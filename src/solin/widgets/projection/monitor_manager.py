@@ -690,5 +690,5 @@ class MonitorManagerPopup(QWidget):
         self._idle_clear_btn.setToolTip(self.tr("Remove idle media"))
 
 
-# ── Widget global de projeção (rodapé direito) ────────────────────────────────
+# Global projection widget (bottom right)
 

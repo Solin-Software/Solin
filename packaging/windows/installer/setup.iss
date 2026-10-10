@@ -64,9 +64,9 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-AppCopyright=Copyright (c) 2026 Alexsander. All rights reserved.
+AppCopyright=Copyright (c) 2026 Alexsander and contributors.
 
-; ── Define o nome limpo no Painel de Controle ────────────────────────────────
+; Set the display name in Control Panel.
 UninstallDisplayName={#MyAppName}
 
 ; ── Mutex: blocks installation while app is running ──────────────────────────
@@ -99,7 +99,7 @@ OutputBaseFilename=Solin-{#MyAppVersion}-windows-x86_64{#MyArtifactSuffix}
 SetupIconFile=..\..\..\src\solin\resources\assets\icon.ico
 WizardStyle=modern
 
-; ── Define o ícone no Painel de Controle (Adicionar/Remover Programas) ──
+; Set the icon in Control Panel (Add/Remove Programs).
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 ; Uncomment if you have wizard artwork BMPs:
@@ -188,32 +188,32 @@ Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallPath"
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "Version";      ValueData: "{#MyAppVersion}";         Flags: uninsdeletevalue
 Root: HKA; Subkey: "{#MyRegSubkey}"; ValueType: string; ValueName: "InstallScope"; ValueData: "{code:GetInstallScope}";  Flags: uninsdeletevalue
 
-; ── 1. Define o que é uma Imagem, Vídeo e Áudio para o Solin ──
+; 1. Define Solin image, video, and audio file types.
 ; Imagem
 Root: HKA; Subkey: "Software\Classes\Solin.Image"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Imagem do Solin"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Solin.Image\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Image\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
-; Vídeo
+; Video
 Root: HKA; Subkey: "Software\Classes\Solin.Video"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Vídeo do Solin"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Solin.Video\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Video\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
-; Áudio
+; Audio
 Root: HKA; Subkey: "Software\Classes\Solin.Audio"; ValueType: string; ValueName: ""; ValueData: "Arquivo de Áudio do Solin"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Solin.Audio\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\resources\assets\icon.ico,0"
 Root: HKA; Subkey: "Software\Classes\Solin.Audio\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
-; ── 2. Adiciona o Solin na lista de "Abrir com..." educadamente ──
+; 2. Add Solin to the "Open with..." list without changing default associations.
 ; Imagens
 Root: HKA; Subkey: "Software\Classes\.png\OpenWithProgids"; ValueType: string; ValueName: "Solin.Image"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\.jpg\OpenWithProgids"; ValueType: string; ValueName: "Solin.Image"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\.jpeg\OpenWithProgids"; ValueType: string; ValueName: "Solin.Image"; ValueData: ""; Flags: uninsdeletevalue
 
-; Vídeos
+; Videos
 Root: HKA; Subkey: "Software\Classes\.mp4\OpenWithProgids"; ValueType: string; ValueName: "Solin.Video"; ValueData: ""; Flags: uninsdeletevalue
 
-; Áudios
+; Audio files
 Root: HKA; Subkey: "Software\Classes\.mp3\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
 Root: HKA; Subkey: "Software\Classes\.wav\OpenWithProgids"; ValueType: string; ValueName: "Solin.Audio"; ValueData: ""; Flags: uninsdeletevalue
 

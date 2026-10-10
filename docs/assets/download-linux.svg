@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="64" viewBox="0 0 220 64" role="img" aria-labelledby="title desc">
+  <title id="title">Download for Linux</title>
+  <desc id="desc">64-bit AppImage</desc>
+  <rect x="0.5" y="0.5" width="219" height="63" rx="12" fill="#101831" stroke="#3b4565"/>
+  <g stroke="#e6e9ff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="15" y="19" width="30" height="26" rx="4"/><path d="m22 27 5 5-5 5m9 0h7"/></g>
+  <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="58" y="28" fill="#ffffff" font-size="16" font-weight="600">Linux</text>
+    <text x="58" y="47" fill="#c4cbe2" font-size="12">64-bit AppImage</text>
+  </g>
+  <path d="M199 23v13m-4-5 4 5 4-5m-9 11h10" fill="none" stroke="#b7b9ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

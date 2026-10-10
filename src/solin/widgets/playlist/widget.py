@@ -1,7 +1,7 @@
 """
-playlist_widget.py  ─ Solin
-Drag-to-reorder completamente reescrito com container manual (sem QListWidget).
-Thumbnails persistem através de reordenações; botões com SVG real.
+playlist_widget.py — Solin
+Drag-to-reorder uses a manual container instead of QListWidget.
+Thumbnails persist across reordering; buttons use actual SVG icons.
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ from ...core.playlists.storage import (
 )
 
 _THUMB_W, _THUMB_H = 70, 46
-_ITEM_H = 77  # altura fixa de cada item
+_ITEM_H = 77  # fixed height for each item
 _MANIFEST_SAVE_DEBOUNCE_MS = 180
 _MANIFEST_SAVE_RETRY_DELAYS_MS = (100, 250, 500, 1_000, 2_000, 5_000, 10_000, 15_000)
 _MANIFEST_SAVE_RETRY_BUDGET_SECONDS = 60.0
@@ -160,7 +160,7 @@ if TYPE_CHECKING:
     from ...core.playlists.cleanup import PlaylistCleanupQueue
     from ...core.rendering.document_conversion import DocumentConversionService
 
-# ── Tela de edição ─────────────────────────────────────────────────────────────
+# Edit screen
 
 
 class PlaylistEditView(
@@ -232,7 +232,7 @@ class PlaylistEditView(
         self._is_watched: bool = False  # linked folder mode
         self._watched_path: str = ""  # physical subfolder path
         self._wf_sync_thread: object = None
-        self._id_to_thumb: dict[str, QPixmap] = {}  # cache de thumbnails por ID
+        self._id_to_thumb: dict[str, QPixmap] = {}  # thumbnail cache by ID
         self._thumb_idx_to_id: dict[int, str] = {}  # request token → item ID
         self._thumb_idx_to_source: dict[int, str] = {}  # request token → source URL
         self._thumb_idx_to_intent: dict[int, _ThumbnailRequestIntent] = {}
@@ -2501,7 +2501,7 @@ class PlaylistWidget(QWidget):
     # ── Watched folder ─────────────────────────────────────────────────────
 
     def set_watched_folder(self, path: str) -> None:
-        """Chamado pelo main_window quando a configuração muda."""
+        """Called by main_window when configuration changes."""
         self._watched_folder = path
         if self._list_view is not None:
             self._list_view.set_watched_folder(path)
@@ -2509,7 +2509,7 @@ class PlaylistWidget(QWidget):
             self._folder_watcher.set_root(path)
 
     def _on_folder_changed(self) -> None:
-        """O watcher detectou mudança na pasta raiz ou subpastas (debounced)."""
+        """The watcher detected a root folder or subfolder change (debounced)."""
         edit_view = self._edit_view
         if edit_view is not None and self._stack.currentIndex() == 1 and edit_view._is_watched:
             edit_view.supersede_watched_folder_refresh()
@@ -2517,7 +2517,7 @@ class PlaylistWidget(QWidget):
         self._wf_refresh_debounce.start()
 
     def _on_subfolder_changed(self, path: str) -> None:
-        """Mudança em subpasta específica — debounced."""
+        """Change in a specific subfolder (debounced)."""
         edit_view = self._edit_view
         if (
             edit_view is not None
@@ -2609,7 +2609,7 @@ class PlaylistWidget(QWidget):
             playlist_item["origin_item_id"] = str(playlist_item.get("id") or "")
         self.project_video_signal.emit(url, title, pl, order)
 
-    # ── API pública ────────────────────────────────────────────────────────
+    # Public API
 
     def open_temp_playlist(
         self,

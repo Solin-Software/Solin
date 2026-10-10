@@ -1,40 +1,36 @@
 """
 media_api.py — Solin
-═════════════════════════════════════════════════════════════════════════════
-Cliente centralizado das APIs de mídia JW.org (cânticos e clipes musicais).
+====================
+Centralized client for JW.org media APIs (Songs and Original Songs).
 
-Suporte a línguas gestuais (Sign Language)
-──────────────────────────────────────────
-A API JW.org distingue dois conjuntos de cânticos:
-  • sjjm  – "Symphonize Jehovah's Joy — with Music"  (vídeo com trilha Musical)
-  • sjj   – "Symphonize Jehovah's Joy" (vídeo língua gestual, sem trilha separada)
+Sign language support:
+The JW.org API distinguishes two song collections:
+  • sjjm — "Sing Out Joyfully" to Jehovah with music (video with a music track).
+  • sjj — "Sing Out Joyfully" to Jehovah (sign language video, no separate track).
 
-A flag `is_sign_language: bool` deve ser derivada de
-`JWLanguageService.is_media_sign_language` (que lê `isSignLanguage` da API JW)
-e repassada a todas as funções deste módulo.
+Derive `is_sign_language: bool` from `JWLanguageService.is_media_sign_language`
+(which reads `isSignLanguage` from the JW API) and pass it to all functions here.
 
-Clipes musicais (Original Songs — pub=osg)
-──────────────────────────────────────────
-Endpoint otimizado: GETPUBMEDIALINKS com pub=osg.
-  • Idiomas normais : fileformat=MP3
-  • Línguas gestuais: fileformat=MP4  (o clip é um vídeo em língua gestual)
+Original Songs (pub=osg):
+Optimized endpoint: GETPUBMEDIALINKS with pub=osg.
+  • Spoken languages: fileformat=MP3.
+  • Sign languages: fileformat=MP4 (the clip is a sign language video).
 
-Estrutura JSON do osg diferente do sjjm:
-  • pubName está na raiz
-  • files > {code} > MP3|MP4  → lista de itens
-  • Cada item: title (nível do item), file > { url }, label (quando MP4)
+The osg JSON structure differs from sjjm:
+  • pubName is at the root.
+  • files > {code} > MP3|MP4 → item list.
+  • Each item: title at item level, file > {url}, label for MP4.
 
-Qualidade de vídeo
-──────────────────
-A resolução preferida e a direção de fallback são controladas pelas constantes
-VIDEO_PREFERRED_QUALITY e VIDEO_QUALITY_FALLBACK_DIR em constants.py.
-A função pick_quality() é o único ponto de decisão de qualidade.
+Video quality:
+VIDEO_PREFERRED_QUALITY and VIDEO_QUALITY_FALLBACK_DIR in constants.py control
+the preferred resolution and fallback direction. pick_quality() is the single
+decision point for quality selection.
 
-Fallback de idioma
-──────────────────
-Quando o idioma de mídia JW não tem conteúdo e cai no idioma da interface,
-o fallback_is_sign SEMPRE é False — idiomas da interface nunca são gestuais.
-Isso evita que, p. ex., o fallback "T" tente buscar sjj em vez de sjjm.
+Language fallback:
+When the JW media language lacks content and falls back to the interface
+language, fallback_is_sign is ALWAYS False: interface languages are never
+sign languages. This prevents fallback "T", for example, from fetching sjj
+instead of sjjm.
 """
 
 from __future__ import annotations
@@ -58,7 +54,7 @@ log = logging.getLogger(__name__)
 _HTTP_TIMEOUT = 15
 _SONG_CACHE_SCHEMA_VERSION = 2
 
-# ── Base URL comum ────────────────────────────────────────────────────────────
+# Common base URL
 
 _JW_PUBMEDIA = (
     "https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS"
@@ -66,7 +62,7 @@ _JW_PUBMEDIA = (
     "&langwritten={code}&txtCMSLang={code}"
 )
 
-# Endpoint mediador — usado para clipes de idiomas normais (exclui audio-descrição)
+# Mediator endpoint: Original Songs in spoken languages (excludes audio description).
 _JW_MEDIATOR_CLIPS = (
     "https://b.jw-cdn.org/apis/mediator/v1/categories/{code}/AudioOriginalSongs"
     "?detailed=1&clientType=www"
@@ -75,20 +71,20 @@ _JW_MEDIATOR_CLIPS = (
 
 def song_publication_symbol(is_sign_language: bool) -> str:
     """
-    Retorna o símbolo da publicação de cânticos correto:
-      • True  → 'sjj'   (língua gestual — sem trilha musical)
-      • False → 'sjjm'  (idioma normal — com trilha musical)
-    Uso centralizado: toda referência programática a 'sjj'/'sjjm' deve passar aqui.
+    Return the correct song publication symbol:
+      • True → 'sjj' (sign language, no music track).
+      • False → 'sjjm' (spoken language, with music track).
+    All programmatic references to 'sjj'/'sjjm' must use this centralized helper.
     """
     return "sjj" if is_sign_language else "sjjm"
 
 
 def _songs_fmt(is_sign: bool, audio: bool) -> str:
     """
-    Formato de arquivo para cânticos:
-      • Língua gestual           → MP4  (independente de modo audio/vídeo)
-      • Idioma normal, modo áudio → MP3
-      • Idioma normal, modo vídeo → MP4
+    Song file format:
+      • Sign language → MP4, regardless of audio/video mode.
+      • Spoken language, audio mode → MP3.
+      • Spoken language, video mode → MP4.
     """
     if is_sign:
         return "MP4"
@@ -97,9 +93,9 @@ def _songs_fmt(is_sign: bool, audio: bool) -> str:
 
 def _clips_fmt(is_sign: bool) -> str:
     """
-    Formato de arquivo para clipes osg:
-      • Língua gestual → MP4
-      • Normal         → MP3
+    osg clip file format:
+      • Sign language → MP4.
+      • Spoken language → MP3.
     """
     return "MP4" if is_sign else "MP3"
 
@@ -111,13 +107,13 @@ def _build_songs_url(api_code: str, is_sign: bool, audio: bool) -> str:
 
 
 def _build_clips_url(api_code: str, is_sign: bool) -> str:
-    """URL do endpoint de clipes conforme o tipo de idioma."""
+    """Clip endpoint URL for the language type."""
     if is_sign:
-        # Língua gestual: GETPUBMEDIALINKS com pub=osg e MP4
+        # Sign language: GETPUBMEDIALINKS with pub=osg and MP4.
         fmt = "MP4"
         return _JW_PUBMEDIA.format(pub="osg", fmt=fmt, code=api_code)
     else:
-        # Idioma normal: endpoint mediador (exclui audio-descrição corretamente)
+        # Spoken language: mediator endpoint (correctly excludes audio description).
         return _JW_MEDIATOR_CLIPS.format(code=api_code)
 
 
@@ -127,47 +123,47 @@ def pick_quality(
     fallback_dir: str = VIDEO_QUALITY_FALLBACK_DIR,
 ) -> str | None:
     """
-    Escolhe o label de qualidade ideal dentre os itens disponíveis.
+    Select the ideal quality label from the available items.
 
-    Algoritmo (todos lendo VIDEO_PREFERRED_QUALITY / VIDEO_QUALITY_FALLBACK_DIR):
-      1. Tenta o preferred exatamente.
-      2. Determina as qualidades acima e abaixo do preferred em VIDEO_QUALITY_ORDER.
-      3. fallback_dir='below' → tenta abaixo primeiro, depois acima (padrão conservador).
-         fallback_dir='above' → tenta acima primeiro, depois abaixo.
-      4. Se nenhuma qualidade conhecida existir, retorna qualquer label disponível
-         (robusto a novas resoluções que a JW venha a lançar).
-      5. Retorna None se não houver itens com label.
+    Algorithm (using VIDEO_PREFERRED_QUALITY / VIDEO_QUALITY_FALLBACK_DIR):
+      1. Try an exact match for preferred.
+      2. Find qualities above and below preferred in VIDEO_QUALITY_ORDER.
+      3. fallback_dir='below': try below first, then above (conservative default).
+         fallback_dir='above': try above first, then below.
+      4. If no known quality exists, return any available label to accommodate
+         new resolutions released by JW.
+      5. Return None if no items have a label.
     """
     labels_set = {e.get("label") for e in items if isinstance(e, dict) and e.get("label")}
     if not labels_set:
         return None
 
-    # 1. Preferência exata
+    # 1. Exact preference
     if preferred in labels_set:
         return preferred
 
-    # 2. Posiciona preferred na ordem canônica
+    # 2. Locate preferred in the canonical order.
     order = list(VIDEO_QUALITY_ORDER)
     if preferred in order:
         idx = order.index(preferred)
-        above = [q for q in order[:idx] if q in labels_set]  # mais alto primeiro
-        below = [q for q in order[idx + 1 :] if q in labels_set]  # mais baixo primeiro
+        above = [q for q in order[:idx] if q in labels_set]  # highest first
+        below = [q for q in order[idx + 1 :] if q in labels_set]  # lowest first
     else:
         above = [q for q in order if q in labels_set]
         below = []
 
-    # 3. Ordena segundo fallback_dir
+    # 3. Order according to fallback_dir.
     ordered = (below + above) if fallback_dir != "above" else (above + below)
 
     if ordered:
         return ordered[0]
 
-    # 4. Qualquer label disponível (resolução desconhecida)
+    # 4. Any available label (unknown resolution)
     return next(iter(labels_set))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Cânticos — vídeo (MP4 / sjjm ou sjj)
+# Songs: video (MP4 / sjjm or sjj)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -258,12 +254,12 @@ def _save_cache(
 
 def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
     """
-    Parse da resposta GETPUBMEDIALINKS (sjjm ou sjj) em lista de cânticos.
+    Parse a GETPUBMEDIALINKS response (sjjm or sjj) into a song list.
 
-    Usa pick_quality() para selecionar a melhor resolução de vídeo conforme
-    VIDEO_PREFERRED_QUALITY e VIDEO_QUALITY_FALLBACK_DIR em constants.py.
-    Para áudio (MP3): sem filtragem de label; deduplica por número.
-    Filtra versões com áudio descrição comparando parsed_num vs campo track.
+    Use pick_quality() to select video resolution according to
+    VIDEO_PREFERRED_QUALITY and VIDEO_QUALITY_FALLBACK_DIR in constants.py.
+    For MP3 audio, do not filter labels; deduplicate by number.
+    Filter audio description versions by comparing parsed_num with track.
     """
     pub_name = data.get("pubName", "")
     is_audio = fmt.upper() == "MP3"
@@ -272,7 +268,7 @@ def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
     except (KeyError, TypeError):
         return [], pub_name
 
-    # Para vídeo: escolhe a melhor qualidade disponível de forma centralizada
+    # Video: select the best available quality through the centralized policy.
     chosen_label: str | None = None
     if not is_audio:
         chosen_label = pick_quality(items)
@@ -285,13 +281,13 @@ def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
             continue
 
         if not is_audio:
-            # Vídeo: exige a qualidade escolhida e sem legenda
+            # Video: require the selected quality and no subtitles.
             if item.get("label") != chosen_label:
                 continue
             if item.get("subtitled") is not False:
                 continue
         else:
-            # Áudio: sem legenda, deduplica por número
+            # Audio: no subtitles; deduplicate by number.
             if item.get("subtitled") is not False:
                 continue
 
@@ -302,7 +298,7 @@ def parse_songs(data: dict, api_code: str, fmt: str) -> tuple[list, str]:
 
         num = int(match.group(1))
 
-        # Filtra áudio-descrição: track oficial ≠ número do cântico (ex: 502 ≠ 2)
+        # Filter audio description: official track ≠ song number (e.g. 502 ≠ 2).
         track = int(item.get("track", 0))
         if track != num:
             continue
@@ -347,17 +343,17 @@ def fetch_songs(
     cache_dir: str | os.PathLike[str],
 ) -> tuple[list, str, float, bool]:
     """
-    Busca cânticos JW (vídeo MP4).
+    Fetch JW songs (MP4 video).
 
-    Parâmetros
+    Parameters
     ----------
-    api_code         : código JW do idioma de mídia (ex: 'T', 'ASL', 'BSL')
-    force            : ignora cache
-    fallback_code    : idioma da interface — usado como fallback quando api_code falha;
-                       NUNCA é gestual (sempre sjjm).
-    is_sign_language : se True, usa pub=sjj; caso contrário, pub=sjjm.
+    api_code: JW media language code (e.g. 'T', 'ASL', 'BSL').
+    force: bypass the cache.
+    fallback_code: interface language used when api_code fails;
+                   NEVER a sign language (always sjjm).
+    is_sign_language: use pub=sjj if True, otherwise pub=sjjm.
 
-    Retorna (songs, pub_name, fetched_at_timestamp, from_cache).
+    Return (songs, pub_name, fetched_at_timestamp, from_cache).
     """
     if not force and _is_cache_valid(api_code, is_sign_language, cache_dir):
         songs, pub_name, fetched_at = _load_cache(
@@ -374,7 +370,7 @@ def fetch_songs(
     try:
         data = http_get_json(url, timeout=_HTTP_TIMEOUT)
     except HttpError:
-        # Fallback: idioma da interface — nunca é gestual
+        # Fallback: interface language, never a sign language.
         if fallback_code and fallback_code != api_code:
             return fetch_songs(
                 fallback_code,
@@ -408,7 +404,7 @@ def fetch_songs(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Cânticos — áudio (MP3 ou MP4 para gestuais, sjjm ou sjj)
+# Songs: audio (MP3, or MP4 for sign languages; sjjm or sjj)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -469,13 +465,13 @@ def fetch_songs_audio(
     cache_dir: str | os.PathLike[str],
 ) -> tuple[list, str, float, bool]:
     """
-    Busca cânticos JW em modo áudio.
+    Fetch JW songs in audio mode.
 
-    Para idiomas normais: pub=sjjm, fileformat=MP3.
-    Para línguas gestuais: pub=sjj, fileformat=MP4
-      (não há áudio separado — o "áudio" é o próprio vídeo em língua gestual).
+    Spoken languages: pub=sjjm, fileformat=MP3.
+    Sign languages: pub=sjj, fileformat=MP4 (no separate audio;
+    the "audio" is the sign language video itself).
 
-    Parâmetros idênticos a fetch_songs.
+    Parameters are identical to fetch_songs.
     """
     if not force and _is_songs_audio_cache_valid(api_code, is_sign_language, cache_dir):
         songs, pub_name, fetched_at = _load_songs_audio_cache(
@@ -517,7 +513,7 @@ def fetch_songs_audio(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Clipes musicais (Original Songs — pub=osg)
+# Original Songs (pub=osg)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -570,16 +566,16 @@ def _save_clips_cache(
 
 def _parse_clips_mediator(data: dict) -> list:
     """
-    Parser para o endpoint mediador (/mediator/v1/categories/{code}/AudioOriginalSongs).
+    Parse the mediator endpoint (/mediator/v1/categories/{code}/AudioOriginalSongs).
 
-    Usado para idiomas normais (não gestuais). O mediador já retorna apenas clipes
-    sem áudio-descrição quando filtramos subtitled=False.
+    Used for spoken languages. Filtering subtitled=False makes the mediator
+    return only Original Songs without audio description.
 
-    Estrutura:
-      data["category"]["media"]  → lista de itens
-      item["title"]              → "A melhor vida"
-      item["duration"]           → 251.884
-      item["files"][]            → { "progressiveDownloadURL": "...", "subtitled": bool }
+    Structure:
+      data["category"]["media"] → item list
+      item["title"] → "The Best Life Ever"
+      item["duration"] → 251.884
+      item["files"][] → {"progressiveDownloadURL": "...", "subtitled": bool}
     """
     clips: list[dict] = []
     try:
@@ -610,17 +606,17 @@ def _parse_clips_mediator(data: dict) -> list:
 
 def parse_clips_osg(data: dict, api_code: str) -> list:
     """
-    Parser para o endpoint GETPUBMEDIALINKS (pub=osg, fileformat=MP4).
+    Parse GETPUBMEDIALINKS (pub=osg, fileformat=MP4).
 
-    Usado para línguas gestuais. Seleciona a melhor resolução via pick_quality()
-    e **inverte** a lista — o osg retorna do mais antigo para o mais novo, então
-    revertemos para que os lançamentos mais recentes apareçam primeiro.
+    Used for sign languages. Select the best resolution via pick_quality()
+    and reverse the list: osg returns oldest first, so reversing shows
+    the latest releases first.
 
-    Estrutura:
-      data["files"][api_code]["MP4"]  → lista de itens
-      item["title"]                   → "A melhor vida"
-      item["label"]                   → "720p"
-      item["file"]["url"]             → URL do MP4
+    Structure:
+      data["files"][api_code]["MP4"] → item list
+      item["title"] → "The Best Life Ever"
+      item["label"] → "720p"
+      item["file"]["url"] → MP4 URL
     """
     clips: list[dict] = []
     try:
@@ -644,7 +640,7 @@ def parse_clips_osg(data: dict, api_code: str) -> list:
         duration = item.get("duration", 0) or 0
         clips.append({"title": title, "url": url, "duration": duration})
 
-    # Inverte: osg ordena do mais antigo ao mais novo → queremos o mais novo primeiro
+    # Reverse: osg orders oldest to newest; show newest first.
     clips.reverse()
     return clips
 
@@ -658,16 +654,16 @@ def fetch_clips(
     cache_dir: str | os.PathLike[str],
 ) -> tuple[list, float, bool]:
     """
-    Busca clipes musicais originais (Original Songs).
+    Fetch Original Songs.
 
-    • Idiomas normais  → endpoint mediador (/mediator/…/AudioOriginalSongs)
-                         Exclui áudio-descrição via subtitled=False.
-    • Línguas gestuais → endpoint osg (GETPUBMEDIALINKS, pub=osg, fileformat=MP4)
-                         Melhor resolução via pick_quality(); resultado invertido
-                         (mais novo primeiro, pois osg retorna do mais antigo ao mais novo).
+    • Spoken languages → mediator endpoint (/mediator/…/AudioOriginalSongs);
+      exclude audio description via subtitled=False.
+    • Sign languages → osg endpoint (GETPUBMEDIALINKS, pub=osg, fileformat=MP4);
+      select resolution via pick_quality() and reverse to show newest first
+      because osg returns oldest first.
 
-    Fallback para idioma da interface sempre com is_sign_language=False.
-    Retorna (clips, fetched_at_timestamp, from_cache).
+    Always fall back to the interface language with is_sign_language=False.
+    Return (clips, fetched_at_timestamp, from_cache).
     """
     if not force and _is_clips_cache_valid(api_code, is_sign_language, cache_dir):
         clips, fetched_at = _load_clips_cache(api_code, is_sign_language, cache_dir)
@@ -708,7 +704,7 @@ def fetch_clips(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Utilitários de cache (usados por settings_widget, etc.)
+# Cache utilities (used by settings_widget, etc.)
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -718,7 +714,7 @@ def get_cache_date(
     *,
     cache_dir: str | os.PathLike[str],
 ) -> float | None:
-    """Retorna o timestamp do cache de cânticos (vídeo) se existir."""
+    """Return the video song cache timestamp, if it exists."""
     data = _read_cache_json(_cache_path(api_code, is_sign_language, cache_dir))
     if data is None:
         return None

@@ -1,9 +1,9 @@
 """
-zoom_poll_widget.py  —  Solin
-─────────────────────────────
-Janela standalone para análise de relatórios de enquete do Zoom.
-Aberta EXCLUSIVAMENTE via argumento de linha de comando (.csv).
-Não interfere com a instância principal nem com o servidor IPC.
+zoom_poll_widget.py — Solin
+==========================
+Standalone window for analyzing Zoom poll reports.
+Opened EXCLUSIVELY through a command-line argument (.csv).
+Does not interfere with the main instance or IPC server.
 """
 
 from __future__ import annotations
@@ -144,7 +144,7 @@ def _cell(text, align=Qt.AlignmentFlag.AlignLeft,
 
 
 class _NumericItem(QTableWidgetItem):
-    """QTableWidgetItem que ordena numericamente pelo texto."""
+    """QTableWidgetItem that sorts text numerically."""
     def __lt__(self, other):
         try:
             return float(self.text()) < float(other.text())
@@ -416,7 +416,7 @@ class ZoomPollWindow(QDialog):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _alerts_block(self, r):
-        """Container pai 'Inconsistências' — engloba duplicados, divergências e família."""
+        """Parent 'Inconsistencies' container for duplicates, discrepancies, and family."""
         outer = QFrame()
         outer.setStyleSheet(f"""
             QFrame {{
@@ -429,7 +429,7 @@ class ZoomPollWindow(QDialog):
         v.setContentsMargins(14, 14, 14, 14)
         v.setSpacing(10)
 
-        # Cabeçalho pai
+        # Parent header
         texto_inconsistencias = self.tr("Inconsistencies found")
         v.addWidget(_section_lbl(
             f'⚠  {texto_inconsistencias}',
@@ -449,7 +449,7 @@ class ZoomPollWindow(QDialog):
                     self.tr("Responded {count}× with the same value ({value}). Counted once.").replace("{count}", str(a.count)).replace("{value}", str(a.value)),
                 ))
 
-        # ── Subsection: Divergências ───────────────────────────────────────
+        # Subsection: Discrepancies
         if r.divergence_alerts:
             v.addWidget(_section_lbl(
                 f'🔀  {self.tr("Divergences")}',
@@ -463,7 +463,7 @@ class ZoomPollWindow(QDialog):
                     self.tr("Submitted different values: [{values}]. Highest value used: {kept}.").replace("{values}", str(vals)).replace("{kept}", str(a.kept_value)),
                 ))
 
-        # Correção de dedup — abaixo dos alertas de dup/div
+        # Deduplication correction below duplicate/discrepancy alerts.
         raw       = r.raw_total_attendance
         corrected = r.total_attendance
         delta     = raw - corrected
@@ -476,14 +476,14 @@ class ZoomPollWindow(QDialog):
                 details = self._dedup_details(r),
             ))
 
-        # ── Subsection: Família ────────────────────────────────────────────
+        # Subsection: Family
         if r.family_alerts:
             v.addWidget(_section_lbl(
                 '👨‍👩‍👧  ' + self.tr("Same family"),
                 11, PALETTE.accent
             ))
 
-            base            = r.total_attendance   # base fixa = total já corrigido pelo dedup
+            base            = r.total_attendance   # fixed baseline = deduplication-adjusted total
             total_fam_delta = 0
             fam_details     = []
 
@@ -491,7 +491,7 @@ class ZoomPollWindow(QDialog):
                 fam_reported     = sum(m.value for m in a.members)
                 fam_delta        = fam_reported - a.family_corrected
                 total_fam_delta += fam_delta
-                # cada card mostra sempre: base → base − delta_desta_família
+                # each card always shows: baseline → baseline − this family's delta
                 after_this       = base - fam_delta
                 delta_str        = f"  (−{fam_delta})" if fam_delta > 0 else ""
                 correction_note = self.tr(
@@ -863,7 +863,7 @@ class ZoomPollWindow(QDialog):
         table.setColumnWidth(4, 88)
         table.setMinimumHeight(min(len(r.responses) * 38 + 38, 500))
 
-        # Enable interactive sorting; default: alphabético por nome (col 1)
+        # Enable interactive sorting; default: alphabetical by name (column 1).
         hh.setSortIndicatorShown(True)
         hh.setHighlightSections(True)
         table.setSortingEnabled(True)

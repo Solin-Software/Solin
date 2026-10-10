@@ -1,15 +1,14 @@
 """
-controls.py — Controles robustos do Zoom via Windows UIA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+controls.py — Reliable Zoom controls via Windows UIA
 
-Funcoes publicas:
-  Todas as operacoes recebem uma ZoomSession pertencente ao ZoomService.
-  get_meeting_state(session)       → estado completo da reuniao
-  toggle_audio(session)            → alterna mute/unmute do proprio audio
-  mute_all(session, allow_unmute)  → muta todos os participantes
-  leave_computer_audio(session)    → sai do audio do computador
-  stop_screen_share(session)       → para compartilhamento ativo
-  dump_descendants(win)     → debug: lista descendentes de uma janela
+Public functions:
+  All operations receive a ZoomSession owned by ZoomService.
+  get_meeting_state(session) → complete meeting state
+  toggle_audio(session) → toggle own audio mute/unmute
+  mute_all(session, allow_unmute) → mute all participants
+  leave_computer_audio(session) → leave computer audio
+  stop_screen_share(session) → stop active sharing
+  dump_descendants(win) → debug: list a window's descendants
 """
 
 from __future__ import annotations
@@ -78,12 +77,12 @@ def _require_pywinauto() -> None:
 #  Timeouts
 # ─────────────────────────────────────────────────────────────────
 
-POPUP_TIMEOUT:  float = 5.0    # segundos — aguardar popup/janela aparecer
-POLL_INTERVAL:  float = 0.03   # segundos — poll agressivo para resposta rapida
+POPUP_TIMEOUT:  float = 5.0    # seconds; wait for a popup/window to appear
+POLL_INTERVAL:  float = 0.03   # seconds; aggressive polling for a quick response
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Constantes de janelas Zoom
+#  Zoom window constants
 # ─────────────────────────────────────────────────────────────────
 
 ZOOM_WINDOW_CLASS_NAMES: set[str] = {
@@ -123,9 +122,9 @@ def _is_blacklisted(title: str) -> bool:
 
 def _poll(fn, timeout: float = POPUP_TIMEOUT, interval: float = POLL_INTERVAL):
     """
-    Chama fn() repetidamente ate retornar valor truthy ou timeout expirar.
-    Excecoes dentro de fn() sao ignoradas (tratadas como None).
-    Retorna o ultimo resultado — truthy se encontrou, falsy/None se expirou.
+    Call fn() repeatedly until it returns a truthy value or the timeout expires.
+    Ignore exceptions in fn() (treat them as None).
+    Return the last result: truthy on success, falsy/None on timeout.
     """
     deadline = time.monotonic() + timeout
     while True:
@@ -143,7 +142,7 @@ def _poll(fn, timeout: float = POPUP_TIMEOUT, interval: float = POLL_INTERVAL):
 # ─────────────────────────────────────────────────────────────────
 
 def _query_process_image_path(session: ZoomSession, pid: int) -> Optional[str]:
-    """Retorna o caminho do executavel do processo, com cache curto em memoria."""
+    """Return the process executable path, using a short-lived in-memory cache."""
     if pid in session.process_image_cache:
         return session.process_image_cache[pid]
 
@@ -176,7 +175,7 @@ def _is_zoom_process_id(session: ZoomSession, pid: int) -> bool:
 
 
 def _find_zoom_windows_fast(session: ZoomSession) -> tuple[list, set]:
-    """Descobre janelas Zoom via top-level scan. Retorna (janelas, pids)."""
+    """Discover Zoom windows through a top-level scan. Return (windows, pids)."""
     session.ensure_active()
     desktop = session.desktop()
     found: dict = {}
@@ -218,8 +217,8 @@ def _find_main_window(
     windows: list,
 ) -> tuple[Optional[dict], bool]:
     """
-    Retorna (janela_principal, is_floating).
-    is_floating=True quando esta em modo de compartilhamento (floating toolbar).
+    Return (main_window, is_floating).
+    is_floating=True in sharing mode (floating toolbar).
     """
     normal = next(
         (w for w in windows if w["class_name"] == "ConfMultiTabContentWndClass"), None
@@ -276,8 +275,8 @@ def _wait_for_window_class(
     timeout: float = POPUP_TIMEOUT,
 ) -> Optional[dict]:
     """
-    Aguarda ate uma janela com a classe especificada aparecer.
-    Poll a cada POLL_INTERVAL por ate timeout segundos.
+    Wait for a window of the specified class to appear.
+    Poll every POLL_INTERVAL for up to timeout seconds.
     """
     from pywinauto import findwindows
 
@@ -304,7 +303,7 @@ def _wait_for_window_class(
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Busca de elementos UIA
+#  UIA element lookup
 # ─────────────────────────────────────────────────────────────────
 
 def _find_element_by_cid(
@@ -317,9 +316,9 @@ def _find_element_by_cid(
     cache_handle: int = 0,
 ) -> Any | None:
     """
-    Busca elemento pelo controlID dentro de win.
-    Com timeout=0 faz uma unica tentativa; caso contrario faz poll ate timeout.
-    use_cache=True tenta o cache da toolbar antes do scan.
+    Find an element by controlID within win.
+    With timeout=0, attempt once; otherwise poll until timeout.
+    With use_cache=True, try the toolbar cache before scanning.
     """
     if use_cache and cache_handle:
         cached = session.toolbar_cache.get(win, cache_handle, control_id)
@@ -353,11 +352,11 @@ def _find_elements_by_cid(
     use_cache: bool = False,
     cache_handle: int = 0,
 ) -> dict[str, Any]:
-    """Busca multiplos controlIDs de uma vez. Retorna {cid: element}."""
+    """Find multiple controlIDs at once. Return {cid: element}."""
     result: dict[str, Any] = {}
     remaining = set(control_ids)
 
-    # Tenta cache primeiro
+    # Try the cache first.
     if use_cache and cache_handle:
         cached = session.toolbar_cache.get_multi(cache_handle, control_ids)
         if cached:
@@ -663,18 +662,18 @@ def _visible_control_ids(
 
 def _participants_panel_visible(win) -> bool:
     """
-    Detecção robusta se o painel de participantes está aberto.
+    Reliably detect whether the participant panel is open.
 
-    NÃO usa cache — a visibilidade do painel é volátil (o usuário pode
-    abrir/fechar a qualquer momento). Sempre faz verificação estrutural
-    fresca com validação de bounds para máxima confiabilidade.
+    Do NOT use the cache: panel visibility is volatile (the user may open
+    or close it at any time). Always perform a fresh structural check
+    with bounds validation for maximum reliability.
     """
     try:
         win_rect = win.rectangle()
     except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
         return False
 
-    # Busca estrutural: ListBox visível, DENTRO da janela, com ListItem children
+    # Structural search: visible ListBox INSIDE the window, with ListItem children.
     try:
         for d in win.descendants():
             try:
@@ -683,12 +682,12 @@ def _participants_panel_visible(win) -> bool:
                 rect = d.rectangle()
                 if rect.width() <= 0 or rect.height() <= 0:
                     continue
-                # Bounds check: deve estar dentro da janela principal.
-                # Quando o painel é fechado, o Zoom pode manter o ListBox
-                # no tree mas fora dos bounds visíveis.
+                # Bounds check: must be inside the main window.
+                # When the panel is closed, Zoom may keep the ListBox
+                # in the tree but outside the visible bounds.
                 if not _rect_inside(rect, win_rect, tolerance=10):
                     continue
-                # Confirma que é a lista de participantes (tem ListItem children)
+                # Confirm this is the participant list (contains ListItem children).
                 if any(c.friendly_class_name() == "ListItem" for c in d.descendants()):
                     return True
             except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
@@ -704,7 +703,7 @@ class _POINT(ctypes.Structure):
 
 
 def _move_mouse_to_reveal_toolbar(session: ZoomSession, win) -> None:
-    """Revela a toolbar do Zoom 7 movendo o cursor para a base e restaurando."""
+    """Reveal the Zoom 7 toolbar by moving the cursor to the bottom and restoring it."""
     def _move() -> None:
         pt = _POINT()
         user32 = ctypes.windll.user32
@@ -741,8 +740,8 @@ def _find_element_by_text(
     timeout: float = 0.0,
 ) -> Any | None:
     """
-    Busca elemento pelo texto (util para floating toolbar quando controlIDs
-    nao estao disponiveis).
+    Find an element by text (useful for the floating toolbar when
+    controlIDs are unavailable).
     """
     def _try():
         try:
@@ -768,12 +767,12 @@ def _safe_invoke(
     fallback_hwnd: Optional[int] = None,
 ) -> bool:
     """
-    Invoca elemento clicável de forma invisível.
-    Tenta as vias normais do UIA (invoke/toggle/select) pois controles padrões
-    (como MenuItems) suportam nativamente.
-    Se falhar (ex: botões flutuantes customizados do Zoom que apenas simulam suporte),
-    tenta o clique via PostMessageW (se fallback_hwnd providenciado),
-    pois revelou-se imune às blindagens do UIA sem mover o cursor físico.
+    Invoke a clickable element without visible interaction.
+    Try standard UIA routes (invoke/toggle/select), which standard controls
+    such as MenuItems support natively. If they fail (e.g. custom floating
+    Zoom buttons that only simulate support), try a PostMessageW click
+    when fallback_hwnd is provided. This bypasses UIA restrictions
+    without moving the physical cursor.
     """
     def _invoke() -> bool:
         for method in ("invoke", "toggle", "select"):
@@ -818,8 +817,8 @@ def _click_in_popup(
     patterns: list[str],
 ) -> bool:
     """
-    Encontra e invoca o primeiro item do popup cujo texto bate com patterns.
-    Interacao programatica (invoke/toggle/select), sem clique de mouse.
+    Find and invoke the first popup item whose text matches patterns.
+    Use programmatic interaction (invoke/toggle/select), without a mouse click.
     """
     try:
         for d in popup_win.descendants():
@@ -837,7 +836,7 @@ def _click_in_popup(
 
 
 # ─────────────────────────────────────────────────────────────────
-#  ZoomSession — estado UIA pertencente a uma geração do ZoomService
+# ZoomSession — UIA state owned by a ZoomService generation
 # ─────────────────────────────────────────────────────────────────
 
 class ZoomSession:
@@ -891,7 +890,7 @@ class ZoomSession:
         now = time.monotonic()
         if not force and self._pids and (now - self._last_scan < 5.0):
             if self._main_handle:
-                # Validacao rapida via Win32 (sem COM/UIA)
+                # Fast validation via Win32 (no COM/UIA).
                 if ctypes.windll.user32.IsWindow(self._main_handle):
                     return
 
@@ -917,7 +916,7 @@ class ZoomSession:
 
     @property
     def is_floating(self) -> bool:
-        """True quando Zoom esta em modo de compartilhamento (floating toolbar)."""
+        """True when Zoom is in sharing mode (floating toolbar)."""
         self.refresh()
         return self._is_floating
 
@@ -930,12 +929,12 @@ class ZoomSession:
     def ensure_toolbar(self, control_ids: Optional[set[str]] = None,
                        *, force_reveal: bool = False) -> None:
         """
-        Garante que a toolbar ou os controles pedidos estejam visiveis.
-        Se os participantes estao acessiveis mas a toolbar sumiu, envia Alt
-        para acordar os controles e tenta novamente.
+        Ensure the toolbar or requested controls are visible.
+        If participants are accessible but the toolbar has disappeared, send Alt
+        to wake the controls and retry.
         """
         if self.is_floating:
-            return  # floating toolbar esta sempre visivel
+            return  # floating toolbar is always visible
 
         h = self.main_handle
         if h is None:
@@ -957,14 +956,14 @@ class ZoomSession:
             except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                 return False
 
-        # Verifica primeiro sem tocar no foco. Quando um controle especifico foi
-        # pedido, panel_toolbar sozinho nao basta: o botao pode ter sumido.
+        # Check without changing focus first. When a specific control is
+        # requested, panel_toolbar alone is insufficient: the button may have disappeared.
         if not force_reveal and _has_required_control():
             return
 
-        # Toolbar oculta/stale — envia Alt para revelar. Fazemos duas tentativas
-        # porque o Zoom pode consumir o primeiro Alt enquanto muda foco entre
-        # lista de participantes e janela principal.
+        # Toolbar hidden/stale: send Alt to reveal it. Try twice
+        # because Zoom may consume the first Alt while switching focus between
+        # the participant list and the main window.
         last_error: Exception | None = None
         for _ in range(2):
             try:
@@ -1010,9 +1009,9 @@ def warm_toolbar_cache(
     include_participants: bool = False,
 ) -> bool:
     """
-    Revalida/aquece o cache dos controles da toolbar.
-    reveal=False nunca envia Alt nem rouba foco; reveal=True acorda a toolbar.
-    include_participants=True também cacheia mute_all_btn e more_btn.
+    Revalidate/warm the toolbar control cache.
+    reveal=False never sends Alt or takes focus; reveal=True wakes the toolbar.
+    include_participants=True also caches mute_all_btn and more_btn.
     """
     ctx = _require_meeting(session)
     if ctx.is_floating:
@@ -1024,7 +1023,7 @@ def warm_toolbar_cache(
     win = ctx.get_main_window()
     ids = set(control_ids or TOOLBAR_CORE_CONTROL_IDS)
 
-    # Cache proativo dos botões de participantes quando solicitado
+    # Proactively cache participant buttons when requested.
     if include_participants and _participants_panel_visible(win):
         ids = ids | PARTICIPANTS_PANEL_CONTROL_IDS
 
@@ -1050,8 +1049,8 @@ def _find_toolbar_button(
     fresh: bool = False,
 ) -> Any | None:
     """
-    Busca um botao da toolbar de forma robusta:
-    cache/scan primeiro, Alt para revelar quando necessario, e retry.
+    Find a toolbar button reliably:
+    try cache/scan first, reveal with Alt when needed, then retry.
     """
     ctx = _require_meeting(session)
     if fresh:
@@ -1078,8 +1077,8 @@ def _find_toolbar_button(
     if btn:
         return btn
 
-    # Se o panel_toolbar estava stale ou o Zoom ocultou os botoes entre o scan
-    # e o clique, acorda de novo e refaz a busca.
+    # If panel_toolbar was stale or Zoom hid the buttons between scanning
+    # and clicking, reveal it again and repeat the lookup.
     ctx.ensure_toolbar({control_id}, force_reveal=True)
     ctx.refresh(force=True)
     win = ctx.get_main_window()
@@ -1100,12 +1099,12 @@ def _invoke_toolbar_button(
     timeout: float = 2.0,
 ) -> bool:
     """
-    Invoca um botao da toolbar com estratégia cache-first.
+    Invoke a toolbar button using a cache-first strategy.
 
-    Fluxo otimizado:
-      1. Cache hit → invoke direto (~0ms)
-      2. Cache miss → scan único + fallback estrutural → invoke
-      3. Se invoke falhou (elemento stale) → invalida cache, revela toolbar, retry
+    Optimized flow:
+      1. Cache hit → invoke directly (~0 ms).
+      2. Cache miss → single scan + structural fallback → invoke.
+      3. Failed invocation (stale element) → invalidate cache, reveal toolbar, retry.
     """
     ctx = _require_meeting(session)
     btn = _find_toolbar_button(session, control_id, timeout=timeout)
@@ -1113,8 +1112,8 @@ def _invoke_toolbar_button(
     if btn and _safe_invoke(session, btn, fallback_hwnd=fallback_hwnd):
         return True
 
-    # Primeiro invoke falhou — elemento pode estar stale.
-    # Invalida apenas o elemento específico, não o cache inteiro.
+    # The first invocation failed; the element may be stale.
+    # Invalidate only the specific element, not the entire cache.
     h = ctx.main_handle
     if h:
         session.toolbar_cache.invalidate_control(control_id)
@@ -1141,8 +1140,8 @@ def _invoke_toolbar_button(
 
 class _StopShareCache:
     """
-    Cache persistente para o botão 'Stop Share' da floating toolbar.
-    Validação rápida do UIA elemento.
+    Persistent cache for the floating toolbar's 'Stop Share' button.
+    Fast UIA element validation.
     """
     __slots__ = ("_float_handle", "_btn")
 
@@ -1181,8 +1180,8 @@ class _StopShareCache:
 
 def _find_float_toolbar_hwnd() -> Optional[int]:
     """
-    Retorna handle da floating toolbar usando FindWindowW (~0ms).
-    Filtra toolbars ocultas ou em estado de pré-inicialização do Zoom.
+    Return the floating toolbar handle using FindWindowW (~0 ms).
+    Filter hidden toolbars and toolbars in Zoom's pre-initialization state.
     """
     hwnd = ctypes.windll.user32.FindWindowW("ZPFloatToolbarClass", None)
     if hwnd and ctypes.windll.user32.IsWindowVisible(hwnd):
@@ -1192,9 +1191,9 @@ def _find_float_toolbar_hwnd() -> Optional[int]:
 
 def _scan_stop_btn(session: ZoomSession, float_handle: int) -> Any | None:
     """
-    Varre a floating toolbar buscando o ÚLTIMO botão (Button).
-    Independente de idioma e sem controlID, o Stop Share é sempre o último.
-    Exige que o botão esteja completamente renderizado (tem texto e tamanho).
+    Scan the floating toolbar for the LAST Button.
+    Regardless of language or controlID, Stop Share is always last.
+    Require the button to be fully rendered (has text and size).
     """
     try:
         win = _get_window(session, float_handle)
@@ -1204,7 +1203,7 @@ def _scan_stop_btn(session: ZoomSession, float_handle: int) -> Any | None:
                 if d.friendly_class_name() == "Button":
                     text = d.window_text() or ""
                     rect = d.rectangle()
-                    # Garante que o Zoom ja popularizou as strings e coordenadas na UI
+                    # Ensure Zoom has populated the UI strings and coordinates.
                     if text.strip() and rect.width() > 0 and rect.height() > 0:
                         last_button = d
             except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
@@ -1216,7 +1215,7 @@ def _scan_stop_btn(session: ZoomSession, float_handle: int) -> Any | None:
 
 def _is_sharing(session: ZoomSession) -> bool:
     """
-    Verifica estado de compartilhamento via Win32 (~0ms) e mantem cache quente.
+    Check sharing state via Win32 (~0 ms) and keep the cache warm.
     """
     float_handle = _find_float_toolbar_hwnd()
     stop_cache = session.stop_share_cache
@@ -1242,11 +1241,11 @@ def _is_sharing(session: ZoomSession) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Estado da reuniao
+# Meeting state
 # ─────────────────────────────────────────────────────────────────
 
 def get_meeting_state(session: ZoomSession) -> MeetingState:
-    """Retorna o estado atual da reuniao (audio, video, sharing, participantes)."""
+    """Return the current meeting state (audio, video, sharing, participants)."""
     ctx = _require_meeting(session)
     ctx.ensure_toolbar()
     win = ctx.get_main_window()
@@ -1259,7 +1258,7 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
     participant_count = 0
 
     if ctx.is_floating:
-        # Modo floating: busca audio/video por texto (controlIDs indisponiveis)
+        # Floating mode: find audio/video by text (controlIDs unavailable).
         try:
             for d in win.descendants():
                 try:
@@ -1292,7 +1291,7 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
             in_meeting=True,
         )
 
-    # Modo normal: busca por controlID
+    # Normal mode: search by controlID.
     h = ctx.main_handle
     if h is None:
         return MeetingState(sharing=sharing, in_meeting=True)
@@ -1345,7 +1344,7 @@ def get_meeting_state(session: ZoomSession) -> MeetingState:
 # ─────────────────────────────────────────────────────────────────
 
 def _get_audio_button(session: ZoomSession):
-    """Retorna o elemento btn_muteAudio (ou equivalente na floating toolbar)."""
+    """Return the btn_muteAudio element (or its floating toolbar equivalent)."""
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
 
@@ -1378,7 +1377,7 @@ def _audio_is_muted(session: ZoomSession) -> bool:
 
 
 def toggle_audio(session: ZoomSession) -> AudioState:
-    """Alterna mute/unmute do audio proprio. Retorna novo estado."""
+    """Toggle own audio mute/unmute. Return the new state."""
     el = _find_toolbar_button(
         session,
         "btn_muteAudio",
@@ -1402,7 +1401,7 @@ def toggle_audio(session: ZoomSession) -> AudioState:
 
 
 def mute_audio(session: ZoomSession) -> AudioState:
-    """Garante que o audio proprio fica mutado."""
+    """Ensure own audio is muted."""
     el = _find_toolbar_button(
         session,
         "btn_muteAudio",
@@ -1421,7 +1420,7 @@ def mute_audio(session: ZoomSession) -> AudioState:
 
 
 def unmute_audio(session: ZoomSession) -> AudioState:
-    """Garante que o audio proprio fica ativo."""
+    """Ensure own audio is unmuted."""
     el = _find_toolbar_button(
         session,
         "btn_muteAudio",
@@ -1444,7 +1443,7 @@ def unmute_audio(session: ZoomSession) -> AudioState:
 # ─────────────────────────────────────────────────────────────────
 
 def _get_video_button(session: ZoomSession):
-    """Retorna o elemento btn_muteVideo (ou equivalente na floating toolbar)."""
+    """Return the btn_muteVideo element (or its floating toolbar equivalent)."""
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
 
@@ -1475,7 +1474,7 @@ def _video_is_stopped(session: ZoomSession) -> bool:
 
 
 def toggle_video(session: ZoomSession) -> VideoState:
-    """Alterna video ligado/desligado. Retorna novo estado."""
+    """Toggle video on/off. Return the new state."""
     el = _find_toolbar_button(
         session,
         "btn_muteVideo",
@@ -1499,7 +1498,7 @@ def toggle_video(session: ZoomSession) -> VideoState:
 
 
 def start_video(session: ZoomSession) -> VideoState:
-    """Garante que o video esta ligado."""
+    """Ensure video is on."""
     el = _find_toolbar_button(
         session,
         "btn_muteVideo",
@@ -1514,7 +1513,7 @@ def start_video(session: ZoomSession) -> VideoState:
 
 
 def stop_video(session: ZoomSession) -> VideoState:
-    """Garante que o video esta desligado."""
+    """Ensure video is off."""
     el = _find_toolbar_button(
         session,
         "btn_muteVideo",
@@ -1529,29 +1528,29 @@ def stop_video(session: ZoomSession) -> VideoState:
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Painel de participantes
+#  Participants panel
 # ─────────────────────────────────────────────────────────────────
 
 def _open_participants_panel(session: ZoomSession) -> bool:
     """
-    Abre o painel de participantes se ainda nao estiver aberto.
-    Retorna True se foi necessario abrir, False se ja estava aberto.
+    Open the participant panel if it is not already open.
+    Return True if opening was necessary, False if already open.
 
-    Usa detecção robusta (estrutural + bounds) para evitar toggle acidental
-    que fecha o painel quando ele já está aberto.
+    Use reliable detection (structural + bounds) to avoid accidentally
+    toggling an open panel closed.
 
-    Double-check: se a primeira verificação diz "fechado", espera 50ms e
-    verifica de novo para descartar falsos negativos por glitch de UIA/COM.
+    Double-check: if the first check says "closed", wait 50 ms and check
+    again to rule out false negatives caused by UIA/COM glitches.
     """
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
 
-    # Detecção robusta: scan estrutural fresco com bounds check
+    # Reliable detection: fresh structural scan with bounds checking.
     if _participants_panel_visible(win):
         return False  # ja estava aberto
 
-    # Double-check: evita toggle acidental por falso negativo transiente.
-    # UIA/COM pode falhar em scan isolado (glitch, timing, animação).
+    # Double-check to avoid an accidental toggle due to a transient false negative.
+    # UIA/COM may fail during a single scan (glitch, timing, animation).
     time.sleep(0.05)
     ctx.refresh(force=True)
     win = ctx.get_main_window()
@@ -1561,7 +1560,7 @@ def _open_participants_panel(session: ZoomSession) -> bool:
     if not _invoke_toolbar_button(session, "btn_paticipants", timeout=2.0):
         raise RuntimeError("btn_paticipants not found")
 
-    # Aguarda painel aparecer — usa detecção robusta
+    # Wait for the panel to appear using reliable detection.
     def _panel_appeared():
         ctx.refresh(force=True)
         try:
@@ -1573,7 +1572,7 @@ def _open_participants_panel(session: ZoomSession) -> bool:
     if not _poll(_panel_appeared, timeout=POPUP_TIMEOUT):
         raise RuntimeError("Participants panel did not open within timeout")
 
-    # Cache proativo dos botões do painel de participantes (mute_all, more_btn)
+    # Proactively cache participant panel buttons (mute_all, more_btn).
     try:
         w = ctx.get_main_window()
         h = ctx.main_handle
@@ -1591,7 +1590,7 @@ def _open_participants_panel(session: ZoomSession) -> bool:
 
 
 def _close_participants_panel(session: ZoomSession) -> None:
-    """Fecha o painel de participantes se estiver aberto."""
+    """Close the participants panel if it is open."""
     ctx = session
     try:
         win = ctx.get_main_window()
@@ -1609,11 +1608,11 @@ def _close_participants_panel(session: ZoomSession) -> None:
 
 def mute_all(session: ZoomSession, allow_unmute: bool = False) -> None:
     """
-    Muta todos os participantes.
+    Mute all participants.
 
-    allow_unmute=False  → garante que a checkbox 'Permitir participantes ativarem
-                          o proprio audio' fica DESMARCADA (padrao mais restritivo).
-    allow_unmute=True   → deixa a checkbox MARCADA.
+    allow_unmute=False → ensure 'Allow participants to unmute themselves'
+                         is UNCHECKED (the more restrictive default).
+    allow_unmute=True → leave the checkbox CHECKED.
     """
     ctx = _require_meeting(session)
     opened_by_us = _open_participants_panel(session)
@@ -1633,7 +1632,7 @@ def mute_all(session: ZoomSession, allow_unmute: bool = False) -> None:
 
     _safe_invoke(session, mute_btn)
 
-    # Aguarda caixa de dialogo de confirmacao via poll
+    # Poll for the confirmation dialog.
     _CONFIRM_CLASSES = (
         "zChangeNameWndClass",
         "ZGridMultiLevelPopupWndClass",
@@ -1656,19 +1655,19 @@ def mute_all(session: ZoomSession, allow_unmute: bool = False) -> None:
     confirm_win = _poll(_find_confirm_dialog, timeout=POPUP_TIMEOUT)
 
     if not confirm_win:
-        # Sem dialogo = nao havia participantes ou Zoom mutou silenciosamente
+        # No dialog: no participants were present or Zoom muted silently.
         if opened_by_us:
             _close_participants_panel(session)
         return
 
-    # ── Ajusta checkbox ──────────────────────────────────────────
-    # chk_option = "Permitir que participantes ativem o proprio audio"
-    # allow_unmute=True  → queremos MARCADA   (toggle_state == 1)
-    # allow_unmute=False → queremos DESMARCADA (toggle_state == 0)
+    # Adjust checkbox
+    # chk_option = "Allow participants to unmute themselves"
+    # allow_unmute=True  → it must be checked   (toggle_state == 1)
+    # allow_unmute=False → it must be unchecked (toggle_state == 0)
     chk = _find_element_by_cid(session, confirm_win, "chk_option")
     if chk:
         try:
-            toggle_state = chk.get_toggle_state()  # 0=desmarcada, 1=marcada
+            toggle_state = chk.get_toggle_state()  # 0=unchecked, 1=checked
             needs_toggle = (
                 (allow_unmute     and toggle_state == 0) or
                 (not allow_unmute and toggle_state == 1)
@@ -1679,8 +1678,8 @@ def mute_all(session: ZoomSession, allow_unmute: bool = False) -> None:
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             _debug_ignored("Could not read Zoom mute-all checkbox state; skipped blind toggle")
 
-    # ── Confirma o dialogo ───────────────────────────────────────
-    # btn_rename e reutilizado pelo Zoom como botao "Sim"/"Yes" nesse contexto
+    # Confirm the dialog
+    # Zoom reuses btn_rename as the "Yes" button in this context.
     confirm_btn = _find_element_by_cid(session, confirm_win, "btn_rename")
     if confirm_btn:
         _safe_invoke(session, confirm_btn)
@@ -1699,22 +1698,22 @@ def mute_all(session: ZoomSession, allow_unmute: bool = False) -> None:
 
 def unmute_all(session: ZoomSession) -> None:
     """
-    Pede que todos os participantes ativem o proprio som.
+    Ask all participants to unmute themselves.
 
-    Estrategia:
-      1. mute_all(allow_unmute=True) — garante que o checkbox
-         'Permitir participantes ativarem o proprio audio' esta marcado.
-      2. Menu 3 pontinhos (more_btn) → 'Pedir a todos para ativar o som'.
+    Strategy:
+      1. mute_all(allow_unmute=True) ensures 'Allow participants to unmute
+         themselves' is checked.
+      2. Three-dot menu (more_btn) → 'Ask All to Unmute'.
     """
-    # Abre o painel uma vez — mute_all vera que ja esta aberto e nao vai fechar.
+    # Open the panel once; mute_all sees it is open and will not close it.
     opened_by_us = _open_participants_panel(session)
     time.sleep(0.1)
 
-    # Passo 1: garante permissao de desmutar (checkbox marcado)
+    # Step 1: allow participants to unmute themselves (checkbox checked).
     mute_all(session, allow_unmute=True)
     time.sleep(0.15)
 
-    # Passo 2: 3 pontinhos → "Pedir a todos para ativar o som"
+    # Step 2: three-dot menu → "Ask All to Unmute".
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
 
@@ -1742,7 +1741,7 @@ def unmute_all(session: ZoomSession) -> None:
     for d in popup_win.descendants():
         try:
             if d.friendly_class_name() in ("MenuItem", "Button", "ListItem"):
-                # Garante que ignora separadores visuais vazios
+                # Ensure empty visual separators are ignored.
                 if (d.window_text() or "").strip():
                     first_item = d
                     break
@@ -1771,13 +1770,13 @@ def unmute_all(session: ZoomSession) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Audio do computador: leave / join
+# Computer audio: leave / join
 # ─────────────────────────────────────────────────────────────────
 
 def _open_audio_dropdown(session: ZoomSession):
     """
-    Abre o dropdown de audio (botao seta ao lado do microfone).
-    Retorna o wrapper WCN_ModelessWnd do popup, ou None se nao aparecer.
+    Open the audio dropdown (arrow button next to the microphone).
+    Return the popup's WCN_ModelessWnd wrapper, or None if it does not appear.
     """
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
@@ -1786,7 +1785,7 @@ def _open_audio_dropdown(session: ZoomSession):
     if not audio_menu:
         return None
 
-    # Focus necessario para o dropdown seta responder ao click
+    # Focus is required for the dropdown arrow to respond to clicks.
     try:
         session.perform_action(win.set_focus)
         time.sleep(0.05)
@@ -1807,7 +1806,7 @@ def _open_audio_dropdown(session: ZoomSession):
 
 
 def leave_computer_audio(session: ZoomSession) -> None:
-    """Sai do audio do computador via menu dropdown."""
+    """Leave computer audio through the dropdown menu."""
     popup_win = _open_audio_dropdown(session)
     if not popup_win:
         raise RuntimeError("btn_audioMenu not found or dropdown did not appear")
@@ -1861,8 +1860,8 @@ def _click_penultimate_audio_menu_item(
 
 def _find_join_audio_btn_in_popup(popup_win):
     """
-    Busca o botao de entrar no audio dentro do popup zJoinAudioWndClass.
-    Usa multiplas estrategias em uma unica passagem de descendants.
+    Find the join audio button inside the zJoinAudioWndClass popup.
+    Use multiple strategies in a single pass through descendants.
     """
     best_by_cid = None
     best_by_text = None
@@ -1890,11 +1889,11 @@ def _find_join_audio_btn_in_popup(popup_win):
 
 
 def join_computer_audio(session: ZoomSession) -> None:
-    """Entra no audio do computador."""
+    """Join computer audio."""
     ctx = _require_meeting(session)
     win = ctx.get_main_window()
 
-    # ── Caso 1: btn_muteAudio exibe "Conectar áudio" (audio desconectado) ──
+    # Case 1: btn_muteAudio shows "Join Audio" (audio disconnected).
     mute_btn = _find_toolbar_button(
         session,
         "btn_muteAudio",
@@ -1915,7 +1914,7 @@ def join_computer_audio(session: ZoomSession) -> None:
                 popup_win = _get_window(session, join_popup["handle"])
                 join_btn = _find_join_audio_btn_in_popup(popup_win)
                 if not join_btn:
-                    # Poll: popup pode demorar a popular seus filhos
+                    # Poll: the popup may take time to populate its children.
                     def _find():
                         return _find_join_audio_btn_in_popup(
                             _get_window(session, join_popup["handle"])
@@ -1930,9 +1929,9 @@ def join_computer_audio(session: ZoomSession) -> None:
                 except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
                     _debug_ignored("Failed to close Zoom join-audio popup after missing button")
                 raise RuntimeError("Join audio button not found in popup (tried controlID + text)")
-            return  # reconectou direto sem popup
+            return  # reconnected directly without a popup
 
-    # ── Caso 2: btn_connectAudio explicito (variante do Zoom) ──
+    # Case 2: explicit btn_connectAudio (Zoom variant).
     connect_btn = _find_element_by_cid(
         session,
         win,
@@ -1969,7 +1968,7 @@ def join_computer_audio(session: ZoomSession) -> None:
 
 
 def _force_foreground(hwnd: int) -> bool:
-    """Forca uma janela para foreground via AttachThreadInput. Sem mouse."""
+    """Force a window to the foreground via AttachThreadInput, without the mouse."""
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
 
@@ -1991,11 +1990,9 @@ def _force_foreground(hwnd: int) -> bool:
 
 
 def stop_screen_share(session: ZoomSession) -> None:
-    """
-    Interrompe o compartilhamento de tela ativo de forma ultrarrápida.
-    """
+    """Stop active screen sharing as quickly as possible."""
     def _float_gone() -> bool:
-        # Considera que o compartilhamento acabou se a janela sumir OU ficar invisível
+        # Treat sharing as ended if the window disappears OR becomes invisible.
         return not bool(_find_float_toolbar_hwnd())
 
     stop_cache = session.stop_share_cache
@@ -2014,7 +2011,7 @@ def stop_screen_share(session: ZoomSession) -> None:
         except Exception:  # noqa: BLE001 - pywinauto/UIA adapter boundary
             stop_cache.invalidate()
 
-    time.sleep(4)  # Breve pausa para UI reagir
+    time.sleep(4)  # Brief pause for the UI to react.
     float_handle = _find_float_toolbar_hwnd()
 
     if float_handle:
@@ -2041,7 +2038,7 @@ def stop_screen_share(session: ZoomSession) -> None:
 # ─────────────────────────────────────────────────────────────────
 
 def dump_descendants(win, max_items: int = 200) -> None:
-    """Loga todos os descendentes de uma janela (util para debug/mapeamento)."""
+    """Log all descendants of a window (useful for debugging/mapping)."""
     count = 0
     for d in win.descendants():
         try:
@@ -2067,21 +2064,21 @@ def dump_descendants(win, max_items: int = 200) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Participantes: nomes e contagem de pessoas
+#  Participants: names and headcount
 # ─────────────────────────────────────────────────────────────────
 
 def get_participant_names(session: ZoomSession) -> list[str]:
     """
-    Retorna a lista de nomes dos participantes da reuniao.
-    Abre o painel de participantes se necessario e fecha ao terminar.
-    Extrai o texto do elemento com controlID='username_lb' de cada ListItem.
+    Return meeting participant names.
+    Open the participant panel if needed and close it when finished.
+    Extract text from the controlID='username_lb' element in each ListItem.
     """
     ctx = _require_meeting(session)
     opened_by_us = _open_participants_panel(session)
     try:
         time.sleep(0.1)
         win = ctx.get_main_window()
-        # Tenta cache/fallback estrutural primeiro (rápido), depois controlID
+        # Try cache/structural fallback first (fast), then controlID.
         list_el = _find_participants_fallback(win, "unified_primary_list")
         if not list_el:
             list_el = _find_element_by_cid(
@@ -2150,16 +2147,16 @@ def _explicit_people_count(name: str) -> int | None:
 
 def count_people(names: list[str], exclude_host: bool = True) -> int:
     """
-    Conta o numero real de pessoas a partir dos nomes de participantes.
+    Count the actual number of people from participant names.
 
-    Um numero inteiro no fim do nome vence os separadores.
-    Ex.: "Familia Alves 7" conta como 7.
+    A trailing integer takes precedence over separators.
+    For example, "Alves Family 7" counts as 7.
 
-    Usa PEOPLE_SEPARATORS para detectar multiplas pessoas em um nome.
-    O separador recomendado e ' & ' (ex: 'Felipe & Julia').
-    Tambem aceita ' | ', ' + '.
+    Use PEOPLE_SEPARATORS to detect multiple people in one name.
+    The recommended separator is ' & ' (e.g. 'Felipe & Julia').
+    Also accept ' | ' and ' + '.
 
-    Se exclude_host=True, subtrai 1 para descontar o anfitriao.
+    If exclude_host=True, subtract 1 to exclude the host.
     """
     total = 0
     for name in names:

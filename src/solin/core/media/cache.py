@@ -1,9 +1,9 @@
 """
-MediaCacheManager — gerencia cache e pré-download de mídia remota.
+MediaCacheManager — manage remote media caching and prefetching.
 
-O manager centraliza a fila global de prefetch para que ações em lote não
-criem dezenas de SongDownloader simultâneos. UIs consultam estado ativo/queued
-separadamente: ativo mostra progresso; queued mostra espera sem spinner falso.
+Centralize the global prefetch queue so batch actions do not create dozens
+of simultaneous SongDownloader instances. UIs query active/queued states
+separately: active shows progress; queued shows waiting without a misleading spinner.
 """
 from __future__ import annotations
 
@@ -60,22 +60,22 @@ class MediaCacheManager(QObject):
     """Owns the application media-cache queue on the Qt main thread."""
 
     _notify_cached_requested = Signal(str)
-    # url que agora está em cache (por prefetch ou notificação do player)
+    # URL now cached (via prefetch or a player notification)
     cache_changed      = Signal(str)
-    # caminho local removido do cache (arquivo principal; .done também é removido)
+    # local path removed from cache (main file; .done is removed too)
     cache_removed      = Signal(str)
     _cache_removed_requested = Signal(str)
-    # progresso do prefetch: (url, bytes_baixados, bytes_total)
+    # prefetch progress: (url, bytes_downloaded, bytes_total)
     prefetch_progress  = Signal(str, int, int)
     # erro no prefetch: (url, mensagem)
     prefetch_error     = Signal(str, str)
-    # url aguardando uma vaga na fila
+    # URL waiting for a queue slot
     prefetch_queued    = Signal(str)
-    # url saiu da fila pendente (iniciou, cancelou ou foi descartada)
+    # URL left the pending queue (started, canceled, or discarded)
     prefetch_dequeued  = Signal(str)
     # status de lote: batch_id, queued, active, done, failed
     prefetch_batch_changed = Signal(str, int, int, int, int)
-    # erro de lote emitido uma vez quando o restante e abortado
+    # batch error emitted once when the remaining work is aborted
     prefetch_batch_error = Signal(str, str)
 
     def __init__(
@@ -101,7 +101,7 @@ class MediaCacheManager(QObject):
     def max_concurrent_prefetches(self, value: int) -> None:
         self._prefetch_queue.max_concurrent = max(0, int(value))
 
-    # ── API pública ───────────────────────────────────────────────────────
+    # Public API
 
     def is_cached(self, url: str) -> bool:
         return is_url_cached(url, self.media_cache_dir)
@@ -112,27 +112,27 @@ class MediaCacheManager(QObject):
 
     @staticmethod
     def is_remote(url: str) -> bool:
-        """True se a URL é HTTP/HTTPS (portanto sujeita a cacheamento)."""
+        """True if the URL uses HTTP/HTTPS and is therefore cacheable."""
         return is_remote_url(url)
 
     def is_prefetching(self, url: str) -> bool:
-        """True se há um prefetch ativo para a URL."""
+        """True if a prefetch is active for the URL."""
         return self._prefetch_queue.is_prefetching(url)
 
     def is_queued(self, url: str) -> bool:
-        """True se a URL aguarda uma vaga na fila de prefetch."""
+        """True if the URL is waiting for a prefetch queue slot."""
         return self._prefetch_queue.is_queued(url)
 
     @Slot(str)
     def prefetch(self, url: str, priority: bool = False) -> None:
         """
-        Inicia download em background para pré-cachear a mídia.
-        No-op se já cacheado; se a fila estiver cheia, aguarda uma vaga.
+        Start a background download to pre-cache media.
+        Do nothing if already cached; wait for a slot if the queue is full.
         """
         self._apply_plan(self._prefetch_queue.prefetch(url, priority=priority))
 
     def prefetch_many(self, urls: list[str], batch_id: str) -> int:
-        """Enfileira um lote deduplicado e retorna quantas URLs entraram na fila."""
+        """Enqueue a deduplicated batch and return the number of URLs added."""
         plan = self._prefetch_queue.prefetch_many(urls, batch_id)
         self._apply_plan(plan)
         return plan.added
@@ -145,14 +145,14 @@ class MediaCacheManager(QObject):
 
     def cancel_prefetch(self, url: str) -> None:
         """
-        Cancela o prefetch ativo para a URL (se houver).
-        Deve ser chamado pelo MediaController ANTES de iniciar seu download,
-        para evitar gravações simultâneas no mesmo .tmp.
+        Cancel the active prefetch for the URL, if any.
+        MediaController must call this BEFORE starting its own download
+        to avoid concurrent writes to the same .tmp file.
         """
         self._apply_plan(self._prefetch_queue.cancel_prefetch(url))
 
     def cancel_all(self) -> None:
-        """Cancela todos os prefetches ativos (ex: ao fechar o app)."""
+        """Cancel all active prefetches (e.g. when closing the application)."""
         self._apply_plan(self._prefetch_queue.cancel_all())
 
     def cancel_batch(self, batch_id: str) -> None:
@@ -160,9 +160,9 @@ class MediaCacheManager(QObject):
 
     def notify_cached(self, url: str) -> None:
         """
-        Chamado pelo MediaController quando SEU download termina.
-        Garante que o prefetch concorrente (se houvesse) seja removido do dict
-        e emite cache_changed para atualizar a UI.
+        Called by MediaController when ITS download finishes.
+        Ensure any concurrent prefetch is removed from the dict and emit
+        cache_changed to update the UI.
         """
         self._downloaders.pop(url, None)
         self._apply_plan(self._prefetch_queue.notify_cached(url))
@@ -173,10 +173,10 @@ class MediaCacheManager(QObject):
 
     def remove_cached_file(self, path: str) -> bool:
         """
-        Remove um arquivo do cache e seu marcador .done, emitindo cache_removed.
+        Remove a cached file and its .done marker, emitting cache_removed.
 
-        Retorna True se o arquivo principal ou o marcador foram removidos.
-        Centralizar esse fluxo evita UIs com estado stale após exclusão manual.
+        Return True if the main file or marker was removed. Centralizing this
+        flow prevents stale UI state after manual deletion.
         """
         removed = remove_cached_entry(self.media_cache_dir, path)
 

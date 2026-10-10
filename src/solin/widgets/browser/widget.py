@@ -42,37 +42,37 @@ if TYPE_CHECKING:
 #
 # Melhorias v2:
 #
-#   HOVER CONFIÁVEL
-#     • Substituído display:none/block por opacity + pointer-events.
-#       display:none remove o elemento do layout e pode disparar mouseleave
-#       extras no container; opacity:0 mantém o elemento no fluxo e evita
-#       esse efeito colateral.
-#     • Cada par (anchor, btn) compartilha um único timer com clearTimeout
-#       no mouseenter. Qualquer re-entrada cancela o timer pendente, então
-#       sair e voltar rapidamente nunca oculta o botão indevidamente.
-#     • O mouseleave do btn agora usa o mesmo timer em vez de esconder
-#       imediatamente — mover o cursor do botão de volta ao container não
-#       fecha mais o overlay.
+# RELIABLE HOVER
+# • Replace display:none/block with opacity and pointer-events.
+# display:none removes the element from the layout and may trigger extra
+# mouseleave events on the container; opacity:0 keeps it in the flow and avoids
+# that side effect.
+# • Each (anchor, btn) pair shares a single timer cleared with clearTimeout
+# on mouseenter. Re-entering cancels the pending timer, so
+# leaving and returning quickly never hides the button unexpectedly.
+# • The button's mouseleave uses the same timer instead of hiding
+# immediately; moving the cursor back to the container does not
+# hide the overlay again.
 #
-#   ÍCONES SVG
-#     • Botão exibe um ícone SVG inline em vez de texto:
-#         – Imagem : monitor com cena de paisagem (montanha + sol)
-#         – Vídeo  : monitor com triângulo de play
-#     • O texto traduzido vira tooltip (title) e aria-label,
-#       mantendo acessibilidade e deixando claro o propósito do botão.
+# SVG ICONS
+# • The button shows an inline SVG icon rather than text:
+# – Image: monitor with a landscape scene (mountain and sun).
+# – Video: monitor with a play triangle.
+# • The translated text becomes the tooltip (title) and aria-label,
+# Preserve accessibility while making the button's purpose clear.
 #
-#   ESTRATÉGIA DE VÍDEO (inalterada)
-#     1. Ao encontrar um <video>, varrer os <source> filhos e armazenar o
-#        melhor URL direto (mp4 > webm > outro) antes do VideoJS agir.
-#     2. Procurar também em data-* e JSON embutido na página.
-#     3. Ao clicar, enviar o URL direto ao bridge Python → QMediaPlayer.
+# VIDEO STRATEGY (unchanged)
+# 1. When a <video> is found, scan its child <source> elements and store the
+# best direct URL (mp4 > webm > other) before VideoJS acts.
+# 2. Also search data-* attributes and JSON embedded in the page.
+# 3. On click, send the direct URL to the Python bridge for playback.
 #
 import json
 from ...styles.icons import JS_SVG_IMAGE, JS_SVG_VIDEO
 
 
 def _build_overlay_js(body: str) -> str:
-    """Injeta as SVG strings vindas de icons.py no corpo do JS overlay."""
+    """Inject SVG strings from icons.py into the JS overlay body."""
     body = re.sub(
         r"// ── Ícones SVG.*?\.join\(''\);",
         (
@@ -706,22 +706,22 @@ _OVERLAY_JS_RAW = r"""
 })();
 """
 
-# Substitui as definições inline de SVG pelas vindas de icons.py de SVG pelas vindas de icons.py
+# Replace inline SVG definitions with those from icons.py.
 OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 
 # ── BrowserWidget ──────────────────────────────────────────────────────────────
 #
 # Layout manual: QTabBar standalone + QPushButton "+" + QStackedWidget.
-# O botão "+" é um widget IRMÃO do QTabBar no HBoxLayout — nunca filho.
-# Isso elimina para sempre o problema de posicionamento sobre as abas.
+# The "+" button is a SIBLING of QTabBar in HBoxLayout, never a child.
+# This prevents positioning issues over the tabs.
 #
-#  tab_row (QFrame, fundo do tema):
+# tab_row (QFrame, themed background):
 #    QHBoxLayout:
 #      [BrowserTabBar — setExpanding(False), scroll buttons]
 #      [QPushButton "+"]
-#      [stretch — preenche o espaço restante com a cor de fundo]
+# [stretch: fill the remaining space with the background color]
 #
-#  QStackedWidget — conteúdo das abas
+# QStackedWidget: tab content
 #  loading_bar
 
 class BrowserWidget(
@@ -733,9 +733,9 @@ class BrowserWidget(
     project_image_signal       = Signal(bytes)
     project_video_signal       = Signal(str, str)
     stop_projection_signal     = Signal()
-    project_tab_pixmap_signal  = Signal(object)   # QImage — frame ao vivo da aba pinada
+    project_tab_pixmap_signal  = Signal(object)   # QImage: live frame from the pinned tab
     stop_tab_projection_signal = Signal()
-    crop_image_signal          = Signal(bytes)     # PNG bytes da região recortada
+    crop_image_signal          = Signal(bytes)     # PNG bytes of the cropped region
     media_destination_signal = Signal(str, str, str, bool)
 
     _image_fetched_signal = Signal(int, bytes)
@@ -779,14 +779,14 @@ class BrowserWidget(
         self.setAcceptDrops(True)
         self._image_fetched_signal.connect(self._deliver_image)
 
-        # ── Estado de projeção de aba ─────────────────────────────────────────
+        # Tab projection state
         self._pinned_tab: "BrowserTab | None" = None
         self._tab_projection_fps = self._read_projection_fps(projection_fps)
         self._tab_proj_timer = QTimer(self)
         self._tab_proj_timer.setInterval(self._projection_interval_ms())
         self._tab_proj_timer.timeout.connect(self._grab_pinned_tab)
-        # True quando o crop foi iniciado sobre a aba pinada — a projeção fica
-        # congelada (timer parado) mas o estado é mantido para poder retomar.
+        # True when cropping starts on the pinned tab: projection is
+        # frozen (timer stopped), but state is retained so it can resume.
         self._proj_paused_for_crop: bool = False
         self._tab_capture_requests: set[tuple[int, int]] = set()
         self._crop_capture_requests: set[tuple[int, int]] = set()
@@ -795,8 +795,8 @@ class BrowserWidget(
 
         # ── Spotlight de cursor ───────────────────────────────────────────────
         self._cursor_spotlight_active: bool = False
-        # Timer Qt que sincroniza a posição durante drags nativos (scrollbars,
-        # etc.) onde o Chromium captura o mouse e para de despachar para o JS.
+        # Qt timer syncing position during native drags (scrollbars,
+        # etc.) where Chromium captures the mouse and stops dispatching to JS.
         self._spotlight_drag_timer = QTimer(self)
         self._spotlight_drag_timer.setInterval(16)   # ~60 fps
         self._spotlight_drag_timer.timeout.connect(self._sync_spotlight_drag_pos)
@@ -828,9 +828,9 @@ class BrowserWidget(
         self._tab_bar.setCurrentIndex(0)
         self._update_nav_buttons()
 
-    # ── Projeção ────────────────────────────────────────────────────────────────
+    # Projection
 
-    # ── Projeção de aba ao vivo ────────────────────────────────────────────────
+    # Live tab projection
 
     def _read_projection_fps(self, configured: int | None = None) -> int:
         if configured is not None:
@@ -922,11 +922,11 @@ class BrowserWidget(
             self.stop_tab_projection_signal.emit()
 
     def _start_tab_projection(self):
-        """Pina a aba atual e começa captura no FPS configurado."""
+        """Pin the current tab and start capturing at the configured FPS."""
         self._image_fetches.invalidate()
         tab = self._current_tab()
         if not tab:
-            # Sem aba válida — desfaz o toggle silenciosamente
+            # No valid tab: silently undo the toggle.
             self.cast_btn.blockSignals(True)
             self.cast_btn.setChecked(False)
             self.cast_btn.blockSignals(False)
@@ -938,10 +938,10 @@ class BrowserWidget(
         self._tab_frame_stream_active = False
         self._pinned_tab = tab
         idx = self._tab_bar.currentIndex()
-        # Destaque azul no título da aba pinada
+        # Blue highlight on the pinned tab's title.
         self._tab_bar.setTabTextColor(idx, QColor(PALETTE.accent))
         self._update_cast_btn_visual(True)
-        # Mantém o Chromium renderizando mesmo quando BrowserWidget for ocultado
+        # Keep Chromium rendering even when BrowserWidget is hidden.
         tab.view.set_projection_active(True)
         if not self._start_native_frame_stream(tab):
             log.info(
@@ -951,7 +951,7 @@ class BrowserWidget(
             self._tab_proj_timer.start()
 
     def _stop_tab_projection_internal(self):
-        """Para o timer e limpa estado visual — NÃO emite o sinal externo."""
+        """Stop the timer and clear visual state; do NOT emit the external signal."""
         self._tab_proj_timer.stop()
         if self._pinned_tab:
             try:
@@ -962,15 +962,15 @@ class BrowserWidget(
         self._tab_capture_in_flight = False
         self._tab_frame_stream_active = False
         self._proj_paused_for_crop = False
-        # Remove destaque de todas as abas
+        # Remove highlights from all tabs.
         for i in range(self._tab_bar.count()):
             self._tab_bar.setTabTextColor(i, QColor())
-        # Libera o Chromium para pausar renderização normalmente quando oculto
+        # Allow Chromium to pause rendering normally when hidden.
         if self._pinned_tab:
             self._pinned_tab.view.set_projection_active(False)
         self._pinned_tab = None
         self._update_cast_btn_visual(False)
-        # Garante que o botão fique desmarcado sem disparar toggled
+        # Ensure the button is unchecked without emitting toggled.
         self.cast_btn.blockSignals(True)
         self.cast_btn.setChecked(False)
         self.cast_btn.blockSignals(False)
@@ -1017,7 +1017,7 @@ class BrowserWidget(
             )
             self._tab_proj_timer.start()
 
-    # ── Limpeza de ciclo de vida ────────────────────────────────────────────────
+    # Lifecycle cleanup
 
     def cleanup_browser(self) -> None:
         """Compatibility cleanup hook kept for MainWindow shutdown."""
@@ -1065,7 +1065,7 @@ class BrowserWidget(
 
     @staticmethod
     def _make_spotlight_icon(color: str, size: int = 16) -> QIcon:
-        """Ícone de círculo-com-ponto para o botão de spotlight."""
+        """Circle-with-dot icon for the spotlight button."""
         from PySide6.QtGui import QPixmap, QColor
         px = QPixmap(size, size)
         px.fill(Qt.GlobalColor.transparent)
@@ -1087,7 +1087,7 @@ class BrowserWidget(
         p.end()
         return QIcon(px)
 
-    # ── Aspect ratio do browser ───────────────────────────────────────────────
+    # Browser aspect ratio
 
     def _on_aspect_lock_toggled(self, checked: bool):
         self._browser_aspect_locked = checked
@@ -1175,10 +1175,10 @@ class BrowserWidget(
             self.cursor_btn.setToolTip(self.tr("Cursor spotlight (presentation mode)"))
 
     def _sync_spotlight_drag_pos(self):
-        """Fallback Qt: sincroniza posição durante drags nativos."""
+        """Qt fallback: synchronize position during native drags."""
         from PySide6.QtGui import QCursor
 
-        # Só age quando um botão está pressionado
+        # Act only while a button is pressed.
         if not self._mouse_button_pressed_for_spotlight():
             return
 
@@ -1215,10 +1215,11 @@ class BrowserWidget(
             return False
 
     def _grab_pinned_tab(self):
-        """Captura o frame atual da aba pinada pela API nativa do WebView.
+        """
+        Capture the current pinned tab frame through the native WebView API.
 
-        Nunca usamos captura de tela aqui: qualquer screen-grab capturaria
-        toolbar, outros apps ou janelas passando por cima do browser.
+        Never use screen capture here: it would include toolbars, other apps,
+        or windows overlapping the browser.
         """
         if not self._pinned_tab:
             return
@@ -1307,7 +1308,7 @@ class BrowserWidget(
         if not url:
             return
         self._image_fetches.invalidate()
-        # Usa o título da aba como fallback; metadados do arquivo sobrescrevem depois
+        # Use the tab title as a fallback; file metadata overrides it later.
         tab = self._current_tab()
         tab_title = tab.view.title().strip() if tab else ""
         title = tab_title if tab_title else "Video"
@@ -1321,7 +1322,7 @@ class BrowserWidget(
     _CURSOR_SPOTLIGHT_JS = CURSOR_SPOTLIGHT_JS
     _CURSOR_SPOTLIGHT_REMOVE_JS = CURSOR_SPOTLIGHT_REMOVE_JS
 
-    # ── Recorte de região ──────────────────────────────────────────────────────
+    # Region cropping
 
     def _on_crop_toggled(self, checked: bool):
         if checked:
@@ -1330,7 +1331,7 @@ class BrowserWidget(
             self._cancel_crop_mode()
 
     def _start_crop_mode(self):
-        """Cria o overlay Qt de seleção sobre a aba atual."""
+        """Create the Qt selection overlay over the current tab."""
         tab = self._current_tab()
         if not tab:
             self._reset_crop_btn()
@@ -1338,7 +1339,7 @@ class BrowserWidget(
 
         self._activate_tab(tab)
 
-        # Pausa a projeção ao vivo se o crop for na aba pinada
+        # Pause live projection when cropping the pinned tab.
         if self._pinned_tab is not None and self._pinned_tab is tab:
             self._tab_proj_timer.stop()
             if self._tab_frame_stream_active:
@@ -1351,7 +1352,7 @@ class BrowserWidget(
 
         self._update_crop_btn_visual(True)
 
-        # Cria overlay Qt sobre o view — funciona com HTML, PDF ou qualquer conteúdo
+        # Create a Qt overlay over the view; works with HTML, PDF, or any content.
         overlay = CropOverlay(tab.view)
         overlay.crop_confirmed.connect(self._on_crop_selected)
         overlay.crop_cancelled.connect(self._on_crop_cancelled)
@@ -1361,7 +1362,7 @@ class BrowserWidget(
         overlay.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _cancel_crop_mode(self):
-        """Remove o overlay Qt e cancela o modo de recorte."""
+        """Remove the Qt overlay and cancel crop mode."""
         overlay = getattr(self, '_crop_overlay', None)
         if overlay:
             try:
@@ -1394,7 +1395,7 @@ class BrowserWidget(
 
     @Slot(float, float, float, float)
     def _on_crop_selected(self, x: float, y: float, w: float, h: float):
-        """Captura a região selecionada usando a API nativa do WebView."""
+        """Capture the selected region using the native WebView API."""
         self._crop_overlay = None
         self._reset_crop_btn()
         self._proj_paused_for_crop = False
@@ -1404,7 +1405,7 @@ class BrowserWidget(
         QTimer.singleShot(60, lambda: self._grab_crop_region(tab, x, y, w, h))
 
     def _grab_crop_region(self, tab, x: float, y: float, w: float, h: float):
-        """Captura região selecionada diretamente do WebView nativo."""
+        """Capture the selected region directly from the native WebView."""
         try:
             request_id = tab.view.capture_region(int(x), int(y), int(w), int(h))
         except Exception as exc:  # noqa: BLE001 - native webview capture boundary
@@ -1414,10 +1415,10 @@ class BrowserWidget(
 
     @Slot()
     def _on_crop_cancelled(self):
-        """Usuário cancelou via ESC / clique sem arrastar / blur."""
+        """User canceled via ESC, click without dragging, or blur."""
         self._crop_overlay = None
         self._reset_crop_btn()
-        # Se a projeção estava apenas pausada para o crop, retoma normalmente
+        # Resume normally if projection was only paused for cropping.
         if self._proj_paused_for_crop and self._pinned_tab is not None:
             self._proj_paused_for_crop = False
             self._resume_tab_projection_after_pause()

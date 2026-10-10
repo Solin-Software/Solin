@@ -37,7 +37,7 @@ def test_browser_overlay_js_keeps_the_hover_bar_outside_the_page():
 def test_browser_overlay_js_context_menu_uses_the_hover_media_pair():
     overlay_js = browser_widget.OVERLAY_JS
 
-    # O par {image, video} resolvido por elementsFromPoint alimenta o menu inteiro.
+    # The {image, video} pair resolved by elementsFromPoint feeds the entire menu.
     assert "function ctxItemsFor(media)" in overlay_js
     assert (
         "if (media.image) _addCtxGroup(items, seen, imageUrlOf(media.image), 'image');"
@@ -48,11 +48,11 @@ def test_browser_overlay_js_context_menu_uses_the_hover_media_pair():
         in overlay_js
     )
 
-    # Clique sobre o botão da barra reaproveita o par; clique na mídia resolve pelo ponto.
+    # Toolbar button clicks reuse the pair; media clicks resolve it at the click point.
     assert "var media = (_bar && _bar.contains(e.target) && _barMedia)" in overlay_js
     assert ": mediaFromPoint(e.clientX, e.clientY);" in overlay_js
 
-    # A mídia não é redescoberta caminhando o DOM.
+    # Media is not rediscovered by walking the DOM.
     assert "_gatherCtxItems" not in overlay_js
     assert "_gatherFromElement" not in overlay_js
 
@@ -60,12 +60,12 @@ def test_browser_overlay_js_context_menu_uses_the_hover_media_pair():
 def test_browser_overlay_js_resolves_relative_image_urls():
     overlay_js = browser_widget.OVERLAY_JS
 
-    # src relativo (wol.jw.org) precisa virar absoluto antes do filtro http,
-    # senão o menu de mídia não abre e o menu nativo assume.
+    # Relative src (wol.jw.org) must become absolute before the HTTP filter;
+    # otherwise the media menu does not open and the native menu takes over.
     assert "function absMediaUrl(url)" in overlay_js
     assert "var abs = new URL(url, document.baseURI).href;" in overlay_js
 
-    # Os três pontos que transformam atributo em URL candidata usam o helper.
+    # All three attribute-to-candidate-URL conversions use the helper.
     assert "return m ? absMediaUrl(m[1]) : '';" in overlay_js
     assert (
         "var url = absMediaUrl((img.getAttribute('src') || img.currentSrc || '')"
@@ -76,7 +76,7 @@ def test_browser_overlay_js_resolves_relative_image_urls():
         ".split('?')[0]);" in overlay_js
     )
 
-    # A cadeia antiga parava no src relativo e nunca chegava ao currentSrc.
+    # The old chain stopped at relative src and never reached currentSrc.
     assert "|| (el.getAttribute('src') || '').split('?')[0]" not in overlay_js
 
 

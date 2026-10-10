@@ -1,49 +1,48 @@
 """
 reader.py
-─────────────────────
-Lê arquivos .jwlplaylist exportados pelo JW Library ≥ 14.
+=========
+Read .jwlplaylist files exported by JW Library ≥ 14.
 
-Formato:
-  • ZIP contendo userData.db (SQLite) + imagens embutidas
-  • Tabelas relevantes:
-      - Playlist              → metadados da playlist (nome, etc.)
-      - PlaylistItem          → itens ordenados (Label, position)
-      - IndependentMedia      → mídias locais embutidas no ZIP
-                                (FilePath, OriginalFileName, MimeType, Hash)
-      - PlaylistItemIndependentMediaMap → liga PlaylistItem ↔ IndependentMedia
-      - PlaylistItemLocationMap         → liga PlaylistItem ↔ Location (vídeos JW.org)
-      - Location              → referência de conteúdo JW.org
-                                (KeySymbol, Track, IssueTagNumber, DocumentId, …)
+Format:
+  • ZIP containing userData.db (SQLite) and embedded images.
+  • Relevant tables:
+      - PlaylistItem → ordered items (Label, position).
+      - IndependentMedia → local media embedded in the ZIP
+        (FilePath, OriginalFileName, MimeType, Hash).
+      - PlaylistItemIndependentMediaMap → PlaylistItem ↔ IndependentMedia.
+      - PlaylistItemLocationMap → PlaylistItem ↔ Location (JW.org videos).
+      - Location → JW.org content reference
+        (KeySymbol, Track, IssueTagNumber, DocumentId, …).
 
-Resultado de `parse()`:
+`parse()` result:
   {
-    "name": str,                  # nome da playlist
+    "name": str,  # playlist name
     "items": [
-        {
-            "source_item_id": str,       # stable PlaylistItem ID within this source
-            "title":      str,
-            "type":       "image" | "video",
-            "source":     "embedded" | "jworg",
-            # — para imagens embutidas:
-            "data":       bytes,          # conteúdo da imagem
-            "mime_type":  str,
-            "filename":   str,
-            # — para vídeos JW.org:
-            "jworg_url":  str | None,     # URL resolvida (pode ser None se offline)
-            "key_symbol": str,
-            "track":      int | None,
-            "issue_tag":  int | None,
-            "doc_id":     int | None,
-            "language":   int,
-        },
-        …
+      {
+        "source_item_id": str,  # stable PlaylistItem ID within this source
+        "title": str,
+        "type": "image" | "video",
+        "source": "embedded" | "jworg",
+        # For embedded images:
+        "data": bytes,  # image contents
+        "mime_type": str,
+        "filename": str,
+        # For JW.org videos:
+        "jworg_url": str | None,  # resolved URL; may be None when offline
+        "key_symbol": str,
+        "track": int | None,
+        "issue_tag": int | None,
+        "doc_id": int | None,
+        "language": int,
+      },
+      …
     ]
   }
 
-Resolução de URLs JW.org:
-  Tenta https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?...
-  Se a rede não estiver disponível, retorna jworg_url=None — o chamador
-  pode exibir uma mensagem ao usuário ou pular o item.
+JW.org URL resolution:
+  Try https://b.jw-cdn.org/apis/pub-media/GETPUBMEDIALINKS?...
+  If the network is unavailable, return jworg_url=None; callers can
+  display a message to the user or skip the item.
 """
 
 from __future__ import annotations
@@ -68,7 +67,7 @@ CancelCallback = Callable[[], bool]
 
 _READ_CHUNK_SIZE = 1024 * 1024
 
-# Mapa simples MimeType → extensão de arquivo
+# Simple MimeType → file extension map
 _MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -90,7 +89,7 @@ _MIME_TO_EXT: dict[str, str] = {
 
 @dataclass
 class _RawItem:
-    """Representa um item bruto da tabela PlaylistItem."""
+    """Raw item from the PlaylistItem table."""
 
     playlist_item_id: int
     label: str
@@ -100,14 +99,14 @@ class _RawItem:
     accuracy: Optional[int] = None
     end_action: Optional[int] = None
     thumbnail_file_path: Optional[str] = None
-    # preenchidos depois da junção com as tabelas de mapa:
+    # populated after joining the mapping tables:
     independent_media_id: Optional[int] = None
     location_id: Optional[int] = None
 
 
 @dataclass
 class _IndependentMedia:
-    filepath: str  # relativo dentro do ZIP
+    filepath: str  # relative path within the ZIP
     original_name: str
     mime_type: str
     duration_ticks: Optional[int] = None
@@ -124,7 +123,7 @@ class _Location:
     doc_id: Optional[int]
     language_id: int = 0
     meps_language: int = 0
-    major_multimedia_type: Optional[int] = None  # 0=audio, 2=video (da PlaylistItemLocationMap)
+    major_multimedia_type: Optional[int] = None  # 0=audio, 2=video (from PlaylistItemLocationMap)
     base_duration_ticks: Optional[int] = None
 
 
@@ -160,7 +159,7 @@ def _database_text(
 
 
 class JWLPlaylistReader:
-    """Lê um .jwlplaylist e retorna a estrutura de playlist normalizada."""
+    """Read a .jwlplaylist file and return the normalized playlist structure."""
 
     def __init__(
         self,
@@ -191,8 +190,8 @@ class JWLPlaylistReader:
 
     def parse(self) -> dict:
         """
-        Retorna dict com 'name' e 'items'.
-        Lança FileNotFoundError, zipfile.BadZipFile ou ValueError em caso de erro.
+        Return a dict with 'name' and 'items'.
+        Raise FileNotFoundError, zipfile.BadZipFile, or ValueError on failure.
         """
         if not self._path.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {self._path}")
@@ -219,7 +218,7 @@ class JWLPlaylistReader:
     # ── Internos ──────────────────────────────────────────────────────────────
 
     def _parse_zip(self) -> dict:
-        # Localiza userData.db (pode estar na raiz ou numa subpasta)
+        # Find userData.db (may be at the root or in a subfolder).
         db_entry = self._find_db()
         if not db_entry:
             raise ValueError("userData.db não encontrado no arquivo .jwlplaylist")
@@ -237,13 +236,13 @@ class JWLPlaylistReader:
 
     def _parse_db(self, db_bytes: bytes) -> dict:
         """
-        Carrega os bytes do SQLite via arquivo temporário → backup para :memory:.
+        Load SQLite bytes through a temporary file, then back up to :memory:.
 
-        Essa abordagem é a mais robusta e funciona em 100% dos casos:
-          - Não depende de deserialize() (disponível só no Python 3.11+ e com
-            edge cases em tamanhos de página não-padrão).
-          - Não mantém arquivos temporários abertos durante a extração
-            (evita WinError 32 no Windows).
+        This robust approach:
+          - Does not depend on deserialize() (Python 3.11+ only, with edge cases
+            for nonstandard page sizes).
+          - Does not keep temporary files open during extraction
+            (avoids WinError 32 on Windows).
         """
         import tempfile
 
@@ -305,20 +304,20 @@ class JWLPlaylistReader:
                 log.debug("Could not close in-memory playlist database", exc_info=True)
 
     def _extract(self, con: sqlite3.Connection) -> dict:
-        # ── Nome da playlist ──────────────────────────────────────────────────
+        # Playlist name
         playlist_name = self._get_playlist_name(con)
 
         # ── Itens ordenados ───────────────────────────────────────────────────
         raw_items = self._get_raw_items(con)
         self._raise_if_cancelled()
 
-        # ── Mapa item → mídia embutida ────────────────────────────────────────
+        # Item → embedded media map
         im_map = self._build_independent_media_map(con)
 
-        # ── Mapa item → location (vídeo JW.org) ──────────────────────────────
+        # Item → location map (JW.org video)
         loc_map = self._build_location_map(con)
 
-        # ── Constrói lista de resultado ───────────────────────────────────────
+        # Build the result list.
         items = []
         total_items = len(raw_items)
         self._report_progress("items", 0, total_items)
@@ -328,7 +327,7 @@ class JWLPlaylistReader:
 
             if iid in im_map:
                 media = im_map[iid]
-                # Roteia pelo mime_type — IndependentMedia pode conter vídeo também
+                # Route by mime_type; IndependentMedia can also contain video.
                 mime = (media.mime_type or "").lower()
                 if mime.startswith("video/") or mime.startswith("audio/"):
                     entry = self._build_embedded_media_entry(raw, media)
@@ -349,45 +348,45 @@ class JWLPlaylistReader:
 
         return {"name": playlist_name, "items": items}
 
-    # ── Helpers de extração ───────────────────────────────────────────────────
+    # Extraction helpers
 
     def _get_playlist_name(self, con: sqlite3.Connection) -> str:
-        # O schema real do JW Library não possui tabela "Playlist".
-        # Usa o nome do arquivo (sem extensão) como nome da playlist.
+        # The actual JW Library schema has no "Playlist" table.
+        # Use the filename without its extension as the playlist name.
         return self._path.stem or "Playlist"
 
     def _get_raw_items(self, con: sqlite3.Connection) -> list[_RawItem]:
         """
-        Lê os itens da PlaylistItem de forma robusta.
+        Read PlaylistItem entries reliably.
 
-        O JW Library mudou o schema entre versões:
-          - v14+  usa a coluna  "Position"  (inteiro, base-0)
-          - Versões mais antigas usam "Order"
-          - Pode haver outras variações (ex.: sem coluna de ordem alguma)
+        JW Library schemas differ between versions:
+          - v14+ uses "Position" (zero-based integer).
+          - Older versions use "Order".
+          - Other variations may have no ordering column.
 
-        Estratégia:
-          1. Inspeciona as colunas reais via PRAGMA table_info.
-          2. Monta a query com as colunas existentes.
-          3. Se nenhuma coluna de ordem for encontrada, ordena por rowid
-             (preserva a ordem de inserção original do JW Library).
+        Strategy:
+          1. Inspect actual columns using PRAGMA table_info.
+          2. Build a query with existing columns.
+          3. If no ordering column exists, sort by rowid to preserve
+             JW Library's original insertion order.
         """
-        # Colunas reais da tabela (em minúsculas para comparação case-insensitive)
+        # Actual table columns (lowercase for case-insensitive comparison)
         pragma_rows = con.execute("PRAGMA table_info(PlaylistItem)").fetchall()
         col_names_lower = {row[1].lower(): row[1] for row in pragma_rows}
-        # row[1] é o nome original da coluna; usamos o mapa lower→original
+        # row[1] is the original column name; use the lowercase→original map.
 
-        # ── Coluna de ID ───────────────────────────────────────────────────────
+        # ID column
         id_col = col_names_lower.get("playlistitemid") or col_names_lower.get("id") or "rowid"
 
-        # ── Coluna de rótulo ───────────────────────────────────────────────────
+        # Label column
         label_col = (
             col_names_lower.get("label")
             or col_names_lower.get("title")
             or col_names_lower.get("name")
         )
 
-        # ── Coluna de ordem ───────────────────────────────────────────────────
-        # Possíveis nomes já observados nos diferentes builds do JW Library:
+        # Order column
+        # Possible names observed in different JW Library builds:
         #   "Position", "Order", "Sequence", "Sort", "SortOrder"
         order_col = (
             col_names_lower.get("position")
@@ -405,10 +404,10 @@ class JWLPlaylistReader:
         )
 
         def _q(col: str) -> str:
-            """Envolve o nome da coluna em aspas duplas (escapa palavras reservadas como Order)."""
+            """Double-quote the column name to escape reserved words such as Order."""
             return '"' + col.replace('"', '""') + '"'
 
-        # Monta SELECT dinamico — sempre lê todas as colunas conhecidas que existirem
+        # Build SELECT dynamically, reading all known columns that exist.
         def _col(name: str) -> Optional[str]:
             return col_names_lower.get(name.lower())
 
@@ -484,8 +483,8 @@ class JWLPlaylistReader:
 
     def _build_independent_media_map(self, con: sqlite3.Connection) -> dict[int, _IndependentMedia]:
         """
-        Retorna {PlaylistItemId: _IndependentMedia} para itens com mídia embutida.
-        Carrega os bytes da mídia diretamente do ZIP.
+        Return {PlaylistItemId: _IndependentMedia} for embedded media items.
+        Load media bytes directly from the ZIP.
         """
         result: dict[int, _IndependentMedia] = {}
         map_columns = {
@@ -537,7 +536,7 @@ class JWLPlaylistReader:
                 "IndependentMedia.Hash",
             )
 
-            # Tenta ler os bytes do ZIP (busca exata e parcial)
+            # Try reading ZIP bytes (exact and partial matches).
             if file_path not in embedded_bytes:
                 embedded_bytes[file_path] = self._read_zip_entry(file_path)
             data = embedded_bytes[file_path]
@@ -559,9 +558,7 @@ class JWLPlaylistReader:
         return result
 
     def _build_location_map(self, con: sqlite3.Connection) -> dict[int, _Location]:
-        """
-        Retorna {PlaylistItemId: _Location} para itens que referenciam vídeos JW.org.
-        """
+        """Return {PlaylistItemId: _Location} for items referencing JW.org videos."""
         result: dict[int, _Location] = {}
         try:
             rows = con.execute(
@@ -608,12 +605,12 @@ class JWLPlaylistReader:
         *,
         phase: str = "media_bytes",
     ) -> Optional[bytes]:
-        """Tenta ler uma entrada do ZIP por caminho exato ou correspondência parcial."""
+        """Try reading a ZIP entry by exact path or partial match."""
         entry_name: str | None = None
         if file_path in self._names_in_zip:
             entry_name = file_path
         else:
-            # Às vezes o FilePath no banco tem separadores diferentes ou subpasta
+            # FilePath in the database may use different separators or a subfolder.
             basename = Path(file_path).name
             for name in self._names_in_zip:
                 if Path(name).name == basename:
@@ -638,7 +635,7 @@ class JWLPlaylistReader:
     # ── Construtores de entry ─────────────────────────────────────────────────
 
     def _build_embedded_media_entry(self, raw: _RawItem, media: _IndependentMedia) -> dict:
-        """Constrói entry para vídeo/áudio embutido no ZIP (IndependentMedia)."""
+        """Build an entry for video/audio embedded in the ZIP (IndependentMedia)."""
         mime = (media.mime_type or "").lower()
         if mime.startswith("audio/"):
             media_type = "audio"
@@ -711,8 +708,8 @@ class JWLPlaylistReader:
             if loc.base_duration_ticks is not None
             else (meta["duration_ticks"] if meta else None)
         )
-        # Título canônico da API (ex: "Faça amizade com os mais velhos") tem
-        # prioridade sobre o Label do banco — que pode ter sido editado/sufixado.
+        # The canonical API title (e.g. "Make Friends With Older Ones") takes
+        # precedence over the database Label, which may have been edited or suffixed.
         api_title = meta.get("title") if meta else None
 
         if loc.major_multimedia_type == 0:
@@ -748,8 +745,8 @@ class JWLPlaylistReader:
 
     def print_schema(self) -> None:
         """
-        Lê o userData.db do ZIP e imprime na tela o esquema real de todas as tabelas.
-        Isso ignora a extração normal e serve apenas para debug.
+        Read userData.db from the ZIP and print the actual schema of all tables.
+        Bypass normal extraction; intended only for debugging.
         """
         if not self._path.exists():
             raise FileNotFoundError(f"Arquivo não encontrado: {self._path}")
@@ -765,8 +762,8 @@ class JWLPlaylistReader:
 
             db_bytes = self._zip.read(db_entry)
 
-            # Reutiliza o sistema robusto de conexão do _parse_db, mas altera o extrator final
-            # Em vez de retornar self._extract, passamos uma função de dump temporária
+            # Reuse _parse_db's robust connection handling, but change the final extractor.
+            # Pass a temporary dump function instead of returning self._extract.
             self._dump_schema(db_bytes)
 
     def _dump_schema(self, db_bytes: bytes):
@@ -789,7 +786,7 @@ class JWLPlaylistReader:
                 "=" * 50,
             ]
 
-            # Pega todas as tabelas
+            # Get all tables.
             tables = con.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()
 
             for table_row in tables:
@@ -797,7 +794,7 @@ class JWLPlaylistReader:
                 lines.append("")
                 lines.append(f"Table: {table_name}")
 
-                # Pega as colunas de cada tabela
+                # Read the columns from each table.
                 columns = con.execute(f"PRAGMA table_info('{table_name}')").fetchall()
                 for col in columns:
                     pk_marker = " (PRIMARY KEY)" if col["pk"] else ""
@@ -812,19 +809,19 @@ class JWLPlaylistReader:
             Path(tmp_path).unlink(missing_ok=True)
 
 
-# ── Função solta no final do arquivo (perto do read_jwlplaylist) ──────────────
+# Standalone function at the end of the file (near read_jwlplaylist)
 
 
 def introspect_jwlplaylist(path: str | Path) -> None:
     """
-    Abre um .jwlplaylist e imprime a estrutura real do banco de dados na tela.
-    Uso: introspect_jwlplaylist('minha_lista.jwlplaylist')
+    Open a .jwlplaylist file and print its actual database structure.
+    Usage: introspect_jwlplaylist('my_playlist.jwlplaylist')
     """
     reader = JWLPlaylistReader(path)
     reader.print_schema()
 
 
-# ── Função de conveniência ────────────────────────────────────────────────────
+# Convenience function
 
 
 def read_jwlplaylist(
@@ -835,14 +832,13 @@ def read_jwlplaylist(
     should_cancel: CancelCallback | None = None,
 ) -> dict:
     """
-    Ponto de entrada simplificado.
+    Simplified entry point.
 
-    fallback_lang_code: api_code do LanguageManager (ex: "T" para pt_BR).
-      Usado como idioma para videos cujo MEPS ID nao esta no mapa conhecido.
+    fallback_lang_code: LanguageManager api_code (e.g. "T" for pt_BR).
+    Used for videos whose MEPS ID is absent from the known map.
 
-    Retorna dict com 'name' e 'items'.
-    Propaga FileNotFoundError, BadZipFile ou ValueError.
-
+    Return a dict with 'name' and 'items'.
+    Propagate FileNotFoundError, BadZipFile, or ValueError.
     Cancellation is cooperative and propagates ``concurrent.futures.CancelledError``.
     Progress reports counts or uncompressed bytes according to the phase.
     """

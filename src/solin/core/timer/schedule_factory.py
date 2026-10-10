@@ -1,15 +1,15 @@
 """
 schedule_factory.py — Solin timer domain
-=========================================
-Builds default meeting schedules and keeps section totals consistent when the
+=======================================
+Build default meeting schedules and keep section totals consistent when the
 operator edits part durations or the number of parts.
 
-Two sections carry a *fixed section total* (see ``FIXED_TOTAL_SECONDS``):
-    • Ministry ("Apply Yourself to the Field Ministry") → 12 min
-    • Living   ("Living as Christians", before the congregation Bible study) → 15 min
+Two sections have a fixed total (see ``FIXED_TOTAL_SECONDS``):
+    • Ministry ("Apply Yourself to the Field Ministry") → 12 min.
+    • Living ("Living as Christians", before the congregation Bible study) → 15 min.
 
-For those, changing one part's duration makes the **following** part absorb the
-delta so the section total never drifts ("a parte abaixo responde à mudança").
+Changing a part's duration makes the following part absorb the difference
+so the section total stays constant (the part below responds to the change).
 All functions here are pure (no Qt) and unit-tested in isolation.
 """
 

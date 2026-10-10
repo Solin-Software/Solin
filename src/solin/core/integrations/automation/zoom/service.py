@@ -38,7 +38,7 @@ import importlib.util
 
 _HAS_ZOOM = False
 if sys.platform == "win32":
-    # Verifica se a biblioteca existe sem importá-la na thread principal
+    # Check whether the library exists without importing it on the main thread.
     _HAS_ZOOM = importlib.util.find_spec("pywinauto") is not None
 
 
@@ -347,28 +347,28 @@ class ZoomService(QObject):
     ) -> None:
         """
         Get participant names from Zoom.
-        Opens the participant panel if closed and KEEPS IT OPEN
-        (avoids the open-close-open-close flicker every 5s).
+        Open the participant panel if closed and KEEP IT OPEN
+        to avoid open-close flicker every 5 seconds.
 
-        Fluxo otimizado:
-          1. _open_participants_panel() usa detecção robusta (cache + estrutural)
-             para não fechar o painel por engano quando já está aberto.
-          2. get_participant_names() detecta o painel já aberto e NÃO fecha ao sair.
-          3. warm_toolbar_cache() com include_participants=True cacheia toolbar +
-             mute_all_btn + more_btn em um único scan.
+        Optimized flow:
+          1. _open_participants_panel() uses reliable detection (cache + structural)
+             to avoid accidentally closing an already open panel.
+          2. get_participant_names() detects the open panel and leaves it open.
+          3. warm_toolbar_cache() with include_participants=True caches the toolbar,
+             mute_all_btn, and more_btn in a single scan.
         """
         from . import controls
         initialize_com_for_current_thread()
         try:
-            # Abre painel se necessário (detecção robusta impede toggle acidental)
+            # Open the panel if necessary (reliable detection prevents accidental toggling).
             controls._open_participants_panel(session)
             time.sleep(0.1)
 
-            # get_participant_names() detecta painel já aberto → não fecha
+            # get_participant_names() detects the open panel and leaves it open.
             names = controls.get_participant_names(session)
             count = controls.count_people(names, exclude_host=True) if names else 0
 
-            # Cache proativo: toolbar + botões do painel de participantes
+            # Proactively cache the toolbar and participant panel buttons.
             try:
                 controls.warm_toolbar_cache(
                     session,
@@ -418,7 +418,7 @@ class ZoomService(QObject):
                 self._sig_sharing.emit(generation, False)
                 return
 
-            # OTIMISTA: Emitimos o sinal de parada AGORA para a UI reagir instantaneamente (igual ao start_share)
+            # OPTIMISTIC: emit the stop signal NOW so the UI reacts immediately (as with start_share).
             self._sig_sharing.emit(generation, False)
             
             log.info("[ZStop] Calling stop_screen_share()...")
@@ -458,9 +458,9 @@ class ZoomService(QObject):
             # _is_sharing() uses a fast floating-toolbar probe and validates cache.
             still_sharing = controls._is_sharing(session)
             if not still_sharing:
-                # Pode ser que a pessoa apenas começou a compartilhar e está com a 
-                # caixa de seleção do que compartilhar (ZPShareEntranceClass) aberta.
-                # Não queremos desarmar o poller se ele só estiver escolhendo a tela.
+                # The user may have just started sharing and still have the
+                # share selection dialog (ZPShareEntranceClass) open.
+                # Keep the poller armed while the user is choosing a screen.
                 if not share_selection_dialog_open():
                     self._sig_sharing.emit(generation, False)
         except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary

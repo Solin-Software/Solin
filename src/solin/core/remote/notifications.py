@@ -1,43 +1,43 @@
 """
 notifications.py
-=======================
-Serviço assíncrono de notificações do Solin.
+================
+Asynchronous Solin notification service.
 
-Fluxo completo:
-  1. NotificationWorker é iniciado em QThread separado ~1,5 s após o app abrir.
-  2. Faz GET na NOTIFICATION_API_URL com timeout curto (não trava a UI).
-  3. Valida o schema mínimo do payload.
-  4. Filtra notificações cujo ID já está no histórico local do perfil.
-  5. Solicita o conteúdo no api_code do idioma ativo; o servidor resolve
-     idioma solicitado, inglês e primeiro conteúdo disponível, nessa ordem.
-     O cliente mantém a mesma resolução defensiva para backends antigos.
-  6. Emite o signal `notifications_ready` com a lista já processada.
-  7. A MainWindow conecta esse signal e enfileira os dialogs (não-modais).
+Workflow:
+  1. Start NotificationWorker in a separate QThread ~1.5 s after opening the app.
+  2. GET NOTIFICATION_API_URL with a short timeout, without blocking the UI.
+  3. Validate the payload's minimum schema.
+  4. Filter notifications whose IDs are already in the profile's local history.
+  5. Request content in the active language's api_code. The server resolves
+     the requested language, English, then the first available content.
+     The client retains the same defensive resolution for older backends.
+  6. Emit `notifications_ready` with the processed list.
+  7. MainWindow connects this signal and queues non-modal dialogs.
 
-Segurança:
-  - HTTPS + verificação de certificado pelo adaptador HTTP central.
-  - Timeout agressivo (FETCH_TIMEOUT_S) para não atrasar a inicialização.
-  - Nenhum dado sensível é enviado ao servidor.
-  - IDs marcados como vistos ANTES de emitir o signal — evita re-exibição
-    em caso de crash entre a emissão e a interação do usuário.
-  - Parsing totalmente defensivo; qualquer exceção é silenciada e logada.
+Security:
+  - HTTPS and certificate verification through the central HTTP adapter.
+  - Short FETCH_TIMEOUT_S to avoid delaying startup.
+  - No sensitive data sent to the server.
+  - Mark IDs as seen BEFORE emitting to prevent redisplay if a crash occurs
+    between emission and user interaction.
+  - Fully defensive parsing; exceptions are suppressed and logged.
 
-Formato esperado da API:
+Expected API format:
   {
     "version": 1,
     "notifications": [
       {
-        "id": "2025_001",          // str único e imutável
-        "type": "info",            // "info" | "warning" | "error"
+        "id": "2025_001",  // unique, immutable string
+        "type": "info",  // "info" | "warning" | "error"
         "content": {
           "E": {"title": "...", "detail": "..."},  // English (fallback)
-          "T": {"title": "...", "detail": "..."},  // Português
-          "S": {"title": "...", "detail": "..."}   // Español
-          // … outros api_codes conforme necessário
+          "T": {"title": "...", "detail": "..."},  // Portuguese
+          "S": {"title": "...", "detail": "..."}  // Spanish
+          // … other api_codes as needed
         },
-        "action": {                // OPCIONAL
+        "action": {  // OPTIONAL
           "url": "https://...",
-          "label": "Saiba mais"    // texto do botão (opcional; usa padrão se ausente)
+          "label": "Learn more"  // optional button text; default if absent
         }
       }
     ]
@@ -66,19 +66,19 @@ from solin.core.remote.notification_settings import NotificationSettingsStore
 
 log = logging.getLogger(__name__)
 
-FETCH_TIMEOUT_S: int = 8        # timeout total da requisição HTTP
+FETCH_TIMEOUT_S: int = 8        # total HTTP request timeout
 InstallIdProvider = Callable[[], str]
 
 
-# ── Worker assíncrono ──────────────────────────────────────────────────────────
+# Asynchronous worker
 
 class NotificationWorker(QObject):
     """
-    Roda em QThread separado. Faz a requisição HTTP e emite o resultado.
-    Não acessa widgets — apenas emite signals.
+    Run in a separate QThread. Perform the HTTP request and emit the result.
+    Do not access widgets; emit signals only.
     """
     notifications_ready = Signal(list)   # list[Notification]
-    fetch_failed = Signal(str)           # mensagem de erro (para log silencioso)
+    fetch_failed = Signal(str)           # error message for quiet logging
 
     def __init__(
         self,
@@ -88,17 +88,17 @@ class NotificationWorker(QObject):
         parent: QObject | None = None,
     ):
         super().__init__(parent)
-        # api_code do idioma ativo (ex: "T" para Português, "E" para English)
+        # active language api_code (e.g. "T" for Portuguese, "E" for English)
         self._api_code = api_code
         self._settings = settings
         self._install_id_provider = install_id_provider
 
     def run(self) -> None:
-        """Chamado pela thread. Faz fetch, processa, emite resultado."""
+        """Called by the thread: fetch, process, and emit the result."""
         try:
-            # Enviamos id + v para o servidor poder upsert AppInstance
-            # (contribui para métricas de instâncias ativas sem precisar de
-            #  uma chamada extra dedicada). Ambos são opcionais pelo servidor.
+            # Send id + v so the server can upsert AppInstance
+            # and track active instances without an extra dedicated
+            # request. Both fields are optional on the server.
             params = {
                 "id":       self._install_id_provider(),
                 "v":        _notification_version(),
@@ -124,8 +124,8 @@ class NotificationWorker(QObject):
 
     def _process(self, payload: object) -> list[Notification]:
         """
-        Valida o payload, filtra vistas e resolve conteúdo localizado.
-        Retorna lista de Notification prontas para exibir.
+        Validate the payload, filter seen notifications, and resolve localized content.
+        Return a list of Notification objects ready for display.
         """
         result = resolve_remote_notifications(
             payload,
@@ -137,13 +137,13 @@ class NotificationWorker(QObject):
         return list(result.notifications)
 
 
-# ── Controlador público ────────────────────────────────────────────────────────
+# Public controller
 
 class NotificationService(QObject):
     """
-    Fachada pública. Gerencia o ciclo de vida da thread e expõe um signal limpo.
+    Public facade managing the thread lifecycle and exposing a clean signal.
 
-    Uso típico:
+    Typical usage:
         self._notif_service = NotificationService(
             lang_manager,
             notification_settings_store,
@@ -173,7 +173,7 @@ class NotificationService(QObject):
         self._delete_when_stopped = False
 
     def check(self) -> None:
-        """Inicia a verificação assíncrona. Ignora chamadas duplicadas."""
+        """Start the asynchronous check. Ignore duplicate calls."""
         if self._stopping or self._running:
             return
         self._running = True
@@ -200,11 +200,11 @@ class NotificationService(QObject):
 
     def stop(self, wait_ms: int = 0, delete_when_stopped: bool = False) -> None:
         """
-        Para o ciclo de vida da thread de forma segura.
+        Stop the thread lifecycle safely.
 
-        A requisição HTTP em andamento pode estar bloqueada fora do event loop
-        do Qt. Se ela não terminar dentro do prazo, o serviço é desanexado do
-        pai para que a janela possa morrer sem destruir um QThread ativo.
+        The ongoing HTTP request may be blocked outside Qt's event loop.
+        If it does not finish within the deadline, detach the service from its
+        parent so the window can close without destroying an active QThread.
         """
         self._stopping = True
         self._delete_when_stopped = self._delete_when_stopped or delete_when_stopped
@@ -220,7 +220,7 @@ class NotificationService(QObject):
             self.deleteLater()
 
     def shutdown(self) -> None:
-        """Compatibilidade para callers que esperam shutdown()."""
+        """Compatibility for callers expecting shutdown()."""
         self.stop(wait_ms=3000, delete_when_stopped=True)
 
     # ── Slots privados ─────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ class NotificationService(QObject):
         self._running = False
 
     def _cleanup(self) -> None:
-        """Libera recursos da thread após conclusão."""
+        """Release thread resources after completion."""
         if self._worker:
             self._worker.deleteLater()
             self._worker = None

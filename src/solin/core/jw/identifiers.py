@@ -1456,23 +1456,23 @@ class JwMediaIdentifier(TypedDict):
     meps_language: int
 
 
-# ── Regexes de parsing de URL ─────────────────────────────────────────────────
+# URL parsing regexes
 
-# Formato pub- explícito: pub-sjjm_T_1_r720P
+# Explicit pub- format: pub-sjjm_T_1_r720P
 _JW_PUB_RE = re.compile(
     r"pub-([A-Za-z0-9]+)_([A-Z]{1,4})_(\d{1,4})(?:_[^/]*)?",
     re.IGNORECASE,
 )
 
-# Formato com issue/edição: pub-w_T_202201
+# Format with issue/edition: pub-w_T_202201
 _JW_ISSUE_RE = re.compile(
     r"pub-([A-Za-z0-9]+)_([A-Z]{1,4})_(\d{5,8})",
     re.IGNORECASE,
 )
 
-# Formato DocumentId numérico: 502100025_T_cnt_1_r720P.mp4
+# Numeric DocumentId format: 502100025_T_cnt_1_r720P.mp4
 _JW_DOCID_URL_RE = re.compile(
-    r"^(\d{5,12})"  # doc_id: 5–12 dígitos
+    r"^(\d{5,12})"  # doc_id: 5–12 digits
     r"_([A-Z]{1,4})"  # _LANG
     r"_[A-Za-z]+_"  # _token_ (cnt, a, b, …)
     r"(\d+)",  # track/index
@@ -1504,11 +1504,11 @@ def is_jw_url(url: str) -> bool:
 
 def parse_jworg_url(url: str) -> JwMediaIdentifier | None:
     """
-    Tenta extrair metadados JW.org de uma URL de download.
-    Retorna dict com key_symbol, track, issue_tag, doc_id, meps_language ou None.
-    key_symbol pode ser None quando a mídia é identificada só por doc_id.
+    Try to extract JW.org metadata from a download URL.
+    Return a dict with key_symbol, track, issue_tag, doc_id, and meps_language, or None.
+    key_symbol may be None when media is identified only by doc_id.
 
-    Formatos suportados (exemplos reais):
+    Supported formats (real examples):
       https://akamd1.jw-cdn.org/sg2/p/64dbe62/2/o/sjjm_T_002_r720P.mp4
       https://akamd1.jw-cdn.org/sg2/p/3808c4/1/o/osg_T_108.mp3
       https://download.jw.org/files/media_pub/pub-sjjm_T_1_r720P.mp4
@@ -1519,7 +1519,7 @@ def parse_jworg_url(url: str) -> JwMediaIdentifier | None:
     if not is_jw_url(url):
         return None
 
-    # ── Tenta formato com issue primeiro (track seria número longo) ───────
+    # Try the issue format first (otherwise track would be a long number).
     m = _JW_ISSUE_RE.search(url)
     if m:
         key_symbol = m.group(1).lower()
@@ -1534,7 +1534,7 @@ def parse_jworg_url(url: str) -> JwMediaIdentifier | None:
             "meps_language": meps,
         }
 
-    # ── Tenta formato pub-symbol_LANG_TRACK ───────────────────────────────
+    # Try pub-symbol_LANG_TRACK format.
     m = _JW_PUB_RE.search(url)
     if m:
         key_symbol = m.group(1).lower()
@@ -1549,12 +1549,12 @@ def parse_jworg_url(url: str) -> JwMediaIdentifier | None:
             "meps_language": meps,
         }
 
-    # ── Extrai basename para os formatos restantes ────────────────────────
+    # Extract the basename for the remaining formats.
     path_part = url.split("?")[0]
     basename = path_part.rsplit("/", 1)[-1]
     name_no_ext = basename.rsplit(".", 1)[0]
 
-    # ── Formato DocumentId numérico: 502100025_T_cnt_1_r720P ─────────────
+    # Numeric DocumentId format: 502100025_T_cnt_1_r720P
     m_doc = _JW_DOCID_URL_RE.match(name_no_ext)
     if m_doc:
         doc_id_val = int(m_doc.group(1))
@@ -1569,7 +1569,7 @@ def parse_jworg_url(url: str) -> JwMediaIdentifier | None:
             "meps_language": meps,
         }
 
-    # ── Formato geral: SYMBOL_LANG_TRACK[_qualidade] ─────────────────────
+    # General format: SYMBOL_LANG_TRACK[_quality]
     m2 = re.match(
         r"^([A-Za-z][A-Za-z0-9]{1,11})_([A-Z]{1,4})_(\d{1,4})(?:_.*)?$",
         name_no_ext,

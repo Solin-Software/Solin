@@ -1,15 +1,14 @@
 """
 languages.py — Solin
-════════════════════════════════
-Busca e armazena em cache a lista completa de idiomas disponíveis no JW.org.
+====================
+Fetch and cache the complete list of languages available on JW.org.
 
-Endpoint : https://b.jw-cdn.org/apis/mediator/v1/languages/E/all
-Cache    : 30 dias  →  cache/jw_languages.json
-Formato  : { "languages": [ {code, locale, vernacular, name, script,
-                              isLangPair, isSignLanguage, isRTL}, … ] }
+Endpoint: https://b.jw-cdn.org/apis/mediator/v1/languages/E/all
+Cache: 30 days → cache/jw_languages.json
+Format: {"languages": [{code, locale, vernacular, name, script,
+                       isLangPair, isSignLanguage, isRTL}, …]}
 
-Uso
-───
+Usage:
     svc = JWLanguageService(
         cache_file=runtime_paths.cache_dir / "jw_languages.json",
         parent=self,
@@ -17,13 +16,13 @@ Uso
     svc.languages_ready.connect(self._on_langs)
     svc.fetch_if_needed()
 
-Propriedades chave de cada idioma retornado:
-    code            – código api JW (ex: "T", "E", "S", "CHS")
-    vernacular      – nome nativo   (ex: "Português (Brasil)")
-    name            – nome inglês   (ex: "Portuguese (Brazil)")
-    locale          – BCP-47 locale (ex: "pt")
-    isRTL           – bool
-    isSignLanguage  – bool  (true para línguas gestuais; usam pub=sjj, não sjjm)
+Key properties of each returned language:
+    code — JW API code (e.g. "T", "E", "S", "CHS")
+    vernacular — native name (e.g. "Português (Brasil)")
+    name — English name (e.g. "Portuguese (Brazil)")
+    locale — BCP-47 locale (e.g. "pt")
+    isRTL — bool
+    isSignLanguage — bool (true for sign languages; use pub=sjj, not sjjm)
 """
 
 from __future__ import annotations
@@ -49,11 +48,11 @@ _CACHE_TTL_DAYS = 30
 _FETCH_TIMEOUT  = 15
 
 
-# ── Worker de fetch ─────────────────────────────────────────────────────────────
+# Fetch worker
 
 class _FetchSignals(QObject):
-    succeeded = Signal(list)       # lista de dicts de idioma
-    failed    = Signal(str)        # mensagem de erro
+    succeeded = Signal(list)       # list of language dicts
+    failed    = Signal(str)        # error message
 
 
 class _FetchWorker(QRunnable):
@@ -75,7 +74,7 @@ class _FetchWorker(QRunnable):
                 self.signals.failed.emit("Resposta vazia da API de idiomas")
                 return
 
-            # Filtra apenas idiomas publicáveis (exclui pares de idiomas raros)
+            # Filter to publishable languages only (exclude rare language pairs).
             filtered = [
                 lang for lang in languages
                 if isinstance(lang, dict)
@@ -94,20 +93,18 @@ class _FetchWorker(QRunnable):
 
 class JWLanguageService(QObject):
     """
-    Gerencia a lista de idiomas JW.org e o idioma de mídia selecionado.
+    Manage the JW.org language list and the selected media language.
 
-    Signals
-    ───────
-    languages_ready(list)   – emitido quando a lista estiver disponível
-                              (do cache ou do fetch)
-    fetch_started()         – fetch de rede iniciado
-    fetch_failed(str)       – fetch falhou; erro como string
+    Signals:
+      languages_ready(list) — list available from cache or fetch
+      fetch_started() — network fetch started
+      fetch_failed(str) — fetch failed; error as a string
     """
 
     languages_ready = Signal(list)
     fetch_started   = Signal()
     fetch_failed    = Signal(str)
-    media_language_changed = Signal(str)   # emitido quando o código de mídia muda
+    media_language_changed = Signal(str)   # emitted when the media language code changes
 
     def __init__(
         self,
@@ -124,16 +121,16 @@ class JWLanguageService(QObject):
         self._thread_pool = QThreadPool(self)
         self._worker: _FetchWorker | None = None
 
-        # Carrega do cache imediatamente (síncrono, rápido)
+        # Load from cache immediately (synchronous and fast).
         cached = self._load_cache()
         if cached:
             self._set_languages(cached)
 
-    # ── Acesso aos dados ────────────────────────────────────────────────────────
+    # Data access
 
     @property
     def languages(self) -> list[dict]:
-        """Lista de idiomas disponíveis. Pode estar vazia se ainda carregando."""
+        """Available languages. May be empty while loading."""
         return self._languages
 
     @property
@@ -145,17 +142,17 @@ class JWLanguageService(QObject):
         return bool(self._languages)
 
     def get_language(self, code: str) -> Optional[dict]:
-        """Retorna o dict do idioma pelo código api JW (ex: 'T', 'E')."""
+        """Return the language dict for a JW API code (e.g. 'T', 'E')."""
         return self._by_code.get(code)
 
     def vernacular_for(self, code: str, fallback: str = "") -> str:
-        """Nome nativo do idioma para o código api JW."""
+        """Native language name for the JW API code."""
         lang = self._by_code.get(code)
         if lang:
             return lang.get("vernacular") or lang.get("name") or fallback
         return fallback
 
-    # ── Idioma de mídia selecionado ─────────────────────────────────────────────
+    # Selected media language
 
     def activate_settings(self, settings: JWLanguageSettingsStore) -> None:
         self._media_language_settings = settings
@@ -180,13 +177,13 @@ class JWLanguageService(QObject):
     @property
     def is_media_sign_language(self) -> bool:
         """
-        Retorna True se o idioma de mídia selecionado for uma língua gestual
-        (isSignLanguage=true na API JW.org).
+        Return True if the selected media language is a sign language
+        (isSignLanguage=true in the JW.org API).
 
-        Implicações:
-          • cânticos JW  → pub=sjj  (sem trilha de música separada)
-          • clipes osg   → fileformat=MP4 (vídeo em língua gestual)
-          • cânticos da interface (fallback) NUNCA são gestuais (sempre sjjm).
+        Implications:
+          • JW songs → pub=sjj (no separate music track).
+          • osg clips → fileformat=MP4 (sign language video).
+          • Interface songs used as fallbacks are NEVER sign language (always sjjm).
         """
         code = self.media_api_code
         if not code:
@@ -200,15 +197,15 @@ class JWLanguageService(QObject):
 
     def fetch_if_needed(self) -> None:
         """
-        Inicia fetch de rede se o cache expirou ou não existe.
-        Se o cache ainda for válido, emite languages_ready imediatamente.
+        Start a network fetch if the cache has expired or is missing.
+        If the cache is still valid, emit languages_ready immediately.
         """
         if self._is_loading:
             return
 
         if self._is_cache_valid():
             if self._languages:
-                # já carregado no __init__
+                # already loaded in __init__
                 self.languages_ready.emit(self._languages)
             else:
                 cached = self._load_cache()
@@ -221,7 +218,7 @@ class JWLanguageService(QObject):
             self._start_fetch()
 
     def force_refresh(self) -> None:
-        """Força um novo fetch ignorando o cache."""
+        """Force a new fetch, ignoring the cache."""
         if not self._is_loading:
             self._start_fetch()
 
@@ -245,7 +242,7 @@ class JWLanguageService(QObject):
         self._worker = None
         self._is_loading = False
         self.fetch_failed.emit(error)
-        # Se tiver cache antigo, ainda assim emite (melhor que nada)
+        # Emit even with an old cache (better than nothing).
         if self._languages:
             self.languages_ready.emit(self._languages)
 
@@ -264,7 +261,7 @@ class JWLanguageService(QObject):
             if isinstance(lang, dict) and lang.get("code")
         }
 
-    # ── Cache em disco ──────────────────────────────────────────────────────────
+    # Disk cache
 
     def _is_cache_valid(self) -> bool:
         if not self._cache_file.is_file():

@@ -201,13 +201,13 @@ class _ThemedVideoPreview(QWidget):
 
 class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     """
-    Barra inferior de projeção (48 px) com overlay expansível.
+    Bottom projection bar (48 px) with an expandable overlay.
 
-    Novidades:
-      - Ícones SVG (sem emojis)
-      - Suporte a playlist com modos: desligado / próximo / aleatório
-      - Menu de opções de vídeo (velocidade, loop, ordem)
-      - Persisted playback preferences through a typed settings store
+    Features:
+      - SVG icons instead of emoji.
+      - Playlist support with off / next / random modes.
+      - Video options menu (speed, loop, order).
+      - Persisted playback preferences through a typed settings store.
     """
     stop_requested      = Signal()
     seek_requested      = Signal(int)
@@ -216,13 +216,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     timer_updated       = Signal(int, int)
     timer_blink         = Signal(bool)
     play_next_requested = Signal(object)  # complete media item for automatic advance
-    playlist_navigate   = Signal(int)        # índice absoluto — navegação manual prev/next
+    playlist_navigate   = Signal(int)        # absolute index for manual previous/next navigation
     add_to_destination_requested = Signal(str, str, object)  # url, title, metadata
-    send_to_temp_playlist_requested = Signal(list)  # lista de itens da playlist atual
+    send_to_temp_playlist_requested = Signal(list)  # items in the current playlist
     source_duration_discovered = Signal(str, int)  # playlist item id, original duration ms
     monitor_manager_requested = Signal(object)   # QWidget (the button) for popup positioning
-    obs_scene_toggle_requested = Signal()    # usuário quer alternar entre cena de mídia e cena anterior
-    set_as_idle_requested      = Signal(str) # path — usuário quer definir mídia como idle screen
+    obs_scene_toggle_requested = Signal()    # user wants to toggle between the media scene and the previous scene
+    set_as_idle_requested      = Signal(str) # path: user wants to set media as the idle screen
     expanded_changed           = Signal(bool)
     video_output_target_changed = Signal()
 
@@ -263,11 +263,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._expanded  = False
         self._mode      = None  # 'video' | 'image' | 'timer' | None
         self._image_pixmap: QPixmap | None = None
-        self._image_file_path: str = ""   # caminho do arquivo salvo para imagens sem URL
+        self._image_file_path: str = ""   # saved file path for images without a URL
         self._is_audio: bool = False
         self._video_preview_route_requested = False
         self._audio_cover_pixmap: QPixmap | None = None
-        self._is_live_tab: bool = False   # True quando projetando aba ao vivo do browser
+        self._is_live_tab: bool = False   # True while projecting a live browser tab
         self._fullscreen_overlay: FullscreenVideoOverlay | None = None
         self._fullscreen_preparation_scheduled = False
         self._last_buffer_progress: tuple[int, int] = (0, 0)
@@ -299,18 +299,18 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._wave_timer = QTimer(self)
         self._wave_timer.setInterval(50)  # 20 fps
         self._wave_timer.timeout.connect(self._on_wave_tick)
-        # Estado independente por barra: altura atual, alvo, velocidade de lerp
+        # Independent per-bar state: current height, target, lerp speed
         _B = [22, 50, 76, 96, 76, 50, 22]   # alturas de repouso
         self._wave_cur   = [float(h) for h in _B]
         self._wave_target= [float(h) for h in _B]
-        self._wave_speed = [0.07, 0.09, 0.11, 0.08, 0.10, 0.07, 0.09]  # lerp por barra
+        self._wave_speed = [0.07, 0.09, 0.11, 0.08, 0.10, 0.07, 0.09]  # lerp per bar
 
         # ── Playlist state ───────────────────────────────────────────────
         self._playlist: list[dict] = []         # [{"url":..., "title":...}]
         self._playlist_index: int = 0
-        self._played_indices: set = set()        # para ordem aleatória sem loop
-        self._screen_count: int = 0              # armazenado para refresh de idioma
-        self._is_from_saved_playlist: bool = False  # True quando reproduzindo de playlist salva
+        self._played_indices: set = set()        # for random playback without looping
+        self._screen_count: int = 0              # stored for language refresh
+        self._is_from_saved_playlist: bool = False  # True while playing from a saved playlist
 
         # ── Persisted playback preferences ───────────────────────────────
         self._loop: bool = self._playback_settings.loop_enabled()
@@ -340,20 +340,20 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # until the asynchronous share-start attempt has been resolved.
         self._auto_share_playback_waiting = False
 
-        # ── Thumbnail queue para o painel de playlist ─────────────────────
+        # Thumbnail queue for the playlist panel
         self._thumb_queue = media_info_queue_factory(self)
         self._panel_populated = False
-        # Timer one-shot: captura thumbnail da mídia atual ao vivo (uma vez por faixa)
+        # One-shot timer: capture a live thumbnail of current media once per track.
         self._live_thumb_captured: bool = False
         self._live_thumb_timer = QTimer(self)
         self._live_thumb_timer.setSingleShot(True)
         self._live_thumb_timer.timeout.connect(self._do_live_thumb_capture)
 
         # ── OBS scene toggle state (modo imagem) ──────────────────────────
-        # True  → OBS está (ou deveria estar) na cena de mídia
-        # False → OBS está (ou deveria estar) na cena anterior/idle
+        # True → OBS is (or should be) on the media scene.
+        # False → OBS is (or should be) on the previous/idle scene.
         self._obs_scene_is_media: bool = True
-        # Habilitado somente quando OBS conectado + media_window_scene configurada
+        # Enabled only when OBS is connected and media_window_scene is configured.
         self._obs_btn_available: bool = False
 
         self.setObjectName("StatusBar")
@@ -391,7 +391,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_slider.setValue(int(self._volume * 100))
         self.media.set_volume(self._volume)
 
-    # ── Barra (sempre visível) ────────────────────────────────────────────
+    # Bar (always visible)
 
     def _offline_badge_stylesheet(self) -> str:
         return (
@@ -439,12 +439,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def _build_bar_ui(self):
         bar_lay = QHBoxLayout(self)
-        # Deixamos o topo e a base em 0 para o Qt centralizar verticalmente de forma automática.
-        # Colocamos 9px na esquerda e direita para igualar com a folga natural de 9px do topo/base.
+        # Keep top and bottom margins at 0 so Qt centers vertically automatically.
+        # Use 9 px on each side to match the natural 9 px top/bottom gap.
         bar_lay.setContentsMargins(9, 0, 9, 0) 
         bar_lay.setSpacing(8)
 
-        # ── Estado inativo ────────────────────────────────────────────────
+        # Inactive state
         self.inactive_widget = QWidget()
         self.inactive_widget.setCursor(Qt.CursorShape.ArrowCursor)
         self.inactive_widget.setStyleSheet("background: transparent;")
@@ -468,7 +468,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         inact_lay.addWidget(self.screen_count_label)
         bar_lay.addWidget(self.inactive_widget)
 
-        # ── Estado ativo ──────────────────────────────────────────────────
+        # Active state
         self.active_widget = QWidget()
         self.active_widget.setCursor(Qt.CursorShape.PointingHandCursor)
         self.active_widget.setStyleSheet("background: transparent;")
@@ -477,7 +477,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         act_lay.setContentsMargins(0, 0, 0, 0)
         act_lay.setSpacing(8)
 
-        # Thumb / ícone de modo
+        # Thumbnail / mode icon
         self.thumb_label = QLabel()
         self.thumb_label.setFixedSize(28, 28)
         self.thumb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -486,7 +486,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             f" border: 1px solid {qss_rgba(PALETTE.accent_hover, 0.20)};"
         )
 
-        # Título
+        # Title
         self.proj_title = QLabel()
         self.proj_title.setObjectName("StatusLabel")
         self.proj_title.setStyleSheet(
@@ -497,9 +497,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.proj_title.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         install_themed_tooltip(self.proj_title)
 
-        # Badge de reprodução offline — ponto de status verde (10 px).
-        # Padrão de design universal (Slack, Spotify, Discord) para indicadores
-        # de status a tamanhos pequenos: ponto sólido colorido + tooltip descritivo.
+        # Offline playback badge: green status dot (10 px).
+        # Small status indicators use a solid colored dot
+        # with a descriptive tooltip.
         self._offline_badge = QLabel()
         self._offline_badge.setFixedSize(10, 10)
         self._offline_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -508,8 +508,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         )
         self._offline_badge.setVisible(False)
         install_themed_tooltip(self._offline_badge)
-        # Ponto verde sólido. QToolTip override garante que o tooltip não herda
-        # o background verde do widget pai.
+        # Solid green dot. Override QToolTip so the tooltip does not inherit
+        # the parent widget's green background.
         self._offline_badge.setStyleSheet(self._offline_badge_stylesheet())
 
         # Seek slider
@@ -526,7 +526,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.time_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
-        # Play/Pause — mesmo tamanho e estilo dos demais botoes
+        # Play/Pause: same size and style as the other buttons.
         self.play_btn = _icon_btn(ICON_PAUSE, 30, 15, PALETTE.text_secondary,
                                   self.tr("Pause/Resume"))
         self.play_btn.clicked.connect(self._on_play_btn_clicked)
@@ -551,21 +551,21 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_slider.setFixedWidth(70)
         self.vol_slider.valueChanged.connect(self._on_volume_slider)
 
-        # Mais opções (só vídeo)
+        # More options (video only)
         self.more_btn = _icon_btn(ICON_MORE_VERT, 30, 15, PALETTE.text_muted,
                                   self.tr("Playback options"))
         self.more_btn.setVisible(False)
         self.more_btn.clicked.connect(self._show_more_menu)
 
-        # OBS scene toggle — só imagem, só quando OBS conectado + cena de mídia configurada
-        # Alterna entre a cena de mídia (projetor visível) e a cena anterior/idle (projetor oculto)
+        # OBS scene toggle: images only, when OBS is connected and a media scene is configured.
+        # Toggle between the media scene (projector visible) and previous/idle scene (projector hidden).
         self.obs_scene_btn = _icon_btn(ICON_OBS, 30, 14, PALETTE.text_muted,
                                        self.tr("Toggle OBS scene"))
         self.obs_scene_btn.setVisible(False)
         self.obs_scene_btn.clicked.connect(self._on_obs_scene_btn_clicked)
-        # Tooltip dinâmico — atualizado em _refresh_obs_scene_btn
+        # Dynamic tooltip, updated in _refresh_obs_scene_btn.
 
-        # Timer countdown (só modo timer)
+        # Timer countdown (timer mode only)
         self.timer_countdown_label = QLabel("00:00")
         self.timer_countdown_label.setStyleSheet(
             f"background: transparent; color: {PALETTE.accent}; font-size: 18px;"
@@ -574,11 +574,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.timer_countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.timer_countdown_label.setVisible(False)
 
-        # Fechar / parar — circular, transparente, vermelho só no hover
+        # Close / stop: circular, transparent, red only on hover.
         self.close_btn = _icon_btn(ICON_CLOSE, 30, 13, PALETTE.text_muted,
                                    self.tr("Stop projection"))
         self.close_btn.setStyleSheet(self._close_button_stylesheet())
-        # Muda cor do ícone para vermelho no hover via evento
+        # Change the icon to red on hover through an event.
         self.close_btn.installEventFilter(self)
         self.close_btn.clicked.connect(self.stop_requested)
 
@@ -593,7 +593,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         act_lay.addWidget(self.vol_slider)
         act_lay.addWidget(self.timer_countdown_label, stretch=1)
         act_lay.addWidget(self.more_btn)
-        # Espaçador só visível no modo imagem — ancora prev/next à direita em todos os modos
+        # Spacer visible only in image mode; anchors previous/next on the right in all modes.
         self._fill_spacer = QWidget()
         self._fill_spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._fill_spacer.setVisible(False)
@@ -648,13 +648,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             f"background: transparent; color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
         )
 
-        # Botão de toggle do painel de playlist (só aparece com > 1 item)
+        # Playlist panel toggle button (shown only with > 1 item)
         self.ov_panel_btn = _icon_btn(ICON_PANEL_RIGHT, 28, 14, PALETTE.text_muted,
                                       self.tr("Show playlist"))
         self.ov_panel_btn.setVisible(False)
         self.ov_panel_btn.clicked.connect(self._toggle_playlist_panel)
 
-        # Botão "Adicionar à Playlist"
+        # "Add to Playlist" button
         self.ov_add_destination_btn = _icon_btn(
             ICON_ADD_TO_PLAYLIST, 28, 13, PALETTE.text_muted,
             self.tr("Add to…"),
@@ -662,7 +662,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_add_destination_btn.setVisible(False)
         self.ov_add_destination_btn.clicked.connect(self._on_add_to_destination_clicked)
 
-        # Botão "Enviar para playlist temporária" (só aparece se não for de playlist salva)
+        # "Send to Temporary Playlist" button (shown only when not from a saved playlist)
         self.ov_send_temp_btn = _icon_btn(
             ICON_SEND_TO_PLAYLIST, 28, 14, PALETTE.text_muted,
             self.tr("Open as temporary playlist"),
@@ -670,8 +670,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.ov_send_temp_btn.setVisible(False)
         self.ov_send_temp_btn.clicked.connect(self._on_send_to_temp_playlist)
 
-        # Botão "Definir como Idle Screen"
-        # Visível apenas para vídeo (não-áudio) e imagem; nunca para timer ou aba ao vivo.
+        # "Set as Idle Screen" button
+        # Visible only for video (not audio) and images; never for timers or live tabs.
         self.ov_set_idle_btn = _icon_btn(
             ICON_SET_AS_IDLE, 28, 14, PALETTE.text_muted,
             self.tr("Set as idle screen"),
@@ -696,7 +696,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._overlay_layout.addWidget(ov_top)
         startup.mark("projection_overlay_header_constructed")
 
-        # ── Body: preview + painel lateral ───────────────────────────────
+        # Body: preview + side panel
         body = QWidget()
         self._overlay_body = body
         body.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -705,7 +705,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._overlay_body_layout.setContentsMargins(0, 0, 0, 0)
         self._overlay_body_layout.setSpacing(0)
 
-        # Stack de conteúdo (preview / timer)
+        # Content stack (preview / timer)
         self.overlay_stack = QStackedWidget()
         self.overlay_stack.setStyleSheet("background: transparent;")
 
@@ -750,7 +750,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _finish_overlay(self) -> None:
         from solin.bootstrap.startup_timeline import startup_timeline
 
-        # Painel de playlist (inicia fechado = largura 0)
+        # Playlist panel (starts closed at width 0).
         self.playlist_panel = PlaylistPanel(lang=self.lang)
         self._thumb_queue.info_ready.connect(self._on_thumbnail_ready)
         self.playlist_panel.item_clicked.connect(self._on_panel_item_clicked)
@@ -774,7 +774,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         c = self._container
         self.overlay.setGeometry(0, 0, c.width(), max(0, c.height() - self._BAR_H))
 
-    # ── Event filter: botão fechar muda ícone no hover ────────────────────
+    # Event filter: close button icon changes on hover.
 
     def eventFilter(self, obj, event):
         from PySide6.QtCore import QEvent
@@ -904,7 +904,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # ImagePreviewWidget handles its own scaling + zoom in paintEvent
         self.preview_content.setPixmap(self._image_pixmap)
 
-    # ── Conexões com MediaController ─────────────────────────────────────
+    # MediaController connections
 
     def _connect_media(self):
         self.seek_slider.sliderMoved.connect(self.seek_requested)
@@ -939,9 +939,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     @Slot(bool)
     def _on_playback_source_changed(self, is_offline: bool):
         """
-        Mostra/oculta o badge de offline dependendo da fonte de reprodução.
-        is_offline=True  → arquivo local (cache) — mostra badge verde sutil
-        is_offline=False → stream HTTP ou inativo — oculta badge
+        Show/hide the offline badge according to the playback source.
+        is_offline=True → local cached file; show a subtle green badge.
+        is_offline=False → HTTP stream or inactive; hide the badge.
         """
         self._offline_badge.setVisible(is_offline and self._mode is not None)
 
@@ -955,7 +955,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if overlay is not None:
             overlay.set_reconnect_active(self._playback_recovering)
 
-    # ── API pública ───────────────────────────────────────────────────────
+    # Public API
 
     def is_expanded(self) -> bool:
         return self._expanded
@@ -1156,18 +1156,18 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._is_audio = is_audio
         self._enter_mode("video")
         self._image_pixmap = None
-        self._stop_wave_animation()   # para animação da faixa anterior (se houver)
+        self._stop_wave_animation()   # stop any previous track animation
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
-        # _live_thumb_captured sempre reseta ao trocar de faixa.
-        # keep_expanded=True mantém overlay aberto mas é uma nova mídia — nova captura.
+        # Always reset _live_thumb_captured when changing tracks.
+        # keep_expanded=True keeps the overlay open, but new media requires a new capture.
         self._live_thumb_captured = False
-        # Sempre reseta a capa de áudio ao trocar de faixa — a nova mídia pode não ter capa.
+        # Always reset audio cover art on track changes; the new media may have no cover.
         self._audio_cover_pixmap = None
         # Disable interactive image mode
         self.preview_content.set_image_mode(False)
 
-        # Ícone correto: música para áudio, vídeo para vídeo
+        # Correct icon: music for audio, video for video.
         _thumb_icon = ICON_MUSIC if is_audio else ICON_VIDEO
         self.thumb_label.setPixmap(make_icon(_thumb_icon, 18, PALETTE.success).pixmap(18, 18))
 
@@ -1194,7 +1194,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.overlay_stack.setCurrentIndex(0)
         self._sync_app_fullscreen_availability()
 
-        # Aplica velocidade salva
+        # Apply the saved playback speed.
         self.media.set_playback_rate(self._speed)
 
         if self.app_fullscreen_active() and self._fullscreen_overlay is not None:
@@ -1205,23 +1205,23 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             if keep_expanded:
                 self._update_overlay_geometry()
                 self.overlay.raise_()
-                # Se é áudio e overlay está aberto, atualiza a capa (ou fallback)
+                # For audio with the overlay open, update the cover or fallback.
                 if is_audio:
                     QTimer.singleShot(10, self._refresh_audio_cover_in_overlay)
             else:
                 self._collapse()
         self._sync_preview_surface()
 
-        # Mostra botão de adicionar à playlist no overlay
+        # Show the add-to-playlist button in the overlay.
         self.ov_add_destination_btn.setVisible(True)
-        # Idle btn: visível apenas para vídeo local (não para áudio nem URLs remotas)
+        # Idle button: visible only for local video, not audio or remote URLs.
         self._is_live_tab = False
         self._refresh_idle_btn_visibility()
 
-        # Atualiza botões de navegação
+        # Update navigation buttons.
         self._update_nav_buttons()
 
-        # Agenda captura one-shot de thumbnail ao vivo, se o item ainda não tem miniatura
+        # Schedule one live thumbnail capture if the item has no thumbnail yet.
         self._live_thumb_timer.stop()
         self._schedule_live_thumb()
         self._schedule_fullscreen_preparation()
@@ -1299,7 +1299,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
-        # Botão OBS: visível se disponível; ao entrar no modo imagem, assume cena de mídia ativa
+        # OBS button: visible if available; assume the media scene is active on entering image mode.
         self._obs_scene_is_media = True
         self._refresh_obs_scene_btn()
         self.obs_scene_btn.setVisible(self._obs_btn_available)
@@ -1312,12 +1312,12 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             else:
                 self._collapse()
 
-        # Atualiza botões de navegação
+        # Update navigation buttons.
         self._update_nav_buttons()
 
-        # Mostra botão de adicionar à playlist no overlay (imagem)
+        # Show the add-to-playlist button in the image overlay.
         self.ov_add_destination_btn.setVisible(allow_add_to_destination)
-        # Mostra botão de idle screen para imagens (exceto aba ao vivo — tratado em set_live_tab_mode)
+        # Show the idle screen button for images, except live tabs handled by set_live_tab_mode.
         self._is_live_tab = False
         self.ov_set_idle_btn.setVisible(allow_set_as_idle)
 
@@ -1331,10 +1331,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         return self.preview_content.set_current_transform(transform)
 
     def update_tab_live_preview(self, frame):
-        """Atualiza o overlay com o frame ao vivo da aba projetada (bug 2).
+        """
+        Update the overlay with the projected tab's live frame (bug 2).
 
-        Chamado no ritmo entregue pelo motor nativo da aba ao vivo.
-        Só renderiza se o overlay estiver expandido — sem custo quando minimizado.
+        Called at the rate delivered by the live tab's native engine.
+        Render only while the overlay is expanded; no cost when minimized.
         """
         if (
             not self._expanded
@@ -1447,7 +1448,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.obs_scene_btn.setVisible(False)
         self.timer_countdown_label.setVisible(True)
         self.ov_add_destination_btn.setVisible(False)
-        self.ov_set_idle_btn.setVisible(False)        # cronômetro não pode ser idle
+        self.ov_set_idle_btn.setVisible(False)        # timers cannot be idle screens
         self.inactive_widget.setVisible(False)
         self.active_widget.setVisible(True)
         if self._expanded:
@@ -1585,7 +1586,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._playback_recovering = False
         if self._expanded:
             self._collapse()
-        # Fecha e reseta o painel
+        # Close and reset the panel.
         if self.playlist_panel.is_open():
             self.playlist_panel.close_panel()
             self.ov_panel_btn.setIcon(make_icon(ICON_PANEL_RIGHT, 14, PALETTE.text_muted))
@@ -1615,35 +1616,35 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def set_obs_btn_available(self, available: bool):
         """
-        Habilita/desabilita o botão OBS de acordo com conexão e configuração.
-        Chamado pela MainWindow quando o estado do OBS muda.
-        Só mostra o botão se disponível E modo image estiver ativo.
+        Enable/disable the OBS button according to connection and configuration.
+        Called by MainWindow when OBS state changes.
+        Show the button only if available AND image mode is active.
         """
         self._obs_btn_available = available
-        # Visibilidade real: só no modo imagem
+        # Actual visibility: image mode only.
         self.obs_scene_btn.setVisible(available and self._mode == 'image')
 
     def set_obs_scene_is_media(self, is_media: bool):
         """
-        Atualiza o estado visual do botão para refletir se a cena de mídia
-        está ativa ou não. Chamado pela MainWindow após cada troca de cena.
+        Update the button's appearance to reflect whether the media scene is active.
+        Called by MainWindow after each scene change.
         """
         self._obs_scene_is_media = is_media
         self._refresh_obs_scene_btn()
 
     def _refresh_obs_scene_btn(self):
-        """Atualiza cor e tooltip do botão para refletir o estado atual."""
+        """Update the button color and tooltip to reflect the current state."""
         if self._obs_scene_is_media:
-            # Cena de mídia ativa → ícone destacado (azul), tooltip indica "ocultar"
+            # Media scene active → highlighted blue icon, tooltip says "hide".
             self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, PALETTE.text_muted))
             self.obs_scene_btn.setToolTip(self.tr("Hide media from OBS"))
         else:
-            # Cena anterior ativa → ícone neutro, tooltip indica "mostrar"
+            # Previous scene active → neutral icon, tooltip says "show".
             self.obs_scene_btn.setIcon(make_icon(ICON_OBS, 14, PALETTE.text_dim))
             self.obs_scene_btn.setToolTip(self.tr("Show media in OBS"))
 
     def _on_obs_scene_btn_clicked(self):
-        """Solicita à MainWindow que alterne entre cena de mídia e cena anterior/idle."""
+        """Ask MainWindow to toggle between the media scene and the previous/idle scene."""
         self.obs_scene_toggle_requested.emit()
 
     def set_screen_count(self, n: int):
@@ -1710,7 +1711,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        """Atualiza todos os textos do widget global quando o idioma muda."""
+        """Update all global widget text when the language changes."""
         self.play_btn.setToolTip(self.tr("Pause/Resume"))
         self.vol_btn.setToolTip(self.tr("Volume"))
         self.more_btn.setToolTip(self.tr("Playback options"))
@@ -1819,7 +1820,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         """Received from ImagePreviewWidget — forward animated reset to MainWindow."""
         self.image_reset_transform.emit()
 
-    # ── Menu de opções de vídeo ───────────────────────────────────────────
+    # Video options menu
 
     def _show_more_menu(self):
         menu = QMenu(self)
@@ -1848,7 +1849,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         menu.addSeparator()
 
-        # ── Ordem de reprodução ─────────────────────────────────────────
+        # Playback order
         order_menu = menu.addMenu("  " + self.tr("Playback Order"))
         order_menu.setStyleSheet(projection_menu_style())
         order_group = QActionGroup(order_menu)
@@ -1885,7 +1886,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _set_playback_order(self, order: str):
         self._playback_order = order
         self._playback_settings.set_playback_order(order)
-        # Reinicia rastreamento de aleatório ao mudar de modo
+        # Reset random playback tracking when changing modes.
         self._played_indices = {self._playlist_index}
         self._refresh_playback_options_indicator()
         overlay = getattr(self, "_fullscreen_overlay", None)
@@ -1921,7 +1922,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._volume = vol
         self._playback_settings.set_volume(vol)
         self.volume_changed.emit(vol)
-        # Atualiza ícone
+        # Update the icon.
         if value == 0:
             self.vol_btn.setIcon(make_icon(ICON_VOLUME_MUTE, 15, PALETTE.text_muted))
         elif value < 50:
@@ -2021,7 +2022,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         if self.yearly_timer is not None:
             self.yearly_timer.clear_countdown()
 
-    # ── Callbacks de mídia ────────────────────────────────────────────────
+    # Media callbacks
 
     def _current_playback_state(self) -> SolinPlaybackState:
         if self.media.is_playing:
@@ -2074,7 +2075,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._on_announce_gate_expired()
 
     def _on_media_ended(self):
-        """Lógica de avanço automático com base na playlist e ordem de reprodução."""
+        """Advance automatically according to the playlist and playback order."""
         if self._mode != 'video':
             return
 
@@ -2092,7 +2093,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             return
 
         if order == ORDER_OFF:
-            # Reproduz apenas o item atual
+            # Play only the current item.
             if self._loop:
                 self.media.replay()
             else:

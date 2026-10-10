@@ -887,7 +887,7 @@ class MeetingsWidget(QWidget):
         if lang_manager and hasattr(lang_manager, "language_changed"):
             lang_manager.language_changed.connect(self._on_lang_changed)
 
-        # Recarrega quando o idioma de mídia JW muda (independente da UI)
+        # Reload when the JW media language changes (independent of the UI).
         if lang_manager and hasattr(lang_manager, "jw_lang_service"):
             lang_manager.jw_lang_service.media_language_changed.connect(self._on_media_lang_changed)
 
@@ -1027,8 +1027,8 @@ class MeetingsWidget(QWidget):
 
     def _set_memorial_lang_from_mgr(self):
         """
-        Aplica o idioma de mídia JW ao serviço do Memorial.
-        Sempre usa o idioma de mídia efetivo, não o fallback da interface.
+        Apply the JW media language to the Memorial service.
+        Always use the effective media language, not the interface fallback.
         """
         context = self._current_media_context()
         self._memorial_svc.set_lang(context.api_code)
@@ -1147,8 +1147,8 @@ class MeetingsWidget(QWidget):
         self._navbar.update_week(monday, db_label)
         self._refresh_overview_cards(monday)
         self._ensure_week(monday, force=reload)
-        # Carrega mídias do Memorial se estamos na semana correta
-        # (MemorialService decide internamente se está na janela de 7 dias)
+        # Load Memorial media if this is the correct week.
+        # MemorialService checks the seven-day window internally.
         if self._memorial_svc.is_memorial_week(monday):
             self._memorial_svc.load(force=reload)
 
@@ -1406,12 +1406,12 @@ class MeetingsWidget(QWidget):
 
     @Slot(object)
     def _on_memorial_ready(self, md: "MemorialData"):
-        """Memorial data carregada — atualiza card se estamos na semana certa."""
+        """Memorial data loaded; update the card if this is the correct week."""
         if self._memorial_svc.is_memorial_week(self._monday):
             mc = self._overview.memorial_card
             mc.setVisible(True)
             mc.set_ready(md)
-            # Invalida detalhe cacheado para forçar rebuild com dados frescos
+            # Invalidate cached details to rebuild with fresh data.
             self._discard_detail(f"memorial:{self._monday.isoformat()}")
 
     @Slot(str)
@@ -1460,8 +1460,8 @@ class MeetingsWidget(QWidget):
     @Slot(str)
     def _on_media_lang_changed(self, _code: str):
         """
-        Idioma de mídia JW mudou → recarrega reuniões com o novo código.
-        Usa o contexto JW centralizado em vez do fallback da interface.
+        JW media language changed: reload meetings with the new code.
+        Use the centralized JW context rather than the interface fallback.
         """
         self._preparation.cancel_other_language_contexts(self._current_media_context())
         self._set_lang_from_mgr()
@@ -1674,7 +1674,7 @@ class MeetingsWidget(QWidget):
         return self._saved_snapshots_for(monday).get(pub_type)
 
     def cleanup(self) -> None:
-        """Para serviços com QThread antes da janela principal ser destruída."""
+        """Stop QThread-based services before the main window is destroyed."""
         self.preparation_handle.cancel()
         self._snapshot_preparation.cancel()
         timer = getattr(self, "_auto_download_timer", None)

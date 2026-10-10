@@ -67,7 +67,7 @@ if not defined VERSION (
 set PRODUCT_NAME=Solin
 set COMPANY_NAME=Solin Software
 set DESCRIPTION=Solin - Audio and Video for Kingdom Hall meetings
-set COPYRIGHT=Copyright (c) 2026 Alexsander. All rights reserved.
+set COPYRIGHT=Copyright (c) 2026 Alexsander and contributors.
 
 echo.
 echo  =========================================

@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, QCoreApplication, QTimer
 
 install_qt_message_handler()
 
-# Apenas constantes puras — sem dependência de caminhos ou QApplication.
+# Pure constants only; no dependencies on paths or QApplication.
 from solin.bootstrap.config import default_app_config
 from solin.bootstrap.container import initialize_application_container
 from solin.bootstrap.file_open import (
@@ -792,17 +792,17 @@ def main():
     startup_timeline().mark("container_ready")
     profile_service = container.profile_service
 
-    # ── Imports dependentes de caminhos ───────────────────────────────────────
+    # Path-dependent imports
     from solin.core.i18n.manager import LanguageManager
 
-    # ── Ícone da aplicação ────────────────────────────────────────────────────
+    # Application icon
     icon_path = application_asset_path("icon.ico")
     if icon_path.is_file():
         from PySide6.QtGui import QIcon
 
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    # ── Argumentos da linha de comando ────────────────────────────────────────
+    # Command-line arguments
     runtime_args = parse_runtime_args(sys.argv)
     requested_profile_id = runtime_args.requested_profile_id
     create_profile_mode = runtime_args.create_profile
@@ -819,7 +819,7 @@ def main():
     )
     container.lifecycle.register_cleanup(lang_manager.shutdown)
 
-    # ── CSV do Zoom: janela standalone ────────────────────────────────────────
+    # Zoom CSV: standalone window
     csv_args = [
         a for a in file_args if os.path.isfile(a) and os.path.splitext(a)[1].lower() == ".csv"
     ]
@@ -845,12 +845,12 @@ def main():
     if single_instance_started:
         container.lifecycle.register_single_instance(single_instance)
 
-    # ── Decisão: perfil direto ou tela de seleção ─────────────────────────────
+    # Choose between opening a profile directly and showing the profile selector.
     #
-    #   • 0 perfis + sem legado  → Onboarding completo
-    #   • 0 perfis + com legado  → Tela de migração
-    #   • 1 perfil               → Abre direto (sem seletor)
-    #   • 2+ perfis              → Seletor Netflix
+    # • 0 profiles + no legacy data → Full onboarding
+    # • 0 profiles + legacy data → Migration screen
+    # • 1 profile → Open directly (skip the selector)
+    #   • 2+ perfis              → Seletor
 
     if create_profile_mode:
         screen = _create_profile_screen(container, lang_manager)
@@ -883,7 +883,7 @@ def main():
         screen.start_new_profile()
 
     elif requested_profile_id and profile_service.get_profile(requested_profile_id):
-        # Relaunch controlado: abre diretamente no perfil solicitado.
+        # Controlled relaunch: open directly into the requested profile.
         profile_service.set_active(requested_profile_id)
         _launch_profile_window(
             container,
@@ -893,7 +893,7 @@ def main():
         )
 
     elif profile_service.has_profiles() and len(profile_service.profiles) == 1:
-        # ── Caso rápido: perfil único → pula seletor ──────────────────────
+        # Fast path: a single profile skips the selector.
         last_id = profile_service.restore_last_active()
         if last_id is not None:
             profile_service.set_active(last_id)
@@ -907,14 +907,14 @@ def main():
         )
 
     else:
-        # ── Mostra ProfileScreen ───────────────────────────────────────────
+        # Show ProfileScreen
         screen = _create_profile_screen(container, lang_manager)
         _main_window_ref[0] = screen
         screen.setWindowTitle("Solin")
         screen.setMinimumSize(860, 580)
         screen.resize(960, 640)
 
-        # Centra na tela
+        # Center on the screen.
         from PySide6.QtGui import QGuiApplication
 
         geo = QGuiApplication.primaryScreen().availableGeometry()
@@ -932,13 +932,13 @@ def main():
                 file_args,
                 profile_id,
             )
-            # Fecha a tela de perfil de vez depois da animação
+            # Close the profile screen permanently after the animation.
             QTimer.singleShot(400, screen.close)
 
         screen.profile_ready.connect(_on_profile_ready)
         _pm_screen = screen
 
-        # Inicia fluxo correto
+        # Start the appropriate flow.
         screen.start()
 
     sys.exit(app.exec())

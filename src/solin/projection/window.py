@@ -940,16 +940,16 @@ class FloatingPreviewWindow(BaseProjectionView):
         # move and resize interaction while the presenter only renders video.
         self.native_video_surface.set_input_target(self)
         
-        # ── Keep-alive (Anti-congelamento para Zoom/OBS) ──────────────────
-        # Cria um pixel 1x1 no topo esquerdo (0,0) que flutua sobre a UI
+        # Keep-alive (prevent freezing in Zoom/OBS)
+        # Create a 1×1 pixel at the top left (0,0) floating over the UI.
         self._keep_alive_pixel = QWidget(self)
         self._keep_alive_pixel.setGeometry(0, 0, 1, 1)
-        self._keep_alive_pixel.raise_()  # Garante que fica por cima do stack
+        self._keep_alive_pixel.raise_()  # Ensure it stays above the stack.
         
         self._keep_alive_state = False
         self._keep_alive_timer = QTimer(self)
         self._keep_alive_timer.timeout.connect(self._toggle_keep_alive)
-        self._keep_alive_timer.start(1000)  # Pulso a cada 1 segundo
+        self._keep_alive_timer.start(1000)  # pulse once per second
 
         # ── Zoom-break timer ──────────────────────────────────────────────
         self._zoom_break_timer = QTimer(self)
@@ -1078,10 +1078,10 @@ class FloatingPreviewWindow(BaseProjectionView):
     
     def _toggle_keep_alive(self) -> None:
         """
-        Força um redesenho mínimo na janela para enganar a otimização do DWM.
-        Alterna a cor de um pixel 1x1 entre preto e '#010101'.
-        Isso impede que ferramentas de captura (Zoom, Teams) congelem a tela
-        quando uma imagem estática estiver sendo exibida.
+        Force a minimal window redraw to bypass DWM optimization.
+        Alternate a 1×1 pixel between black and '#010101'.
+        This prevents capture tools (Zoom, Teams) from freezing the screen
+        while a static image is displayed.
         """
         self._keep_alive_state = not self._keep_alive_state
         color = "#0101010F" if self._keep_alive_state else "#0000002D"

@@ -1,21 +1,22 @@
 """
-memorial.py ─ Solin
-==============================
-Serviço de mídia da Celebração do Memorial JW.
+memorial.py — Solin
+===================
+JW Memorial media service.
 
-Responsabilidades:
-  1. Expor a API pública de mídia do Memorial para a UI
-  2. Determinar a data e a semana do Memorial para consultas síncronas leves
-  3. Orquestrar a thread dedicada que executa I/O bloqueante
-  4. Emitir sinais para a UI (main thread via QueuedConnection)
+Responsibilities:
+  1. Expose the public Memorial media API to the UI.
+  2. Determine the Memorial date and week for lightweight synchronous queries.
+  3. Orchestrate the dedicated thread performing blocking I/O.
+  4. Emit UI signals (main thread via QueuedConnection).
 
 Threading:
-  MemorialWorker   — QObject num QThread dedicado (toda I/O bloqueante aqui)
-  MemorialService  — QObject na main thread (API pública para a UI)
+  MemorialWorker — QObject in a dedicated QThread (all blocking I/O).
+  MemorialService — QObject on the main thread (public UI API).
 
-Política de fetch:
-  O worker só busca mídias se a data atual está a ≤ 7 dias do Memorial.
-  Fora desse período, emite memorial_not_yet/memorial_past (UI pode ignorar).
+Fetch policy:
+  The worker fetches media only when the current date is ≤ 7 days before
+  the Memorial. Outside that window, it emits memorial_not_yet/memorial_past
+  (the UI may ignore these).
 """
 
 from __future__ import annotations
@@ -36,23 +37,23 @@ log = logging.getLogger(__name__)
 _STOPPING_MEMORIAL_SERVICES: set[object] = set()
 
 
-# ── MemorialService — vive na main thread ────────────────────────────────────
+# MemorialService: runs on the main thread.
 
 class MemorialService(QObject):
     """
-    API pública para a UI.  Vive na main thread.
-    Expõe sinais para o widget consumir resultados do worker.
+    Public UI API, running on the main thread.
+    Expose signals so the widget can consume worker results.
 
-    Uso típico:
+    Typical usage:
         svc = MemorialService(self)
         svc.set_lang("T")
         svc.memorial_ready.connect(self._on_memorial)
-        svc.load()                           # dispara worker se estiver na janela
-        monday = svc.memorial_week()         # para saber em qual semana mostrar
+        svc.load()  # start the worker if within the window
+        monday = svc.memorial_week()  # determine which week to display
     """
 
     memorial_ready   = Signal(object)     # meeting_models.MemorialData (status="ready")
-    memorial_status  = Signal(str)        # status string (p/ UI genérica)
+    memorial_status  = Signal(str)        # status string for generic UI use
     memorial_progress = Signal(int)       # 0-100
 
     _sig_load     = Signal(int)
@@ -84,7 +85,7 @@ class MemorialService(QObject):
         self._thread.start()
 
     def shutdown(self, wait_ms: int = 3000, delete_when_stopped: bool = False) -> None:
-        """Encerra explicitamente a worker thread do Memorial."""
+        """Explicitly stop the Memorial worker thread."""
         thread: QThread | None = getattr(self, "_thread", None)
         if thread is None:
             return
@@ -121,7 +122,7 @@ class MemorialService(QObject):
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_lang(self, lang: str):
-        """Define o idioma de mídia JW (não o idioma da interface)."""
+        """Set the JW media language (not the interface language)."""
         if lang == self._lang:
             return
         self._lang = lang
@@ -133,8 +134,8 @@ class MemorialService(QObject):
 
     def load(self, force: bool = False):
         """
-        Dispara o worker para carregar/verificar as mídias do Memorial.
-        Se force=False e já temos dados prontos, emite o sinal imediatamente.
+        Start the worker to load/check Memorial media.
+        If force=False and data is already ready, emit the signal immediately.
         """
         if not force and self._data and self._data.status == "ready":
             self.memorial_ready.emit(self._data)
@@ -145,19 +146,19 @@ class MemorialService(QObject):
         return self._data
 
     def memorial_date(self) -> Optional[date]:
-        """Data calculada do Memorial (pode ser None se ainda não calculada)."""
+        """Calculated Memorial date (may be None if not yet calculated)."""
         if self._data:
             return self._data.memorial_date
-        # Cálculo síncrono leve para uso imediato pela UI (sem bloquear)
+        # Lightweight synchronous calculation for immediate, nonblocking UI use.
         return memorial_date_for_year(self._year)
 
     def memorial_week(self) -> Optional[date]:
-        """Segunda-feira da semana do Memorial."""
+        """Monday of the Memorial week."""
         d = self.memorial_date()
         return monday_of(d) if d else None
 
     def is_memorial_week(self, monday: date) -> bool:
-        """Verdadeiro se a semana dada é a semana do Memorial."""
+        """True if the given week is the Memorial week."""
         mw = self.memorial_week()
         return mw is not None and mw == monday
 

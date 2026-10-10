@@ -333,11 +333,11 @@ class ZoomPanel(QWidget):
         self._participant_count = count
         self._part_row.setVisible(True)
         
-        # Parâmetros: tr(texto_base, desambiguação, n)
+        # Parameters: tr(source_text, disambiguation, n)
         text = self.tr("%n attendee(s)", "", count)
         
         self._part_lbl.setText(text)
-        # Tooltip com nomes dos participantes removida
+        # Participant-name tooltip removed.
         # if names:
         #     self._part_lbl.setToolTip("\n".join(names))
         # else:

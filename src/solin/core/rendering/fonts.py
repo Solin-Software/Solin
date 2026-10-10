@@ -1,29 +1,29 @@
-"""font_manager.py — Solin
+"""
+fonts.py — Solin
 
-Gerencia o download, conversão e registro de fontes externas no Qt.
+Manage downloading, converting, and registering external fonts in Qt.
 
-Por que converter WOFF2 → TTF?
-  Qt (QFontDatabase) só suporta TTF/OTF nativamente.
-  WOFF2 é formato web (compressão Brotli) — usado por browsers/Electron,
-  mas rejeitado silenciosamente pelo DirectWrite do Windows.
-  A biblioteca `fontTools` (+ `brotli`) faz a conversão sem perda.
+Why convert WOFF2 → TTF?
+  Qt (QFontDatabase) natively supports only TTF/OTF. WOFF2 is a web format
+  using Brotli compression, supported by browsers/Electron but silently
+  rejected by Windows DirectWrite. `fontTools` with `brotli` converts it losslessly.
 
-Fluxo (espelho do helpers/fonts.ts do meeting-media-manager):
-  1. Verifica se o .ttf já existe em cache/fonts/
-  2. Faz HEAD request para comparar tamanho do .woff2 remoto vs local
-  3. Se necessário: baixa o .woff2 → converte → salva como .ttf
-  4. Registra no QFontDatabase via addApplicationFont()
-  5. Emite font_ready(font_name) quando disponível
+Workflow:
+  1. Check whether the .ttf already exists in cache/fonts/.
+  2. Make a HEAD request to compare remote and local .woff2 sizes.
+  3. If needed, download .woff2 → convert → save as .ttf.
+  4. Register with QFontDatabase via addApplicationFont().
+  5. Emit font_ready(font_name) when available.
 
-Dependências extras:
+Additional dependencies:
   pip install fonttools brotli
 
-Uso:
+Usage:
     from solin.core.rendering.fonts import FontManager
     font_manager = FontManager(runtime_paths.cache_dir)
     font_manager.font_ready.connect(lambda name: widget.update())
     font_manager.ensure('Wt-ClearText-Bold')
-    family = font_manager.family('Wt-ClearText-Bold')  # fallback automático
+    family = font_manager.family('Wt-ClearText-Bold')  # automatic fallback
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ _FONT_URLS: dict[str, str] = {
     "Wt-ClearText-Bold": ("https://b.jw-cdn.org/fonts/wt-clear-text/1.029/Wt-ClearText-Bold.woff2"),
 }
 
-# Fallback por fonte: usado se download ou conversão falharem
+# Per-font fallback if download or conversion fails
 _FONT_FALLBACKS: dict[str, str] = {
     "Wt-ClearText-Bold": "Georgia",
 }
@@ -62,11 +62,11 @@ _USER_AGENT = (
 )
 
 
-# ── Conversão WOFF2 → TTF ──────────────────────────────────────────────────────
+# WOFF2 → TTF conversion
 def _woff2_to_ttf(woff2_data: bytes) -> bytes:
     """
-    Converte bytes WOFF2 para TTF puro usando fontTools.
-    Requer: pip install fonttools brotli
+    Convert WOFF2 bytes to plain TTF using fontTools.
+    Requires: pip install fonttools brotli.
     """
     try:
         from fontTools.ttLib import TTFont  # type: ignore[import]
@@ -74,17 +74,17 @@ def _woff2_to_ttf(woff2_data: bytes) -> bytes:
         raise RuntimeError("fontTools is not installed. Run: pip install fonttools brotli") from exc
 
     font = TTFont(io.BytesIO(woff2_data))
-    font.flavor = None  # remove wrapper WOFF2 → TTF/OTF puro
+    font.flavor = None  # remove the WOFF2 wrapper → plain TTF/OTF
     buf = io.BytesIO()
     font.save(buf)
     return buf.getvalue()
 
 
-# ── Worker de download + conversão ────────────────────────────────────────────
+# Download and conversion worker
 class _DownloadWorker(QThread):
     """
-    Baixa o WOFF2 em background, converte para TTF e salva no cache.
-    Emite succeeded com o caminho do .ttf final.
+    Download WOFF2 in the background, convert to TTF, and cache it.
+    Emit succeeded with the final .ttf path.
     """
 
     succeeded = Signal(str, str)  # font_name, local_ttf_path
@@ -122,7 +122,7 @@ class _DownloadWorker(QThread):
         woff2_path = self._woff2_path
         ttf_path = self._ttf_path
 
-        # 1. Download do WOFF2
+        # 1. Download WOFF2.
         log.debug("[font_manager] Downloading %s", url)
         try:
             with stream_get(
@@ -151,7 +151,7 @@ class _DownloadWorker(QThread):
         if self.isInterruptionRequested():
             return
 
-        # 2. Salva .woff2 em cache (referência de tamanho para HEAD futuro)
+        # 2. Cache .woff2 (size reference for a future HEAD request).
         try:
             os.makedirs(os.path.dirname(woff2_path), exist_ok=True)
             with open(woff2_path, "wb") as f:
@@ -159,7 +159,7 @@ class _DownloadWorker(QThread):
         except OSError as exc:
             log.warning("[font_manager] Could not save WOFF2: %s", exc)
 
-        # 3. Converte WOFF2 → TTF
+        # 3. Convert WOFF2 → TTF.
         log.debug("[font_manager] Converting WOFF2 to TTF for '%s'", font_name)
         try:
             ttf_data = _woff2_to_ttf(woff2_data)
@@ -171,7 +171,7 @@ class _DownloadWorker(QThread):
         if self.isInterruptionRequested():
             return
 
-        # 4. Salva .ttf em cache
+        # 4. Cache .ttf.
         try:
             with open(ttf_path, "wb") as f:
                 f.write(ttf_data)
@@ -187,12 +187,12 @@ class _DownloadWorker(QThread):
 # ── FontManager principal ──────────────────────────────────────────────────────
 class FontManager(QObject):
     """
-    Gerencia fontes externas para uso no Qt com cache explicitamente injetado.
+    Manage external Qt fonts with an explicitly injected cache.
 
     Signals
     -------
-    font_ready(font_name)   — fonte registrada com sucesso no QFontDatabase
-    font_failed(font_name)  — falha total; family() retorna o fallback
+    font_ready(font_name) — font registered successfully with QFontDatabase
+    font_failed(font_name) — complete failure; family() returns the fallback
     """
 
     font_ready = Signal(str)
@@ -208,13 +208,13 @@ class FontManager(QObject):
         self._registered: dict[str, Optional[str]] = {}
         self._workers: dict[str, _DownloadWorker] = {}
 
-    # ── API pública ───────────────────────────────────────────────────────────
+    # Public API
 
     def ensure(self, font_name: str) -> None:
         """
-        Garante que a fonte estará disponível (idempotente).
-          - TTF em cache + WOFF2 com tamanho correto → registra imediatamente.
-          - Caso contrário → baixa + converte em background.
+        Ensure the font is available (idempotent).
+          - Cached TTF + correctly sized WOFF2 → register immediately.
+          - Otherwise → download and convert in the background.
         """
         if font_name in self._registered:
             return
@@ -234,8 +234,8 @@ class FontManager(QObject):
 
     def family(self, font_name: str) -> str:
         """
-        Retorna a família a usar no QFont.
-        Wt-ClearText-Bold se registrada com sucesso, senão Georgia.
+        Return the family to use in QFont.
+        Wt-ClearText-Bold if successfully registered, otherwise Georgia.
         """
         name = self._registered.get(font_name)
         if name:
@@ -245,7 +245,7 @@ class FontManager(QObject):
     def is_ready(self, font_name: str) -> bool:
         return bool(self._registered.get(font_name))
 
-    # ── Caminhos de cache ─────────────────────────────────────────────────────
+    # Cache paths
 
     def _cache_key(self, font_name: str) -> str:
         url = _FONT_URLS.get(font_name, "")
@@ -279,7 +279,7 @@ class FontManager(QObject):
         log.info("[font_manager] '%s' registered as '%s'.", font_name, registered_name)
         self.font_ready.emit(font_name)
 
-    # ── Download em background ────────────────────────────────────────────────
+    # Background download
 
     def _start_download(self, font_name: str, url: str, woff2_path: str, ttf_path: str) -> None:
         if font_name in self._workers:

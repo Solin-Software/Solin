@@ -1,25 +1,25 @@
 """
 Qt media metadata extraction and thumbnail services.
-Extração centralizada de thumbnail + título de mídia, de forma assíncrona
-e sem download completo de arquivos remotos.
+Centralized asynchronous thumbnail/title extraction without fully downloading
+remote files.
 
-Fontes de metadado (em ordem de prioridade):
-  Áudio local   : bytes brutos do header (ID3v2/MP4 atoms/FLAC/OGG) → sem player
-  Áudio remoto  : HTTP Range request (512 KB máx) → mesmos parsers de bytes
-  Vídeo local   : ffprobe (título/duração) → ffmpeg (capa ou frame 5%)
-  Vídeo remoto  : ffprobe/ffmpeg na URL (sem download completo)
-  URL qualquer  : RemotePageMetaExtractor → og:image + og:title via HTTP HEAD/GET parcial
-  Fallback local: arquivo remoto completo com .done → usado após falha da origem
+Metadata sources, in priority order:
+  Local audio: raw header bytes (ID3v2/MP4 atoms/FLAC/OGG), without a player.
+  Remote audio: HTTP Range request (512 KB maximum), using the same byte parsers.
+  Local video: ffprobe (title/duration), then ffmpeg (cover or frame at 5%).
+  Remote video: ffprobe/ffmpeg on the URL, without a full download.
+  Any URL: RemotePageMetaExtractor, og:image/og:title via partial HTTP HEAD/GET.
+  Local fallback: complete remote file with .done, used after source failure.
 
-Sinal principal:  info_ready(index, pixmap, title)
-  - pixmap : thumbnail extraída (QPixmap válido) ou QPixmap() se não encontrada
-  - title  : título dos metadados, ou "" se não disponível
+Main signal: info_ready(index, pixmap, title).
+  - pixmap: extracted thumbnail (valid QPixmap), or QPixmap() if absent.
+  - title: metadata title, or "" if unavailable.
 
-Para alimentação ao vivo (player em reprodução), use feed_live_frame() /
-feed_live_cover() na ThumbnailQueue — emitem info_ready com title="".
+For live input from a playing source, use feed_live_frame() / feed_live_cover()
+on ThumbnailQueue; these emit info_ready with title="".
 
-Nota: completamente independente da API JW.org. Thumb e título são extraídos
-diretamente do stream de mídia (ffprobe/ffmpeg) ou dos metadados HTML da página.
+Independent of the JW.org API: thumbnails and titles come directly from
+media streams (ffprobe/ffmpeg) or page HTML metadata.
 """
 
 from __future__ import annotations
@@ -380,14 +380,14 @@ def _embedded_image_is_complete(data: bytes) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Parsers de metadado (operam em bytes — zero I/O de arquivo, zero player)
+# Metadata parsers (operate on bytes: no file I/O, no player)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _audio_info_from_bytes(data: bytes, ext: str) -> "tuple[bytes | None, str]":
     """
-    Extrai (cover_bytes, title) de dados de áudio em memória.
-    Faz uma única passagem pelo header — cover e título lidos juntos.
-    Retorna (None, "") se nada encontrado.
+    Extract (cover_bytes, title) from in-memory audio data.
+    Read the cover and title together in a single header pass.
+    Return (None, "") if nothing is found.
     """
     try:
         if ext == ".mp3":
@@ -452,7 +452,7 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
         pos = 0
         while pos < len(tag) and not (cover and title):
             if ver >= 4:
-                # v2.4 usa Sync-Safe Integer para o tamanho do frame
+                # v2.4 uses a syncsafe integer for frame size.
                 if pos + 10 > len(tag):
                     break
                 fid = tag[pos : pos + 4].decode("latin-1", errors="ignore")
@@ -464,14 +464,14 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                 )
                 frame_header_size = 10
             elif ver == 3:
-                # v2.3 usa Integer normal de 32-bits
+                # v2.3 uses a regular 32-bit integer.
                 if pos + 10 > len(tag):
                     break
                 fid = tag[pos : pos + 4].decode("latin-1", errors="ignore")
                 fsz = struct.unpack(">I", tag[pos + 4 : pos + 8])[0]
                 frame_header_size = 10
             else:
-                # v2.2 usa 24-bits
+                # v2.2 uses 24 bits.
                 if pos + 6 > len(tag):
                     break
                 fid = tag[pos : pos + 3].decode("latin-1", errors="ignore")
@@ -491,31 +491,31 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                 enc = fdat[0]
                 i = 1
                 
-                # 1. Pula o MIME type (sempre Latin-1, termina em único \x00)
+                # 1. Skip the MIME type (always Latin-1, terminated by a single \x00).
                 while i < len(fdat) and fdat[i] != 0:
                     i += 1
-                i += 1  # Pula o \x00 do MIME
+                i += 1  # Skip the MIME \x00.
                 
-                # 2. Pula o Picture Type (1 byte)
+                # 2. Skip Picture Type (1 byte).
                 i += 1
                 
-                # 3. Pula a Description (depende do text encoding)
-                if enc in (1, 2):  # UTF-16 (termina com duplo \x00\x00)
-                    # Itera de 2 em 2 para não tropeçar no meio de um caractere
+                # 3. Skip Description (depends on text encoding).
+                if enc in (1, 2):  # UTF-16 (terminated by double \x00\x00)
+                    # Advance two bytes at a time to avoid landing inside a character.
                     while i < len(fdat) - 1:
                         if fdat[i] == 0 and fdat[i+1] == 0:
                             i += 2
                             break
                         i += 2
-                else:  # UTF-8 ou Latin-1 (termina com \x00)
+                else:  # UTF-8 or Latin-1 (terminated by \x00)
                     while i < len(fdat) and fdat[i] != 0:
                         i += 1
                     i += 1
                     
                 cover_raw = fdat[i:]
                 
-                # 4. FALLBACK 100% À PROVA DE BALAS (MAGIC BYTES)
-                # Procura a assinatura exata para ignorar qualquer lixo residual do ID3
+                # 4. SIGNATURE-BASED FALLBACK (MAGIC BYTES)
+                # Find the exact signature to skip residual ID3 data.
                 if cover_raw:
                     jpg_idx = cover_raw.find(b'\xff\xd8\xff')
                     png_idx = cover_raw.find(_PNG_SIGNATURE)
@@ -523,10 +523,10 @@ def _id3v2_info_from_bytes(data: bytes) -> "tuple[bytes | None, str]":
                     
                     starts = [idx for idx in (jpg_idx, png_idx, gif_idx) if idx != -1]
                     if starts:
-                        # Corta exatamente onde a imagem verdadeira começa
+                        # Slice exactly where the actual image begins.
                         cover = cover_raw[min(starts):]
                     else:
-                        # Se for um formato bizarro/desconhecido, tenta a sorte
+                        # For an unusual/unknown format, keep the remaining bytes as-is.
                         cover = cover_raw or None
 
             # Title
@@ -794,12 +794,12 @@ class _ThreadedMediaInfoExtractor(QObject):
 
 class RemoteAudioInfoExtractor(_ThreadedMediaInfoExtractor):
     """
-    Extrai cover art e título de áudio remoto sem baixar o arquivo completo.
+    Extract cover art and title from remote audio without a full download.
 
-    Faz uma requisição HTTP Range (bytes=0–524287, 512 KB máx) para obter
-    apenas o header com metadados. Cover e título são lidos em memória pelos
-    mesmos parsers usados para arquivos locais (ID3v2, MP4 atoms, FLAC, OGG).
-    Nenhum byte além dos necessários é transferido.
+    Use an HTTP Range request (bytes=0–524287, maximum 512 KB) to fetch
+    only the metadata header. Read cover and title in memory using the same
+    parsers as local files (ID3v2, MP4 atoms, FLAC, OGG).
+    Transfer only the bytes required.
     """
 
     _MAX_BYTES = 3_145_728  # 3 MB (3 * 1024 * 1024)
@@ -879,7 +879,7 @@ class LocalAudioInfoExtractor(_ThreadedMediaInfoExtractor):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MediaInfoExtractor — QMediaPlayer assíncrono (vídeo local/remoto, áudio local)
+# MediaInfoExtractor — asynchronous media extraction (local/remote video, local audio)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediaInfoExtractor(QObject):
@@ -1027,10 +1027,10 @@ class MediaInfoExtractor(QObject):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# RemotePageMetaExtractor — og:image + og:title de qualquer URL web
+# RemotePageMetaExtractor — og:image + og:title from any web URL
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Padrões para extrair og:title e og:image de HTML
+# Patterns for extracting og:title and og:image from HTML
 _RE_OG_TITLE = re.compile(
     rb'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']',
     re.IGNORECASE,
@@ -1052,8 +1052,8 @@ _RE_TITLE_TAG = re.compile(rb'<title[^>]*>([^<]+)</title>', re.IGNORECASE)
 
 def _extract_og_meta(data: bytes) -> "tuple[str, str]":
     """
-    Extrai (thumb_url, title) de HTML via og:image / og:title / <title>.
-    Retorna ('', '') se nada encontrado.
+    Extract (thumb_url, title) from HTML via og:image / og:title / <title>.
+    Return ('', '') if nothing is found.
     """
     thumb_url = ""
     title = ""
@@ -1074,7 +1074,7 @@ def _extract_og_meta(data: bytes) -> "tuple[str, str]":
         m = _RE_TITLE_TAG.search(data)
         if m:
             title = m.group(1).decode("utf-8", errors="ignore").strip()
-            # Remove sufixos comuns de sites ("Título | Site" → "Título")
+            # Remove common site suffixes ("Title | Site" → "Title").
             for sep in (" | ", " - ", " – ", " — "):
                 if sep in title:
                     title = title.split(sep)[0].strip()
@@ -1085,22 +1085,21 @@ def _extract_og_meta(data: bytes) -> "tuple[str, str]":
 
 class RemotePageMetaExtractor(_ThreadedMediaInfoExtractor):
     """
-    Extrai thumbnail e título de qualquer URL remota (vídeo, página web)
-    de forma independente, sem API externa e sem baixar a mídia completa.
+    Extract thumbnail and title from any remote URL (video or web page)
+    independently, without an external API or a full media download.
 
-    Estratégia:
-      1. Faz requisição HTTP parcial (primeiros 96 KB) à URL.
-      2. Se Content-Type for HTML → extrai og:image + og:title do HTML.
-         Depois baixa a og:image (também parcial se necessário) como pixmap.
-      3. Se Content-Type for mídia direta (video/audio) → extrai metadados
-         de bytes (cover art ID3/MP4/FLAC) ou emite thumbnail_failed para que
-         o MediaInfoExtractor (QMediaPlayer) seja usado.
+    Strategy:
+      1. Make a partial HTTP request for the first 96 KB.
+      2. For HTML Content-Type, extract og:image and og:title, then download
+         og:image as a pixmap (also partially if needed).
+      3. For direct video/audio Content-Type, extract byte metadata (ID3/MP4/FLAC
+         cover art), or emit thumbnail_failed to use MediaInfoExtractor.
 
-    Completamente independente da API JW.org.
+    Independent of the JW.org API.
     """
 
-    _MAX_HTML_BYTES  = 98_304   # 96 KB — suficiente para a maioria dos <head>
-    _MAX_IMG_BYTES   = 524_288  # 512 KB para imagem og:image
+    _MAX_HTML_BYTES  = 98_304   # 96 KB: enough for most <head> elements
+    _MAX_IMG_BYTES   = 524_288  # 512 KB for the og:image image
     _TIMEOUT_S       = 12
 
     def _fetch_info(self) -> tuple[bytes | None, str]:
@@ -1150,18 +1149,18 @@ class RemotePageMetaExtractor(_ThreadedMediaInfoExtractor):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _RemoteVideoMetaThenStream — estratégia em dois estágios para vídeo remoto
+# _RemoteVideoMetaThenStream — two-stage remote video strategy
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _RemoteVideoMetaThenStream(QObject):
     """
-    Para URLs remotas de vídeo/mídia: tenta primeiro extrair thumb+título via
-    metadados HTML (og:image/og:title) sem tocar o player. Se falhar, cai para
-    MediaInfoExtractor (QMediaPlayer streaming) que captura frame do vídeo.
+    For remote video/media URLs, first try HTML metadata (og:image/og:title)
+    without using the player. On failure, fall back to MediaInfoExtractor
+    to extract a video frame.
 
-    Isso resolve JW.org e qualquer outro site sem depender de API externa.
-    A thumb vem do og:image da página (que normalmente é a capa/thumbnail do
-    vídeo), e o título vem do og:title — ambos reais, não nomes de arquivo.
+    This handles JW.org and other sites without an external API. The thumbnail
+    comes from the page's og:image (usually the video cover/thumbnail), and the
+    title from og:title; both are actual metadata rather than filenames.
     """
 
     info_ready       = Signal(int, QPixmap, str)
@@ -1188,7 +1187,7 @@ class _RemoteVideoMetaThenStream(QObject):
         self._page_pixmap = QPixmap()
         self._stream_ex: MediaInfoExtractor | None = None
 
-        # Estágio 1: tenta og:image + og:title
+        # Stage 1: try og:image and og:title.
         self._page_ex = RemotePageMetaExtractor(index, url, worker_pool, self)
         self._page_ex.info_ready.connect(self._on_page_ready)
         self._page_ex.thumbnail_failed.connect(self._on_page_failed)
@@ -1240,7 +1239,7 @@ class _RemoteVideoMetaThenStream(QObject):
     def _start_stream(self, index: int) -> None:
         if self._stream_ex is not None:
             return
-        # Estágio 2: fallback para QMediaPlayer (captura frame do stream)
+        # Stage 2: fall back to MediaInfoExtractor (extract a frame from the stream).
         self._stream_ex = MediaInfoExtractor(
             index,
             self._url,
@@ -1565,24 +1564,22 @@ def _create_extractor(
 
 class MediaInfoQueue(QObject):
     """
-    Gerencia a extração de thumbnail + título em fila, com no máximo
-    _MAX_CONCURRENT extratores simultâneos.
+    Queue thumbnail/title extraction with at most _MAX_CONCURRENT extractors.
 
-    ``info_ready`` encerra a requisição. Quando houver duração disponível,
-    ``duration_ready`` é sempre emitido antes desse sinal terminal.
-    Falhas de processamento não são confundidas com ausência de imagem:
-    ``request_failed`` só é emitido quando a política de retry se encerra.
+    ``info_ready`` ends the request. If duration is available, emit
+    ``duration_ready`` before that terminal signal. Do not confuse processing
+    failures with missing images: emit ``request_failed`` only when the retry
+    policy is exhausted.
 
-    Sinal principal:
-      info_ready(index, pixmap, title)
-        - pixmap válido = thumbnail encontrada
-        - pixmap nulo   = nenhuma imagem, mas pode haver título
-        - title         = título dos metadados, ou "" se não encontrado
+    Main signal: info_ready(index, pixmap, title).
+      - Valid pixmap: thumbnail found.
+      - Null pixmap: no image, but a title may be available.
+      - title: metadata title, or "" if absent.
 
-    Para alimentação ao vivo (frame/cover capturado do player em reprodução):
-      feed_live_frame(index, pixmap)  — apenas thumbnail, sem título
-      feed_live_cover(index, pixmap)  — cover art, prioridade máxima
-    Ambos emitem info_ready com title="".
+    Live input (frame/cover captured during playback):
+      feed_live_frame(index, pixmap) — thumbnail only, no title.
+      feed_live_cover(index, pixmap) — cover art, highest priority.
+    Both emit info_ready with title="".
     """
 
     info_ready     = Signal(int, QPixmap, str)   # (index, pixmap, title)
@@ -1741,7 +1738,7 @@ class MediaInfoQueue(QObject):
         except RuntimeError:
             pass
 
-    # ── API pública ───────────────────────────────────────────────────────────
+    # Public API
 
     def request(
         self,
@@ -1754,7 +1751,7 @@ class MediaInfoQueue(QObject):
         require_duration: bool = False,
         restart_on_source_change: bool = True,
     ) -> None:
-        """Solicita extração de info para o item. Idempotente."""
+        """Request metadata extraction for the item (idempotent)."""
         if (
             self._scheduler.is_scheduled(index)
             or index in self._request_states
@@ -1841,9 +1838,9 @@ class MediaInfoQueue(QObject):
             restart_on_source_change=lookup.restart_on_source_change,
         )
 
-        # A thumbnail derivada já foi tentada acima. Para uma origem remota,
-        # consulte o servidor primeiro; o arquivo completo local só é usado
-        # como fallback depois de uma falha real da origem.
+        # The derived thumbnail was already attempted above. For a remote source,
+        # query the server first; use the complete local file only as a
+        # fallback after an actual source failure.
         self._enqueue(
             index,
             url,
@@ -1856,8 +1853,8 @@ class MediaInfoQueue(QObject):
 
     def feed_live_frame(self, index: int, pixmap: QPixmap) -> bool:
         """
-        Alimenta com frame capturado ao vivo.
-        Só aceita se ainda não há thumbnail válido.
+        Feed a frame captured live.
+        Accept only if no valid thumbnail exists yet.
         """
         if not pixmap or pixmap.isNull():
             return False
@@ -1870,9 +1867,7 @@ class MediaInfoQueue(QObject):
         return True
 
     def feed_live_cover(self, index: int, pixmap: QPixmap) -> bool:
-        """
-        Alimenta com cover art ao vivo. Prioridade máxima — sempre sobrescreve.
-        """
+        """Feed live cover art at highest priority, always overwriting."""
         if not pixmap or pixmap.isNull():
             return False
         _, existing_title = self._cache.get(index, (None, ""))
@@ -1882,7 +1877,7 @@ class MediaInfoQueue(QObject):
         return True
 
     def get_cached(self, index: int) -> "tuple[QPixmap | None, str]":
-        """Retorna (pixmap, title) do cache, ou (None, '') se ausente."""
+        """Return (pixmap, title) from cache, or (None, '') if absent."""
         return self._cache.get(index, (None, ""))
 
     def get_cached_pixmap(self, index: int) -> "QPixmap | None":
@@ -2567,16 +2562,16 @@ class MediaInfoQueue(QObject):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MediaInfoService — API baseada em path para inventários de mídia
+# MediaInfoService — path-based API for media inventories
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediaInfoService(QObject):
     """
-    Serviço de extração de info com API baseada em path/url (em vez de índice).
-    Usado por superfícies que gerenciam arquivos por path, como a seção de
-    downloads da Biblioteca, e não por índice de playlist.
+    Metadata extraction service with a path/URL-based API instead of an index.
+    Used by surfaces managing files by path, such as Library downloads,
+    rather than by playlist index.
 
-    Sinal:
+    Signal:
       info_ready(path, pixmap, title)
     """
 
@@ -2605,7 +2600,7 @@ class MediaInfoService(QObject):
         require_thumbnail: bool = True,
         require_title: bool = True,
     ):
-        """Idempotente: re-emite imediatamente se já extraído."""
+        """Idempotent: emit again immediately if already extracted."""
         if path in self._path_to_idx:
             idx = self._path_to_idx.pop(path)
             self._path_to_idx[path] = idx

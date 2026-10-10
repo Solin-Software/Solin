@@ -401,12 +401,42 @@ def test_staging_copies_only_the_host_architecture_preserves_layout_and_notices(
     assert (destination / "plugins-extra-data.bin").read_bytes() == b"fixture"
     assert not (destination.parent / "arm64").exists()
     assert (app / "licenses/pylibobs/0-LICENSE").read_bytes() == b"redistribution notice"
+    repository = Path(packaging.__file__).resolve().parents[1]
+    for name in ("LICENSE", "NOTICE"):
+        assert (app / "licenses/solin" / name).read_bytes() == (repository / name).read_bytes()
     if target == "windows":
         assert (app / "obs-ffmpeg-mux.exe").read_bytes() == b"fixture"
     else:
         assert (app / "obs-ffmpeg-mux").read_bytes() == b"fixture"
         if os.name != "nt":
             assert (app / "obs-ffmpeg-mux").stat().st_mode & 0o111
+
+
+@pytest.mark.parametrize("missing_notice", ["LICENSE", "NOTICE"])
+def test_staging_rejects_missing_application_notices_before_replacing_runtime(
+    tmp_path, monkeypatch, missing_notice
+):
+    package, app = tmp_path / "installed", tmp_path / "application"
+    _runtime(package, "windows")
+    _touch(app / "pylibobs/_libs/windows/x86_64/previous.dll", b"previous")
+    binding_notice = tmp_path / "binding-LICENSE"
+    _touch(binding_notice, b"binding notice")
+    repository = tmp_path / "repository"
+    for name in ("LICENSE", "NOTICE"):
+        if name != missing_notice:
+            _touch(repository / name, b"application notice")
+    monkeypatch.setattr(packaging, "__file__", str(repository / "scripts" / "staging.py"))
+
+    with pytest.raises(packaging.LibobsPackagingError, match=missing_notice):
+        packaging.stage_runtime(
+            package_dir=package,
+            application_dir=app,
+            target_platform="windows",
+            architecture="x86_64",
+            license_files=[binding_notice],
+        )
+
+    assert (app / "pylibobs/_libs/windows/x86_64/previous.dll").read_bytes() == b"previous"
 
 
 def test_staging_replaces_old_plugins_and_never_keeps_stale_runtime_files(tmp_path):

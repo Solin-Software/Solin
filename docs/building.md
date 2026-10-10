@@ -9,7 +9,8 @@ Python module; standalone builds launch the Solin executable with
 `--scene-engine-sidecar`, before importing the GUI or opening a profile.
 Each build includes the `pylibobs` Python modules and stages the installed native
 runtime under `pylibobs/_libs/<platform>/<architecture>`, including its plugins,
-shader resources, dependencies and redistribution notices. Builds also stage
+shader resources, dependencies and redistribution notices. Builds copy Solin's
+`LICENSE` and `NOTICE` under `licenses/solin`. They also stage
 the OBS mux helper beside Solin so recording works in read-only installations;
 Windows additionally stages the native encoder probe helpers.
 
@@ -207,7 +208,7 @@ The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
 `pkg-config`. The libobs runtime needs the host's graphics and audio support.
 Linux virtual-camera output additionally needs a `v4l2loopback` device and the
 libobs `virtualcam_output` plugin. Automatic Zoom sharing from source requires
-`xdotool` and an X11/XWayland session.
+`xdotool` and an X11 session; the automation rejects Wayland sessions.
 
 SideView and its native backend are installed from PyPI through the Python
 dependencies. No SideView binary is vendored in this repository.
@@ -275,10 +276,35 @@ current. The resulting AppImage and SHA-256 file are written to `dist/`.
 
 The AppImage packages the application and its Python/Qt dependencies while
 using the host distribution's security-maintained WebKitGTK stack. Its Zoom
-automation remains limited to X11/XWayland. AppImage packaging does not lower
-the native glibc requirements or establish support for Ubuntu 22.04. Native
-Linux rendering, decoding and packaging qualification are gated by the Ubuntu
-24.04 workflow; Windows tests do not establish those results.
+automation requires X11 and rejects Wayland sessions. AppImage packaging does
+not lower the native glibc requirements or establish support for Ubuntu 22.04.
+Native Linux rendering, decoding and packaging qualification are gated by the
+Ubuntu 24.04 workflow; Windows tests do not establish those results.
+
+## Integration capabilities
+
+Scenes use the default libobs engine on all supported platforms. Native
+devices, capture sources, and output plugins determine which features are
+available on a particular machine.
+
+- Virtual-camera output on Windows requires registered Solin DirectShow
+  filters; the installer supplies them. Linux requires a configured
+  `v4l2loopback` device and the libobs `virtualcam_output` plugin. The macOS
+  runtime includes `mac-virtualcam`; validate camera-extension availability,
+  permissions, and camera output on the target Mac before distributing a build.
+- Zoom meeting detection and participant/audio automation require Windows and
+  `pywinauto`. Automatic screen sharing on macOS requires Accessibility
+  permission; on Linux it requires `xdotool` and an X11 session. The Linux
+  automation rejects Wayland sessions.
+- Recording microphone capture uses WASAPI on Windows and PulseAudio or ALSA
+  on Linux. System-audio capture uses WASAPI on Windows and PulseAudio on Linux.
+  The selector does not support macOS microphone or system-audio capture types.
+- Office documents and presentations require LibreOffice and are converted
+  through PDF to static images. Animations and embedded-media playback are not
+  preserved.
+
+For application setup and operation, see the
+[user guide](https://solinav.vercel.app/guide/).
 
 ## Build workflows
 

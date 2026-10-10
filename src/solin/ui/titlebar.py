@@ -1,28 +1,26 @@
 """
-titlebar.py — Aplica cor personalizada à barra de título nativa.
+titlebar.py — Apply a custom native title bar color.
 
-Suporte por plataforma
-──────────────────────
-Windows 11+ (build ≥ 22000)
-    DwmSetWindowAttribute(DWMWA_CAPTION_COLOR) → cor exata em BGR.
+Platform support:
+Windows 11+ (build ≥ 22000):
+    DwmSetWindowAttribute(DWMWA_CAPTION_COLOR) → exact BGR color.
 
-Windows 10 (build ≥ 18985, < 22000)
-    DWMWA_USE_IMMERSIVE_DARK_MODE → força barra escura.
-    Cor personalizada não suportada pela API neste build.
+Windows 10 (build ≥ 18985, < 22000):
+    DWMWA_USE_IMMERSIVE_DARK_MODE → force a dark title bar.
+    This build's API does not support a custom color.
 
-macOS
-    No-op. A ponte Qt/PySide → NSWindow via ctypes/ObjC é frágil em builds
-    Nuitka standalone e pode causar crash nativo antes de qualquer exceção
-    Python ser capturada.
+macOS:
+    No-op. The Qt/PySide → NSWindow bridge through ctypes/ObjC is fragile
+    in Nuitka standalone builds and may cause a native crash before
+    Python can catch an exception.
 
-Linux / outros
-    No-op silencioso — a barra de título é desenhada pelo window manager
-    e não expõe API pública para personalização por aplicação.
+Linux / others:
+    Silent no-op. The window manager draws the title bar and provides
+    no public per-application customization API.
 
-Uso
-───
+Usage:
     from solin.ui.titlebar import apply_titlebar_color
-    apply_titlebar_color(window)   # após window.show()
+    apply_titlebar_color(window)  # after window.show()
 """
 
 from __future__ import annotations
@@ -34,8 +32,8 @@ from solin.styles.theme import PALETTE
 
 log = logging.getLogger(__name__)
 
-# Cor de texto da barra: escuro → texto branco, claro → texto preto
-_DARK_THRESHOLD = 128  # luminância percebida abaixo disto → texto branco
+# Title bar text color: white on dark backgrounds, black on light backgrounds.
+_DARK_THRESHOLD = 128  # perceived luminance below this threshold → white text
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
@@ -44,7 +42,7 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _perceived_luminance(r: int, g: int, b: int) -> float:
-    """Luminância percebida (0–255). Fórmula BT.601."""
+    """Perceived luminance (0–255), using the BT.601 formula."""
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 
@@ -52,8 +50,8 @@ def _perceived_luminance(r: int, g: int, b: int) -> float:
 
 def _apply_windows(hwnd: int, hex_color: str) -> bool:
     """
-    Tenta aplicar cor de barra de título no Windows.
-    Retorna True se conseguiu (qualquer nível de suporte).
+    Try to apply a title bar color on Windows.
+    Return True if any supported customization succeeds.
     """
     try:
         import ctypes
@@ -62,7 +60,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
 
     dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
 
-    # ── Detecta build do Windows ──────────────────────────────────────────
+    # Detect the Windows build.
     try:
         ver = sys.getwindowsversion()           # type: ignore[attr-defined]
         build = ver.build
@@ -71,7 +69,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
 
     # DWMWA_CAPTION_COLOR (35) — Windows 11 Build 22000+
     DWMWA_CAPTION_COLOR       = 35
-    # DWMWA_USE_IMMERSIVE_DARK_MODE — build ≥ 18985 usa attr 20, mais antigo 19
+    # DWMWA_USE_IMMERSIVE_DARK_MODE — build ≥ 18985 uses attr 20; older builds use 19
     DWMWA_IMMERSIVE_DARK_MODE = 20 if build >= 18985 else 19
     # DWMWA_TEXT_COLOR (36) — Windows 11 Build 22000+
     DWMWA_TEXT_COLOR          = 36
@@ -79,7 +77,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
     applied = False
 
     if build >= 22000:
-        # Windows 11: cor exata da barra de título
+        # Windows 11: exact title bar color
         r, g, b = _hex_to_rgb(hex_color)
         # COLORREF = 0x00BBGGRR
         colorref = ctypes.c_uint32(b << 16 | g << 8 | r)
@@ -93,7 +91,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
             applied = True
             log.debug("DWM caption color applied: %s (COLORREF=0x%06X)", hex_color, colorref.value)
 
-        # Força texto branco se fundo escuro
+        # Force white text on a dark background.
         lum = _perceived_luminance(*_hex_to_rgb(hex_color))
         text_color = 0xFFFFFF if lum < _DARK_THRESHOLD else 0x000000
         tc = ctypes.c_uint32(
@@ -105,7 +103,7 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
             hwnd, DWMWA_TEXT_COLOR, ctypes.byref(tc), ctypes.sizeof(tc)
         )
 
-    # Windows 10+ com dark mode: pelo menos torna a barra escura
+    # Windows 10+ with dark mode: at least make the title bar dark.
     if build >= 18985:
         dark = ctypes.c_uint32(1)
         hr2 = dwmapi.DwmSetWindowAttribute(
@@ -125,12 +123,12 @@ def _apply_windows(hwnd: int, hex_color: str) -> bool:
 
 def apply_titlebar_color(window, hex_color: str | None = None) -> bool:
     """
-    Aplica `hex_color` à barra de título nativa da `window` (QMainWindow ou similar).
+    Apply `hex_color` to the native title bar of `window` (QMainWindow or similar).
 
-    Deve ser chamado APÓS window.show() para garantir que o HWND/NSWindow
-    já foi criado pelo sistema operacional.
+    Call AFTER window.show() to ensure the operating system has created
+    the HWND/NSWindow.
 
-    Retorna True se algum nível de personalização foi aplicado.
+    Return True if any customization was applied.
     """
     hex_color = hex_color or PALETTE.titlebar
     if not hex_color:

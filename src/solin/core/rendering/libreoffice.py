@@ -1,31 +1,31 @@
 """
-lo_converter.py — Solin
-============================
-Converte apresentações e documentos em imagens JPEG via LibreOffice headless
-+ pipeline de PDF já existente (QtPdf).
+libreoffice.py — Solin
+=====================
+Convert presentations and documents to JPEG images using headless LibreOffice
+and the existing PDF pipeline (QtPdf).
 
-Formatos suportados:
-    Apresentações : .pptx  .ppt  .odp
-    Documentos    : .docx  .doc  .odt  .rtf
+Supported formats:
+    Presentations: .pptx .ppt .odp
+    Documents: .docx .doc .odt .rtf
 
-Fluxo (igual para todos os formatos):
-    arquivo
-        └─► LibreOffice --headless --convert-to pdf   (arquivo .pdf temporário)
-            └─► rendering.pdf.render_pdf_pages_sync()  (JPEG por página/slide)
+Workflow (all formats):
+    file
+      └─► LibreOffice --headless --convert-to pdf (temporary .pdf)
+          └─► rendering.pdf.render_pdf_pages_sync() (JPEG per page/slide)
 
 Cache:
-    {pptx_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  (apresentações)
-    {docx_pages_dir}/{sha256_12}_{stem}/page_001.jpg  …  (documentos)
-    (mesmo esquema do pipeline central de PDF — .done como marker)
+    {pptx_pages_dir}/{sha256_12}_{stem}/page_001.jpg … (presentations)
+    {docx_pages_dir}/{sha256_12}_{stem}/page_001.jpg … (documents)
+    Same layout as the central PDF pipeline, with .done as a marker.
 
-Disponibilidade:
-    O módulo é sempre importável. A função `libreoffice_available()` verifica
-    em runtime se o executável existe. Se não existir, LoConvertThread emite
-    conversion_failed com mensagem explicativa — sem travar nem crashar.
+Availability:
+    This module is always importable. `libreoffice_available()` checks for the
+    executable at runtime. If unavailable, LoConvertThread emits conversion_failed
+    with an explanatory message, without hanging or crashing.
 
-Dependências:
-    - LibreOffice instalado no sistema (soffice / libreoffice no PATH)
-    - PySide6.QtPdf  (já embarcado com o runtime Qt do app)
+Dependencies:
+    - LibreOffice installed (soffice / libreoffice on PATH).
+    - PySide6.QtPdf (included in the application's Qt runtime).
 """
 
 from __future__ import annotations
@@ -48,26 +48,26 @@ log = logging.getLogger(__name__)
 # ── Constantes ─────────────────────────────────────────────────────────────────
 _DEFAULT_DPI = 150
 
-# Nomes possíveis do executável do LibreOffice por plataforma
+# Possible LibreOffice executable names by platform
 _SOFFICE_CANDIDATES: list[str] = [
     "soffice",
     "libreoffice",
-    # macOS (instalação padrão)
+    # macOS (default installation)
     "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-    # Windows (caminhos mais comuns)
+    # Windows (most common paths)
     r"C:\Program Files\LibreOffice\program\soffice.exe",
     r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
 ]
 
 
-# ── Detecção de disponibilidade ────────────────────────────────────────────────
+# Availability detection
 
 
 def libreoffice_path() -> str | None:
     """
-    Retorna o caminho do executável soffice/libreoffice se encontrado,
-    ou None se o LibreOffice não estiver instalado.
-    Resultado é cacheado após a primeira chamada.
+    Return the soffice/libreoffice executable path if found,
+    or None if LibreOffice is not installed.
+    Cache the result after the first call.
     """
     if hasattr(libreoffice_path, "_cached"):
         return libreoffice_path._cached  # type: ignore[attr-defined]
@@ -84,15 +84,15 @@ def libreoffice_path() -> str | None:
 
 
 def libreoffice_available() -> bool:
-    """True se o LibreOffice estiver disponível no sistema."""
+    """True if LibreOffice is available on the system."""
     return libreoffice_path() is not None
 
 
-# ── Funções utilitárias ────────────────────────────────────────────────────────
+# Utility functions
 
 
 def _file_hash(path: str | Path) -> str:
-    """SHA-256 (primeiros 12 chars) do conteúdo do arquivo."""
+    """SHA-256 of the file contents (first 12 characters)."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(65536):
@@ -107,14 +107,14 @@ def _pages_dir_root(
     docx_pages_dir: str | os.PathLike[str],
 ) -> Path:
     """
-    Retorna o diretório raiz de cache adequado ao tipo de arquivo:
-      - Apresentações (.pptx/.ppt/.odp) → ``pptx_pages_dir``
-      - Documentos (.docx/.doc/.odt/.rtf) → ``docx_pages_dir``
+    Return the cache root appropriate for the file type:
+      - Presentations (.pptx/.ppt/.odp) → ``pptx_pages_dir``.
+      - Documents (.docx/.doc/.odt/.rtf) → ``docx_pages_dir``.
     """
     ext = Path(path).suffix.lower()
     if ext in DOCX_EXTS:
         return Path(docx_pages_dir)
-    return Path(pptx_pages_dir)  # default para apresentações
+    return Path(pptx_pages_dir)  # default for presentations
 
 
 def _cache_dir(
@@ -124,10 +124,10 @@ def _cache_dir(
     docx_pages_dir: str | os.PathLike[str],
 ) -> Path:
     """
-    Retorna o diretório de cache para um arquivo específico.
-    Exemplos:
-        data/pptx_pages/a3f8c201ee9d_apresentacao
-        data/docx_pages/b7e1d903cc21_roteiro
+    Return the cache directory for a specific file.
+    Examples:
+        data/pptx_pages/a3f8c201ee9d_presentation
+        data/docx_pages/b7e1d903cc21_outline
     """
     lo_path = Path(lo_path)
     stem = lo_path.stem[:40]
@@ -147,8 +147,8 @@ def cached_pages(
     docx_pages_dir: str | os.PathLike[str],
 ) -> list[str] | None:
     """
-    Retorna lista de caminhos JPEG se o arquivo já foi convertido e o cache
-    está completo. Retorna None se a conversão ainda não foi feita.
+    Return JPEG paths if the file was converted and its cache is complete.
+    Return None if conversion has not yet been performed.
     """
     d = _cache_dir(
         lo_path,
@@ -174,29 +174,28 @@ def convert_lo_sync(
     progress_cb: Callable[[int, int], None] | None = None,
 ) -> list[str]:
     """
-    Converte qualquer arquivo suportado pelo LibreOffice em imagens JPEG.
-    Funciona tanto para apresentações (.pptx/.ppt/.odp) quanto para
-    documentos (.docx/.doc/.odt/.rtf).
+    Convert any LibreOffice-supported file to JPEG images.
+    Support presentations (.pptx/.ppt/.odp) and documents (.docx/.doc/.odt/.rtf).
 
-    Fluxo:
-        1. Verifica cache — retorna imediatamente se já convertido.
-        2. Converte para PDF via LibreOffice headless (em diretório temporário).
-        3. Usa o renderizador central de PDF para gravar os JPEGs no cache.
+    Workflow:
+      1. Check the cache and return immediately if already converted.
+      2. Convert to PDF with headless LibreOffice in a temporary directory.
+      3. Use the central PDF renderer to save JPEGs in the cache.
 
     Args:
-        lo_path:     Caminho para o arquivo.
-        pptx_pages_dir: Diretório raiz explícito do cache de apresentações.
-        docx_pages_dir: Diretório raiz explícito do cache de documentos.
-        pdf_pages_dir: Diretório raiz explícito que hospeda o workspace
-            temporário do PDF intermediário.
-        dpi:         Resolução de renderização (padrão 150).
-        progress_cb: Callback opcional (página_atual, total_páginas).
+        lo_path: Source file path.
+        pptx_pages_dir: Explicit presentation cache root directory.
+        docx_pages_dir: Explicit document cache root directory.
+        pdf_pages_dir: Explicit cache root containing the temporary
+            workspace for the intermediate PDF.
+        dpi: Rendering resolution (default 150).
+        progress_cb: Optional callback (current_page, total_pages).
 
     Returns:
-        Lista de caminhos JPEG ordenados (page_001.jpg …).
+        Ordered JPEG paths (page_001.jpg …).
 
     Raises:
-        RuntimeError: Se LibreOffice não estiver disponível ou conversão falhar.
+        RuntimeError: LibreOffice unavailable or conversion failed.
     """
     from .pdf import render_pdf_pages_sync
 
@@ -299,21 +298,21 @@ def convert_lo_sync(
     return pdf_pages
 
 
-# ── Thread assíncrona ──────────────────────────────────────────────────────────
+# Asynchronous thread
 
 
 class LoConvertThread(QThread):
     """
-    Converte qualquer arquivo suportado pelo LibreOffice em JPEG em background.
-    Funciona para apresentações (.pptx/.ppt/.odp) e documentos (.docx/.doc/.odt/.rtf).
+    Convert LibreOffice-supported files to JPEG in the background.
+    Support presentations (.pptx/.ppt/.odp) and documents (.docx/.doc/.odt/.rtf).
 
-    Sinais:
-        progress(atual, total)         — atualização de progresso
-        pages_ready(paths, stem)       — conversão concluída com sucesso
-        conversion_failed(error_msg)   — erro ou LibreOffice ausente
+    Signals:
+        progress(current, total) — progress update
+        pages_ready(paths, stem) — conversion completed successfully
+        conversion_failed(error_msg) — error or LibreOffice unavailable
     """
 
-    progress = Signal(int, int)  # (página_atual, total)
+    progress = Signal(int, int)  # (current_page, total)
     pages_ready = Signal(list, str)  # (list[str] paths, stem)
     conversion_failed = Signal(str)  # mensagem de erro
 
@@ -353,11 +352,11 @@ class LoConvertThread(QThread):
             self.conversion_failed.emit(f"Erro inesperado: {exc}")
 
 
-# ── Limpeza de cache órfão ─────────────────────────────────────────────────────
+# Orphaned cache cleanup
 
 
 def _flush_lo_dir(pages_root: Path, referenced_paths: set[str]) -> None:
-    """Remove subdiretórios órfãos de um diretório de cache LO."""
+    """Remove orphaned subdirectories from a LibreOffice cache directory."""
     if not pages_root.is_dir():
         return
     norm_ref = {os.path.normpath(p) for p in referenced_paths}
@@ -376,7 +375,7 @@ def flush_pptx_pages_dir(
     referenced_paths: set[str],
     pptx_pages_dir: str | os.PathLike[str],
 ) -> None:
-    """Remove subdiretórios órfãos do cache explícito de apresentações."""
+    """Remove orphaned subdirectories from the explicit presentation cache."""
     _flush_lo_dir(Path(pptx_pages_dir), referenced_paths)
 
 
@@ -384,5 +383,5 @@ def flush_docx_pages_dir(
     referenced_paths: set[str],
     docx_pages_dir: str | os.PathLike[str],
 ) -> None:
-    """Remove subdiretórios órfãos do cache explícito de documentos."""
+    """Remove orphaned subdirectories from the explicit document cache."""
     _flush_lo_dir(Path(docx_pages_dir), referenced_paths)

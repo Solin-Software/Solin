@@ -4,15 +4,30 @@
 
 Use Python 3.13 or newer. On macOS, first follow the
 [macOS binding bootstrap](docs/building.md#macos) before installing dependencies.
-On other platforms, install the locked development dependencies:
+On Linux, first install the
+[native dependencies](docs/building.md#linux-development). Then activate an
+isolated environment and install the locked development dependencies:
 
 ```text
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 ```
 
-An isolated environment is recommended, but the repository does not depend on a
-specific environment manager or Python launcher.
+The repository does not depend on a specific environment manager or Python
+launcher.
+
+## Run from source
+
+Start the application with the installed `solin` command or the local launcher:
+
+```text
+python main.py
+```
+
+Install `ffmpeg` and `ffprobe` on `PATH` for metadata, embedded cover art, and
+thumbnails. Playback and scene composition use a supervised libobs process
+through `pylibobs`. See [Building and platform requirements](docs/building.md)
+for native dependencies and standalone packaging.
 
 ## Change workflow
 
@@ -62,6 +77,13 @@ Do not commit:
 
 Tests that need an archive or user state must construct deterministic synthetic
 fixtures containing only the minimum data required by the scenario.
+
+## Licensing
+
+Contributions to Solin are provided under [GPL-3.0-or-later](LICENSE).
+Preserve third-party notices and check license compatibility before adding
+dependencies or copying code. See the [licensing guide](docs/licensing.md) for
+distribution requirements.
 
 ## Dependencies
 

@@ -1,0 +1,30 @@
+name: Improvement suggestion
+description: Suggest a feature or an improvement to Solin or its documentation.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe one suggestion per issue. Check [existing issues](https://github.com/Solin-Software/Solin/issues?q=is%3Aissue) for related ideas before submitting.
+
+        Issues and attachments are public. Remove personal information and private material from anything you share.
+  - type: textarea
+    id: need
+    attributes:
+      label: What would you like to improve?
+      description: Describe the task, difficulty, or missing capability. For documentation, link to the page or section involved.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested change
+      description: Explain what you would like Solin or its documentation to do differently and who would benefit.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Alternatives and additional context
+      description: Optionally describe your current workaround, alternatives you considered, or examples that help explain the suggestion.
+    validations:
+      required: false

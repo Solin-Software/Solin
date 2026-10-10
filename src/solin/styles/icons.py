@@ -1,8 +1,8 @@
 """
-Ícones SVG centralizados — usados em toda a aplicação.
+Centralized SVG icons used throughout the application.
 
-  Widgets Qt : make_icon(ICON_X, size, color)  →  QIcon
-  Overlay JS : importar JS_SVG_IMAGE, JS_SVG_VIDEO
+  Qt widgets: make_icon(ICON_X, size, color) → QIcon
+  JS overlay: import JS_SVG_IMAGE, JS_SVG_VIDEO
 """
 
 from PySide6.QtCore import QByteArray, Qt
@@ -17,24 +17,24 @@ from solin.styles.theme import PALETTE
 # Declared without eagerly constructing the SVG returned by __getattr__.
 ICON_CURSOR_HOVER: str
 
-# ── Configuracao de bandeiras ─────────────────────────────────────────────────
+# Flag configuration
 #
-# USE_EMOJI_FLAGS = True   → renderiza bandeiras como emoji Unicode (🇧🇷 🇺🇸 etc.)
-#                            Funciona em macOS e Linux (fontes de emoji colorido
-#                            suportam indicadores regionais nesses SOs).
+# USE_EMOJI_FLAGS = True   → render flags as Unicode emoji (🇧🇷 🇺🇸 etc.)
+# Works on macOS and Linux (color emoji fonts
+#                            support regional indicators on those OSes).
 #
-# USE_EMOJI_FLAGS = False  → usa os SVGs hardcoded (comportamento original).
-#                            Unico modo que funciona corretamente no Windows,
-#                            pois o Windows nao suporta emoji de bandeiras
-#                            regionais (Segoe UI Emoji nao inclui esses glifos).
+# USE_EMOJI_FLAGS = False  → use the hardcoded SVGs (original behavior).
+# The only mode that works correctly on Windows,
+# because Windows does not support regional flag emoji
+# (Segoe UI Emoji lacks these glyphs).
 #
-# Deteccao automatica por plataforma. Para forcar um valor, substitua por:
+# Automatic platform detection. To force a value, replace with:
 #   USE_EMOJI_FLAGS: bool = True   ou   USE_EMOJI_FLAGS: bool = False
 #
 USE_EMOJI_FLAGS: bool = sys.platform != "win32"
 
-# Família de fonte emoji preferida (primeira disponível no sistema é usada).
-# Você pode ajustar esta lista se quiser priorizar outra fonte.
+# Preferred emoji font family (use the first available on the system).
+# Adjust this list to prioritize a different font.
 _EMOJI_FONT_PREFERENCE = [
     "Noto Color Emoji",  # Linux (Google Noto)
     "Apple Color Emoji",  # macOS
@@ -46,8 +46,8 @@ _EMOJI_FONT_PREFERENCE = [
 
 def resolve_emoji_font(size: int) -> QFont:
     """
-    Retorna um QFont configurado para a melhor fonte de emoji colorido disponivel.
-    Funcao publica para uso nos widgets (QLabel.setFont).
+    Return a QFont configured for the best available color emoji font.
+    Public helper for widgets (QLabel.setFont).
     """
     available = set(QFontDatabase.families())
     for family in _EMOJI_FONT_PREFERENCE:
@@ -62,10 +62,9 @@ def resolve_emoji_font(size: int) -> QFont:
 
 def make_emoji_flag_icon(emoji: str, size: int = 24) -> QIcon:
     """
-    Renderiza um emoji de bandeira como QIcon via QTextDocument.
-    Usa o motor de texto do Qt (mais confiavel que QPainter.drawText
-    para color emoji em todas as plataformas).
-    Retorna QIcon vazio se o emoji nao puder ser renderizado.
+    Render a flag emoji as a QIcon through QTextDocument.
+    Use Qt's text engine, which handles color emoji more reliably than
+    QPainter.drawText across platforms. Return an empty QIcon if rendering fails.
     """
     if not emoji:
         return QIcon()
@@ -74,7 +73,7 @@ def make_emoji_flag_icon(emoji: str, size: int = 24) -> QIcon:
     from PySide6.QtCore import QSizeF
 
     font = resolve_emoji_font(size)
-    canvas = size + 8  # margem para o glifo nao ser cortado
+    canvas = size + 8  # margin to avoid clipping the glyph
 
     doc = QTextDocument()
     doc.setDefaultFont(font)
@@ -131,12 +130,12 @@ def _render_icon(svg_str: str, size: int, color: str) -> QIcon:
 
 
 def make_icon(svg_str: str, size: int = 18, color: str | None = None) -> QIcon:
-    """Renderiza SVG string como QIcon, substituindo 'currentColor' por *color*."""
+    """Render an SVG string as a QIcon, replacing 'currentColor' with *color*."""
     color = str(color or PALETTE.text_secondary)
     return QIcon(_render_icon(svg_str, size, color))
 
 
-# ── Qt widget icons (usa currentColor para fácil coloração) ───────────────────
+# Qt widget icons (currentColor makes recoloring easy)
 
 _SVG_CACHE: dict[str, str] = {}
 _ICON_NAMES = frozenset(
@@ -815,7 +814,7 @@ def _build_icon_svg(name: str) -> str:
         )
     elif name == "ICON_CLOUD_DOWNLOAD":
         return (
-            # SVG fornecido pelo designer — nuvem + seta de download
+            # Designer-provided SVG: cloud and download arrow
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
             ' stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
             '<path d="M6.5 17a4.5 4.5 0 1 1 .8-8.9 5.5 5.5 0 0 1 9.7.4 3.8 3.8 0 1 1 .8 7.5"/>'
@@ -1336,7 +1335,7 @@ __all__ = sorted(
 )
 
 
-# Ícone "abrir painel de playlist" — retângulo com linha vertical direita
+# "Open playlist panel" icon: rectangle with a right-side vertical line
 
 
 # ── Sidebar navigation icons ──────────────────────────────────────────────────
@@ -1358,8 +1357,8 @@ __all__ = sorted(
 # ── Auto-download / cache settings icon ───────────────────────────────────────
 
 
-# ── JS-embeddable SVGs (para o overlay do browser) ────────────────────────────
-# Importados em widgets/browser/widget.py e injetados no OVERLAY_JS como strings JS.
+# JS-embeddable SVGs (browser overlay)
+# Imported in widgets/browser/widget.py and injected into OVERLAY_JS as JS strings.
 
 
 # ── Cache / Media Manager nav icon ────────────────────────────────────────────
@@ -1371,16 +1370,16 @@ __all__ = sorted(
 # ── Meetings / navigation icons ──────────────────────────────────────────────
 
 
-# ── Flag icons (multi-color SVG — renderizados com make_flag_icon) ────────────
+# Flag icons (multicolor SVGs rendered with make_flag_icon)
 
 
-# Ícone circular para botão de fechar overlay (ex: troca de perfil).
-# Círculo sutil de fundo + X com linhas arredondadas — estilo moderno.
+# Circular overlay close button icon (e.g. profile switching).
+# Subtle background circle and rounded X strokes for a modern appearance.
 
 # ── Onboarding / profile-screen icons ────────────────────────────────────────
 
 
-# Mapeamento código → SVG de bandeira (usado quando USE_EMOJI_FLAGS = False)
+# Language code → flag SVG map (used when USE_EMOJI_FLAGS = False)
 
 
 def _get_flag_svg(lang_code: str) -> str | None:
@@ -1392,21 +1391,21 @@ def _get_flag_svg(lang_code: str) -> str | None:
 
 def get_flag_icon(lang_code: str, emoji: str, size: int = 24) -> QIcon:
     """
-    Retorna o QIcon de bandeira para *lang_code* respeitando USE_EMOJI_FLAGS.
+    Return a flag QIcon for *lang_code*, respecting USE_EMOJI_FLAGS.
 
-    Quando USE_EMOJI_FLAGS = True:
-        Usa *emoji* (ex: '🇧🇷') renderizado com a fonte de emoji do sistema.
-        Funciona para qualquer idioma sem precisar de SVG novo.
+    When USE_EMOJI_FLAGS = True:
+        Render *emoji* (e.g. '🇧🇷') with the system emoji font.
+        Support any language without adding an SVG.
 
-    Quando USE_EMOJI_FLAGS = False:
-        Usa o SVG hardcoded de FLAG_ICONS[lang_code] quando disponível.
-        Idiomas sem SVG caem em fallback de texto emoji (QLabel).
+    When USE_EMOJI_FLAGS = False:
+        Use the hardcoded FLAG_ICONS[lang_code] SVG if available.
+        Languages without an SVG fall back to emoji text (QLabel).
 
-    Parâmetros
+    Parameters
     ----------
-    lang_code : str   código do idioma (ex: 'pt_BR', 'zh_CN')
-    emoji     : str   emoji de bandeira do JSON meta['flag'] (ex: '🇧🇷')
-    size      : int   tamanho do ícone em pixels
+    lang_code: str — language code (e.g. 'pt_BR', 'zh_CN').
+    emoji: str — flag emoji from JSON meta['flag'] (e.g. '🇧🇷').
+    size: int — icon size in pixels.
     """
     if USE_EMOJI_FLAGS:
         return make_emoji_flag_icon(emoji, size)
@@ -1415,7 +1414,7 @@ def get_flag_icon(lang_code: str, emoji: str, size: int = 24) -> QIcon:
     if svg:
         return make_flag_icon(svg, size)
 
-    # Fallback SVG não disponível → tenta emoji mesmo assim
+    # No fallback SVG available: try emoji anyway.
     return make_emoji_flag_icon(emoji, size)
 
 

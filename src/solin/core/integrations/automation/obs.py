@@ -1,15 +1,13 @@
 """
-OBSWebSocketService — integração com OBS Studio via WebSocket Protocol v5.
+OBSWebSocketService — OBS Studio integration via WebSocket Protocol v5.
 
-Thread-safety
-─────────────
-  Worker roda em threading.Thread daemon.
-  Toda comunicação de volta para a main thread é via Qt Signals internos
-  (QueuedConnection automático) — nunca via QMetaObject.invokeMethod.
+Thread safety:
+  The worker runs in a daemon threading.Thread.
+  All communication back to the main thread uses internal Qt signals
+  (automatic QueuedConnection), never QMetaObject.invokeMethod.
 
-Eventos OBS suportados
-──────────────────────
-  SceneListChanged → atualiza lista de cenas automaticamente (sem botão manual)
+Supported OBS events:
+  SceneListChanged → update the scene list automatically (no manual button).
 """
 
 from __future__ import annotations
@@ -56,21 +54,19 @@ class OBSConnectionState(Enum):
 
 class OBSWebSocketService(QObject):
     """
-    Gerencia conexão persistente com OBS Studio WebSocket v5.
+    Manage a persistent connection to OBS Studio WebSocket v5.
 
-    Public Signals
-    ──────────────
-    state_changed(OBSConnectionState, str)
-        Emitido na main thread a cada mudança de estado.
-
-    scenes_updated(list[str])
-        Emitido na main thread após conexão ou quando OBS muda suas cenas.
-        A UI deve sempre reagir a este signal para manter os selects atualizados.
+    Public signals:
+      state_changed(OBSConnectionState, str)
+          Emitted on the main thread on each state change.
+      scenes_updated(list[str])
+          Emitted on the main thread after connecting or when OBS changes scenes.
+          The UI must react to this signal to keep selectors up to date.
     """
 
     state_changed  = Signal(object, str)   # (OBSConnectionState, message)
     scenes_updated = Signal(list)          # list[str]
-    current_scene_changed = Signal(str)    # nome da cena ativa no OBS
+    current_scene_changed = Signal(str)    # name of the active OBS scene
     recording_state_changed = Signal(bool) # True = recording, False = stopped
 
     # ── Sinais internos bridge thread → main thread ───────────────────────
@@ -148,7 +144,7 @@ class OBSWebSocketService(QObject):
 
     @property
     def current_scene(self) -> str | None:
-        """Nome da cena ativa no momento no OBS (None se desconectado ou desconhecido)."""
+        """Name of the currently active OBS scene (None if disconnected or unknown)."""
         return self._current_scene
 
     @property
@@ -156,7 +152,7 @@ class OBSWebSocketService(QObject):
         return self._is_recording
 
     def start(self):
-        """Inicia a integração se port estiver configurada."""
+        """Start the integration if the port is configured."""
         if not self._config_ok():
             return
         self._active = True
@@ -167,7 +163,7 @@ class OBSWebSocketService(QObject):
         self._attempt_connect()
 
     def stop(self, *, wait: bool = False, timeout: float = 7.0):
-        """Para completamente; não tenta reconectar."""
+        """Stop completely without attempting to reconnect."""
         self._active = False
         self._restart_requested = False
         self._retry_timer.stop()
@@ -188,8 +184,8 @@ class OBSWebSocketService(QObject):
 
     def request_scene_change(self, scene_name: str):
         """
-        Solicita troca de cena com debounce de 400 ms.
-        Chamadas rápidas em sequência colapsam na última.
+        Request a scene change with a 400 ms debounce.
+        Rapid successive calls collapse into the last one.
         """
         if not self.is_connected or not scene_name:
             return
@@ -380,8 +376,8 @@ class OBSWebSocketService(QObject):
 
     def _handle_event(self, msg: dict, generation: int):
         """
-        Processa mensagens recebidas do OBS durante o event loop.
-        Trata: SceneListChanged, CurrentProgramSceneChanged.
+        Process incoming OBS messages during the event loop.
+        Handle SceneListChanged and CurrentProgramSceneChanged.
         """
         if msg.get("op") != ObsOp.EVENT:
             return
@@ -410,7 +406,7 @@ class OBSWebSocketService(QObject):
             self._sig_record_state.emit(generation, is_recording_output_active(state))
 
     def _do_handshake(self, ws, password: str, generation: int) -> list[str]:
-        """Executa Hello→Identify→Identified. Retorna lista de cenas."""
+        """Perform Hello→Identify→Identified. Return the scene list."""
         raw = ws.recv()
         msg = json.loads(raw)
         if msg.get("op") != ObsOp.HELLO:
@@ -444,8 +440,8 @@ class OBSWebSocketService(QObject):
         scenes = self._request_scenes(ws)
         current = self._request_current_scene(ws)
         if current:
-            # Entrega já pelo sig_scene_changed para popular _current_scene
-            # antes do sig_connected ser processado na main thread.
+            # Emit sig_scene_changed now to populate _current_scene
+            # before sig_connected is processed on the main thread.
             self._sig_scene_changed.emit(generation, current)
 
         # Fetch initial recording status
@@ -455,7 +451,7 @@ class OBSWebSocketService(QObject):
         return scenes
 
     def _request_scenes(self, ws) -> list[str]:
-        """Envia GetSceneList e retorna nomes em ordem de criação."""
+        """Send GetSceneList and return names in creation order."""
         import websocket
 
         payload = request_payload("GetSceneList")
@@ -475,7 +471,7 @@ class OBSWebSocketService(QObject):
         return []
 
     def _request_current_scene(self, ws) -> str:
-        """Envia GetCurrentProgramScene e retorna o nome da cena ativa."""
+        """Send GetCurrentProgramScene and return the active scene name."""
         import websocket
 
         payload = request_payload("GetCurrentProgramScene")
@@ -495,7 +491,7 @@ class OBSWebSocketService(QObject):
         return ""
 
     def _request_record_status(self, ws) -> bool:
-        """Envia GetRecordStatus e retorna se está gravando."""
+        """Send GetRecordStatus and return whether recording is active."""
         import websocket
 
         payload = request_payload("GetRecordStatus")
@@ -575,21 +571,21 @@ class OBSWebSocketService(QObject):
         self._schedule_retry()
 
     def _on_scenes_updated_main(self, generation: int, scenes: list):
-        """Chamado quando OBS emite SceneListChanged."""
+        """Called when OBS emits SceneListChanged."""
         if not self._accept_generation(generation):
             return
         self._scenes = list(scenes)
         self.scenes_updated.emit(self._scenes)
 
     def _on_scene_changed_main(self, generation: int, scene_name: str):
-        """Chamado quando OBS troca de cena (CurrentProgramSceneChanged ou handshake)."""
+        """Called when OBS changes scenes (CurrentProgramSceneChanged or handshake)."""
         if not self._accept_generation(generation):
             return
         self._current_scene = scene_name
         self.current_scene_changed.emit(scene_name)
 
     def _on_record_state_main(self, generation: int, is_recording: bool):
-        """Chamado quando OBS muda estado de gravação."""
+        """Called when OBS changes recording state."""
         if not self._accept_generation(generation):
             return
         self._is_recording = is_recording
