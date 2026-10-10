@@ -22,32 +22,26 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       application_required: ${{ steps.classify.outputs.application_required }}
+      release_preparation: ${{ steps.classify.outputs.release_preparation }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - name: Detect documentation-only changes
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: python -m pip install packaging==26.0
+      - name: Detect documentation and version-only changes
         id: classify
-        shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
           REF_TYPE: ${{ github.ref_type }}
-        run: |
-          application_required=true
-          if [[ "$REF_TYPE" != "tag" && "$BASE_SHA" =~ ^[0-9a-f]{40}$ && ! "$BASE_SHA" =~ ^0+$ ]]; then
-            application_required=false
-            while IFS= read -r path; do
-              case "$path" in
-                *.md) ;;
-                *) application_required=true; break ;;
-              esac
-            done < <(git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA")
-          fi
-          echo "application_required=$application_required" >> "$GITHUB_OUTPUT"
+        run: python scripts/classify_quality_changes.py
 
   static:
     name: Static checks
+    needs: changes
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,6 +53,16 @@ jobs:
       - run: python scripts/check_locales.py
       - name: Validate release notes
         run: python scripts/release.py check-notes
+      - name: Validate release preparation
+        if: needs.changes.outputs.release_preparation == 'true'
+        run: |
+          python -m pip install pytest==9.0.3
+          python -m pytest --noconftest tests/unit/test_release_metadata.py tests/unit/test_quality_changes.py
+          python scripts/release.py metadata
+          python - <<'PY'
+          from scripts.release import current_version, load_notes
+          load_notes(current_version())
+          PY
       - name: Validate workflows
         run: |
           archive="$RUNNER_TEMP/actionlint.tar.gz"
@@ -242,8 +246,8 @@ jobs:
         run: |
           test "$CHANGES_RESULT" = success
           test "$STATIC_RESULT" = success
-          if [ "$APPLICATION_REQUIRED" = true ]; then
-            test "$PLATFORM_RESULT" = success
-          else
-            test "$PLATFORM_RESULT" = skipped
-          fi
+          case "$APPLICATION_REQUIRED" in
+            true) test "$PLATFORM_RESULT" = success ;;
+            false) test "$PLATFORM_RESULT" = skipped ;;
+            *) exit 1 ;;
+          esac

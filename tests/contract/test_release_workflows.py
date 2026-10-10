@@ -1,5 +1,6 @@
 """Cross-workflow guarantees required before a distribution can be published."""
 from pathlib import Path
+import os
 import re
 import shutil
 import subprocess
@@ -40,7 +41,17 @@ def test_quality_gate_waits_for_every_platform():
     assert quality["platforms"]["if"] == (
         "needs.changes.outputs.application_required == 'true'"
     )
-    assert "git diff --no-renames --name-only" in quality["changes"]["steps"][1]["run"]
+    classifier = next(step for step in quality["changes"]["steps"] if step.get("id") == "classify")
+    assert classifier["run"] == "python scripts/classify_quality_changes.py"
+    assert classifier["env"]["REF_TYPE"] == "${{ github.ref_type }}"
+    assert quality["static"]["needs"] == "changes"
+    preparation = next(
+        step for step in quality["static"]["steps"]
+        if step.get("name") == "Validate release preparation"
+    )
+    assert preparation["if"] == "needs.changes.outputs.release_preparation == 'true'"
+    assert "--noconftest tests/unit/test_release_metadata.py tests/unit/test_quality_changes.py" in preparation["run"]
+    assert "load_notes(current_version())" in preparation["run"]
     assert len(quality["platforms"]["strategy"]["matrix"]["include"]) == 4
     assert quality_workflow["env"]["QT_QPA_PLATFORM"] == "offscreen"
     for target in quality["platforms"]["strategy"]["matrix"]["include"]:
@@ -57,6 +68,68 @@ def test_quality_gate_waits_for_every_platform():
     assert "pytest tests/contract --durations=20" in macos["run"]
     assert "pytest tests/integration --durations=20" in macos["run"]
     assert "pytest tests/unit --durations=20" in macos["run"]
+
+
+@pytest.mark.parametrize("application_required,platform_result,accepted", [
+    ("true", "success", True), ("false", "skipped", True),
+    ("true", "skipped", False), ("true", "failure", False),
+    ("false", "failure", False), ("false", "success", False),
+    ("", "skipped", False), ("unknown", "skipped", False),
+])
+def test_quality_gate_requires_an_explicit_valid_classification(
+    application_required, platform_result, accepted,
+):
+    git_executable = shutil.which("git")
+    git_bash = (
+        Path(git_executable).parents[1] / "bin" / "bash.exe"
+        if sys.platform == "win32" and git_executable else None
+    )
+    executable = str(git_bash) if git_bash is not None and git_bash.is_file() else shutil.which("bash")
+    if executable is None:
+        pytest.skip("Bash is not installed")
+    commands = workflow("quality.yml")["jobs"]["gate"]["steps"][0]["run"]
+    result = subprocess.run(
+        [executable, "--noprofile", "--norc", "-e"], input=commands,
+        env={
+            **os.environ, "CHANGES_RESULT": "success", "STATIC_RESULT": "success",
+            "APPLICATION_REQUIRED": application_required, "PLATFORM_RESULT": platform_result,
+        },
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("notes", ["reviewed", "missing", "outdated", "placeholder"])
+def test_reduced_preparation_requires_reviewed_notes_for_the_checked_out_version(
+    notes, tmp_path, monkeypatch,
+):
+    from scripts import release
+
+    source = tmp_path / "src" / "solin"
+    source.mkdir(parents=True)
+    (source / "version.py").write_text('VERSION = "26.32.0b4"\n', encoding="utf-8")
+    locales = source / "resources" / "translations" / "locales"
+    locales.mkdir(parents=True)
+    (locales / "en.json").write_text("{}", encoding="utf-8")
+    note_root = tmp_path / "docs" / "release-notes"
+    if notes != "missing":
+        tag = "26.32.0-beta.3" if notes == "outdated" else "26.32.0-beta.4"
+        directory = note_root / tag
+        directory.mkdir(parents=True)
+        content = "<!-- TODO: Review notes. -->" if notes == "placeholder" else "Reviewed changes"
+        (directory / "en.md").write_text(content, encoding="utf-8")
+    monkeypatch.setattr(release, "ROOT", tmp_path)
+    monkeypatch.setattr(release, "NOTES", note_root)
+    preparation = next(
+        step for step in workflow("quality.yml")["jobs"]["static"]["steps"]
+        if step.get("name") == "Validate release preparation"
+    )
+    script = preparation["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    if notes == "reviewed":
+        exec(compile(script, "release-preparation-notes", "exec"), {})
+    else:
+        with pytest.raises(ValueError):
+            exec(compile(script, "release-preparation-notes", "exec"), {})
 
 
 def test_macos_quality_preserves_crash_evidence_without_interactive_alerts():
