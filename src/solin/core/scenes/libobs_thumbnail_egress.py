@@ -6,11 +6,12 @@ single vertical atlas: the app creates a block ``cell_width x (cell_height * N)`
 and the sidecar writes scene ``i`` into row ``i`` of the scene-id list it was
 given, so the app can slice rows without any per-card plumbing.
 
-Rendering runs on a worker thread that enters the graphics context per frame
-(serialised with the main render loop by libobs' graphics mutex), at a deliberately
-low rate — these are thumbnails, and the program's own render must stay first in
-line. Scene sources are **borrowed** from the scene graph, so a render and a graph
-rebuild are mutually excluded by ``_lock``.
+Rendering runs in libobs' main render callback, which already owns the graphics
+context. A worker holding the borrower lock while waiting for graphics would
+block content commits behind the main composite on a software renderer. Scene
+sources are **borrowed** from the graph, so rendering and source handoffs are
+mutually excluded by ``_lock``. The callback skips a frame when the control thread
+owns that lock, preserving the graphics-to-source lock order.
 
 Thumbnailed scenes are show-ref'd so their cameras and media actually run and every
 card is live, not a frozen last frame. Show refs are not activate refs, so none of
@@ -28,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any, Callable, Protocol, cast
 
 from solin.core.scenes.content_frame_channel import SharedFrameChannelWriter
@@ -56,12 +58,15 @@ class LibobsThumbnailEgress:
         self._before_render = before_render
         self._scene_resolver = scene_resolver
         self._lock = threading.Lock()
+        self._lifecycle_lock = threading.Lock()
         self._writer: SharedFrameChannelWriter | None = None
         self._handle_token = ""
         self._scene_ids: tuple[str, ...] = ()
         self._cell = (0, 0)
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._callback: Any = None
+        self._render_to_bgra: Callable[..., Any] | None = None
+        self._next_render_at = 0.0
+        self._closed = False
         self._suspended = False
         self._show_refs: list[Any] = []  # raw pointers we have inc_showing'd
 
@@ -77,6 +82,14 @@ class LibobsThumbnailEgress:
         cell_height: int,
     ) -> None:
         """Attach to the app's atlas block, or detach when it goes away."""
+        with self._lifecycle_lock:
+            if not self._closed:
+                self._configure(descriptor, scene_ids, cell_width, cell_height)
+
+    def _configure(
+        self, descriptor: object, scene_ids: tuple[str, ...],
+        cell_width: int, cell_height: int,
+    ) -> None:
         if (
             not isinstance(descriptor, dict)
             or descriptor.get("transport") != SHARED_MEMORY_BGRA
@@ -112,9 +125,22 @@ class LibobsThumbnailEgress:
             self._handle_token = token
             self._scene_ids = tuple(scene_ids)
             self._cell = (cell_width, cell_height)
-            if not self._suspended:
-                self._acquire_show_refs()
-        self._ensure_thread()
+            self._next_render_at = 0.0
+        from solin.core.media.obs_source_render import resolve_render_source_to_bgra
+
+        try:
+            with self._lock:
+                if not self._suspended:
+                    self._acquire_show_refs()
+            self._render_to_bgra = resolve_render_source_to_bgra(
+                before_render=self._before_render, opaque_background=True,
+            )
+            # Registration/removal waits on OBS' callback-list mutex. Never hold
+            # the borrower lock while registering or waiting for a callback.
+            self._callback = self._runtime.ob.add_main_render_callback(self._on_render)
+        except Exception:  # noqa: BLE001 - roll back partial native registration
+            log.warning("could not register thumbnail render callback", exc_info=True)
+            self._detach()
 
     # ── show refs ──────────────────────────────────────────────────────────
 
@@ -191,72 +217,82 @@ class LibobsThumbnailEgress:
             current, self._show_refs = self._show_refs, previous
             self._release_show_refs()
             self._show_refs = current
+            self._next_render_at = 0.0
 
     def resume(self) -> None:
         """Re-resolve the rebuilt scenes and take fresh show refs."""
         with self._lock:
             self._suspended = False
+            self._next_render_at = 0.0
             if self._writer is not None:
                 self._acquire_show_refs()
 
-    def _ensure_thread(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
+    def _on_render(self, _width: int, _height: int) -> None:
+        # Show-ref changes can invoke native plugin code while owning _lock.
+        # Never block the graphics thread behind those control-thread changes.
+        if not self._lock.acquire(blocking=False):
             return
-        self._stop.clear()
-        self._thread = threading.Thread(
-            target=self._loop, name="solin-thumbnail-render", daemon=True
-        )
-        self._thread.start()
-
-    def _loop(self) -> None:
-        from solin.core.media.obs_source_render import resolve_render_source_to_bgra
-
-        render_to_bgra = resolve_render_source_to_bgra(
-            before_render=self._before_render, opaque_background=True,
-        )
-
-        canvas = self._runtime.video
-        while not self._stop.wait(_RENDER_INTERVAL_S):
-            with self._lock:
-                writer = self._writer
-                scene_ids = self._scene_ids
-                cell_width, cell_height = self._cell
-                if self._suspended or writer is None or not scene_ids or cell_width <= 0:
+        try:
+            writer = self._writer
+            scene_ids = self._scene_ids
+            cell_width, cell_height = self._cell
+            render_to_bgra = self._render_to_bgra
+            if (
+                self._suspended or writer is None or not scene_ids
+                or cell_width <= 0 or render_to_bgra is None
+            ):
+                return
+            now = time.monotonic()
+            if now < self._next_render_at:
+                return
+            self._next_render_at = now + _RENDER_INTERVAL_S
+            canvas = self._runtime.video
+            row_bytes = cell_width * 4
+            atlas = bytearray(row_bytes * cell_height * len(scene_ids))
+            for index, scene_id in enumerate(scene_ids):
+                source = self._scene_resolver(scene_id)
+                if source is None:
                     continue
-                row_bytes = cell_width * 4
-                atlas = bytearray(row_bytes * cell_height * len(scene_ids))
-                for index, scene_id in enumerate(scene_ids):
-                    source = self._scene_resolver(scene_id)
-                    if source is None:
-                        continue
-                    try:
-                        result = render_to_bgra(
-                            source, cell_width, cell_height,
-                            canvas_width=canvas.width, canvas_height=canvas.height,
-                        )
-                    except Exception:  # noqa: BLE001 - libobs graphics boundary
-                        log.debug("thumbnail render errored for %r", scene_id, exc_info=True)
-                        continue
-                    if result is None:
-                        continue
-                    data, stride = result
-                    base = index * cell_height * row_bytes
-                    for row in range(cell_height):
-                        src = row * stride
-                        dst = base + row * row_bytes
-                        atlas[dst : dst + row_bytes] = data[src : src + row_bytes]
                 try:
-                    writer.write(bytes(atlas), stride=row_bytes)
-                except Exception:  # noqa: BLE001 - shared-memory boundary
-                    log.debug("thumbnail atlas write errored", exc_info=True)
+                    result = render_to_bgra(
+                        source, cell_width, cell_height,
+                        canvas_width=canvas.width, canvas_height=canvas.height,
+                    )
+                except Exception:  # noqa: BLE001 - libobs graphics boundary
+                    log.debug("thumbnail render errored for %r", scene_id, exc_info=True)
+                    continue
+                if result is None:
+                    continue
+                data, stride = result
+                base = index * cell_height * row_bytes
+                for row in range(cell_height):
+                    src = row * stride
+                    dst = base + row * row_bytes
+                    atlas[dst : dst + row_bytes] = data[src : src + row_bytes]
+            try:
+                writer.write(bytes(atlas), stride=row_bytes)
+            except Exception:  # noqa: BLE001 - shared-memory boundary
+                log.debug("thumbnail atlas write errored", exc_info=True)
+        except Exception:  # noqa: BLE001 - native render callback boundary
+            log.warning("thumbnail render or egress write errored", exc_info=True)
+        finally:
+            self._lock.release()
 
     def _detach(self) -> None:
+        # Removal completes in-flight native reads before releasing sources or
+        # closing the writer. Retain all owners if native removal fails.
+        callback = self._callback
+        if callback is not None:
+            self._runtime.ob.remove_main_render_callback(callback)
+            self._callback = None
         with self._lock:
             self._release_show_refs()
             writer, self._writer = self._writer, None
             self._handle_token = ""
             self._scene_ids = ()
             self._cell = (0, 0)
+            self._render_to_bgra = None
+            self._next_render_at = 0.0
         if writer is not None:
             try:
                 writer.close()
@@ -264,8 +300,6 @@ class LibobsThumbnailEgress:
                 log.debug("thumbnail writer close errored", exc_info=True)
 
     def shutdown(self) -> None:
-        self._stop.set()
-        thread, self._thread = self._thread, None
-        if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=1.0)
-        self._detach()
+        with self._lifecycle_lock:
+            self._closed = True
+            self._detach()
