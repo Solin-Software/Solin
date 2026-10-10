@@ -71,9 +71,96 @@ channel. Files are first uploaded to a draft and the draft is published only
 after GitHub reports every expected asset as complete with the expected digest.
 A beta is marked as a prerelease and never becomes `latest`.
 
+### Contributor credits
+
+Publication appends a managed English **Related pull requests and issues** block
+to the GitHub Release body. The reviewed English and translated changelogs,
+manifest, and in-app notes stay unchanged.
+GitHub account mentions on contribution entries provide the release's contributor
+avatars.
+
+Entries come from the exact commits after the previous published version up to
+the new tag. A beta uses the highest earlier published version; a stable release
+uses the highest earlier published stable version, including contributions from
+its betas. Drafts and tags from failed publication attempts are not predecessors.
+Version order, not publication date, determines the predecessor.
+
+Until an appropriate predecessor exists, the historical boundary is commit
+`2209281ebe91c9f8872132d4f3aafdf1ba0c012b`, the externally distributed
+`26.31.1.0` bump. That commit is excluded. Both boundaries must belong to the
+same verified history; missing tags or divergent histories fail rather than
+silently crediting all repository history.
+
+The managed block records both commit boundaries. Subsequent updates preserve
+that recorded interval even if an older release is published later.
+
+Every merged pull request whose merge commit belongs to the interval is included,
+including documentation, build, and release-preparation PRs. Entries use linked
+PR titles without categories or filtering by labels, Conventional Commit type,
+or title format. A Conventional Commit prefix, when present, is removed only for
+presentation; the original title remains unchanged on GitHub. Titles without
+that format are also included.
+
+PR entries credit the PR author, authors of included associated Git commits, and
+Git coauthors recognized through `Co-authored-by` identities. Bots are excluded
+and accounts are deduplicated on
+each entry. GitHub resolves accounts; the publisher never guesses logins from
+names or email addresses. Commits without an included merged PR fall back to a
+linked commit title with its human author and Git coauthors, using the same
+prefix removal for presentation. Unlinked commit authors produce a warning so
+their GitHub email association can be corrected.
+
+An issue is linked only when GitHub records its actual closure by an included
+merged PR and its state is `CLOSED` with state reason `COMPLETED`. A mention,
+a closing keyword, or a suggested closing link alone is insufficient. Open,
+reopened, and not-planned issues are excluded, as are issues closed by a PR
+outside the interval. Issue entries do not credit issue authors.
+
+For an already published release, run **Release contributors** from Actions.
+Supply the existing tag and select `apply` to update it; the default is a preview.
+The CLI equivalent is:
+
+```text
+git fetch origin main --tags
+python scripts/release.py contributors --tag 26.32.0-beta.4
+python scripts/release.py contributors --tag 26.32.0-beta.4 --apply
+```
+
+Or dispatch the manual workflow after it is merged into `main`:
+
+```text
+gh workflow run release-contributors.yml --ref main -f tag=26.32.0-beta.4 -f apply=false
+gh workflow run release-contributors.yml --ref main -f tag=26.32.0-beta.4 -f apply=true
+```
+
+The workflow reports the exact interval and generated entries in its run summary
+and shares the publication concurrency lock. It verifies the existing source marker
+against the actual tag, preserves all text outside its managed block, detects
+intervening edits, and updates only the release body. Repeating an unchanged
+update is a no-op. It does not rebuild packages, upload assets, move tags, change
+the release channel, or change `latest`.
+
+Publication and the manual workflow require **Pull requests: read** and
+**Issues: read** to resolve merged PRs, their authors, and actual issue closures,
+alongside **Contents: write** to update the release body.
+
+The manual workflow normally uses `GITHUB_TOKEN`. GitHub can require additional
+workflow authorization when an older release's target differs from `main` in
+`.github/workflows/`, even for a body-only update. For that case, configure the
+optional repository secret `RELEASE_NOTES_TOKEN`: a fine-grained token restricted
+to this repository with **Contents: write**, **Pull requests: read**,
+**Issues: read**, and **Workflows: write**. Alternatively, run the CLI using an
+appropriately authorized `gh` login. Do not change the release target to bypass
+this check. See GitHub's
+[update-release permissions](https://docs.github.com/en/rest/releases/releases#update-a-release).
+
+### Published package integrity
+
 Published assets are never replaced. A failed run may safely complete its owned
-draft; a correction to a published release requires a new version. Repository
-release immutability is an external prerequisite for production publication;
+draft; an application correction to a published release requires a new version.
+Related pull requests, issues, and contributor attribution can be maintained
+separately as described above. Repository release immutability is an external
+prerequisite for production publication;
 it locks each published tag and its assets after the workflow publishes the
 draft.
 
