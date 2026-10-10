@@ -9189,14 +9189,15 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Дополнительно</translation>
+        <source>Assignments</source>
+        <translation>Задания</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Обратный отсчёт медиа</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Таймер</translation>
     </message>
 </context>
 <context>

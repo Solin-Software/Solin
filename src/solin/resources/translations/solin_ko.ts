@@ -9126,14 +9126,15 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>고급</translation>
+        <source>Assignments</source>
+        <translation>과제</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>미디어 카운트다운</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>타이머</translation>
     </message>
 </context>
 <context>

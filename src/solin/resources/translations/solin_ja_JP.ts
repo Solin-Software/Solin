@@ -9126,14 +9126,15 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>詳細</translation>
+        <source>Assignments</source>
+        <translation>割り当て</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>メディアカウントダウン</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>タイマー</translation>
     </message>
 </context>
 <context>

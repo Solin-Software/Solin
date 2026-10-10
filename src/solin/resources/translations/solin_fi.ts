@@ -9158,14 +9158,15 @@ Lisää taso, kun olet valmis.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Lisäasetukset</translation>
+        <source>Assignments</source>
+        <translation>Tehtävät</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Median lähtölaskenta</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Ajastin</translation>
     </message>
 </context>
 <context>

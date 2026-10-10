@@ -7311,7 +7311,7 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
     <message>
         <location line="+2"/>
         <source>Scripture:</source>
-        <translation>Escritura:</translation>
+        <translation>Texto bíblico:</translation>
     </message>
     <message>
         <source>E.g.: Happy are those conscious of their spiritual need.</source>
@@ -9195,14 +9195,15 @@ Adicione uma quando quiser.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Avançado</translation>
+        <source>Assignments</source>
+        <translation>Designações</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Contagem regressiva de mídia</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Temporizador</translation>
     </message>
 </context>
 <context>

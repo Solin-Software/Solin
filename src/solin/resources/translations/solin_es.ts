@@ -3707,7 +3707,7 @@ Se conservarán el contenido añadido manualmente, los recortes, el encuadre y e
     <message>
         <location filename="../../widgets/playlist/components.py" line="+165"/>
         <source>Rename</source>
-        <translation>Cambiar nombre</translation>
+        <translation>Renombrar</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4018,7 +4018,7 @@ Se conservarán el contenido añadido manualmente, los recortes, el encuadre y e
     <message>
         <location line="+86"/>
         <source>Rename section</source>
-        <translation>Cambiar nombre a la sección</translation>
+        <translation>Renombrar sección</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -4290,7 +4290,7 @@ Esta acción no se puede deshacer.</translation>
     <message>
         <location line="+46"/>
         <source>Rename folder</source>
-        <translation>Cambiar el nombre de la carpeta</translation>
+        <translation>Renombrar carpeta</translation>
     </message>
     <message>
         <location line="+62"/>
@@ -4575,7 +4575,7 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
     <message>
         <location filename="../../qml/PlaylistTreeView.qml" line="+66"/>
         <source>Rename</source>
-        <translation>Cambiar nombre</translation>
+        <translation>Renombrar</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -4865,7 +4865,7 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
     <message>
         <location line="+89"/>
         <source>Rename</source>
-        <translation>Cambiar nombre</translation>
+        <translation>Renombrar</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -4875,7 +4875,7 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
     <message>
         <location line="+20"/>
         <source>Rename profile</source>
-        <translation>Cambiar el nombre del perfil</translation>
+        <translation>Renombrar perfil</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -6848,7 +6848,7 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
-        <translation>Cambiar nombre…</translation>
+        <translation>Renombrar…</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -6903,7 +6903,7 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <location line="+6"/>
         <source>Rename profile…</source>
-        <translation>Cambiar nombre del perfil…</translation>
+        <translation>Renombrar perfil…</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7044,7 +7044,7 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <location line="-8"/>
         <source>Rename scene</source>
-        <translation>Cambiar el nombre de la escena</translation>
+        <translation>Renombrar escena</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -7054,7 +7054,7 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <location line="+6"/>
         <source>Rename Scene profile</source>
-        <translation>Cambiar el nombre del perfil de escenas</translation>
+        <translation>Renombrar perfil de escenas</translation>
     </message>
     <message>
         <location line="+30"/>
@@ -9158,14 +9158,15 @@ Añada una cuando quiera.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Avanzado</translation>
+        <source>Assignments</source>
+        <translation>Asignaciones</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Cuenta regresiva de medios</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Temporizador</translation>
     </message>
 </context>
 <context>
@@ -9258,7 +9259,7 @@ Haz clic en &quot;Descargar&quot; para abrir la página de descarga.</translatio
     <message>
         <location filename="../../widgets/playlist/components.py" line="+236"/>
         <source>Rename</source>
-        <translation>Cambiar nombre</translation>
+        <translation>Renombrar</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -10292,7 +10293,7 @@ Use el botón de reproducción para proyectar · Arrastre el control ⠿ para re
     <message>
         <location line="+433"/>
         <source>Rename section</source>
-        <translation>Cambiar nombre a la sección</translation>
+        <translation>Renombrar sección</translation>
     </message>
     <message>
         <location line="+9"/>

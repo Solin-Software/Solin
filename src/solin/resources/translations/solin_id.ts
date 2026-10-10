@@ -9126,14 +9126,15 @@ Tambahkan saat Anda siap.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Advanced</source>
-        <translation>Lanjutan</translation>
+        <source>Assignments</source>
+        <translation>Penugasan</translation>
     </message>
     <message>
         <location line="-18"/>
         <location line="+18"/>
-        <source>Media countdown</source>
-        <translation>Hitung mundur media</translation>
+        <source>Timer</source>
+        <comment>countdown mode</comment>
+        <translation>Pengatur Waktu</translation>
     </message>
 </context>
 <context>
