@@ -82,7 +82,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - runner: ubuntu-24.04
+            platform: Linux
+            qt_platform: offscreen
+          - runner: windows-2025
+            platform: Windows
+            qt_platform: offscreen
           - runner: macos-15-intel
+            platform: Darwin
+            qt_platform: cocoa
+          - runner: macos-15
             platform: Darwin
             qt_platform: cocoa
     runs-on: ${{ matrix.runner }}
