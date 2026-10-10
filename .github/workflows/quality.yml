@@ -177,7 +177,9 @@ jobs:
           defaults write com.apple.CrashReporter DialogType -string server
           sudo sysctl -w kern.corefile="$RUNNER_TEMP/solin-core.%P"
           ulimit -c unlimited
-          python -m pytest tests/integration/test_native_scene_content_pipeline.py -k 'closing_image or video_auto_switch' --log-cli-level=WARNING --durations=20
+          python -m pytest tests/contract --durations=20
+          python -m pytest tests/unit --durations=20
+          python -m pytest tests/integration --durations=20
 
       - name: Report macOS native crashes
         if: failure() && runner.os == 'macOS'
