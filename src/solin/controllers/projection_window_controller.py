@@ -9,17 +9,13 @@ from PySide6.QtCore import QCoreApplication, QDateTime, QTimer, QT_TRANSLATE_NOO
 
 from ..ui.screens import ScreenManager
 from ..ui.thumbnail_images import load_thumbnail_path
-from ..core.projection.application import (
-    ProjectionSession,
-    projection_presentation_type,
-)
+from ..core.projection.application import ProjectionSession
 from ..core.projection.image_framing import (
     IDENTITY_IMAGE_TRANSFORM,
     image_transform_from_values,
 )
 from ..core.projection.idle_media import IdleMediaRequest, existing_idle_media_path
 from ..core.timer.models import MediaCountdownPresentation
-from ..projection.idle_source import IdleMediaSource
 from ..projection.window import FloatingPreviewWindow, ProjectionWindow
 from ..widgets.projection.idle_dialog import confirm_set_as_idle
 
@@ -67,8 +63,7 @@ class ProjectionWindowContext:
     sync_projection_integrations: Callable[[], None]
     sync_obs_scene: Callable[[bool], None]
     yearly_text: Callable[[], tuple[str, str, str]]
-    content_frame_sink: Callable[[object], None]
-    refresh_program_content: Callable[[], None]
+    request_idle_media: Callable[[str], None]
     set_projection_screen_count: Callable[[int], None]
     set_toolbar_screen_count: Callable[[int], None]
     monitor_popup: Callable[[], Any | None]
@@ -77,27 +72,15 @@ class ProjectionWindowContext:
     timer_output: Callable[[], Any | None] = _no_object
     timer_bridge: Callable[[], Any | None] = _no_object
     program_mirror_enabled: Callable[[], bool] = _false
-    program_content_requested: Callable[[], bool] = _false
     native_outputs_changed: Callable[[], None] = _nothing
 
 
 class ProjectionWindowController:
     """Owns projection target windows and monitor-manager actions."""
 
-    def __init__(
-        self,
-        context: ProjectionWindowContext,
-        *,
-        idle_source_factory=IdleMediaSource,
-    ) -> None:
+    def __init__(self, context: ProjectionWindowContext) -> None:
         self._context = context
         self._session = context.session
-        # The single shared idle decoder is created lazily on first use so the
-        # controller stays cheap to construct (and unit-testable without a
-        # QApplication).  All surfaces paint the frames it fans out, so the idle
-        # video is decoded exactly once and stays frame-locked across monitors.
-        self._idle_source_factory = idle_source_factory
-        self._idle_source: IdleMediaSource | None = None
 
     def _media_eligible(self, screen) -> bool:
         """True when media projection windows may be shown on ``screen``."""
@@ -137,69 +120,10 @@ class ProjectionWindowController:
             win.set_yearly_text(quote, ref, api_code)
 
     def apply_full_state_to_window(self, win) -> None:
-        """Single source of truth for what a projection surface must show.
-
-        Applies the *complete* current projection state to one window — yearly
-        text, custom idle media, and the active projection (video/image/timer/
-        talk).  Every window-creation path funnels through here so a freshly
-        created or hot-plugged monitor always matches the windows that were
-        already open, instead of each call site re-deriving a partial subset of
-        the state (which is exactly how the idle-media-on-reconnect bug crept
-        in: reconcile replayed everything *except* the idle media).
-        """
-        # Track this surface's idle visibility so the shared decoder can pause
-        # while no surface is showing the idle video (Qt auto-disconnects when
-        # the window is destroyed, so there is nothing to clean up on close).
-        win.bind_idle_visibility(self._on_idle_visibility_changed)
-
+        """Restore application-owned state; libobs owns the shared idle surface."""
         quote, ref, api_code = self._yearly_text()
         win.set_yearly_text(quote, ref, api_code)
-        if self._context.program_mirror_enabled():
-            return
-        if self._session.idle_media_path:
-            win.set_idle_active()
-            # Paint the most recent decoded frame right away so a hot-plugged or
-            # respawned surface is in sync from its very first frame instead of
-            # flashing black until the next frame arrives.
-            if self._idle_source is not None and self._idle_source.current_image is not None:
-                win.update_idle_image(self._idle_source.current_image)
-        else:
-            win.clear_idle()
         self.restore_state_to_window(win)
-
-    def _ensure_idle_source(self) -> IdleMediaSource:
-        """Create (once) and return the shared idle decoder, wiring its frames to
-        every surface."""
-        if self._idle_source is None:
-            self._idle_source = self._idle_source_factory()
-            self._idle_source.frame_ready.connect(self._distribute_idle_frame)
-        return self._idle_source
-
-    def _distribute_idle_frame(self, image) -> None:
-        """Fan a freshly decoded idle frame out to every surface (one decode, N
-        paints — mirrors the normal-video distribute_frame pipeline)."""
-        if not self._context.program_mirror_enabled():
-            for win in self.all_windows():
-                win.update_idle_image(image)
-        self._context.content_frame_sink(image)
-
-    def _on_idle_visibility_changed(self, _visible: bool) -> None:
-        """A surface showed/hid its idle page — re-evaluate decoder playback."""
-        self._sync_idle_playback()
-
-    def _sync_idle_playback(self) -> None:
-        """Play the shared idle video only while at least one surface is showing
-        the idle screen; pause it otherwise (no-op for image idles)."""
-        if self._idle_source is None:
-            return
-        any_visible = any(win.is_idle_visible() for win in self.all_windows())
-        if (
-            self._context.program_content_requested()
-            and projection_presentation_type(self._session.state) == "idle"
-            and self._session.idle_media_path
-        ):
-            any_visible = True
-        self._idle_source.set_playing(any_visible)
 
     def _normalize_expired_state(self) -> None:
         """Collapse a timer whose target has already passed back to idle.
@@ -307,35 +231,20 @@ class ProjectionWindowController:
             self.on_idle_media_changed(path)
 
     def on_idle_media_changed(self, path: str) -> None:
-        # Reject a path that no longer exists — treat it as "clear".
-        if path and not os.path.isfile(path):
-            path = ""
-        self._session.set_idle_media_path(path)
+        """Prepare the requested choice in the engine before accepting it."""
+        self._context.request_idle_media(path)
+        # The popup emits an optimistic choice. Keep its UI on the confirmed
+        # session value until the asynchronous engine update succeeds.
+        self._sync_idle_popup()
 
-        if path:
-            # Activate surfaces *before* loading: a static image emits its single
-            # frame synchronously inside set_media(), so the surfaces must already
-            # be in idle-media mode to accept it.  Decode happens once on the
-            # shared source; every surface paints the frames it fans out (see
-            # _distribute_idle_frame).
-            if not self._context.program_mirror_enabled():
-                for win in self.all_windows():
-                    win.set_idle_active()
-            self._ensure_idle_source().set_media(path)
-            # Start the video decoder only if the idle screen is actually visible
-            # right now (it is not while a clip/image/timer is being projected).
-            self._sync_idle_playback()
-        else:
-            if self._idle_source is not None:
-                self._idle_source.clear()
-            if not self._context.program_mirror_enabled():
-                for win in self.all_windows():
-                    win.clear_idle()
+    def on_idle_media_applied(self, _path: str) -> None:
+        """Refresh UI from the session already confirmed by the scene runtime."""
+        self._sync_idle_popup()
 
+    def _sync_idle_popup(self) -> None:
         popup = self._context.monitor_popup()
         if popup is not None:
-            popup._sync_idle_ui(path)
-        self._context.refresh_program_content()
+            popup._sync_idle_ui(self._session.idle_media_path)
 
     def on_floating_toggle(self, make_active: bool) -> None:
         if make_active:

@@ -6196,6 +6196,10 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Scenes</source>
         <translation>Сцены</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Неактивный экран</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7225,6 +7229,10 @@ Add content, a camera, or another scene.</source>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Открыть папку</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Неактивный экран</translation>
     </message>
 </context>
 <context>
@@ -11556,6 +11564,13 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 {path}</source>
         <translation type="vanished">Сохранено в:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Неактивный экран</translation>
     </message>
 </context>
 </TS>

@@ -781,13 +781,41 @@ class SceneWorkspaceService:
         """Load a collection document ready to drive a live SceneDocumentService.
 
         Materializes the shared camera resources, then self-heals collections
-        saved before the year-text-as-a-scene feature by adding the Default (year
-        text) scene as the idle default when it is missing.
+        saved before idle scenes by adding the Default scene when it is missing.
         """
-        return ensure_default_scene(
+        document = ensure_default_scene(
             self._materialize_resources(self._load_recovering(repository)),
             self._seed_names,
         )
+        return self._localize_idle_source_names(document)
+
+    def _localize_idle_source_names(self, document: SceneDocument) -> SceneDocument:
+        """Localize the codec's generic migration label without changing custom layers."""
+        sources = tuple(
+            replace(source, name=self._seed_names.idle_screen_source)
+            if source.kind is SourceKind.IDLE_SCREEN and source.name == "Idle screen"
+            else source
+            for source in document.sources
+        )
+        renamed_ids = {
+            source.id for source, original in zip(sources, document.sources, strict=True)
+            if source != original
+        }
+        if not renamed_ids:
+            return document
+        scenes = tuple(
+            replace(
+                scene,
+                layers=tuple(
+                    replace(layer, name=self._seed_names.idle_screen_layer)
+                    if layer.source_id in renamed_ids and layer.name == "Idle screen"
+                    else layer
+                    for layer in scene.layers
+                ),
+            )
+            for scene in document.scenes
+        )
+        return replace(document, sources=sources, scenes=scenes)
 
     def _materialize_resources(self, document: SceneDocument) -> SceneDocument:
         camera_by_id = {camera.id: camera for camera in self._resources.cameras}

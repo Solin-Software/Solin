@@ -199,6 +199,7 @@ class _Projection:
     def __init__(self) -> None:
         self.state = {"type": "idle"}
         self.session_id = 0
+        self.idle_media_path = ""
         self._listeners: set[Callable[[], None]] = set()
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]:
@@ -207,6 +208,11 @@ class _Projection:
 
     def set_type(self, state_type: str) -> None:
         self.set_state({"type": state_type})
+
+    def set_idle_media_path(self, path: str) -> None:
+        self.idle_media_path = path
+        for listener in tuple(self._listeners):
+            listener()
 
     def set_state(self, state: dict[str, object]) -> None:
         self.state = state
@@ -408,8 +414,10 @@ class _Engine:
     def cancel_preparation(self, request_id: str) -> None:
         self.cancelled.append(request_id)
 
-    def reload_yeartext(self) -> None:
-        self.yeartext_reloads = getattr(self, "yeartext_reloads", 0) + 1
+    def set_idle_screen(self, state, *, request_id, sequence, deadline_ms):
+        self.idle_updates = [*getattr(self, "idle_updates", []), state]
+        revision = self.snapshots[-1][1].document.revision
+        return _completed(self._ack(request_id, sequence, revision))
 
     def preview_layer_geometry(
         self,
@@ -1752,17 +1760,431 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight(request
     assert engine.camera_requests == ["list-cameras"]
 
 
-def test_reload_yeartext_forwards_a_notification_to_the_engine(request) -> None:
+def test_idle_fallback_updates_without_rehydrating_or_changing_foreground(request) -> None:
     projection = _Projection()
     engine = _Engine()
-    _documents, _runtime, controller = _runtime_controller(
-        request,
-        engine, projection, request_ids=("hydrate",)
+    _documents, _runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.start_engine()
+    snapshots_before = len(engine.snapshots)
+    desired = controller.desired_scenes
+    controller.set_yeartext_image("fallback.png", 1)
+    _deliver_controller_results(controller)
+    assert engine.idle_updates[-1].yeartext_image_path == "fallback.png"
+    assert len(engine.snapshots) == snapshots_before
+    assert controller.desired_scenes == desired
+
+
+def test_idle_choice_is_published_only_after_native_acceptance(request) -> None:
+    class PendingEngine(_Engine):
+        def set_idle_screen(self, state, *, request_id, sequence, deadline_ms):
+            self.pending_state = state
+            self.pending_ack = self._ack(request_id, sequence, self.snapshots[-1][1].document.revision)
+            self.idle_future = Future()
+            return self.idle_future
+    engine = PendingEngine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    applied = []
+    controller.idle_media_applied.connect(applied.append)
+    controller.request_idle_media("idle.mp4")
+    assert applied == []
+    engine.idle_future.set_result(engine.pending_ack)
+    _deliver_controller_results(controller)
+    assert applied == ["idle.mp4"]
+    assert not controller.content_is_playing
+
+
+def test_idle_rejection_preserves_published_choice_and_restores_superseded_candidate(request) -> None:
+    class PendingEngine(_Engine):
+        def set_idle_screen(self, state, *, request_id, sequence, deadline_ms):
+            self.pending_state = state
+            self.pending_ack = self._ack(request_id, sequence, self.snapshots[-1][1].document.revision)
+            self.idle_future = Future()
+            return self.idle_future
+    engine = PendingEngine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    applied = []
+    controller.idle_media_applied.connect(applied.append)
+    controller.request_idle_media("first.mp4")
+    first_future, first_ack = engine.idle_future, engine.pending_ack
+    controller.request_idle_media("broken.mp4")
+    first_future.set_result(first_ack)
+    _deliver_controller_results(controller)
+    assert engine.pending_state.media_path == "broken.mp4"
+    engine.idle_future.set_result(replace(engine.pending_ack, applied=False, error_code="idle_media_invalid"))
+    _deliver_controller_results(controller)
+    assert applied == []
+    assert engine.pending_state.media_path == ""
+    engine.idle_future.set_result(engine.pending_ack)
+    _deliver_controller_results(controller)
+    assert applied == [""]
+
+
+class _PendingIdleEngine(_Engine):
+    def __init__(self):
+        super().__init__()
+        self.idle_requests = []
+
+    def set_idle_screen(self, state, *, request_id, sequence, deadline_ms):
+        future = Future()
+        ack = self._ack(request_id, sequence, self.snapshots[-1][1].document.revision)
+        self.idle_requests.append((state, future, ack))
+        return future
+
+    def finish_idle(self, index, *, applied=True):
+        _state, future, ack = self.idle_requests[index]
+        future.set_result(ack if applied else replace(
+            ack, applied=False, error_code="idle_media_invalid",
+        ))
+
+
+@pytest.mark.parametrize("applied", [True, False])
+def test_idle_confirmation_uses_the_session_without_a_ui_listener(request, applied):
+    from solin.core.projection.application import ProjectionSession
+
+    session = ProjectionSession()
+    session.set_idle_media_path("previous.png")
+    session.set_state({"type": "image"})
+    engine = _PendingIdleEngine()
+    _, _, controller = _runtime_controller(request, engine, session, request_ids=())
+    controller.start_engine()
+    epoch, desired, takes = session.presentation_session_id, controller.desired_scenes, len(engine.takes)
+    observations, errors = [], []
+    controller.idle_media_applied.connect(lambda path: observations.append((path, session.idle_media_path)))
+    controller.idle_media_failed.connect(errors.append)
+    controller.request_idle_media("next.mp4")
+    assert session.idle_media_path == "previous.png"
+    engine.finish_idle(0, applied=applied)
+    _deliver_controller_results(controller)
+    if applied:
+        assert session.idle_media_path == "next.mp4"
+        assert observations == [("next.mp4", "next.mp4")]
+        assert errors == []
+    else:
+        assert session.idle_media_path == "previous.png"
+        assert errors == ["idle_media_invalid"]
+        assert engine.idle_requests[1][0].media_path == "previous.png"
+        engine.finish_idle(1)
+        _deliver_controller_results(controller)
+        assert observations == [("previous.png", "previous.png")]
+    assert session.presentation_session_id == epoch
+    assert controller.desired_scenes == desired and len(engine.takes) == takes
+
+
+def test_restarted_generation_discards_an_unconfirmed_idle_choice(request):
+    from solin.core.projection.application import ProjectionSession
+
+    session = ProjectionSession()
+    session.set_idle_media_path("confirmed.mp4")
+    engine = _PendingIdleEngine()
+    _, _, controller = _runtime_controller(request, engine, session, request_ids=())
+    controller.start_engine()
+    controller.request_idle_media("pending.mp4")
+    engine.generation = "replacement-generation"
+    engine.emit_health(SceneEngineStatus.READY)
+    _deliver_controller_results(controller)
+    assert engine.snapshots[-1][1].idle_screen.media_path == "confirmed.mp4"
+    engine.finish_idle(0)
+    _deliver_controller_results(controller)
+    assert session.idle_media_path == "confirmed.mp4"
+    assert controller._idle_in_flight is None
+
+
+@pytest.mark.parametrize("applied", [True, False])
+def test_profile_switch_waits_for_idle_and_replays_the_confirmed_session(
+    scene_workspace_factory, request, tmp_path, applied,
+):
+    from solin.core.projection.application import ProjectionSession
+
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    session, engine = ProjectionSession(), _PendingIdleEngine()
+    session.set_idle_media_path("previous.png")
+    controller = SceneRuntimeController(workspace, session, engine=engine, session_id="test-session")
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    controller.request_idle_media("candidate.mp4")
+    future = controller.activate_scene_profile(collection.id)
+    assert controller.profile_activation_in_progress
+    assert len(engine.snapshots) == 1 and not future.done()
+    engine.finish_idle(0, applied=applied)
+    _deliver_controller_results(controller)
+    assert future.result().applied
+    assert workspace.active_collection.id == collection.id
+    expected = "candidate.mp4" if applied else "previous.png"
+    assert engine.snapshots[-1][1].idle_screen.media_path == expected
+    assert session.idle_media_path == expected
+
+
+def test_shutdown_cancels_a_profile_staged_behind_idle(
+    scene_workspace_factory, request, tmp_path,
+):
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    engine = _PendingIdleEngine()
+    controller = SceneRuntimeController(workspace, _Projection(), engine=engine, session_id="test-session")
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    controller.request_idle_media("pending.mp4")
+    future = controller.activate_scene_profile(collection.id)
+    controller.stop_engine()
+    assert future.cancelled() and len(engine.snapshots) == 1
+    engine.finish_idle(0)
+    _deliver_controller_results(controller)
+    assert len(engine.snapshots) == 1
+
+
+def test_idle_recovery_health_is_reported_once_even_without_the_scenes_ui(request):
+    from solin.core.scenes.model import IdleScreenSourceConfig
+    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
+
+    engine = _Engine()
+    document = _document()
+    document = replace(document, sources=(*document.sources, SourceDefinition(
+        id=IDLE_SCREEN_SOURCE_ID, kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen", configuration=IdleScreenSourceConfig(),
+    )))
+    _, _, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(), document=document,
+    )
+    controller.start_engine()
+    failures = []
+    controller.idle_media_failed.connect(failures.append)
+    event = SourceHealthEvent(
+        source_id=IDLE_SCREEN_SOURCE_ID, status=SourceHealthStatus.FAILED,
+        error_code="idle_media_unavailable", message="Idle media unavailable",
+    )
+    engine.listener(event)
+    engine.listener(event)
+    _deliver_controller_results(controller)
+    assert failures == ["idle_media_unavailable"]
+
+
+
+@pytest.mark.parametrize(
+    ("current_has_idle", "target_is_idle", "stage_behind_idle", "expected_failures"),
+    [
+        (False, True, False, ["idle_media_unavailable"]),
+        (False, False, False, []),
+        (True, False, False, []),
+        (False, True, True, []),
+        (True, False, True, ["idle_media_unavailable"]),
+    ],
+)
+def test_idle_recovery_during_profile_hydration_uses_dispatched_document(
+    scene_workspace_factory, request, tmp_path,
+    current_has_idle, target_is_idle, stage_behind_idle, expected_failures,
+):
+    from solin.core.scenes.model import ColorSourceConfig, IdleScreenSourceConfig
+
+    class PendingEngine(_PendingGeometryEngine):
+        defer_idle = False
+
+        def set_idle_screen(self, state, *, request_id, sequence, deadline_ms):
+            if not self.defer_idle:
+                return super().set_idle_screen(
+                    state, request_id=request_id, sequence=sequence, deadline_ms=deadline_ms,
+                )
+            self.idle_future = Future()
+            self.idle_request = (request_id, sequence)
+            return self.idle_future
+
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    previous_id = workspace.active_collection.id
+    source_id = "profile-recovery-source"
+    source = SourceDefinition(
+        id=source_id, kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen", configuration=IdleScreenSourceConfig(),
+    )
+    if current_has_idle:
+        workspace.documents.create_source(source)
+    prepared = workspace.prepare_collection_activation(collection.id)
+    prepared.documents.create_source(source if target_is_idle else SourceDefinition(
+        id=source_id, kind=SourceKind.COLOR,
+        name="Background", configuration=ColorSourceConfig(),
+    ))
+    workspace.discard_collection_activation(prepared)
+    engine = PendingEngine(defer_hydration=True)
+    controller = SceneRuntimeController(
+        workspace, _Projection(), engine=engine, session_id="test-session",
+    )
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    engine.finish_hydration(0)
+    _deliver_controller_results(controller)
+    failures = []
+    controller.idle_media_failed.connect(failures.append)
+    if stage_behind_idle:
+        engine.defer_idle = True
+        controller.request_idle_media("pending.mp4")
+    controller.activate_scene_profile(collection.id)
+    assert workspace.active_collection.id == previous_id
+    event = SourceHealthEvent(
+        source_id=source_id, status=SourceHealthStatus.FAILED,
+        error_code="idle_media_unavailable", message="Idle media unavailable",
     )
 
-    controller.reload_yeartext()
+    engine.listener(event)
+    engine.listener(event)
+    _deliver_controller_results(controller)
 
-    assert getattr(engine, "yeartext_reloads", 0) == 1
+    assert failures == expected_failures
+    assert controller.source_health(source_id) == event
+    assert workspace.active_collection.id == previous_id
+    if not stage_behind_idle:
+        engine.finish_hydration(1)
+        _deliver_controller_results(controller)
+        assert workspace.active_collection.id == collection.id
+        assert failures == expected_failures
+        assert controller.source_health(source_id) == event
+        # A repeated health report after commit remains deduplicated.
+        engine.listener(event)
+        _deliver_controller_results(controller)
+        assert failures == expected_failures
+    else:
+        engine.idle_future.set_result(engine._ack(*engine.idle_request, 0))
+        _deliver_controller_results(controller)
+        engine.finish_hydration(1)
+        _deliver_controller_results(controller)
+        assert workspace.active_collection.id == collection.id
+        assert controller.source_health(source_id) is None
+
+
+@pytest.fixture
+def pending_profile_health(scene_workspace_factory, request, tmp_path):
+    from solin.core.scenes.model import ColorSourceConfig, IdleScreenSourceConfig
+
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    source_id = "reused-profile-health-source"
+    workspace.documents.create_source(SourceDefinition(
+        id=source_id, kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen", configuration=IdleScreenSourceConfig(),
+    ))
+    prepared = workspace.prepare_collection_activation(collection.id)
+    prepared.documents.create_source(SourceDefinition(
+        id=source_id, kind=SourceKind.COLOR,
+        name="Background", configuration=ColorSourceConfig(),
+    ))
+    workspace.discard_collection_activation(prepared)
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    controller = SceneRuntimeController(
+        workspace, _Projection(), engine=engine, session_id="test-session",
+    )
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    engine.finish_hydration(0)
+    _deliver_controller_results(controller)
+    return workspace, collection, controller, engine, source_id
+
+
+@pytest.mark.parametrize("fresh_status", [None, *SourceHealthStatus])
+def test_profile_commit_retains_only_fresh_target_health(pending_profile_health, fresh_status):
+    workspace, collection, controller, engine, source_id = pending_profile_health
+    old_event = SourceHealthEvent(
+        source_id=source_id, status=SourceHealthStatus.FAILED,
+        error_code="idle_media_unavailable", message="Idle media unavailable",
+    )
+    engine.listener(old_event)
+    _deliver_controller_results(controller)
+    controller.activate_scene_profile(collection.id)
+    expected = None
+    if fresh_status is not None:
+        event = replace(
+            old_event, status=fresh_status,
+            error_code="" if fresh_status is SourceHealthStatus.READY else old_event.error_code,
+        )
+        engine.listener(event)
+        if fresh_status is not SourceHealthStatus.STOPPED:
+            expected = event
+    # A health report for a source absent from the dispatched target must not
+    # survive the commit even though it reaches the generic event cache.
+    engine.listener(replace(old_event, source_id="unrelated-source"))
+    _deliver_controller_results(controller)
+    committed_health = []
+    controller.document_changed.connect(
+        lambda _document: committed_health.append(controller.source_health(source_id)),
+    )
+
+    engine.finish_hydration(1)
+    _deliver_controller_results(controller)
+
+    assert workspace.active_collection.id == collection.id
+    assert workspace.documents.document.source(source_id).kind is SourceKind.COLOR
+    assert controller.source_health(source_id) == expected
+    assert committed_health == [expected]
+    assert controller.source_health("unrelated-source") is None
+
+
+@pytest.mark.parametrize("outcome", ["rejected", "error", "cancelled", "invalid_ack"])
+def test_failed_profile_health_does_not_leak_into_retry(pending_profile_health, outcome):
+    workspace, collection, controller, engine, source_id = pending_profile_health
+    previous_id = workspace.active_collection.id
+    controller.activate_scene_profile(collection.id)
+    event = SourceHealthEvent(
+        source_id=source_id, status=SourceHealthStatus.FAILED,
+        error_code="source_unavailable", message="Source unavailable",
+    )
+    engine.listener(event)
+    _deliver_controller_results(controller)
+    future = engine.hydration_futures[1]
+    if outcome == "error":
+        future.set_exception(RuntimeError("Hydration failed"))
+    elif outcome == "cancelled":
+        future.cancel()
+    else:
+        request_id, snapshot = engine.snapshots[1]
+        ack = engine._ack(request_id, snapshot.sequence, snapshot.document.revision)
+        future.set_result(
+            replace(ack, applied=False, error_code="hydrate_failed")
+            if outcome == "rejected" else replace(ack, request_id="wrong-request")
+        )
+    _deliver_controller_results(controller)
+    assert workspace.active_collection.id == previous_id
+    assert not controller.profile_activation_in_progress
+
+    # The same target ID receives no new health in the second transaction.
+    controller.activate_scene_profile(collection.id)
+    engine.finish_hydration(len(engine.hydration_futures) - 1)
+    _deliver_controller_results(controller)
+    assert workspace.active_collection.id == collection.id
+    assert controller.source_health(source_id) is None
+
+
+@pytest.mark.parametrize("reset", ["failed", "generation_changed", "stop"])
+def test_profile_health_is_discarded_on_engine_reset(pending_profile_health, reset):
+    workspace, collection, controller, engine, source_id = pending_profile_health
+    controller.activate_scene_profile(collection.id)
+    event = SourceHealthEvent(
+        source_id=source_id, status=SourceHealthStatus.FAILED,
+        error_code="source_unavailable", message="Source unavailable",
+    )
+    engine.listener(event)
+    _deliver_controller_results(controller)
+    if reset == "stop":
+        controller.stop_engine()
+        controller.start_engine()
+        engine.finish_hydration(len(engine.hydration_futures) - 1)
+    elif reset == "generation_changed":
+        engine.generation = "new-process-generation"
+        engine.emit_health(SceneEngineStatus.READY)
+    else:
+        engine.emit_health(SceneEngineStatus.FAILED)
+    _deliver_controller_results(controller)
+    if reset == "failed":
+        # A queued source report after engine failure is not part of a live
+        # profile hydration and must not repopulate its retained health.
+        engine.listener(event)
+        _deliver_controller_results(controller)
+
+    # Even if the queued ACK arrives later, health from the old native graph
+    # cannot be restored into the activated document.
+    engine.finish_hydration(1)
+    _deliver_controller_results(controller)
+    if workspace.active_collection.id != collection.id:
+        controller.activate_scene_profile(collection.id)
+        engine.finish_hydration(len(engine.hydration_futures) - 1)
+        _deliver_controller_results(controller)
+    assert workspace.active_collection.id == collection.id
+    assert controller.source_health(source_id) is None
 
 
 def test_committing_a_layer_resize_does_not_rehydrate(request) -> None:
@@ -4527,7 +4949,7 @@ def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
 
 
 def test_content_is_playing_tracks_what_the_content_channel_carries(request) -> None:
-    """Idle blanks the content source — unless an idle video/image feeds it."""
+    """Idle media never fills the foreground content channel."""
     projection = _Projection()
     _, _, controller = _runtime_controller(
         request,
@@ -4542,6 +4964,6 @@ def test_content_is_playing_tracks_what_the_content_channel_carries(request) -> 
     projection.set_type("idle")
     assert controller.content_is_playing is False
 
-    # A configured idle video keeps the channel fed while the state stays idle.
+    # Idle is shared through its own source while Media stays transparent.
     projection.idle_media_path = "loop.mp4"
-    assert controller.content_is_playing is True
+    assert controller.content_is_playing is False

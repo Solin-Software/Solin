@@ -12,7 +12,7 @@ from typing import Any, Final, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -71,10 +71,9 @@ class SourceKind(StrEnum):
     IMAGE = "image"
     COLOR = "color"
     SCENE_REFERENCE = "scene_reference"
-    # The year text, rendered by the app in its own styling and shown as an image
-    # source. There is a single global year text, so the source carries no config;
-    # a layer positions/sizes it like any other. See YeartextSourceConfig.
-    YEARTEXT = "yeartext"
+    # Session-owned idle content shared by all layers; configuration is external
+    # to the scene document. See IdleScreenSourceConfig.
+    IDLE_SCREEN = "idle_screen"
 
 
 class CameraMediaType(StrEnum):
@@ -1067,18 +1066,18 @@ class ImageSourceConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class YeartextSourceConfig:
-    """Configuration for a year-text source.
+class IdleScreenSourceConfig:
+    """Reference the session's idle content without duplicating media paths.
 
-    The year text is a single global value rendered by the app in its own
-    styling and surfaced as an image; a layer positions/sizes it. There is
-    nothing per-source to configure, so the record is empty."""
+    The shared content defaults to the rendered annual text. Each layer keeps
+    its own geometry, but there is nothing per-source to configure.
+    """
 
     def to_record(self) -> dict[str, object]:
         return {}
 
     @classmethod
-    def from_record(cls, raw: object) -> "YeartextSourceConfig":
+    def from_record(cls, raw: object) -> "IdleScreenSourceConfig":
         _mapping(raw, field_name="source.configuration", allowed_keys=set())
         return cls()
 
@@ -1142,7 +1141,7 @@ SourceConfig: TypeAlias = (
     | ImageSourceConfig
     | ColorSourceConfig
     | SceneReferenceConfig
-    | YeartextSourceConfig
+    | IdleScreenSourceConfig
 )
 
 _CONFIG_BY_SOURCE_KIND = {
@@ -1152,7 +1151,7 @@ _CONFIG_BY_SOURCE_KIND = {
     SourceKind.IMAGE: ImageSourceConfig,
     SourceKind.COLOR: ColorSourceConfig,
     SourceKind.SCENE_REFERENCE: SceneReferenceConfig,
-    SourceKind.YEARTEXT: YeartextSourceConfig,
+    SourceKind.IDLE_SCREEN: IdleScreenSourceConfig,
 }
 
 
@@ -2446,6 +2445,38 @@ def _migrate_scene_document_record(
             # transform — the bump exists so an older build rejects a diverged
             # document outright instead of failing its own validation.
             current_version = 10
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 10:
+            sources = migrated.get("sources")
+            previous_names: dict[str, str] = {}
+            if isinstance(sources, list):
+                for source in sources:
+                    if not isinstance(source, dict) or source.get("type") != "yeartext":
+                        continue
+                    source_id = source.get("id")
+                    old_name = source.get("name")
+                    if isinstance(source_id, str) and isinstance(old_name, str):
+                        previous_names[source_id] = old_name
+                    source["type"] = SourceKind.IDLE_SCREEN.value
+                    source["name"] = "Idle screen"
+            scenes = migrated.get("scenes")
+            if isinstance(scenes, list):
+                for scene in scenes:
+                    layers = scene.get("layers") if isinstance(scene, dict) else None
+                    if not isinstance(layers, list):
+                        continue
+                    for layer in layers:
+                        if not isinstance(layer, dict):
+                            continue
+                        source_id = layer.get("source_id")
+                        if (
+                            isinstance(source_id, str)
+                            and source_id in previous_names
+                            and layer.get("name") == previous_names[source_id]
+                        ):
+                            layer["name"] = "Idle screen"
+            current_version = 11
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

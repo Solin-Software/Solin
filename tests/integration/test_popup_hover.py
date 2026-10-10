@@ -333,8 +333,10 @@ def _scene_runtime(tmp_path, scene_workspace_factory):
         ),
     )
     projection = SimpleNamespace(
-        state={"type": "idle"}, session_id=0, subscribe=lambda _: lambda: None
+        state={"type": "idle"}, session_id=0, subscribe=lambda _: lambda: None,
+        idle_media_path="",
     )
+    projection.set_idle_media_path = lambda path: setattr(projection, "idle_media_path", path)
     return SceneRuntimeController(workspace, projection)
 
 

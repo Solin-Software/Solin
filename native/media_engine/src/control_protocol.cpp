@@ -274,10 +274,39 @@ void validate_audio_device_response(const Json& payload) {
     }
 }
 
+void validate_idle_screen_state(const Json& state) {
+    if (!has_exact_fields(state,
+                          {"revision", "media_path", "yeartext_image_path", "yeartext_revision"})) {
+        throw std::runtime_error("invalid idle screen state");
+    }
+    for (const auto key : {"revision", "yeartext_revision"}) {
+        const auto& value = state.at(key);
+        if (!(value.is_number_unsigned() ||
+              (value.is_number_integer() && value.get<std::int64_t>() >= 0))) {
+            throw std::runtime_error("invalid idle screen revision");
+        }
+    }
+    for (const auto key : {"media_path", "yeartext_image_path"}) {
+        if (!state.at(key).is_string()) {
+            throw std::runtime_error("invalid idle screen local path");
+        }
+        const auto& path = state.at(key).get_ref<const std::string&>();
+        const auto characters = std::ranges::count_if(path, [](const unsigned char character) {
+            return (character & 0xC0U) != 0x80U;
+        });
+        if (characters > 4096 || path.find("://") != std::string::npos ||
+            std::ranges::any_of(path, [](const unsigned char character) {
+                return character < 32U || character == 127U;
+            })) {
+            throw std::runtime_error("invalid idle screen local path");
+        }
+    }
+}
+
 void validate_hydrate_shape(const Json& payload) {
     if (!has_exact_fields(payload, {"document", "active_scenes", "render_enabled",
                                     "output_enabled", "content_ingress", "preview_egress",
-                                    "program_egress", "window_targets"}) ||
+                                    "program_egress", "window_targets", "idle_screen"}) ||
         !payload.at("document").is_object() || !payload.at("active_scenes").is_object() ||
         !payload.at("render_enabled").is_object() ||
         !payload.at("output_enabled").is_object() ||
@@ -287,9 +316,10 @@ void validate_hydrate_shape(const Json& payload) {
           payload.at("preview_egress").is_object()) ||
         !(payload.at("program_egress").is_null() ||
           payload.at("program_egress").is_object()) ||
-        !payload.at("window_targets").is_array()) {
+        !payload.at("window_targets").is_array() || !payload.at("idle_screen").is_object()) {
         throw std::runtime_error("invalid hydrate payload");
     }
+    validate_idle_screen_state(payload.at("idle_screen"));
 }
 
 void validate_ack_payload(const Json& payload) {
@@ -548,6 +578,17 @@ ProtocolReply ControlSession::handle(const ControlEnvelope& request) {
                            : unavailable_ack();
         validate_ack_payload(payload);
         return {.response = response_for(request, "ack", std::move(payload))};
+    }
+    if (request.message_type == "set_idle_screen") {
+        if (!has_exact_fields(request.payload, {"idle_screen"})) {
+            throw std::runtime_error("invalid idle screen payload");
+        }
+        validate_idle_screen_state(request.payload.at("idle_screen"));
+        return {.response = response_for(request, "ack", {
+            {"applied", false},
+            {"error_code", "source_not_implemented"},
+            {"error_message", "Idle screen sources require the libobs backend"},
+        })};
     }
     if (request.message_type == "take_prepared") {
         validate_unavailable_command(request);

@@ -54,6 +54,10 @@ class LibobsProjectionRoute:
         return self._scene_id
 
     @property
+    def transition_source(self) -> Any:
+        return self._transition
+
+    @property
     def scene_source(self) -> Any:
         return self._scene_source
 

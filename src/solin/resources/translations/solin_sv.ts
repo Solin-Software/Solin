@@ -6164,6 +6164,10 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>Scenes</source>
         <translation>Scener</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Inaktiv skärm</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7193,6 +7197,10 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Öppna mapp</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Inaktiv skärm</translation>
     </message>
 </context>
 <context>
@@ -11513,6 +11521,13 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 {path}</source>
         <translation type="vanished">Sparad i:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Inaktiv skärm</translation>
     </message>
 </context>
 </TS>

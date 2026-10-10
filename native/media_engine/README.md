@@ -20,7 +20,7 @@ rotation, placement, and opacity. Solin content enters through a versioned, thre
 dynamic latest-frame channel. On Windows, the primary channel is a pinned Qt 6.11.1 bridge:
 a no-GIL native worker maps hardware NV12 video through Qt's private video-buffer interface
 and copies it GPU-to-GPU into bridge-owned named D3D11 textures. Static BGRA content is
-uploaded once into the same ring, so video, images, and idle retain one logical descriptor,
+uploaded once into the same ring, so video and images retain one logical descriptor,
 source runtime, and Raw transition owner. The sidecar validates adapter/resource generations,
 imports each leased texture as `GstD3D11Memory`, and performs one canonical BGRA
 conversion/scale. Video takes no Solin CPU pixel readback, SHM pixel copy, or CPU-to-GPU
@@ -94,6 +94,13 @@ shader path remain later phases in
 
 The native process must not import, link, or dynamically load libobs. OBS WebSocket support
 belongs to the Python application's independent external-integration layer.
+
+Scene schema 11 recognizes the session-owned `idle_screen` source kind with an
+empty per-source configuration. It validates the idle state in hydration but does
+not decode or render idle media. An idle source in a scene graph, or an explicit
+idle update command, reports `source_not_implemented`; this feature requires the
+libobs backend. Older persisted `yeartext` sources are migrated by the application
+before hydration, preserving their IDs and layer geometry.
 
 ## Windows development build
 

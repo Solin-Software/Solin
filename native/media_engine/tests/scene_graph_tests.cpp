@@ -858,6 +858,20 @@ void test_failed_hydration_preserves_the_previous_applied_graph() {
                  "unsupported graph leaves fail with an explicit capability error");
     expect(runtime.document_revision() == 1U,
            "an unsupported source cannot partially advance the applied document");
+
+    auto idle = snapshot(4U);
+    idle.sources.push_back({
+        .id = "solin.idle.current",
+        .kind = solin::media_engine::SceneSourceKind::idle_screen,
+        .enabled = true,
+    });
+    idle.scenes.push_back(
+        {.id = "scene-idle", .layers = {layer("idle-layer", "solin.idle.current")}});
+    idle.active_scene_ids = {"scene-idle", "scene-idle"};
+    expect_error([&runtime, &idle] { runtime.hydrate(idle, 4U); },
+                 "source_not_implemented", "idle requires libobs without creating a native decoder");
+    expect(runtime.document_revision() == 1U,
+           "unsupported idle content preserves the applied document");
 }
 
 void test_preview_geometry_updates_the_active_renderer_without_rebuilding_it() {

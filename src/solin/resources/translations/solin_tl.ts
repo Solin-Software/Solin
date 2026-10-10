@@ -6165,6 +6165,10 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>Scenes</source>
         <translation>Mga Eksena</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Idle Screen</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Buksan ang folder</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Idle Screen</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
 {path}</source>
         <translation type="vanished">Na-save sa:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Idle Screen</translation>
     </message>
 </context>
 </TS>

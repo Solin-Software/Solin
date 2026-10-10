@@ -176,7 +176,7 @@ presentation must reconcile its epoch even when the scene ID stays the same or
 hydration is pending. Replaying the current media restarts its existing decoder.
 
 BGRA ingress allocates one native source per presentation epoch and reuses it for
-subsequent frames of that epoch. An idle blank or a new image cannot overwrite
+subsequent frames of that epoch. A new image cannot overwrite
 the outgoing presentation's texture before its transition. The scene graph keeps
 its committed source across hydration; new ingress sources attach only at an
 accepted Take. Both native media and BGRA use the same Content presentation
@@ -189,6 +189,105 @@ outgoing composition while another output or preview receives new content. The
 control heartbeat releases superseded compositions and
 sources after borrowed scene references and native showing references retire,
 without cleanup timers.
+
+### Session-owned idle screen
+
+`idle_screen` sources refer to the session's shared idle content, independently of
+the foreground Content presentation. The initial Default scene contains one
+full-canvas Idle screen layer. Its content defaults to the styled annual text;
+choosing an idle image or video updates every scene using this source. Videos
+loop silently at normal speed. Removing the selected media restores the annual
+text. Each layer retains its own placement, crop, visibility, and ordering.
+Changing idle media does not select a scene or override customized default scenes
+or manual routing. The annual-text settings and timer presentations remain
+independent consumers of the annual text.
+
+One dedicated idle owner holds a stable private libobs scene shared by all idle
+layers, including nested scenes. Its committed producer is an annual-text PNG,
+an image, or a video decoder separate from foreground media and background music.
+The private scene uses the output canvas; its producer fits centrally with its
+aspect ratio preserved and no automatic crop. Layer transforms and crop remain
+outside this shared surface. Additional scenes and outputs share the same
+committed decoder and playback clock.
+
+Updates prepare a replacement privately and validate an uploaded image or a
+usable native video frame before changing the visible content. The new item,
+its transform, and removal of the old item commit under the native scene lock,
+without rebuilding the scene graph or restarting cameras. Video input opens only
+after mute, zero volume, disabled audio mixers, and disabled monitoring are set.
+Rejected media, expired preparation, and superseded requests leave the committed
+content intact. Observers detach before their source references are released.
+
+The session remains the source of truth for the selected media. An explicit
+`IdleScreenState` carries `revision`, `media_path`, `yeartext_image_path`, and
+`yeartext_revision` through hydration and acknowledged idle updates, independently
+of Content presentation epochs. The PNG path and revision are supplied directly;
+the engine does not resolve them from an environment variable. Updating annual
+text while selected media is playing refreshes the fallback state without
+replacing or restarting that media. Sidecar recovery and profile hydration replay
+the latest idle state. If the selected file is unavailable during recovery, the
+owner tries the annual-text PNG within the same deadline and reports the failure
+without changing the session's choice. If the fallback cannot be prepared either,
+the idle surface is transparent. Removing the media uses the latest annual-text
+state. Foreground Content stays transparent during idle.
+
+Idle preparation runs on one worker with one pending request. Newer valid choices
+supersede older preparation and pending requests, keeping heartbeat and foreground
+commands responsive while decoding the first frame. Only an accepted current
+revision updates the session and interface. Shutdown cancels and joins preparation
+before releasing native owners. Scene rebuilds and profile changes wait for the
+current idle transaction before replaying its confirmed state.
+
+Idle video playback is driven by live outputs whose effective source tree
+contains idle content, including visible nested scenes and transition origins.
+Without a live consumer, the shared video is paused at its prepared initial frame;
+editor and Program previews and scene thumbnails display that static frame.
+The first live consumer starts playback from this frame. Readiness of the initial
+frame must be confirmed before releasing idle content to that output, so its first
+appearance cannot expose a stale frame from an earlier playback position.
+Additional live monitors, virtual-camera output, or recording share the current
+loop without restarting while any live consumer remains. Previews and thumbnails
+also show this shared playback while it is live. Losing the last live consumer
+resets the video to its initial frame and holds it paused, even if previews remain
+open or no consumers remain.
+
+The native video source does not expose a seek-completion acknowledgement, so a
+seek or playback-clock value alone cannot prove that its displayed texture is the
+initial frame. Off live, the private idle scene displays its confirmed, immutable
+initial frame while the old decoder is retired and a fresh inactive decoder is
+prepared. Only a decoder with a confirmed initial frame can replace this surface
+when live playback starts. There is one steady-state idle decoder shared by all
+consumers; this frame remains inside libobs, without a Qt poster producer or a
+Content-channel publication. If preparing the next decoder fails, the cached
+initial frame remains visible and source health reports the restart failure;
+this transport failure does not select the annual-text fallback or change the
+session's selected media.
+
+Transition demand includes both visible branches until video reaches its
+destination. An outgoing idle branch remains a live consumer until it is no
+longer visible; the reset after losing the last live consumer must wait for that
+transition to finish.
+Once video completes, it inspects the native active destination and releases the
+temporary reference directly. Projection transitions may retain their old audio
+branch without mixing it; that retained reference does not establish visibility.
+
+The sidecar derives consumer visibility from effective egress `active` state,
+virtual-camera and recorder `active` state, and window `render_targets`,
+distinguishing previews from live outputs. Selecting Program or
+enabling aggregate rendering alone does not establish a live consumer; projection
+can require Program rendering without publishing Program itself. Graph hydration
+and rebuilds suspend demand reconciliation so transient graph changes do not
+create artificial pause or restart boundaries.
+
+Scene schema 11 migrates every persisted `yeartext` source to `idle_screen`,
+preserving source and layer identities and scene references. Migrated source
+names become Idle screen; layers matching the previous source name follow the
+rename, while custom layer names remain intact. The workspace localizes the
+generic label when loading a collection. New sources use `solin.idle.current`;
+migrated sources retain their previous IDs.
+
+The native escape-hatch backend understands the schema and reports idle sources
+as unsupported. It does not create an alternate decoder for this feature.
 
 ## Reconsideration triggers
 

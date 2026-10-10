@@ -104,6 +104,11 @@ class LibobsPreviewEgress:
         with self._lock:
             return self._scene_source
 
+    @property
+    def active(self) -> bool:
+        """Whether the editor has an attached, enabled render consumer."""
+        return self._enabled and self._writer is not None and self._scene_source is not None
+
     def set_scene_source(self, source: Any) -> None:
         """Set the borrowed scene source to render (None to stop rendering).
 

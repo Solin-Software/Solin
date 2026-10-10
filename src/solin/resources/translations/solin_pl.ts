@@ -6197,6 +6197,10 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <source>Scenes</source>
         <translation>Sceny</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ekran bezczynności</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7226,6 +7230,10 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Otwórz folder</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ekran bezczynności</translation>
     </message>
 </context>
 <context>
@@ -11557,6 +11565,13 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
 {path}</source>
         <translation type="vanished">Zapisano w:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ekran bezczynności</translation>
     </message>
 </context>
 </TS>

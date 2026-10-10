@@ -45,7 +45,7 @@ from solin.core.scenes.model import (
     VideoColorRange,
     VideoColorSpace,
     VideoPixelFormat,
-    YeartextSourceConfig,
+    IdleScreenSourceConfig,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
@@ -53,7 +53,7 @@ from solin.core.scenes.presets import (
     CONTENT_SCENE_ID,
     DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
-    YEARTEXT_SOURCE_ID,
+    IDLE_SCREEN_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
     create_fresh_scene_collection_document,
@@ -360,36 +360,103 @@ def test_graph_signature_ignores_geometry_and_timestamps_but_tracks_structure() 
     assert scene_engine_graph_signature(hidden_document) != baseline
 
 
-def test_yeartext_source_config_round_trips_with_an_empty_record() -> None:
-    configuration = YeartextSourceConfig()
+def test_idle_screen_source_config_round_trips_with_an_empty_record() -> None:
+    configuration = IdleScreenSourceConfig()
     assert configuration.to_record() == {}
-    assert YeartextSourceConfig.from_record(configuration.to_record()) == configuration
+    assert IdleScreenSourceConfig.from_record(configuration.to_record()) == configuration
 
 
-def test_yeartext_source_definition_round_trips_through_the_document_codec() -> None:
+@pytest.mark.parametrize("record", [{"media_path": "idle.mp4"}, {"year": 2026}, None, []])
+def test_idle_source_config_rejects_per_source_state(record: object) -> None:
+    with pytest.raises(SceneValidationError):
+        IdleScreenSourceConfig.from_record(record)
+
+
+def test_schema_10_migrates_every_yeartext_source_without_changing_scene_geometry() -> None:
+    document = create_fresh_scene_collection_document(
+        _names(), document_id="migrated-idle", created_at="2026-08-02T12:00:00+00:00"
+    )
+    record = document.to_record()
+    record["schema_version"] = 10
+    sources = record["sources"]
+    idle = next(source for source in sources if source["type"] == "idle_screen")
+    idle.update(id="solin.yeartext.current", type="yeartext", name="Texto do ano")
+    alternate = deepcopy(idle)
+    alternate.update(id="custom.yeartext", name="Year text")
+    sources.append(alternate)
+    layer = record["scenes"][0]["layers"][0]
+    layer.update(source_id=idle["id"], name=idle["name"], visible=False, locked=True)
+    layer["rect"] = {"x": 0.2, "y": 0.3, "width": 0.5, "height": 0.4}
+    layer["crop"] = {"left": 0.1, "top": 0.2, "right": 0.15, "bottom": 0.05}
+    layer.update(rotation_degrees=45.0, opacity=0.6, mirror_x=True)
+    second = deepcopy(layer)
+    second.update(id="custom-idle-layer", source_id=alternate["id"], name="Backdrop")
+    record["scenes"][1]["layers"].append(second)
+    shared = deepcopy(layer)
+    shared.update(id="shared-idle-layer")
+    record["scenes"][2]["layers"].append(shared)
+    record["outputs"][0]["default_scene_id"] = CAMERA_SCENE_ID
+    original = deepcopy(record)
+
+    migrated = SceneDocument.from_record(record)
+    expected = deepcopy(record)
+    expected["schema_version"] = 11
+    for source in expected["sources"]:
+        if source["type"] == "yeartext":
+            source.update(type="idle_screen", name="Idle screen")
+    expected["scenes"][0]["layers"][0]["name"] = "Idle screen"
+    expected["scenes"][2]["layers"][-1]["name"] = "Idle screen"
+
+    assert migrated.to_record() == expected
+    assert record == original
+    assert SceneDocument.from_record(migrated.to_record()) == migrated
+
+
+def test_current_schema_rejects_legacy_yeartext_source_kind() -> None:
+    record = create_fresh_scene_collection_document(_names(), document_id="idle").to_record()
+    record["sources"][-1]["type"] = "yeartext"
+    with pytest.raises(SceneValidationError):
+        SceneDocument.from_record(record)
+
+
+def test_missing_default_scene_reuses_a_migrated_idle_source() -> None:
+    document = _document()
+    migrated = SourceDefinition(
+        id="solin.yeartext.current", kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen", configuration=IdleScreenSourceConfig(),
+    )
+    document = replace(document, sources=(*document.sources, migrated))
+
+    healed = ensure_default_scene(document, _names())
+
+    assert healed.scene(DEFAULT_SCENE_ID).layers[0].source_id == migrated.id
+    assert healed.sources == document.sources
+
+
+def test_idle_screen_source_definition_round_trips_through_the_document_codec() -> None:
     source = SourceDefinition(
-        id="solin.yeartext",
-        kind=SourceKind.YEARTEXT,
-        name="Year text",
-        configuration=YeartextSourceConfig(),
+        id="solin.idle_screen",
+        kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen",
+        configuration=IdleScreenSourceConfig(),
     )
     record = source.to_record()
-    assert record["type"] == "yeartext"
+    assert record["type"] == "idle_screen"
     assert record["configuration"] == {}
     assert SourceDefinition.from_record(record) == source
 
 
-def test_yeartext_source_definition_rejects_a_mismatched_configuration() -> None:
+def test_idle_screen_source_definition_rejects_a_mismatched_configuration() -> None:
     with pytest.raises(SceneValidationError):
         SourceDefinition(
-            id="solin.yeartext",
-            kind=SourceKind.YEARTEXT,
-            name="Year text",
-            configuration=ImageSourceConfig(asset_id="not-yeartext"),
+            id="solin.idle_screen",
+            kind=SourceKind.IDLE_SCREEN,
+            name="Idle screen",
+            configuration=ImageSourceConfig(asset_id="not-idle_screen"),
         )
 
 
-def test_ensure_default_scene_heals_a_document_without_a_year_text_default() -> None:
+def test_ensure_default_scene_heals_a_document_without_a_idle_screen_default() -> None:
     # A document from before the year-text-as-a-scene feature: it has scenes but
     # no Default (year text) scene. ensure_default_scene must add the year-text
     # source + Default scene and make that scene the shared idle default, keeping
@@ -399,10 +466,10 @@ def test_ensure_default_scene_heals_a_document_without_a_year_text_default() -> 
 
     healed = ensure_default_scene(legacy, _names())
 
-    yeartext = healed.source(YEARTEXT_SOURCE_ID)
-    assert yeartext.kind is SourceKind.YEARTEXT
+    idle_screen = healed.source(IDLE_SCREEN_SOURCE_ID)
+    assert idle_screen.kind is SourceKind.IDLE_SCREEN
     default_scene = healed.scene(DEFAULT_SCENE_ID)
-    assert [layer.source_id for layer in default_scene.layers] == [YEARTEXT_SOURCE_ID]
+    assert [layer.source_id for layer in default_scene.layers] == [IDLE_SCREEN_SOURCE_ID]
     assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
     # existing scenes are preserved
     assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}

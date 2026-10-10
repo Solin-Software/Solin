@@ -6133,6 +6133,10 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <source>Scenes</source>
         <translation>Adegan</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Layar Siaga</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7162,6 +7166,10 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Buka folder</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Layar Siaga</translation>
     </message>
 </context>
 <context>
@@ -11471,6 +11479,13 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 {path}</source>
         <translation type="vanished">Disimpan ke:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Layar Siaga</translation>
     </message>
 </context>
 </TS>

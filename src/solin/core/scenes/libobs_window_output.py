@@ -78,6 +78,13 @@ class LibobsWindowOutput:
         return tuple(self._displays)
 
     @property
+    def render_targets(self) -> tuple[tuple[str, str], ...]:
+        """Live display routes, read without blocking the graphics thread."""
+        routes = self._routes
+        scenes = self._scene_ids
+        return tuple((route, scenes.get(handle, "")) for handle, route in routes.items())
+
+    @property
     def hydrate_lock(self) -> "threading.RLock":
         """Held by per-scene draw callbacks; the sidecar holds it across a graph
         rebuild so a callback can't resolve a scene mid-clear."""
@@ -128,7 +135,9 @@ class LibobsWindowOutput:
                     except Exception:  # noqa: BLE001 - libobs boundary
                         log.warning("libobs display resize failed for handle %d", handle, exc_info=True)
             # One store, so a draw callback never sees a half-updated map.
-            self._routes = {handle: routes[handle] for handle in wanted}
+            self._routes = {
+                handle: routes[handle] for handle in wanted if handle in self._displays
+            }
 
     def _create(self, handle: int, width: int, height: int, canvas: Any) -> None:
         try:

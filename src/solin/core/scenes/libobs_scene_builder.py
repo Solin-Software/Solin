@@ -92,11 +92,14 @@ def _layer_fit_mode(layer: dict) -> str:
 class LibobsSceneGraph:
     """Owns the libobs scenes/sources built for one hydrate snapshot."""
 
-    def __init__(self, runtime: Any) -> None:
+    def __init__(self, runtime: Any, *, idle_source: Callable[[], Any] | None = None) -> None:
         self._runtime = runtime
+        self._idle_source = idle_source
         self._scenes: dict[str, Any] = {}
         self._editor_preview_scene: Any | None = None
         self._editor_preview_layer: tuple[str, str] | None = None
+        self._document_record: dict = {}
+        self._idle_scene_ids: frozenset[str] = frozenset()
         self._sources: list[Any] = []
         # Scene items bound to the content slot, tracked so the content source can
         # be swapped live (BGRA frame source <-> libobs-decoded media) without a
@@ -104,9 +107,6 @@ class LibobsSceneGraph:
         # always use the latest geometry and update the live editing target.
         self._content_items: list[dict[str, Any]] = []
         self._content_source: Any = None
-        # Year-text image sources built this hydrate, tracked so the app can force a
-        # re-read of the rendered PNG (reload_yeartext) without a full re-hydrate.
-        self._yeartext_sources: list[Any] = []
         # Item records keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
@@ -131,6 +131,35 @@ class LibobsSceneGraph:
         self._active_scene_source: Any = None
         self._pending: dict[str, tuple[str, str, int, str]] = {}
         self._token_seq = 0
+
+    def scene_uses_idle_source(self, scene_id: str) -> bool:
+        """Constant-time demand lookup, including visible nested scene layers."""
+        return scene_id in self._idle_scene_ids
+
+    def _index_idle_scenes(self) -> None:
+        """Resolve dependencies once per graph generation, outside rendering."""
+        definitions = {source["id"]: source for source in self._document_record.get("sources", ())}
+
+        def visit(candidate: str, seen: set[str]) -> bool:
+            if candidate in seen:
+                return False
+            seen.add(candidate)
+            for record in self._scene_layers.get(candidate, ()):
+                definition = definitions.get(record["layer"].get("source_id"), {})
+                if not record["source_available"]:
+                    continue
+                if definition.get("type") == "idle_screen":
+                    return True
+                if record["referenced_scene_id"] and visit(record["referenced_scene_id"], seen):
+                    return True
+            return False
+        self._idle_scene_ids = frozenset(
+            scene_id for scene_id in self._scenes if visit(scene_id, set())
+        )
+
+    @property
+    def program_source(self) -> Any:
+        return self._transition
 
     @property
     def scene_ids(self) -> tuple[str, ...]:
@@ -276,6 +305,7 @@ class LibobsSceneGraph:
                 self.refresh_source_crops,
             )
         self._content_source = content_source
+        self._document_record = document
         ob = self._runtime.ob
         canvas = self._runtime.video
         sources_by_id = {
@@ -303,6 +333,7 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
+        self._index_idle_scenes()
         self._transitions.prepare_all()
         if before_activate is not None:
             before_activate()
@@ -530,31 +561,9 @@ class LibobsSceneGraph:
                 {"file": path},
             )
             return (source, True)
-        if kind == "yeartext":
-            # The year text is rendered by the app (in its own styling) to a PNG at
-            # SOLIN_YEARTEXT_IMAGE; the sidecar shows it as a plain image source. A
-            # layer positions/sizes it. When the PNG is re-rendered the app calls
-            # reload_yeartext() to re-read the file in place.
-            path = self._resolve_yeartext_image()
-            if not path:
-                return (None, False)  # not rendered yet → placeholder
-            source = ob.Source.create(
-                "image_source",
-                f"solin-yeartext-{layer.get('id', 'layer')}",
-                {"file": path},
-            )
-            self._yeartext_sources.append(source)
-            return (source, True)
+        if kind == "idle_screen":
+            return (self._idle_source(), False) if self._idle_source is not None else (None, False)
         return (None, False)
-
-    @staticmethod
-    def _resolve_yeartext_image() -> str | None:
-        """Absolute path to the app-rendered year-text PNG (``SOLIN_YEARTEXT_IMAGE``),
-        or ``None`` when it has not been rendered yet."""
-        import os
-
-        path = os.environ.get("SOLIN_YEARTEXT_IMAGE")
-        return path if path and os.path.isfile(path) else None
 
     @staticmethod
     def _resolve_image_asset(asset_id: str) -> str | None:
@@ -843,21 +852,6 @@ class LibobsSceneGraph:
     def cancel_all(self) -> None:
         self._pending.clear()
 
-    def reload_yeartext(self) -> bool:
-        """Force the year-text image sources to re-read their PNG in place.
-
-        Called after the app re-renders the year-text image so the change shows
-        without a full re-hydrate. Returns True if any source was refreshed."""
-        path = self._resolve_yeartext_image()
-        refreshed = False
-        for source in self._yeartext_sources:
-            try:
-                source.update({"file": path} if path else {"file": ""})
-                refreshed = True
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("yeartext source reload errored", exc_info=True)
-        return refreshed
-
     def clear(self) -> None:
         """Detach Program before releasing its graph; keep the reserved channel.
 
@@ -873,9 +867,9 @@ class LibobsSceneGraph:
         self._pending.clear()
         self._content_items = []
         self._content_source = None
-        self._yeartext_sources = []
         self._layer_items = {}
         self._scene_layers = {}
+        self._idle_scene_ids = frozenset()
         self._transition = None
         self._transition_kind = None
         self._active_scene_id = None

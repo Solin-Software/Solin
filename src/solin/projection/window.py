@@ -67,144 +67,6 @@ def exclude_from_aero_peek(hwnd: int) -> None:
     except Exception:  # noqa: BLE001 - Win32 window-manager API boundary
         log_ignored_exception(__name__, "Could not exclude projection window from Aero Peek")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# IdleMediaWidget — replaces the yeartext when a custom idle media is set
-# Supports images (static) and videos (looped, muted).
-# Created once per projection surface; hidden by default.
-# ─────────────────────────────────────────────────────────────────────────────
-
-class IdleMediaWidget(QWidget):
-    """
-    Passive, full-screen renderer for the custom idle background.
-
-    This widget does **no decoding of its own**.  Both static images and video
-    frames are decoded *once* by the shared :class:`solin.projection.idle_source.
-    IdleMediaSource` and handed to every surface via :meth:`set_image`.  This is
-    the design that keeps all monitors frame-locked and collapses N independent
-    decoders down to one (see ``idle_source.py`` for the full rationale).
-
-    Everything is painted manually in :meth:`paintEvent` via ``QPainter`` so
-    ``QGraphicsOpacityEffect`` composites correctly (a native ``QVideoWidget``
-    overlay would bypass the painter pipeline and ignore the fade effect).
-
-    A single incoming :class:`QImage` is shared, read-only, across all surfaces
-    on the GUI thread; each surface scales it to its own geometry on the GPU via
-    ``SmoothPixmapTransform`` with a cached destination rect — no CPU pre-scale.
-
-    Visibility signalling
-    ---------------------
-    Emits :attr:`visibility_changed` whenever this page is actually shown/hidden
-    (the QStackedWidget swaps it in/out as the projection switches between idle
-    and live content).  The controller uses this to pause the shared video
-    decoder while *no* surface is showing the idle screen — so a custom idle
-    video costs zero CPU while a clip/image/timer is being projected.
-    """
-
-    #: True when this page becomes visible, False when hidden.  Lets the owner
-    #: pause idle-video decoding while nothing is showing it.
-    visibility_changed = Signal(bool)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("background: black;")
-
-        # Latest frame to paint (static image or current video frame).  Shared
-        # with the other surfaces — never mutate it, only replace the reference.
-        self._image: QImage | None = None
-        self._paint_pending: bool = False
-        self._reported_visible: bool = False
-
-        # ── Geometry cache (same pattern as VideoDisplayWidget) ───────────
-        self._cached_widget_size: QSize = QSize()
-        self._cached_src_size: QSize = QSize()
-        self._cached_dst_rect: QRectF = QRectF()
-
-    # ── Visibility signalling ──────────────────────────────────────────────
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._report_visibility(True)
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._report_visibility(False)
-
-    def _report_visibility(self, visible: bool) -> None:
-        # Guard against duplicate/spontaneous events so the signal only fires on
-        # a real transition.
-        if visible != self._reported_visible:
-            self._reported_visible = visible
-            self.visibility_changed.emit(visible)
-
-    # ── Public API ────────────────────────────────────────────────────────
-
-    def set_image(self, image: QImage) -> None:
-        """Paint a frame decoded by the shared idle source (image or video)."""
-        if image is None or image.isNull():
-            return
-        self._image = image
-        # Invalidate the dst cache when the source dimensions change
-        # (first frame, switching media, or a mid-stream format change).
-        if QSize(image.width(), image.height()) != self._cached_src_size:
-            self._cached_src_size = QSize()
-        if not self._paint_pending:
-            self._paint_pending = True
-            self.update()
-
-    def clear(self) -> None:
-        """Drop the current frame and go black."""
-        self._image = None
-        self._paint_pending = True
-        self.update()
-
-    # ── Painting ──────────────────────────────────────────────────────────
-
-    def paintEvent(self, event):
-        self._paint_pending = False
-        painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0))
-
-        if self._image is not None and not self._image.isNull():
-            dst = self._ensure_dst_rect(self._image.width(), self._image.height())
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-            painter.drawImage(dst, self._image)
-
-        painter.end()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        # Invalidate geometry caches so the next paint recalculates the fit.
-        self._cached_widget_size = QSize()
-        self._cached_src_size = QSize()
-        if self._image is not None:
-            self.update()
-
-    # ── Internals ─────────────────────────────────────────────────────────
-
-    def _ensure_dst_rect(self, src_w: int, src_h: int) -> QRectF:
-        """Return the centred keep-aspect-ratio destination rect for the frame."""
-        widget_size = self.size()
-        src_size = QSize(src_w, src_h)
-        if widget_size == self._cached_widget_size and src_size == self._cached_src_size:
-            return self._cached_dst_rect
-
-        self._cached_widget_size = QSize(widget_size)
-        self._cached_src_size = QSize(src_size)
-
-        ww, wh = widget_size.width(), widget_size.height()
-        if src_w <= 0 or src_h <= 0 or ww <= 0 or wh <= 0:
-            self._cached_dst_rect = QRectF(0, 0, ww, wh)
-            return self._cached_dst_rect
-
-        scale = min(ww / src_w, wh / src_h)
-        dw = src_w * scale
-        dh = src_h * scale
-        self._cached_dst_rect = QRectF(
-            (ww - dw) / 2.0, (wh - dh) / 2.0, dw, dh
-        )
-        return self._cached_dst_rect
-
-
 class VideoDisplayWidget(QWidget):
     """
     High-performance video/image display widget.
@@ -406,11 +268,10 @@ class BaseProjectionView(QWidget):
     Shared content surface for both the on-monitor :class:`ProjectionWindow`
     and the on-screen :class:`FloatingPreviewWindow`.
 
-    This base owns the 4-page ``QStackedWidget`` and **all** content
-    behaviour — media/video, circular timer, yearly text and custom idle
-    media. Native media surfaces delegate transitions to the GPU engine. The
-    Qt renderer retains the legacy fade only as the cross-platform fallback;
-    timer and idle-page animations remain local here.
+    This base owns the 3-page ``QStackedWidget`` for media/video, circular
+    timers, and yearly text. Native surfaces delegate composition, custom idle
+    media, and transitions to the scene engine. The Qt renderer provides the
+    static yearly-text fallback and local media/timer fades.
     Subclasses are responsible only for *window-level* chrome
     (fullscreen placement vs. resizable 16:9 floating frame) and must call
     :meth:`_build_projection_stack` exactly once from their ``__init__``.
@@ -420,15 +281,13 @@ class BaseProjectionView(QWidget):
 
         0  media / image     (:class:`VideoDisplayWidget`)
         1  circular timer
-        2  yearly text       (default idle screen)
-        3  custom idle media (image or looping video)
+        2  yearly text       (static idle fallback and yearly-text timer)
     """
 
     # Named page indices so call sites read intent instead of magic numbers.
     _PAGE_MEDIA      = 0
     _PAGE_TIMER      = 1
     _PAGE_YEARLY     = 2
-    _PAGE_IDLE_MEDIA = 3
 
     _MEDIA_FADE_DURATION_MS = 200
     _YEARLY_TIMER_EXIT_FADE_DURATION_MS = 200
@@ -480,7 +339,7 @@ class BaseProjectionView(QWidget):
         self._timer_anim.setDuration(500)
         self._timer_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
-        # Page 2 — yearly text (idle screen)
+        # Page 2 — yearly text (static idle fallback and countdown)
         self._yearly_widget = YearlyTextWidget(self._font_manager)
         self._stack.addWidget(self._yearly_widget)  # index 2
 
@@ -494,20 +353,8 @@ class BaseProjectionView(QWidget):
         self._yearly_timer_exit_pending = False
         self._yearly_anim.finished.connect(self._on_yearly_animation_finished)
 
-        # Page 3 — custom idle media (image or looping video)
-        self._idle_media_widget = IdleMediaWidget()
-        self._stack.addWidget(self._idle_media_widget)  # index 3
-
-        self._idle_media_opacity = QGraphicsOpacityEffect(self._idle_media_widget)
-        self._idle_media_opacity.setOpacity(1.0)
-        self._idle_media_widget.setGraphicsEffect(self._idle_media_opacity)
-        self._idle_media_anim = QPropertyAnimation(self._idle_media_opacity, b"opacity")
-        self._idle_media_anim.setDuration(500)
-        self._idle_media_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-
         # Explicit state flag — never rely on currentIndex for logic
         self._is_showing_media: bool = False
-        self._has_idle_media: bool = False   # True when custom idle is loaded
         self._timer_presentation: MediaCountdownPresentation | None = None
 
         # Guard: only True while a *video* (not audio) is expected.
@@ -781,8 +628,9 @@ class BaseProjectionView(QWidget):
 
         # Already on the correct idle page and nothing animating — do nothing
         # (avoids flicker on audio-only clips).
-        idle_page = self._PAGE_IDLE_MEDIA if self._has_idle_media else self._PAGE_YEARLY
-        already_idle = (self._stack.currentIndex() == idle_page and not self._is_showing_media)
+        already_idle = (
+            self._stack.currentIndex() == self._PAGE_YEARLY and not self._is_showing_media
+        )
         if already_idle:
             return
 
@@ -833,29 +681,18 @@ class BaseProjectionView(QWidget):
         self._switch_to_idle_with_fade()
 
     def _switch_to_idle_with_fade(self) -> None:
-        """Switch to the idle screen (custom media page 3 if set, else yeartext page 2)."""
-        if self._has_idle_media:
-            self._idle_media_opacity.setOpacity(0.0)
-            self._stack.setCurrentIndex(self._PAGE_IDLE_MEDIA)
-            self._idle_media_anim.setStartValue(0.0)
-            self._idle_media_anim.setEndValue(1.0)
-            self._idle_media_anim.start()
-        else:
-            self._yearly_opacity.setOpacity(0.0)
-            self._stack.setCurrentIndex(self._PAGE_YEARLY)
-            self._start_yearly_fade(
-                start=0.0,
-                end=1.0,
-                duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
-            )
+        """Fade into the static yearly-text fallback."""
+        self._yearly_opacity.setOpacity(0.0)
+        self._stack.setCurrentIndex(self._PAGE_YEARLY)
+        self._start_yearly_fade(
+            start=0.0,
+            end=1.0,
+            duration_ms=self._YEARLY_FADE_IN_DURATION_MS,
+        )
 
     def _switch_to_idle_immediately(self) -> None:
-        if self._has_idle_media:
-            self._idle_media_opacity.setOpacity(1.0)
-            self._stack.setCurrentIndex(self._PAGE_IDLE_MEDIA)
-        else:
-            self._yearly_opacity.setOpacity(1.0)
-            self._stack.setCurrentIndex(self._PAGE_YEARLY)
+        self._yearly_opacity.setOpacity(1.0)
+        self._stack.setCurrentIndex(self._PAGE_YEARLY)
 
     def _stop_all_anims(self) -> None:
         """Stop all local animations and cancel pending completion work."""
@@ -863,55 +700,10 @@ class BaseProjectionView(QWidget):
             self._media_anim,
             self._yearly_anim,
             self._timer_anim,
-            self._idle_media_anim,
         ):
             anim.stop()
         self._media_fade_out_pending = False
 
-    # ── Custom idle media API ─────────────────────────────────────────────
-
-    def set_idle_active(self) -> None:
-        """Mark that a shared custom idle is active for this surface.
-
-        Frames are decoded by the shared IdleMediaSource and delivered via
-        update_idle_image(); this only flips the surface into idle-media mode and,
-        if currently on the plain yeartext idle page, fades over to it.
-        """
-        self._has_idle_media = True
-        if (
-            self._timer_presentation is None
-            and self._stack.currentIndex() == self._PAGE_YEARLY
-            and not self._is_showing_media
-        ):
-            self._stop_all_anims()
-            self._switch_to_idle_with_fade()
-
-    def clear_idle(self) -> None:
-        """Stop showing the custom idle and return to the yeartext screen."""
-        self._has_idle_media = False
-        self._idle_media_widget.clear()
-        if self._stack.currentIndex() == self._PAGE_IDLE_MEDIA and not self._is_showing_media:
-            self._stop_all_anims()
-            self._switch_to_idle_with_fade()
-
-    def update_idle_image(self, image: QImage) -> None:
-        """Paint the latest idle frame from the shared source.
-
-        No-op unless a custom idle is currently active for this surface, so the
-        controller can fan every frame out to all surfaces unconditionally.
-        """
-        if self._has_idle_media:
-            self._idle_media_widget.set_image(image)
-
-    def bind_idle_visibility(self, slot) -> None:
-        """Connect a callback(bool) fired when this surface's custom-idle page is
-        shown/hidden, so the shared source can pause decoding while no surface is
-        displaying the idle video."""
-        self._idle_media_widget.visibility_changed.connect(slot)
-
-    def is_idle_visible(self) -> bool:
-        """True when the custom-idle page is currently visible on this surface."""
-        return self._idle_media_widget.isVisible()
 
 
 class ProjectionWindow(BaseProjectionView):

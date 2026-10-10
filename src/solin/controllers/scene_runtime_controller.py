@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import CancelledError, Future
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
@@ -35,7 +35,9 @@ from solin.core.scenes.engine import (
     scene_engine_graph_signature,
 )
 from solin.core.scenes.media_control import ContentSourceKind
+from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.model import (
+    SourceKind,
     DELIVERY_BUSES,
     AUTOMATIC_MEDIA_CATEGORIES,
     BusId,
@@ -84,6 +86,7 @@ _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
 _LAYER_GEOMETRY_DEADLINE_MS = 500
 _CAMERA_DISCOVERY_DEADLINE_MS = 3000
+_IDLE_DEADLINE_MS = 5000
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +103,11 @@ _CATEGORY_BY_PROJECTION_TYPE = {
 class ProjectionStateSource(Protocol):
     @property
     def state(self) -> Mapping[str, Any]: ...
+
+    @property
+    def idle_media_path(self) -> str: ...
+
+    def set_idle_media_path(self, path: str) -> None: ...
 
     def subscribe(self, listener: Callable[[], None]) -> Callable[[], None]: ...
 
@@ -149,6 +157,9 @@ class _PendingProfileActivation:
     request_id: str
     snapshot: SceneEngineSnapshot
     activation: SceneWorkspaceActivation
+    source_health: dict[str, SourceHealthEvent] = field(
+        default_factory=dict, compare=False, repr=False,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +219,8 @@ class SceneRuntimeController(QObject):
     editor_source_preview_invalidated = Signal()
     scene_profiles_changed = Signal(object)
     runtime_changed = Signal(object)
+    idle_media_applied = Signal(str)
+    idle_media_failed = Signal(str)
     _async_result = Signal(object)
     _queued_async_result = Signal(object)
     _async_engine_event = Signal(object)
@@ -239,11 +252,15 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight: tuple[str, SceneEngineSnapshot] | None = None
         self._hydrate_dirty = False
         self._engine_document_revision = 0
+        self._idle_screen = IdleScreenState(media_path=projection.idle_media_path)
+        self._idle_applied_revision = -1
+        self._idle_in_flight: tuple[str, int, int, str, IdleScreenState] | None = None
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._observed_document = self._documents.document
         self._layer_geometry_in_flight: _PendingLayerGeometry | None = None
         self._queued_layer_geometry: dict[tuple[str, str], tuple[SceneLayer, bool, int]] = {}
         self._profile_activation: _PendingProfileActivation | None = None
+        self._profile_idle_waiter: Future[SceneEngineAck] | None = None
         self._profile_preview_scene_id: str | None = None
         self._delete_after_profile_activation = ""
         self._committing_hydrated_profile = False
@@ -390,18 +407,13 @@ class SceneRuntimeController(QObject):
 
     @property
     def content_is_playing(self) -> bool:
-        """Whether the content source carries anything, or is blank because idle.
-
-        Idle publishes a transparent frame, so a scene built on the content source
-        shows nothing — except when an idle video/image is configured, which keeps
-        the channel fed and still counts as content on screen.
-        """
+        """Whether foreground content is present, independently of idle media."""
         if (
             content_category_for_projection(self._projection.state)
             in AUTOMATIC_MEDIA_CATEGORIES
         ):
             return True
-        return bool(getattr(self._projection, "idle_media_path", ""))
+        return False
 
     def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Take one output now; only content scenes return after the media session."""
@@ -694,6 +706,7 @@ class SceneRuntimeController(QObject):
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
             window_targets=self._combined_window_targets(),
+            idle_screen=self._idle_screen,
         )
         context = _PendingProfileActivation(
             request_id=request_id,
@@ -702,6 +715,11 @@ class SceneRuntimeController(QObject):
         )
         self._profile_activation = context
         self.operational_state_changed.emit()
+        if self._idle_in_flight is not None:
+            # Stage the profile while native preparation completes. Hydration
+            # must replay a confirmed choice, never recover an unaccepted one.
+            self._profile_idle_waiter = Future()
+            return self._profile_idle_waiter
         future = self._engine.hydrate(
             snapshot,
             request_id=request_id,
@@ -709,6 +727,40 @@ class SceneRuntimeController(QObject):
         )
         self._track_future(future, "profile_hydrate", context)
         return future
+
+    def _dispatch_profile_after_idle(self) -> None:
+        waiter, context = self._profile_idle_waiter, self._profile_activation
+        if waiter is None or context is None or self._idle_in_flight is not None:
+            return
+        self._profile_idle_waiter = None
+        if self._engine is None or not self._engine_ready:
+            waiter.cancel()
+            self._fail_profile_activation(context, SceneEngineNotReadyError("engine_not_ready"))
+            return
+        idle = self._idle_screen
+        if idle.media_path != self._projection.idle_media_path:
+            self._idle_screen = replace(idle, revision=idle.revision + 1)
+            idle = replace(idle, media_path=self._projection.idle_media_path)
+        context = replace(context, snapshot=replace(
+            context.snapshot, sequence=self._next_sequence(), idle_screen=idle,
+        ))
+        self._profile_activation = context
+        future = self._engine.hydrate(
+            context.snapshot, request_id=context.request_id, deadline_ms=_HYDRATE_DEADLINE_MS,
+        )
+        self._track_future(future, "profile_hydrate", context)
+
+        def complete(result: Future[SceneEngineAck]) -> None:
+            if waiter.done():
+                return
+            if result.cancelled():
+                waiter.cancel()
+            elif (error := result.exception()) is not None:
+                waiter.set_exception(error)
+            else:
+                waiter.set_result(result.result())
+
+        future.add_done_callback(complete)
 
     def delete_scene_profile(
         self,
@@ -813,14 +865,92 @@ class SceneRuntimeController(QObject):
         self._track_future(future, "start", None)
         return future
 
-    @Slot()
-    def reload_yeartext(self) -> None:
-        """Notify the engine to re-read the year-text source image in place.
+    @Slot(str)
+    def request_idle_media(self, path: str) -> None:
+        """Prepare a session choice; publish it only after native acceptance."""
+        if self._engine is None or not self._engine_ready:
+            self._report_exception("idle_screen", SceneEngineNotReadyError("engine_not_ready"))
+            self.idle_media_failed.emit("engine_not_ready")
+            return
+        try:
+            self._idle_screen = replace(
+                self._idle_screen, revision=self._idle_screen.revision + 1, media_path=path,
+            )
+        except ValueError:
+            self._report_exception(
+                "idle_screen", SceneEngineCommandRejectedError("invalid_idle_screen"),
+            )
+            self.idle_media_failed.emit("invalid_idle_screen")
+            return
+        self._dispatch_idle_screen()
 
-        Called after the app re-renders the year-text PNG so a mid-session change
-        shows without a full re-hydrate. A no-op when no engine hosts the source."""
-        if self._engine is not None:
-            self._engine.reload_yeartext()
+    def set_yeartext_image(self, path: str, revision: int) -> None:
+        """Replay the rendered fallback explicitly, without foreground transport."""
+        if (path, revision) == (self._idle_screen.yeartext_image_path,
+                                self._idle_screen.yeartext_revision):
+            return
+        self._idle_screen = replace(
+            self._idle_screen, revision=self._idle_screen.revision + 1,
+            yeartext_image_path=path, yeartext_revision=revision,
+        )
+        self._dispatch_idle_screen()
+
+    def _dispatch_idle_screen(self) -> None:
+        if (self._engine is None or not self._engine_ready
+                or self._hydrate_in_flight is not None or self._profile_activation is not None
+                or self._idle_applied_revision == self._idle_screen.revision):
+            return
+        if self._idle_in_flight is not None and self._idle_in_flight[4] == self._idle_screen:
+            return
+        context = (new_identity(), self._next_sequence(), self._engine_document_revision,
+                   self._process_generation, self._idle_screen)
+        self._idle_in_flight = context
+        future = self._engine.set_idle_screen(
+            context[4], request_id=context[0], sequence=context[1],
+            deadline_ms=_IDLE_DEADLINE_MS,
+        )
+        self._track_future(future, "idle_screen", context, queued=True)
+
+    def _finish_idle_screen(self, context: object, result: object, error: object) -> None:
+        if context != self._idle_in_flight or self._idle_in_flight is None:
+            return
+        request_id, sequence, revision, generation, state = self._idle_in_flight
+        self._idle_in_flight = None
+        if generation != self._process_generation or not self._engine_ready:
+            return
+        if error is None:
+            try:
+                ack = self._validated_ack(result, request_id=request_id,
+                                          sequence=sequence, document_revision=revision)
+                if not ack.applied:
+                    error = SceneEngineCommandRejectedError(ack.error_code)
+            except Exception as exc:  # noqa: BLE001 - engine response boundary
+                error = exc
+        if error is not None:
+            if state == self._idle_screen:
+                self._report_exception("idle_screen", error)
+                self.idle_media_failed.emit(self._last_engine_error_code)
+                # A superseded candidate may already be on the sidecar. Restore
+                # the last choice published to the UI if the latest one fails.
+                self._idle_screen = replace(
+                    self._idle_screen, revision=self._idle_screen.revision + 1,
+                    media_path=self._projection.idle_media_path,
+                )
+                if state.media_path == self._projection.idle_media_path:
+                    self._idle_applied_revision = self._idle_screen.revision
+            self._dispatch_idle_screen()
+            self._dispatch_profile_after_idle()
+            if self._hydrate_dirty:
+                self._hydrate_if_ready()
+            return
+        self._idle_applied_revision = state.revision
+        if state == self._idle_screen:
+            self._projection.set_idle_media_path(state.media_path)
+            self.idle_media_applied.emit(state.media_path)
+        self._dispatch_idle_screen()
+        self._dispatch_profile_after_idle()
+        if self._hydrate_dirty:
+            self._hydrate_if_ready()
 
     @Slot(object)
     def set_content_ingress(self, descriptor: FrameChannelDescriptor | None) -> None:
@@ -1126,6 +1256,9 @@ class SceneRuntimeController(QObject):
         )
 
     def stop_engine(self) -> None:
+        if self._profile_idle_waiter is not None:
+            self._profile_idle_waiter.cancel()
+            self._profile_idle_waiter = None
         self._ready_video_epoch = None
         self._take_reconciliation_required.clear()
         if self._profile_activation is not None:
@@ -1215,7 +1348,15 @@ class SceneRuntimeController(QObject):
         self._hydrate_dirty = False
         self._engine_document_revision = 0
         self._failed_takes.clear()
-        self._clear_source_health()
+        profile = self._profile_activation
+        target_source_ids = {source.id for source in self._documents.document.sources}
+        retained_health = (
+            {source_id: event for source_id, event in profile.source_health.items()
+             if source_id in target_source_ids}
+            if self._committing_hydrated_profile and profile is not None
+            else None
+        )
+        self._clear_source_health(retained=retained_health)
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._observed_document = self._documents.document
         self._layer_geometry_in_flight = None
@@ -1324,6 +1465,17 @@ class SceneRuntimeController(QObject):
         if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
+            # Only fresh events from a dispatched profile belong to its commit.
+            # Record before deduplication: a new source may reuse an old ID and
+            # report the same value without inheriting that source's old cache.
+            profile = self._profile_activation
+            if self._engine_ready and profile is not None and self._profile_idle_waiter is None and any(
+                source.id == event.source_id for source in profile.snapshot.document.sources
+            ):
+                if event.status is SourceHealthStatus.STOPPED:
+                    profile.source_health.pop(event.source_id, None)
+                else:
+                    profile.source_health[event.source_id] = event
             previous = self._source_health.get(event.source_id)
             if event.status is SourceHealthStatus.STOPPED:
                 if previous is not None:
@@ -1332,6 +1484,20 @@ class SceneRuntimeController(QObject):
             elif previous != event:
                 self._source_health[event.source_id] = event
                 self.source_health_changed.emit(event.source_id)
+                # Hydration publishes source health before its ACK commits the
+                # target collection. Classify against the dispatched snapshot;
+                # a profile staged behind idle preparation is not dispatched yet.
+                profile = self._profile_activation
+                health_document = (
+                    profile.snapshot.document
+                    if profile is not None and self._profile_idle_waiter is None
+                    else self._documents.document
+                )
+                if event.status is SourceHealthStatus.FAILED and any(
+                    source.id == event.source_id and source.kind is SourceKind.IDLE_SCREEN
+                    for source in health_document.sources
+                ):
+                    self.idle_media_failed.emit(event.error_code)
             return
         if not isinstance(event, EngineHealthEvent) or not self._engine_started:
             return
@@ -1343,6 +1509,8 @@ class SceneRuntimeController(QObject):
             generation_changed = health.process_generation != self._process_generation
             was_ready = self._engine_ready
             if generation_changed:
+                self._clear_source_health()
+                self._reset_idle_update()
                 self._ready_video_epoch = None
                 self._cancel_all_pending(cancel_native=False)
                 self._failed_takes.clear()
@@ -1493,6 +1661,9 @@ class SceneRuntimeController(QObject):
     def _hydrate_if_ready(self) -> None:
         if self._engine is None or not self._engine_ready:
             return
+        if self._idle_in_flight is not None:
+            self._hydrate_dirty = True
+            return
         if self._pending:
             self._hydrate_dirty = True
             return
@@ -1530,6 +1701,7 @@ class SceneRuntimeController(QObject):
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
             window_targets=self._combined_window_targets(),
+            idle_screen=self._idle_screen,
         )
         context = (request_id, snapshot)
         self._hydrate_in_flight = context
@@ -1816,6 +1988,9 @@ class SceneRuntimeController(QObject):
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
+        if operation == "idle_screen":
+            self._finish_idle_screen(context, result, error)
+            return
         if (
             (operation == "prepare" or operation == "take" and error is not None)
             and isinstance(context, tuple)
@@ -1919,6 +2094,7 @@ class SceneRuntimeController(QObject):
             return
         self._set_last_engine_error_code("")
         self._engine_document_revision = snapshot.document.revision
+        self._idle_applied_revision = snapshot.idle_screen.revision
         self._failed_takes.clear()
         self._set_applied_scenes(snapshot.active_scenes)
         # Hydration records routes, not a committed content epoch. Restore the
@@ -1948,6 +2124,7 @@ class SceneRuntimeController(QObject):
             self._dispatch_layer_geometry()
             self.operational_state_changed.emit()
             self._schedule_next_take()
+            self._dispatch_idle_screen()
             return
         self._committing_hydrated_profile = True
         try:
@@ -1958,6 +2135,7 @@ class SceneRuntimeController(QObject):
             self._profile_preview_scene_id = None
         self._set_last_engine_error_code("")
         self._engine_document_revision = context.snapshot.document.revision
+        self._idle_applied_revision = context.snapshot.idle_screen.revision
         self._failed_takes.clear()
         self._observed_graph_record = scene_engine_graph_signature(context.snapshot.document)
         self._set_applied_scenes(context.snapshot.active_scenes)
@@ -1968,6 +2146,7 @@ class SceneRuntimeController(QObject):
             self._workspace.delete_collection(delete_collection_id)
         self.operational_state_changed.emit()
         self._schedule_next_take()
+        self._dispatch_idle_screen()
 
     def _fail_profile_activation(self, context: object, error: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -1984,6 +2163,7 @@ class SceneRuntimeController(QObject):
         self._dispatch_layer_geometry()
         self.operational_state_changed.emit()
         self._schedule_next_take()
+        self._dispatch_idle_screen()
 
     def _handle_prepared(self, context: object, result: object) -> None:
         bus_id, expected = _context_tuple(context, 2, "prepare")
@@ -2372,6 +2552,7 @@ class SceneRuntimeController(QObject):
             self._hydrate_if_ready()
             return
         self._dispatch_layer_geometry()
+        self._dispatch_idle_screen()
         self.operational_state_changed.emit()
         self._schedule_next_take()
 
@@ -2578,9 +2759,20 @@ class SceneRuntimeController(QObject):
             return
         self._engine_ready = ready
         if not ready:
+            self._reset_idle_update()
+            self._dispatch_profile_after_idle()
             self.editor_source_preview_invalidated.emit()
         self.engine_ready_changed.emit(ready)
         self.operational_state_changed.emit()
+
+    def _reset_idle_update(self) -> None:
+        self._idle_in_flight = None
+        self._idle_applied_revision = -1
+        if self._idle_screen.media_path != self._projection.idle_media_path:
+            self._idle_screen = replace(
+                self._idle_screen, revision=self._idle_screen.revision + 1,
+                media_path=self._projection.idle_media_path,
+            )
 
     def _set_last_engine_error_code(self, error_code: str) -> None:
         if self._last_engine_error_code == error_code:
@@ -2588,9 +2780,13 @@ class SceneRuntimeController(QObject):
         self._last_engine_error_code = error_code
         self.operational_state_changed.emit()
 
-    def _clear_source_health(self) -> None:
-        source_ids = tuple(self._source_health)
-        self._source_health.clear()
+    def _clear_source_health(
+        self, *, retained: Mapping[str, SourceHealthEvent] | None = None,
+    ) -> None:
+        source_ids = self._source_health.keys() | (retained or {}).keys()
+        self._source_health = dict(retained or {})
+        if retained is None and self._profile_activation is not None:
+            self._profile_activation.source_health.clear()
         for source_id in source_ids:
             self.source_health_changed.emit(source_id)
 

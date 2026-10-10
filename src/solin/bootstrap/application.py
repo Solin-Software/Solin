@@ -141,6 +141,7 @@ def _scene_seed_names():
     from solin.core.scenes.presets import SceneSeedNames
 
     translate = lambda source: QCoreApplication.translate("_Scenes", source)
+    idle_screen_name = QCoreApplication.translate("_Scenes", "Idle screen")
     return SceneSeedNames(
         content_source=translate("Current Solin content"),
         default_camera_source=translate("Default camera"),
@@ -152,9 +153,9 @@ def _scene_seed_names():
         content_layer=translate("Content"),
         camera_layer=translate("Camera"),
         background_layer=translate("Background"),
-        yeartext_source=translate("Year text"),
+        idle_screen_source=idle_screen_name,
         default_scene=translate("Default"),
-        yeartext_layer=translate("Year text"),
+        idle_screen_layer=idle_screen_name,
     )
 
 

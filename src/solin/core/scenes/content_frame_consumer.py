@@ -4,7 +4,8 @@ Given a ``content_ingress`` :class:`FrameChannelDescriptor`, this opens the
 shared-memory channel (:mod:`content_frame_channel`), creates a
 ``solin_frame_source`` in the libobs runtime, and pumps BGRA frames from the
 channel into that source on a background thread so the app's rendered content
-(yeartext, timers, browser, framed images) composites like any other source.
+(timers, browser, framed images) composites like any other source. The idle
+screen has a separate session-owned native producer.
 
 Each presentation epoch has its own frame source. New epochs cannot overwrite
 pixels still used by an outgoing scene. The consumer owns the sources; the

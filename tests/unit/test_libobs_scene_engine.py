@@ -1225,83 +1225,112 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     assert source.settings["input"] == "rtsp://host/stream"
 
 
-# ── year-text source (rendered PNG shown as an image source) ─────────────────
-
-
-_YEARTEXT_DOC = {
-    "sources": [
-        {"id": "yt", "type": "yeartext", "name": "Year text", "configuration": {}},
-    ],
+# Shared idle source is borrowed, rather than recreated per layer/hydrate.
+_IDLE_DOC = {
+    "sources": [{"id": "idle", "type": "idle_screen", "name": "Idle screen", "configuration": {}}],
     "scenes": [
-        {"id": "default", "layers": [
-            {"id": "l1", "source_id": "yt", "visible": True,
-             "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
-        ]},
+        {"id": "default", "layers": [{"id": "l1", "source_id": "idle", "visible": True}]},
+        {"id": "custom", "layers": [{"id": "l2", "source_id": "idle", "visible": True}]},
     ],
 }
 
 
-def test_yeartext_layer_builds_an_image_source_from_the_rendered_png(tmp_path, monkeypatch):
+def test_idle_layers_borrow_one_stable_source_across_hydration():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+    runtime = _CompositingRuntime()
+    shared = _FakeColorSource("scene", "shared-idle", {"width": 1920, "height": 1080})
+    graph = LibobsSceneGraph(runtime, idle_source=lambda: shared)
+    graph.hydrate(_IDLE_DOC, {"virtual_camera": "default"})
+    assert graph.scene_uses_idle_source("default")
+    assert graph.scene_uses_idle_source("custom")
+    assert all(scene.items[0].source is shared for scene in runtime.scenes)
+    graph.hydrate(_IDLE_DOC, {"virtual_camera": "custom"})
+    assert not shared.released
+    graph.clear()
+    assert not shared.released
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.parametrize("visible", [True, False])
+def test_idle_demand_index_follows_composed_visible_layers_and_nested_references(enabled, visible):
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 
-    png = tmp_path / "yeartext.png"
-    png.write_bytes(b"not-a-real-png")  # the fake never decodes it
-    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
     runtime = _CompositingRuntime()
-    graph = LibobsSceneGraph(runtime)
-    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
+    shared = _FakeColorSource("scene", "shared-idle", {"width": 1920, "height": 1080})
+    graph = LibobsSceneGraph(runtime, idle_source=lambda: shared)
+    document = {
+        "sources": [
+            {"id": "idle", "type": "idle_screen", "enabled": enabled, "configuration": {}},
+            {"id": "nested", "type": "scene_reference", "enabled": enabled,
+             "configuration": {"target_scene_id": "child"}},
+        ],
+        "scenes": [
+            {"id": "child", "layers": [{"id": "idle-layer", "source_id": "idle",
+                                         "visible": visible}]},
+            {"id": "parent", "layers": [{"id": "reference", "source_id": "nested"}]},
+            {"id": "hidden-parent", "layers": [{"id": "hidden-reference",
+                                                  "source_id": "nested", "visible": False}]},
+        ],
+    }
+    try:
+        graph.hydrate(document, {"virtual_camera": "parent"})
+        assert graph.scene_uses_idle_source("child") is visible
+        assert graph.scene_uses_idle_source("parent") is visible
+        assert not graph.scene_uses_idle_source("hidden-parent")
+        assert bool(runtime.scenes[0].items) is visible
+        if visible:
+            assert runtime.scenes[0].items[0].source is shared
+            assert runtime.scenes[1].items[0].source == runtime.scenes[0].as_source()
+    finally:
+        graph.clear()
+    assert not shared.released
 
-    image_sources = [s for s in runtime.sources if s.kind == "image_source"]
-    assert len(image_sources) == 1
-    assert image_sources[0].settings["file"] == str(png)
 
-
-def test_yeartext_reload_rereads_the_png_in_place(tmp_path, monkeypatch):
+def test_idle_demand_index_ignores_unavailable_idle_producer_and_its_ancestors():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 
-    png = tmp_path / "yeartext.png"
-    png.write_bytes(b"v1")
-    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
     runtime = _CompositingRuntime()
     graph = LibobsSceneGraph(runtime)
-    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
+    try:
+        graph.hydrate({
+            "sources": [
+                {"id": "idle", "type": "idle_screen", "configuration": {}},
+                {"id": "reference", "type": "scene_reference",
+                 "configuration": {"target_scene_id": "child"}},
+            ],
+            "scenes": [
+                {"id": "child", "layers": [{"id": "idle-layer", "source_id": "idle"}]},
+                {"id": "parent", "layers": [{"id": "nested-layer", "source_id": "reference"}]},
+            ],
+        }, {"virtual_camera": "parent"})
+        assert runtime.scenes[0].items  # unavailable idle has a visible placeholder
+        assert not graph.scene_uses_idle_source("child")
+        assert not graph.scene_uses_idle_source("parent")
+    finally:
+        graph.clear()
 
-    assert graph.reload_yeartext() is True
-    image_source = next(s for s in runtime.sources if s.kind == "image_source")
-    assert image_source.settings["file"] == str(png)  # re-applied the file
 
-
-def test_yeartext_layer_without_a_rendered_png_falls_back_to_placeholder(monkeypatch):
-    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
-
-    monkeypatch.delenv("SOLIN_YEARTEXT_IMAGE", raising=False)
-    runtime = _CompositingRuntime()
-    graph = LibobsSceneGraph(runtime)
-    graph.hydrate(_YEARTEXT_DOC, {"virtual_camera": "default"})
-
-    # No PNG yet → no image source; the layer takes a colour placeholder instead.
-    assert not [s for s in runtime.sources if s.kind == "image_source"]
-    assert graph.reload_yeartext() is False  # nothing to refresh
-
-
-def test_engine_reload_yeartext_notification_rereads_the_source(tmp_path, monkeypatch):
-    png = tmp_path / "yeartext.png"
-    png.write_bytes(b"v1")
-    monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(png))
+def test_idle_updates_are_acknowledged_independently_of_the_scene_graph():
+    from solin.core.scenes.idle import IdleScreenState
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
-    engine.handle(_request("hydrate", {
-        "document": _YEARTEXT_DOC,
-        "active_scenes": {"virtual_camera": "default"},
-    }))
-    image_source = next(s for s in runtime.sources if s.kind == "image_source")
-    image_source.settings["file"] = "STALE"  # simulate the PNG being re-rendered
-
-    result = engine.handle(_request("reload_yeartext", {}))
-
-    assert result is None  # a fire-and-forget notification — no response
-    assert image_source.settings["file"] == str(png)  # re-read in place
+    updates = []
+    engine._idle_source = types.SimpleNamespace(
+        admit=lambda _state: None,
+        apply=lambda state, deadline: updates.append(state), set_demand=lambda _demand: None,
+    )
+    state = IdleScreenState(revision=1, media_path="idle.mp4")
+    request = replace(
+        _request("set_idle_screen", {"idle_screen": state.to_record()}),
+        deadline_monotonic_ms=int(time.monotonic() * 1000) + 1000,
+    )
+    response = engine.handle(request)
+    assert _ack_from_envelope(response).applied
+    assert updates == [state]
+    assert runtime.scenes == []
+    engine._idle_source = None
+    engine.shutdown()
 
 
 # ── live layer geometry (preview_layer_geometry, no re-hydrate) ──────────────

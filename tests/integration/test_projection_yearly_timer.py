@@ -181,11 +181,11 @@ def test_immediate_countdown_clear_always_requests_a_repaint():
     assert widget.update_requests >= 1
 
 
-def test_new_projection_cancels_pending_yearly_page_fade_out():
+def test_new_projection_cancels_pending_yearly_page_fade_out(request):
     view = _ProjectionViewHarness()
+    request.addfinalizer(lambda: dispose_widget(view))
     view.resize(1280, 720)
     view.set_yearly_text("Annual text", "Reference")
-    view._has_idle_media = True
     view._timer_presentation = MediaCountdownPresentation.YEARLY_TEXT
     view._yearly_widget.set_countdown(55, 90)
     view._stack.setCurrentIndex(view._PAGE_YEARLY)
@@ -199,7 +199,9 @@ def test_new_projection_cancels_pending_yearly_page_fade_out():
     assert view._accept_video_frames is True
     assert view._yearly_widget._countdown_remaining is None
     assert view._yearly_opacity.opacity() == 1.0
-    assert view._stack.currentIndex() != view._PAGE_IDLE_MEDIA
+    # Arming video preserves the current page until a usable frame arrives.
+    assert view._stack.currentIndex() == view._PAGE_YEARLY
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Stopped
 
 
 def test_new_untransformed_image_resets_zoom_before_clear_fade_finishes():
@@ -263,3 +265,61 @@ def test_native_media_output_never_runs_the_qt_media_fade() -> None:
     assert view.native_output_active
     assert not view.native_video_surface.isHidden()
     assert view._stack.currentIndex() == view._PAGE_MEDIA
+
+
+
+def test_static_yearly_fallback_stays_visible_on_repeated_idle_clear(request):
+    view = _ProjectionViewHarness()
+    request.addfinalizer(lambda: dispose_widget(view))
+    view.set_yearly_text("Annual text", "Reference")
+    finished = QSignalSpy(view._yearly_anim.finished)
+
+    view.clear()
+    view.clear()
+
+    assert view._stack.count() == 3
+    assert view._stack.currentWidget() is view._yearly_widget
+    assert view._yearly_opacity.opacity() == 1.0
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Stopped
+    assert finished.count() == 0
+
+
+def test_circular_timer_clear_fades_back_to_static_yearly_text(request):
+    view = _ProjectionViewHarness()
+    request.addfinalizer(lambda: dispose_widget(view))
+    view.set_yearly_text("Annual text", "Reference")
+    view.show_timer(30, 60, MediaCountdownPresentation.CIRCULAR)
+    view._timer_anim.setCurrentTime(view._timer_anim.duration())
+    assert view._stack.currentWidget() is view._proj_timer
+
+    view.clear()
+
+    assert view._timer_presentation is None
+    assert view._yearly_widget._countdown_remaining is None
+    assert view._stack.currentWidget() is view._yearly_widget
+    assert view._timer_anim.state() is QAbstractAnimation.State.Stopped
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Running
+    view._yearly_anim.setCurrentTime(view._YEARLY_FADE_IN_DURATION_MS // 2)
+    assert view._yearly_opacity.opacity() == 0.5
+    view._yearly_anim.setCurrentTime(view._YEARLY_FADE_IN_DURATION_MS)
+    assert view._yearly_opacity.opacity() == 1.0
+
+
+
+def test_native_renderer_unavailable_restores_static_yearly_fallback(request):
+    view = _ProjectionViewHarness()
+    request.addfinalizer(lambda: dispose_widget(view))
+    view.set_yearly_text("Annual text", "Reference")
+    view.set_native_output_active(True)
+    view.clear()
+    assert view._stack.currentWidget() is view._media_host
+
+    view.set_native_output_active(False)
+    view.clear()
+
+    assert view.native_video_surface.isHidden()
+    assert view._stack.currentWidget() is view._yearly_widget
+    assert view._yearly_widget._countdown_remaining is None
+    assert view._yearly_opacity.opacity() == 1.0
+    assert view._yearly_anim.state() is QAbstractAnimation.State.Stopped
+    assert view._media_anim.state() is QAbstractAnimation.State.Stopped

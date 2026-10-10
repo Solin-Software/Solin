@@ -23,6 +23,7 @@ from solin.core.scenes.model import (
     VideoPixelFormat,
 )
 from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackNativeState
+from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -378,12 +379,15 @@ class SceneEngineSnapshot:
     preview_egress: FrameChannelDescriptor | None = None
     program_egress: FrameChannelDescriptor | None = None
     window_targets: tuple[OutputWindowTarget, ...] = ()
+    idle_screen: IdleScreenState = IdleScreenState()
 
     def __post_init__(self) -> None:
         _identity(self.session_id, "engine session id")
         _non_negative_int(self.sequence, "engine sequence")
         if not isinstance(self.document, SceneDocument):
             raise ValueError("Snapshot document must be a SceneDocument")
+        if not isinstance(self.idle_screen, IdleScreenState):
+            raise ValueError("Invalid idle screen state")
         _validate_bus_pairs(self.active_scenes, value_type=str, field_name="active scenes")
         _validate_bus_pairs(
             self.render_enabled,
@@ -715,13 +719,10 @@ class SceneEngine(Protocol):
 
     def cancel_preparation(self, request_id: str) -> None: ...
 
-    def reload_yeartext(self) -> None:
-        """Ask the engine to re-read the year-text source image in place.
-
-        A fire-and-forget notification sent after the app re-renders the year-text
-        PNG so the change shows without a full re-hydrate. No-op on engines that
-        do not host a year-text source."""
-        ...
+    def set_idle_screen(
+        self, state: IdleScreenState, *, request_id: str, sequence: int,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
 
     def preview_layer_geometry(
         self,

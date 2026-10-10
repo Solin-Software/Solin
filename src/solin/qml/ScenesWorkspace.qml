@@ -971,8 +971,8 @@ Item {
         // already in THIS scene stay out of it.
         ScenesMenuItem {
             theme: root.theme
-            text: qsTr("Year text")
-            onTriggered: root.bridge.addYearText()
+            text: qsTr("Idle screen")
+            onTriggered: root.bridge.addIdleScreen()
         }
         // A camera already used by another scene belongs here: the device can only
         // be opened once, so the operator has to re-use the source rather than

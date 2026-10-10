@@ -170,3 +170,31 @@ def test_projection_session_delegates_monitor_ownership_to_allocation() -> None:
     session.confirm_media_assignment(screen)
     assert allocation.confirmed == [("DISPLAY2", OWNER_MEDIA)]
     assert allocation.owners["DISPLAY2"] == OWNER_MEDIA
+
+
+def test_idle_choice_has_separate_revision_without_replacing_presentation():
+    session = ProjectionSession()
+    session.set_state({"type": "video", "title": "Playing", "is_audio": False})
+    identity = (session.session_id, session.presentation_session_id)
+    state = dict(session.state)
+    published = []
+    session.subscribe(lambda: published.append((session.revision, session.idle_media_revision)))
+
+    session.set_idle_media_path("idle.mp4")
+    session.set_idle_media_path("idle.mp4")
+    session.set_idle_media_path("")
+
+    assert published == [(2, 1), (3, 2)]
+    assert (session.session_id, session.presentation_session_id) == identity
+    assert session.state == state
+    assert session.idle_media_path == ""
+
+
+def test_idle_choice_notifies_pipeline_in_order():
+    session = ProjectionSession()
+    published = []
+    session.subscribe(lambda: published.append(("content", session.idle_media_path)))
+    session.subscribe(lambda: published.append(("scenes", session.idle_media_path)))
+    session.subscribe(lambda: published.append(("surfaces", session.idle_media_path)))
+    session.set_idle_media_path("idle.png")
+    assert published == [("content", "idle.png"), ("scenes", "idle.png"), ("surfaces", "idle.png")]

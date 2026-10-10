@@ -44,11 +44,15 @@ class _Projection:
     def __init__(self) -> None:
         self.state = {"type": "idle"}
         self.session_id = 0
+        self.idle_media_path = ""
         self._listeners = set()
 
     def subscribe(self, listener):
         self._listeners.add(listener)
         return lambda: self._listeners.discard(listener)
+
+    def set_idle_media_path(self, path):
+        self.idle_media_path = path
 
     def set_type(self, state_type: str) -> None:
         self.state = {"type": state_type}

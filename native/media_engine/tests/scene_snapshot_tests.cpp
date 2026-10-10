@@ -124,7 +124,7 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     return {
         {"document",
          {
-             {"schema_version", 10U},
+             {"schema_version", 11U},
              {"document_id", "document-1"},
              {"revision", 7U},
              {"sources", std::move(sources)},
@@ -140,6 +140,8 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
         {"preview_egress", nullptr},
         {"program_egress", nullptr},
         {"window_targets", Json::array()},
+        {"idle_screen", {{"revision", 0U}, {"media_path", ""},
+                          {"yeartext_image_path", ""}, {"yeartext_revision", 0U}}},
     };
 }
 
@@ -157,7 +159,7 @@ void test_valid_snapshot_is_normalized_into_typed_graph_state() {
 }
 
 void test_unsupported_schema_versions_are_rejected() {
-    for (const auto version : {9U, 11U}) {
+    for (const auto version : {10U, 12U}) {
         auto payload = valid_payload();
         payload["document"]["schema_version"] = version;
         expect_rejected(
@@ -166,6 +168,32 @@ void test_unsupported_schema_versions_are_rejected() {
             },
             "older and future scene schemas are rejected at the native boundary");
     }
+}
+
+void test_idle_source_is_typed_and_has_no_per_source_configuration() {
+    auto payload = valid_payload();
+    payload["document"]["sources"].push_back(
+        source("solin.idle.current", "idle_screen", Json::object()));
+    const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
+    expect(snapshot.sources.back().kind == solin::media_engine::SceneSourceKind::idle_screen,
+           "idle content is a distinct source kind");
+    expect(std::holds_alternative<std::monostate>(snapshot.sources.back().configuration),
+           "idle media configuration belongs to the session, not a scene source");
+
+    payload["document"]["sources"].back()["configuration"]["media_path"] = "idle.mp4";
+    expect_rejected(
+        [&payload] {
+            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+        },
+        "idle source rejects duplicated session configuration");
+
+    payload["document"]["sources"].back()["configuration"] = Json::object();
+    payload["document"]["sources"].back()["type"] = "yeartext";
+    expect_rejected(
+        [&payload] {
+            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+        },
+        "persisted yeartext records must be migrated by the application");
 }
 
 void test_program_default_role_may_be_unassigned() {
@@ -179,6 +207,34 @@ void test_program_default_role_may_be_unassigned() {
     expect(snapshot.outputs[0].default_scene_id.empty() &&
                snapshot.outputs[1].default_scene_id.empty(),
            "the removable Program default role remains unassigned natively");
+}
+
+void test_idle_hydration_state_rejects_invalid_metadata() {
+    for (const auto& revision : {Json(-1), Json(true), Json(1.5)}) {
+        auto payload = valid_payload();
+        payload["idle_screen"]["revision"] = revision;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "idle revisions are non-negative integer values");
+    }
+    for (const auto path : {"https://example.org/idle.mp4", "idle\n.mp4"}) {
+        auto payload = valid_payload();
+        payload["idle_screen"]["media_path"] = path;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "idle state contains local paths without control characters");
+    }
+    auto payload = valid_payload();
+    payload["idle_screen"]["decoder"] = "alternate";
+    expect_rejected(
+        [&payload] {
+            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+        },
+        "unknown idle state fields are rejected");
 }
 
 void test_unknown_nested_fields_are_rejected() {
@@ -381,6 +437,8 @@ void test_local_camera_rejects_invalid_native_frame_rates() {
 int main() {
     test_valid_snapshot_is_normalized_into_typed_graph_state();
     test_unsupported_schema_versions_are_rejected();
+    test_idle_source_is_typed_and_has_no_per_source_configuration();
+    test_idle_hydration_state_rejects_invalid_metadata();
     test_program_default_role_may_be_unassigned();
     test_unknown_nested_fields_are_rejected();
     test_unicode_names_use_character_limits_instead_of_wire_byte_limits();

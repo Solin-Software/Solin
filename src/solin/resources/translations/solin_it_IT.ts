@@ -6165,6 +6165,10 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <source>Scenes</source>
         <translation>Scene</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Schermata inattiva</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Apri cartella</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Schermata inattiva</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
 {path}</source>
         <translation type="vanished">Salvato in:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Schermata inattiva</translation>
     </message>
 </context>
 </TS>

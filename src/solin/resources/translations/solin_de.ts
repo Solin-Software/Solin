@@ -6165,6 +6165,10 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <source>Scenes</source>
         <translation>Szenen</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ruhebild</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Ordner öffnen</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ruhebild</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
 {path}</source>
         <translation type="vanished">Gespeichert unter:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Ruhebild</translation>
     </message>
 </context>
 </TS>

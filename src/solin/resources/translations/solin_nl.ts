@@ -6165,6 +6165,10 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <source>Scenes</source>
         <translation>Scènes</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Stand-byscherm</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7194,6 +7198,10 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Map openen</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Stand-byscherm</translation>
     </message>
 </context>
 <context>
@@ -11514,6 +11522,13 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 {path}</source>
         <translation type="vanished">Opgeslagen in:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Stand-byscherm</translation>
     </message>
 </context>
 </TS>

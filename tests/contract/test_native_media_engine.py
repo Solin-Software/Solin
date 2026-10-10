@@ -46,6 +46,20 @@ def test_python_and_native_scene_schema_versions_match() -> None:
     assert int(version.group(1)) == SCHEMA_VERSION
 
 
+def test_native_idle_contract_is_parsed_but_not_rendered() -> None:
+    parser = _read("native/media_engine/src/scene_snapshot.cpp")
+    graph = _read("native/media_engine/src/scene_graph.cpp")
+    control = _read("native/media_engine/src/control_protocol.cpp")
+
+    assert 'kind == "idle_screen"' in parser
+    assert 'require_exact_fields(configuration, {}, "idle screen configuration")' in parser
+    assert 'payload.at("idle_screen")' in parser
+    assert "SceneSourceKind::idle_screen" in graph
+    assert 'request.message_type == "set_idle_screen"' in control
+    assert '"Idle screen sources require the libobs backend"' in graph
+    assert '"Idle screen sources require the libobs backend"' in control
+
+
 def test_native_dependency_downloads_are_versioned_and_digest_pinned() -> None:
     cmake = _read("native/media_engine/CMakeLists.txt")
     virtual_camera_cmake = _read("native/media_engine/cmake/SolinVirtualCameraFilter.cmake")

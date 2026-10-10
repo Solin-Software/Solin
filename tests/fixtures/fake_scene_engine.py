@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
@@ -14,6 +15,7 @@ from solin.core.scenes.ipc_protocol import (  # noqa: E402
     read_envelope,
     write_envelope,
 )
+from solin.core.scenes.idle import IdleScreenState  # noqa: E402
 
 
 def _respond(request: SceneIpcEnvelope, message_type: str, payload: dict[str, object]) -> None:
@@ -38,6 +40,29 @@ def _ack(request: SceneIpcEnvelope) -> None:
         "ack",
         {"applied": True, "error_code": "", "error_message": ""},
     )
+
+
+def _idle_state(request: SceneIpcEnvelope) -> IdleScreenState | None:
+    try:
+        if request.message_type == "set_idle_screen" and set(request.payload) != {"idle_screen"}:
+            raise ValueError("Invalid idle screen command fields")
+        return IdleScreenState.from_record(request.payload.get("idle_screen"))
+    except ValueError:
+        _respond(request, "ack", {
+            "applied": False, "error_code": "invalid_idle_screen",
+            "error_message": "Invalid idle screen state",
+        })
+        return None
+
+
+def _record_idle(request: SceneIpcEnvelope, state: IdleScreenState, marker: Path | None) -> None:
+    if marker is not None:
+        with marker.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({
+                "message_type": request.message_type,
+                "document_revision": request.document_revision,
+                "idle_screen": state.to_record(),
+            }) + "\n")
 
 
 def main() -> int:
@@ -89,6 +114,9 @@ def main() -> int:
                 marker.write_text("crashed", encoding="utf-8")
                 return 71
         elif request.message_type == "hydrate":
+            state = _idle_state(request)
+            if state is None:
+                continue
             if mode == "slow_hydrate":
                 time.sleep(0.75)
             if mode == "reject_hydrate":
@@ -102,6 +130,8 @@ def main() -> int:
                     },
                 )
             else:
+                if mode == "idle_contract":
+                    _record_idle(request, state, marker)
                 _ack(request)
         elif request.message_type == "list_audio_devices":
             _respond(
@@ -326,7 +356,14 @@ def main() -> int:
             if mode == "ignore_heartbeat":
                 continue
             _respond(request, "heartbeat", {"monotonic_ms": int(time.monotonic() * 1000)})
-        elif request.message_type in {"cancel_preparation", "reload_yeartext"}:
+        elif request.message_type == "set_idle_screen":
+            state = _idle_state(request)
+            if state is None:
+                continue
+            if mode == "idle_contract":
+                _record_idle(request, state, marker)
+            _ack(request)
+        elif request.message_type == "cancel_preparation":
             continue  # fire-and-forget notifications — no response
         elif request.message_type == "stop":
             if mode == "ignore_stop":

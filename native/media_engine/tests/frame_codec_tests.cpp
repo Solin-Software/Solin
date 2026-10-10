@@ -147,6 +147,8 @@ void test_control_session_handshake_and_heartbeat() {
         {"preview_egress", nullptr},
         {"program_egress", nullptr},
         {"window_targets", nlohmann::json::array()},
+        {"idle_screen", {{"revision", 0U}, {"media_path", ""},
+                          {"yeartext_image_path", ""}, {"yeartext_revision", 0U}}},
     };
     const auto hydrated = session.handle(hydrate);
     expect(hydrated.response.has_value() && hydrated.response->message_type == "ack",
@@ -318,6 +320,8 @@ void test_control_session_dispatches_validated_graph_commands() {
         {"preview_egress", nullptr},
         {"program_egress", nullptr},
         {"window_targets", nlohmann::json::array()},
+        {"idle_screen", {{"revision", 0U}, {"media_path", ""},
+                          {"yeartext_image_path", ""}, {"yeartext_revision", 0U}}},
     };
     const auto hydrate_reply = session.handle(hydrate);
     expect(hydrated && hydrate_reply.response.has_value() &&
@@ -566,6 +570,30 @@ void test_program_recording_protocol_is_strict_and_atomic() {
     expect(stopped, "Program recording stop is dispatched");
 }
 
+void test_idle_update_reports_unsupported_without_applying_state() {
+    solin::media_engine::ControlSession session{"generation-1"};
+    static_cast<void>(session.handle(hello_envelope()));
+    auto request = hello_envelope();
+    request.message_type = "set_idle_screen";
+    request.sequence = 1U;
+    request.payload = {{"idle_screen", {{"revision", 1U}, {"media_path", "idle.mp4"},
+                                        {"yeartext_image_path", "annual.png"},
+                                        {"yeartext_revision", 1U}}}};
+    const auto result = session.handle(request);
+    expect(result.response.has_value() && result.response->message_type == "ack" &&
+               !result.response->payload.at("applied").get<bool>() &&
+               result.response->payload.at("error_code") == "source_not_implemented",
+           "native idle updates fail explicitly without an alternate decoder");
+    request.sequence = 2U;
+    request.payload["idle_screen"]["revision"] = -1;
+    try {
+        static_cast<void>(session.handle(request));
+        expect(false, "malformed idle revisions are rejected even without backend support");
+    } catch (const std::exception&) {
+        expect(true, "malformed idle revisions are rejected even without backend support");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -578,6 +606,7 @@ int main() {
     test_control_envelope_rejects_duplicate_keys();
     test_control_envelope_rejects_the_previous_protocol_generation();
     test_control_session_handshake_and_heartbeat();
+    test_idle_update_reports_unsupported_without_applying_state();
     test_control_session_dispatches_validated_graph_commands();
     test_transition_contract_rejects_invalid_and_legacy_payloads();
     test_program_recording_protocol_is_strict_and_atomic();

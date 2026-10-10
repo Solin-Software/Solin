@@ -3,7 +3,7 @@
 Used both directions of the libobs sidecar boundary:
 
 * **content ingress** — the app renders content that cannot be an
-  ``ffmpeg_source`` (yeartext, timers, the live browser, framed images) to BGRA
+  ``ffmpeg_source`` (timers, the live browser, framed images) to BGRA
   and the sidecar composites it (app = writer/creator, sidecar = reader).
 * **preview egress** — the sidecar renders a scene composite back for the
   editor preview (sidecar = writer, app = reader/creator).

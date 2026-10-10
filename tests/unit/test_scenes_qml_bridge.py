@@ -68,6 +68,10 @@ from tests.fixtures.editor_source_preview import EditorSourcePreview
 
 class _Projection:
     state = {"type": "idle"}
+    idle_media_path = ""
+
+    def set_idle_media_path(self, path):
+        self.idle_media_path = path
 
     def subscribe(self, _listener):
         return lambda: None
@@ -594,7 +598,7 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
     assert bridge.engineStatus == "Scene engine unavailable"
 
 
-def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
+def test_bridge_add_idle_screen_adds_a_full_size_layer_and_reuses_one_source(
     scene_bridge_factory,
 ) -> None:
     from solin.core.scenes.model import SourceKind
@@ -603,13 +607,13 @@ def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
     bridge.createScene("Talk")
     talk_id = bridge.selectedSceneId
 
-    bridge.addYearText()
+    bridge.addIdleScreen()
 
     scene = controller.document.scene(talk_id)
     assert len(scene.layers) == 1
     layer = scene.layers[0]
     source = controller.document.source(layer.source_id)
-    assert source.kind is SourceKind.YEARTEXT
+    assert source.kind is SourceKind.IDLE_SCREEN
     # full-size by default
     assert (layer.rect.x, layer.rect.y, layer.rect.width, layer.rect.height) == (
         0.0,
@@ -620,11 +624,49 @@ def test_bridge_add_year_text_adds_a_full_size_layer_and_reuses_one_source(
 
     # Adding the year text to another scene reuses the single global source.
     bridge.createScene("Consideration")
-    bridge.addYearText()
-    yeartext_sources = [
-        s for s in controller.document.sources if s.kind is SourceKind.YEARTEXT
+    bridge.addIdleScreen()
+    idle_screen_sources = [
+        s for s in controller.document.sources if s.kind is SourceKind.IDLE_SCREEN
     ]
-    assert len(yeartext_sources) == 1
+    assert len(idle_screen_sources) == 1
+
+
+def test_bridge_add_idle_creates_canonical_source_when_absent(scene_bridge_factory) -> None:
+    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
+
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    controller.documents.delete_source(IDLE_SCREEN_SOURCE_ID, cascade=True)
+    bridge.createScene("Talk")
+
+    bridge.addIdleScreen()
+
+    scene = controller.document.scene(bridge.selectedSceneId)
+    source = controller.document.source(IDLE_SCREEN_SOURCE_ID)
+    assert scene.layers[0].source_id == IDLE_SCREEN_SOURCE_ID
+    assert source.kind is SourceKind.IDLE_SCREEN
+    assert source.configuration.to_record() == {}
+    assert source.name == "Idle screen"
+    assert bridge.layersModel.get(0)["kind"] == "idle_screen"
+
+
+def test_bridge_add_idle_reuses_migrated_source_identity(scene_bridge_factory) -> None:
+    from solin.core.scenes.model import IdleScreenSourceConfig
+    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
+
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    controller.documents.delete_source(IDLE_SCREEN_SOURCE_ID, cascade=True)
+    source = SourceDefinition(
+        id="solin.yeartext.current", kind=SourceKind.IDLE_SCREEN,
+        name="Idle screen", configuration=IdleScreenSourceConfig(),
+    )
+    controller.documents.create_source(source)
+    bridge.createScene("Talk")
+
+    bridge.addIdleScreen()
+
+    scene = controller.document.scene(bridge.selectedSceneId)
+    assert scene.layers[0].source_id == source.id
+    assert [s.id for s in controller.document.sources if s.kind is SourceKind.IDLE_SCREEN] == [source.id]
 
 
 def test_bridge_preserves_enums_and_transform_contracts(scene_bridge_factory) -> None:

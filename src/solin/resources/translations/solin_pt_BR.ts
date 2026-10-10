@@ -6194,6 +6194,10 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <source>Choose a valid transition and duration.</source>
         <translation>Escolha uma transição e duração válidas.</translation>
     </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Tela de descanso</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6413,10 +6417,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
     <message>
         <source>Media</source>
         <translation>Mídia</translation>
-    </message>
-    <message>
-        <source>Year text</source>
-        <translation>Texto do ano</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -7231,6 +7231,10 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <location line="+8"/>
         <source>Open folder</source>
         <translation>Abrir pasta</translation>
+    </message>
+    <message>
+        <source>Idle screen</source>
+        <translation>Tela de descanso</translation>
     </message>
 </context>
 <context>
@@ -11559,6 +11563,13 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
 {path}</source>
         <translation type="vanished">Salvo em:
 {path}</translation>
+    </message>
+</context>
+<context>
+    <name>_Scenes</name>
+    <message>
+        <source>Idle screen</source>
+        <translation>Tela de descanso</translation>
     </message>
 </context>
 </TS>

@@ -36,9 +36,6 @@ SHARED_METHODS = [
     "_switch_to_idle_with_fade",
     "_switch_to_idle_immediately",
     "_stop_all_anims",
-    "set_idle_active",
-    "clear_idle",
-    "update_idle_image",
 ]
 
 
@@ -87,4 +84,3 @@ def test_page_indices_are_shared_constants():
     assert BaseProjectionView._PAGE_MEDIA == 0
     assert BaseProjectionView._PAGE_TIMER == 1
     assert BaseProjectionView._PAGE_YEARLY == 2
-    assert BaseProjectionView._PAGE_IDLE_MEDIA == 3

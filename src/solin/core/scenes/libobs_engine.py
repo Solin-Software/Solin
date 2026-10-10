@@ -54,10 +54,6 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
         # engine now, so this runs on every start and must not care.
         images_dir = Path(images_dir)
         os.environ["SOLIN_SCENE_IMAGES_DIR"] = str(images_dir)
-        # The app renders the styled year text to this PNG; the sidecar shows it as
-        # the "Year text" scene source. Exported before the content controller is
-        # built so the file exists by the first hydrate.
-        os.environ["SOLIN_YEARTEXT_IMAGE"] = str(images_dir / "__solin_yeartext__.png")
     return SubprocessSceneEngine(
         SceneEngineProcessConfig(
             executable=Path(sys.executable),
