@@ -64,7 +64,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-AppCopyright=Copyright (c) 2026 Alexsander. All rights reserved.
+AppCopyright=Copyright (c) 2026 Alexsander and contributors.
 
 ; Set the display name in Control Panel.
 UninstallDisplayName={#MyAppName}

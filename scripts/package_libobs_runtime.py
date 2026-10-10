@@ -569,6 +569,9 @@ def stage_runtime(
         raise LibobsPackagingError("The installed pylibobs distribution has no license notice.")
     for notice in license_files:
         _require_file(notice)
+    solin_notices = [Path(__file__).resolve().parents[1] / name for name in ("LICENSE", "NOTICE")]
+    for notice in solin_notices:
+        _require_file(notice)
     destination = application_dir / "pylibobs" / "_libs" / target_platform / architecture
     if not destination.resolve().is_relative_to(application_dir.resolve()):
         raise LibobsPackagingError("The runtime destination must stay inside the application.")
@@ -593,6 +596,10 @@ def stage_runtime(
     notices.mkdir(parents=True, exist_ok=True)
     for index, notice in enumerate(license_files):
         shutil.copy2(notice, notices / f"{index}-{notice.name}")
+    application_notices = application_dir / "licenses" / "solin"
+    application_notices.mkdir(parents=True, exist_ok=True)
+    for notice in solin_notices:
+        shutil.copy2(notice, application_notices / notice.name)
     if target_platform == "windows":
         # OBS locates these via the host executable, including read-only installs.
         for name in _WINDOWS_HELPERS:

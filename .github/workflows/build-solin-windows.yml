@@ -37,7 +37,7 @@ env:
   COMPANY_NAME: Solin Software
   PRODUCT_NAME: Solin
   FILE_DESCRIPTION: Solin - Audio and Video for Kingdom Hall meetings
-  COPYRIGHT: Copyright (c) 2026 Alexsander. All rights reserved.
+  COPYRIGHT: Copyright (c) 2026 Alexsander and contributors.
 
 jobs:
   build:

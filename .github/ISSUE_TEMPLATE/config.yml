@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: User guide
+    url: https://solinav.vercel.app/guide/
+    about: Setup and everyday use of Solin.
+  - name: Frequently asked questions
+    url: https://solinav.vercel.app/faq/
+    about: Answers to common questions about Solin.

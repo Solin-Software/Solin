@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="64" viewBox="0 0 220 64" role="img" aria-labelledby="title desc">
+  <title id="title">Download for Windows</title>
+  <desc id="desc">64-bit installer</desc>
+  <rect x="0.5" y="0.5" width="219" height="63" rx="12" fill="#101831" stroke="#3b4565"/>
+  <path d="M18 20h11v11H18zM31 20h11v11H31zM18 33h11v11H18zM31 33h11v11H31z" fill="#e6e9ff"/>
+  <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+    <text x="58" y="28" fill="#ffffff" font-size="16" font-weight="600">Windows</text>
+    <text x="58" y="47" fill="#c4cbe2" font-size="12">64-bit installer</text>
+  </g>
+  <path d="M199 23v13m-4-5 4 5 4-5m-9 11h10" fill="none" stroke="#b7b9ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
