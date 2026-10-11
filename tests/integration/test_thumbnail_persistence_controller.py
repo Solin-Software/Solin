@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 
-from PySide6.QtCore import QCoreApplication
+import pytest
+
+from PySide6.QtCore import QCoreApplication, QObject
 from PySide6.QtGui import QColor, QImage
 
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
@@ -25,9 +28,21 @@ def _wait_until(predicate, timeout: float = 3.0) -> None:
     QCoreApplication.processEvents()
 
 
-def test_image_is_encoded_and_atomically_published_off_the_gui_thread(tmp_path) -> None:
-    coordinator = MediaOperationCoordinator()
-    controller = ThumbnailPersistenceController(coordinator)
+@pytest.fixture
+def thumbnail_runtime(qt_object_owner: QObject) -> Iterator[ThumbnailPersistenceController]:
+    """Stop thumbnail workers before their Qt owner drains deferred destruction."""
+    coordinator = MediaOperationCoordinator(parent=qt_object_owner)
+    controller = ThumbnailPersistenceController(coordinator, parent=qt_object_owner)
+    try:
+        yield controller
+    finally:
+        assert coordinator.shutdown() == (), "Thumbnail workers did not stop during teardown"
+
+
+def test_image_is_encoded_and_atomically_published_off_the_gui_thread(
+    tmp_path, thumbnail_runtime: ThumbnailPersistenceController
+) -> None:
+    controller = thumbnail_runtime
     store = ThumbnailStore(tmp_path / "thumbs")
     image = QImage(32, 18, QImage.Format.Format_RGB32)
     image.fill(QColor("#336699"))
@@ -50,4 +65,3 @@ def test_image_is_encoded_and_atomically_published_off_the_gui_thread(tmp_path) 
     assert store.source_signature_path("media-1").read_text(encoding="utf-8") == (
         "100:200"
     )
-    coordinator.shutdown()
