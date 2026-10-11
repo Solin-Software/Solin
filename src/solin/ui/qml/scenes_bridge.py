@@ -41,7 +41,6 @@ from solin.core.scenes.engine import (
     SceneSourcePreview,
 )
 from solin.core.scenes.model import (
-    CONTENT_SOURCE_ID,
     BusId,
     CameraPreset,
     Crop,
@@ -67,10 +66,10 @@ from solin.core.scenes.model import (
     ViscaIpPtzBinding,
     ViscaSerialPtzBinding,
     ViscaTransport,
-    IdleScreenSourceConfig,
+    SolinContentConfig,
+    SolinContentMode,
     new_identity,
 )
-from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
 from solin.core.scenes.recording import (
     AudioDeviceDirection,
     AudioDeviceSelection,
@@ -101,7 +100,6 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
-    SourceKind.IDLE_SCREEN: "#EAB308",
 }
 
 
@@ -153,7 +151,6 @@ class ScenesBridge(QObject):
     documentGenerationChanged = Signal()
     framingChanged = Signal()
     _framing_result = Signal(object)
-    contentIdleChanged = Signal()
     pointerCursorEntered = Signal(str, int)
     pointerCursorChanged = Signal(str, int)
     pointerCursorExited = Signal(str)
@@ -220,7 +217,6 @@ class ScenesBridge(QObject):
             (controller.preview_egress_changed, self._runtime_changed),
             (controller.local_cameras_changed, self._runtime_changed),
             (controller.source_health_changed, self._runtime_changed),
-            (controller.content_playing_changed, self._on_content_playing_changed),
             (controller.editor_source_preview_invalidated, self._clear_framing_session),
         )
         for signal, handler in self._controller_connections:
@@ -300,16 +296,6 @@ class ScenesBridge(QObject):
     @Property(bool, notify=previewChanged)
     def previewAvailable(self) -> bool:
         return self._preview_available
-
-    @Property(bool, notify=contentIdleChanged)
-    def contentIdle(self) -> bool:
-        """Whether the content source has nothing to show right now.
-
-        Idle publishes a transparent frame, so a content layer draws nothing. The
-        canvas marks it with a media glyph rather than leaving an empty rectangle
-        the operator cannot tell from a broken source.
-        """
-        return not self._controller.content_is_playing
 
     @Property(int, notify=documentGenerationChanged)
     def documentGeneration(self) -> int:
@@ -392,7 +378,7 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def automationConfigured(self) -> bool:
-        return self._controller.documents.program_automation_configured
+        return self._controller.documents.media_automation_configured
 
     @Property(str, notify=changed)
     def outputStateLabel(self) -> str:
@@ -941,14 +927,6 @@ class ScenesBridge(QObject):
             self._preview_selected_scene()
 
     @Slot(str, bool)
-    def setDefaultScene(self, scene_id: str, enabled: bool) -> None:
-        self._run_edit(
-            lambda: self._controller.documents.set_program_default_scene(
-                scene_id if enabled else None
-            )
-        )
-
-    @Slot(str, bool)
     def setMediaScene(self, scene_id: str, enabled: bool) -> None:
         self._run_edit(
             lambda: self._controller.documents.set_program_media_scene(
@@ -1036,24 +1014,21 @@ class ScenesBridge(QObject):
 
     @Slot()
     def addContentSource(self) -> None:
-        self._add_source_layer(CONTENT_SOURCE_ID)
-
-    @Slot()
-    def addIdleScreen(self) -> None:
-        # All layers share the session's idle content. Reuse a migrated source ID
-        # when available; new documents use the canonical identity.
         document = self._controller.document
         source = next(
             (candidate for candidate in document.sources
-             if candidate.kind is SourceKind.IDLE_SCREEN),
+             if candidate.kind is SourceKind.SOLIN_CONTENT
+             and isinstance(candidate.configuration, SolinContentConfig)
+             and candidate.configuration.mode is SolinContentMode.PRESENTATION
+             and candidate.enabled),
             None,
         )
         if source is None:
             source = SourceDefinition(
-                id=IDLE_SCREEN_SOURCE_ID,
-                kind=SourceKind.IDLE_SCREEN,
-                name=self.tr("Idle screen"),
-                configuration=IdleScreenSourceConfig(),
+                id=new_identity(),
+                kind=SourceKind.SOLIN_CONTENT,
+                name=self.tr("Solin Content"),
+                configuration=SolinContentConfig(mode=SolinContentMode.PRESENTATION),
             )
             if not self._run_edit(lambda: self._controller.documents.create_source(source)):
                 return
@@ -2014,11 +1989,6 @@ class ScenesBridge(QObject):
     def _runtime_changed(self, _value: object = None) -> None:
         self._refresh_models()
 
-    def _on_content_playing_changed(self, _playing: bool = False) -> None:
-        if self._closed:
-            return
-        self.contentIdleChanged.emit()
-
     def _on_preview_frame(self, scene_id: str, image: object) -> None:
         if (
             self._closed
@@ -2041,14 +2011,11 @@ class ScenesBridge(QObject):
             return
         document = self._controller.document
         self._document_id = document.document_id
-        default_id = self._controller.documents.program_default_scene_id
         media_id = self._controller.documents.program_media_scene_id
         live_id = self._controller.applied_scene(BusId.VIRTUAL_CAMERA)
         scene_records = []
         for scene in document.scenes:
             roles = []
-            if scene.id == default_id:
-                roles.append(self.tr("Default"))
             if scene.id == media_id:
                 roles.append(self.tr("Media"))
             if scene.id == live_id:
@@ -2061,7 +2028,6 @@ class ScenesBridge(QObject):
                     "id": scene.id,
                     "name": scene.name,
                     "metadata": " · ".join(roles),
-                    "default": scene.id == default_id,
                     "media": scene.id == media_id,
                     "live": scene.id == live_id,
                     "transition_override": override is not None,
@@ -2249,7 +2215,10 @@ class ScenesBridge(QObject):
         document = self._controller.document
         source = document.source(source_id)
         scene = self._selected_scene()
-        contains_content = any(layer.source_id == CONTENT_SOURCE_ID for layer in scene.layers)
+        contains_content = any(
+            document.source(layer.source_id).kind is SourceKind.SOLIN_CONTENT
+            for layer in scene.layers
+        )
         rect = (
             NormalizedRect(x=0.72, y=0.68, width=0.25, height=0.25)
             if contains_content

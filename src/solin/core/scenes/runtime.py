@@ -31,8 +31,8 @@ class SceneRuntimeStore(Protocol):
 @dataclass(frozen=True, slots=True)
 class OutputRuntimeState:
     bus_id: BusId
+    base_scene_id: str
     mode: OutputMode = OutputMode.AUTO
-    manual_scene_id: str = ""
     enabled: bool = False
 
     def __post_init__(self) -> None:
@@ -40,10 +40,8 @@ class OutputRuntimeState:
             raise SceneValidationError("Invalid runtime output bus")
         if not isinstance(self.mode, OutputMode):
             raise SceneValidationError("Invalid runtime output mode")
-        if not isinstance(self.manual_scene_id, str) or len(self.manual_scene_id) > 128:
-            raise SceneValidationError("Invalid runtime manual scene id")
-        if self.mode is OutputMode.MANUAL and not self.manual_scene_id:
-            raise SceneValidationError("Manual runtime mode requires a scene")
+        if not isinstance(self.base_scene_id, str) or not self.base_scene_id or len(self.base_scene_id) > 128:
+            raise SceneValidationError("Invalid runtime base scene id")
         if not isinstance(self.enabled, bool):
             raise SceneValidationError("Runtime output enabled must be a boolean")
 
@@ -51,7 +49,7 @@ class OutputRuntimeState:
         return {
             "bus_id": self.bus_id.value,
             "mode": self.mode.value,
-            "manual_scene_id": self.manual_scene_id,
+            "base_scene_id": self.base_scene_id,
             "enabled": self.enabled,
         }
 
@@ -60,21 +58,21 @@ class OutputRuntimeState:
         data = _strict_mapping(
             raw,
             field_name="runtime output",
-            allowed_keys={"bus_id", "mode", "manual_scene_id", "enabled"},
+            allowed_keys={"bus_id", "mode", "base_scene_id", "enabled"},
         )
         try:
             bus_id = BusId(data.get("bus_id"))
             mode = OutputMode(data.get("mode", OutputMode.AUTO.value))
         except (TypeError, ValueError) as exc:
             raise SceneValidationError("Invalid runtime output enum") from exc
-        manual_scene_id = data.get("manual_scene_id", "")
+        base_scene_id = data.get("base_scene_id", "")
         enabled = data.get("enabled", False)
-        if not isinstance(manual_scene_id, str) or not isinstance(enabled, bool):
+        if not isinstance(base_scene_id, str) or not isinstance(enabled, bool):
             raise SceneValidationError("Invalid runtime output value")
         return cls(
             bus_id=bus_id,
             mode=mode,
-            manual_scene_id=manual_scene_id,
+            base_scene_id=base_scene_id,
             enabled=enabled,
         )
 
@@ -84,7 +82,7 @@ class SceneRuntimeState:
     document_id: str
     revision: int
     outputs: tuple[OutputRuntimeState, ...]
-    schema_version: int = 3
+    schema_version: int = 4
 
     def __post_init__(self) -> None:
         if not isinstance(self.document_id, str) or not self.document_id:
@@ -95,7 +93,7 @@ class SceneRuntimeState:
             or self.revision < 0
         ):
             raise SceneValidationError("Invalid runtime revision")
-        if self.schema_version != 3:
+        if self.schema_version != 4:
             raise SceneValidationError("Unsupported runtime schema version")
         if not isinstance(self.outputs, tuple) or not all(
             isinstance(output, OutputRuntimeState) for output in self.outputs
@@ -115,7 +113,7 @@ class SceneRuntimeState:
             raise SceneValidationError("Runtime state belongs to a different scene document")
         scene_ids = {scene.id for scene in document.scenes}
         for output in self.outputs:
-            if output.manual_scene_id and output.manual_scene_id not in scene_ids:
+            if output.base_scene_id not in scene_ids:
                 raise SceneValidationError(
                     f"Runtime output {output.bus_id.value} references a missing scene"
                 )
@@ -123,12 +121,12 @@ class SceneRuntimeState:
     def reconciled_against(self, document: SceneDocument) -> SceneRuntimeState:
         """Return a usable state after configuration changed while Solin was offline."""
         if self.document_id != document.document_id:
-            return create_default_runtime_state(document)
+            return create_initial_runtime_state(document)
         scene_ids = {scene.id for scene in document.scenes}
         outputs = tuple(
             (
-                replace(output, mode=OutputMode.AUTO, manual_scene_id="")
-                if output.manual_scene_id and output.manual_scene_id not in scene_ids
+                replace(output, base_scene_id=document.scenes[0].id)
+                if output.base_scene_id and output.base_scene_id not in scene_ids
                 else output
             )
             for output in self.outputs
@@ -156,7 +154,7 @@ class SceneRuntimeState:
         revision = data.get("revision")
         document_id = data.get("document_id")
         outputs = data.get("outputs")
-        if schema_version not in {1, 2, 3}:
+        if schema_version != 4:
             raise SceneValidationError("Unsupported runtime schema version")
         if (
             not isinstance(document_id, str)
@@ -166,45 +164,42 @@ class SceneRuntimeState:
         ):
             raise SceneValidationError("Invalid scene runtime state")
         restored_outputs = tuple(OutputRuntimeState.from_record(item) for item in outputs)
-        if schema_version == 1:
-            try:
-                primary = next(
-                    output for output in restored_outputs if output.bus_id is BusId.VIRTUAL_CAMERA
-                )
-            except StopIteration as exc:
-                raise SceneValidationError("Runtime state is missing the Program output") from exc
-            legacy_selections = {
-                (output.mode, output.manual_scene_id) for output in restored_outputs
-            }
-            program_mode = OutputMode.AUTO if len(legacy_selections) > 1 else primary.mode
-            restored_outputs = tuple(
-                replace(
-                    output,
-                    mode=program_mode,
-                    manual_scene_id=primary.manual_scene_id,
-                )
-                for output in restored_outputs
-            )
         return cls(
             document_id=document_id,
             revision=revision,
             outputs=restored_outputs,
-            schema_version=3,
+            schema_version=4,
         )
 
 
-def create_default_runtime_state(document: SceneDocument) -> SceneRuntimeState:
-    return SceneRuntimeState(
+def create_initial_runtime_state(
+    document: SceneDocument,
+    *,
+    selections: Mapping[BusId, str] | None = None,
+) -> SceneRuntimeState:
+    from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID
+
+    scene_ids = {scene.id for scene in document.scenes}
+    initial = {
+        BusId.MEDIA_WINDOWS: CONTENT_SCENE_ID,
+        BusId.VIRTUAL_CAMERA: CAMERA_SCENE_ID,
+    }
+    if selections is not None:
+        initial.update(selections)
+    state = SceneRuntimeState(
         document_id=document.document_id,
         revision=0,
         outputs=tuple(
             OutputRuntimeState(
                 bus_id=route.bus_id,
+                base_scene_id=initial[route.bus_id] if initial[route.bus_id] in scene_ids else document.scenes[0].id,
                 enabled=route.start_with_solin,
             )
             for route in document.outputs
         ),
     )
+    state.validate_against(document)
+    return state
 
 
 class SceneRuntimeService:
@@ -245,26 +240,25 @@ class SceneRuntimeService:
         current = self._state.output(bus_id)
         return self._commit(
             self._with_output(
-                replace(current, mode=OutputMode.MANUAL, manual_scene_id=scene_id)
+                replace(current, mode=OutputMode.MANUAL, base_scene_id=scene_id)
             )
         )
 
-    def select_scene(self, bus_id: BusId, scene_id: str | None) -> SceneRuntimeState:
-        """Choose one output's return base and restore AUTO; None clears the override."""
+    def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
+        """Choose one output's return base and restore AUTO."""
         return self.select_base_scenes({bus_id: scene_id}, resume_automation=True)
 
     def select_base_scenes(
         self,
-        selections: Mapping[BusId, str | None],
+        selections: Mapping[BusId, str],
         *,
         resume_automation: bool = False,
     ) -> SceneRuntimeState:
-        """Update output return bases atomically; None uses the configured default."""
+        """Update valid output return bases atomically."""
         for bus_id, scene_id in selections.items():
             if bus_id not in DELIVERY_BUSES:
                 raise SceneValidationError("Invalid runtime output bus")
-            if scene_id is not None:
-                self._documents.document.scene(scene_id)
+            self._documents.document.scene(scene_id)
         return self._commit(
             replace(
                 self._state,
@@ -272,7 +266,7 @@ class SceneRuntimeService:
                     replace(
                         output,
                         mode=OutputMode.AUTO if resume_automation else output.mode,
-                        manual_scene_id=selections[output.bus_id] or "",
+                        base_scene_id=selections[output.bus_id],
                     ) if output.bus_id in selections else output
                     for output in self._state.outputs
                 ),
@@ -280,11 +274,7 @@ class SceneRuntimeService:
         )
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Route every delivery output to ``scene_id`` (the old lockstep take).
-
-        Still used where a single scene really is meant for everything — deleting
-        the live scene, for instance.
-        """
+        """Pin every delivery output to ``scene_id`` in manual mode."""
         self._documents.document.scene(scene_id)
         return self._commit(
             replace(
@@ -293,29 +283,29 @@ class SceneRuntimeService:
                     replace(
                         output,
                         mode=OutputMode.MANUAL,
-                        manual_scene_id=scene_id,
+                        base_scene_id=scene_id,
                     )
                     for output in self._state.outputs
                 ),
             )
         )
 
-    def select_program_scene(self, scene_id: str | None) -> SceneRuntimeState:
-        """Select the Program base, or clear its override, without changing auto-switch."""
+    def select_program_scene(self, scene_id: str) -> SceneRuntimeState:
+        """Select every output base without changing auto-switch."""
 
         return self.select_base_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
 
     def resume_program_automation(self) -> SceneRuntimeState:
         return self.set_program_automatic(
             True,
-            scene_ids={output.bus_id: output.manual_scene_id or None for output in self._state.outputs},
+            scene_ids={output.bus_id: output.base_scene_id for output in self._state.outputs},
         )
 
     def set_program_automatic(
         self,
         enabled: bool,
         *,
-        scene_ids: Mapping[BusId, str | None],
+        scene_ids: Mapping[BusId, str],
     ) -> SceneRuntimeState:
         """Commit all output modes and their selected bases or pins atomically."""
         if not isinstance(enabled, bool):
@@ -323,10 +313,7 @@ class SceneRuntimeService:
         if set(scene_ids) != set(DELIVERY_BUSES):
             raise SceneValidationError("Selected scenes must define every output bus")
         for scene_id in scene_ids.values():
-            if scene_id is None and not enabled:
-                raise SceneValidationError("Manual runtime mode requires a scene")
-            if scene_id is not None:
-                self._documents.document.scene(scene_id)
+            self._documents.document.scene(scene_id)
         return self._commit(
             replace(
                 self._state,
@@ -334,7 +321,7 @@ class SceneRuntimeService:
                     replace(
                         output,
                         mode=OutputMode.AUTO if enabled else OutputMode.MANUAL,
-                        manual_scene_id=scene_ids[output.bus_id] or "",
+                        base_scene_id=scene_ids[output.bus_id],
                     )
                     for output in self._state.outputs
                 ),
@@ -351,14 +338,9 @@ class SceneRuntimeService:
         document = self._documents.document
         output = self._state.output(bus_id)
         scene_ids = {scene.id for scene in document.scenes}
-        if output.mode is OutputMode.MANUAL and output.manual_scene_id in scene_ids:
-            return output.manual_scene_id
-        route = document.output(bus_id)
-        base_scene_id = (
-            output.manual_scene_id
-            if output.manual_scene_id in scene_ids
-            else route.default_scene_id or document.scenes[0].id
-        )
+        base_scene_id = output.base_scene_id if output.base_scene_id in scene_ids else document.scenes[0].id
+        if output.mode is OutputMode.MANUAL:
+            return base_scene_id
         if category not in AUTOMATIC_MEDIA_CATEGORIES:
             return base_scene_id
         return document.automation_for(bus_id).scene_for(category) or base_scene_id
@@ -367,23 +349,7 @@ class SceneRuntimeService:
         self._unsubscribe_document()
 
     def _on_document_changed(self, change: SceneDocumentChange) -> None:
-        scene_ids = {scene.id for scene in change.document.scenes}
-        automation_configured = self._documents.program_automation_configured
-        reconciled_outputs = []
-        for output in self._state.outputs:
-            manual_scene_id = (
-                output.manual_scene_id
-                if output.manual_scene_id in scene_ids
-                else change.document.output(output.bus_id).default_scene_id
-                or change.document.scenes[0].id
-            )
-            mode = (
-                OutputMode.MANUAL
-                if output.mode is OutputMode.AUTO and not automation_configured
-                else output.mode
-            )
-            reconciled_outputs.append(replace(output, mode=mode, manual_scene_id=manual_scene_id))
-        outputs = tuple(reconciled_outputs)
+        outputs = self._state.reconciled_against(change.document).outputs
         if outputs == self._state.outputs:
             return
         try:

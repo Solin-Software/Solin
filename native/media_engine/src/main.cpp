@@ -271,9 +271,31 @@ active_source_health(const solin::media_engine::SceneGraphRuntime* graph) {
                    target.bus == solin::media_engine::OutputBus::media_windows;
         });
     if (content_required) {
-        content_source.emplace(graph.acquire_source(
-            solin::media_engine::kSolinContentSourceId,
-            "native-window-output-" + std::to_string(sequence)));
+        const auto document = graph.compiled_document();
+        const solin::media_engine::SceneSource* selected = nullptr;
+        if (document) {
+            for (const auto& [id, source] : document->sources) {
+                if (!source.enabled ||
+                    source.kind != solin::media_engine::SceneSourceKind::solin_content) {
+                    continue;
+                }
+                const auto& configuration =
+                    std::get<solin::media_engine::SolinContentSourceConfiguration>(
+                        source.configuration);
+                if (!selected || configuration.mode ==
+                                     solin::media_engine::SolinContentMode::presentation) {
+                    selected = &source;
+                }
+                if (configuration.mode ==
+                    solin::media_engine::SolinContentMode::presentation) {
+                    break;
+                }
+            }
+        }
+        if (selected) {
+            content_source.emplace(graph.acquire_source(
+                selected->id, "native-window-output-" + std::to_string(sequence)));
+        }
     }
     return output.configure(targets, std::move(content_source)) &&
            output.set_enabled(!targets.empty());

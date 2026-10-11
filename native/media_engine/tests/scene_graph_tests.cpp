@@ -515,7 +515,6 @@ layer(std::string id, std::string source_id, const bool visible = true) {
         .output_enabled = {true, false},
     };
     value.outputs[0].bus = solin::media_engine::OutputBus::media_windows;
-    value.outputs[0].default_scene_id = "scene-a";
     value.outputs[0].video_format = {
         .width = 1920U,
         .height = 1080U,
@@ -526,7 +525,6 @@ layer(std::string id, std::string source_id, const bool visible = true) {
         .color_range = "full",
     };
     value.outputs[1].bus = solin::media_engine::OutputBus::virtual_camera;
-    value.outputs[1].default_scene_id = "scene-a";
     value.outputs[1].video_format = value.outputs[0].video_format;
     return value;
 }
@@ -535,9 +533,10 @@ layer(std::string id, std::string source_id, const bool visible = true) {
     std::string handle_token) {
     auto value = snapshot();
     value.sources = {{
-        .id = std::string{solin::media_engine::kSolinContentSourceId},
+        .id = "custom-content",
         .kind = solin::media_engine::SceneSourceKind::solin_content,
         .enabled = true,
+        .configuration = solin::media_engine::SolinContentSourceConfiguration{},
         .frame_channel = solin::media_engine::FrameChannelConfiguration{
             .channel_id = "content-channel",
             .generation = 1U,
@@ -553,12 +552,9 @@ layer(std::string id, std::string source_id, const bool visible = true) {
     }};
     value.scenes = {{
         .id = "content-scene",
-        .layers = {layer("content-layer", std::string{
-            solin::media_engine::kSolinContentSourceId})},
+        .layers = {layer("content-layer", "custom-content")},
     }};
     value.active_scene_ids = {"content-scene", "content-scene"};
-    value.outputs[0].default_scene_id = "content-scene";
-    value.outputs[1].default_scene_id = "content-scene";
     return value;
 }
 
@@ -578,8 +574,6 @@ layer(std::string id, std::string source_id, const bool visible = true) {
     });
     value.active_scene_ids = {std::string{active_scene_id},
                               std::string{active_scene_id}};
-    value.outputs[0].default_scene_id = "default-scene";
-    value.outputs[1].default_scene_id = "default-scene";
     return value;
 }
 
@@ -858,20 +852,6 @@ void test_failed_hydration_preserves_the_previous_applied_graph() {
                  "unsupported graph leaves fail with an explicit capability error");
     expect(runtime.document_revision() == 1U,
            "an unsupported source cannot partially advance the applied document");
-
-    auto idle = snapshot(4U);
-    idle.sources.push_back({
-        .id = "solin.idle.current",
-        .kind = solin::media_engine::SceneSourceKind::idle_screen,
-        .enabled = true,
-    });
-    idle.scenes.push_back(
-        {.id = "scene-idle", .layers = {layer("idle-layer", "solin.idle.current")}});
-    idle.active_scene_ids = {"scene-idle", "scene-idle"};
-    expect_error([&runtime, &idle] { runtime.hydrate(idle, 4U); },
-                 "source_not_implemented", "idle requires libobs without creating a native decoder");
-    expect(runtime.document_revision() == 1U,
-           "unsupported idle content preserves the applied document");
 }
 
 void test_preview_geometry_updates_the_active_renderer_without_rebuilding_it() {

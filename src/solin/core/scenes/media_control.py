@@ -29,6 +29,7 @@ class ContentSourceKind(StrEnum):
 
     FRAMES = "frames"
     NATIVE_MEDIA = "native_media"
+    IDLE = "idle"
 
 
 class MediaPlaybackState(IntEnum):

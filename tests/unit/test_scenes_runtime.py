@@ -26,7 +26,7 @@ from solin.core.scenes.repository import (
 from solin.core.scenes.runtime import (
     SceneRuntimeService,
     SceneRuntimeState,
-    create_default_runtime_state,
+    create_initial_runtime_state,
 )
 
 
@@ -53,7 +53,7 @@ def _services() -> tuple[SceneDocumentService, SceneRuntimeService]:
     documents = SceneDocumentService(_document())
     runtime = SceneRuntimeService(
         documents,
-        create_default_runtime_state(documents.document),
+        create_initial_runtime_state(documents.document),
     )
     return documents, runtime
 
@@ -84,18 +84,18 @@ def test_enabling_automation_can_normalize_a_media_scene_base() -> None:
     )
 
     assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
-    assert {output.manual_scene_id for output in runtime.state.outputs} == {CAMERA_SCENE_ID}
+    assert {output.base_scene_id for output in runtime.state.outputs} == {CAMERA_SCENE_ID}
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
 
 
-def test_automatic_program_base_can_return_to_the_configured_default() -> None:
+def test_automatic_program_base_can_explicitly_return_to_camera() -> None:
     _documents, runtime = _services()
     runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
 
-    runtime.select_program_scene(None)
+    runtime.select_program_scene(CAMERA_SCENE_ID)
 
-    assert all(output.manual_scene_id == "" for output in runtime.state.outputs)
+    assert all(output.base_scene_id == CAMERA_SCENE_ID for output in runtime.state.outputs)
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
 
 
@@ -137,7 +137,7 @@ def test_live_take_is_not_part_of_editor_undo_history() -> None:
     assert documents.document.scene(CONTENT_SCENE_ID).name == "Content"
     output = runtime.state.output(BusId.VIRTUAL_CAMERA)
     assert output.mode is OutputMode.MANUAL
-    assert output.manual_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+    assert output.base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
 
 
 def test_deleting_a_selected_scene_fails_safe_to_document_fallback() -> None:
@@ -148,19 +148,19 @@ def test_deleting_a_selected_scene_fails_safe_to_document_fallback() -> None:
 
     output = runtime.state.output(BusId.MEDIA_WINDOWS)
     assert output.mode is OutputMode.MANUAL
-    assert output.manual_scene_id == CAMERA_SCENE_ID
+    assert output.base_scene_id == CAMERA_SCENE_ID
     assert runtime.resolve_scene(BusId.MEDIA_WINDOWS, ContentCategory.IMAGE) == CAMERA_SCENE_ID
 
 
-def test_removing_a_program_role_disables_invalid_automation() -> None:
+def test_removing_media_mapping_keeps_output_modes_and_bases() -> None:
     documents, runtime = _services()
     runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
 
     documents.set_program_media_scene(None)
 
-    assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
+    assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
     assert {
-        output.manual_scene_id for output in runtime.state.outputs
+        output.base_scene_id for output in runtime.state.outputs
     } == {CONTENT_CAMERA_PIP_SCENE_ID}
     assert (
         runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IMAGE)
@@ -180,7 +180,7 @@ def test_runtime_repository_persists_only_small_live_state(tmp_path) -> None:
     reloaded = repository.load_or_create(documents.document)
     assert reloaded.revision == updated.revision + 1
     assert reloaded.output(BusId.VIRTUAL_CAMERA).enabled
-    assert reloaded.output(BusId.VIRTUAL_CAMERA).manual_scene_id == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert reloaded.output(BusId.VIRTUAL_CAMERA).base_scene_id == (CONTENT_CAMERA_PIP_SCENE_ID)
     assert repository.path.stat().st_size < 4096
 
 
@@ -203,7 +203,7 @@ class _GatedRuntimeRepository:
 
 
 def test_runtime_persistence_queue_coalesces_without_blocking_the_caller() -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     repository = _GatedRuntimeRepository()
     queue = SceneRuntimePersistenceQueue(repository, initial)
     first = replace(initial, revision=1)
@@ -240,7 +240,7 @@ def test_runtime_persistence_queue_retries_a_transient_storage_failure(drain) ->
                 raise OSError("temporary storage failure")
             self.saved = state
 
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     repository = _FlakyRepository()
     queue = SceneRuntimePersistenceQueue(
         repository,
@@ -341,7 +341,7 @@ def test_runtime_persistence_queue_stops_on_permanent_storage_failure(
     ],
 )
 def test_runtime_persistence_queue_preserves_latest_state_after_terminal_failure(error) -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     repository = _GatedRuntimeRepository(error)
     queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=0.001)
     latest = replace(initial, revision=2)
@@ -408,7 +408,7 @@ def test_runtime_persistence_queue_recovers_wrapped_read_failure_and_coalesces(
 
 
 def test_runtime_persistence_queue_close_seals_admission_and_drains_accepted_writes() -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     repository = _GatedRuntimeRepository()
     queue = SceneRuntimePersistenceQueue(repository, initial)
     latest = replace(initial, revision=2)
@@ -445,7 +445,7 @@ def test_runtime_persistence_queue_close_seals_admission_and_drains_accepted_wri
 def test_runtime_persistence_queue_timeout_preserves_inflight_and_stops_later_writes(
     failure,
 ) -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     repository = _GatedRuntimeRepository(failure)
     queue = SceneRuntimePersistenceQueue(repository, initial)
     first = replace(initial, revision=1)
@@ -486,7 +486,7 @@ def test_runtime_persistence_queue_timeout_preserves_inflight_and_stops_later_wr
 
 
 def test_runtime_persistence_queue_close_interrupts_long_retry_backoff() -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     failure = OSError("storage unavailable")
     repository = _GatedRuntimeRepository(failure)
     queue = SceneRuntimePersistenceQueue(repository, initial, retry_delay_seconds=60)
@@ -520,13 +520,13 @@ def test_runtime_persistence_queue_close_interrupts_long_retry_backoff() -> None
 def test_runtime_persistence_queue_rejects_invalid_retry_delays(delay) -> None:
     with pytest.raises(ValueError, match="finite and positive"):
         SceneRuntimePersistenceQueue(
-            None, create_default_runtime_state(_document()), retry_delay_seconds=delay
+            None, create_initial_runtime_state(_document()), retry_delay_seconds=delay
         )
 
 
 @pytest.mark.parametrize("timeout", [-1, float("nan"), float("inf")])
 def test_runtime_persistence_queue_rejects_invalid_timeouts_without_closing(timeout) -> None:
-    initial = create_default_runtime_state(_document())
+    initial = create_initial_runtime_state(_document())
     queue = SceneRuntimePersistenceQueue(None, initial)
     try:
         with pytest.raises(ValueError, match="finite and nonnegative"):
@@ -561,29 +561,32 @@ def test_runtime_repository_recovers_a_stale_manual_scene_after_offline_edit(
 
     output = recovered.output(BusId.MEDIA_WINDOWS)
     assert recovered.revision == stale.revision + 1
-    assert output.mode is OutputMode.AUTO
-    assert output.manual_scene_id == ""
+    assert output.mode is OutputMode.MANUAL
+    assert output.base_scene_id == CAMERA_SCENE_ID
     assert output.enabled
 
 
-def test_runtime_schema_one_migrates_divergent_destinations_to_one_auto_program() -> None:
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_repository_converts_beta_runtime_preserving_independent_selections(tmp_path, version) -> None:
+    import json
+
     document = _document()
-    state = create_default_runtime_state(document).to_record()
-    state["schema_version"] = 1
-    media, virtual = state["outputs"]
-    media.update(mode=OutputMode.MANUAL.value, manual_scene_id=CONTENT_SCENE_ID)
-    virtual.update(mode=OutputMode.MANUAL.value, manual_scene_id=CAMERA_SCENE_ID)
-
-    restored = SceneRuntimeService(
-        SceneDocumentService(document),
-        SceneRuntimeState.from_record(state),
-    ).state
-
-    assert restored.schema_version == 3
-    assert all(output.mode is OutputMode.AUTO for output in restored.outputs)
-    assert {
-        output.manual_scene_id for output in restored.outputs
-    } == {CAMERA_SCENE_ID}
+    state = create_initial_runtime_state(document).to_record()
+    state["schema_version"] = version
+    for output in state["outputs"]:
+        output["manual_scene_id"] = output.pop("base_scene_id")
+        output["mode"] = "manual"
+        output["enabled"] = True
+    repository = SceneRuntimeRepository(tmp_path / "runtime.json")
+    repository.path.write_text(json.dumps(state), encoding="utf-8")
+    restored = repository.load_or_create(document)
+    assert restored.schema_version == 4
+    assert restored.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+    assert restored.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+    assert all(output.mode is OutputMode.MANUAL and output.enabled for output in restored.outputs)
+    assert repository.load_or_create(document) == restored
+    with pytest.raises(SceneValidationError):
+        SceneRuntimeState.from_record(state)
 
 
 def test_selecting_a_scene_restores_automation_on_a_pinned_output() -> None:
@@ -601,7 +604,7 @@ def test_selecting_a_scene_restores_automation_on_a_pinned_output() -> None:
 
     program = runtime.state.output(BusId.VIRTUAL_CAMERA)
     assert program.mode is OutputMode.AUTO
-    assert program.manual_scene_id == CAMERA_SCENE_ID
+    assert program.base_scene_id == CAMERA_SCENE_ID
     # Idle rests on the chosen scene…
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
     # …and playing media still takes it over.
@@ -635,8 +638,82 @@ def test_turning_off_auto_switch_keeps_each_output_on_its_own_scene() -> None:
     })
 
     assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
-    assert runtime.state.output(BusId.MEDIA_WINDOWS).manual_scene_id == CAMERA_SCENE_ID
+    assert runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
     assert (
-        runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+        runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
         == CONTENT_CAMERA_PIP_SCENE_ID
     )
+
+
+def test_runtime_store_keeps_revisions_independent_across_documents(tmp_path):
+    document = _document()
+    other = replace(document, document_id="other-document")
+    repository = SceneRuntimeRepository(tmp_path / "runtime.json")
+    initial = repository.load_or_create(document)
+    other_initial = repository.load_or_create(other)
+    updated = replace(initial, revision=1, outputs=tuple(replace(output, base_scene_id=CONTENT_CAMERA_PIP_SCENE_ID) for output in initial.outputs))
+    repository.save(updated, expected_revision=0)
+    repository.save(replace(other_initial, revision=1), expected_revision=0)
+    assert repository.load_or_create(document) == updated
+    assert repository.load_or_create(other).revision == 1
+    before = repository.path.read_bytes()
+    with pytest.raises(SceneRevisionConflictError):
+        repository.save(replace(initial, revision=2), expected_revision=0)
+    assert repository.path.read_bytes() == before
+
+
+def test_media_scene_is_a_valid_explicit_return_base_for_every_output():
+    _documents, runtime = _services()
+    runtime.select_program_scene(CONTENT_SCENE_ID)
+    for bus in (BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA):
+        assert runtime.resolve_scene(bus, ContentCategory.IDLE) == CONTENT_SCENE_ID
+
+
+@pytest.mark.parametrize("mutation", ["mode", "bus", "revision", "extra"])
+def test_invalid_beta_runtime_fails_without_rewriting_storage(tmp_path, mutation):
+    import json
+
+    document = _document()
+    record = create_initial_runtime_state(document).to_record()
+    record["schema_version"] = 3
+    for output in record["outputs"]:
+        output["manual_scene_id"] = output.pop("base_scene_id")
+    if mutation == "mode":
+        record["outputs"][0]["mode"] = "invalid"
+    elif mutation == "bus":
+        record["outputs"][0]["bus_id"] = "editor"
+    elif mutation == "revision":
+        record["revision"] = True
+    else:
+        record["outputs"][0]["extra"] = 1
+    repository = SceneRuntimeRepository(tmp_path / "runtime.json")
+    repository.path.write_text(json.dumps(record), encoding="utf-8")
+    before = repository.path.read_bytes()
+    with pytest.raises(SceneRepositoryCorruptError):
+        repository.load_or_create(document)
+    assert repository.path.read_bytes() == before
+
+
+def test_runtime_deletion_preserves_other_states_and_revisions(tmp_path, monkeypatch):
+    document = _document()
+    other = replace(document, document_id="other-document")
+    repository = SceneRuntimeRepository(tmp_path / "runtime.json")
+    initial = repository.load_or_create(document)
+    repository.load_or_create(other)
+    before = repository.path.read_bytes()
+    original_write = repository._repository.write
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("simulated deletion write failure")
+
+    monkeypatch.setattr(repository._repository, "write", fail_write)
+    with pytest.raises(OSError):
+        repository.delete(other.document_id)
+    assert repository.path.read_bytes() == before
+    monkeypatch.setattr(repository._repository, "write", original_write)
+    repository.delete(other.document_id)
+    assert repository.load_or_create(document) == initial
+    deleted = repository.path.read_bytes()
+    repository.delete(other.document_id)
+    assert repository.path.read_bytes() == deleted
+    assert repository.load_or_create(other).revision == 0

@@ -6041,11 +6041,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Nabigong tawagin ang PTZ preset.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Default</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6166,8 +6161,8 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Mga Eksena</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Idle Screen</translation>
+        <source>Solin Content</source>
+        <translation>Nilalaman ng Solin</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Alisin bilang default</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Itakda bilang default</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Alisin bilang eksena ng media</translation>
@@ -7200,8 +7190,8 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Buksan ang folder</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Idle Screen</translation>
+        <source>Solin Content</source>
+        <translation>Nilalaman ng Solin</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Idle Screen</translation>
+        <source>Solin Content</source>
+        <translation>Nilalaman ng Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
     </message>
 </context>
 </TS>

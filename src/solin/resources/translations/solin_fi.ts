@@ -6041,11 +6041,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>PTZ-esiasetuksen palauttaminen epäonnistui.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Oletus</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6166,8 +6161,8 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Näkymät</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Valmiusnäyttö</translation>
+        <source>Solin Content</source>
+        <translation>Solinin sisältö</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Poista oletusnäkymän asetus</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Aseta oletusnäkymäksi</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Poista medianäkymän asetus</translation>
@@ -7200,8 +7190,8 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Avaa kansio</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Valmiusnäyttö</translation>
+        <source>Solin Content</source>
+        <translation>Solinin sisältö</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Valmiusnäyttö</translation>
+        <source>Solin Content</source>
+        <translation>Solinin sisältö</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

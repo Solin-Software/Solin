@@ -78,7 +78,7 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
 
 [[nodiscard]] Json valid_payload() {
     Json sources = Json::array();
-    sources.push_back(source("solin.content.current", "solin_content", Json::object()));
+    sources.push_back(source("solin.content.current", "solin_content", {{"mode", "presentation"}}));
     sources.push_back(source("camera.local", "local_camera",
                              {
                                  {"device_id", "camera://stable-id"},
@@ -106,13 +106,11 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     Json outputs = Json::array();
     outputs.push_back({
         {"bus_id", "media_windows"},
-        {"default_scene_id", "scene-1"},
         {"start_with_solin", false},
         {"video_format", video_format("bgra")},
     });
     outputs.push_back({
         {"bus_id", "virtual_camera"},
-        {"default_scene_id", "scene-1"},
         {"start_with_solin", false},
         {"video_format", video_format("nv12")},
     });
@@ -124,7 +122,7 @@ template <typename Callback> void expect_rejected(Callback&& callback, const cha
     return {
         {"document",
          {
-             {"schema_version", 11U},
+             {"schema_version", 12U},
              {"document_id", "document-1"},
              {"revision", 7U},
              {"sources", std::move(sources)},
@@ -159,7 +157,7 @@ void test_valid_snapshot_is_normalized_into_typed_graph_state() {
 }
 
 void test_unsupported_schema_versions_are_rejected() {
-    for (const auto version : {10U, 12U}) {
+    for (const auto version : {10U, 11U, 13U}) {
         auto payload = valid_payload();
         payload["document"]["schema_version"] = version;
         expect_rejected(
@@ -170,43 +168,106 @@ void test_unsupported_schema_versions_are_rejected() {
     }
 }
 
-void test_idle_source_is_typed_and_has_no_per_source_configuration() {
+void test_content_modes_are_typed_without_reserved_content_identity() {
     auto payload = valid_payload();
+    payload["document"]["sources"][0]["id"] = "content.presentation";
     payload["document"]["sources"].push_back(
-        source("solin.idle.current", "idle_screen", Json::object()));
+        source("content.media-only", "solin_content", {{"mode", "media_only"}}));
     const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
-    expect(snapshot.sources.back().kind == solin::media_engine::SceneSourceKind::idle_screen,
-           "idle content is a distinct source kind");
-    expect(std::holds_alternative<std::monostate>(snapshot.sources.back().configuration),
-           "idle media configuration belongs to the session, not a scene source");
-
-    payload["document"]["sources"].back()["configuration"]["media_path"] = "idle.mp4";
-    expect_rejected(
-        [&payload] {
-            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
-        },
-        "idle source rejects duplicated session configuration");
-
-    payload["document"]["sources"].back()["configuration"] = Json::object();
-    payload["document"]["sources"].back()["type"] = "yeartext";
-    expect_rejected(
-        [&payload] {
-            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
-        },
-        "persisted yeartext records must be migrated by the application");
+    const auto& presentation = std::get<solin::media_engine::SolinContentSourceConfiguration>(
+        snapshot.sources.front().configuration);
+    const auto& media = std::get<solin::media_engine::SolinContentSourceConfiguration>(
+        snapshot.sources.back().configuration);
+    expect(presentation.mode == solin::media_engine::SolinContentMode::presentation,
+           "presentation content mode is retained");
+    expect(media.mode == solin::media_engine::SolinContentMode::media_only,
+           "foreground-only content mode is retained independently");
 }
 
-void test_program_default_role_may_be_unassigned() {
-    auto payload = valid_payload();
-    for (auto& output : payload["document"]["outputs"]) {
-        output["default_scene_id"] = "";
+void test_content_configuration_requires_an_explicit_known_mode() {
+    for (const auto& configuration : {
+             Json::object(), Json{{"mode", nullptr}}, Json{{"mode", true}},
+             Json{{"mode", 1U}}, Json{{"mode", ""}}, Json{{"mode", "combined"}},
+             Json{{"mode", "PRESENTATION"}},
+             Json{{"mode", "presentation"}, {"media_path", "idle.mp4"}}}) {
+        auto payload = valid_payload();
+        payload["document"]["sources"][0]["configuration"] = configuration;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "content configuration requires only the explicit supported mode");
     }
+}
+
+void test_removed_idle_source_types_are_rejected() {
+    for (const auto kind : {"idle_screen", "yeartext"}) {
+        auto payload = valid_payload();
+        payload["document"]["sources"].push_back(
+            source("former-idle-source", kind, Json::object()));
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "removed source types must be migrated before native hydration");
+    }
+}
+
+void test_output_routes_reject_the_removed_default_role() {
+    for (const auto& scene_id : {Json(""), Json("scene-1")}) {
+        auto payload = valid_payload();
+        payload["document"]["outputs"][0]["default_scene_id"] = scene_id;
+        expect_rejected(
+            [&payload] {
+                static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+            },
+            "output routes do not accept the removed default role");
+    }
+}
+
+void test_content_sources_are_optional() {
+    auto payload = valid_payload();
+    payload["document"]["sources"].erase(0U);
 
     const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
+    expect(snapshot.sources.size() == 2U, "camera-only documents need no reserved content source");
+}
 
-    expect(snapshot.outputs[0].default_scene_id.empty() &&
-               snapshot.outputs[1].default_scene_id.empty(),
-           "the removable Program default role remains unassigned natively");
+void test_active_scene_selections_are_independent_from_output_routes() {
+    auto payload = valid_payload();
+    auto camera_scene = payload["document"]["scenes"][0];
+    camera_scene["id"] = "scene-camera";
+    camera_scene["layers"] = Json::array();
+    payload["document"]["scenes"].push_back(camera_scene);
+    payload["active_scenes"]["virtual_camera"] = "scene-camera";
+    const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
+    expect(snapshot.active_scene_ids[0] == "scene-1" &&
+               snapshot.active_scene_ids[1] == "scene-camera",
+           "runtime selects each output independently, including an empty camera scene");
+
+    payload["document"]["outputs"][1]["bus_id"] = "media_windows";
+    expect_rejected(
+        [&payload] {
+            static_cast<void>(solin::media_engine::parse_scene_hydration_snapshot(payload, 7U));
+        },
+        "output routes still require distinct buses");
+}
+
+void test_content_mode_changes_are_document_changes() {
+    const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(valid_payload(), 7U);
+    auto original = snapshot.sources[0];
+    original.id = "custom-content";
+    auto changed = original;
+    changed.frame_channel = solin::media_engine::FrameChannelConfiguration{
+        .channel_id = "runtime-channel", .generation = 2U,
+    };
+    expect(solin::media_engine::same_scene_document_source_definition(original, changed),
+           "runtime ingress changes do not alter a content source's document definition");
+    changed.configuration = solin::media_engine::SolinContentSourceConfiguration{
+        .mode = solin::media_engine::SolinContentMode::media_only,
+    };
+    expect(!solin::media_engine::same_scene_document_source_definition(original, changed),
+           "mode changes require a new document revision");
 }
 
 void test_idle_hydration_state_rejects_invalid_metadata() {
@@ -339,6 +400,9 @@ void test_content_ingress_transport_requires_a_compatible_pixel_layout() {
 
     for (const auto& combination : combinations) {
         auto payload = valid_payload();
+        payload["document"]["sources"][0]["id"] = "custom-content";
+        payload["document"]["sources"].push_back(
+            source("foreground-content", "solin_content", {{"mode", "media_only"}}));
         payload["content_ingress"] = {
             {"channel_id", "content-1"},
             {"generation", 1U},
@@ -354,7 +418,17 @@ void test_content_ingress_transport_requires_a_compatible_pixel_layout() {
         if (combination.accepted) {
             const auto snapshot = solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
             expect(snapshot.sources[0].frame_channel == snapshot.content_ingress,
-                   "content ingress participates in the source runtime identity");
+                   "content ingress binds by source kind rather than reserved identity");
+            expect(snapshot.sources.back().frame_channel == snapshot.content_ingress,
+                   "both content modes share the injected ingress descriptor");
+            expect(!snapshot.sources[1].frame_channel.has_value(),
+                   "content ingress does not bind to a camera source");
+            payload["document"]["sources"].erase(0U);
+            payload["document"]["sources"].erase(2U);
+            const auto without_content =
+                solin::media_engine::parse_scene_hydration_snapshot(payload, 7U);
+            expect(without_content.content_ingress.has_value(),
+                   "runtime ingress remains valid without authored content sources");
             continue;
         }
         expect_rejected(
@@ -437,9 +511,14 @@ void test_local_camera_rejects_invalid_native_frame_rates() {
 int main() {
     test_valid_snapshot_is_normalized_into_typed_graph_state();
     test_unsupported_schema_versions_are_rejected();
-    test_idle_source_is_typed_and_has_no_per_source_configuration();
+    test_content_modes_are_typed_without_reserved_content_identity();
+    test_content_configuration_requires_an_explicit_known_mode();
+    test_removed_idle_source_types_are_rejected();
     test_idle_hydration_state_rejects_invalid_metadata();
-    test_program_default_role_may_be_unassigned();
+    test_output_routes_reject_the_removed_default_role();
+    test_content_sources_are_optional();
+    test_active_scene_selections_are_independent_from_output_routes();
+    test_content_mode_changes_are_document_changes();
     test_unknown_nested_fields_are_rejected();
     test_unicode_names_use_character_limits_instead_of_wire_byte_limits();
     test_envelope_and_document_revisions_must_match();

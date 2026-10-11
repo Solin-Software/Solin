@@ -281,6 +281,76 @@ def test_source_is_one_borrowed_stable_canvas_and_empty_apply_is_transparent(pro
     assert owner.error_code == ""
 
 
+def test_idle_presentations_preserve_outgoing_video_and_restart_independently(provider, tmp_path):
+    configuration, runtime = provider
+    state = _state(tmp_path)
+    configuration.apply(state, 5000)
+    prepared_producer = configuration._producer
+    first = configuration.prepare_presentation(5000)
+    second = None
+    try:
+        assert first._producer is prepared_producer
+        assert configuration._producer is None
+        first.set_demand(True, live=True)
+        second = configuration.prepare_presentation(5000)
+        assert second.state == first.state == configuration.state
+        assert second.source is not first.source
+        assert second._producer.transport is not first._producer.transport
+        assert first._producer.transport.live
+        assert not second._producer.transport.live
+        second.set_demand(True, live=True)
+        assert first._producer.transport.live_transitions == [True]
+        assert second._producer.transport.live_transitions == [True]
+        first.set_demand(False)
+        assert second._producer.transport.live
+        assert not first._producer.transport.live
+        assert len(runtime.sources) == 2
+    finally:
+        first.close()
+        if second is not None:
+            second.close()
+
+
+def test_idle_configuration_changes_do_not_mutate_borrowed_presentations(provider, tmp_path):
+    configuration, _runtime = provider
+    original = _state(tmp_path)
+    configuration.apply(original, 5000)
+    outgoing = configuration.prepare_presentation(5000)
+    try:
+        producer = outgoing._producer
+        configuration.apply(_state(tmp_path, revision=2, media="replacement.mp4"), 5000)
+        assert outgoing.state == original
+        assert outgoing._producer is producer
+        assert not producer.transport.closed
+        assert configuration.state.revision == 2
+    finally:
+        outgoing.close()
+
+
+def test_unused_fallback_updates_keep_the_current_idle_clock_and_decoder(provider, tmp_path):
+    from solin.core.scenes.media_control import ContentSourceKind
+
+    configuration, runtime = provider
+    original = _state(tmp_path)
+    configuration.apply(original, 5000)
+    engine = LibobsSidecarEngine()
+    engine._idle_source = configuration
+    engine._idle_definitions = ("content",)
+    source = engine._resolve_content_source((ContentSourceKind.IDLE, 3), deadline=5)
+    owner = engine._idle_presentations[(3, original.revision)][0]
+    try:
+        owner.set_demand(True, live=True)
+        configuration.apply(replace(original, revision=2, yeartext_revision=2), 5000)
+        resolved = engine._resolve_content_source((ContentSourceKind.IDLE, 3), deadline=5)
+        assert resolved is source
+        assert engine._idle_presentations[(3, 2)][0] is owner
+        assert owner._producer.transport.live_transitions == [True]
+        assert owner.state == original
+        assert len(runtime.sources) == 1
+    finally:
+        owner.close()
+
+
 @pytest.mark.parametrize("media", ["photo.PNG", "movie.mp4", ""])
 def test_first_native_frame_or_image_update_precedes_atomic_full_canvas_contain(
     provider,

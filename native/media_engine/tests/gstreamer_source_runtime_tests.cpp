@@ -501,12 +501,10 @@ void test_automatic_camera_format_is_bounded_and_deterministic() {
     value.outputs = {
         solin::media_engine::SceneOutputDefinition{
             .bus = solin::media_engine::OutputBus::media_windows,
-            .default_scene_id = "scene-root",
             .video_format = format,
         },
         solin::media_engine::SceneOutputDefinition{
             .bus = solin::media_engine::OutputBus::virtual_camera,
-            .default_scene_id = "scene-root",
             .video_format = virtual_camera_format,
         },
     };
@@ -595,8 +593,6 @@ startup_deferred_camera_snapshot() {
               .geometry = inset},
          }},
     };
-    value.outputs[0].default_scene_id = "startup-camera-scene";
-    value.outputs[1].default_scene_id = "startup-camera-scene";
     value.active_scene_ids = {"startup-camera-scene", "startup-camera-scene"};
     value.render_enabled = {false, true};
     value.output_enabled = {false, true};
@@ -1510,8 +1506,6 @@ void test_first_hardware_camera_publishes_its_exact_selected_format(
               .geometry = pip_geometry},
          }},
     };
-    value.outputs[0].default_scene_id = "scene-red";
-    value.outputs[1].default_scene_id = "scene-red";
     value.active_scene_ids = {"scene-red", "scene-red"};
     value.render_enabled = {false, true};
     value.output_enabled = {false, true};

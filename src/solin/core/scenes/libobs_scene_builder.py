@@ -30,9 +30,6 @@ _PLACEHOLDER_COLOR = 0xFF404040
 # "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
 _PROGRAM_BUS = "virtual_camera"
 _MIRROR_BUS = "media_windows"
-# The single canonical content source id (see model.CONTENT_SOURCE_ID). Layers
-# referencing it are fed by the content ingress source, not a placeholder.
-_CONTENT_SOURCE_ID = "solin.content.current"
 
 
 class _SceneTransition(Protocol):
@@ -92,14 +89,13 @@ def _layer_fit_mode(layer: dict) -> str:
 class LibobsSceneGraph:
     """Owns the libobs scenes/sources built for one hydrate snapshot."""
 
-    def __init__(self, runtime: Any, *, idle_source: Callable[[], Any] | None = None) -> None:
+    def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
-        self._idle_source = idle_source
         self._scenes: dict[str, Any] = {}
         self._editor_preview_scene: Any | None = None
         self._editor_preview_layer: tuple[str, str] | None = None
         self._document_record: dict = {}
-        self._idle_scene_ids: frozenset[str] = frozenset()
+        self._presentation_scene_ids: frozenset[str] = frozenset()
         self._sources: list[Any] = []
         # Scene items bound to the content slot, tracked so the content source can
         # be swapped live (BGRA frame source <-> libobs-decoded media) without a
@@ -107,6 +103,7 @@ class LibobsSceneGraph:
         # always use the latest geometry and update the live editing target.
         self._content_items: list[dict[str, Any]] = []
         self._content_source: Any = None
+        self._media_only_source: Any = None
         # Item records keyed by (scene_id, layer_id), so a layer's geometry can be
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
@@ -132,11 +129,11 @@ class LibobsSceneGraph:
         self._pending: dict[str, tuple[str, str, int, str]] = {}
         self._token_seq = 0
 
-    def scene_uses_idle_source(self, scene_id: str) -> bool:
+    def scene_uses_presentation_source(self, scene_id: str) -> bool:
         """Constant-time demand lookup, including visible nested scene layers."""
-        return scene_id in self._idle_scene_ids
+        return scene_id in self._presentation_scene_ids
 
-    def _index_idle_scenes(self) -> None:
+    def _index_presentation_scenes(self) -> None:
         """Resolve dependencies once per graph generation, outside rendering."""
         definitions = {source["id"]: source for source in self._document_record.get("sources", ())}
 
@@ -148,12 +145,17 @@ class LibobsSceneGraph:
                 definition = definitions.get(record["layer"].get("source_id"), {})
                 if not record["source_available"]:
                     continue
-                if definition.get("type") == "idle_screen":
+                if (
+                    definition.get("type") == "solin_content"
+                    and (definition.get("configuration") or {}).get("mode", "presentation")
+                    == "presentation"
+                ):
                     return True
                 if record["referenced_scene_id"] and visit(record["referenced_scene_id"], seen):
                     return True
             return False
-        self._idle_scene_ids = frozenset(
+
+        self._presentation_scene_ids = frozenset(
             scene_id for scene_id in self._scenes if visit(scene_id, set())
         )
 
@@ -169,6 +171,10 @@ class LibobsSceneGraph:
     def content_source(self) -> Any | None:
         """The committed presentation, independent of frames awaiting a Take."""
         return self._content_source
+
+    @property
+    def media_only_source(self) -> Any | None:
+        return self._media_only_source
 
     @property
     def content_sources(self) -> tuple[Any, ...]:
@@ -282,11 +288,12 @@ class LibobsSceneGraph:
         source_credentials: dict | None = None,
         *,
         before_activate: Callable[[], None] | None = None,
+        media_only_source: Any | None = None,
     ) -> None:
         """Rebuild the scene graph from a document record and route the program.
 
         ``content_source`` (a libobs source fed by the content ingress) is placed
-        for layers referencing the canonical content id; it is *referenced*, not
+        for content layers according to their source mode; it is *referenced*, not
         owned, so the scene graph never releases it.
 
         ``source_credentials`` maps a source id to its ``{"username", "password"}``.
@@ -305,6 +312,7 @@ class LibobsSceneGraph:
                 self.refresh_source_crops,
             )
         self._content_source = content_source
+        self._media_only_source = content_source if media_only_source is None else media_only_source
         self._document_record = document
         ob = self._runtime.ob
         canvas = self._runtime.video
@@ -333,7 +341,7 @@ class LibobsSceneGraph:
                 if not layer.get("visible", True):
                     continue
                 self._add_layer(ob, scene_id, scene, layer, canvas, sources_by_id, content_source)
-        self._index_idle_scenes()
+        self._index_presentation_scenes()
         self._transitions.prepare_all()
         if before_activate is not None:
             before_activate()
@@ -368,14 +376,23 @@ class LibobsSceneGraph:
             "item": item,
             "layer": layer,
             "placeholder": placeholder,
-            "content_source": content_source if is_content else None,
+            "content_source": source if is_content and source_available else None,
+            "content_mode": str(
+                (sources_by_id.get(layer.get("source_id"), {}).get("configuration") or {}).get(
+                    "mode", "presentation"
+                )
+            ),
             "is_content": is_content,
             "source_available": source_available,
             "referenced_scene_id": (
-                str((sources_by_id[layer["source_id"]].get("configuration") or {}).get(
-                    "target_scene_id", "",
-                ))
-                if (sources_by_id.get(layer.get("source_id")) or {}).get("type") == "scene_reference"
+                str(
+                    (sources_by_id[layer["source_id"]].get("configuration") or {}).get(
+                        "target_scene_id",
+                        "",
+                    )
+                )
+                if (sources_by_id.get(layer.get("source_id")) or {}).get("type")
+                == "scene_reference"
                 else ""
             ),
         }
@@ -484,7 +501,7 @@ class LibobsSceneGraph:
     def _is_content_layer(layer: dict, sources_by_id: dict) -> bool:
         definition = sources_by_id.get(layer.get("source_id"))
         kind = definition.get("type") if definition else None
-        return kind == "solin_content" or layer.get("source_id") == _CONTENT_SOURCE_ID
+        return kind == "solin_content"
 
     def _resolve_source(
         self,
@@ -501,8 +518,11 @@ class LibobsSceneGraph:
         kind = definition.get("type") if definition else None
         config = (definition.get("configuration") if definition else None) or {}
 
-        if kind == "solin_content" or layer.get("source_id") == _CONTENT_SOURCE_ID:
-            return (content_source, False)  # referenced (the consumer owns it)
+        if kind == "solin_content":
+            return (
+                self._media_only_source if config.get("mode") == "media_only" else content_source,
+                False,
+            )
         if kind == "color":
             return (self._create_color(ob, layer, canvas, _parse_color(str(config.get("color", "")))), True)
         if kind == "local_camera":
@@ -561,8 +581,6 @@ class LibobsSceneGraph:
                 {"file": path},
             )
             return (source, True)
-        if kind == "idle_screen":
-            return (self._idle_source(), False) if self._idle_source is not None else (None, False)
         return (None, False)
 
     @staticmethod
@@ -632,7 +650,12 @@ class LibobsSceneGraph:
         )
 
     @contextmanager
-    def content_presentation(self, new_source: Any) -> Iterator[PreparedContentPresentation]:
+    def content_presentation(
+        self,
+        new_source: Any,
+        *,
+        media_only_source: Any | None = None,
+    ) -> Iterator[PreparedContentPresentation]:
         """Prepare new scene instances without mutating any transition origin.
 
         Sources and cameras are shared; only composition instances change. Clone
@@ -640,7 +663,8 @@ class LibobsSceneGraph:
         The accepted destination routes to a staged scene before publishing the
         new graph. Cancellation releases the candidates, leaving live routes intact.
         """
-        if new_source is self._content_source:
+        media_only_source = new_source if media_only_source is None else media_only_source
+        if new_source is self._content_source and media_only_source is self._media_only_source:
             yield PreparedContentPresentation(self._scenes, lambda: None, changes_graph=False)
             return
         affected = {record["scene_id"] for record in self._content_items}
@@ -669,18 +693,30 @@ class LibobsSceneGraph:
                 for previous in self._scene_layers.get(scene_id, []):
                     target = previous["referenced_scene_id"]
                     source = (
-                        new_source if previous["is_content"] else
-                        candidates[target].as_source() if target in candidates else
-                        previous["item"].source
+                        (
+                            media_only_source
+                            if previous["content_mode"] == "media_only"
+                            else new_source
+                        )
+                        if previous["is_content"]
+                        else candidates[target].as_source()
+                        if target in candidates
+                        else previous["item"].source
                     )
                     item = scene.add(source)
                     record = dict(previous, scene=scene, item=item)
                     records.append(record)
                     if previous["is_content"]:
-                        record.update(content_source=new_source, placeholder=None,
-                                      source_available=new_source is not None)
+                        record.update(
+                            content_source=source,
+                            placeholder=None,
+                            source_available=source is not None,
+                        )
                     self._apply_item_geometry(
-                        item, previous["layer"], self._runtime.video, self._runtime.ob,
+                        item,
+                        previous["layer"],
+                        self._runtime.video,
+                        self._runtime.ob,
                     )
 
             def commit():
@@ -693,7 +729,8 @@ class LibobsSceneGraph:
                     self.clear_editor_source_preview()
                     retired = {scene_id: self._scenes[scene_id] for scene_id in candidates}
                     retired_sources = tuple(
-                        record["content_source"] for scene_id in candidates
+                        record["content_source"]
+                        for scene_id in candidates
                         for record in self._scene_layers.get(scene_id, [])
                         if record["content_source"] is not None
                     )
@@ -713,6 +750,7 @@ class LibobsSceneGraph:
                         self._scene_layers[scene_id] = candidate_records[scene_id]
                     self._scenes.update(candidates)
                     self._content_source = new_source
+                    self._media_only_source = media_only_source
                     committed = True
 
             yield PreparedContentPresentation({**self._scenes, **candidates}, commit)
@@ -724,7 +762,6 @@ class LibobsSceneGraph:
                             self._cropped_items.pop(id(record["item"]), None)
                 for scene in candidates.values():
                     scene.release()
-
 
     def _create_color(self, ob: Any, layer: dict, canvas: Any, color: int) -> Any:
         rect = layer.get("rect") or {}
@@ -867,9 +904,10 @@ class LibobsSceneGraph:
         self._pending.clear()
         self._content_items = []
         self._content_source = None
+        self._media_only_source = None
         self._layer_items = {}
         self._scene_layers = {}
-        self._idle_scene_ids = frozenset()
+        self._presentation_scene_ids = frozenset()
         self._transition = None
         self._transition_kind = None
         self._active_scene_id = None

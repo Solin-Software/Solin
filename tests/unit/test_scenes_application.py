@@ -148,13 +148,11 @@ def test_referenced_scene_deletion_clears_program_roles_transactionally() -> Non
 
     assert all(scene.id != CONTENT_SCENE_ID for scene in service.document.scenes)
     assert all(not mapping.assignments for mapping in service.document.automation)
-    assert all(
-        route.default_scene_id == CAMERA_SCENE_ID for route in service.document.outputs
-    )
+    assert all("default_scene_id" not in route.to_record() for route in service.document.outputs)
 
     service.delete_scene(CAMERA_SCENE_ID)
 
-    assert all(not route.default_scene_id for route in service.document.outputs)
+    assert all("default_scene_id" not in route.to_record() for route in service.document.outputs)
 
 
 def test_scene_deletion_cascades_scene_reference_sources_transactionally() -> None:
@@ -335,23 +333,20 @@ def test_reapplying_the_same_program_media_scene_is_a_noop() -> None:
 def test_program_roles_are_updated_for_both_destinations_atomically() -> None:
     service = _service()
 
-    service.set_program_default_scene(CAMERA_SCENE_ID)
     service.set_program_media_scene(CONTENT_SCENE_ID)
 
-    assert service.program_default_scene_id == CAMERA_SCENE_ID
     assert service.program_media_scene_id == CONTENT_SCENE_ID
-    assert service.program_automation_configured
-    assert {route.default_scene_id for route in service.document.outputs} == {CAMERA_SCENE_ID}
+    assert service.media_automation_configured
     for mapping in service.document.automation:
         assert mapping.scene_for(ContentCategory.IMAGE) == CONTENT_SCENE_ID
         assert mapping.scene_for(ContentCategory.VIDEO) == CONTENT_SCENE_ID
 
 
-def test_program_roles_must_be_different() -> None:
+def test_media_scene_can_also_be_a_selected_base() -> None:
     service = _service()
 
-    with pytest.raises(SceneConflictError, match="must be different"):
-        service.set_program_media_scene(CAMERA_SCENE_ID)
+    service.set_program_media_scene(CAMERA_SCENE_ID)
+    assert service.program_media_scene_id == CAMERA_SCENE_ID
 
 
 def test_program_roles_can_be_removed_independently() -> None:
@@ -359,21 +354,15 @@ def test_program_roles_can_be_removed_independently() -> None:
 
     service.set_program_media_scene(None)
 
-    assert service.program_default_scene_id == CAMERA_SCENE_ID
     assert service.program_media_scene_id is None
-    assert not service.program_automation_configured
+    assert not service.media_automation_configured
     assert all(
         mapping.scene_for(ContentCategory.IMAGE) is None
         and mapping.scene_for(ContentCategory.VIDEO) is None
         for mapping in service.document.automation
     )
 
-    service.set_program_default_scene(None)
-
-    assert service.program_default_scene_id is None
-    assert {route.default_scene_id for route in service.document.outputs} == {""}
-    restored = SceneDocument.from_record(service.document.to_record())
-    assert {route.default_scene_id for route in restored.outputs} == {""}
+    assert SceneDocument.from_record(service.document.to_record()) == service.document
 
 
 def test_failed_persistence_leaves_document_and_history_unchanged() -> None:

@@ -65,6 +65,8 @@ from solin.core.scenes.model import (
     SceneValidationError,
     SourceDefinition,
     SourceKind,
+    SolinContentConfig,
+    SolinContentMode,
     TransitionKind,
     TransitionSpec,
     VideoColorRange,
@@ -92,14 +94,13 @@ from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
-    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
     SceneSeedNames,
     create_default_scene_document,
 )
 from solin.core.scenes.runtime import (
     SceneRuntimeService,
-    create_default_runtime_state,
+    create_initial_runtime_state,
 )
 
 
@@ -1230,8 +1231,9 @@ def _runtime_controller(
     documents = SceneDocumentService(document or _document())
     runtime = SceneRuntimeService(
         documents,
-        create_default_runtime_state(documents.document),
+        create_initial_runtime_state(documents.document),
     )
+    runtime.select_base_scenes({bus_id: CAMERA_SCENE_ID for bus_id in DELIVERY_BUSES})
     cleanup = ExitStack() if cleanup is None else cleanup
     request.addfinalizer(cleanup.close)
     cleanup.callback(runtime.close)
@@ -1615,7 +1617,7 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(
     )
     assert controller.preview_scene_id == CONTENT_SCENE_ID
     assert published_document_ids[-1] == "document-b"
-    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
+    assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
 
 def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
@@ -1712,9 +1714,9 @@ def test_live_scene_deletion_requires_and_takes_the_chosen_replacement(request) 
     )
 
     assert all(scene.id != CAMERA_SCENE_ID for scene in documents.document.scenes)
-    assert all(output.mode.value == "manual" for output in runtime.state.outputs)
+    assert all(output.mode.value == "auto" for output in runtime.state.outputs)
     assert {
-        output.manual_scene_id for output in runtime.state.outputs
+        output.base_scene_id for output in runtime.state.outputs
     } == {CONTENT_CAMERA_PIP_SCENE_ID}
 
 
@@ -1944,14 +1946,12 @@ def test_shutdown_cancels_a_profile_staged_behind_idle(
 
 
 def test_idle_recovery_health_is_reported_once_even_without_the_scenes_ui(request):
-    from solin.core.scenes.model import IdleScreenSourceConfig
-    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
 
     engine = _Engine()
     document = _document()
     document = replace(document, sources=(*document.sources, SourceDefinition(
-        id=IDLE_SCREEN_SOURCE_ID, kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen", configuration=IdleScreenSourceConfig(),
+        id="idle-capable-source", kind=SourceKind.SOLIN_CONTENT,
+        name="Idle screen", configuration=SolinContentConfig(),
     )))
     _, _, controller = _runtime_controller(
         request, engine, _Projection(), request_ids=(), document=document,
@@ -1960,7 +1960,7 @@ def test_idle_recovery_health_is_reported_once_even_without_the_scenes_ui(reques
     failures = []
     controller.idle_media_failed.connect(failures.append)
     event = SourceHealthEvent(
-        source_id=IDLE_SCREEN_SOURCE_ID, status=SourceHealthStatus.FAILED,
+        source_id="idle-capable-source", status=SourceHealthStatus.FAILED,
         error_code="idle_media_unavailable", message="Idle media unavailable",
     )
     engine.listener(event)
@@ -1984,7 +1984,7 @@ def test_idle_recovery_during_profile_hydration_uses_dispatched_document(
     scene_workspace_factory, request, tmp_path,
     current_has_idle, target_is_idle, stage_behind_idle, expected_failures,
 ):
-    from solin.core.scenes.model import ColorSourceConfig, IdleScreenSourceConfig
+    from solin.core.scenes.model import ColorSourceConfig
 
     class PendingEngine(_PendingGeometryEngine):
         defer_idle = False
@@ -2002,8 +2002,8 @@ def test_idle_recovery_during_profile_hydration_uses_dispatched_document(
     previous_id = workspace.active_collection.id
     source_id = "profile-recovery-source"
     source = SourceDefinition(
-        id=source_id, kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen", configuration=IdleScreenSourceConfig(),
+        id=source_id, kind=SourceKind.SOLIN_CONTENT,
+        name="Idle screen", configuration=SolinContentConfig(),
     )
     if current_has_idle:
         workspace.documents.create_source(source)
@@ -2061,13 +2061,13 @@ def test_idle_recovery_during_profile_hydration_uses_dispatched_document(
 
 @pytest.fixture
 def pending_profile_health(scene_workspace_factory, request, tmp_path):
-    from solin.core.scenes.model import ColorSourceConfig, IdleScreenSourceConfig
+    from solin.core.scenes.model import ColorSourceConfig
 
     workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     source_id = "reused-profile-health-source"
     workspace.documents.create_source(SourceDefinition(
-        id=source_id, kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen", configuration=IdleScreenSourceConfig(),
+        id=source_id, kind=SourceKind.SOLIN_CONTENT,
+        name="Idle screen", configuration=SolinContentConfig(),
     ))
     prepared = workspace.prepare_collection_activation(collection.id)
     prepared.documents.create_source(SourceDefinition(
@@ -2375,7 +2375,7 @@ def test_select_scene_during_media_returns_only_from_content_scenes(
     if has_content:
         assert runtime.state is state_before
     else:
-        assert runtime.state.output(bus_id).manual_scene_id == scene_id
+        assert runtime.state.output(bus_id).base_scene_id == scene_id
     projection.set_type("idle")
     assert controller.desired_scene(bus_id) == (
         CONTENT_CAMERA_PIP_SCENE_ID if has_content else scene_id
@@ -2528,7 +2528,7 @@ def test_selection_restores_auto_during_media_and_preserves_previously_pinned_re
     assert controller.desired_scene(bus_id) == NO_SIGNAL_SCENE_ID
     assert not controller.return_scene_override_available(bus_id)
     controller.select_scene(bus_id, CONTENT_SCENE_ID)
-    assert runtime.state.output(bus_id).manual_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+    assert runtime.state.output(bus_id).base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
     controller.set_return_scene(bus_id, CAMERA_SCENE_ID)
     projection.set_type("idle")
     assert controller.desired_scene(bus_id) == CAMERA_SCENE_ID
@@ -2550,7 +2550,7 @@ def test_removed_session_scene_and_return_fall_back_without_invalid_references(r
     controller.select_scene(BusId.MEDIA_WINDOWS, NO_SIGNAL_SCENE_ID)
     controller.resume_program_automation()
     projection.set_type("idle")
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == documents.document.scenes[0].id
 
 
 @pytest.mark.parametrize("stop_before_resuming", [False, True])
@@ -2600,14 +2600,14 @@ def test_auto_media_returns_after_operator_takes_another_content_scene(request) 
         request_ids=(),
     )
     projection.set_type("image")
-    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
 
     controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
     assert not controller.program_automation_suspended
     assert controller.program_return_scene_id == CAMERA_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == return_base_before
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == return_base_before
     controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID),))
     assert controller.program_return_override_available
     controller.set_program_return_scene(NO_SIGNAL_SCENE_ID)
@@ -2634,18 +2634,18 @@ def test_taking_a_content_scene_resumes_a_suspended_media_session(request) -> No
         request_ids=(),
     )
     projection.set_type("image")
-    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id
+    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
     controller.take_program_scene(NO_SIGNAL_SCENE_ID)
     assert controller.program_automation_suspended
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == NO_SIGNAL_SCENE_ID
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == NO_SIGNAL_SCENE_ID
 
     controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
     assert not controller.program_automation_suspended
     assert controller.program_return_scene_id == CAMERA_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == return_base_before
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == return_base_before
 
     projection.set_type("idle")
 
@@ -2752,64 +2752,23 @@ def test_disabling_automation_preserves_the_latest_desired_scene_during_take(req
 
     program = runtime.state.output(BusId.VIRTUAL_CAMERA)
     assert program.mode is OutputMode.MANUAL
-    assert program.manual_scene_id == CAMERA_SCENE_ID
+    assert program.base_scene_id == CAMERA_SCENE_ID
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
 
-def test_disabled_previous_scene_memory_returns_to_default(
-    request,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "solin.controllers.scene_runtime_controller.MEMORIZE_PRE_MEDIA_SCENE",
-        False,
-    )
+@pytest.mark.parametrize("bus_id", DELIVERY_BUSES)
+def test_media_base_is_preserved_when_resuming_automation(request, bus_id) -> None:
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
-        request,
-        _Engine(),
-        projection,
-        request_ids=(),
+        request, _Engine(), projection, request_ids=(),
     )
-    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
-
+    controller.select_scene(bus_id, CONTENT_SCENE_ID)
     projection.set_type("image")
-
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    assert controller.program_return_scene_id == CAMERA_SCENE_ID
-
+    controller.set_program_automatic(False)
+    controller.set_program_automatic(True)
     projection.set_type("idle")
-
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-
-
-@pytest.mark.parametrize("scene_id", [CONTENT_SCENE_ID, NO_SIGNAL_SCENE_ID])
-def test_disabled_previous_scene_memory_resets_only_automatic_outputs_to_their_defaults(
-    request,
-    monkeypatch: pytest.MonkeyPatch,
-    scene_id: str,
-) -> None:
-    monkeypatch.setattr("solin.controllers.scene_runtime_controller.MEMORIZE_PRE_MEDIA_SCENE", False)
-    document = _document()
-    document = replace(document, outputs=tuple(
-        replace(route, default_scene_id=CONTENT_CAMERA_PIP_SCENE_ID)
-        if route.bus_id is BusId.MEDIA_WINDOWS else route
-        for route in document.outputs
-    ))
-    projection = _Projection()
-    _documents, _runtime, controller = _runtime_controller(
-        request,
-        _Engine(), projection, request_ids=(), document=document,
-    )
-    controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
-    controller.take_scene(BusId.VIRTUAL_CAMERA, NO_SIGNAL_SCENE_ID)
-    projection.set_type("video")
-    controller.select_scene(BusId.MEDIA_WINDOWS, scene_id)
-    projection.set_type("idle")
-    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == (
-        CONTENT_CAMERA_PIP_SCENE_ID if scene_id == CONTENT_SCENE_ID else scene_id
-    )
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    assert runtime.state.output(bus_id).base_scene_id == CONTENT_SCENE_ID
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
 
 
 def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts(request) -> None:
@@ -3333,6 +3292,7 @@ def test_engine_recovery_republishes_empty_content_and_ignores_previous_generati
     _deliver_controller_results(controller)
     assert controller._empty_content_sent == (
         engine.generation, projection.session_id, controller._engine_document_revision,
+        controller._idle_applied_revision,
     )
 
 
@@ -3389,16 +3349,13 @@ def test_return_to_idle_commits_current_epoch_on_pinned_content_routes(
     assert controller._take_reconciliation_required == set()
 
 
-def test_timer_return_to_custom_content_default_prepares_idle_pixels(request) -> None:
+def test_timer_return_to_custom_content_base_prepares_idle_pixels(request) -> None:
     document = _document()
     content = next(scene for scene in document.scenes if scene.id == CONTENT_SCENE_ID)
     custom_idle = replace(content, id="custom-idle", name="Custom idle")
     document = replace(
         document,
         scenes=document.scenes + (custom_idle,),
-        outputs=tuple(
-            replace(output, default_scene_id=custom_idle.id) for output in document.outputs
-        ),
     )
     projection = _Projection()
     projection.idle_media_path = "idle.png"
@@ -3406,6 +3363,8 @@ def test_timer_return_to_custom_content_default_prepares_idle_pixels(request) ->
     _documents, _runtime, controller = _runtime_controller(
         request, engine, projection, request_ids=(), document=document,
     )
+    controller.select_scene(BusId.VIRTUAL_CAMERA, custom_idle.id)
+    controller.select_scene(BusId.MEDIA_WINDOWS, custom_idle.id)
     controller.start_engine()
     projection.set_type("timer")
     engine.preparations.clear()
@@ -5046,9 +5005,9 @@ def test_projection_and_program_can_show_different_scenes(request) -> None:
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_CAMERA_PIP_SCENE_ID
     # each output holds its own runtime selection
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).manual_scene_id == CONTENT_SCENE_ID
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CONTENT_SCENE_ID
     assert (
-        runtime.state.output(BusId.MEDIA_WINDOWS).manual_scene_id
+        runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id
         == CONTENT_CAMERA_PIP_SCENE_ID
     )
     # and each was prepared on its own bus
@@ -5057,25 +5016,17 @@ def test_projection_and_program_can_show_different_scenes(request) -> None:
     assert prepared[BusId.MEDIA_WINDOWS] == CONTENT_CAMERA_PIP_SCENE_ID
 
 
-def test_each_output_keeps_its_own_default_scene_across_a_save() -> None:
-    from solin.core.scenes.model import SceneDocument
+def test_each_output_keeps_its_own_base_scene_across_a_save(request) -> None:
+    from solin.core.scenes.runtime import SceneRuntimeState
 
-    documents = SceneDocumentService(_document())
-    documents.set_program_default_scene(CAMERA_SCENE_ID)
-    diverged = replace(
-        documents.document,
-        outputs=tuple(
-            replace(route, default_scene_id=CONTENT_SCENE_ID)
-            if route.bus_id is BusId.MEDIA_WINDOWS
-            else route
-            for route in documents.document.outputs
-        ),
+    _documents, runtime, controller = _runtime_controller(
+        request, _Engine(), _Projection(), request_ids=(),
     )
-
-    restored = SceneDocument.from_record(diverged.to_record())
-
-    assert restored.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
-    assert restored.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
+    controller.select_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+    restored = SceneRuntimeState.from_record(runtime.state.to_record())
+    assert restored.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+    assert restored.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
 
 
 def test_content_is_playing_tracks_what_the_content_channel_carries(request) -> None:
@@ -5097,3 +5048,208 @@ def test_content_is_playing_tracks_what_the_content_channel_carries(request) -> 
     # Idle is shared through its own source while Media stays transparent.
     projection.idle_media_path = "loop.mp4"
     assert controller.content_is_playing is False
+
+
+@pytest.mark.parametrize("bus_id", DELIVERY_BUSES)
+def test_media_can_be_base_and_explicit_return_without_an_immediate_take(request, bus_id):
+    projection, engine = _Projection(), _Engine()
+    _documents, runtime, controller = _runtime_controller(request, engine, projection, request_ids=())
+    controller.select_scene(bus_id, CONTENT_SCENE_ID)
+    controller.start_engine()
+    projection.set_type("image")
+    _deliver_controller_results(controller)
+    takes = tuple(engine.takes)
+    controller.set_return_scene(bus_id, CONTENT_SCENE_ID)
+    assert tuple(engine.takes) == takes
+    assert runtime.state.output(bus_id).base_scene_id == CONTENT_SCENE_ID
+    engine.preparations.clear()
+    engine.preparation_content_source_kinds.clear()
+    projection.set_type("idle")
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
+    assert controller.applied_scene(bus_id) == CONTENT_SCENE_ID
+    assert any(bus == bus_id for _, bus, *_ in engine.preparations)
+    assert all(kind is ContentSourceKind.IDLE for kind in engine.preparation_content_source_kinds)
+
+
+@pytest.mark.parametrize("bus_id", DELIVERY_BUSES)
+@pytest.mark.parametrize("resume_content", [False, True])
+def test_manual_camera_selection_only_returns_to_a_after_content_resumes(request, bus_id, resume_content):
+    projection = _Projection()
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), projection, request_ids=())
+    controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
+    other_bus = next(bus for bus in DELIVERY_BUSES if bus != bus_id)
+    other_base = runtime.state.output(other_bus)
+    projection.set_type("image")
+    controller.select_scene(bus_id, CAMERA_SCENE_ID)
+    if resume_content:
+        controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    projection.set_type("idle")
+    assert controller.desired_scene(bus_id) == (NO_SIGNAL_SCENE_ID if resume_content else CAMERA_SCENE_ID)
+    assert runtime.state.output(other_bus) == other_base
+
+
+@pytest.mark.parametrize("deleted_bus", DELIVERY_BUSES)
+def test_delete_live_scene_only_moves_outputs_referencing_it(request, deleted_bus):
+    _documents, runtime, controller = _runtime_controller(request, _Engine(), _Projection(), request_ids=())
+    other_bus = next(bus for bus in DELIVERY_BUSES if bus != deleted_bus)
+    controller.select_scene(deleted_bus, NO_SIGNAL_SCENE_ID)
+    controller.select_scene(other_bus, CONTENT_SCENE_ID)
+    controller.set_output_enabled(deleted_bus, True)
+    before = runtime.state.output(other_bus)
+    assert controller.program_scene_is_live(NO_SIGNAL_SCENE_ID)
+    with pytest.raises(SceneValidationError, match="live scene requires"):
+        controller.delete_scene(NO_SIGNAL_SCENE_ID)
+    controller.delete_scene(NO_SIGNAL_SCENE_ID, live_replacement_scene_id=CAMERA_SCENE_ID)
+    assert controller.desired_scene(deleted_bus) == CAMERA_SCENE_ID
+    assert runtime.state.output(other_bus) == before
+
+
+def test_idle_config_confirmation_prepares_idle_at_same_scene_and_epoch(request):
+    from solin.core.projection.application import ProjectionSession
+
+    class OrderedEngine(_PendingIdleEngine):
+        def __init__(self):
+            super().__init__()
+            self.presentation_commands = []
+
+        def clear_content_presentation(self, epoch, **options):
+            self.presentation_commands.append(("canonical", epoch))
+            return super().clear_content_presentation(epoch, **options)
+
+        def prepare_scene(self, bus_id, scene_id, **options):
+            self.presentation_commands.append(("prepare", bus_id))
+            return super().prepare_scene(bus_id, scene_id, **options)
+
+    session, engine = ProjectionSession(), OrderedEngine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, session, request_ids=())
+    for bus in DELIVERY_BUSES:
+        controller.select_scene(bus, CONTENT_SCENE_ID)
+    controller.start_engine()
+    epoch = session.presentation_session_id
+    controller.request_idle_media("next.mp4")
+    assert engine.presentation_commands == []
+    engine.finish_idle(0)
+    _deliver_controller_results(controller)
+    assert session.presentation_session_id == epoch
+    assert engine.presentation_commands[0] == ("canonical", epoch)
+    assert len(engine.preparations) == 3
+    assert engine.preparation_content_media_epochs == [epoch] * 3
+    assert engine.preparation_content_source_kinds == [ContentSourceKind.IDLE] * 3
+    assert all(scene == CONTENT_SCENE_ID for _, _, scene, *_ in engine.preparations)
+    assert all(controller.applied_scene(bus) == CONTENT_SCENE_ID for bus in DELIVERY_BUSES)
+
+
+@pytest.mark.parametrize("mode", list(SolinContentMode))
+@pytest.mark.parametrize("error", ["idle_media_unavailable", "idle_media_invalid", "media_unavailable"])
+def test_only_presentation_idle_errors_report_idle_failure(request, mode, error):
+    engine = _Engine()
+    document = _document()
+    source = SourceDefinition(
+        id="health-content", kind=SourceKind.SOLIN_CONTENT, name="Content",
+        configuration=SolinContentConfig(mode=mode),
+    )
+    document = replace(document, sources=document.sources + (source,))
+    _documents, _runtime, controller = _runtime_controller(request, engine, _Projection(), request_ids=(), document=document)
+    controller.start_engine()
+    failures = []
+    controller.idle_media_failed.connect(failures.append)
+    engine.listener(SourceHealthEvent(
+        source_id=source.id, status=SourceHealthStatus.FAILED, error_code=error,
+    ))
+    _deliver_controller_results(controller)
+    assert failures == ([error] if mode is SolinContentMode.PRESENTATION and error.startswith("idle_") else [])
+
+
+def test_profile_hydration_and_round_trip_keep_each_output_base(scene_workspace_factory, request, tmp_path):
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    first_id = workspace.active_collection.id
+    engine = _Engine()
+    controller = SceneRuntimeController(workspace, _Projection(), engine=engine)
+    request.addfinalizer(controller.close)
+    controller.activate_scene_profile(collection.id)
+    controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    controller.activate_scene_profile(first_id)
+    controller.select_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+    controller.start_engine()
+    for collection_id, expected in [
+        (collection.id, {BusId.MEDIA_WINDOWS: CAMERA_SCENE_ID, BusId.VIRTUAL_CAMERA: CONTENT_SCENE_ID}),
+        (first_id, {BusId.MEDIA_WINDOWS: CONTENT_SCENE_ID, BusId.VIRTUAL_CAMERA: CAMERA_SCENE_ID}),
+    ]:
+        controller.activate_scene_profile(collection_id)
+        _deliver_controller_results(controller)
+        snapshot = engine.snapshots[-1][1]
+        for bus, scene in expected.items():
+            assert dict(snapshot.active_scenes)[bus] == scene
+            assert controller.runtime.state.output(bus).base_scene_id == scene
+            assert controller.applied_scene(bus) == scene
+
+
+def test_fresh_profile_has_independent_initial_routes_without_configured_camera(scene_workspace_factory, request, tmp_path):
+    workspace, _collection = _real_workspace(scene_workspace_factory, tmp_path)
+    controller = SceneRuntimeController(workspace, _Projection())
+    request.addfinalizer(controller.close)
+    assert [scene.id for scene in controller.document.scenes] == [CONTENT_SCENE_ID, CAMERA_SCENE_ID]
+    assert controller.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert workspace.configured_cameras == ()
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert all(not output.enabled for output in controller.runtime.state.outputs)
+
+
+def test_rejected_idle_choice_does_not_replace_a_live_content_presentation(request):
+    from solin.core.projection.application import ProjectionSession
+
+    session, engine = ProjectionSession(), _PendingIdleEngine()
+    session.set_idle_media_path("current.mp4")
+    _documents, _runtime, controller = _runtime_controller(request, engine, session, request_ids=())
+    for bus in DELIVERY_BUSES:
+        controller.select_scene(bus, CONTENT_SCENE_ID)
+    controller.start_engine()
+    before = tuple(engine.takes)
+    controller.request_idle_media("invalid.mp4")
+    engine.finish_idle(0, applied=False)
+    _deliver_controller_results(controller)
+    assert session.idle_media_path == "current.mp4"
+    assert tuple(engine.takes) == before
+    assert not engine.preparations
+
+
+def test_idle_configuration_revision_supersedes_preparation_at_same_epoch(request, monkeypatch):
+    from solin.core.projection.application import ProjectionSession
+
+    session, engine = ProjectionSession(), _PendingIdleEngine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, session, request_ids=())
+    for bus in DELIVERY_BUSES:
+        controller.select_scene(bus, CONTENT_SCENE_ID)
+    controller.start_engine()
+    prepare = engine.prepare_scene
+    future = Future()
+    old_preparations = []
+
+    def defer_first_prepare(*args, **options):
+        result = prepare(*args, **options)
+        if not old_preparations:
+            old_preparations.append(result.result())
+            return future
+        return result
+
+    monkeypatch.setattr(engine, "prepare_scene", defer_first_prepare)
+    epoch = session.presentation_session_id
+    controller.request_idle_media("first.mp4")
+    engine.finish_idle(0)
+    _deliver_controller_results(controller)
+    old = old_preparations[0]
+    assert controller._pending[old.bus_id].idle_revision == engine.idle_requests[0][0].revision
+    controller.request_idle_media("latest.mp4")
+    engine.finish_idle(1)
+    _deliver_controller_results(controller)
+    future.set_result(old)
+    _deliver_controller_results(controller)
+    assert session.presentation_session_id == epoch
+    assert old.request_id in engine.cancelled
+    assert all(prepared.preparation_token != old.preparation_token for _, prepared in engine.takes)
+    assert len(engine.takes) == 3
+    assert engine.preparation_content_source_kinds == [ContentSourceKind.IDLE] * 4
+    assert session.idle_media_path == "latest.mp4"

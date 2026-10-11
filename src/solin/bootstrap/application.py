@@ -140,22 +140,17 @@ def _meeting_weekday_resolver(schedule_settings):
 def _scene_seed_names():
     from solin.core.scenes.presets import SceneSeedNames
 
-    translate = lambda source: QCoreApplication.translate("_Scenes", source)
-    idle_screen_name = QCoreApplication.translate("_Scenes", "Idle screen")
     return SceneSeedNames(
-        content_source=translate("Current Solin content"),
-        default_camera_source=translate("Default camera"),
-        no_signal_source=translate("No signal background"),
-        content_scene=translate("Content"),
-        camera_scene=translate("Camera"),
-        content_camera_pip_scene=translate("Content + camera"),
-        no_signal_scene=translate("No signal"),
-        content_layer=translate("Content"),
-        camera_layer=translate("Camera"),
-        background_layer=translate("Background"),
-        idle_screen_source=idle_screen_name,
-        default_scene=translate("Default"),
-        idle_screen_layer=idle_screen_name,
+        content_source=QCoreApplication.translate("_Scenes", "Solin Content"),
+        default_camera_source=QCoreApplication.translate("_Scenes", "Default camera"),
+        no_signal_source=QCoreApplication.translate("_Scenes", "No signal background"),
+        content_scene=QCoreApplication.translate("_Scenes", "Media"),
+        camera_scene=QCoreApplication.translate("_Scenes", "Camera"),
+        content_camera_pip_scene=QCoreApplication.translate("_Scenes", "Content + camera"),
+        no_signal_scene=QCoreApplication.translate("_Scenes", "No signal"),
+        content_layer=QCoreApplication.translate("_Scenes", "Solin Content"),
+        camera_layer=QCoreApplication.translate("_Scenes", "Camera"),
+        background_layer=QCoreApplication.translate("_Scenes", "Background"),
     )
 
 

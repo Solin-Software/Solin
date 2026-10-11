@@ -21,7 +21,7 @@ namespace {
 
 using Json = nlohmann::json;
 
-constexpr std::uint64_t kSceneSchemaVersion = 11U;
+constexpr std::uint64_t kSceneSchemaVersion = 12U;
 constexpr std::size_t kMaximumSources = 256U;
 constexpr std::size_t kMaximumScenes = 256U;
 constexpr std::size_t kMaximumLayersPerScene = 128U;
@@ -428,11 +428,14 @@ void validate_ptz_binding(const Json& value) {
     const auto kind = bounded_text(value.at("type"), 32U, "source kind");
     const auto& configuration = value.at("configuration");
     if (kind == "solin_content") {
-        require_exact_fields(configuration, {}, "Solin content configuration");
+        require_exact_fields(configuration, {"mode"}, "Solin content configuration");
+        const auto mode = bounded_text(configuration.at("mode"), 16U, "Solin content mode");
+        require_one_of(mode, {"presentation", "media_only"}, "Solin content mode");
         result.kind = SceneSourceKind::solin_content;
-    } else if (kind == "idle_screen") {
-        require_exact_fields(configuration, {}, "idle screen configuration");
-        result.kind = SceneSourceKind::idle_screen;
+        result.configuration = SolinContentSourceConfiguration{
+            .mode = mode == "presentation" ? SolinContentMode::presentation
+                                           : SolinContentMode::media_only,
+        };
     } else if (kind == "local_camera") {
         result.kind = SceneSourceKind::local_camera;
         result.configuration = parse_local_camera(configuration);
@@ -610,12 +613,10 @@ void validate_ptz_binding(const Json& value) {
 
 [[nodiscard]] SceneOutputDefinition parse_output(const Json& value) {
     require_exact_fields(value,
-                         {"bus_id", "default_scene_id", "start_with_solin", "video_format"},
+                         {"bus_id", "start_with_solin", "video_format"},
                          "output");
     return {
         .bus = output_bus(value.at("bus_id"), "output bus"),
-        .default_scene_id =
-            bounded_text(value.at("default_scene_id"), 128U, "output default scene", true),
         .start_with_solin = boolean(value.at("start_with_solin"), "output startup state"),
         .video_format = parse_output_video_format(value.at("video_format")),
     };
@@ -793,8 +794,7 @@ bool same_scene_document_source_definition(const SceneSource& left,
         left.enabled != right.enabled || left.configuration != right.configuration) {
         return false;
     }
-    if (left.kind == SceneSourceKind::solin_content &&
-        left.id == kSolinContentSourceId) {
+    if (left.kind == SceneSourceKind::solin_content) {
         return true;
     }
     return left.frame_channel == right.frame_channel;
@@ -846,26 +846,20 @@ parse_scene_hydration_snapshot(const Json& payload,
     std::unordered_map<std::string, SceneSourceKind> source_kind_by_id;
     std::unordered_map<std::string, std::string> reference_target_by_source;
     result.sources.reserve(document.at("sources").size());
-    std::size_t content_source_count = 0U;
     for (const auto& raw_source : document.at("sources")) {
         auto source = parse_source(raw_source);
         if (!source_kind_by_id.emplace(source.id, source.kind).second) {
             invalid("duplicate source id");
         }
-        if (source.kind == SceneSourceKind::solin_content) {
-            ++content_source_count;
-        } else if (source.kind == SceneSourceKind::scene_reference) {
+        if (source.kind == SceneSourceKind::scene_reference) {
             reference_target_by_source.emplace(
                 source.id,
                 std::get<SceneReferenceSourceConfiguration>(source.configuration).target_scene_id);
         }
         result.sources.push_back(std::move(source));
     }
-    const auto content_source = source_kind_by_id.find(std::string{kSolinContentSourceId});
     const auto no_signal_source = source_kind_by_id.find(std::string{kNoSignalSourceId});
-    if (content_source_count != 1U || content_source == source_kind_by_id.end() ||
-        content_source->second != SceneSourceKind::solin_content ||
-        no_signal_source == source_kind_by_id.end() ||
+    if (no_signal_source == source_kind_by_id.end() ||
         no_signal_source->second != SceneSourceKind::color) {
         invalid("reserved sources");
     }
@@ -940,9 +934,8 @@ parse_scene_hydration_snapshot(const Json& payload,
     for (const auto& raw_output : document.at("outputs")) {
         auto output = parse_output(raw_output);
         const auto index = bus_index(output.bus);
-        if (seen_output_buses[index] ||
-            (!output.default_scene_id.empty() && !scene_ids.contains(output.default_scene_id))) {
-            invalid("output scene reference");
+        if (seen_output_buses[index]) {
+            invalid("duplicate output bus");
         }
         seen_output_buses[index] = true;
         result.outputs[index] = std::move(output);
@@ -986,10 +979,11 @@ parse_scene_hydration_snapshot(const Json& payload,
     const auto& content_ingress = payload.at("content_ingress");
     if (!content_ingress.is_null()) {
         result.content_ingress = parse_frame_channel(content_ingress, "solin_offscreen");
-        const auto source = std::ranges::find_if(result.sources, [](const SceneSource& candidate) {
-            return candidate.id == kSolinContentSourceId;
-        });
-        source->frame_channel = result.content_ingress;
+        for (auto& source : result.sources) {
+            if (source.kind == SceneSourceKind::solin_content) {
+                source.frame_channel = result.content_ingress;
+            }
+        }
     }
     const auto& preview_egress = payload.at("preview_egress");
     if (!preview_egress.is_null()) {

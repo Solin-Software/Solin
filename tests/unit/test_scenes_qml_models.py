@@ -10,7 +10,6 @@ def _scene(scene_id: str, name: str) -> dict[str, object]:
         "id": scene_id,
         "name": name,
         "metadata": "",
-        "default": False,
         "media": False,
         "live": False,
         "transition_override": False,
@@ -42,3 +41,9 @@ def test_scene_model_emits_role_changes_after_a_move() -> None:
 
     assert changed.count() == 1
     assert model.get(0)["name"] == "Renamed"
+
+
+def test_scene_model_has_media_role_without_default_role() -> None:
+    roles = {bytes(name) for name in SceneListModel().roleNames().values()}
+    assert b"isMediaScene" in roles
+    assert b"isDefaultScene" not in roles

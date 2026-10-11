@@ -70,7 +70,8 @@ def _scenario(directory: Path, live_route: str) -> dict:
         document = {
             "revision": 7,
             "sources": [
-                {"id": "idle", "type": "idle_screen", "enabled": False, "configuration": {}},
+                {"id": "idle", "type": "solin_content", "enabled": False,
+                 "configuration": {"mode": "presentation"}},
                 {
                     "id": "nested-reference",
                     "type": "scene_reference",
@@ -116,19 +117,22 @@ def _scenario(directory: Path, live_route: str) -> dict:
             )
         )
         assert hydrated is not None and hydrated.payload["applied"]
-        owner, graph = engine._idle_source, engine._scene_graph
+        graph = engine._scene_graph
         projection_route = engine._projection_route
-        assert owner is not None and graph is not None and projection_route is not None
+        assert graph is not None and projection_route is not None
+        owner, shared = next(
+            (owner, source) for owner, source in engine._idle_presentations.values()
+            if source is graph.content_source
+        )
         assert owner._producer is not None
         idle = native._idle_decoder(owner)
         assert idle is not None
         presentation = owner._producer.source
-        shared = owner.source
         initial_hash = hashlib.sha256(
             native._assert_visible_contain(native._frame(shared))[0]
         ).hexdigest()
-        assert graph.scene_uses_idle_source("nested")
-        assert not graph.scene_uses_idle_source("other")
+        assert graph.scene_uses_presentation_source("nested")
+        assert not graph.scene_uses_presentation_source("other")
         assert runtime.active_source_tree_contains(graph.program_source, shared)
         assert runtime.active_source_tree_contains(projection_route.transition_source, shared)
         assert native._native_decoder_count() == 1

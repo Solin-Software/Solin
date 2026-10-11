@@ -12,7 +12,7 @@ from typing import Any, Final, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -64,6 +64,11 @@ class SceneValidationError(SceneDocumentError):
     pass
 
 
+class SolinContentMode(StrEnum):
+    PRESENTATION = "presentation"
+    MEDIA_ONLY = "media_only"
+
+
 class SourceKind(StrEnum):
     SOLIN_CONTENT = "solin_content"
     LOCAL_CAMERA = "local_camera"
@@ -71,9 +76,7 @@ class SourceKind(StrEnum):
     IMAGE = "image"
     COLOR = "color"
     SCENE_REFERENCE = "scene_reference"
-    # Session-owned idle content shared by all layers; configuration is external
-    # to the scene document. See IdleScreenSourceConfig.
-    IDLE_SCREEN = "idle_screen"
+
 
 
 class CameraMediaType(StrEnum):
@@ -602,13 +605,19 @@ class VideoFormat:
 
 @dataclass(frozen=True, slots=True)
 class SolinContentConfig:
+    mode: SolinContentMode = SolinContentMode.PRESENTATION
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, SolinContentMode):
+            raise SceneValidationError("Invalid Solin content mode")
+
     def to_record(self) -> dict[str, object]:
-        return {}
+        return {"mode": self.mode.value}
 
     @classmethod
     def from_record(cls, raw: object) -> SolinContentConfig:
-        _mapping(raw, field_name="source.configuration", allowed_keys=set())
-        return cls()
+        data = _mapping(raw, field_name="source.configuration", allowed_keys={"mode"})
+        return cls(mode=_enum(SolinContentMode, data.get("mode"), field_name="source.configuration.mode"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1066,23 +1075,6 @@ class ImageSourceConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class IdleScreenSourceConfig:
-    """Reference the session's idle content without duplicating media paths.
-
-    The shared content defaults to the rendered annual text. Each layer keeps
-    its own geometry, but there is nothing per-source to configure.
-    """
-
-    def to_record(self) -> dict[str, object]:
-        return {}
-
-    @classmethod
-    def from_record(cls, raw: object) -> "IdleScreenSourceConfig":
-        _mapping(raw, field_name="source.configuration", allowed_keys=set())
-        return cls()
-
-
-@dataclass(frozen=True, slots=True)
 class ColorSourceConfig:
     color: str = "#000000FF"
 
@@ -1141,7 +1133,6 @@ SourceConfig: TypeAlias = (
     | ImageSourceConfig
     | ColorSourceConfig
     | SceneReferenceConfig
-    | IdleScreenSourceConfig
 )
 
 _CONFIG_BY_SOURCE_KIND = {
@@ -1151,7 +1142,6 @@ _CONFIG_BY_SOURCE_KIND = {
     SourceKind.IMAGE: ImageSourceConfig,
     SourceKind.COLOR: ColorSourceConfig,
     SourceKind.SCENE_REFERENCE: SceneReferenceConfig,
-    SourceKind.IDLE_SCREEN: IdleScreenSourceConfig,
 }
 
 
@@ -1686,17 +1676,12 @@ class SceneDefinition:
 @dataclass(frozen=True, slots=True)
 class OutputRoute:
     bus_id: BusId
-    default_scene_id: str
     start_with_solin: bool = False
     video_format: VideoFormat = field(default_factory=VideoFormat)
 
     def __post_init__(self) -> None:
         if not isinstance(self.bus_id, BusId):
             raise SceneValidationError("Invalid output bus")
-        if self.default_scene_id:
-            _validate_identity(self.default_scene_id, field_name="output default scene id")
-        elif not isinstance(self.default_scene_id, str):
-            raise SceneValidationError("Invalid output default scene id")
         if not isinstance(self.start_with_solin, bool):
             raise SceneValidationError("Output startup state must be a boolean")
         if not isinstance(self.video_format, VideoFormat):
@@ -1705,7 +1690,6 @@ class OutputRoute:
     def to_record(self) -> dict[str, object]:
         return {
             "bus_id": self.bus_id.value,
-            "default_scene_id": self.default_scene_id,
             "start_with_solin": self.start_with_solin,
             "video_format": self.video_format.to_record(),
         }
@@ -1717,19 +1701,12 @@ class OutputRoute:
             field_name="output route",
             allowed_keys={
                 "bus_id",
-                "default_scene_id",
                 "start_with_solin",
                 "video_format",
             },
         )
         return cls(
             bus_id=_enum(BusId, data.get("bus_id"), field_name="output route.bus_id"),
-            default_scene_id=_string(
-                data.get("default_scene_id"),
-                field_name="output route.default_scene_id",
-                allow_empty=True,
-                maximum=128,
-            ),
             start_with_solin=_boolean(
                 data.get("start_with_solin", False),
                 field_name="output route.start_with_solin",
@@ -1897,11 +1874,6 @@ class SceneDocument:
                 "Transition overrides must reference existing scenes"
             )
 
-        content_source = source_by_id.get(CONTENT_SOURCE_ID)
-        if content_source is None or content_source.kind is not SourceKind.SOLIN_CONTENT:
-            raise SceneValidationError("Document must contain the Solin content source")
-        if sum(source.kind is SourceKind.SOLIN_CONTENT for source in self.sources) != 1:
-            raise SceneValidationError("Document must contain exactly one Solin content source")
         no_signal_source = source_by_id.get(NO_SIGNAL_SOURCE_ID)
         if no_signal_source is None or no_signal_source.kind is not SourceKind.COLOR:
             raise SceneValidationError("Document must contain the no-signal fallback source")
@@ -1975,8 +1947,8 @@ class SceneDocument:
         if {mapping.bus_id for mapping in self.automation} != expected_buses:
             raise SceneValidationError("Document must define automation for every bus")
 
-        # Each delivery output carries its OWN default scene: the projection can
-        # idle on the year text while the program idles on a camera.
+        # Delivery outputs share the media assignment; their selected bases live
+        # independently in the runtime state.
         automatic_categories = set(AUTOMATIC_MEDIA_CATEGORIES)
         program_assignments: dict[ContentCategory, str] | None = None
         for mapping in self.automation:
@@ -1996,11 +1968,6 @@ class SceneDocument:
                     "Every destination must share the Program media scene"
                 )
 
-        for route in self.outputs:
-            if route.default_scene_id and route.default_scene_id not in scene_ids:
-                raise SceneValidationError(
-                    f"Output {route.bus_id.value!r} references a missing default scene"
-                )
         for mapping in self.automation:
             for _, scene_id in mapping.assignments:
                 if scene_id not in scene_ids:
@@ -2449,34 +2416,26 @@ def _migrate_scene_document_record(
             continue
         if current_version == 10:
             sources = migrated.get("sources")
-            previous_names: dict[str, str] = {}
             if isinstance(sources, list):
                 for source in sources:
-                    if not isinstance(source, dict) or source.get("type") != "yeartext":
-                        continue
-                    source_id = source.get("id")
-                    old_name = source.get("name")
-                    if isinstance(source_id, str) and isinstance(old_name, str):
-                        previous_names[source_id] = old_name
-                    source["type"] = SourceKind.IDLE_SCREEN.value
-                    source["name"] = "Idle screen"
-            scenes = migrated.get("scenes")
-            if isinstance(scenes, list):
-                for scene in scenes:
-                    layers = scene.get("layers") if isinstance(scene, dict) else None
-                    if not isinstance(layers, list):
-                        continue
-                    for layer in layers:
-                        if not isinstance(layer, dict):
-                            continue
-                        source_id = layer.get("source_id")
-                        if (
-                            isinstance(source_id, str)
-                            and source_id in previous_names
-                            and layer.get("name") == previous_names[source_id]
-                        ):
-                            layer["name"] = "Idle screen"
+                    if isinstance(source, dict) and source.get("type") == "yeartext":
+                        source["type"] = "idle_screen"
             current_version = 11
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 11:
+            sources = migrated.get("sources")
+            if isinstance(sources, list):
+                for source in sources:
+                    if isinstance(source, dict) and source.get("type") in {"idle_screen", "solin_content"}:
+                        source["type"] = "solin_content"
+                        source["configuration"] = {"mode": "presentation"}
+            outputs = migrated.get("outputs")
+            if isinstance(outputs, list):
+                for route in outputs:
+                    if isinstance(route, dict):
+                        route.pop("default_scene_id", None)
+            current_version = 12
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

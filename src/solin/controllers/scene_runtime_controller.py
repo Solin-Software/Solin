@@ -8,7 +8,6 @@ from typing import Any, Protocol, cast
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
-from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 from solin.core.projection.application import projection_presentation_type
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.composition import scene_uses_content_source
@@ -37,7 +36,8 @@ from solin.core.scenes.engine import (
 from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.model import (
-    SourceKind,
+    SolinContentConfig,
+    SolinContentMode,
     DELIVERY_BUSES,
     AUTOMATIC_MEDIA_CATEGORIES,
     BusId,
@@ -120,6 +120,7 @@ class _PendingTake:
     document_revision: int
     content_presentation_id: int | None = None
     content_source_kind: ContentSourceKind = ContentSourceKind.FRAMES
+    idle_revision: int | None = None
     take_request_id: str = ""
     take_sequence: int = -1
 
@@ -185,7 +186,7 @@ class _PendingWindowTargets:
 class _AutomaticMediaSceneSelection:
     projection_session_id: int
     scene_id: str
-    return_scene_id: str | None
+    return_scene_id: str
 
 
 def content_category_for_projection(state: Mapping[str, Any]) -> ContentCategory:
@@ -289,8 +290,8 @@ class SceneRuntimeController(QObject):
         self._pending: dict[BusId, _PendingTake] = {}
         self._waiting_video_take: tuple[ScenePreparation, _PendingTake] | None = None
         self._ready_video_epoch: int | None = None
-        self._empty_content_sent: tuple[str, int, int] | None = None
-        self._empty_content_in_flight: tuple[tuple[str, int, int], str, int] | None = None
+        self._empty_content_sent: tuple[str, int, int, int] | None = None
+        self._empty_content_in_flight: tuple[tuple[str, int, int, int], str, int] | None = None
         self._empty_content_epoch: int | None = None
         self._failed_takes: set[tuple[BusId, str]] = set()
         self._take_reconciliation_required: set[BusId] = set()
@@ -505,11 +506,7 @@ class SceneRuntimeController(QObject):
 
         runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
         scene_ids = {scene.id for scene in self._documents.document.scenes}
-        media_scene_id = self._documents.program_media_scene_id
-        if runtime.manual_scene_id in scene_ids and runtime.manual_scene_id != media_scene_id:
-            return runtime.manual_scene_id
-        default_scene_id = self._documents.program_default_scene_id
-        return default_scene_id if default_scene_id in scene_ids else ""
+        return runtime.base_scene_id if runtime.base_scene_id in scene_ids else ""
 
     @property
     def program_return_override_available(self) -> bool:
@@ -532,8 +529,6 @@ class SceneRuntimeController(QObject):
             raise SceneValidationError(
                 "Program return can only change while the automatic media scene is live"
             )
-        if scene_id == self._documents.program_media_scene_id:
-            raise SceneValidationError("Program return scene must differ from media scene")
         return self._set_return_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
 
     def return_scene_override_available(self, bus_id: BusId) -> bool:
@@ -550,9 +545,6 @@ class SceneRuntimeController(QObject):
         self._documents.document.scene(scene_id)
         if not self.return_scene_override_available(bus_id):
             raise SceneValidationError("Return can only change during automatic media")
-        category = content_category_for_projection(self._projection.state)
-        if scene_id == self._documents.document.automation_for(bus_id).scene_for(category):
-            raise SceneValidationError("Return scene must differ from media scene")
         return self._set_return_scenes({bus_id: scene_id})
 
     def _set_return_scenes(self, selections: Mapping[BusId, str]) -> SceneRuntimeState:
@@ -575,12 +567,12 @@ class SceneRuntimeController(QObject):
         return self.set_program_automatic(True)
 
     def set_program_automatic(self, enabled: bool) -> SceneRuntimeState:
-        if enabled and not self._documents.program_automation_configured:
+        if enabled and not self._documents.media_automation_configured:
             raise SceneValidationError(
-                "Automatic switching requires different default and media scenes"
+                "Automatic switching requires a media scene"
             )
         previous_selections = self._automatic_media_scene_selections.copy()
-        scene_ids: dict[BusId, str | None] = {}
+        scene_ids: dict[BusId, str] = {}
         category = content_category_for_projection(self._projection.state)
         valid_scene_ids = {scene.id for scene in self._documents.document.scenes}
         if enabled:
@@ -588,15 +580,10 @@ class SceneRuntimeController(QObject):
                 selection = self._current_media_session_selection(bus_id)
                 scene_id = (
                     selection.return_scene_id if selection is not None
-                    else self._runtime.state.output(bus_id).manual_scene_id or None
+                    else self._runtime.state.output(bus_id).base_scene_id
                 )
-                automation = self._documents.document.automation_for(bus_id)
-                media_scene_ids = {
-                    automation.scene_for(media_category)
-                    for media_category in AUTOMATIC_MEDIA_CATEGORIES
-                }
-                if scene_id not in valid_scene_ids or scene_id in media_scene_ids:
-                    scene_id = self._documents.document.output(bus_id).default_scene_id or None
+                if scene_id not in valid_scene_ids:
+                    scene_id = self._documents.document.scenes[0].id
                 scene_ids[bus_id] = scene_id
             self._automatic_media_scene_selections.clear()
         else:
@@ -625,11 +612,11 @@ class SceneRuntimeController(QObject):
         """Return whether an enabled Program destination uses or is applying the scene."""
 
         self._documents.document.scene(scene_id)
-        program_enabled = any(output.enabled for output in self._runtime.state.outputs)
-        return program_enabled and scene_id in {
-            self.desired_scene(BusId.VIRTUAL_CAMERA),
-            self.applied_scene(BusId.VIRTUAL_CAMERA),
-        }
+        return any(
+            self._runtime.state.output(bus_id).enabled
+            and scene_id in {self.desired_scene(bus_id), self.applied_scene(bus_id)}
+            for bus_id in DELIVERY_BUSES
+        )
 
     def delete_scene(
         self,
@@ -649,8 +636,20 @@ class SceneRuntimeController(QObject):
             if live_replacement_scene_id == scene_id:
                 raise SceneValidationError("Live replacement scene must be different")
             self._documents.document.scene(live_replacement_scene_id)
-            self.take_program_scene(live_replacement_scene_id)
-        return self._documents.delete_scene(scene_id)
+            for bus_id in DELIVERY_BUSES:
+                if scene_id in {self.desired_scene(bus_id), self.applied_scene(bus_id)}:
+                    self.select_scene(bus_id, live_replacement_scene_id)
+        previous_selections = self._automatic_media_scene_selections.copy()
+        self._automatic_media_scene_selections = {
+            bus_id: selection
+            for bus_id, selection in previous_selections.items()
+            if selection.scene_id != scene_id
+        }
+        try:
+            return self._documents.delete_scene(scene_id)
+        except Exception:  # noqa: BLE001 - restore transient state on write failure
+            self._automatic_media_scene_selections = previous_selections
+            raise
 
     def activate_scene_profile(self, collection_id: str) -> Future[SceneEngineAck] | None:
         if self._profile_activation is not None:
@@ -676,8 +675,9 @@ class SceneRuntimeController(QObject):
         sequence = self._next_sequence()
         category = content_category_for_projection(self._projection.state)
         program_scene = activation.runtime.resolve_scene(BusId.VIRTUAL_CAMERA, category)
+        projection_scene = activation.runtime.resolve_scene(BusId.MEDIA_WINDOWS, category)
         active_scenes = (
-            (BusId.MEDIA_WINDOWS, program_scene),
+            (BusId.MEDIA_WINDOWS, projection_scene),
             (BusId.VIRTUAL_CAMERA, program_scene),
             (BusId.EDITOR, self._profile_preview_scene_id or program_scene),
         )
@@ -950,6 +950,15 @@ class SceneRuntimeController(QObject):
         if state == self._idle_screen:
             self._projection.set_idle_media_path(state.media_path)
             self.idle_media_applied.emit(state.media_path)
+            if content_category_for_projection(self._projection.state) is ContentCategory.IDLE:
+                self._pending_content_presentation_epoch = self._projection_session_id()
+                self._require_pending_content_takes()
+                self._failed_takes = {
+                    (bus_id, scene_id) for bus_id, scene_id in self._failed_takes
+                    if not scene_uses_content_source(self._documents.document, scene_id)
+                }
+                self._empty_content_epoch = self._projection_session_id()
+                self._schedule_next_take()
         self._dispatch_idle_screen()
         self._dispatch_profile_after_idle()
         if self._hydrate_dirty:
@@ -1310,6 +1319,17 @@ class SceneRuntimeController(QObject):
     def _on_document_changed(self, change: SceneDocumentChange) -> None:
         previous_document = self._observed_document
         self._observed_document = change.document
+        scene_ids = {scene.id for scene in change.document.scenes}
+        self._automatic_media_scene_selections = {
+            bus_id: replace(
+                selection,
+                return_scene_id=(selection.return_scene_id
+                                 if selection.return_scene_id in scene_ids
+                                 else change.document.scenes[0].id),
+            )
+            for bus_id, selection in self._automatic_media_scene_selections.items()
+            if selection.scene_id in scene_ids
+        }
         graph_record = scene_engine_graph_signature(change.document)
         graph_changed = graph_record != self._observed_graph_record
         self._observed_graph_record = graph_record
@@ -1405,15 +1425,6 @@ class SceneRuntimeController(QObject):
                 for bus_id, selection in self._automatic_media_scene_selections.items()
                 if self._runtime.state.output(bus_id).mode is OutputMode.MANUAL
             }
-            if (
-                not MEMORIZE_PRE_MEDIA_SCENE
-                and category in AUTOMATIC_MEDIA_CATEGORIES
-            ):
-                self._runtime.select_base_scenes({
-                    bus_id: self._documents.document.output(bus_id).default_scene_id or None
-                    for bus_id in DELIVERY_BUSES
-                    if self._runtime.state.output(bus_id).mode is OutputMode.AUTO
-                })
         self._notify_content_playing()
         self._reconcile_desired(prepare=True)
 
@@ -1499,7 +1510,10 @@ class SceneRuntimeController(QObject):
                     else self._documents.document
                 )
                 if event.status is SourceHealthStatus.FAILED and any(
-                    source.id == event.source_id and source.kind is SourceKind.IDLE_SCREEN
+                    source.id == event.source_id
+                    and isinstance(source.configuration, SolinContentConfig)
+                    and source.configuration.mode is SolinContentMode.PRESENTATION
+                    and event.error_code.startswith("idle_")
                     for source in health_document.sources
                 ):
                     self.idle_media_failed.emit(event.error_code)
@@ -1606,10 +1620,13 @@ class SceneRuntimeController(QObject):
                 return
 
     def _reconcile_empty_content(self) -> None:
-        """Retire canonical content independently of which scenes outputs select."""
+        """Prepare canonical idle independently of which scenes outputs select."""
         if self._engine is None or self._empty_content_epoch is None:
             return
-        identity = (self._process_generation, self._projection_session_id(), self._engine_document_revision)
+        identity = (
+            self._process_generation, self._projection_session_id(),
+            self._engine_document_revision, self._idle_applied_revision,
+        )
         if identity == self._empty_content_sent or self._empty_content_in_flight is not None:
             return
         request_id = self._request_id_factory()
@@ -1628,7 +1645,8 @@ class SceneRuntimeController(QObject):
         self._empty_content_in_flight = None
         identity, request_id, sequence = _context_tuple(context, 3, "clear content")
         if identity != (
-            self._process_generation, self._projection_session_id(), self._engine_document_revision,
+            self._process_generation, self._projection_session_id(),
+            self._engine_document_revision, self._idle_applied_revision,
         ) or projection_presentation_type(self._projection.state) != "idle":
             self._schedule_next_take()
             return
@@ -1647,7 +1665,7 @@ class SceneRuntimeController(QObject):
         if not ack.applied:
             self._report_rejection("clear_content", ack)
         else:
-            self._empty_content_sent = cast(tuple[str, int, int], identity)
+            self._empty_content_sent = cast(tuple[str, int, int, int], identity)
 
     def _reconcile_engine_outputs(self) -> None:
         destinations = self._destination_enabled()
@@ -1870,6 +1888,8 @@ class SceneRuntimeController(QObject):
             self._cancel_pending(bus_id, cancel_native=True)
         request_id = self._request_id_factory()
         sequence = self._next_sequence()
+        category = content_category_for_projection(self._projection.state)
+        uses_content = scene_uses_content_source(self._documents.document, scene_id)
         pending = _PendingTake(
             scene_id=scene_id,
             prepare_request_id=request_id,
@@ -1877,12 +1897,17 @@ class SceneRuntimeController(QObject):
             document_revision=self._engine_document_revision,
             content_presentation_id=(
                 self._projection_session_id()
-                if scene_uses_content_source(self._documents.document, scene_id)
-                else None
+                if uses_content else None
+            ),
+            idle_revision=(
+                self._idle_applied_revision
+                if uses_content and category is ContentCategory.IDLE else None
             ),
             content_source_kind=(
                 ContentSourceKind.NATIVE_MEDIA
-                if content_category_for_projection(self._projection.state) is ContentCategory.VIDEO
+                if category is ContentCategory.VIDEO
+                else ContentSourceKind.IDLE
+                if category is ContentCategory.IDLE
                 else ContentSourceKind.FRAMES
             ),
         )
@@ -1894,7 +1919,7 @@ class SceneRuntimeController(QObject):
             if bus_id is BusId.EDITOR
             else self._documents.effective_transition(scene_id)
         )
-        # Both producers use the visual presentation identity. Native media must
+        # Every producer uses the visual presentation identity. Native media must
         # resolve its source at Take, without waiting for app ingress in Prepare.
         content_source_kind = pending.content_source_kind
         future = self._engine.prepare_scene(
@@ -2288,8 +2313,10 @@ class SceneRuntimeController(QObject):
             return
         self._pending.pop(bus_id, None)
         if (
-            expected.content_presentation_id is not None
-            and expected.content_presentation_id != self._projection_session_id()
+            (expected.content_presentation_id is not None
+             and expected.content_presentation_id != self._projection_session_id())
+            or (expected.idle_revision is not None
+                and expected.idle_revision != self._idle_applied_revision)
         ):
             self._take_reconciliation_required.add(bus_id)
         else:
@@ -2502,6 +2529,8 @@ class SceneRuntimeController(QObject):
         presentation_id = expected.content_presentation_id
         if self.desired_scene(bus_id) == expected.scene_id and (
             presentation_id is None or presentation_id == self._projection_session_id()
+        ) and (
+            expected.idle_revision is None or expected.idle_revision == self._idle_applied_revision
         ):
             return False
         # Scene identity alone is insufficient: video and the next image can use
@@ -2703,6 +2732,8 @@ class SceneRuntimeController(QObject):
         return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
     def _scene_keeps_media_automation(self, scene_id: str) -> bool:
+        if not any(scene.id == scene_id for scene in self._documents.document.scenes):
+            return False
         return (
             scene_id == self._documents.program_media_scene_id
             or scene_uses_content_source(
@@ -2735,14 +2766,12 @@ class SceneRuntimeController(QObject):
                 projection_session_id=self._projection_session_id(),
                 scene_id=scene_id,
                 return_scene_id=(
-                    current.return_scene_id if current.return_scene_id in scene_ids else None
+                    current.return_scene_id if current.return_scene_id in scene_ids
+                    else self._documents.document.scenes[0].id
                 ),
             )
         runtime = self._runtime.state.output(bus_id)
-        return_scene_id = runtime.manual_scene_id or None
-        category = content_category_for_projection(self._projection.state)
-        if return_scene_id == self._documents.document.automation_for(bus_id).scene_for(category):
-            return_scene_id = None
+        return_scene_id = runtime.base_scene_id
         return _AutomaticMediaSceneSelection(
             projection_session_id=self._projection_session_id(),
             scene_id=scene_id,

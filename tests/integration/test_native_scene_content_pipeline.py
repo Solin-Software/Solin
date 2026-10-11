@@ -2,6 +2,8 @@ from __future__ import annotations
 import time
 import struct
 import re
+import json
+import statistics
 import subprocess
 import sys
 import textwrap
@@ -530,15 +532,23 @@ def _content_document() -> tuple[SceneDocument, SceneDefinition]:
         for scene in document.scenes
         if len(scene.layers) == 1 and scene.layers[0].source_id == CONTENT_SOURCE_ID
     )
-    return (
-        replace(
-            document,
-            outputs=tuple(
-                replace(route, default_scene_id=content_scene.id) for route in document.outputs
-            ),
-        ),
-        content_scene,
+    return document, content_scene
+
+
+def _select_black_return_scene(workspace) -> str:
+    """Choose explicit output bases for transport-retirement assertions."""
+    return_scene_id = workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
+    media_scene = workspace.documents.document.scene(workspace.documents.program_media_scene_id)
+    for layer in workspace.documents.document.scene(return_scene_id).layers:
+        workspace.documents.delete_layer(return_scene_id, layer.id)
+    workspace.documents.add_layer(
+        return_scene_id,
+        replace(media_scene.layers[0], id="return-background", source_id=NO_SIGNAL_SOURCE_ID),
     )
+    workspace.runtime.select_base_scenes({
+        BusId.VIRTUAL_CAMERA: return_scene_id, BusId.MEDIA_WINDOWS: return_scene_id,
+    })
+    return return_scene_id
 
 
 class _FontManager(QObject):
@@ -594,7 +604,7 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
     "preview_content", ["none", "thumbnails", "editor"],
     ids=["automatic-preview", "thumbnail-only", "content-preview"],
 )
-def test_closing_image_preserves_outgoing_pixels_until_default_transition(
+def test_closing_image_preserves_outgoing_pixels_until_return_transition(
     tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject,
     transition: TransitionSpec, preview_content: str,
 ) -> None:
@@ -605,11 +615,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
     workspace = scene_workspace_factory(paths, seed_names=_seed_names())
     workspace.documents.set_program_transition(transition)
     content_scene_id = workspace.documents.program_media_scene_id
-    default_scene_id = workspace.documents.program_default_scene_id
-    default_layer = workspace.documents.document.scene(default_scene_id).layers[0]
-    workspace.documents.update_layer(
-        default_scene_id, default_layer.id, replace(default_layer, source_id=NO_SIGNAL_SOURCE_ID),
-    )
+    return_scene_id = _select_black_return_scene(workspace)
     engine = _create_native_transition_engine(tmp_path)
     ingress = ContentFrameIngressController(
         publisher_factory=SharedMemoryContentPublisher,
@@ -643,7 +649,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
         controller.set_program_egress(program.descriptor)
         controller.start_engine()
         assert _wait_for(
-            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == return_scene_id,
             application=application, timeout=15,
         )
         if thumbnails is not None:
@@ -669,7 +675,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
         with _record_program_centers(program) as samples:
             projection.reset_state()
             # Allow ingress to deliver idle's transparent frame while Qt has not
-            # yet processed the asynchronous default Take acknowledgement.
+            # yet processed the asynchronous return Take acknowledgement.
             time.sleep(0.15)
             outgoing = tuple(samples)
             assert outgoing
@@ -681,18 +687,18 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
                     f"Idle blank erased the image before its transition: {outgoing!r}"
                 )
             assert _wait_for(
-                lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id
-                and controller.applied_scene(BusId.MEDIA_WINDOWS) == default_scene_id
+                lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == return_scene_id
+                and controller.applied_scene(BusId.MEDIA_WINDOWS) == return_scene_id
                 and not controller._pending,
                 application=application,
             )
             time.sleep(0.8)
         assert _program_pixel_matches(samples[-1][1], bytes((0, 0, 0, 255))), (
-            f"Program did not finish its return to Default: {samples!r}"
+            f"Program did not finish its return to its selected base: {samples!r}"
         )
         if transition.kind is not TransitionKind.CUT:
             assert any(6 < pixel[1] < 249 for _, pixel in samples), (
-                f"The outgoing image never faded into Default: {samples!r}"
+                f"The outgoing image never faded into its selected base: {samples!r}"
             )
             # Program egress can repeat an earlier GPU readback and subsequently
             # publish a later render. Delivery cadence cannot bound the pixel
@@ -721,7 +727,7 @@ def test_closing_image_preserves_outgoing_pixels_until_default_transition(
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
-@pytest.mark.parametrize("return_kind", ["idle", "image"], ids=["default-return", "image-return"])
+@pytest.mark.parametrize("return_kind", ["idle", "image"], ids=["base-return", "image-return"])
 @pytest.mark.parametrize(
     "transition",
     [
@@ -766,7 +772,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
     workspace.documents.set_program_transition(transition)
     content_scene_id = workspace.documents.program_media_scene_id
     assert content_scene_id is not None
-    default_scene_id = workspace.documents.program_default_scene_id
+    return_scene_id = _select_black_return_scene(workspace)
     engine = _create_native_transition_engine(tmp_path)
     ingress = ContentFrameIngressController(
         publisher_factory=SharedMemoryContentPublisher,
@@ -818,7 +824,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
         controller.set_program_egress(program.descriptor)
         controller.start_engine()
         assert _wait_for(
-            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == default_scene_id,
+            lambda: controller.applied_scene(BusId.VIRTUAL_CAMERA) == return_scene_id,
             application=application,
             timeout=15,
         ), observation()
@@ -966,7 +972,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                 )
                 close_latencies_ms.append((time.monotonic() - close_started_at) * 1000)
                 # IPC and Qt reconciliation are asynchronous. Observe the closed
-                # content scene before the default take can hide an invalid swap.
+                # content scene before the return Take can hide an invalid swap.
                 time.sleep(0.15)
                 outgoing = tuple(samples)
                 assert outgoing and all(
@@ -982,7 +988,7 @@ def test_video_auto_switch_reaches_program_without_app_decoded_frames(
                     destination_scene_id = content_scene_id
                 else:
                     projection.reset_state()
-                    destination_scene_id = default_scene_id
+                    destination_scene_id = return_scene_id
                 assert _wait_for(
                     lambda destination_scene_id=destination_scene_id: (
                         controller.applied_scene(BusId.VIRTUAL_CAMERA) == destination_scene_id
@@ -1375,7 +1381,8 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
         try:
             send("hello")
             send("hydrate", {"document": {
-                "sources": [{"id": "solin.content.current", "type": "content"}],
+                "sources": [{"id": "solin.content.current", "type": "solin_content",
+                             "configuration": {"mode": "presentation"}}],
                 "scenes": [{"id": "idle", "layers": []}, {"id": "content", "layers": [{
                     "id": "picture", "source_id": "solin.content.current",
                 }]}],
@@ -1610,6 +1617,7 @@ def test_return_to_cached_content_never_publishes_the_previous_presentation(
             "engine": _engine_observation(engine),
         }, width=120)
 
+        take(prepare(content_scene.id, content_media_epoch=1))
         for cycle in range(3):
             if cycle:
                 ingress.begin_presentation(cycle * 2 + 1)
@@ -1693,6 +1701,352 @@ def _run_native_readback(scenario: str) -> None:
         capture_output=True, text=True, timeout=30, check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("arrangement", ["flat", "nested"])
+def test_unified_content_modes_transition_and_restart_in_the_same_scene(
+    tmp_path: Path, arrangement: str,
+) -> None:
+    from tests.integration import test_native_idle_screen as native
+
+    if any(mark.name == "skipif" and mark.args[0] for mark in native.pytestmark):
+        pytest.skip("Native libobs and FFmpeg fixture tools required")
+    result = subprocess.run(
+        [sys.executable, "-B", "-X", "faulthandler", "-c", (
+            "import sys; from pathlib import Path; "
+            "from tests.integration.test_native_scene_content_pipeline import "
+            "_assert_unified_content_modes; "
+            "_assert_unified_content_modes(Path(sys.argv[1]), sys.argv[2])"
+        ), str(tmp_path), arrangement],
+        capture_output=True, text=True, errors="replace", timeout=45, check=False,
+        cwd=Path(__file__).resolve().parents[2],
+    )
+    assert result.returncode == 0, (result.stdout + result.stderr)[-16000:]
+    report = json.loads((tmp_path / "unified-metrics.json").read_text(encoding="utf-8"))
+    assert report["samples"] == 8
+    assert report["retired_idle_owners"] == 8
+    assert all(1 <= count <= 2 for count in report["steady_native_decoders"])
+    assert report["native_decoders_before_runtime_shutdown"] == 0
+    print("NATIVE_UNIFIED_CONTENT", json.dumps(report, sort_keys=True))
+
+
+def _assert_unified_content_modes(directory: Path, arrangement: str) -> None:
+    """Real native Takes preserve both content modes across presentation generations."""
+    from contextlib import ExitStack
+    from types import SimpleNamespace
+
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import shutdown as shutdown_readback
+    from solin.core.scenes.idle import IdleScreenState
+    from solin.core.scenes.ipc_protocol import SceneIpcEnvelope
+    from solin.core.scenes.libobs_media_source import STATE_PLAYING
+    from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
+    from solin.core.scenes.libobs_idle_source import LibobsIdleSource
+    from pylibobs._ffi import ffi, get_lib
+    from tests.integration import test_native_idle_screen as native
+
+    deadline = time.monotonic() + 38
+    video = directory / "idle-first-red-then-blue.mp4"
+    native._command([
+        "ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+        "color=red:size=160x90:rate=30:duration=4,"
+        "drawbox=color=blue:t=fill:enable='gte(t,1.2)'",
+        "-f", "lavfi", "-i", "sine=frequency=750:sample_rate=48000",
+        "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(video),
+    ], deadline)
+    foreground = directory / "foreground.gif"
+    images = [Image.new("RGB", (160, 90), "green") for _ in range(8)]
+    try:
+        for index, image in enumerate(images):
+            image.putpixel((0, 0), (index * 25,) * 3)
+        images[0].save(foreground, save_all=True, append_images=images[1:], duration=200, loop=0)
+    finally:
+        for image in images:
+            image.close()
+
+    sequence = 0
+    with ExitStack() as stack:
+        runtime = ObsRuntime()
+        stack.callback(runtime.shutdown)
+        runtime.ensure_started(width=native._WIDTH, height=native._HEIGHT, fps=native._FPS)
+        engine = LibobsSidecarEngine(lambda: runtime)
+        stack.callback(engine.shutdown)
+        stack.callback(shutdown_readback)
+
+        def send(kind, payload=None):
+            nonlocal sequence
+            sequence += 1
+            response = engine.handle(SceneIpcEnvelope(
+                kind, f"unified-{sequence}", "native-unified", "generation-1", sequence, 7,
+                int((time.monotonic() + native._remaining(deadline)) * 1000), payload or {},
+            ))
+            assert response is not None and response.message_type != "error", response
+            assert response.payload.get("applied", True), response
+            return response
+
+        send("hello")
+        # Stop readback callbacks before releasing their graphics context.
+        assert engine._preview_egress is not None and engine._program_egress is not None
+        stack.callback(engine._preview_egress.shutdown)
+        stack.callback(engine._program_egress.shutdown)
+        state = IdleScreenState(10, str(video), "", 0)
+        baseline_preparation = []
+        with ExitStack() as baseline_stack:
+            configuration = LibobsIdleSource(runtime)
+            baseline_stack.callback(configuration.close)
+            configuration.apply(state, int((time.monotonic() + native._remaining(deadline)) * 1000))
+            # Exclude the first transfer of the already-prepared configuration.
+            configuration.prepare_presentation(
+                int((time.monotonic() + native._remaining(deadline)) * 1000),
+            ).close()
+            for _ in range(8):
+                started = time.perf_counter()
+                owner = configuration.prepare_presentation(
+                    int((time.monotonic() + native._remaining(deadline)) * 1000),
+                )
+                baseline_preparation.append((time.perf_counter() - started) * 1000)
+                try:
+                    assert native._native_decoder_count() == 1
+                finally:
+                    owner.close()
+        assert native._native_decoder_count() == 0
+        scene_id = "combined" if arrangement == "flat" else "parent"
+        sources = [
+            {"id": "presentation", "type": "solin_content",
+             "configuration": {"mode": "presentation"}},
+            {"id": "foreground", "type": "solin_content",
+             "configuration": {"mode": "media_only"}},
+            {"id": "background", "type": "color", "configuration": {"color": "#00ffff"}},
+        ]
+        scenes = [{"id": "combined", "layers": [
+            {"id": "background", "source_id": "background"},
+            {"id": "presentation", "source_id": "presentation", "fit_mode": "stretch",
+             "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 1.0}},
+            {"id": "foreground", "source_id": "foreground", "fit_mode": "stretch",
+             "rect": {"x": 0.5, "y": 0.0, "width": 0.5, "height": 1.0}},
+        ]}]
+        if arrangement == "nested":
+            sources.append({"id": "child", "type": "scene_reference",
+                            "configuration": {"target_scene_id": "combined"}})
+            scenes.append({"id": "parent", "layers": [{"id": "child", "source_id": "child"}]})
+        buses = ("virtual_camera", "media_windows", "editor")
+        send("hydrate", {
+            "document": {"revision": 7, "sources": sources, "scenes": scenes},
+            "idle_screen": state.to_record(),
+            "active_scenes": dict.fromkeys(buses, scene_id),
+            "render_enabled": dict.fromkeys(buses, True),
+            "output_enabled": {"virtual_camera": False},
+        })
+        graph, projection = engine._scene_graph, engine._projection_route
+        assert graph is not None and projection is not None
+        assert graph.scene_uses_presentation_source(scene_id)
+
+        def idle_owner(source):
+            return next(owner for owner, cached in engine._idle_presentations.values()
+                        if cached is source)
+
+        initial_source = graph.content_source
+        initial_owner = idle_owner(initial_source)
+        initial_pixels = native._frame(initial_source)
+        assert initial_pixels is not None
+        assert not initial_owner._live_demand
+
+        def capture(source):
+            frame = native._frame(source)
+            assert frame is not None
+            pixels, stride = frame
+            return tuple(pixels[45 * stride + x * 4:45 * stride + (x + 1) * 4]
+                         for x in (40, 120))
+
+        def matches(actual, expected):
+            return all(_program_pixel_matches(a, b)
+                       for a, b in zip(actual, expected, strict=True))
+
+        initial_data, initial_stride = initial_pixels
+        red = initial_data[45 * initial_stride + 80 * 4:45 * initial_stride + 81 * 4]
+        assert red[2] > 240 and max(red[:2]) < 35 and red[3] == 255, red
+        green, background = bytes((0, 128, 0, 255)), bytes((255, 255, 0, 255))
+
+        def blue_on_air():
+            left, right = capture(graph.program_source)
+            return (left[0] > 240 and max(left[1:3]) < 35 and left[3] == 255
+                    and _program_pixel_matches(right, background))
+        try:
+            native._wait_for(lambda: matches(capture(graph.program_source), (red, background)), deadline)
+        except AssertionError as error:
+            raise AssertionError({
+                "program": capture(graph.program_source),
+                "scene": capture(graph.scene_source(scene_id)),
+                "idle": capture(initial_source),
+                "canvas": (runtime.video.width, runtime.video.height),
+                "items": [(record["layer"], record["item"].source.width,
+                           record["item"].source.height) for record in graph._scene_layers[scene_id]],
+            }) from error
+        empty = native._frame(graph.media_only_source)
+        assert empty is not None and all(alpha == 0 for alpha in empty[0][3::4])
+
+        camera = SimpleNamespace(active=True)
+        camera.stop = lambda: setattr(camera, "active", False)
+        patch = stack.enter_context(pytest.MonkeyPatch.context())
+        patch.setattr(engine, "_virtual_camera", camera)
+        native._wait_decoder(initial_owner, lambda decoder: decoder.media_state == STATE_PLAYING, deadline)
+        native._wait_for(blue_on_air, deadline)
+        decoder = native._idle_decoder(initial_owner)
+        assert decoder.muted and decoder.volume == 0 and decoder.audio_mixers == 0
+
+        def prepare(epoch, kind, duration=600):
+            return [send("prepare_scene", {
+                "bus_id": bus, "scene_id": scene_id,
+                "transition": {"kind": "cut" if duration == 0 else "dissolve", "duration_ms": duration},
+                "content_media_epoch": epoch, "content_source_kind": kind.value,
+            }).payload["preparation_token"] for bus in buses]
+
+        def take(tokens):
+            for bus, token in zip(buses, tokens, strict=True):
+                send("take_prepared", {"bus_id": bus, "scene_id": scene_id,
+                                       "preparation_token": token})
+            assert graph._active_scene_id == scene_id and projection.scene_id == scene_id
+
+        def settle(expected):
+            samples = []
+
+            def finished():
+                samples.append(capture(graph.program_source))
+                # Projection has no physical display in this isolated process.
+                capture(projection.transition_source)
+                return matches(samples[-1], expected) and graph.program_source.progress >= 1.0
+
+            native._wait_for(finished, deadline)
+            return samples
+
+        send("open_media", {"path": str(foreground), "autoplay": False,
+                            "is_local_file": True, "content_media_epoch": 1})
+        take(prepare(1, ContentSourceKind.NATIVE_MEDIA))
+        entered = settle((green, green))
+        assert any(10 < left[1] < 120 and left[0] > 10 for left, _right in entered), entered
+        assert graph.content_source is graph.media_only_source
+
+        returning = prepare(2, ContentSourceKind.IDLE)
+        return_source = engine._current_content_source((ContentSourceKind.IDLE, 2))
+        return_owner = idle_owner(return_source)
+        assert return_owner is not initial_owner
+        assert native._frame(return_source) == initial_pixels, "Idle did not prepare its first pixels"
+        take(returning)
+        returned = settle((red, background))
+        assert any(10 < left[1] < 120 and left[2] > 10 for left, _right in returned), returned
+        native._wait_for(blue_on_air, deadline)
+
+        # Return while the outgoing blue idle still belongs to a live transition.
+        send("open_media", {"path": str(foreground), "autoplay": False,
+                            "is_local_file": True, "content_media_epoch": 3})
+        take(prepare(3, ContentSourceKind.NATIVE_MEDIA, duration=2000))
+        rapid = prepare(4, ContentSourceKind.IDLE)
+        rapid_source = engine._current_content_source((ContentSourceKind.IDLE, 4))
+        rapid_owner = idle_owner(rapid_source)
+        assert rapid_owner is not return_owner
+        assert runtime.transition_source_tree_contains(graph.program_source, return_source)
+        assert return_owner._live_demand, "The test must retain a live outgoing idle generation"
+        assert not rapid_owner._live_demand
+        assert native._frame(rapid_source) == initial_pixels, "Rapid return reused a later video frame"
+        take(rapid)
+        settle((red, background))
+        native._wait_decoder(rapid_owner, lambda decoder: decoder.media_state == STATE_PLAYING, deadline)
+        assert graph.content_source is rapid_source
+        assert runtime.active_source_tree_contains(graph.scene_source(scene_id), rapid_source)
+        assert runtime.active_source_tree_contains(projection.scene_source, rapid_source)
+
+        send("control_media", {"action": "close"})
+        lib = get_lib()
+        get_weak = ffi.cast("obs_weak_source_t *(*)(obs_source_t *)", lib.obs_source_get_weak_source)
+        preparation_ms, switch_ms, retirement_ms = [], [], []
+        peak_decoders, steady_decoders = [], []
+        weak_sources = []
+        retired_at = []
+        for epoch in range(5, 13):
+            previous = graph.content_source
+            weak = get_weak(previous._ptr)
+            weak_sources.append(weak)
+            stack.callback(lib.obs_weak_source_release, weak)
+            started = time.perf_counter()
+            tokens = prepare(epoch, ContentSourceKind.IDLE, duration=0)
+            preparation_ms.append((time.perf_counter() - started) * 1000)
+            peak_decoders.append(native._native_decoder_count())
+            incoming = engine._current_content_source((ContentSourceKind.IDLE, epoch))
+            assert native._frame(incoming) == initial_pixels
+            started = time.perf_counter()
+            take(tokens)
+            switch_ms.append((time.perf_counter() - started) * 1000)
+            retired_at.append(time.perf_counter())
+
+            def retired(older=tuple(weak_sources[:-1])):
+                # Complete both native output transitions and then run the same
+                # lifetime collector used after accepted presentation commits.
+                capture(graph.program_source)
+                capture(projection.transition_source)
+                engine._collect_retired_presentations()
+                # OBS may retain one completed origin, even after Cut. It loses
+                # its final native reference on the next Take. Require every
+                # older origin to expire; a growing pool is a lifetime failure.
+                return all(lib.obs_weak_source_expired(source) for source in older)
+
+            try:
+                native._wait_for(retired, deadline)
+            except AssertionError as error:
+                raise AssertionError({
+                    "epoch": epoch, "pool": list(engine._idle_presentations),
+                    "expired": bool(lib.obs_weak_source_expired(weak)),
+                    "native_decoders": native._native_decoder_count(),
+                    "program_progress": graph.program_source.progress,
+                    "projection_progress": projection.transition_source.progress,
+                    "preview_contains": runtime.active_source_tree_contains(
+                        engine._preview_egress.scene_source, previous),
+                    "preview_active": engine._preview_egress.active,
+                    "retired_scenes": [[(name, scene.as_source().showing)
+                                        for name, scene in scenes.items()]
+                                       for scenes, _sources in graph._retired_presentations],
+                }) from error
+            if len(retired_at) > 1:
+                retirement_ms.append((time.perf_counter() - retired_at[-2]) * 1000)
+            native._wait_for(lambda: native._native_decoder_count() <= 2, deadline)
+            steady_decoders.append(native._native_decoder_count())
+            assert len(engine._idle_presentations) <= 2
+
+        engine._preview_egress.shutdown()
+        engine._program_egress.shutdown()
+        shutdown_readback()
+        shutdown_counts = []
+        shutdown_runtime = runtime.shutdown
+
+        def audit_shutdown():
+            # Native source enumeration needs a live OBS context. Observe after
+            # sidecar-owned sources close, immediately before global shutdown.
+            shutdown_counts.append(native._native_decoder_count())
+            shutdown_runtime()
+
+        patch.setattr(runtime, "shutdown", audit_shutdown)
+        engine.shutdown()
+        assert all(lib.obs_weak_source_expired(weak) for weak in weak_sources)
+        assert shutdown_counts == [0], shutdown_counts
+
+        def metrics(values):
+            return {"p50_ms": round(statistics.median(values), 3),
+                    "p95_ms": round(native._percentile(values, 0.95), 3),
+                    "samples_ms": [round(value, 3) for value in values]}
+
+        report = {
+            "arrangement": arrangement, "samples": len(preparation_ms),
+            "producer_only_preparation": metrics(baseline_preparation),
+            "unified_return_preparation": metrics(preparation_ms),
+            "unified_switch_three_buses": metrics(switch_ms),
+            "retirement": metrics(retirement_ms),
+            "peak_native_decoders": peak_decoders,
+            "steady_native_decoders": steady_decoders,
+            "retired_idle_owners": sum(bool(lib.obs_weak_source_expired(weak)) for weak in weak_sources),
+            "native_decoders_before_runtime_shutdown": shutdown_counts[0],
+            "retirement_metric": "Actual native expiry after the next Take releases OBS' completed origin",
+            "comparison": "Same asset/runtime; producer-only preparation vs preparation of three output tokens",
+        }
+        (directory / "unified-metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
 
 def test_native_readback_preserves_source_alpha_and_flattens_scene_background() -> None:
@@ -2125,6 +2479,9 @@ def test_actual_size_content_reaches_composed_libobs_output() -> None:
         ).result(15)
         assert acknowledged.applied
 
+        ingress.begin_presentation(0)
+        ingress.submit_frame(image)
+        _take_content_presentation(engine, document, content_scene, 0)
         deadline = time.monotonic() + 8.0
         while time.monotonic() < deadline:
             ingress.submit_frame(image)
@@ -2387,6 +2744,8 @@ def test_libobs_image_framing_preserves_aspect_and_normalized_pan() -> None:
         yellow = bytes((0x20, 0xD0, 0xE0, 0xFF))
         probe = _PixelWaitProbe()
         output = None
+        ingress.submit_frame(quadrants)
+        _take_content_presentation(engine, document, content_scene, 1)
         deadline = time.monotonic() + 8.0
         while output is None and time.monotonic() < deadline:
             ingress.submit_frame(quadrants)

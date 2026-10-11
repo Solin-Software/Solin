@@ -27,6 +27,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     BusId,
+    DEFAULT_CAMERA_SOURCE_ID,
     CameraMediaType,
     Crop,
     FitMode,
@@ -40,13 +41,14 @@ from solin.core.scenes.model import (
     SceneReferenceConfig,
     SourceDefinition,
     SourceKind,
+    SolinContentConfig,
+    SolinContentMode,
     TransitionKind,
     new_identity,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_SCENE_ID,
-    DEFAULT_SCENE_ID,
     SceneSeedNames,
 )
 from solin.core.scenes.recording import (
@@ -269,6 +271,15 @@ def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
         )
         paths.ensure_dirs()
         workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+        camera = SourceDefinition(
+            id=DEFAULT_CAMERA_SOURCE_ID, kind=SourceKind.LOCAL_CAMERA,
+            name="Default camera", configuration=LocalCameraConfig(),
+        )
+        if not workspace.configured_cameras:
+            workspace.upsert_camera(camera, add_to_active_document=True)
+            workspace.documents.add_layer(CAMERA_SCENE_ID, SceneLayer(
+                id="configured-camera-layer", source_id=camera.id, name="Camera",
+            ))
         controller = SceneRuntimeController(workspace, _Projection(), ptz=ptz)
         controller.set_editor_source_preview = source_preview or EditorSourcePreview()
         cleanup.callback(controller.close)
@@ -362,7 +373,7 @@ def _enable_default_camera_ptz(
         ),
     )
     workspace.upsert_camera(updated, add_to_active_document=False)
-    scene = controller.document.scenes[0]
+    scene = controller.document.scene(CAMERA_SCENE_ID)
     layer = scene.layers[0]
     return camera.id, layer.id
 
@@ -509,7 +520,7 @@ def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_
 def test_bridge_persists_shared_ptz_presets_and_scene_actions(scene_bridge_factory) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id, _ = _enable_default_camera_ptz(workspace, controller)
-    # The default camera layer lives in the Camera scene (scene 0 is now Default).
+    # The configured camera layer lives in the Camera scene.
     bridge.selectScene(CAMERA_SCENE_ID)
     layer_id = controller.document.scene(CAMERA_SCENE_ID).layers[0].id
     bridge.selectLayer(layer_id)
@@ -588,85 +599,67 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
 
     scene = controller.document.scene(bridge.selectedSceneId)
     virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
-    # First-run ships Default + Camera + Content; the new "Custom" scene makes four.
-    assert bridge.scenesModel.rowCount() == 4
+    # First-run ships Content + Camera; the new Custom scene makes three.
+    assert bridge.scenesModel.rowCount() == 3
     assert len(scene.layers) == 1
     assert virtual.mode is OutputMode.AUTO
-    assert virtual.manual_scene_id == scene.id
+    assert virtual.base_scene_id == scene.id
     assert bridge.selectedSceneDesired
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
 
 
-def test_bridge_add_idle_screen_adds_a_full_size_layer_and_reuses_one_source(
+def test_bridge_add_content_adds_full_size_layers_and_reuses_presentation_source(
     scene_bridge_factory,
 ) -> None:
-    from solin.core.scenes.model import SourceKind
-
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.createScene("Talk")
-    talk_id = bridge.selectedSceneId
-
-    bridge.addIdleScreen()
-
-    scene = controller.document.scene(talk_id)
-    assert len(scene.layers) == 1
-    layer = scene.layers[0]
-    source = controller.document.source(layer.source_id)
-    assert source.kind is SourceKind.IDLE_SCREEN
-    # full-size by default
-    assert (layer.rect.x, layer.rect.y, layer.rect.width, layer.rect.height) == (
-        0.0,
-        0.0,
-        1.0,
-        1.0,
-    )
-
-    # Adding the year text to another scene reuses the single global source.
+    bridge.addContentSource()
+    first = controller.document.scene(bridge.selectedSceneId).layers[0]
+    source = controller.document.source(first.source_id)
+    assert source.kind is SourceKind.SOLIN_CONTENT
+    assert source.configuration.mode is SolinContentMode.PRESENTATION
+    assert first.rect == NormalizedRect()
     bridge.createScene("Consideration")
-    bridge.addIdleScreen()
-    idle_screen_sources = [
-        s for s in controller.document.sources if s.kind is SourceKind.IDLE_SCREEN
-    ]
-    assert len(idle_screen_sources) == 1
+    bridge.addContentSource()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].source_id == source.id
+    assert not hasattr(bridge, "addIdleScreen")
+    assert not hasattr(bridge, "contentIdle")
 
 
-def test_bridge_add_idle_creates_canonical_source_when_absent(scene_bridge_factory) -> None:
-    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
-
+def test_bridge_add_content_creates_presentation_when_only_media_exists(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
-    controller.documents.delete_source(IDLE_SCREEN_SOURCE_ID, cascade=True)
+    for source in controller.document.sources:
+        if source.kind is SourceKind.SOLIN_CONTENT:
+            controller.documents.delete_source(source.id, cascade=True)
+    only = SourceDefinition(
+        id="foreground-only", kind=SourceKind.SOLIN_CONTENT, name="Only Media",
+        configuration=SolinContentConfig(mode=SolinContentMode.MEDIA_ONLY),
+    )
+    controller.documents.create_source(only)
     bridge.createScene("Talk")
-
-    bridge.addIdleScreen()
-
-    scene = controller.document.scene(bridge.selectedSceneId)
-    source = controller.document.source(IDLE_SCREEN_SOURCE_ID)
-    assert scene.layers[0].source_id == IDLE_SCREEN_SOURCE_ID
-    assert source.kind is SourceKind.IDLE_SCREEN
-    assert source.configuration.to_record() == {}
-    assert source.name == "Idle screen"
-    assert bridge.layersModel.get(0)["kind"] == "idle_screen"
+    bridge.addContentSource()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    source = controller.document.source(layer.source_id)
+    assert source.id != only.id
+    assert source.name == "Solin Content"
+    assert source.configuration.mode is SolinContentMode.PRESENTATION
+    assert bridge.layersModel.get(0)["kind"] == "solin_content"
 
 
-def test_bridge_add_idle_reuses_migrated_source_identity(scene_bridge_factory) -> None:
-    from solin.core.scenes.model import IdleScreenSourceConfig
-    from solin.core.scenes.presets import IDLE_SCREEN_SOURCE_ID
-
+def test_bridge_add_content_reuses_arbitrary_presentation_identity(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
-    controller.documents.delete_source(IDLE_SCREEN_SOURCE_ID, cascade=True)
+    for source in controller.document.sources:
+        if source.kind is SourceKind.SOLIN_CONTENT:
+            controller.documents.delete_source(source.id, cascade=True)
     source = SourceDefinition(
-        id="solin.yeartext.current", kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen", configuration=IdleScreenSourceConfig(),
+        id="migrated-idle", kind=SourceKind.SOLIN_CONTENT,
+        name="Custom presentation", configuration=SolinContentConfig(),
     )
     controller.documents.create_source(source)
     bridge.createScene("Talk")
-
-    bridge.addIdleScreen()
-
-    scene = controller.document.scene(bridge.selectedSceneId)
-    assert scene.layers[0].source_id == source.id
-    assert [s.id for s in controller.document.sources if s.kind is SourceKind.IDLE_SCREEN] == [source.id]
+    bridge.addContentSource()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].source_id == source.id
 
 
 def test_bridge_preserves_enums_and_transform_contracts(scene_bridge_factory) -> None:
@@ -806,7 +799,7 @@ def test_bridge_cancels_and_invalidates_framing_without_document_mutation(
     scene_bridge_factory,
 ) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
-    bridge.selectScene(CAMERA_SCENE_ID)  # a framable camera layer (not the year text)
+    bridge.selectScene(CAMERA_SCENE_ID)  # a configured, framable camera layer
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id
     bridge.selectLayer(layer_id)
     revision = controller.document.revision
@@ -1142,47 +1135,33 @@ def test_bridge_geometry_preview_commits_exactly_one_revision(scene_bridge_facto
     assert controller.document.revision == revision + 1
 
 
-def test_bridge_scene_roles_are_removable_secondary_metadata(scene_bridge_factory) -> None:
+def test_bridge_only_media_scene_role_is_removable(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
-    default_id = controller.documents.program_default_scene_id
-    records = [
-        bridge.scenesModel.get(row) for row in range(bridge.scenesModel.rowCount())
-    ]
-    default_record = next(record for record in records if record["id"] == default_id)
-    assert "Default" in default_record["metadata"]
-
-    bridge.setDefaultScene(str(default_id), False)
-
-    assert controller.documents.program_default_scene_id is None
-    assert not controller.documents.program_automation_configured
+    records = [bridge.scenesModel.get(row) for row in range(bridge.scenesModel.rowCount())]
+    media = next(record for record in records if record["media"])
+    assert "Media" in media["metadata"]
+    assert all("default" not in record for record in records)
+    assert not hasattr(bridge, "setDefaultScene")
+    bridge.setMediaScene(media["id"], False)
+    assert controller.documents.program_media_scene_id is None
+    assert not controller.documents.media_automation_configured
 
 
-def test_bridge_delete_requires_a_replacement_only_for_program_scene(
-    scene_bridge_factory,
-) -> None:
+def test_bridge_delete_live_camera_preserves_projection_selection(scene_bridge_factory) -> None:
     notifications = _Notifications()
-    _workspace, controller, bridge, _preview_store = scene_bridge_factory(
-        notifications=notifications,
-    )
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory(notifications=notifications)
     bridge.setVirtualCameraEnabled(True)
-    # The Default scene is the program/default role holder now, so deleting it is
-    # what requires a replacement.
-    bridge.selectScene(DEFAULT_SCENE_ID)
+    bridge.selectScene(CAMERA_SCENE_ID)
     assert bridge.selectedSceneRequiresReplacement
     assert not bridge.selectedSceneLive
-
-    bridge.deleteScene(DEFAULT_SCENE_ID, "")
-    assert controller.document.scene(DEFAULT_SCENE_ID).id == DEFAULT_SCENE_ID
-    assert notifications.errors[-1][1]["dedupe_key"] == (
-        "scenes-live-delete-replacement-required"
-    )
-
-    bridge.deleteScene(DEFAULT_SCENE_ID, CONTENT_SCENE_ID)
-
-    assert all(scene.id != DEFAULT_SCENE_ID for scene in controller.document.scenes)
-    assert {
-        output.manual_scene_id for output in controller.runtime.state.outputs
-    } == {CONTENT_SCENE_ID}
+    bridge.deleteScene(CAMERA_SCENE_ID, "")
+    assert controller.document.scene(CAMERA_SCENE_ID).id == CAMERA_SCENE_ID
+    assert notifications.errors[-1][1]["dedupe_key"] == "scenes-live-delete-replacement-required"
+    projection_before = controller.runtime.state.output(BusId.MEDIA_WINDOWS)
+    bridge.deleteScene(CAMERA_SCENE_ID, CONTENT_SCENE_ID)
+    assert all(scene.id != CAMERA_SCENE_ID for scene in controller.document.scenes)
+    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CONTENT_SCENE_ID
+    assert controller.runtime.state.output(BusId.MEDIA_WINDOWS) == projection_before
 
 
 def test_bridge_deletes_offline_scene_without_confusing_editor_preview(

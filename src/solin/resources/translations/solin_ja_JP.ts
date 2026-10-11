@@ -6009,11 +6009,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>PTZ プリセットの呼び出しに失敗しました。</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>既定</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>メディア</translation>
@@ -6134,8 +6129,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>シーン</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>アイドル画面</translation>
+        <source>Solin Content</source>
+        <translation>Solinのコンテンツ</translation>
     </message>
 </context>
 <context>
@@ -6833,11 +6828,6 @@ Add content, a camera, or another scene.</source>
         <translation>既定のシーンから外す</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>既定のシーンに設定</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>メディアのシーンから外す</translation>
@@ -7168,8 +7158,8 @@ Add content, a camera, or another scene.</source>
         <translation>フォルダーを開く</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>アイドル画面</translation>
+        <source>Solin Content</source>
+        <translation>Solinのコンテンツ</translation>
     </message>
 </context>
 <context>
@@ -11484,8 +11474,16 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>アイドル画面</translation>
+        <source>Solin Content</source>
+        <translation>Solinのコンテンツ</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>メディア</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>カメラ</translation>
     </message>
 </context>
 </TS>

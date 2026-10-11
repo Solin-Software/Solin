@@ -41,8 +41,8 @@ remain Solin contracts.
 ### Scene editing
 
 - Each global Solin profile owns one shared camera/PTZ resource catalog and one or more
-  **scene profiles**. A scene profile owns its scenes, layers, default/media roles, output
-  defaults, and automation mappings. Cameras, protected credential references, and PTZ
+  **scene profiles**. A scene profile owns its scenes, layers, a media role, per-output
+  runtime selections, and automation mappings. Cameras, protected credential references, and PTZ
   presets are shared between the scene profiles in that Solin profile.
 - A scene may contain Solin content, local cameras, RTSP cameras, solid colors, and an
   acyclic reference to another scene. Images and video projected by Solin use the same
@@ -60,12 +60,15 @@ remain Solin contracts.
 `SceneCollection` is the internal entity; **Scene profile** is the only user-facing name.
 Each general Solin profile owns an ordered catalog with immutable IDs and one active Scene
 profile. Every collection has its own scene document, backup, optimistic revision, scenes,
-instantiated sources, transforms, default/media roles, and entry actions. Camera connections,
+instantiated sources, transforms, a media role, and entry actions. Camera connections,
 protected credential references, and PTZ presets belong to the shared resource catalog of the
 general Solin profile and are resolved by stable camera ID when a collection is hydrated.
 
-The first fresh collection is `Profile 1`. It contains only the visible `Camera` default scene
-and `Content` media scene; the technical no-signal source remains internal. Existing
+The first fresh collection is `Profile 1`. It contains Media and Camera. Media has
+one full-canvas Solin Content layer, showing foreground content or the idle presentation.
+Projection initially selects Media; virtual camera and recording initially select Camera,
+which remains present and empty if no camera is configured. Initial selections do not enable
+outputs. There is no Default role; the technical no-signal source remains internal. Existing
 `scenes.json` data migrates intact and idempotently into `Profile 1`. Authored document,
 resource, and profile-catalog mutations are persisted before UI publication. High-frequency
 live selection state is instead serialized and latest-state coalesced on a dedicated writer,
@@ -97,30 +100,33 @@ Stop. A dead-man timer independently stops a camera if the UI disappears. ONVIF,
 and VISCA serial implement pan/tilt, zoom, Stop, recall, and remote preset storage through the
 same bounded executor.
 
-### One Program, multiple destinations
+### Independent output selections
 
-Solin exposes one live composition named **Program**. The virtual camera is its primary
-destination. Media windows can optionally mirror that same Program; they do not select or
-automate a second scene. This removes the ambiguous `Media windows: Auto/Take/Output`
-controls and guarantees that an in-room display and a call see the same composition when
-mirroring is enabled.
+Projection and virtual camera select scenes independently. Recording captures the
+virtual-camera composition. Editor Preview is a non-live selection and does not change
+output routing.
 
-| Destination | Initial format | Behavior |
+| Destination | Initial format | Initial scene |
 | --- | --- | --- |
-| Virtual camera | 1920×1080, 30 fps, NV12/BT.709/limited | Publishes Program to camera applications |
-| Media-window mirror | 1920×1080, 30 fps, D3D11-backed on Windows | Opt-in direct presentation of the Program render branch; bounded BGRA fallback |
-| Editor Preview | 1920×1080, BGRA/sRGB/full | Non-live selected-scene preview through the bounded fallback |
+| Projection | 1920×1080, 30 fps, D3D11-backed on Windows | Media |
+| Virtual camera / recording | 1920×1080, 30 fps, NV12/BT.709/limited | Camera |
+| Editor Preview | 1920×1080, BGRA/sRGB/full | Selected editor scene |
 
-Program has one base scene, a default-scene role, a media-scene role, and an automatic-media
-toggle. Automation is available only when the two roles exist and refer to different scenes.
-While projected content is active, automation selects the media scene; when projection stops,
-it restores the previous Program base scene, or the configured default when previous-scene
-memory is disabled. The toolbar exposes that return target while the automatic media scene is
-live, and right-clicking another scene overrides the return without taking it immediately.
-Scene-editor Takes of a composition containing projected content retain the return base;
-a Take without projected content makes the selected scene the new base and suspends
-automatic media for that presentation session. The next session resumes automatically.
-Editing history never rewinds Program or destination-enabled state.
+Each output has its own persisted base and automatic-media session selection. Automation
+requires only a designated Media scene, which may also be a base or return target. Active
+visual content temporarily selects Media; idle and audio-only content leave the base selected.
+The popup exposes per-output return overrides without taking them immediately. Scene-editor
+Takes containing projected content retain the session return base; a scene without content
+becomes that output's base and remains selected after the presentation ends. Selecting a
+content composition again restores the saved session return base. Editing history never
+rewinds live routing or output enablement. The external OBS integration retains its own policy.
+
+The source picker exposes only Solin Content for Solin presentations. Its presentation mode
+selects foreground visual content or the shared idle producer. Internal `media_only` mode
+selects foreground or transparency and is not exposed in the UI. Idle video loops silently
+and restarts from a confirmed initial frame on every return. Presentation changes use the
+scene's effective transition even when the scene ID is unchanged; idle does not trigger
+media-scene automation.
 
 The Solin Scenes control panel routes the monitor and virtual camera independently.
 During automatic media, a left click immediately selects the live scene for that output.
@@ -501,14 +507,14 @@ Properties:
 - in-process and interprocess transaction locks;
 - optimistic expected revisions;
 - backup recovery is explicit for configuration corruption;
-- stale live references are automatically reset to automatic mode without disabling the
-  output;
+- missing base references use the first valid scene without changing unrelated outputs,
+  automation preference, or output enablement;
 - future schema versions are preserved and reported, never silently replaced.
 - migration is idempotent: an existing `scenes.json` becomes `Profile 1` without deleting or
   guessing which user scenes are obsolete; a fresh install creates `Profile 1` with only the
   visible `Content` and `Camera` scenes while retaining the no-signal source internally;
 - switching scene profiles is blocked while the virtual camera is enabled, clears editor
-  undo/redo, selects the destination profile's default scene (or first scene), and never
+  undo/redo, restores the destination profile's independent per-output base selections, and never
   changes the media-window mirror or automatic-switch preference;
 - active-profile changes use a pending catalog marker and are committed only after the
   target document is loaded and validated; interrupted changes recover the previous active
@@ -546,10 +552,10 @@ Add a dedicated Solin Scenes icon next to, but visually distinct from, OBS Scene
 provides:
 
 - one-click Program scene Take;
-- stable compact scene chips with desired/applied state and accessible default, media, and
+- stable compact scene chips with desired/applied state and accessible media and
   return roles;
-- default/media chips pinned in a configured group, with remaining scenes in a responsive
-  wrapping flow and no duplicate Program summary;
+- stable scene chips in a responsive wrapping flow with independent projection and
+  virtual-camera controls and no duplicate Program summary;
 - automatic switching with an explicit per-session suspension state;
 - a fixed, single-line status area for engine state, failures, suspension, and the current
   automatic-media return target; right-click overrides the return with local chip feedback;
@@ -569,9 +575,9 @@ OBS WebSocket scenes keep their existing icon, settings, popup, and behavior.
   margin equal to 5% of the canvas's shorter displayed edge, so all four inset distances remain
   visually equal regardless of output aspect ratio.
 - A gesture is previewed continuously but commits once on release, producing one undo item.
-- `Set as default scene` and `Set as media scene` live in the scene context menu and render
-  persistent `DEFAULT`/`MEDIA` badges. Invalid role combinations disable automation with an
-  actionable explanation.
+- `Set as media` lives in the scene context menu and renders a persistent Media badge.
+  Removing the designation disables automatic media switching without changing output bases;
+  the designated scene may itself be a base or return target.
 - Adding a local camera that already exists reuses the existing physical-device source. Two
   scenes never create competing capture sessions for the same device.
 - Scene references support the `Overview` → `Speaker`/`Speaker + reader` workflow while cycle
@@ -690,7 +696,7 @@ Track:
 - [x] Add schema version 1→8 migrations for rational frame rates, explicit camera media
   types, bounded exact camera formats, legacy camera-only automation repair, duplicate
   physical-camera coalescing, one-Program destination normalization, and removable
-  default/media role designations.
+  default/media role designations (historical beta behavior, superseded by schema 12).
 
 ### Phase 1 — User interface
 
@@ -706,7 +712,7 @@ Track:
 - [x] Enable the sidecar-backed stable device/caps picker in the scene camera editor.
 - [x] Add pointer drag/resize/crop with one history transaction per gesture.
 - [x] Add PTZ binding, preset CRUD, test/recall, and per-scene entry actions.
-- [x] Add default/media scene roles and automatic-media switching controls.
+- [x] Add beta default/media roles and switching controls; superseded by the Media-only role and per-output bases.
 - [x] Add multiple transactionally switched scene profiles per Solin profile, with shared
   cameras, credentials, and PTZ presets.
 - [x] Complete keyboard/accessibility coverage for canvas transforms, source ordering, and
@@ -912,7 +918,7 @@ without freezing the consumer, leaking registrations, or requiring Solin restart
 - [x] Execute entry actions according to `keep_current`/`take_anyway` policy.
 - [x] Add contextual interactive PTZ pan/tilt/zoom, nudge, Stop, dead-man safety, and remote
   preset storage through the bounded per-camera executor.
-- [x] Finish Program content-category automation with explicit default/media scene roles.
+- [x] Finish beta Program automation with default/media roles; schema 12 now uses only the Media designation.
 
 ### Phase 7 — Packaging, benchmarks, and release gates
 

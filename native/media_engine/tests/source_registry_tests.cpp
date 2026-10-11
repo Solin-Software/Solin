@@ -238,6 +238,7 @@ class BlockingStopFactory final : public solin::media_engine::SourceRuntimeFacto
         .id = std::string{solin::media_engine::kSolinContentSourceId},
         .kind = solin::media_engine::SceneSourceKind::solin_content,
         .enabled = true,
+        .configuration = solin::media_engine::SolinContentSourceConfiguration{},
         .frame_channel = solin::media_engine::FrameChannelConfiguration{
             .channel_id = "content-channel",
             .generation = 1U,

@@ -6041,11 +6041,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Kuita mpangilio uliohifadhiwa wa PTZ kumeshindikana.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Chaguomsingi</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6166,8 +6161,8 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Mandhari</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Skrini Isiyotumika</translation>
+        <source>Solin Content</source>
+        <translation>Maudhui ya Solin</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Ondoa kama ya kawaida</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Weka kama ya kawaida</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Ondoa kama mandhari ya media</translation>
@@ -7200,8 +7190,8 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Fungua folda</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Skrini Isiyotumika</translation>
+        <source>Solin Content</source>
+        <translation>Maudhui ya Solin</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Skrini Isiyotumika</translation>
+        <source>Solin Content</source>
+        <translation>Maudhui ya Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

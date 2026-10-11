@@ -97,6 +97,12 @@ class LibobsIdleSource:
             return self._state
 
     @property
+    def presentation_key(self) -> tuple[object, ...]:
+        """Identity of the visible asset, excluding an unused fallback."""
+        with self._lock:
+            return self._key(self._state)
+
+    @property
     def error_code(self) -> str:
         with self._lock:
             producer = self._producer
@@ -202,7 +208,10 @@ class LibobsIdleSource:
             self._generation += 1
             generation = self._generation
             key = self._key(state)
-            current_key = self._producer.key if self._producer else ()
+            current_key = (
+                self._producer.key if self._producer else self._key(self._state)
+                if self._applied else ()
+            )
             if self._applied and not self.error_code and key == current_key:
                 # The fallback is data until it is needed: no second decoder,
                 # no PNG reload, and no transport reset for an active video.
@@ -256,6 +265,59 @@ class LibobsIdleSource:
             self._dispose(candidate)
         if error is not None:
             raise error
+
+    def prepare_presentation(self, deadline_monotonic_ms: int) -> LibobsIdleSource:
+        """Own an immutable presentation with a fresh, paused initial frame.
+
+        Configuration preparation and presentation lifetime are independent. A
+        prepared producer can be transferred once; later presentations prepare a
+        new owner so an outgoing transition never observes an incoming restart.
+        The configuration owner remains valid after handing off its producer.
+        """
+        owner = LibobsIdleSource(self._runtime)
+        producer: _Producer | None = None
+        with self._lock:
+            self._check_deadline(deadline_monotonic_ms)
+            if self._closed:
+                raise IdleScreenError("closed")
+            state, error_code = self._state, self._error_code
+            if self._producer is not None and not self._demand:
+                producer = self._swap(None)
+                self._producer = None
+        try:
+            if producer is None:
+                owner.apply(state, deadline_monotonic_ms, recover=True)
+            else:
+                with owner._lock:
+                    owner._ensure_scene()
+                    owner._swap(producer)
+                    owner._producer = producer
+                    producer = None
+                    owner._state = state
+                    owner._requested = state
+                    owner._applied = True
+                    owner._error_code = error_code
+            with self._lock:
+                if self._closed or self._state != state:
+                    raise IdleScreenError("stale_revision")
+            return owner
+        except IdleScreenError as exc:
+            # Recovery installed the configured fallback. It is still a usable
+            # presentation and retains typed health on its independent owner.
+            if (
+                owner._applied
+                and exc.error_code not in ("stale_revision", "closed")
+                and not self._closed
+                and self._state == state
+            ):
+                return owner
+            owner.close()
+            raise
+        except BaseException:  # noqa: BLE001 - native ownership must survive interruptions
+            owner.close()
+            raise
+        finally:
+            self._dispose(producer)
 
     @staticmethod
     def _check_deadline(deadline_ms: int) -> None:

@@ -18,9 +18,7 @@ from solin.core.scenes.collections import (
 from solin.core.scenes.model import (
     BusId,
     CameraPreset,
-    DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
-    OutputMode,
     RtspCameraConfig,
     SceneDocument,
     SourceDefinition,
@@ -28,11 +26,9 @@ from solin.core.scenes.model import (
     new_identity,
 )
 from solin.core.scenes.presets import (
-    CAMERA_SCENE_ID,
-    CONTENT_SCENE_ID,
     SceneSeedNames,
     create_fresh_scene_collection_document,
-    ensure_default_scene,
+    convert_pristine_beta_preset,
 )
 from solin.core.scenes.repository import (
     SceneCollectionCatalogRepository,
@@ -42,6 +38,7 @@ from solin.core.scenes.repository import (
     SceneResourceCatalogRepository,
     SceneRuntimeRepository,
     SceneRuntimePersistenceQueue,
+    read_beta_output_selections,
 )
 from solin.core.scenes.resources import (
     SceneResourceCatalog,
@@ -49,10 +46,8 @@ from solin.core.scenes.resources import (
 )
 from solin.core.scenes.recording import SceneRecordingConfig
 from solin.core.scenes.runtime import (
-    OutputRuntimeState,
     SceneRuntimeService,
     SceneRuntimeState,
-    create_default_runtime_state,
 )
 
 
@@ -114,8 +109,13 @@ class SceneWorkspaceService:
         self._listeners: set[Callable[[SceneWorkspaceChange], None]] = set()
         self._catalog_mutation_guards: set[Callable[[str], str]] = set()
         self._catalog = self._load_or_migrate_catalog()
+        self._beta_initial_selections = {
+            collection.id: read_beta_output_selections(self._collection_path(collection.id), backup_path=self._collection_path(collection.id).with_name(f"{collection.id}.backup.json"))
+            for collection in self._catalog.collections
+        }
         self._resources = self._load_or_migrate_resources()
         self._normalize_collection_storage()
+        del self._beta_initial_selections
         self._documents, self._runtime, self._runtime_persistence = self._load_services(
             self._catalog.active_collection_id,
             previous_runtime=None,
@@ -213,10 +213,7 @@ class SceneWorkspaceService:
             existing=self._catalog.collections,
         )
         collection = SceneCollection(id=self._identity_factory(), name=canonical_name)
-        document = create_fresh_scene_collection_document(
-            self._seed_names,
-            document_id=self._identity_factory(),
-        )
+        document = self._fresh_document()
         repository = self._document_repository(collection.id)
         try:
             repository.save(document)
@@ -386,12 +383,11 @@ class SceneWorkspaceService:
         repository = self._document_repository(collection_id)
         document = self._load_document_for_use(repository)
         documents = SceneDocumentService(document, store=repository)
-        base_runtime = create_default_runtime_state(document)
+        base_runtime = self._runtime_repository.load_or_create(document)
         runtime_state = self._preserved_runtime_state(
             document,
             previous=self._runtime.state,
             current=base_runtime,
-            automation_configured=documents.program_automation_configured,
         )
         runtime = SceneRuntimeService(documents, runtime_state)
         return SceneWorkspaceActivation(
@@ -504,6 +500,7 @@ class SceneWorkspaceService:
         self._catalog.collection(collection_id)
         if len(self._catalog.collections) == 1:
             raise SceneWorkspaceOperationError("The last Scene profile cannot be deleted")
+        document_id = self._load_recovering(self._document_repository(collection_id)).document_id
         if collection_id == self._catalog.active_collection_id:
             if replacement_collection_id is None:
                 raise SceneWorkspaceOperationError(
@@ -528,7 +525,13 @@ class SceneWorkspaceService:
                 if collection.id != collection_id
             ),
         )
+        previous_catalog = self._catalog
         self._save_catalog(updated)
+        try:
+            self._runtime_repository.delete(document_id)
+        except Exception:  # noqa: BLE001 - restore the catalog before propagating a persistence failure
+            self._save_catalog(replace(previous_catalog, revision=updated.revision + 1))
+            raise
         self._remove_collection_files(collection_id)
         self._collect_orphaned_cameras_safely()
         self._publish(SceneWorkspaceChangeKind.CATALOG)
@@ -639,12 +642,18 @@ class SceneWorkspaceService:
                 pass
         if not destination.path.exists():
             if legacy is not None:
+                selections = read_beta_output_selections(legacy.path, backup_path=legacy.backup_path)
                 document = self._load_recovering(legacy)
+                converted = convert_pristine_beta_preset(document, self._seed_names, selections=selections)
+                self._runtime_repository.load_or_create(converted, selections=selections if converted is document else None)
+                document = converted
             else:
                 document = self._fresh_document()
             destination.save(document)
         else:
             document = self._load_recovering(destination)
+        if backup_document is not None and legacy is not None:
+            backup_document = convert_pristine_beta_preset(backup_document, self._seed_names, selections=read_beta_output_selections(legacy.backup_path))
         destination.initialize_backup(backup_document or document)
 
         catalog = SceneCollectionCatalog(
@@ -694,49 +703,12 @@ class SceneWorkspaceService:
         return resources
 
     def _fresh_document(self) -> SceneDocument:
-        document = create_fresh_scene_collection_document(
+        cameras = self._resources.cameras if hasattr(self, "_resources") else ()
+        camera = next((source for source in cameras if source.kind is SourceKind.RTSP_CAMERA or isinstance(source.configuration, LocalCameraConfig) and source.configuration.device_id), None)
+        return create_fresh_scene_collection_document(
             self._seed_names,
             document_id=self._identity_factory(),
-        )
-        if not hasattr(self, "_resources"):
-            return document
-        if not self._resources.cameras:
-            return replace(
-                document,
-                sources=tuple(
-                    source
-                    for source in document.sources
-                    if source.id != DEFAULT_CAMERA_SOURCE_ID
-                ),
-                scenes=tuple(
-                    scene for scene in document.scenes if scene.id != CAMERA_SCENE_ID
-                ),
-                outputs=tuple(
-                    replace(output, default_scene_id=CONTENT_SCENE_ID)
-                    for output in document.outputs
-                ),
-            )
-        camera = self._resources.cameras[0]
-        return replace(
-            document,
-            sources=tuple(
-                replace(camera, enabled=source.enabled)
-                if source.id == DEFAULT_CAMERA_SOURCE_ID
-                else source
-                for source in document.sources
-            ),
-            scenes=tuple(
-                replace(
-                    scene,
-                    layers=tuple(
-                        replace(layer, source_id=camera.id)
-                        if layer.source_id == DEFAULT_CAMERA_SOURCE_ID
-                        else layer
-                        for layer in scene.layers
-                    ),
-                )
-                for scene in document.scenes
-            ),
+            camera=camera,
         )
 
     def _load_services(
@@ -758,7 +730,6 @@ class SceneWorkspaceService:
                 document,
                 previous=previous_runtime,
                 current=runtime_state,
-                automation_configured=documents.program_automation_configured,
             )
             self._runtime_repository.save(
                 runtime_state,
@@ -778,44 +749,8 @@ class SceneWorkspaceService:
         self,
         repository: SceneDocumentRepository | SceneCollectionDocumentRepository,
     ) -> SceneDocument:
-        """Load a collection document ready to drive a live SceneDocumentService.
-
-        Materializes the shared camera resources, then self-heals collections
-        saved before idle scenes by adding the Default scene when it is missing.
-        """
-        document = ensure_default_scene(
-            self._materialize_resources(self._load_recovering(repository)),
-            self._seed_names,
-        )
-        return self._localize_idle_source_names(document)
-
-    def _localize_idle_source_names(self, document: SceneDocument) -> SceneDocument:
-        """Localize the codec's generic migration label without changing custom layers."""
-        sources = tuple(
-            replace(source, name=self._seed_names.idle_screen_source)
-            if source.kind is SourceKind.IDLE_SCREEN and source.name == "Idle screen"
-            else source
-            for source in document.sources
-        )
-        renamed_ids = {
-            source.id for source, original in zip(sources, document.sources, strict=True)
-            if source != original
-        }
-        if not renamed_ids:
-            return document
-        scenes = tuple(
-            replace(
-                scene,
-                layers=tuple(
-                    replace(layer, name=self._seed_names.idle_screen_layer)
-                    if layer.source_id in renamed_ids and layer.name == "Idle screen"
-                    else layer
-                    for layer in scene.layers
-                ),
-            )
-            for scene in document.scenes
-        )
-        return replace(document, sources=sources, scenes=scenes)
+        """Load a collection and materialize its shared camera resources."""
+        return self._materialize_resources(self._load_recovering(repository))
 
     def _materialize_resources(self, document: SceneDocument) -> SceneDocument:
         camera_by_id = {camera.id: camera for camera in self._resources.cameras}
@@ -838,25 +773,10 @@ class SceneWorkspaceService:
         *,
         previous: SceneRuntimeState,
         current: SceneRuntimeState,
-        automation_configured: bool,
     ) -> SceneRuntimeState:
-        default_scene_id = (
-            document.output(BusId.VIRTUAL_CAMERA).default_scene_id
-            or document.scenes[0].id
-        )
-        previous_primary = previous.output(BusId.VIRTUAL_CAMERA)
-        mode = (
-            previous_primary.mode
-            if previous_primary.mode is OutputMode.MANUAL or automation_configured
-            else OutputMode.MANUAL
-        )
+        current.validate_against(document)
         outputs = tuple(
-            OutputRuntimeState(
-                bus_id=output.bus_id,
-                mode=mode,
-                manual_scene_id=default_scene_id,
-                enabled=previous.output(output.bus_id).enabled,
-            )
+            replace(output, mode=previous.output(output.bus_id).mode, enabled=previous.output(output.bus_id).enabled)
             for output in current.outputs
         )
         return replace(current, revision=current.revision + 1, outputs=outputs)
@@ -874,17 +794,20 @@ class SceneWorkspaceService:
         return SceneDocumentRepository(path, seed_factory=self._fresh_document)
 
     def _normalize_collection_storage(self) -> None:
-        for collection in self._catalog.collections:
+        # Persist bases before removing beta routes, so a restart during conversion
+        # cannot lose customized per-output selections.
+        ordered = (self._catalog.active, *(collection for collection in self._catalog.collections if collection.id != self._catalog.active_collection_id))
+        for collection in ordered:
             repository = self._document_repository(collection.id)
+            selections = self._beta_initial_selections[collection.id]
+            document = self._load_recovering(repository)
+            converted = convert_pristine_beta_preset(document, self._seed_names, selections=selections)
+            self._runtime_repository.load_or_create(converted, selections=selections if converted is document else None)
             if isinstance(repository, SceneCollectionDocumentRepository):
-                try:
-                    repository.normalize_storage()
-                except SceneRepositoryCorruptError:
-                    repository.recover_from_backup()
-                    repository.normalize_storage()
+                repository.normalize_storage(seed_names=self._seed_names, beta_selections=selections)
 
-    @staticmethod
     def _load_recovering(
+        self,
         repository: SceneDocumentRepository | SceneCollectionDocumentRepository,
     ) -> SceneDocument:
         try:
@@ -894,6 +817,10 @@ class SceneWorkspaceService:
                 "Recovering a corrupt Scene profile from its last known-good backup",
                 exc_info=True,
             )
+            backup = repository.load_backup()
+            selections = read_beta_output_selections(repository.backup_path)
+            converted = convert_pristine_beta_preset(backup, self._seed_names, selections=selections)
+            self._runtime_repository.load_or_create(converted, selections=selections if converted is backup else None)
             return repository.recover_from_backup()
 
     def _rollback_failed_activation(

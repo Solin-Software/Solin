@@ -26,7 +26,17 @@ enum class SceneSourceKind : std::uint8_t {
     image,
     color,
     scene_reference,
-    idle_screen,
+};
+
+enum class SolinContentMode : std::uint8_t {
+    presentation,
+    media_only,
+};
+
+struct SolinContentSourceConfiguration {
+    SolinContentMode mode{SolinContentMode::presentation};
+
+    bool operator==(const SolinContentSourceConfiguration&) const = default;
 };
 
 struct FrameChannelConfiguration {
@@ -87,7 +97,8 @@ struct SceneReferenceSourceConfiguration {
 };
 
 using SceneSourceConfiguration =
-    std::variant<std::monostate, LocalCameraSourceConfiguration, RtspCameraSourceConfiguration,
+    std::variant<std::monostate, SolinContentSourceConfiguration,
+                 LocalCameraSourceConfiguration, RtspCameraSourceConfiguration,
                  ImageSourceConfiguration, ColorSourceConfiguration,
                  SceneReferenceSourceConfiguration>;
 
@@ -152,7 +163,6 @@ struct OutputVideoFormat {
 
 struct SceneOutputDefinition {
     OutputBus bus{OutputBus::media_windows};
-    std::string default_scene_id{};
     bool start_with_solin{false};
     OutputVideoFormat video_format{};
 

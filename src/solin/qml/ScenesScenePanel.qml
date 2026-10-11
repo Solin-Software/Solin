@@ -15,7 +15,6 @@ Rectangle {
     signal requestSceneMenu(
         string sceneId,
         string sceneName,
-        bool isDefaultScene,
         bool isMediaScene,
         bool isLiveScene,
         bool hasTransitionOverride,
@@ -230,7 +229,6 @@ Rectangle {
                 required property string sceneId
                 required property string sceneName
                 required property string sceneMetadata
-                required property bool isDefaultScene
                 required property bool isMediaScene
                 required property bool isLiveScene
                 required property bool hasTransitionOverride
@@ -293,7 +291,6 @@ Rectangle {
                                 root.requestSceneMenu(
                                     sceneRow.sceneId,
                                     sceneRow.sceneName,
-                                    sceneRow.isDefaultScene,
                                     sceneRow.isMediaScene,
                                     sceneRow.isLiveScene,
                                     sceneRow.hasTransitionOverride,
@@ -373,7 +370,6 @@ Rectangle {
                             root.requestSceneMenu(
                                 sceneRow.sceneId,
                                 sceneRow.sceneName,
-                                sceneRow.isDefaultScene,
                                 sceneRow.isMediaScene,
                                 sceneRow.isLiveScene,
                                 sceneRow.hasTransitionOverride,

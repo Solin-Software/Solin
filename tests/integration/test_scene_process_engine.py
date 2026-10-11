@@ -16,6 +16,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
 from solin.core.scenes.idle import IdleScreenState
+from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.model import (
     DELIVERY_BUSES,
     BusId,
@@ -23,7 +24,7 @@ from solin.core.scenes.model import (
     TransitionKind,
     TransitionSpec,
 )
-from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
+from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames, create_default_scene_document
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     SceneEngineProcessConfig,
@@ -86,7 +87,7 @@ def _snapshot(
     enabled: bool = True,
 ) -> SceneEngineSnapshot:
     document = document or _document()
-    active_scenes = tuple((route.bus_id, route.default_scene_id) for route in document.outputs)
+    active_scenes = ((BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID), (BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID))
     return SceneEngineSnapshot(
         session_id="integration-session",
         sequence=sequence,
@@ -585,3 +586,27 @@ def _wait_until(predicate, *, timeout: float = 2.0) -> None:
             return
         time.sleep(0.01)
     raise AssertionError("condition was not reached before timeout")
+
+
+@pytest.mark.parametrize("kind", list(ContentSourceKind))
+def test_content_source_kinds_roundtrip_through_prepare_and_take(kind):
+    engine = _engine()
+    try:
+        engine.start(session_id="integration-session", deadline_ms=2000).result(3)
+        snapshot = _snapshot()
+        engine.hydrate(snapshot, request_id="hydrate-content-kind", deadline_ms=1000).result(2)
+        prepared = engine.prepare_scene(
+            BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID,
+            transition=TransitionSpec(TransitionKind.DISSOLVE, 350),
+            document_revision=snapshot.document.revision,
+            request_id="prepare-content-kind", sequence=2, deadline_ms=1000,
+            content_media_epoch=41, content_source_kind=kind,
+        ).result(2)
+        assert prepared.bus_id is BusId.MEDIA_WINDOWS
+        assert prepared.scene_id == CONTENT_SCENE_ID
+        taken = engine.take_prepared(
+            prepared, request_id="take-content-kind", sequence=3, deadline_ms=1000,
+        ).result(2)
+        assert taken.applied
+    finally:
+        engine.stop()

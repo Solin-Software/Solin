@@ -77,8 +77,7 @@ constexpr auto kGraphActivationTimeout = std::chrono::seconds{1};
 content_source(const SceneHydrationSnapshot& snapshot) noexcept {
     const auto source = std::ranges::find_if(
         snapshot.sources, [](const auto& candidate) {
-            return candidate.id == kSolinContentSourceId &&
-                   candidate.kind == SceneSourceKind::solin_content;
+            return candidate.kind == SceneSourceKind::solin_content;
         });
     return source == snapshot.sources.end() ? nullptr : &*source;
 }
@@ -172,10 +171,6 @@ class SceneCompiler final {
                         compiled_layer.referenced_scene->active_leaf_source_ids.end());
                 }
             } else if (visible_source_layer(layer, source->second)) {
-                if (source->second.kind == SceneSourceKind::idle_screen) {
-                    throw SceneGraphError{"source_not_implemented",
-                                          "Idle screen sources require the libobs backend"};
-                }
                 active_sources.insert(layer.source_id);
             }
             graph->layers.push_back(std::move(compiled_layer));

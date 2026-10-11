@@ -68,10 +68,10 @@ producer heartbeat is stale. The public virtual-camera capability is enabled onl
 per-user filter registrations, x64 COM activation/device enumeration, cross-process
 transport, and the supported Windows version pass the runtime probe. On Windows, physical
 media surfaces render through engine-owned child windows and `d3d11videosink`; frames remain
-D3D11-backed and do not cross back through Python. Raw-media targets acquire the canonical
-`solin.content.current` runtime directly, independently of editable scenes, and bypass scene
-composition. A single canonical D3D11 transition resolves Raw media epochs inside
-`solin.content.current` before fan-out, so physical Raw windows and Raw layers authored into
+D3D11-backed and do not cross back through Python. Raw-media targets resolve an enabled Solin
+content source by type and mode, preferring presentation mode, independently of editable
+scenes, and bypass scene composition. A canonical D3D11 transition resolves Raw media epochs
+inside that content runtime before fan-out, so physical Raw windows and Raw layers authored into
 Program consume the same transitioned GPU frames. Program-mirror targets consume the
 already-transitioned Program bus. A separate persistent two-input D3D11 compositor per
 physical surface owns only Raw/Program ownership switches without rebuilding the presenter.
@@ -95,12 +95,17 @@ shader path remain later phases in
 The native process must not import, link, or dynamically load libobs. OBS WebSocket support
 belongs to the Python application's independent external-integration layer.
 
-Scene schema 11 recognizes the session-owned `idle_screen` source kind with an
-empty per-source configuration. It validates the idle state in hydration but does
-not decode or render idle media. An idle source in a scene graph, or an explicit
-idle update command, reports `source_not_implemented`; this feature requires the
-libobs backend. Older persisted `yeartext` sources are migrated by the application
-before hydration, preserving their IDs and layer geometry.
+Scene schema 12 uses `solin_content` with an explicit `mode`: `presentation`
+(visual content or idle presentation) or `media_only` (visual content or
+transparency). Multiple content sources may have independent IDs and share the
+injected content ingress descriptor. Output routes contain the bus, startup flag,
+and video format; active scene selections belong to runtime state. Removed
+`idle_screen` source records and `default_scene_id` route fields must be migrated
+by the application before hydration; the native parser does not accept aliases.
+The session-owned idle state remains validated separately. Idle media decoding
+and mode-specific presentation composition require the libobs backend; this
+engine does not implement them through the snapshot contract alone. An explicit
+idle update command still reports `source_not_implemented`.
 
 ## Windows development build
 

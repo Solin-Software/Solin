@@ -6041,11 +6041,6 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Échec du rappel du préréglage PTZ.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Par défaut</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Médias</translation>
@@ -6166,8 +6161,8 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Scènes</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Écran inactif</translation>
+        <source>Solin Content</source>
+        <translation>Contenu Solin</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Retirer comme scène par défaut</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Définir comme scène par défaut</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Retirer comme scène de médias</translation>
@@ -7200,8 +7190,8 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Ouvrir le dossier</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Écran inactif</translation>
+        <source>Solin Content</source>
+        <translation>Contenu Solin</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Écran inactif</translation>
+        <source>Solin Content</source>
+        <translation>Contenu Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Médias</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Caméra</translation>
     </message>
 </context>
 </TS>

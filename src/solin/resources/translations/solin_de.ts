@@ -6041,11 +6041,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Abruf der PTZ-Voreinstellung fehlgeschlagen.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Medien</translation>
@@ -6166,8 +6161,8 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Szenen</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Ruhebild</translation>
+        <source>Solin Content</source>
+        <translation>Solin-Inhalt</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <translation>Als Standard entfernen</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Als Standard festlegen</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Als Medienszene entfernen</translation>
@@ -7200,8 +7190,8 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <translation>Ordner öffnen</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Ruhebild</translation>
+        <source>Solin Content</source>
+        <translation>Solin-Inhalt</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Ruhebild</translation>
+        <source>Solin Content</source>
+        <translation>Solin-Inhalt</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Medien</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

@@ -338,25 +338,6 @@ Item {
                         }
                     }
 
-                    // Idle publishes a transparent content frame, so this layer
-                    // draws nothing — and an empty rectangle reads the same as a
-                    // broken source. A faded glyph says "waiting for media".
-                    Image {
-                        objectName: "scenesCanvasContentIdle-" + layerBox.layerId
-                        visible: layerBox.sourceKind === "solin_content"
-                            && root.bridge && root.bridge.contentIdle
-                        anchors.centerIn: parent
-                        width: Math.max(
-                            14,
-                            Math.min(46, parent.width / 6, parent.height / 4))
-                        height: width
-                        opacity: 0.35
-                        smooth: true
-                        fillMode: Image.PreserveAspectFit
-                        source: "image://sceneicons/video/96/"
-                            + root.iconHex(root.textMuted)
-                    }
-
                     Rectangle {
                         anchors.fill: parent
                         color: "transparent"
