@@ -1,0 +1,53 @@
+name: Release contributors
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published release tag
+        required: true
+        type: string
+      apply:
+        description: Update only the release body (false previews related PRs and issues)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  contributors:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Share the publication lock; never interrupt an asset publication.
+    concurrency:
+      group: solin-release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: git fetch origin main --tags
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0
+      - name: Generate related pull requests and issues for the exact published tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          APPLY_CREDITS: ${{ inputs.apply }}
+          GH_TOKEN: ${{ secrets.RELEASE_NOTES_TOKEN || github.token }}
+        run: |
+          options=()
+          if [[ "$APPLY_CREDITS" == "true" ]]; then
+            options+=(--apply)
+          fi
+          python scripts/release.py contributors --tag "$RELEASE_TAG" "${options[@]}"

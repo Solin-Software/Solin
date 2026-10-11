@@ -31,6 +31,47 @@ def test_publication_requires_all_platforms_and_quality():
     assert {row["architecture"] for row in mac["strategy"]["matrix"]["include"]} == {"arm64", "x86_64"}
 
 
+@pytest.mark.parametrize("name,job_name,contents", [
+    ("release.yml", "publish", "write"),
+    ("release-contributors.yml", None, "read"),
+    ("release-contributors.yml", "contributors", "write"),
+])
+def test_related_release_notes_have_explicit_pr_and_issue_read_permissions(
+    name, job_name, contents,
+):
+    configuration = workflow(name)
+    scope = configuration["jobs"][job_name] if job_name else configuration
+    assert scope["permissions"] == {
+        "contents": contents, "pull-requests": "read", "issues": "read",
+    }
+    if name == "release.yml":
+        assert configuration["permissions"] == {"contents": "read"}
+
+
+def test_contributor_maintenance_is_manual_body_only_and_serialized_with_publication():
+    release = workflow("release.yml")
+    manual = workflow("release-contributors.yml")
+    assert set(manual["on"]) == {"workflow_dispatch"}
+    inputs = manual["on"]["workflow_dispatch"]["inputs"]
+    assert inputs["tag"]["required"] == "true" and inputs["tag"]["type"] == "string"
+    assert inputs["apply"]["type"] == "boolean" and inputs["apply"]["default"] == "false"
+    assert set(manual["jobs"]) == {"contributors"}
+    job = manual["jobs"]["contributors"]
+    assert job["concurrency"] == release["jobs"]["publish"]["concurrency"]
+    checkout = next(step for step in job["steps"] if "actions/checkout@" in step.get("uses", ""))
+    assert checkout["with"]["fetch-depth"] == "0"
+    assert checkout["with"]["ref"] == "main"
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "git fetch origin main --tags" in commands
+    assert "scripts/release.py contributors" in commands
+    assert "scripts/release.py publish" not in commands
+    assert "${{" not in commands  # Inputs enter through env, never shell interpolation.
+    credits = job["steps"][-1]
+    assert credits["env"]["RELEASE_TAG"] == "${{ inputs.tag }}"
+    assert credits["env"]["APPLY_CREDITS"] == "${{ inputs.apply }}"
+    assert credits["env"]["GH_TOKEN"] == "${{ secrets.RELEASE_NOTES_TOKEN || github.token }}"
+
+
 def test_quality_gate_waits_for_every_platform():
     quality_workflow = workflow("quality.yml")
     quality = quality_workflow["jobs"]

@@ -6,6 +6,13 @@ import pytest
 
 from scripts import release as release_script
 from scripts.release import calculate_next, resolve_predecessor
+from scripts.release_contributors import (
+    Change,
+    Credits,
+    ContributionRange,
+    HISTORICAL_BASE,
+    RelatedIssue,
+)
 from solin.core.releases.manifest import (
     LocalizedReleaseNotes,
     REQUIRED_ASSETS,
@@ -127,6 +134,21 @@ def publish_manifest() -> ReleaseManifest:
     )
 
 
+@pytest.fixture
+def publication_credits(monkeypatch):
+    repository_url = f"https://github.com/{release_script.RELEASE_REPOSITORY}"
+    change = Change(
+        "fix(player): Restore playback",
+        "PR #7",
+        f"{repository_url}/pull/7",
+        ("contributor",),
+        (RelatedIssue("#3", f"{repository_url}/issues/3"),),
+    )
+    credits = Credits(ContributionRange(HISTORICAL_BASE, "a" * 40, ("a" * 40,)), (change,), ())
+    monkeypatch.setattr(release_script, "release_credits", lambda *_args, **_kwargs: credits)
+    return credits
+
+
 def test_publisher_refuses_to_modify_an_already_published_release(monkeypatch, tmp_path) -> None:
     manifest = publish_manifest()
     (tmp_path / "release-notes.md").write_text("Changes", encoding="utf-8")
@@ -141,7 +163,9 @@ def test_publisher_refuses_to_modify_an_already_published_release(monkeypatch, t
         release_script.publish(tmp_path, manifest.tag, manifest.commit_sha)
 
 
-def test_publisher_keeps_partial_draft_unpublished(monkeypatch, tmp_path) -> None:
+def test_publisher_keeps_partial_draft_unpublished(
+    monkeypatch, tmp_path, publication_credits
+) -> None:
     manifest = publish_manifest()
     marker = f"<!-- source-commit: {manifest.commit_sha} -->"
     (tmp_path / "release-notes.md").write_text("Changes", encoding="utf-8")
@@ -162,7 +186,9 @@ def test_publisher_keeps_partial_draft_unpublished(monkeypatch, tmp_path) -> Non
         release_script.publish(tmp_path, manifest.tag, manifest.commit_sha)
 
 
-def test_publisher_rejects_uploaded_checksum_divergence(monkeypatch, tmp_path) -> None:
+def test_publisher_rejects_uploaded_checksum_divergence(
+    monkeypatch, tmp_path, publication_credits
+) -> None:
     manifest = publish_manifest()
     marker = f"<!-- source-commit: {manifest.commit_sha} -->"
     expected = {manifest.assets[0].filename, "release-manifest.json", "SHA256SUMS"}
@@ -191,3 +217,83 @@ def test_publisher_rejects_uploaded_checksum_divergence(monkeypatch, tmp_path) -
 
     with pytest.raises(ValueError, match="checksum mismatch"):
         release_script.publish(tmp_path, manifest.tag, manifest.commit_sha)
+
+
+def test_publisher_preserves_credits_between_draft_and_final_publication(
+    monkeypatch,
+    tmp_path,
+    publication_credits,
+) -> None:
+    manifest = publish_manifest()
+    marker = f"<!-- source-commit: {manifest.commit_sha} -->"
+    (tmp_path / "release-notes.md").write_text("Reviewed changes\n", encoding="utf-8")
+    names = {manifest.assets[0].filename, "release-manifest.json", "SHA256SUMS"}
+    for name in names:
+        (tmp_path / name).write_bytes(b"x")
+    uploaded = {
+        "id": 7,
+        "draft": True,
+        "assets": [
+            {
+                "name": name,
+                "state": "uploaded",
+                "size": 1,
+                "digest": "sha256:" + release_script.digest_file(tmp_path / name),
+            }
+            for name in names
+        ],
+    }
+    mutations = []
+
+    def api(endpoint, *, method="GET", payload=None):
+        if method != "GET":
+            mutations.append((method, payload))
+        return uploaded
+
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "published_releases", lambda: [])
+    monkeypatch.setattr(release_script.subprocess, "run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(release_script, "gh_api", api)
+    release_script.publish(tmp_path, manifest.tag, manifest.commit_sha)
+
+    assert [method for method, _payload in mutations] == ["POST", "PATCH"]
+    draft, final = (payload for _method, payload in mutations)
+    assert draft["draft"] is True and final["draft"] is False
+    assert draft["body"] == final["body"]
+    assert draft["body"].startswith("Reviewed changes\n")
+    assert draft["body"].count(marker) == 1
+    assert publication_credits.markdown() in draft["body"]
+    assert "### Related pull requests and issues" in final["body"]
+    assert "by @contributor" in final["body"]
+    assert (
+        f"Related issue: [#3](https://github.com/{release_script.RELEASE_REPOSITORY}/issues/3)"
+        in final["body"]
+    )
+    assert (tmp_path / "release-notes.md").read_text() == "Reviewed changes\n"
+
+
+def test_publisher_does_not_create_a_draft_when_related_metadata_collection_fails(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    manifest = publish_manifest()
+    (tmp_path / "release-notes.md").write_text("Reviewed changes\n", encoding="utf-8")
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "published_releases", lambda: [])
+    calls = []
+
+    def fail_collection(*_args, **_kwargs):
+        raise ValueError("GitHub related pull request identity mismatch")
+
+    monkeypatch.setattr(release_script, "release_credits", fail_collection)
+    monkeypatch.setattr(
+        release_script, "gh_api", lambda *args, **kwargs: calls.append((args, kwargs))
+    )
+    monkeypatch.setattr(
+        release_script.subprocess, "run", lambda *args, **kwargs: calls.append((args, kwargs))
+    )
+
+    with pytest.raises(ValueError, match="pull request identity mismatch"):
+        release_script.publish(tmp_path, manifest.tag, manifest.commit_sha)
+    assert calls == []
+    assert (tmp_path / "release-notes.md").read_text(encoding="utf-8") == "Reviewed changes\n"

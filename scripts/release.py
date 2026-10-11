@@ -13,6 +13,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT))
+
+from scripts.release_contributors import (  # noqa: E402
+    Credits, collect_credits, contribution_range, recorded_base, update_body,
+)
 
 from solin.core.releases.manifest import (  # noqa: E402
     MANIFEST_FILENAME, MAX_MANIFEST_BYTES, RELEASE_REPOSITORY, REQUIRED_ASSETS,
@@ -232,6 +237,83 @@ def digest_file(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def release_credits(version: ReleaseVersion, sha: str, releases: list[dict], *, body: str = "") -> Credits:
+    credits = collect_credits(contribution_range(version, sha, releases, git,
+                                                recorded_base=recorded_base(body, sha)),
+                              RELEASE_REPOSITORY, gh_api)
+    if credits.unlinked_commits:
+        print(f"Warning: {len(credits.unlinked_commits)} commits have authors without a linked "
+              "GitHub account; their identities were not guessed.", file=sys.stderr)
+    return credits
+
+
+def _release_assets(release: dict) -> dict:
+    assets = release.get("assets")
+    if not isinstance(assets, list) or any(not isinstance(asset, dict) for asset in assets):
+        raise ValueError("Invalid published asset inventory")
+    if (any(type(asset.get("id")) is not int or asset["id"] <= 0 for asset in assets)
+            or len({asset["id"] for asset in assets}) != len(assets)):
+        raise ValueError("Invalid published asset identity")
+    if any(not isinstance(asset.get("name"), str) or not asset["name"]
+           or type(asset.get("size")) is not int or asset["size"] <= 0
+           or asset.get("state") != "uploaded" or not isinstance(asset.get("digest"), str)
+           or not re.fullmatch(r"sha256:[a-f0-9]{64}", asset["digest"]) for asset in assets):
+        raise ValueError("Incomplete published asset inventory")
+    fields = ("id", "name", "size", "digest", "state")
+    return {asset["id"]: tuple(asset.get(field) for field in fields) for asset in assets}
+
+
+def _release_body(body: object, sha: str) -> str:
+    if not isinstance(body, str) or re.findall(r"<!-- source-commit: ([^\n]+?) -->", body) != [sha]:
+        raise ValueError("Published release source marker differs from its tag")
+    return body
+
+
+def contributors(tag: str, *, apply: bool = False) -> None:
+    """Preview or update credits on an owned published release, without republishing."""
+    version = ReleaseVersion.from_tag(tag)
+    if version is None:
+        raise ValueError("Invalid release tag")
+    endpoint = f"repos/{RELEASE_REPOSITORY}/releases/tags/{tag}"
+    existing = gh_api(endpoint)
+    if (not isinstance(existing, dict) or existing.get("draft") is not False
+            or existing.get("tag_name") != tag
+            or existing.get("prerelease") is not version.is_beta
+            or type(existing.get("id")) is not int or existing["id"] <= 0):
+        raise ValueError("Contributor updates require an existing published release")
+    sha = git("rev-parse", f"refs/tags/{tag}^{{commit}}")
+    if not re.fullmatch(r"[a-f0-9]{40}", sha):
+        raise ValueError("Invalid release commit SHA")
+    git("merge-base", "--is-ancestor", sha, "origin/main")
+    body = _release_body(existing.get("body"), sha)
+    assets = _release_assets(existing)
+    credits = release_credits(version, sha, published_releases(), body=body)
+    updated_body = _release_body(update_body(body, credits), sha)
+    changed = updated_body != body
+    if apply and changed:
+        # Detect intervening edits before replacing text. Workflow updates are serialized.
+        update_endpoint = f"repos/{RELEASE_REPOSITORY}/releases/{existing['id']}"
+        current = gh_api(update_endpoint)
+        fields = ("id", "tag_name", "body", "draft", "prerelease")
+        if (not isinstance(current, dict)
+                or any(current.get(field) != existing.get(field) for field in fields)
+                or _release_assets(current) != assets):
+            raise ValueError("Release changed during contributor generation; retry with fresh notes")
+        result = gh_api(update_endpoint, method="PATCH", payload={"body": updated_body})
+        if (not isinstance(result, dict) or result.get("body") != updated_body
+                or any(result.get(field) != existing.get(field) for field in fields if field != "body")
+                or _release_assets(result) != assets):
+            raise ValueError("GitHub did not confirm the contributor update")
+    status = "Updated" if apply and changed else "Unchanged" if not changed else "Preview"
+    summary = (f"{status}: {tag}\n\n"
+               f"Range: `{credits.interval.base}..{credits.interval.head}` "
+               f"({len(credits.interval.commits)} commits).\n\n{credits.markdown()}\n")
+    print(summary)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:
+            stream.write(summary)
+
+
 def create_manifest(directory: Path, tag: str, sha: str) -> ReleaseManifest:
     version = verify_identity(tag, sha)
     assets = []
@@ -267,10 +349,12 @@ def publish(directory: Path, tag: str, sha: str) -> None:
     marker = f"<!-- source-commit: {sha} -->"
     if existing is not None and marker not in str(existing.get("body", "")):
         raise ValueError("Existing draft was not created for this source SHA")
+    body = update_body(body + "\n" + marker, release_credits(
+        manifest.version, sha, releases, body=str(existing.get("body", "")) if existing else ""))
     if existing is None:
         existing = gh_api(f"repos/{RELEASE_REPOSITORY}/releases", method="POST", payload={
             "tag_name": tag, "target_commitish": sha, "name": tag,
-            "body": body + "\n" + marker, "draft": True,
+            "body": body, "draft": True,
             "prerelease": manifest.version.is_beta, "make_latest": "false",
         })
     assert isinstance(existing, dict)
@@ -298,7 +382,7 @@ def publish(directory: Path, tag: str, sha: str) -> None:
     latest = not manifest.version.is_beta and all(manifest.version > v for v in stable if v)
     gh_api(f"repos/{RELEASE_REPOSITORY}/releases/{existing['id']}", method="PATCH", payload={
         "draft": False, "prerelease": manifest.version.is_beta,
-        "make_latest": "true" if latest else "false", "body": body + "\n" + marker,
+        "make_latest": "true" if latest else "false", "body": body,
     })
 
 
@@ -387,6 +471,10 @@ def main() -> None:
     meta.add_argument("--github-output", action="store_true")
     meta.add_argument("--github-env", action="store_true")
     commands.add_parser("check-notes")
+    credits_parser = commands.add_parser("contributors")
+    credits_parser.add_argument("--tag", required=True)
+    credits_parser.add_argument("--apply", action="store_true",
+                               help="Update only the existing release body; default is a preview")
     for name in ("preflight", "manifest", "publish"):
         command = commands.add_parser(name)
         command.add_argument("--tag", required=True)
@@ -406,6 +494,8 @@ def main() -> None:
         prepare(args.intent)
     elif args.command == "check-notes":
         validate_note_tree()
+    elif args.command == "contributors":
+        contributors(args.tag, apply=args.apply)
     elif args.command == "preflight":
         preflight(args.tag, args.sha)
     elif args.command == "manifest":
