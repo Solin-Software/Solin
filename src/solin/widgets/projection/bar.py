@@ -627,7 +627,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._overlay_layout.setContentsMargins(0, 0, 0, 0)
         self._overlay_layout.setSpacing(0)
 
-        # ── Topo ─────────────────────────────────────────────────────────
+        # ── Top ──────────────────────────────────────────────────────────
         ov_top = QWidget()
         self._overlay_header = ov_top
         ov_top.setFixedHeight(42)
@@ -2083,7 +2083,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         n = len(self._playlist)
 
         if n == 0:
-            # Sem playlist — comportamento legado
+            # No playlist — legacy behavior
             if self._loop:
                 self.play_next_requested.emit(
                     {"url": "__replay__", "title": "", "type": "video"}
