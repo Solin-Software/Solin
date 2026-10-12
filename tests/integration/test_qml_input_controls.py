@@ -1,21 +1,28 @@
 from collections import deque
+import gc
 from pathlib import Path
 import subprocess
 import sys
 from textwrap import dedent
+from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, Qt, QUrl
-from PySide6.QtGui import QCursor, QEnterEvent, QGuiApplication
+from PySide6.QtGui import QCursor, QEnterEvent, QGuiApplication, QMouseEvent
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml import host as qml_host
 from tests._paths import REPO_ROOT
-from tests._qt import dispose_widget, mouse_click, mouse_move, show_and_activate, wait_until
+from tests._qt import (
+    dispose_widget, mouse_click, mouse_move, mouse_press, mouse_release,
+    show_and_activate, wait_until,
+)
 
 
 def _controls_widget(source, *, parent=None):
@@ -173,6 +180,326 @@ def test_pointer_input_reaches_embedded_controls_through_native_surfaces(
     stage = "exit move"
     mouse_move(host, outside, sync_cursor=True)
     wait_until(lambda: not root.property("hovered"), description=diagnostic)
+
+
+def _native_hover_host(request, depth=1, late_native=False, owner=None, position=None, sync_cursor=False):
+    host = QWidget(owner, Qt.WindowType.Tool) if owner is not None else QWidget()
+    request.addfinalizer(lambda: dispose_widget(host))
+    host.resize(440, 380)
+    if position is not None:
+        host.move(position)
+    container = host
+    for _ in range(depth):
+        parent = QWidget(container)
+        parent.setGeometry(10, 10, 400, 340)
+        if not late_native:
+            parent.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+        container = parent
+    widget, root = _controls_widget(b'''
+        import QtQuick
+        Item {
+            property alias hovered: area.containsMouse
+            property alias handlerHovered: handler.hovered
+            property alias pressed: area.pressed
+            property int exits: 0
+            MouseArea {
+                id: area
+                anchors.fill: parent
+                hoverEnabled: true
+                onExited: parent.exits++
+            }
+            HoverHandler { id: handler }
+        }
+    ''', parent=container)
+    if late_native:
+        container.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+    show_and_activate(host)
+    _enter_native_hover(widget, sync_cursor=sync_cursor)
+    wait_until(lambda: root.property("hovered"), description="initial embedded hover")
+    return host, container, widget, root
+
+
+def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
+    native = widget if widget.windowHandle() is not None else widget.nativeParentWidget()
+    assert native is not None and native.windowHandle() is not None
+    assert QTest.qWaitForWindowExposed(native.windowHandle(), 3000), "Native input host was not exposed"
+    point = inside if inside is not None else QPoint(60, 60)
+    entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
+    if sync_cursor:
+        # New or changed native hosts can queue real crossings. Qualify distinct
+        # movements so a cursor already at the target cannot skip acknowledgement.
+        mouse_move(widget, entry, sync_cursor=True)
+        mouse_move(widget, point, sync_cursor=True)
+    # These ordered-stream regressions exercise QWidgetWindow dispatch directly.
+    # Physical cursor transport is covered by the native-surface tests above.
+    local = QPointF(widget.mapTo(native, entry))
+    QCoreApplication.sendEvent(
+        native.windowHandle(),
+        QEnterEvent(local, local, QPointF(widget.mapToGlobal(entry))),
+    )
+    local = QPointF(widget.mapTo(native, point))
+    QCoreApplication.sendEvent(
+        native.windowHandle(),
+        QMouseEvent(
+            QEvent.Type.MouseMove, local, local, QPointF(widget.mapToGlobal(point)),
+            Qt.MouseButton.NoButton, QGuiApplication.mouseButtons(), Qt.KeyboardModifier.NoModifier,
+        ),
+    )
+    QCoreApplication.processEvents()
+
+
+def _capture_hover_host(request):
+    grabber = QWidget()
+    request.addfinalizer(lambda: dispose_widget(grabber))
+    grabber.resize(120, 90)
+    origin = grabber.screen().availableGeometry().topLeft() + QPoint(30, 60)
+    grabber.move(origin)
+    show_and_activate(grabber)
+    # Cocoa marks fully occluded windows unexposed. Keep the release receiver
+    # beside the hover host so hiding its child cannot strand the pressed button.
+    host, container, widget, root = _native_hover_host(request, position=origin + QPoint(180, 0))
+    assert not grabber.frameGeometry().intersects(host.frameGeometry())
+    assert QTest.qWaitForWindowExposed(grabber.windowHandle(), 3000)
+    return grabber, host, container, widget, root
+
+
+def _reordered_native_exit(host, container):
+    outside = QPointF(host.width() - 2, host.height() - 2)
+    global_position = QPointF(host.mapToGlobal(outside.toPoint()))
+    # Qt can enter the outer native window before leaving its native child,
+    # overwriting the last receiver with the outer window instead of its alien child.
+    QCoreApplication.sendEvent(
+        host.windowHandle(), QEnterEvent(outside, outside, global_position),
+    )
+    QCoreApplication.sendEvent(container.windowHandle(), QEvent(QEvent.Type.Leave))
+
+
+@pytest.mark.parametrize("depth", [1, 2])
+@pytest.mark.parametrize("late_native", [False, True])
+def test_outer_window_entry_before_native_ancestor_exit_clears_embedded_hover(
+    request, monkeypatch, depth, late_native,
+):
+    host, container, widget, root = _native_hover_host(request, depth, late_native)
+    # Model the cursor snapshot from the native crossing without letting a real
+    # asynchronous warp repair the missing QWidget exit before this assertion.
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    for cycle in range(2):
+        inside = QPoint(70 + cycle * 10, 70)
+        _enter_native_hover(widget, inside)
+        wait_until(lambda: root.property("hovered"), description="embedded re-entry")
+        assert widget.underMouse()
+        _reordered_native_exit(host, container)
+        wait_until(
+            lambda: not root.property("hovered"),
+            description=lambda cycle=cycle: (
+                f"native ancestor exit cycle={cycle}, under_mouse={widget.underMouse()}, "
+                f"exits={root.property('exits')}, physical={QCursor.pos()}, expected={outside}"
+            ),
+        )
+        assert not root.property("handlerHovered")
+        assert not widget.underMouse()
+        assert root.property("exits") == exits + cycle + 1
+
+
+@pytest.mark.parametrize("normal_exit", [False, True])
+def test_ancestor_exit_preserves_inside_hover_and_does_not_duplicate_normal_exits(
+    request, monkeypatch, normal_exit,
+):
+    _host, container, widget, root = _native_hover_host(request)
+    inside = widget.mapToGlobal(QPoint(60, 60))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: inside))
+    exits = root.property("exits")
+    if normal_exit:
+        QCoreApplication.sendEvent(widget, QEvent(QEvent.Type.Leave))
+    QCoreApplication.sendEvent(container, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+    assert bool(root.property("hovered")) is not normal_exit
+    assert root.property("exits") == exits + int(normal_exit)
+
+
+def test_native_ancestor_exit_preserves_capture_until_mouse_release(request, monkeypatch):
+    host, container, widget, root = _native_hover_host(request)
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    mouse_press(widget, Qt.MouseButton.LeftButton, pos=QPoint(60, 60))
+    try:
+        assert root.property("pressed")
+        _reordered_native_exit(host, container)
+        QCoreApplication.processEvents()
+        assert root.property("pressed")
+        assert root.property("hovered")
+        assert root.property("exits") == exits
+    finally:
+        mouse_release(widget, Qt.MouseButton.LeftButton, pos=QPoint(370, 310))
+    wait_until(lambda: not root.property("hovered"), description="exit after native capture release")
+    assert not root.property("pressed")
+    assert not widget.underMouse()
+    assert root.property("exits") == exits + 1
+
+
+def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(request, monkeypatch):
+    old_host, old_container, widget, root = _native_hover_host(request)
+    outside = old_host.mapToGlobal(QPoint(old_host.width() - 2, old_host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    _reordered_native_exit(old_host, old_container)
+    host = QWidget()
+    request.addfinalizer(lambda: dispose_widget(host))
+    host.resize(440, 380)
+    container = QWidget(host)
+    container.setGeometry(10, 10, 400, 340)
+    container.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+    widget.setParent(container)
+    widget.show()
+    show_and_activate(host)
+    _enter_native_hover(widget, QPoint(80, 70), sync_cursor=True)
+    wait_until(lambda: root.property("hovered"), description="reparented embedded hover")
+    exits = root.property("exits")
+    QCoreApplication.sendEvent(old_container, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+    assert root.property("hovered")
+    assert root.property("exits") == exits
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    _reordered_native_exit(host, container)
+    wait_until(lambda: not root.property("hovered"), description="new native ancestor exit")
+    assert root.property("exits") == exits + 1
+
+
+def test_pending_native_exit_resumes_after_capture_transfers_to_another_widget(request, monkeypatch):
+    grabber, host, container, widget, root = _capture_hover_host(request)
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    mouse_press(widget, Qt.MouseButton.LeftButton, pos=QPoint(60, 60))
+    try:
+        _reordered_native_exit(host, container)
+        QCoreApplication.processEvents()
+        grabber.grabMouse()
+        assert QWidget.mouseGrabber() is grabber
+        assert root.property("hovered")
+        assert root.property("exits") == exits
+    finally:
+        try:
+            mouse_release(grabber, Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+        finally:
+            grabber.releaseMouse()
+            if QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton:
+                mouse_release(widget, Qt.MouseButton.LeftButton, pos=QPoint(60, 60))
+    wait_until(lambda: not root.property("hovered"), description="exit after foreign capture release")
+    assert not widget.underMouse()
+    assert root.property("exits") == exits + 1
+
+
+def test_normal_widget_exit_cancels_queued_native_recovery(request, monkeypatch):
+    host, container, widget, root = _native_hover_host(request)
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    _reordered_native_exit(host, container)
+    QCoreApplication.sendEvent(widget, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+    assert not root.property("hovered")
+    assert root.property("exits") == exits + 1
+
+
+def test_native_exit_respects_ancestor_clipping(request, monkeypatch):
+    host, container, widget, root = _native_hover_host(request)
+    widget.move(250, 0)
+    _enter_native_hover(widget, QPoint(60, 60))
+    wait_until(lambda: root.property("hovered"), description="clipped embedded hover")
+    # This point is in the child rectangle, but beyond its parent's right edge.
+    clipped = widget.mapToGlobal(QPoint(200, 60))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: clipped))
+    exits = root.property("exits")
+    _reordered_native_exit(host, container)
+    wait_until(lambda: not root.property("hovered"), description="exit outside ancestor clip")
+    assert root.property("exits") == exits + 1
+
+
+def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, monkeypatch):
+    owner = QWidget()
+    request.addfinalizer(lambda: dispose_widget(owner))
+    owner.resize(600, 440)
+    show_and_activate(owner)
+    host, container, widget, root = _native_hover_host(request, owner=owner, sync_cursor=True)
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    QCoreApplication.sendEvent(owner, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+    assert root.property("hovered")
+    assert root.property("exits") == exits
+    _reordered_native_exit(host, container)
+    wait_until(lambda: not root.property("hovered"), description="owned tool native ancestor exit")
+    assert not widget.underMouse()
+
+
+def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypatch):
+    host, container, widget, root = _native_hover_host(request, depth=2)
+    old_parent = container.parentWidget()
+    parent = QWidget(host)
+    parent.setGeometry(10, 10, 400, 340)
+    parent.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+    container.setParent(parent)
+    # The detached native sibling still overlaps the replacement input surface.
+    # Keep it alive for the stale-observer assertion without intercepting input.
+    old_parent.hide()
+    parent.show()
+    container.show()
+    widget.show()
+    show_and_activate(host)
+    _enter_native_hover(widget, QPoint(90, 70), sync_cursor=True)
+    wait_until(lambda: root.property("hovered"), description="ancestor-reparented hover")
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    exits = root.property("exits")
+    QCoreApplication.sendEvent(old_parent, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+    assert root.property("hovered")
+    _reordered_native_exit(host, container)
+    wait_until(lambda: not root.property("hovered"), description="rebound ancestor exit")
+    assert root.property("exits") == exits + 1
+
+
+def test_hiding_or_destroying_a_host_cancels_capture_recovery(request, monkeypatch):
+    grabber, host, container, widget, root = _capture_hover_host(request)
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+    mouse_press(widget, Qt.MouseButton.LeftButton, pos=QPoint(60, 60))
+    try:
+        _reordered_native_exit(host, container)
+        QCoreApplication.processEvents()
+        widget.hide()
+        exits = root.property("exits")
+        mouse_release(grabber, Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+        QCoreApplication.processEvents()
+        assert root.property("exits") == exits
+        dispose_widget(widget)
+        # A later release on another receiver must not call the destroyed host.
+        QCoreApplication.sendEvent(grabber, QEvent(QEvent.Type.UngrabMouse))
+        QCoreApplication.processEvents()
+    finally:
+        if QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton:
+            mouse_release(grabber, Qt.MouseButton.LeftButton, pos=QPoint(5, 5))
+
+
+def test_pointer_observers_do_not_retain_their_widget_owners(capfd):
+    def create_owner():
+        host = QWidget()
+        container = QWidget(host)
+        widget, _root = _controls_widget(b'import QtQuick; Item {}', parent=container)
+        host.qml = widget
+        container.qml = widget
+        return ref(host), ref(container), ref(widget)
+
+    for _ in range(8):
+        owners = create_owner()
+        gc.collect()
+        assert all(owner() is None for owner in owners), "Pointer observation retained its owner tree"
+        QCoreApplication.processEvents()
+    assert "Error calling Python override" not in capfd.readouterr().err
 
 
 @pytest.mark.parametrize("offset", [QPoint(0, 0), QPoint(80, 120)])
