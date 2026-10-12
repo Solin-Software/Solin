@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 # ── Overlay JavaScript ─────────────────────────────────────────────────────────
 #
-# Melhorias v2:
+# v2 improvements:
 #
 # RELIABLE HOVER
 # • Replace display:none/block with opacity and pointer-events.
@@ -74,9 +74,9 @@ from ...styles.icons import JS_SVG_IMAGE, JS_SVG_VIDEO
 def _build_overlay_js(body: str) -> str:
     """Inject SVG strings from icons.py into the JS overlay body."""
     body = re.sub(
-        r"// ── Ícones SVG.*?\.join\(''\);",
+        r"// ── SVG icons.*?\.join\(''\);",
         (
-            f"// ── Ícones SVG (fonte: solin/styles/icons.py) ──────────────────────────\n"
+            f"// ── SVG icons (source: solin/styles/icons.py) ─────────────────────────\n"
             f"    var SVG_IMAGE = {json.dumps(JS_SVG_IMAGE)};\n"
             f"    var SVG_VIDEO = {json.dumps(JS_SVG_VIDEO)};"
         ),
@@ -99,21 +99,21 @@ _OVERLAY_JS_RAW = r"""
 (function () {
     'use strict';
 
-    // ── Domínios excluídos: têm tratamento próprio a nível de aplicação ──────
+    // ── Excluded domains: handled separately by the application ────────────
     if (location.hostname === 'stream.jw.org') return;
 
     var _bridge        = null;
     var _videoSrcMap   = new WeakMap();
     var _imgSaveUrlMap = new WeakMap();  // img/el → original HTTP URL for cache save
-    var _bar           = null;  // barra única de botões, filha do <body>
-    var _barMedia      = null;  // par {image, video} sob a barra no momento
+    var _bar           = null;  // Single button bar, attached to <body>
+    var _barMedia      = null;  // {image, video} pair currently under the bar
     var _hideTimer     = null;
     var OVERLAY_BAR_CLASS = '__solin_media_hover_overlay_bar';
     window.__solinMediaHoverOverlaysEnabled =
         window.__solinMediaHoverOverlaysEnabled !== false;
 
-    // ── Ícones SVG overlay ────────────────────────────────────────────────
-    // Monitor com paisagem = "projetar imagem"
+    // ── SVG icons for the overlay ─────────────────────────────────────────
+    // Monitor with a landscape = "project image"
     var SVG_IMAGE = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"',
         ' viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"',
@@ -126,7 +126,7 @@ _OVERLAY_JS_RAW = r"""
         '</svg>'
     ].join('');
 
-    // Monitor com triângulo de play = "projetar vídeo"
+    // Monitor with a play triangle = "project video"
     var SVG_VIDEO = [
         '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"',
         ' viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"',
@@ -138,19 +138,19 @@ _OVERLAY_JS_RAW = r"""
         '</svg>'
     ].join('');
 
-    // ── Ícones SVG do menu de contexto ────────────────────────────────────
-    // Seta de download
+    // ── SVG icons for the context menu ────────────────────────────────────
+    // Download arrow
     var SVG_CTX_SAVE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-    // Lista com + (adicionar à playlist)
+    // List with + (add to playlist)
     var SVG_CTX_PLAYLIST = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/><line x1="19" y1="15" x2="19" y2="21"/><line x1="16" y1="18" x2="22" y2="18"/></svg>';
 
-    // ── Sistema de menu de contexto (singleton) ───────────────────────────
+    // ── Context menu system (singleton) ───────────────────────────────────
     //
-    // Apenas um menu aberto por vez. Fecha automaticamente com:
-    //   • clique fora (mousedown capture)
-    //   • tecla ESC
-    //   • scroll na página
-    //   • novo contextmenu em outro elemento
+    // Only one menu is open at a time. It closes automatically on:
+    //   • an outside click (mousedown capture)
+    //   • the Escape key
+    //   • page scrolling
+    //   • a new contextmenu event on another element
 
     var _ctxMenu     = null;
     var _ctxCleanups = [];
@@ -219,7 +219,7 @@ _OVERLAY_JS_RAW = r"""
                 row.style.background = 'transparent';
                 iconEl.style.color = '__SOLIN_CTX_MUTED__';
             });
-            // preventDefault evita que o browser perca o foco da página
+            // preventDefault keeps the browser focus on the page.
             row.addEventListener('mousedown', function(e) { e.preventDefault(); });
             row.addEventListener('click', function(e) {
                 e.preventDefault(); e.stopPropagation();
@@ -231,7 +231,7 @@ _OVERLAY_JS_RAW = r"""
 
         document.body.appendChild(menu);
 
-        // Ajusta posição para não sair da viewport
+        // Adjust the position to keep the menu within the viewport.
         var rect = menu.getBoundingClientRect();
         if (rect.right > window.innerWidth - 8) {
             menu.style.left = Math.max(8, clientX - rect.width) + 'px';
@@ -240,8 +240,8 @@ _OVERLAY_JS_RAW = r"""
             menu.style.top = Math.max(8, clientY - rect.height) + 'px';
         }
 
-        // Registra os dismiss listeners com setTimeout(0) para que o
-        // mousedown que ABRIU o menu não feche imediatamente.
+        // Register dismissal listeners with setTimeout(0) so the
+        // mousedown that opened the menu does not immediately close it.
         var tmr = setTimeout(function() {
             function onOutside(e) {
                 if (_ctxMenu && !_ctxMenu.contains(e.target)) _dismissCtx();
@@ -262,8 +262,8 @@ _OVERLAY_JS_RAW = r"""
         _ctxCleanups.push(function() { clearTimeout(tmr); });
     }
 
-    // Monta os items do menu para um tipo de mídia (image|video)
-    // Retorna null se não houver URL HTTP válida (não exibir menu)
+    // Build menu items for a media type (image|video).
+    // Return null if there is no valid HTTP URL (do not show the menu).
     function _buildMediaCtxItems(saveUrl, mediaType) {
         if (!saveUrl || !saveUrl.startsWith('http')) return null;
 
@@ -280,7 +280,7 @@ _OVERLAY_JS_RAW = r"""
                     if (_bridge) _bridge.saveMedia(saveUrl, mediaType);
                 }
             },
-            null, // separador
+            null, // Separator
             {
                 icon:   SVG_CTX_PLAYLIST,
                 label:  addLabel,
@@ -295,7 +295,7 @@ _OVERLAY_JS_RAW = r"""
         ];
     }
 
-    // ── Canal nativo NativeWebView ─────────────────────────────────────────
+    // ── NativeWebView native channel ──────────────────────────────────────
     function waitForChannel(attempts) {
         if (attempts <= 0) return;
         if (!window.nativeWebView || !window.nativeWebView.postMessage) {
@@ -348,7 +348,7 @@ _OVERLAY_JS_RAW = r"""
         if (!mediaHoverOverlaysEnabled()) hideAllOverlayBars();
     };
 
-    // ── Botão overlay genérico ────────────────────────────────────────────
+    // ── Generic overlay button ───────────────────────────────────────────
     function makeBtn(svgContent, handler) {
         var btn = document.createElement('button');
         btn.innerHTML = svgContent;
@@ -369,11 +369,11 @@ _OVERLAY_JS_RAW = r"""
         return btn;
     }
 
-    // ── Barra de botões flutuante ─────────────────────────────────────────
+    // ── Floating button bar ───────────────────────────────────────────────
     //
-    // A barra vive no <body> com position:fixed, nunca dentro da página.
-    // Carrosséis e galerias (slick) enumeram os filhos dos seus containers
-    // ao inicializar: um nó nosso entre eles virava um slide vazio.
+    // The bar is attached to <body> with position:fixed, outside page containers.
+    // Carousels and galleries (slick) enumerate their container children
+    // during initialization: an overlay node among them became an empty slide.
     function ensureBar() {
         if (_bar && _bar.isConnected) return _bar;
         _bar = document.createElement('div');
@@ -390,8 +390,8 @@ _OVERLAY_JS_RAW = r"""
         return _bar;
     }
 
-    // ponytail: só descarta mídia fora da viewport; um container com
-    // overflow:hidden ainda pode deixar a barra visível sobre o recorte.
+    // Only discard media outside the viewport; a container with
+    // overflow:hidden can still leave the bar visible over the clipped area.
     function placeBar(media) {
         var r = media.getBoundingClientRect();
         if (r.width < 40 || r.height < 40) return false;
@@ -434,11 +434,11 @@ _OVERLAY_JS_RAW = r"""
         setOverlayBarVisible(_bar, placeBar(barAnchor(_barMedia)));
     }
 
-    // ── Mídia sob o cursor ────────────────────────────────────────────────
+    // ── Media under the cursor ────────────────────────────────────────────
     //
-    // Resolve o src contra o documento antes do filtro http: páginas como
-    // wol.jw.org servem src relativo, que sem isso é rejeitado e derruba o
-    // menu de mídia. Retorna '' para data:, blob: e URLs inválidas.
+    // Resolve src against the document before filtering for HTTP: pages such as
+    // wol.jw.org use relative src values, which would otherwise be rejected,
+    // preventing the media menu from opening. Return '' for data:, blob: and invalid URLs.
     function absMediaUrl(url) {
         if (!url) return '';
         try {
@@ -463,10 +463,10 @@ _OVERLAY_JS_RAW = r"""
             && (el.naturalHeight || el.height) > 80;
     }
 
-    // elementsFromPoint alcança o <video> mesmo coberto pelo poster e pelos
-    // controles do player, e a <img> sob camadas decorativas da página.
-    // Antes do play o poster do VideoJS cobre o vídeo: os dois entram na
-    // mesma pilha e cada um recebe o seu botão, como o overlay por âncora fazia.
+    // elementsFromPoint reaches <video> beneath its poster and player controls,
+    // and <img> beneath decorative page layers.
+    // Before playback, the VideoJS poster covers the video: both appear in the
+    // same stack and each gets its own button, as with the previous per-anchor overlay.
     function mediaFromPoint(x, y) {
         var stack = document.elementsFromPoint(x, y);
         var image = null, video = null;
@@ -529,7 +529,7 @@ _OVERLAY_JS_RAW = r"""
         showBarFor(media, buttons);
     }
 
-    // ── Extração de URL de vídeo ──────────────────────────────────────────
+    // ── Video URL extraction ──────────────────────────────────────────────
     function bestSrcFromSources(vid) {
         var sources = vid.querySelectorAll('source');
         var mp4 = '', webm = '', any = '';
@@ -583,7 +583,7 @@ _OVERLAY_JS_RAW = r"""
         return src;
     }
 
-    // ── Projeção de vídeo ─────────────────────────────────────────────────
+    // ── Video projection ──────────────────────────────────────────────────
     function projectVideoElement(vid) {
         var src = _videoSrcMap.get(vid) || captureVideoSrc(vid);
         if (!src) {
@@ -598,11 +598,11 @@ _OVERLAY_JS_RAW = r"""
         }
     }
 
-    // ── Setup geral ───────────────────────────────────────────────────────
+    // ── General setup ─────────────────────────────────────────────────────
     //
-    // Guarda a URL original de cada mídia antes que lazy-load ou o player
-    // troquem o src. Nada é inserido na página: a barra é criada sob demanda
-    // no hover, fora dela.
+    // Store each media element's original URL before lazy loading or the player
+    // changes src. No nodes are inserted into page containers: the bar is created
+    // on demand when hovering, outside those containers.
     function captureMediaUrls() {
         document.querySelectorAll('img').forEach(function (img) {
             if (_imgSaveUrlMap.has(img)) return;
@@ -635,13 +635,13 @@ _OVERLAY_JS_RAW = r"""
         obs.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // ── Listener delegado de contextmenu (nível de documento) ──────────────
+    // ── Delegated contextmenu listener (document level) ────────────────────
     //
-    // Um único listener com capture=true intercepta TODOS os contextmenu.
-    // O par {image, video} resolvido por elementsFromPoint é a única fonte
-    // da mídia, igual para a barra de hover e para o menu: clicar no player
-    // ou no botão do overlay produz o mesmo menu. Sem mídia HTTP válida,
-    // retorna sem preventDefault → menu padrão do browser aparece.
+    // A single listener with capture=true intercepts all contextmenu events.
+    // The {image, video} pair resolved by elementsFromPoint is the single source
+    // of media for both the hover bar and the menu: clicking the player
+    // or the overlay button produces the same menu. Without valid HTTP media,
+    // return without preventDefault so the browser's default menu appears.
 
     function _addCtxGroup(dest, seen, url, mediaType) {
         if (!url || !url.startsWith('http')) return;
@@ -650,7 +650,7 @@ _OVERLAY_JS_RAW = r"""
         seen[key] = true;
         var grp = _buildMediaCtxItems(url, mediaType);
         if (!grp) return;
-        if (dest.length > 0) dest.push(null);   // separador entre grupos
+        if (dest.length > 0) dest.push(null);   // Separator between groups
         for (var i = 0; i < grp.length; i++) dest.push(grp[i]);
     }
 
@@ -677,14 +677,14 @@ _OVERLAY_JS_RAW = r"""
         return items.length > 0 ? items : null;
     }
 
-    // Registrado na fase de capture para agir antes dos demais listeners de contextmenu
+    // Register in the capture phase to run before other contextmenu listeners.
     document.addEventListener('contextmenu', function (e) {
-        // Sobre o botão do overlay, e.target é o botão: usa o par que a barra cobre.
+        // Over an overlay button, e.target is the button: use the pair under the bar.
         var media = (_bar && _bar.contains(e.target) && _barMedia)
             ? _barMedia
             : mediaFromPoint(e.clientX, e.clientY);
         var items = media ? ctxItemsFor(media) : null;
-        if (!items) return;               // sem mídia HTTP → menu padrão do browser
+        if (!items) return;               // No HTTP media → browser's default menu
         e.preventDefault();
         e.stopPropagation();
         _showCtxMenu(e.clientX, e.clientY, items);
@@ -711,7 +711,7 @@ OVERLAY_JS = _build_overlay_js(_OVERLAY_JS_RAW)
 
 # ── BrowserWidget ──────────────────────────────────────────────────────────────
 #
-# Layout manual: QTabBar standalone + QPushButton "+" + QStackedWidget.
+# Manual layout: standalone QTabBar + QPushButton "+" + QStackedWidget.
 # The "+" button is a SIBLING of QTabBar in HBoxLayout, never a child.
 # This prevents positioning issues over the tabs.
 #

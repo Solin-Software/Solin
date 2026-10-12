@@ -522,7 +522,7 @@ def _write_jwlplaylist(
                 original_filename=orig_filename,
             )
             if parsed:
-                key_symbol = parsed.get("key_symbol")   # pode ser None (docid-only)
+                key_symbol = parsed.get("key_symbol")   # May be None (document ID only)
                 track      = parsed.get("track",    track)
                 issue_tag  = parsed.get("issue_tag", issue_tag)
                 doc_id     = parsed.get("doc_id",    doc_id)
@@ -532,7 +532,7 @@ def _write_jwlplaylist(
         # STEP 2: determine whether this is a JW.org item (export as a reference).
         # JW.org if key_symbol exists (publication symbol) OR doc_id comes from a JW CDN.
         # Local files with JW names (e.g. rr_T_43.mp3) are ALSO JW when
-        # parse_jw_media_reference extraiu um key_symbol/doc_id deles.
+        # parse_jw_media_reference extracted a publication symbol or document ID from them.
         is_jworg = bool(key_symbol) or bool(
             doc_id and url and is_jw_url(url)
         )
@@ -546,7 +546,7 @@ def _write_jwlplaylist(
             local_cached_path = completed_cached_path(url, media_cache_dir)
 
         # ─────────────────────────────────────────────────────────────────────
-        # RAMO A: Item JW.org → Location + PlaylistItemLocationMap
+        # BRANCH A: JW.org item → Location + PlaylistItemLocationMap
         # Never embed the media file; include only the canonical reference.
         # ─────────────────────────────────────────────────────────────────────
         if is_jworg:

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/solin-banner.png" alt="Solin — Open-source media management and presentation" width="100%">
+  <img src="docs/assets/solin-banner.svg" alt="Solin — Open-source media management and presentation" width="100%">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
   <a href="#for-contributors">Contribute</a>
 </p>
 
-# Solin
+---
 
 Solin is a free, open-source desktop application for managing audio, video, and
 visual presentation. It brings meeting preparation,

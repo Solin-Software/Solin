@@ -1241,7 +1241,10 @@ def test_replacing_native_video_preserves_the_outgoing_picture_during_dissolve(
                 _program_pixel_matches(pixel, bytes((255, 0, 0, 255)))
                 for _, pixel in tuple(samples)
             ))
-        assert any(20 < pixel[0] < 230 and 20 < pixel[2] < 230 for _, pixel in samples), samples
+        # This latest-frame observer can miss the entire dissolve while native
+        # rendering continues. Controlled-progress native readback qualifies
+        # its intermediate phases; here every delivered picture must preserve
+        # the outgoing video, the incoming video, or their mixture.
         assert all(pixel[0] + pixel[2] >= 230 for _, pixel in samples), samples
         record_property("native_presentation_take_ms", ",".join(f"{value:.3f}" for value in take_latencies_ms))
     finally:
@@ -2058,6 +2061,10 @@ def test_native_prepared_transition_composes_both_phases(scenario: str) -> None:
     _run_native_readback(f"_assert_native_{scenario}_phases")
 
 
+def test_native_video_replacement_preserves_both_producers_during_dissolve() -> None:
+    _run_native_readback("_assert_native_video_replacement_dissolve_phases")
+
+
 def _assert_native_dissolve_phases() -> None:
     _assert_native_transition_phases("dissolve")
 
@@ -2066,31 +2073,36 @@ def _assert_native_fade_to_black_phases() -> None:
     _assert_native_transition_phases("fade_to_black")
 
 
+def _write_native_phase_clip(directory: Path, name: str, color: str) -> Path:
+    path = directory / f"{name}.gif"
+    images = [Image.new("RGB", (64, 64), color) for _ in range(8)]
+    try:
+        for index, image in enumerate(images):
+            image.putpixel((0, 0), (index * 30,) * 3)
+        images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
+    finally:
+        for image in images:
+            image.close()
+    return path
+
+
 def _assert_native_transition_phases(kind: str) -> None:
     """Qualify real prepared-source composition independently of output cadence."""
     from pylibobs._ffi import get_lib
     from solin.core.media.obs_runtime import ObsRuntime
-    from solin.core.media.obs_source_render import render_source_to_bgra, shutdown
+    from solin.core.media.obs_source_render import shutdown
     from solin.core.scenes.libobs_media_source import LibobsMediaSource
     from solin.core.scenes.libobs_transitions import LibobsTransitionPool
 
     runtime = ObsRuntime()
     media = LibobsMediaSource(runtime)
     pool = LibobsTransitionPool(runtime, "phase-qualification")
-    origin = transition = callback = None
+    origin = transition = None
     showing = False
     directory = TemporaryDirectory()
     try:
         runtime.ensure_started(width=64, height=64)
-        path = Path(directory.name) / "red.gif"
-        images = [Image.new("RGB", (64, 64), "#ff0000") for _ in range(8)]
-        try:
-            for index, image in enumerate(images):
-                image.putpixel((0, 0), (index * 30,) * 3)
-            images[0].save(path, save_all=True, append_images=images[1:], duration=200, loop=0)
-        finally:
-            for image in images:
-                image.close()
+        path = _write_native_phase_clip(Path(directory.name), "red", "#ff0000")
         assert media.open(str(path), autoplay=False)
         assert media.wait_for_video_frame(deadline=time.monotonic() + 4)
         origin = runtime.ob.Source.create("color_source_v3", "phase-origin", {
@@ -2103,28 +2115,50 @@ def _assert_native_transition_phases(kind: str) -> None:
         showing = True
         get_lib().obs_transition_set_manual_torque(transition._ptr, 0.0, 0.0)
         assert transition.start(media.source, 350, mode=runtime.ob.TransitionMode.MANUAL)
-        requested_phase = 0.0
-        captured = Event()
-        captured.set()
-        observations = SimpleQueue()
+        _assert_native_transition_readback(runtime, transition, kind, outgoing_channel=1)
+    finally:
+        if showing:
+            get_lib().obs_source_dec_showing(transition._ptr)
+        pool.shutdown()
+        media.close()
+        if origin is not None:
+            origin.release()
+        shutdown()
+        runtime.shutdown()
+        directory.cleanup()
 
-        def sample(_width, _height):
-            if captured.is_set():
+
+def _assert_native_transition_readback(
+    runtime, transition, kind: str, *, outgoing_channel: int,
+    after_phase: Callable[[float], None] | None = None,
+) -> None:
+    from pylibobs._ffi import get_lib
+    from solin.core.media.obs_source_render import render_source_to_bgra
+
+    requested_phase = 0.0
+    captured = Event()
+    captured.set()
+    observations = SimpleQueue()
+
+    def sample(_width, _height):
+        if captured.is_set():
+            return
+        try:
+            if abs(transition.progress - requested_phase) > 0.0001:
                 return
-            try:
-                if abs(transition.progress - requested_phase) > 0.0001:
-                    return
-                captured.set()
-                frame = render_source_to_bgra(
-                    transition, 64, 64, canvas_width=64, canvas_height=64,
-                )
-                assert frame is not None
-                pixels, stride = frame
-                observations.put(pixels[32 * stride + 32 * 4:32 * stride + 33 * 4])
-            except Exception as error:  # noqa: BLE001 - return native callback failures
-                captured.set()
-                observations.put(error)
+            captured.set()
+            frame = render_source_to_bgra(
+                transition, 64, 64, canvas_width=64, canvas_height=64,
+            )
+            assert frame is not None
+            pixels, stride = frame
+            observations.put(pixels[32 * stride + 32 * 4:32 * stride + 33 * 4])
+        except Exception as error:  # noqa: BLE001 - return native callback failures
+            captured.set()
+            observations.put(error)
 
+    callback = None
+    try:
         callback = runtime.ob.add_main_render_callback(sample)
         samples = []
         for phase in (0.0, 0.25, 0.5, 0.75, 1.0):
@@ -2137,27 +2171,126 @@ def _assert_native_transition_phases(kind: str) -> None:
                 raise pixel
             samples.append(pixel)
             assert pixel[3] >= 249, (kind, phase, pixel)
-        assert _program_pixel_matches(samples[0], bytes((0, 255, 0, 255))), samples
+            if after_phase is not None:
+                after_phase(phase)
+        origin = bytearray((0, 0, 0, 255))
+        origin[outgoing_channel] = 255
+        assert _program_pixel_matches(samples[0], bytes(origin)), samples
         assert _program_pixel_matches(samples[-1], bytes((0, 0, 255, 255))), samples
         if kind == "fade_to_black":
             assert 20 < samples[1][1] < 235 and max(samples[1][0], samples[1][2]) <= 6, samples
             assert _program_pixel_matches(samples[2], bytes((0, 0, 0, 255))), samples
             assert 20 < samples[3][2] < 235 and max(samples[3][0], samples[3][1]) <= 6, samples
         else:
-            assert all(20 < p[1] < 235 and 20 < p[2] < 235 for p in samples[1:-1]), samples
-            assert samples[1][1] > samples[2][1] > samples[3][1], samples
+            assert all(20 < p[outgoing_channel] < 235 and 20 < p[2] < 235
+                       for p in samples[1:-1]), samples
+            outgoing = [p[outgoing_channel] for p in samples[1:-1]]
+            assert outgoing[0] > outgoing[1] > outgoing[2], samples
             assert samples[1][2] < samples[2][2] < samples[3][2], samples
+            assert all(p[outgoing_channel] + p[2] >= 230 for p in samples), samples
     finally:
         if callback is not None:
             runtime.ob.remove_main_render_callback(callback)
-        if showing:
-            get_lib().obs_source_dec_showing(transition._ptr)
-        pool.shutdown()
-        media.close()
-        if origin is not None:
-            origin.release()
+
+
+def _assert_native_video_replacement_dissolve_phases() -> None:
+    """Drive production presentation retirement while controlling native progress."""
+    from unittest.mock import patch
+    from pylibobs._ffi import ffi, get_lib
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.media.obs_source_render import shutdown
+    from solin.core.scenes.ipc_protocol import SceneIpcEnvelope
+    from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
+
+    runtime = ObsRuntime()
+
+    def runtime_factory():
+        runtime.ensure_started(width=64, height=64)
+        return runtime
+
+    engine = LibobsSidecarEngine(runtime_factory)
+    sequence = 0
+    lib = get_lib()
+    get_weak = ffi.cast(
+        "obs_weak_source_t *(*)(obs_source_t *)", lib.obs_source_get_weak_source,
+    )
+    outgoing_weak = None
+    directory = TemporaryDirectory()
+
+    def send(kind, payload=None):
+        nonlocal sequence
+        sequence += 1
+        result = engine.handle(SceneIpcEnvelope(
+            message_type=kind, request_id=f"video-phases-{sequence}",
+            session_id="video-phases", process_generation="video-phases",
+            sequence=sequence, document_revision=0,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 4000,
+            payload=payload or {},
+        ))
+        assert result.message_type != "error", result
+        assert result.payload.get("applied", True), result
+        return result
+
+    def prepare(epoch, kind):
+        return send("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "content",
+            "content_media_epoch": epoch, "content_source_kind": "native_media",
+            "transition": {"kind": kind, "duration_ms": 0 if kind == "cut" else 350},
+        })
+
+    def take(prepared):
+        send("take_prepared", {
+            "bus_id": "virtual_camera",
+            "preparation_token": prepared.payload["preparation_token"],
+        })
+
+    def check_retirement(phase):
+        send("ping")
+        if phase < 1:
+            assert not lib.obs_weak_source_expired(outgoing_weak), (
+                "Outgoing video retired early", phase,
+            )
+
+    try:
+        outgoing_path = _write_native_phase_clip(Path(directory.name), "blue", "#0000ff")
+        incoming_path = _write_native_phase_clip(Path(directory.name), "red", "#ff0000")
+        send("hello")
+        send("hydrate", {"document": {
+            "sources": [{"id": CONTENT_SOURCE_ID, "type": "solin_content",
+                         "configuration": {"mode": "presentation"}}],
+            "scenes": [{"id": "idle", "layers": []}, {"id": "content", "layers": [{
+                "id": "picture", "source_id": CONTENT_SOURCE_ID,
+            }]}],
+        }, "active_scenes": dict.fromkeys((bus.value for bus in BusId), "idle")})
+        send("open_media", {
+            "path": str(outgoing_path), "autoplay": False,
+            "is_local_file": True, "content_media_epoch": 1,
+        })
+        take(prepare(1, "cut"))
+        # A native weak reference observes ownership without keeping the decoder alive.
+        outgoing_weak = get_weak(engine._media_source.source._ptr)
+        assert outgoing_weak != ffi.NULL
+        prepared = prepare(2, "dissolve")
+        send("open_media", {
+            "path": str(incoming_path), "autoplay": False,
+            "is_local_file": True, "content_media_epoch": 2,
+        })
+        transition = engine._scene_graph._transitions.prepared("dissolve")
+        lib.obs_transition_set_manual_torque(transition._ptr, 0.0, 0.0)
+        start = transition.start
+        with patch.object(transition, "start", side_effect=lambda source, duration: start(
+            source, duration, mode=runtime.ob.TransitionMode.MANUAL,
+        )):
+            take(prepared)
+        assert engine._scene_graph.program_source is transition
+        _assert_native_transition_readback(
+            runtime, transition, "dissolve", outgoing_channel=0, after_phase=check_retirement,
+        )
+    finally:
+        if outgoing_weak is not None:
+            lib.obs_weak_source_release(outgoing_weak)
         shutdown()
-        runtime.shutdown()
+        engine.shutdown()
         directory.cleanup()
 
 

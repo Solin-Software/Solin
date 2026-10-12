@@ -842,10 +842,10 @@ def main():
 
     # Choose between opening a profile directly and showing the profile selector.
     #
-    # • 0 profiles + no legacy data → Full onboarding
-    # • 0 profiles + legacy data → Migration screen
-    # • 1 profile → Open directly (skip the selector)
-    #   • 2+ perfis              → Seletor
+    # • 0  profiles + no legacy data → Full onboarding
+    # • 0  profiles + legacy data    → Migration screen
+    # • 1  profile                   → Open directly (skip the selector)
+    # • 2+ profiles                  → Selector
 
     if create_profile_mode:
         screen = _create_profile_screen(container, lang_manager)

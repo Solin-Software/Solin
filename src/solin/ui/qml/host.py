@@ -3,12 +3,15 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from typing import Any, cast
+from weakref import ReferenceType, ref
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, Slot
-from PySide6.QtGui import QColor, QEnterEvent, QMouseEvent, QSurfaceFormat
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QTimer, Qt, Slot
+from PySide6.QtGui import QColor, QCursor, QEnterEvent, QGuiApplication, QMouseEvent, QSurfaceFormat
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickControls2 import QQuickStyle
 from PySide6.QtQuickWidgets import QQuickWidget
+from PySide6.QtWidgets import QWidget
+from shiboken6 import isValid
 
 from solin.styles.theme import PALETTE, QML_THEME
 from solin.ui.helpers import QmlPointerCursorState
@@ -17,15 +20,102 @@ from solin.ui.qml.loader import QmlLoadHandle
 _QML_CONTROLS_STYLE = "Basic"
 
 
-class _EmbeddedPointerEnterFilter(QObject):
-    """Translate QWidget window coordinates into the embedded Quick scene."""
+class _EmbeddedPointerEventFilter(QObject):
+    """Map embedded input and reconcile exits lost at native ancestor boundaries."""
+
+    def __init__(self, widget: QQuickWidget) -> None:
+        super().__init__(widget)
+        # The Qt parent tree owns ancestors. Observing them must not create a
+        # Python cycle back to the widget that owns this adapter.
+        self._ancestors: tuple[ReferenceType[QWidget], ...] = ()
+        self._pending_exit = False
+        self._capture_application: QCoreApplication | None = None
+        self._exit_timer = QTimer(self)
+        self._exit_timer.setSingleShot(True)
+        self._exit_timer.timeout.connect(self._reconcile_exit)
+        widget.installEventFilter(self)
+        self._observe_ancestors(widget)
+
+    def _observe_ancestors(self, widget: QQuickWidget) -> None:
+        self._cancel_exit()
+        for reference in self._ancestors:
+            ancestor = reference()
+            if ancestor is not None and isValid(ancestor):
+                ancestor.removeEventFilter(self)
+        ancestors = []
+        ancestor = None if widget.isWindow() else widget.parentWidget()
+        while ancestor is not None:
+            ancestors.append(ref(ancestor))
+            ancestor.installEventFilter(self)
+            if ancestor.isWindow():
+                break
+            ancestor = ancestor.parentWidget()
+        self._ancestors = tuple(ancestors)
+
+    def _cancel_exit(self) -> None:
+        self._pending_exit = False
+        self._exit_timer.stop()
+        if self._capture_application is not None:
+            self._capture_application.removeEventFilter(self)
+            self._capture_application = None
+
+    @Slot()
+    def _reconcile_exit(self) -> None:
+        widget = self.parent()
+        if not isinstance(widget, QQuickWidget) or not self._pending_exit:
+            return
+        # Captured input completes through its normal release path. A pending
+        # exit is reconsidered on release/ungrab, without polling during a drag.
+        if QGuiApplication.mouseButtons() != Qt.MouseButton.NoButton or QWidget.mouseGrabber():
+            # A popup or another surface can take capture before releasing it.
+            # Observe that release only while recovery is pending, even when
+            # its receiver is outside this widget's ancestor chain.
+            if self._capture_application is None:
+                self._capture_application = QCoreApplication.instance()
+                if self._capture_application is not None:
+                    self._capture_application.installEventFilter(self)
+            return
+        self._cancel_exit()
+        if not widget.isVisible() or not widget.underMouse():
+            return
+        position = QCursor.pos()
+        if widget.rect().contains(widget.mapFromGlobal(position)) and all(
+            ancestor.rect().contains(ancestor.mapFromGlobal(position))
+            for reference in self._ancestors
+            if (ancestor := reference()) is not None and isValid(ancestor)
+        ):
+            return
+        # QWidgetWindow can replace its last receiver with the outer native
+        # window before the ancestor's Leave arrives. Preserve QQuickWidget's
+        # own exit dispatch and cursor cleanup instead of bypassing its filters.
+        QCoreApplication.sendEvent(widget, QEvent(QEvent.Type.Leave))
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if not isinstance(event, QEnterEvent):
-            return False
         widget = self.parent()
+        if not isinstance(widget, QQuickWidget):
+            return False
+        event_type = event.type()
+        if watched is not widget and not any(watched is reference() for reference in self._ancestors):
+            if self._pending_exit and event_type in (
+                QEvent.Type.MouseButtonRelease, QEvent.Type.UngrabMouse,
+            ):
+                self._exit_timer.start(0)
+            return False
+        if event_type == QEvent.Type.ParentChange:
+            self._observe_ancestors(widget)
+        elif event_type == QEvent.Type.Hide:
+            self._cancel_exit()
+        elif watched is widget and event_type in (QEvent.Type.Enter, QEvent.Type.Leave):
+            self._cancel_exit()
+        elif event_type == QEvent.Type.Leave and widget.underMouse():
+            self._pending_exit = True
+            self._exit_timer.start(0)
+        elif self._pending_exit and event_type in (
+            QEvent.Type.MouseButtonRelease, QEvent.Type.UngrabMouse,
+        ):
+            self._exit_timer.start(0)
         if (
-            isinstance(widget, QQuickWidget)
+            isinstance(event, QEnterEvent)
             and watched is widget
             and event.scenePosition() != event.position()
         ):
@@ -151,9 +241,8 @@ def configure_qml_host(
     dismiss_text_focus_on_pointer_press: bool = False,
 ) -> QmlLoadHandle:
     configure_qml_controls_style()
-    enter_filter = _EmbeddedPointerEnterFilter(widget)
-    widget.installEventFilter(enter_filter)
-    cast(Any, widget)._qml_pointer_enter_filter = enter_filter
+    pointer_filter = _EmbeddedPointerEventFilter(widget)
+    cast(Any, widget)._qml_pointer_event_filter = pointer_filter
     surface_format = QSurfaceFormat()
     surface_format.setAlphaBufferSize(alpha_buffer_size)
     widget.setFormat(surface_format)
