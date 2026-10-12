@@ -392,16 +392,32 @@ def test_pending_native_exit_resumes_after_capture_transfers_to_another_widget(r
     assert root.property("exits") == exits + 1
 
 
-def test_normal_widget_exit_cancels_queued_native_recovery(request, monkeypatch):
+@pytest.mark.parametrize("reenter", [False, True])
+def test_normal_widget_exit_cancels_queued_native_recovery(request, monkeypatch, reenter):
     host, container, widget, root = _native_hover_host(request)
     outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
     exits = root.property("exits")
     _reordered_native_exit(host, container)
+    recovery = widget._qml_pointer_event_filter
+    assert recovery._pending_exit
+    assert recovery._exit_timer.isActive()
     QCoreApplication.sendEvent(widget, QEvent(QEvent.Type.Leave))
-    QCoreApplication.processEvents()
     assert not root.property("hovered")
     assert root.property("exits") == exits + 1
+    assert not recovery._pending_exit
+    assert not recovery._exit_timer.isActive()
+    if reenter:
+        position = QPointF(60, 60)
+        QCoreApplication.sendEvent(
+            widget, QEnterEvent(position, position, QPointF(widget.mapToGlobal(QPoint(60, 60)))),
+        )
+    # Deliver a stale timeout directly so a fresh platform Enter cannot be
+    # mistaken for failed exit cancellation while pumping unrelated events.
+    recovery._exit_timer.timeout.emit()
+    assert bool(root.property("hovered")) is reenter
+    assert root.property("exits") == exits + 1
+    assert not recovery._pending_exit
 
 
 def test_native_exit_respects_ancestor_clipping(request, monkeypatch):

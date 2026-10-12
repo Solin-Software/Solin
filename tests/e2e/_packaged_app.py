@@ -7,8 +7,9 @@ import subprocess
 import sys
 import time
 import uuid
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 
 import pytest
 
@@ -259,7 +260,9 @@ def assert_process_survives_startup(
     *,
     args: tuple[str, ...] = (),
     env: dict[str, str] | None = None,
+    wait_for_ready: Callable[[BinaryIO], None] | None = None,
 ) -> None:
+    """Observe survival, optionally after a synthetic fixture's pipe handshake."""
     startup_seconds = float(os.environ.get("SOLIN_E2E_STARTUP_SECONDS", "8"))
     shutdown_timeout = float(os.environ.get("SOLIN_E2E_SHUTDOWN_TIMEOUT", "10"))
 
@@ -268,8 +271,13 @@ def assert_process_survives_startup(
         cwd=exe_path.parent,
         env=env,
         start_new_session=os.name == "posix",
+        stdout=subprocess.PIPE if wait_for_ready is not None else None,
     )
     try:
+        if wait_for_ready is not None:
+            assert process.stdout is not None
+            with process.stdout:
+                wait_for_ready(process.stdout)
         deadline = time.monotonic() + startup_seconds
         while time.monotonic() < deadline:
             exit_code = process.poll()
