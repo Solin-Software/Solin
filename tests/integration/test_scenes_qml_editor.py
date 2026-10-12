@@ -18,8 +18,8 @@ from PySide6.QtWidgets import QApplication
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import SceneSourcePreview
-from solin.core.scenes.model import BusId, NormalizedRect, TransitionKind
-from solin.core.scenes.presets import SceneSeedNames
+from solin.core.scenes.model import BusId, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
+from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
 from solin.core.scenes.recording import (
     AudioDevice,
     AudioDeviceDirection,
@@ -149,6 +149,15 @@ def scene_editor_factory(request, scene_workspace_factory):
         cleanup = ExitStack()
         request.addfinalizer(cleanup.close)
         workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+        if not workspace.configured_cameras:
+            camera = SourceDefinition(
+                id=DEFAULT_CAMERA_SOURCE_ID, kind=SourceKind.LOCAL_CAMERA,
+                name="Default camera", configuration=LocalCameraConfig(),
+            )
+            workspace.upsert_camera(camera, add_to_active_document=True)
+            workspace.documents.add_layer(CAMERA_SCENE_ID, SceneLayer(
+                id="configured-camera-layer", source_id=camera.id, name="Camera",
+            ))
         controller = SceneRuntimeController(workspace, _Projection())
         controller.set_editor_source_preview = source_preview or EditorSourcePreview()
         cleanup.callback(controller.close)
@@ -206,8 +215,8 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(
     assert widget._qml.rootObject() is not None
     assert widget._qml.rootObject().objectName() == "scenesEditorView"
     assert widget._qml.rootObject().findChild(QQuickItem, "scenesPreviewImage") is not None
-    # First-run ships Default (year text) + Camera + Content.
-    assert widget.bridge.scenesModel.rowCount() == 3
+    # First-run ships Content + Camera.
+    assert widget.bridge.scenesModel.rowCount() == 2
     assert widget.bridge.outputFormatLabel == "1920 × 1080"
 
     root = widget._qml.rootObject()

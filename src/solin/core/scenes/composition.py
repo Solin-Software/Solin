@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from solin.core.scenes.model import (
-    CONTENT_SOURCE_ID,
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
@@ -89,7 +88,7 @@ class _SceneCompositionAnalyzer:
         return result
 
     def _source_composition(self, source: SourceDefinition) -> SceneComposition:
-        if source.id == CONTENT_SOURCE_ID:
+        if source.kind is SourceKind.SOLIN_CONTENT:
             return _CONTENT_COMPOSITION
         if source.kind in _CAMERA_SOURCE_KINDS:
             return _CAMERA_COMPOSITION

@@ -6040,11 +6040,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Det gick inte att hämta PTZ-förinställningen.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6165,8 +6160,8 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Scener</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Inaktiv skärm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-innehåll</translation>
     </message>
 </context>
 <context>
@@ -6864,11 +6859,6 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Ta bort som standardscen</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Ange som standardscen</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Ta bort som mediascen</translation>
@@ -7199,8 +7189,8 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Öppna mapp</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Inaktiv skärm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-innehåll</translation>
     </message>
 </context>
 <context>
@@ -11526,8 +11516,16 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Inaktiv skärm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-innehåll</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

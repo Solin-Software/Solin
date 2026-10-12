@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from solin.core.scenes.ipc_protocol import MAXIMUM_CONTROL_FRAME_BYTES, PROTOCOL_VERSION
-from solin.core.scenes.model import SCHEMA_VERSION, SENSITIVE_URI_QUERY_FRAGMENTS
+from solin.core.scenes.model import SCHEMA_VERSION, SENSITIVE_URI_QUERY_FRAGMENTS, SolinContentMode
 from tests._paths import REPO_ROOT
 
 
@@ -46,17 +46,31 @@ def test_python_and_native_scene_schema_versions_match() -> None:
     assert int(version.group(1)) == SCHEMA_VERSION
 
 
-def test_native_idle_contract_is_parsed_but_not_rendered() -> None:
+def test_python_and_native_content_mode_wire_values_match() -> None:
+    parser = _read("native/media_engine/src/scene_snapshot.cpp")
+    accepted_modes = re.search(
+        r'require_one_of\(mode, \{([^}]+)\}, "Solin content mode"\)', parser
+    )
+
+    assert accepted_modes is not None
+    assert set(re.findall(r'"([^"]+)"', accepted_modes.group(1))) == {
+        mode.value for mode in SolinContentMode
+    }
+
+
+def test_native_idle_session_state_survives_source_unification() -> None:
     parser = _read("native/media_engine/src/scene_snapshot.cpp")
     graph = _read("native/media_engine/src/scene_graph.cpp")
+    snapshot_header = _read("native/media_engine/include/solin/media_engine/scene_snapshot.hpp")
     control = _read("native/media_engine/src/control_protocol.cpp")
 
-    assert 'kind == "idle_screen"' in parser
-    assert 'require_exact_fields(configuration, {}, "idle screen configuration")' in parser
+    assert 'kind == "idle_screen"' not in parser
     assert 'payload.at("idle_screen")' in parser
-    assert "SceneSourceKind::idle_screen" in graph
+    assert "SceneSourceKind::idle_screen" not in graph
+    assert "idle_screen" not in snapshot_header
+    assert "default_scene_id" not in snapshot_header
+    assert "default_scene_id" not in parser
     assert 'request.message_type == "set_idle_screen"' in control
-    assert '"Idle screen sources require the libobs backend"' in graph
     assert '"Idle screen sources require the libobs backend"' in control
 
 

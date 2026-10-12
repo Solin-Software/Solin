@@ -8,7 +8,6 @@ from typing import Protocol
 
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
-    CONTENT_SOURCE_ID,
     MAX_LAYERS_PER_SCENE,
     NO_SIGNAL_SOURCE_ID,
     BusId,
@@ -240,13 +239,6 @@ class SceneDocumentService:
             and source.configuration.target_scene_id == scene_id
         }
         timestamp = self._clock()
-        outputs = tuple(
-            replace(
-                route,
-                default_scene_id="" if route.default_scene_id == scene_id else route.default_scene_id,
-            )
-            for route in self._document.outputs
-        )
         automation = tuple(
             replace(
                 mapping,
@@ -278,8 +270,7 @@ class SceneDocumentService:
                 self._document,
                 sources=sources,
                 scenes=scenes,
-                outputs=outputs,
-                automation=automation,
+                    automation=automation,
                 transition_policy=self._document.transition_policy.with_override(
                     scene_id,
                     None,
@@ -304,7 +295,7 @@ class SceneDocumentService:
 
     def delete_source(self, source_id: str, *, cascade: bool = False) -> SceneDocument:
         self._source(source_id)
-        if source_id in {CONTENT_SOURCE_ID, NO_SIGNAL_SOURCE_ID}:
+        if source_id in {NO_SIGNAL_SOURCE_ID}:
             raise SceneConflictError("A required built-in source cannot be deleted")
         referenced_preset_ids = {
             preset.id
@@ -405,7 +396,7 @@ class SceneDocumentService:
             updated_scene if candidate.id == scene_id else candidate
             for candidate in self._document.scenes
         )
-        source_is_required = layer.source_id in {CONTENT_SOURCE_ID, NO_SIGNAL_SOURCE_ID}
+        source_is_required = layer.source_id in {NO_SIGNAL_SOURCE_ID}
         source_is_referenced = any(
             candidate.source_id == layer.source_id
             for candidate_scene in scenes
@@ -517,32 +508,11 @@ class SceneDocumentService:
         actions = tuple(action for action in scene.entry_actions if action.preset_id != preset_id)
         return self.update_scene(scene_id, replace(scene, entry_actions=actions))
 
-    def set_program_default_scene(self, scene_id: str | None) -> SceneDocument:
-        """Set the base Program scene for both delivery destinations atomically."""
-
-        if scene_id is not None:
-            self._scene(scene_id)
-        media_scene_id = self.program_media_scene_id
-        if scene_id is not None and media_scene_id == scene_id:
-            raise SceneConflictError("Default and media scenes must be different")
-        stored_scene_id = scene_id or ""
-        return self._commit(
-            replace(
-                self._document,
-                outputs=tuple(
-                    replace(route, default_scene_id=stored_scene_id)
-                    for route in self._document.outputs
-                ),
-            )
-        )
-
     def set_program_media_scene(self, scene_id: str | None) -> SceneDocument:
         """Map all projected-media categories to one Program scene atomically."""
 
         if scene_id is not None:
             self._scene(scene_id)
-        if scene_id is not None and self.program_default_scene_id == scene_id:
-            raise SceneConflictError("Default and media scenes must be different")
         automation = tuple(
             replace(
                 mapping,
@@ -597,10 +567,6 @@ class SceneDocumentService:
         return self._document.transition_policy.effective_for(scene_id)
 
     @property
-    def program_default_scene_id(self) -> str | None:
-        return self._document.output(BusId.VIRTUAL_CAMERA).default_scene_id or None
-
-    @property
     def program_media_scene_id(self) -> str | None:
         mapping = self._document.automation_for(BusId.VIRTUAL_CAMERA)
         assigned = tuple(mapping.scene_for(category) for category in AUTOMATIC_MEDIA_CATEGORIES)
@@ -609,13 +575,8 @@ class SceneDocumentService:
         return assigned[0]
 
     @property
-    def program_automation_configured(self) -> bool:
-        media_scene_id = self.program_media_scene_id
-        return (
-            self.program_default_scene_id is not None
-            and media_scene_id is not None
-            and media_scene_id != self.program_default_scene_id
-        )
+    def media_automation_configured(self) -> bool:
+        return self.program_media_scene_id is not None
 
     def undo(self) -> SceneDocument:
         if not self._undo:

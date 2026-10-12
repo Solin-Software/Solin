@@ -6009,11 +6009,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Gagal memanggil prasetel PTZ.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Default</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6134,8 +6129,8 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Adegan</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Layar Siaga</translation>
+        <source>Solin Content</source>
+        <translation>Konten Solin</translation>
     </message>
 </context>
 <context>
@@ -6833,11 +6828,6 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Hapus sebagai default</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Jadikan default</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Hapus sebagai adegan media</translation>
@@ -7168,8 +7158,8 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Buka folder</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Layar Siaga</translation>
+        <source>Solin Content</source>
+        <translation>Konten Solin</translation>
     </message>
 </context>
 <context>
@@ -11484,8 +11474,16 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Layar Siaga</translation>
+        <source>Solin Content</source>
+        <translation>Konten Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

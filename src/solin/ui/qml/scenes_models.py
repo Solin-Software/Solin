@@ -13,8 +13,7 @@ class _SceneRole(IntEnum):
     ID = int(Qt.ItemDataRole.UserRole) + 1
     NAME = ID + 1
     METADATA = NAME + 1
-    DEFAULT = METADATA + 1
-    MEDIA = DEFAULT + 1
+    MEDIA = METADATA + 1
     LIVE = MEDIA + 1
     TRANSITION_OVERRIDE = LIVE + 1
     TRANSITION_KIND = TRANSITION_OVERRIDE + 1
@@ -50,7 +49,6 @@ _SCENE_ROLES = {
     _SceneRole.ID: QByteArray(b"sceneId"),
     _SceneRole.NAME: QByteArray(b"sceneName"),
     _SceneRole.METADATA: QByteArray(b"sceneMetadata"),
-    _SceneRole.DEFAULT: QByteArray(b"isDefaultScene"),
     _SceneRole.MEDIA: QByteArray(b"isMediaScene"),
     _SceneRole.LIVE: QByteArray(b"isLiveScene"),
     _SceneRole.TRANSITION_OVERRIDE: QByteArray(b"hasTransitionOverride"),
@@ -213,7 +211,6 @@ class SceneListModel(_MappingListModel[_SceneRole]):
                 _SceneRole.ID: "id",
                 _SceneRole.NAME: "name",
                 _SceneRole.METADATA: "metadata",
-                _SceneRole.DEFAULT: "default",
                 _SceneRole.MEDIA: "media",
                 _SceneRole.LIVE: "live",
                 _SceneRole.TRANSITION_OVERRIDE: "transition_override",

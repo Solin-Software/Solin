@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Any
 
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
@@ -27,22 +28,57 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoFormat,
     VideoPixelFormat,
-    IdleScreenSourceConfig,
     stable_identity,
     utc_now_iso,
 )
 
 
-# All layers refer to the session's shared idle content.
-IDLE_SCREEN_SOURCE_ID = "solin.idle.current"
-
 CONTENT_SCENE_ID = stable_identity("default-scene:content")
 CAMERA_SCENE_ID = stable_identity("default-scene:camera")
 CONTENT_CAMERA_PIP_SCENE_ID = stable_identity("default-scene:content-camera-pip")
 NO_SIGNAL_SCENE_ID = stable_identity("default-scene:no-signal")
-# The idle-fallback scene ("default" label): shown whenever nothing else is
-# presented. On first run it holds the full-size idle screen and is the default.
-DEFAULT_SCENE_ID = stable_identity("default-scene:default")
+# Frozen schema-11 bootstrap vocabulary from the 18 shipped _Scenes catalogs.
+# Forward migration cannot rely on TS files or vanished entries in current QM files.
+_BETA_PRESET_NAMES: dict[str, frozenset[str]] = {
+    'Current Solin content': frozenset({
+        'Current Solin content',
+    }),
+    'Content': frozenset({
+        'Content',
+    }),
+    'Camera': frozenset({
+        'Camera',
+    }),
+    'Default camera': frozenset({
+        'Default camera',
+    }),
+    'No signal background': frozenset({
+        'No signal background',
+    }),
+    'Idle screen': frozenset({
+        'Ekran bezczynności',
+        'Idle Screen',
+        'Idle screen',
+        'Inaktiv skärm',
+        'Layar Siaga',
+        'Pantalla inactiva',
+        'Ruhebild',
+        'Schermata inattiva',
+        'Skrini Isiyotumika',
+        'Stand-byscherm',
+        'Tela de descanso',
+        'Valmiusnäyttö',
+        'Écran inactif',
+        'Неактивный экран',
+        'Фоновий екран',
+        'アイドル画面',
+        '空闲屏幕',
+        '비활성 화면',
+    }),
+    'Default': frozenset({
+        'Default',
+    }),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,9 +93,6 @@ class SceneSeedNames:
     content_layer: str
     camera_layer: str
     background_layer: str
-    idle_screen_source: str = "Idle screen"
-    default_scene: str = "Default"
-    idle_screen_layer: str = "Idle screen"
 
 
 def create_default_scene_document(
@@ -159,12 +192,10 @@ def create_default_scene_document(
         outputs=(
             OutputRoute(
                 bus_id=BusId.MEDIA_WINDOWS,
-                default_scene_id=CAMERA_SCENE_ID,
                 video_format=VideoFormat(),
             ),
             OutputRoute(
                 bus_id=BusId.VIRTUAL_CAMERA,
-                default_scene_id=CAMERA_SCENE_ID,
                 video_format=VideoFormat(
                     fps_numerator=30,
                     pixel_format=VideoPixelFormat.NV12,
@@ -206,110 +237,99 @@ def create_fresh_scene_collection_document(
     *,
     document_id: str,
     created_at: str | None = None,
+    camera: SourceDefinition | None = None,
 ) -> SceneDocument:
-    """Create the minimal first Scene profile.
-
-    The first-run collection is a **Default** scene (the idle fallback, holding the
-    full-size idle screen) plus Camera and Content. The Default scene is the shared
-    ``default_scene_id`` for every output bus, so whenever nothing else is
-    presented the idle screen shows on both the projection and the virtual camera.
-    The idle source ships only here (fresh installs); other collections add
-    it on demand via the source picker.
-    """
-
-    timestamp = created_at or utc_now_iso()
-    document = create_default_scene_document(
-        names,
-        document_id=document_id,
-        created_at=created_at,
-    )
-    idle_screen_source, default_scene = _idle_screen_source_and_default_scene(names, timestamp)
-    return replace(
-        document,
-        sources=(*document.sources, idle_screen_source),
-        scenes=(
-            default_scene,
-            document.scene(CAMERA_SCENE_ID),
-            document.scene(CONTENT_SCENE_ID),
-        ),
-        outputs=tuple(
-            replace(route, default_scene_id=DEFAULT_SCENE_ID)
-            for route in document.outputs
-        ),
-    )
+    """Create Media with one presentation layer and Camera, empty until configured."""
+    if camera is not None and camera.kind not in {SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA}:
+        raise ValueError("A fresh Camera scene requires a camera source")
+    document = create_default_scene_document(names, document_id=document_id, created_at=created_at)
+    camera_scene = document.scene(CAMERA_SCENE_ID)
+    camera_scene = replace(camera_scene, layers=() if camera is None else tuple(replace(layer, source_id=camera.id) for layer in camera_scene.layers))
+    sources = tuple(source for source in document.sources if source.id != DEFAULT_CAMERA_SOURCE_ID)
+    if camera is not None:
+        sources = (*sources, camera)
+    return replace(document, sources=sources, scenes=(document.scene(CONTENT_SCENE_ID), camera_scene))
 
 
-def ensure_default_scene(
+def convert_pristine_beta_preset(
     document: SceneDocument,
     names: SceneSeedNames,
     *,
-    created_at: str | None = None,
+    selections: dict[BusId, str],
 ) -> SceneDocument:
-    """Guarantee a Default scene exists for collections predating idle scenes.
-
-    Scene collections saved before idle scenes have no Default scene.
-    This self-heals such documents on load: it adds the idle source (if absent)
-    and a Default scene holding it, then makes that scene the shared
-    ``default_scene_id`` for every output — matching what a fresh install ships.
-
-    It is a no-op once a Default scene is present, so a user who later sets a
-    *different* scene as their default keeps that choice (the Default scene still
-    exists, so this does nothing). A valid document always has at least one scene,
-    so the "no scenes" case cannot occur here.
-    """
-    if any(scene.id == DEFAULT_SCENE_ID for scene in document.scenes):
+    """Rebuild only an exact shipped two/three-scene preset after beta decoding."""
+    old_default_id = stable_identity("default-scene:default")
+    scene_ids = tuple(scene.id for scene in document.scenes)
+    two_scene = set(scene_ids) == {CAMERA_SCENE_ID, CONTENT_SCENE_ID}
+    three_scene = set(scene_ids) == {old_default_id, CAMERA_SCENE_ID, CONTENT_SCENE_ID}
+    if not two_scene and not three_scene:
         return document
-    timestamp = created_at or utc_now_iso()
-    idle_screen_source, default_scene = _idle_screen_source_and_default_scene(names, timestamp)
-    sources = document.sources
-    existing = next(
-        (source for source in sources if source.kind is SourceKind.IDLE_SCREEN),
-        None,
+    expected_base = old_default_id if three_scene else CAMERA_SCENE_ID
+    if set(selections) != {BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA} or set(selections.values()) != {expected_base}:
+        return document
+    # Beta display names are matched against the shipped vocabulary separately
+    # from the new preset labels. Arbitrary user names must never trigger rebuilds.
+    content = next((source for source in document.sources if source.id == CONTENT_SOURCE_ID), None)
+    if content is None:
+        return document
+    content_scene = document.scene(CONTENT_SCENE_ID)
+    if content.name not in _BETA_PRESET_NAMES["Current Solin content"]:
+        return document
+    if content_scene.name not in _BETA_PRESET_NAMES["Content"] or len(content_scene.layers) != 1:
+        return document
+    if content_scene.layers[0].name not in _BETA_PRESET_NAMES["Content"]:
+        return document
+    camera_scene = document.scene(CAMERA_SCENE_ID)
+    if camera_scene.name not in _BETA_PRESET_NAMES["Camera"] or len(camera_scene.layers) != 1:
+        return document
+    if camera_scene.layers[0].name not in _BETA_PRESET_NAMES["Camera"]:
+        return document
+    camera = next((source for source in document.sources if source.id == DEFAULT_CAMERA_SOURCE_ID), None)
+    if camera is None or camera.name not in _BETA_PRESET_NAMES["Default camera"]:
+        return document
+    no_signal = next((source for source in document.sources if source.id == NO_SIGNAL_SOURCE_ID), None)
+    if no_signal is None or no_signal.name not in _BETA_PRESET_NAMES["No signal background"]:
+        return document
+    beta_names = replace(
+        names, content_source=content.name, content_scene=content_scene.name,
+        content_layer=content_scene.layers[0].name, camera_scene=camera_scene.name,
+        camera_layer=camera_scene.layers[0].name, default_camera_source=camera.name,
+        no_signal_source=no_signal.name,
     )
-    if existing is None:
-        sources = (*sources, idle_screen_source)
-    else:
-        default_scene = replace(
-            default_scene,
-            layers=tuple(
-                replace(layer, source_id=existing.id) for layer in default_scene.layers
-            ),
+    seed = create_default_scene_document(beta_names, document_id=document.document_id)
+    expected = replace(seed, scenes=(seed.scene(CONTENT_SCENE_ID), seed.scene(CAMERA_SCENE_ID)))
+    if three_scene:
+        idle = next((source for source in document.sources if source.id == "solin.idle.current"), None)
+        default_scene = document.scene(old_default_id)
+        if idle is None or idle.name not in _BETA_PRESET_NAMES["Idle screen"]:
+            return document
+        if default_scene.name not in _BETA_PRESET_NAMES["Default"] or len(default_scene.layers) != 1:
+            return document
+        if default_scene.layers[0].name not in _BETA_PRESET_NAMES["Idle screen"]:
+            return document
+        idle_source = SourceDefinition(
+            id=idle.id, kind=SourceKind.SOLIN_CONTENT,
+            name=idle.name, configuration=SolinContentConfig(),
         )
-    return replace(
-        document,
-        sources=sources,
-        scenes=(default_scene, *document.scenes),
-        outputs=tuple(
-            replace(route, default_scene_id=DEFAULT_SCENE_ID)
-            for route in document.outputs
-        ),
-    )
-
-
-def _idle_screen_source_and_default_scene(
-    names: SceneSeedNames, timestamp: str
-) -> tuple[SourceDefinition, SceneDefinition]:
-    """Build the idle source and the full-size Default scene that holds it."""
-    idle_screen_source = SourceDefinition(
-        id=IDLE_SCREEN_SOURCE_ID,
-        kind=SourceKind.IDLE_SCREEN,
-        name=names.idle_screen_source,
-        configuration=IdleScreenSourceConfig(),
-    )
-    idle_screen_layer = _layer(
-        "default:idle",
-        IDLE_SCREEN_SOURCE_ID,
-        names.idle_screen_layer,
-        fit_mode=FitMode.CONTAIN,
-    )
-    default_scene = SceneDefinition(
-        id=DEFAULT_SCENE_ID,
-        name=names.default_scene,
-        layers=(idle_screen_layer,),
-        created_at=timestamp,
-        updated_at=timestamp,
-    )
-    return idle_screen_source, default_scene
+        old_default = SceneDefinition(
+            id=old_default_id, name=default_scene.name,
+            layers=(_layer("default:idle", idle_source.id, default_scene.layers[0].name, fit_mode=FitMode.CONTAIN),),
+            created_at=document.scenes[0].created_at, updated_at=document.scenes[0].updated_at,
+        )
+        expected = replace(expected, sources=(*expected.sources, idle_source), scenes=(old_default, expected.scene(CAMERA_SCENE_ID), expected.scene(CONTENT_SCENE_ID)))
+    else:
+        expected = replace(expected, scenes=(expected.scene(CAMERA_SCENE_ID), expected.scene(CONTENT_SCENE_ID)))
+    def structural_record(value: SceneDocument) -> dict[str, Any]:
+        record: dict[str, Any] = value.to_record()
+        record.pop("revision")
+        for scene in record["scenes"]:
+            scene.pop("created_at")
+            scene.pop("updated_at")
+        return record
+    if structural_record(document) != structural_record(expected):
+        return document
+    fresh = create_fresh_scene_collection_document(names, document_id=document.document_id, created_at=document.scenes[0].created_at)
+    return replace(fresh, revision=document.revision)
 
 
 def _layer(

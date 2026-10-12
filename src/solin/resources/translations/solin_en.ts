@@ -4921,11 +4921,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation type="unfinished"></translation>
@@ -5046,8 +5041,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished">Scenes</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation type="unfinished"></translation>
+        <source>Solin Content</source>
+        <translation>Solin Content</translation>
     </message>
 </context>
 <context>
@@ -5744,11 +5739,6 @@ Add content, a camera, or another scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation type="unfinished"></translation>
@@ -6079,8 +6069,8 @@ Add content, a camera, or another scene.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation type="unfinished"></translation>
+        <source>Solin Content</source>
+        <translation>Solin Content</translation>
     </message>
 </context>
 <context>
@@ -10111,8 +10101,16 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation type="unfinished"></translation>
+        <source>Solin Content</source>
+        <translation>Solin Content</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
     </message>
 </context>
 </TS>

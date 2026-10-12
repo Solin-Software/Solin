@@ -6,7 +6,7 @@ import math
 import os
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -18,6 +18,7 @@ from solin.core.scenes.collections import (
 )
 from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
+    BusId,
     SceneDocument,
     SceneValidationError,
     SourceDefinition,
@@ -25,9 +26,10 @@ from solin.core.scenes.model import (
     UnsupportedSceneSchemaError,
 )
 from solin.core.scenes.resources import SceneResourceCatalog
+from solin.core.scenes.presets import SceneSeedNames, convert_pristine_beta_preset
 from solin.core.scenes.runtime import (
     SceneRuntimeState,
-    create_default_runtime_state,
+    create_initial_runtime_state,
 )
 from solin.core.storage.json_repository import JsonFileRepository
 
@@ -55,6 +57,27 @@ class SceneRevisionConflictError(SceneRepositoryError):
 
 class _DuplicateJsonKeyError(ValueError):
     pass
+
+
+def read_beta_output_selections(path: Path, *, backup_path: Path | None = None) -> dict[BusId, str]:
+    """Read removed route selections before the scene codec forward-converts them."""
+    try:
+        record = _read_json_record(path, maximum_bytes=MAX_SCENE_DOCUMENT_BYTES)
+        if not isinstance(record, dict) or record.get("schema_version", 12) >= 12:
+            return {}
+        outputs = record.get("outputs")
+        if not isinstance(outputs, list):
+            return {}
+        selections = {}
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            scene_id = output.get("default_scene_id")
+            if isinstance(scene_id, str) and scene_id:
+                selections[BusId(output.get("bus_id"))] = scene_id
+        return selections
+    except (OSError, TypeError, ValueError):
+        return read_beta_output_selections(backup_path) if backup_path is not None else {}
 
 
 class SceneDocumentRepository:
@@ -300,16 +323,16 @@ class SceneCollectionDocumentRepository:
                 trailing_newline=True,
             )
 
-    def normalize_storage(self) -> None:
-        """Rewrite legacy full-camera records into reference form without a revision bump."""
+    def normalize_storage(self, *, seed_names: SceneSeedNames | None = None, beta_selections: dict[BusId, str] | None = None) -> None:
+        """Forward-convert beta presets and normalize shared-camera references."""
 
         with self._transaction_lock():
             if not self._primary.exists():
                 raise FileNotFoundError(self._primary.path)
-            self._normalize_repository(self._primary)
+            self._normalize_repository(self._primary, seed_names=seed_names, beta_selections=beta_selections)
             if self._backup.exists():
                 try:
-                    self._normalize_repository(self._backup)
+                    self._normalize_repository(self._backup, seed_names=seed_names)
                 except SceneRepositoryCorruptError:
                     current = self._load_repository(self._primary)
                     self._backup.write(
@@ -340,8 +363,10 @@ class SceneCollectionDocumentRepository:
             )
             return document
 
-    def _normalize_repository(self, repository: JsonFileRepository) -> None:
+    def _normalize_repository(self, repository: JsonFileRepository, *, seed_names: SceneSeedNames | None = None, beta_selections: dict[BusId, str] | None = None) -> None:
         document = self._load_repository(repository)
+        if seed_names is not None:
+            document = convert_pristine_beta_preset(document, seed_names, selections=read_beta_output_selections(repository.path) if beta_selections is None else beta_selections)
         record = self._to_storage_record(document)
         current = _read_json_record(
             repository.path,
@@ -635,8 +660,40 @@ class SceneResourceCatalogRepository:
                 yield
 
 
+def _validate_beta_runtime_record(record: dict[str, Any]) -> None:
+    if set(record) != {"schema_version", "document_id", "revision", "outputs"}:
+        raise SceneValidationError("Invalid beta runtime fields")
+    version = record["schema_version"]
+    if isinstance(version, bool) or version not in {1, 2, 3}:
+        raise SceneValidationError("Invalid beta runtime schema")
+    outputs = record["outputs"]
+    if not isinstance(outputs, list):
+        raise SceneValidationError("Invalid beta runtime outputs")
+    converted = []
+    for output in outputs:
+        if not isinstance(output, dict) or set(output) - {"bus_id", "mode", "enabled", "manual_scene_id"}:
+            raise SceneValidationError("Invalid beta runtime output fields")
+        selected = output.get("manual_scene_id", "")
+        if not isinstance(selected, str) or len(selected) > 128:
+            raise SceneValidationError("Invalid beta runtime selection")
+        if output.get("mode") == "manual" and not selected:
+            raise SceneValidationError("A beta manual output requires a scene")
+        converted.append({
+            "bus_id": output.get("bus_id"),
+            "mode": output.get("mode", "auto"),
+            "enabled": output.get("enabled", False),
+            "base_scene_id": selected or "beta-base",
+        })
+    SceneRuntimeState.from_record({
+        "schema_version": 4,
+        "document_id": record["document_id"],
+        "revision": record["revision"],
+        "outputs": converted,
+    })
+
+
 class SceneRuntimeRepository:
-    """Small atomic store for live output state, separate from scene history."""
+    """Atomic per-collection live output state, separate from scene history."""
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self._repository = JsonFileRepository(path)
@@ -649,18 +706,48 @@ class SceneRuntimeRepository:
     def path(self) -> Path:
         return self._repository.path
 
-    def load_or_create(self, document: SceneDocument) -> SceneRuntimeState:
+    def load_or_create(
+        self,
+        document: SceneDocument,
+        *,
+        selections: Mapping[BusId, str] | None = None,
+    ) -> SceneRuntimeState:
         with self._transaction_lock():
-            if self._repository.exists():
-                state = self._load()
-                if state.document_id == document.document_id:
-                    reconciled = state.reconciled_against(document)
-                    reconciled.validate_against(document)
-                    if reconciled != state:
-                        self._write(reconciled)
-                    return reconciled
-            state = create_default_runtime_state(document)
-            self._write(state)
+            records = self._load_records() if self._repository.exists() else {}
+            raw = records.get(document.document_id)
+            if raw is None:
+                state = create_initial_runtime_state(document, selections=selections)
+            elif raw.get("schema_version") in {1, 2, 3}:
+                # Forward conversion exists only at the persistence boundary.
+                initial = create_initial_runtime_state(document, selections=selections)
+                outputs = raw.get("outputs")
+                if not isinstance(outputs, list):
+                    raise SceneRepositoryCorruptError(self.path)
+                scene_ids = {scene.id for scene in document.scenes}
+                converted = []
+                for output in outputs:
+                    if not isinstance(output, dict):
+                        raise SceneRepositoryCorruptError(self.path)
+                    bus = BusId(output.get("bus_id"))
+                    selected = output.get("manual_scene_id")
+                    converted.append({
+                        "bus_id": bus.value,
+                        "mode": output.get("mode", "auto"),
+                        "enabled": output.get("enabled", False),
+                        "base_scene_id": selected if isinstance(selected, str) and selected in scene_ids else initial.output(bus).base_scene_id,
+                    })
+                state = SceneRuntimeState.from_record({
+                    "schema_version": 4,
+                    "document_id": document.document_id,
+                    "revision": raw.get("revision"),
+                    "outputs": converted,
+                })
+            else:
+                state = SceneRuntimeState.from_record(raw).reconciled_against(document)
+            state.validate_against(document)
+            if raw != state.to_record():
+                records[state.document_id] = state.to_record()
+                self._write_records(records)
             return state
 
     def save(
@@ -670,15 +757,13 @@ class SceneRuntimeRepository:
         expected_revision: int | None = None,
     ) -> None:
         with self._transaction_lock():
-            current = self._load() if self._repository.exists() else None
+            records = self._load_records() if self._repository.exists() else {}
+            raw = records.get(state.document_id)
+            current = SceneRuntimeState.from_record(raw) if raw is not None else None
             if current is None:
                 if expected_revision not in {None, 0}:
-                    raise SceneRevisionConflictError(
-                        "Scene runtime state does not exist at the expected revision"
-                    )
+                    raise SceneRevisionConflictError("Scene runtime state does not exist at the expected revision")
             else:
-                if state.document_id != current.document_id:
-                    raise SceneRevisionConflictError("Scene runtime identity changed")
                 if expected_revision is not None and current.revision != expected_revision:
                     raise SceneRevisionConflictError(
                         f"Expected runtime revision {expected_revision}, found {current.revision}"
@@ -686,18 +771,56 @@ class SceneRuntimeRepository:
                 if state != current and state.revision <= current.revision:
                     raise SceneRevisionConflictError("A runtime update must have a newer revision")
             if state != current:
-                self._write(state)
+                records[state.document_id] = state.to_record()
+                self._write_records(records)
 
-    def _load(self) -> SceneRuntimeState:
+    def delete(self, document_id: str) -> None:
+        """Remove one collection's state atomically without changing other revisions."""
+        with self._transaction_lock():
+            if not self._repository.exists():
+                return
+            records = self._load_records()
+            if document_id in records:
+                del records[document_id]
+                self._write_records(records)
+
+    def _load_records(self) -> dict[str, dict[str, Any]]:
         try:
-            record = _read_json_record(self._repository.path, maximum_bytes=64 * 1024)
-            return SceneRuntimeState.from_record(record)
+            record = _read_json_record(self.path, maximum_bytes=512 * 1024)
+            if not isinstance(record, dict):
+                raise SceneValidationError("Invalid runtime store")
+            if record.get("schema_version") in {1, 2, 3}:
+                _validate_beta_runtime_record(record)
+                identity = record.get("document_id")
+                if not isinstance(identity, str) or not identity:
+                    raise SceneValidationError("Invalid runtime document id")
+                return {identity: record}
+            if set(record) != {"schema_version", "states"} or record["schema_version"] != 4:
+                raise SceneValidationError("Invalid runtime store fields")
+            states = record["states"]
+            if not isinstance(states, list):
+                raise SceneValidationError("Invalid runtime store states")
+            result = {}
+            for raw in states:
+                if not isinstance(raw, dict):
+                    raise SceneValidationError("Invalid runtime state")
+                identity = raw.get("document_id")
+                if not isinstance(identity, str) or not identity or identity in result:
+                    raise SceneValidationError("Invalid or duplicate runtime identity")
+                if raw.get("schema_version") == 4:
+                    SceneRuntimeState.from_record(raw)
+                elif raw.get("schema_version") in {1, 2, 3}:
+                    _validate_beta_runtime_record(raw)
+                else:
+                    raise SceneValidationError("Invalid runtime schema")
+                result[identity] = raw
+            return result
         except (OSError, TypeError, ValueError) as exc:
-            raise SceneRepositoryCorruptError(self._repository.path) from exc
+            raise SceneRepositoryCorruptError(self.path) from exc
 
-    def _write(self, state: SceneRuntimeState) -> None:
+    def _write_records(self, records: dict[str, dict[str, Any]]) -> None:
         self._repository.write(
-            state.to_record(),
+            {"schema_version": 4, "states": list(records.values())},
             indent=2,
             sort_keys=False,
             trailing_newline=True,

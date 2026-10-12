@@ -45,19 +45,16 @@ from solin.core.scenes.model import (
     VideoColorRange,
     VideoColorSpace,
     VideoPixelFormat,
-    IdleScreenSourceConfig,
+    SolinContentConfig,
+    SolinContentMode,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_CAMERA_PIP_SCENE_ID,
     CONTENT_SCENE_ID,
-    DEFAULT_SCENE_ID,
     NO_SIGNAL_SCENE_ID,
-    IDLE_SCREEN_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
-    create_fresh_scene_collection_document,
-    ensure_default_scene,
 )
 
 
@@ -360,147 +357,64 @@ def test_graph_signature_ignores_geometry_and_timestamps_but_tracks_structure() 
     assert scene_engine_graph_signature(hidden_document) != baseline
 
 
-def test_idle_screen_source_config_round_trips_with_an_empty_record() -> None:
-    configuration = IdleScreenSourceConfig()
-    assert configuration.to_record() == {}
-    assert IdleScreenSourceConfig.from_record(configuration.to_record()) == configuration
+@pytest.mark.parametrize("mode", list(SolinContentMode))
+def test_content_config_round_trips_explicit_mode(mode) -> None:
+    config = SolinContentConfig(mode=mode)
+    assert config.to_record() == {"mode": mode.value}
+    assert SolinContentConfig.from_record(config.to_record()) == config
 
 
-@pytest.mark.parametrize("record", [{"media_path": "idle.mp4"}, {"year": 2026}, None, []])
-def test_idle_source_config_rejects_per_source_state(record: object) -> None:
+@pytest.mark.parametrize("record", [{}, {"mode": "idle"}, {"mode": "presentation", "black": True}, None])
+def test_content_config_rejects_invalid_or_implicit_modes(record) -> None:
     with pytest.raises(SceneValidationError):
-        IdleScreenSourceConfig.from_record(record)
+        SolinContentConfig.from_record(record)
 
 
-def test_schema_10_migrates_every_yeartext_source_without_changing_scene_geometry() -> None:
-    document = create_fresh_scene_collection_document(
-        _names(), document_id="migrated-idle", created_at="2026-08-02T12:00:00+00:00"
-    )
-    record = document.to_record()
+def test_beta_conversion_preserves_custom_source_ids_names_and_duplicate_layers() -> None:
+    record = _document().to_record()
     record["schema_version"] = 10
-    sources = record["sources"]
-    idle = next(source for source in sources if source["type"] == "idle_screen")
-    idle.update(id="solin.yeartext.current", type="yeartext", name="Texto do ano")
-    alternate = deepcopy(idle)
-    alternate.update(id="custom.yeartext", name="Year text")
-    sources.append(alternate)
-    layer = record["scenes"][0]["layers"][0]
-    layer.update(source_id=idle["id"], name=idle["name"], visible=False, locked=True)
+    content = record["sources"][0]
+    content["configuration"] = {}
+    idle = deepcopy(content)
+    idle.update(id="custom.idle", type="yeartext", name="My backdrop")
+    record["sources"].append(idle)
+    layer = deepcopy(record["scenes"][0]["layers"][0])
+    layer.update(id="custom.layer", source_id=idle["id"], name="Backdrop", visible=False, locked=True, rotation_degrees=45.0, opacity=0.6, mirror_x=True)
     layer["rect"] = {"x": 0.2, "y": 0.3, "width": 0.5, "height": 0.4}
     layer["crop"] = {"left": 0.1, "top": 0.2, "right": 0.15, "bottom": 0.05}
-    layer.update(rotation_degrees=45.0, opacity=0.6, mirror_x=True)
-    second = deepcopy(layer)
-    second.update(id="custom-idle-layer", source_id=alternate["id"], name="Backdrop")
-    record["scenes"][1]["layers"].append(second)
-    shared = deepcopy(layer)
-    shared.update(id="shared-idle-layer")
-    record["scenes"][2]["layers"].append(shared)
-    record["outputs"][0]["default_scene_id"] = CAMERA_SCENE_ID
+    record["scenes"][0]["layers"].extend([layer, dict(layer, id="duplicate.layer")])
+    for route in record["outputs"]:
+        route["default_scene_id"] = CAMERA_SCENE_ID
     original = deepcopy(record)
-
-    migrated = SceneDocument.from_record(record)
+    restored = SceneDocument.from_record(record)
     expected = deepcopy(record)
-    expected["schema_version"] = 11
+    expected["schema_version"] = 12
     for source in expected["sources"]:
-        if source["type"] == "yeartext":
-            source.update(type="idle_screen", name="Idle screen")
-    expected["scenes"][0]["layers"][0]["name"] = "Idle screen"
-    expected["scenes"][2]["layers"][-1]["name"] = "Idle screen"
-
-    assert migrated.to_record() == expected
+        if source["type"] in {"yeartext", "solin_content"}:
+            source.update(type="solin_content", configuration={"mode": "presentation"})
+    for route in expected["outputs"]:
+        route.pop("default_scene_id")
+    assert restored.to_record() == expected
     assert record == original
-    assert SceneDocument.from_record(migrated.to_record()) == migrated
+    assert SceneDocument.from_record(restored.to_record()) == restored
 
 
-def test_current_schema_rejects_legacy_yeartext_source_kind() -> None:
-    record = create_fresh_scene_collection_document(_names(), document_id="idle").to_record()
-    record["sources"][-1]["type"] = "yeartext"
+@pytest.mark.parametrize("kind", ["yeartext", "idle_screen"])
+def test_current_schema_rejects_removed_source_kinds(kind) -> None:
+    record = _document().to_record()
+    record["sources"][0]["type"] = kind
     with pytest.raises(SceneValidationError):
         SceneDocument.from_record(record)
 
 
-def test_missing_default_scene_reuses_a_migrated_idle_source() -> None:
+def test_content_sources_are_optional_and_accept_arbitrary_ids_and_modes() -> None:
     document = _document()
-    migrated = SourceDefinition(
-        id="solin.yeartext.current", kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen", configuration=IdleScreenSourceConfig(),
-    )
-    document = replace(document, sources=(*document.sources, migrated))
-
-    healed = ensure_default_scene(document, _names())
-
-    assert healed.scene(DEFAULT_SCENE_ID).layers[0].source_id == migrated.id
-    assert healed.sources == document.sources
-
-
-def test_idle_screen_source_definition_round_trips_through_the_document_codec() -> None:
-    source = SourceDefinition(
-        id="solin.idle_screen",
-        kind=SourceKind.IDLE_SCREEN,
-        name="Idle screen",
-        configuration=IdleScreenSourceConfig(),
-    )
-    record = source.to_record()
-    assert record["type"] == "idle_screen"
-    assert record["configuration"] == {}
-    assert SourceDefinition.from_record(record) == source
-
-
-def test_idle_screen_source_definition_rejects_a_mismatched_configuration() -> None:
-    with pytest.raises(SceneValidationError):
-        SourceDefinition(
-            id="solin.idle_screen",
-            kind=SourceKind.IDLE_SCREEN,
-            name="Idle screen",
-            configuration=ImageSourceConfig(asset_id="not-idle_screen"),
-        )
-
-
-def test_ensure_default_scene_heals_a_document_without_a_idle_screen_default() -> None:
-    # A document from before the year-text-as-a-scene feature: it has scenes but
-    # no Default (year text) scene. ensure_default_scene must add the year-text
-    # source + Default scene and make that scene the shared idle default, keeping
-    # the existing scenes. The result must be a valid document.
-    legacy = _document()
-    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)
-
-    healed = ensure_default_scene(legacy, _names())
-
-    idle_screen = healed.source(IDLE_SCREEN_SOURCE_ID)
-    assert idle_screen.kind is SourceKind.IDLE_SCREEN
-    default_scene = healed.scene(DEFAULT_SCENE_ID)
-    assert [layer.source_id for layer in default_scene.layers] == [IDLE_SCREEN_SOURCE_ID]
-    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
-    # existing scenes are preserved
-    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
-    # round-trips (i.e. it validated as a real document)
-    assert SceneDocument.from_record(healed.to_record()) == healed
-
-
-def test_ensure_default_scene_is_a_no_op_when_a_default_scene_exists() -> None:
-    fresh = create_fresh_scene_collection_document(
-        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
-    )
-    assert ensure_default_scene(fresh, _names()) is fresh  # unchanged, same object
-
-
-def test_ensure_default_scene_keeps_a_user_chosen_default() -> None:
-    # If a user set a different scene as their default, the Default scene still
-    # exists, so ensure_default_scene must not override their choice.
-    fresh = create_fresh_scene_collection_document(
-        _names(), document_id="fresh", created_at="2026-08-02T12:00:00+00:00"
-    )
-    customized = replace(
-        fresh,
-        outputs=tuple(
-            replace(route, default_scene_id=CAMERA_SCENE_ID) for route in fresh.outputs
-        ),
-    )
-
-    result = ensure_default_scene(customized, _names())
-
-    assert result is customized  # no-op: Default scene present
-    assert {route.default_scene_id for route in result.outputs} == {CAMERA_SCENE_ID}
+    source = document.sources[0]
+    alternate = replace(source, id="custom.content", configuration=SolinContentConfig(SolinContentMode.MEDIA_ONLY))
+    changed = replace(document, sources=(*document.sources, alternate))
+    assert SceneDocument.from_record(changed.to_record()) == changed
+    without = replace(document, sources=document.sources[1:], scenes=tuple(replace(scene, layers=tuple(layer for layer in scene.layers if layer.source_id != source.id)) for scene in document.scenes))
+    assert SceneDocument.from_record(without.to_record()) == without
 
 
 @pytest.mark.parametrize(
@@ -686,34 +600,19 @@ def test_schema_version_five_normalizes_legacy_destinations_to_one_program() -> 
 
     restored = SceneDocument.from_record(record)
 
-    assert {
-        route.default_scene_id for route in restored.outputs
-    } == {CAMERA_SCENE_ID}
+    assert all("default_scene_id" not in route.to_record() for route in restored.outputs)
     assert {
         mapping.scene_for(ContentCategory.IMAGE)
         for mapping in restored.automation
     } == {CONTENT_SCENE_ID}
 
 
-def test_scene_document_allows_each_output_its_own_default_scene() -> None:
-    # Two independent outputs: the projection can idle on one scene while the
-    # program (virtual camera + recording) idles on another.
-    document = _document()
+def test_current_schema_rejects_removed_default_route() -> None:
+    record = _document().to_record()
+    record["outputs"][0]["default_scene_id"] = CONTENT_SCENE_ID
+    with pytest.raises(SceneValidationError):
+        SceneDocument.from_record(record)
 
-    diverged = replace(
-        document,
-        outputs=tuple(
-            replace(route, default_scene_id=CONTENT_SCENE_ID)
-            if route.bus_id is BusId.MEDIA_WINDOWS
-            else replace(route, default_scene_id=CAMERA_SCENE_ID)
-            for route in document.outputs
-        ),
-    )
-
-    assert diverged.output(BusId.MEDIA_WINDOWS).default_scene_id == CONTENT_SCENE_ID
-    assert diverged.output(BusId.VIRTUAL_CAMERA).default_scene_id == CAMERA_SCENE_ID
-    # and it survives a save/load round trip
-    assert SceneDocument.from_record(diverged.to_record()) == diverged
 
 def test_future_scene_schema_is_rejected_explicitly() -> None:
     record = _document().to_record()

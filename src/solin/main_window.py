@@ -1254,9 +1254,8 @@ class MainWindow(QWidget):
             "obs_stream",
             "camera_stream",
         }
-        # Native windows follow their scene routes. The initial Default scene
-        # contains the shared idle screen; custom defaults and manual selections
-        # continue to determine the composition without presentation special cases.
+        # Native windows follow their independent scene selections. Solin Content
+        # presents foreground visuals or idle inside the selected composition.
         native_window_routing_ready = (
             _native_scene_routing_supported()
             and self.scene_runtime.native_window_routing_ready

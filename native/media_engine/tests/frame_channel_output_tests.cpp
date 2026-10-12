@@ -322,7 +322,6 @@ class TestFrameChannel final {
 [[nodiscard]] solin::media_engine::SceneOutputDefinition preview_output() {
     return {
         .bus = solin::media_engine::OutputBus::media_windows,
-        .default_scene_id = "scene-main",
         .video_format = {
             .width = 2U,
             .height = 2U,

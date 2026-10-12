@@ -6009,11 +6009,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>PTZ 프리셋 호출에 실패했습니다.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>기본</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>미디어</translation>
@@ -6134,8 +6129,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>장면</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>비활성 화면</translation>
+        <source>Solin Content</source>
+        <translation>Solin 콘텐츠</translation>
     </message>
 </context>
 <context>
@@ -6833,11 +6828,6 @@ Add content, a camera, or another scene.</source>
         <translation>기본 장면에서 제외</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>기본 장면으로 설정</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>미디어 장면에서 제외</translation>
@@ -7168,8 +7158,8 @@ Add content, a camera, or another scene.</source>
         <translation>폴더 열기</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>비활성 화면</translation>
+        <source>Solin Content</source>
+        <translation>Solin 콘텐츠</translation>
     </message>
 </context>
 <context>
@@ -11484,8 +11474,16 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>비활성 화면</translation>
+        <source>Solin Content</source>
+        <translation>Solin 콘텐츠</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>미디어</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>카메라</translation>
     </message>
 </context>
 </TS>

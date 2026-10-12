@@ -6041,11 +6041,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Oproepen van de PTZ-voorinstelling mislukt.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Standaard</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6166,8 +6161,8 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Scènes</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Stand-byscherm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-inhoud</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Niet meer als standaard</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Instellen als standaard</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Niet meer als mediascène</translation>
@@ -7200,8 +7190,8 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Map openen</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Stand-byscherm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-inhoud</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Stand-byscherm</translation>
+        <source>Solin Content</source>
+        <translation>Solin-inhoud</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
     </message>
 </context>
 </TS>

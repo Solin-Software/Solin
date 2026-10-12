@@ -6041,11 +6041,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Richiamo del preset PTZ non riuscito.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Predefinita</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Media</translation>
@@ -6166,8 +6161,8 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Scene</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Schermata inattiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenuto di Solin</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Rimuovi come predefinita</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Imposta come predefinita</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Rimuovi come scena multimediale</translation>
@@ -7200,8 +7190,8 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Apri cartella</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Schermata inattiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenuto di Solin</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Schermata inattiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenuto di Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Videocamera</translation>
     </message>
 </context>
 </TS>

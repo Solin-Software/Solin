@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable, Protocol, cast
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ _NO_RUNTIME_ENV = "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME"
 # How often the media poller samples + reports playback state (position/state) so
 # the app's transport UI (scrubber, play/pause, ended) stays live.
 _MEDIA_POLL_INTERVAL_S = 0.25
+
 
 # A runtime factory yields an object exposing ``ensure_started()`` / ``shutdown()``
 # (the :class:`~solin.core.media.obs_runtime.ObsRuntime` contract). It is injected
@@ -191,6 +193,17 @@ def build_response(request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedContentBinding:
+    kind: ContentSourceKind
+    epoch: int
+    idle_revision: int | None = None
+
+    @property
+    def selector(self) -> tuple[ContentSourceKind, int]:
+        return self.kind, self.epoch
+
+
 class LibobsSidecarEngine:
     """Owns the libobs runtime lifecycle behind the control protocol.
 
@@ -222,7 +235,7 @@ class LibobsSidecarEngine:
         # pixels. Keep sources while compositions or native outputs reference them.
         self._retired_media_sources: list[Any] = []
         self._retired_frame_sources: list[Any] = []
-        self._prepared_content: dict[str, tuple[ContentSourceKind, int]] = {}
+        self._prepared_content: dict[str, _PreparedContentBinding] = {}
         self._empty_content_source: Any | None = None
         self._content_presentation_epoch: int | None = None
         self._media_epoch: int | None = None
@@ -244,7 +257,8 @@ class LibobsSidecarEngine:
         self._editor_scene_id = ""
         self._editor_preview_sequence = -1
         self._idle_source: Any | None = None
-        self._idle_scene_source: Any | None = None
+        self._idle_presentations: dict[tuple[int, int], tuple[Any, Any]] = {}
+        self._idle_presentations_lock = threading.RLock()
         self._idle_callback: Any | None = None
         self._idle_suspended = False
         self._render_demand: dict[str, object] = {}
@@ -295,7 +309,7 @@ class LibobsSidecarEngine:
 
         idle_source = LibobsIdleSource(runtime)
         self._idle_source = idle_source
-        self._scene_graph = LibobsSceneGraph(runtime, idle_source=lambda: idle_source.source)
+        self._scene_graph = LibobsSceneGraph(runtime)
         self._window_output = LibobsWindowOutput(runtime)
         # The projection output owns its own transition, outside the scene graph so
         # a structural-edit rebuild cannot black the room's screen out.
@@ -490,62 +504,89 @@ class LibobsSidecarEngine:
         idle, graph = self._idle_source, self._scene_graph
         if idle is None or graph is None or self._idle_suspended:
             return
-        # No graph has ever borrowed the idle scene. Keep the lazy owner empty.
-        idle_source = self._idle_scene_source
-        if idle_source is None:
-            idle.set_demand(False)
-            return
         output = self._window_output
         guard = output.hydrate_lock if output is not None else None
         if guard is not None and not guard.acquire(blocking=False):
             return
+        if not self._idle_presentations_lock.acquire(blocking=False):
+            if guard is not None:
+                guard.release()
+            return
         try:
             # Borrowed from the stable owner on the control thread. Acquiring the
             # owner's lock here can deadlock an atomic scene commit against OBS.
-            def contains(source: Any, *, transition: bool = False) -> bool:
+            def contains(source: Any, target: Any, *, transition: bool = False) -> bool:
                 runtime = cast(Any, self._runtime)
                 if transition:
-                    return runtime.transition_source_tree_contains(source, idle_source)
-                return runtime.active_source_tree_contains(source, idle_source)
+                    return runtime.transition_source_tree_contains(source, target)
+                return runtime.active_source_tree_contains(source, target)
+
             thumbnails = self._thumbnail_egress
-            preview = bool(thumbnails is not None and any(
-                graph.scene_uses_idle_source(scene_id) for scene_id in thumbnails.scene_ids
-            ))
             camera, recorder = self._virtual_camera, self._recorder
-            live = bool(
-                ((camera is not None and camera.active) or (recorder is not None and recorder.active))
-                and contains(graph.program_source, transition=True)
-            )
             program, editor = self._program_egress, self._preview_egress
-            if not preview and program is not None and program.active:
-                preview = contains(graph.program_source, transition=True)
-            if not preview and editor is not None and editor.active:
-                preview = contains(graph.editor_scene_source(self._editor_scene_id))
-            if output is not None:
-                for route, scene_id in output.render_targets:
-                    if route == "scene":
-                        preview = preview or contains(graph.editor_scene_source(scene_id))
-                    elif route == "projection":
-                        projection = self._projection_route
-                        live = live or (
-                            projection is not None
-                            and contains(projection.transition_source, transition=True)
-                        )
-                    else:
-                        live = live or contains(graph.program_source, transition=True)
-                    if live and preview:
-                        break
-            idle.set_demand(bool(preview or live), live=bool(live))
+            for owner, idle_source in tuple(self._idle_presentations.values()):
+                preview = bool(
+                    thumbnails is not None
+                    and graph.content_source is idle_source
+                    and any(
+                        graph.scene_uses_presentation_source(scene_id)
+                        for scene_id in thumbnails.scene_ids
+                    )
+                )
+                live = bool(
+                    (
+                        (camera is not None and camera.active)
+                        or (recorder is not None and recorder.active)
+                    )
+                    and contains(graph.program_source, idle_source, transition=True)
+                )
+                if not preview and program is not None and program.active:
+                    preview = contains(graph.program_source, idle_source, transition=True)
+                if not preview and editor is not None and editor.active:
+                    preview = contains(
+                        graph.editor_scene_source(self._editor_scene_id), idle_source
+                    )
+                if output is not None:
+                    for route, scene_id in output.render_targets:
+                        if route == "scene":
+                            preview = preview or contains(
+                                graph.editor_scene_source(scene_id), idle_source
+                            )
+                        elif route == "projection":
+                            projection = self._projection_route
+                            live = live or (
+                                projection is not None
+                                and contains(
+                                    projection.transition_source, idle_source, transition=True
+                                )
+                            )
+                        else:
+                            live = live or contains(
+                                graph.program_source, idle_source, transition=True
+                            )
+                        if live and preview:
+                            break
+                owner.set_demand(bool(preview or live), live=bool(live))
         except Exception:  # noqa: BLE001 - native render callback boundary
             log.warning("Could not reconcile idle screen visibility", exc_info=True)
         finally:
+            self._idle_presentations_lock.release()
             if guard is not None:
                 guard.release()
         # The owner and transport getters are lock-free snapshots of committed
         # state. Never acquire the owner's scene-commit lock on the render thread,
         # and do not retain the graph borrower guard while publishing IPC events.
         try:
-            self._reconcile_idle_health(idle.transport_error_code)
+            self._reconcile_idle_health(
+                next(
+                    (
+                        owner.transport_error_code
+                        for owner, _source in tuple(self._idle_presentations.values())
+                        if owner.transport_error_code
+                    ),
+                    "",
+                )
+            )
         except Exception:  # noqa: BLE001 - native render callback boundary
             log.warning("Could not report idle screen transport health", exc_info=True)
 
@@ -822,13 +863,18 @@ class LibobsSidecarEngine:
                     self._retired_media_sources.append(retired)
                 self._media_epoch = None
                 self._reported_video_epoch = None
-            opened = media.open(path, autoplay=autoplay, is_local_file=is_local,
-                                volume_percent=volume, speed_percent=speed)
+            opened = media.open(
+                path,
+                autoplay=autoplay,
+                is_local_file=is_local,
+                volume_percent=volume,
+                speed_percent=speed,
+            )
             if opened and not slot:
                 if self._scene_graph is not None:
                     for token, binding in tuple(self._prepared_content.items()):
-                        if binding != (ContentSourceKind.NATIVE_MEDIA, epoch) and (
-                            epoch is not None or binding[0] is ContentSourceKind.NATIVE_MEDIA
+                        if binding.selector != (ContentSourceKind.NATIVE_MEDIA, epoch) and (
+                            epoch is not None or binding.kind is ContentSourceKind.NATIVE_MEDIA
                         ):
                             self._scene_graph.discard(token)
                             self._prepared_content.pop(token, None)
@@ -914,16 +960,12 @@ class LibobsSidecarEngine:
             media.set_speed(speed)
         return _ack(request, applied=True)
 
-    def _frame_content_source(self) -> Any | None:
-        consumer = self._content_consumer
-        return consumer.source if consumer is not None else None
-
     def _effective_content_source(self) -> Any | None:
         """Hydration preserves the committed presentation, including staged media."""
         graph = self._scene_graph
         if graph is not None and graph.content_source is not None:
             return graph.content_source
-        return self._frame_content_source()
+        return None
 
     def _release_retired_media_source(self, source: Any) -> None:
         try:
@@ -983,6 +1025,24 @@ class LibobsSidecarEngine:
                 self._retired_frame_sources.remove(wrapper)
             except Exception:  # noqa: BLE001 - cleanup must not break supervision
                 log.warning("Could not collect a detached content source", exc_info=True)
+        pending_epochs = {
+            binding.epoch
+            for binding in self._prepared_content.values()
+            if binding.kind is ContentSourceKind.IDLE
+        }
+        with self._idle_presentations_lock:
+            for key, (owner, source) in tuple(self._idle_presentations.items()):
+                if key[0] in pending_epochs or source.showing:
+                    continue
+                if graph is not None and any(
+                    reference is source for reference in graph.content_sources
+                ):
+                    continue
+                try:
+                    owner.close()
+                    del self._idle_presentations[key]
+                except Exception:  # noqa: BLE001 - preserve ownership for a later cleanup retry
+                    log.warning("Could not collect the retired idle presentation", exc_info=True)
 
     def _sample_media(self, slot: int = 0) -> tuple[int, int, int, str] | None:
         """Read (state, position_ms, duration_ms, path) for ``slot``, or None.
@@ -1243,8 +1303,12 @@ class LibobsSidecarEngine:
             if not isinstance(source_records, (list, tuple)):
                 raise SceneIpcError("Invalid sources")
             self._idle_definitions = tuple(
-                str(source["id"]) for source in source_records
-                if isinstance(source, dict) and source.get("type") == "idle_screen"
+                str(source["id"])
+                for source in source_records
+                if isinstance(source, dict)
+                and source.get("type") == "solin_content"
+                and (source.get("configuration") or {}).get("mode", "presentation")
+                == "presentation"
             )
             self._render_demand = _payload_object(payload.get("render_enabled") or {})
             if self._idle_source is not None and (
@@ -1262,7 +1326,6 @@ class LibobsSidecarEngine:
                     self._publish_idle_health(request, "")
                 except IdleScreenError as exc:
                     self._publish_idle_health(request, exc.error_code)
-                self._idle_scene_source = self._idle_source.source
                 if self._idle_definitions and self._idle_callback is None:
                     self._idle_callback = cast(Any, self._runtime).ob.add_main_render_callback(
                         self._reconcile_idle_demand,
@@ -1288,15 +1351,29 @@ class LibobsSidecarEngine:
                     self._preview_egress.configure(payload.get("preview_egress"))
 
             with rebuild_guard:
+                content_source = self._effective_content_source()
+                media_only_source = graph.media_only_source
+                if content_source is None and self._idle_definitions:
+                    content_source = self._resolve_content_source(
+                        (ContentSourceKind.IDLE, self._content_presentation_epoch or 0),
+                        deadline=request.deadline_monotonic_ms / 1000,
+                    )
+                    media_only_source = self._ensure_empty_content_source()
+                elif content_source is None and any(
+                    isinstance(source, dict) and source.get("type") == "solin_content"
+                    for source in source_records
+                ):
+                    content_source = media_only_source = self._ensure_empty_content_source()
                 graph.hydrate(
                     document,
                     active_scenes,
-                    self._effective_content_source(),
+                    content_source,
                     # Sent beside the document, never inside it: the document
                     # record is persisted and cached, and a password must be in
                     # neither. Absent on older payloads, hence the default.
                     _payload_object(payload.get("source_credentials") or {}),
                     before_activate=configure_outputs,
+                    media_only_source=media_only_source,
                 )
                 self._document_revision = request.document_revision
             if thumbnails is not None:
@@ -1343,8 +1420,12 @@ class LibobsSidecarEngine:
                     thumbnails.resume()
                 except Exception:  # noqa: BLE001 - best-effort recovery
                     log.debug("thumbnail resume after failed hydrate errored", exc_info=True)
-            return _ack(request, applied=False, error_code="hydrate_failed",
-                        error_message="could not build the libobs scene graph")
+            return _ack(
+                request,
+                applied=False,
+                error_code="hydrate_failed",
+                error_message="could not build the libobs scene graph",
+            )
         finally:
             self._idle_suspended = False
             self._reconcile_idle_demand()
@@ -1435,6 +1516,16 @@ class LibobsSidecarEngine:
 
     def _current_content_source(self, binding: tuple[ContentSourceKind, int]) -> Any | None:
         kind, epoch = binding
+        if kind is ContentSourceKind.IDLE:
+            if not self._idle_definitions:
+                return self._empty_content_source
+            idle = self._idle_source
+            presentation = (
+                self._idle_presentations.get((epoch, idle.state.revision))
+                if idle is not None
+                else None
+            )
+            return presentation[1] if presentation is not None else None
         if kind is ContentSourceKind.NATIVE_MEDIA:
             media = self._media_source
             return media.source if media is not None and self._media_epoch == epoch else None
@@ -1442,9 +1533,44 @@ class LibobsSidecarEngine:
         return consumer.source_for_epoch(epoch) if consumer is not None else None
 
     def _resolve_content_source(
-        self, binding: tuple[ContentSourceKind, int], *, deadline: float,
+        self,
+        binding: tuple[ContentSourceKind, int],
+        *,
+        deadline: float,
     ) -> Any | None:
         kind, epoch = binding
+        if kind is ContentSourceKind.IDLE:
+            if not self._idle_definitions:
+                return self._ensure_empty_content_source()
+            idle = self._idle_source
+            if idle is None:
+                return None
+            source = self._current_content_source(binding)
+            if source is None:
+                from solin.core.scenes.libobs_idle_source import IdleScreenError
+
+                state = idle.state
+                # A metadata-only fallback update does not enter idle again.
+                # Keep its clock and immutable pixels; the token still binds the
+                # newly accepted configuration revision.
+                with self._idle_presentations_lock:
+                    for key, (owner, cached_source) in tuple(self._idle_presentations.items()):
+                        if (key[0] == epoch and not idle.error_code and not owner.error_code
+                                and owner.presentation_key == idle.presentation_key):
+                            del self._idle_presentations[key]
+                            self._idle_presentations[(epoch, state.revision)] = owner, cached_source
+                            return cached_source
+                try:
+                    owner = idle.prepare_presentation(int(deadline * 1000))
+                except IdleScreenError:
+                    return None
+                if idle.state != state:
+                    owner.close()
+                    return None
+                source = owner.source
+                with self._idle_presentations_lock:
+                    self._idle_presentations[(epoch, state.revision)] = owner, source
+            return source
         if kind is ContentSourceKind.NATIVE_MEDIA:
             media = self._media_source
             if media is None or self._media_epoch != epoch or not media.wait_for_video_frame(deadline=deadline):
@@ -1492,24 +1618,43 @@ class LibobsSidecarEngine:
         ):
             return _ack(request, applied=False, error_code="stale_request",
                         error_message="the content presentation was superseded")
+        source = self._resolve_content_source(
+            (ContentSourceKind.IDLE, epoch),
+            deadline=request.deadline_monotonic_ms / 1000,
+        )
+        empty = self._ensure_empty_content_source()
+        if source is None or empty is None:
+            return _ack(
+                request,
+                applied=False,
+                error_code="source_unavailable",
+                error_message="the idle presentation could not be prepared",
+            )
+        with graph.content_presentation(source, media_only_source=empty) as presentation:
+            if self._current_content_source((ContentSourceKind.IDLE, epoch)) is not source:
+                return _ack(
+                    request,
+                    applied=False,
+                    error_code="stale_request",
+                    error_message="the idle presentation was superseded",
+                )
+            # Canonical state is prepared without modifying an outgoing scene.
+            self._commit_content_presentation(presentation, preserve_editor=False)
+        self._content_presentation_epoch = epoch
+        return _ack(request, applied=True)
+
+    def _ensure_empty_content_source(self) -> Any | None:
         if self._empty_content_source is None:
             runtime = cast(Any, self._runtime)
             try:
                 self._empty_content_source = runtime.ob.Source.create(
-                    "color_source_v3", "solin-empty-content",
+                    "color_source_v3",
+                    "solin-empty-content",
                     {"color": 0, "width": runtime.video.width, "height": runtime.video.height},
                 )
             except Exception:  # noqa: BLE001 - preserve committed content on native allocation failure
                 log.warning("Could not create the empty content source", exc_info=True)
-            if self._empty_content_source is None:
-                return _ack(request, applied=False, error_code="source_unavailable",
-                            error_message="the empty content source could not be created")
-        with graph.content_presentation(self._empty_content_source) as presentation:
-            # Empty is canonical state, not an output Take. Existing output scenes
-            # keep their immutable origin until their native transitions retire.
-            self._commit_content_presentation(presentation, preserve_editor=False)
-        self._content_presentation_epoch = epoch
-        return _ack(request, applied=True)
+        return self._empty_content_source
 
     def _handle_prepare_scene(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
@@ -1525,19 +1670,30 @@ class LibobsSidecarEngine:
         kind = str(transition.get("kind", "cut"))
         duration_ms = _payload_int(transition, "duration_ms")
         expected_epoch = _content_media_epoch(payload)
+        idle_revision = self._idle_source.state.revision if self._idle_source is not None else None
         try:
             source_kind = ContentSourceKind(str(payload.get("content_source_kind", "frames")))
         except ValueError as error:
             raise SceneIpcError("Invalid content source kind") from error
-        if expected_epoch is not None and source_kind is ContentSourceKind.FRAMES:
-            consumer = self._content_consumer
-            if consumer is None or not consumer.wait_for_epoch(
-                expected_epoch, deadline=request.deadline_monotonic_ms / 1000,
+        if expected_epoch is not None and source_kind in (
+            ContentSourceKind.FRAMES,
+            ContentSourceKind.IDLE,
+        ):
+            if (
+                self._resolve_content_source(
+                    (source_kind, expected_epoch),
+                    deadline=request.deadline_monotonic_ms / 1000,
+                )
+                is None
             ):
-                return _reply(request, "error", {
-                    "error_code": "source_unavailable",
-                    "error_message": "The requested content presentation is not ready",
-                })
+                return _reply(
+                    request,
+                    "error",
+                    {
+                        "error_code": "source_unavailable",
+                        "error_message": "The requested content presentation is not ready",
+                    },
+                )
         result = None
         try:
             result = graph.prepare(scene_id, kind, duration_ms, str(bus_id or ""))
@@ -1560,7 +1716,10 @@ class LibobsSidecarEngine:
                 "error_message": f"no scene {scene_id!r}",
             })
         if expected_epoch is not None:
-            self._prepared_content[result["token"]] = source_kind, expected_epoch
+            self._prepared_content[result["token"]] = _PreparedContentBinding(
+                source_kind, expected_epoch,
+                idle_revision if source_kind is ContentSourceKind.IDLE else None,
+            )
             if source_kind is ContentSourceKind.NATIVE_MEDIA:
                 with self._media_lock:
                     self._requested_video_epoch = expected_epoch
@@ -1599,35 +1758,67 @@ class LibobsSidecarEngine:
             return _ack(request, applied=False, error_code="stale_request",
                         error_message="the editor selection was superseded")
         binding = self._prepared_content.get(token)
-        if binding is not None and (
-            self._content_presentation_epoch is not None
-            and binding[1] < self._content_presentation_epoch
+        prepared_idle_revision = binding.idle_revision if binding is not None else None
+        if prepared_idle_revision is not None and (
+            self._idle_source is None or self._idle_source.state.revision != prepared_idle_revision
         ):
             graph.discard(token)
             self._prepared_content.pop(token, None)
-            return _ack(request, applied=False, error_code="source_unavailable",
-                        error_message="The prepared content presentation was superseded")
+            return _ack(
+                request,
+                applied=False,
+                error_code="source_unavailable",
+                error_message="The prepared idle configuration was superseded",
+            )
+        if binding is not None and (
+            self._content_presentation_epoch is not None
+            and binding.epoch < self._content_presentation_epoch
+        ):
+            graph.discard(token)
+            self._prepared_content.pop(token, None)
+            return _ack(
+                request,
+                applied=False,
+                error_code="source_unavailable",
+                error_message="The prepared content presentation was superseded",
+            )
         content_source = None
         if binding is not None:
             content_source = self._resolve_content_source(
-                binding, deadline=request.deadline_monotonic_ms / 1000,
+                binding.selector,
+                deadline=request.deadline_monotonic_ms / 1000,
             )
             if content_source is None:
                 graph.discard(token)
                 self._prepared_content.pop(token, None)
-                return _ack(request, applied=False, error_code="source_unavailable",
-                            error_message="The prepared content presentation is no longer ready")
+                return _ack(
+                    request,
+                    applied=False,
+                    error_code="source_unavailable",
+                    error_message="The prepared content presentation is no longer ready",
+                )
         replacement = (
-            graph.content_presentation(content_source)
+            graph.content_presentation(
+                content_source,
+                media_only_source=(
+                    self._ensure_empty_content_source()
+                    if binding is not None and binding.kind is ContentSourceKind.IDLE
+                    else content_source
+                ),
+            )
             if binding is not None
             else nullcontext(None)
         )
         with replacement as presentation:
-            if binding is not None and self._current_content_source(binding) is not content_source:
+            if binding is not None and self._current_content_source(binding.selector) is not content_source:
                 graph.discard(token)
                 self._prepared_content.pop(token, None)
-                return _ack(request, applied=False, error_code="source_unavailable",
-                            error_message="The prepared content presentation was superseded while staging")
+                return _ack(
+                    request,
+                    applied=False,
+                    error_code="source_unavailable",
+                    error_message="The prepared content presentation was superseded while staging",
+                )
             scene_id = graph.pending_scene(token) or ""
             scene_source = presentation.scene_source(scene_id) if presentation is not None else None
             applied = False
@@ -1636,8 +1827,12 @@ class LibobsSidecarEngine:
                 # re-points the off-screen preview egress, so the token is dropped
                 # rather than executed.
                 if not graph.discard(token):
-                    return _ack(request, applied=False, error_code="unknown_preparation",
-                                error_message="no such prepared scene")
+                    return _ack(
+                        request,
+                        applied=False,
+                        error_code="unknown_preparation",
+                        error_message="no such prepared scene",
+                    )
                 with self._editor_preview_update():
                     graph.clear_editor_source_preview()
                     self._editor_scene_id = scene_id
@@ -1645,17 +1840,23 @@ class LibobsSidecarEngine:
                 applied = True
             elif bus_id == "media_windows":
                 # Projection animates on its OWN transition, independent of the program.
-                applied = graph.take_projection(token, self._projection_route, scene_source=scene_source)
+                applied = graph.take_projection(
+                    token, self._projection_route, scene_source=scene_source
+                )
             else:
                 applied = graph.take(token, scene_source=scene_source)
             self._prepared_content.pop(token, None)
             if applied:
                 if presentation is not None:
-                    self._commit_content_presentation(presentation, preserve_editor=bus_id != "editor")
+                    self._commit_content_presentation(
+                        presentation, preserve_editor=bus_id != "editor"
+                    )
                     assert binding is not None
-                    self._content_presentation_epoch = binding[1]
+                    self._content_presentation_epoch = binding.epoch
                     if presentation.changes_graph:
-                        self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
+                        self._editor_preview_sequence = max(
+                            self._editor_preview_sequence, request.sequence
+                        )
                 return _ack(request, applied=True)
         return _ack(request, applied=False, error_code="unknown_preparation",
                     error_message="no such prepared scene")
@@ -1795,7 +1996,12 @@ class LibobsSidecarEngine:
         self._content_presentation_epoch = None
         self._media_epoch = None
         idle, self._idle_source = self._idle_source, None
-        self._idle_scene_source = None
+        for owner, _source in tuple(self._idle_presentations.values()):
+            try:
+                owner.close()
+            except Exception:  # noqa: BLE001 - shutdown must release all owned presentations
+                log.warning("Idle presentation close failed", exc_info=True)
+        self._idle_presentations.clear()
         if idle is not None:
             try:
                 idle.close()

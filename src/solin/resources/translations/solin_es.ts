@@ -6041,11 +6041,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>Error al activar el ajuste preestablecido PTZ.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Predeterminada</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Multimedia</translation>
@@ -6166,8 +6161,8 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>Escenas</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Pantalla inactiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenido de Solin</translation>
     </message>
 </context>
 <context>
@@ -6865,11 +6860,6 @@ Añada contenido, una cámara u otra escena.</translation>
         <translation>Quitar como predeterminada</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Establecer como predeterminada</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Quitar como multimedia</translation>
@@ -7200,8 +7190,8 @@ Añada contenido, una cámara u otra escena.</translation>
         <translation>Abrir carpeta</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Pantalla inactiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenido de Solin</translation>
     </message>
 </context>
 <context>
@@ -11527,8 +11517,16 @@ Use el botón de reproducción para proyectar · Arrastre el control ⠿ para re
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Pantalla inactiva</translation>
+        <source>Solin Content</source>
+        <translation>Contenido de Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Multimedia</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Cámara</translation>
     </message>
 </context>
 </TS>

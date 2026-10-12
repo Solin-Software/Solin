@@ -246,7 +246,6 @@ class FakeRenderer final : public solin::media_engine::SceneRenderer {
 [[nodiscard]] solin::media_engine::SceneOutputDefinition test_output() {
     return {
         .bus = solin::media_engine::OutputBus::virtual_camera,
-        .default_scene_id = "scene-main",
         .video_format = {
             .width = 4U,
             .height = 2U,

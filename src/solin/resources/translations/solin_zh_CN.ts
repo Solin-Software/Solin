@@ -6009,11 +6009,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>调用 PTZ 预设失败。</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>默认</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>媒体</translation>
@@ -6134,8 +6129,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>场景</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>空闲屏幕</translation>
+        <source>Solin Content</source>
+        <translation>Solin 内容</translation>
     </message>
 </context>
 <context>
@@ -6833,11 +6828,6 @@ Add content, a camera, or another scene.</source>
         <translation>取消默认场景</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>设为默认场景</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>取消媒体场景</translation>
@@ -7168,8 +7158,8 @@ Add content, a camera, or another scene.</source>
         <translation>打开文件夹</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>空闲屏幕</translation>
+        <source>Solin Content</source>
+        <translation>Solin 内容</translation>
     </message>
 </context>
 <context>
@@ -11484,8 +11474,16 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>空闲屏幕</translation>
+        <source>Solin Content</source>
+        <translation>Solin 内容</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>媒体</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>摄像机</translation>
     </message>
 </context>
 </TS>

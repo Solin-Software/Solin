@@ -15,7 +15,6 @@ Item {
     property string mobilePage: "canvas"
     property string contextSceneId: ""
     property string contextSceneName: ""
-    property bool contextSceneDefault: false
     property bool contextSceneMedia: false
     property bool contextSceneLive: false
     property bool contextSceneTransitionOverride: false
@@ -75,12 +74,11 @@ Item {
     }
 
     function popupSceneMenu(
-            sceneId, sceneName, isDefaultScene, isMediaScene,
+            sceneId, sceneName, isMediaScene,
             isLiveScene, hasTransitionOverride, transitionKind,
             transitionDurationMs, sceneCount, anchor, x, y) {
         contextSceneId = sceneId
         contextSceneName = sceneName
-        contextSceneDefault = isDefaultScene
         contextSceneMedia = isMediaScene
         contextSceneLive = isLiveScene
         contextSceneTransitionOverride = hasTransitionOverride
@@ -245,11 +243,11 @@ Item {
                 onRequestProfileMenu: function(anchor) { root.popupBelow(profileMenu, anchor) }
                 onRequestCreateScene: createSceneDialog.openForCreate()
                 onRequestSceneMenu: function(
-                        sceneId, sceneName, isDefaultScene, isMediaScene,
+                        sceneId, sceneName, isMediaScene,
                         isLiveScene, hasTransitionOverride, transitionKind,
                         transitionDurationMs, sceneCount, anchor, x, y) {
                     root.popupSceneMenu(
-                        sceneId, sceneName, isDefaultScene, isMediaScene,
+                        sceneId, sceneName, isMediaScene,
                         isLiveScene, hasTransitionOverride, transitionKind,
                         transitionDurationMs, sceneCount, anchor, x, y)
                 }
@@ -510,11 +508,11 @@ Item {
                         onRequestProfileMenu: function(anchor) { root.popupBelow(profileMenu, anchor) }
                         onRequestCreateScene: createSceneDialog.openForCreate()
                         onRequestSceneMenu: function(
-                                sceneId, sceneName, isDefaultScene, isMediaScene,
+                                sceneId, sceneName, isMediaScene,
                                 isLiveScene, hasTransitionOverride, transitionKind,
                                 transitionDurationMs, sceneCount, anchor, x, y) {
                             root.popupSceneMenu(
-                                sceneId, sceneName, isDefaultScene, isMediaScene,
+                                sceneId, sceneName, isMediaScene,
                                 isLiveScene, hasTransitionOverride, transitionKind,
                                 transitionDurationMs, sceneCount, anchor, x, y)
                         }
@@ -796,14 +794,6 @@ Item {
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
             theme: root.theme
-            // There is always exactly one default scene, so it can only be moved to
-            // another scene, never removed. The current default shows it as disabled.
-            text: qsTr("Set as default")
-            enabled: !root.contextSceneDefault
-            onTriggered: root.bridge.setDefaultScene(root.contextSceneId, true)
-        }
-        ScenesMenuItem {
-            theme: root.theme
             text: root.contextSceneMedia
                 ? qsTr("Remove media") : qsTr("Set as media")
             onTriggered: root.bridge.setMediaScene(
@@ -966,17 +956,7 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
-        // The picker creates new sources — the year text, a camera, the Solin media
-        // slot — and re-uses cameras that already exist. Other scenes and sources
-        // already in THIS scene stay out of it.
-        ScenesMenuItem {
-            theme: root.theme
-            text: qsTr("Idle screen")
-            onTriggered: root.bridge.addIdleScreen()
-        }
-        // A camera already used by another scene belongs here: the device can only
-        // be opened once, so the operator has to re-use the source rather than
-        // create a second one for the same camera.
+        // Reuse configured cameras so a device is opened only once.
         Repeater {
             model: root.bridge ? root.bridge.configuredCameras : []
             ScenesMenuItem {
@@ -998,7 +978,7 @@ Item {
         }
         ScenesMenuItem {
             theme: root.theme
-            text: qsTr("Media")
+            text: qsTr("Solin Content")
             onTriggered: root.bridge.addContentSource()
         }
     }

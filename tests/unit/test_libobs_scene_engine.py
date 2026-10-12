@@ -44,6 +44,7 @@ from solin.core.scenes.libobs_sidecar import (
     serve,
 )
 from solin.core.scenes.media_control import (
+    ContentSourceKind,
     MediaPlaybackState,
 )
 from solin.core.scenes.process_engine import (
@@ -93,7 +94,7 @@ def _request(
         process_generation="gen-1",
         sequence=sequence,
         document_revision=document_revision,
-        deadline_monotonic_ms=123_456,
+        deadline_monotonic_ms=int(time.monotonic() * 1000) + 60_000,
         payload=payload or {},
     )
 
@@ -737,6 +738,9 @@ class _CompositingRuntime:
             get_audio=lambda: "main-audio",
         )
 
+    def atomic_scene_update(self, scene, callback):
+        callback()
+
     # obs_runtime boot contract
     def ensure_started(self, **_kwargs) -> None:
         self.starts += 1
@@ -1227,7 +1231,9 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
 
 # Shared idle source is borrowed, rather than recreated per layer/hydrate.
 _IDLE_DOC = {
-    "sources": [{"id": "idle", "type": "idle_screen", "name": "Idle screen", "configuration": {}}],
+    "sources": [
+        {"id": "idle", "type": "solin_content", "name": "Idle screen", "configuration": {}}
+    ],
     "scenes": [
         {"id": "default", "layers": [{"id": "l1", "source_id": "idle", "visible": True}]},
         {"id": "custom", "layers": [{"id": "l2", "source_id": "idle", "visible": True}]},
@@ -1237,14 +1243,15 @@ _IDLE_DOC = {
 
 def test_idle_layers_borrow_one_stable_source_across_hydration():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
     runtime = _CompositingRuntime()
     shared = _FakeColorSource("scene", "shared-idle", {"width": 1920, "height": 1080})
-    graph = LibobsSceneGraph(runtime, idle_source=lambda: shared)
-    graph.hydrate(_IDLE_DOC, {"virtual_camera": "default"})
-    assert graph.scene_uses_idle_source("default")
-    assert graph.scene_uses_idle_source("custom")
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(_IDLE_DOC, {"virtual_camera": "default"}, shared)
+    assert graph.scene_uses_presentation_source("default")
+    assert graph.scene_uses_presentation_source("custom")
     assert all(scene.items[0].source is shared for scene in runtime.scenes)
-    graph.hydrate(_IDLE_DOC, {"virtual_camera": "custom"})
+    graph.hydrate(_IDLE_DOC, {"virtual_camera": "custom"}, shared)
     assert not shared.released
     graph.clear()
     assert not shared.released
@@ -1257,26 +1264,34 @@ def test_idle_demand_index_follows_composed_visible_layers_and_nested_references
 
     runtime = _CompositingRuntime()
     shared = _FakeColorSource("scene", "shared-idle", {"width": 1920, "height": 1080})
-    graph = LibobsSceneGraph(runtime, idle_source=lambda: shared)
+    graph = LibobsSceneGraph(runtime)
     document = {
         "sources": [
-            {"id": "idle", "type": "idle_screen", "enabled": enabled, "configuration": {}},
-            {"id": "nested", "type": "scene_reference", "enabled": enabled,
-             "configuration": {"target_scene_id": "child"}},
+            {"id": "idle", "type": "solin_content", "enabled": enabled, "configuration": {}},
+            {
+                "id": "nested",
+                "type": "scene_reference",
+                "enabled": enabled,
+                "configuration": {"target_scene_id": "child"},
+            },
         ],
         "scenes": [
-            {"id": "child", "layers": [{"id": "idle-layer", "source_id": "idle",
-                                         "visible": visible}]},
+            {
+                "id": "child",
+                "layers": [{"id": "idle-layer", "source_id": "idle", "visible": visible}],
+            },
             {"id": "parent", "layers": [{"id": "reference", "source_id": "nested"}]},
-            {"id": "hidden-parent", "layers": [{"id": "hidden-reference",
-                                                  "source_id": "nested", "visible": False}]},
+            {
+                "id": "hidden-parent",
+                "layers": [{"id": "hidden-reference", "source_id": "nested", "visible": False}],
+            },
         ],
     }
     try:
-        graph.hydrate(document, {"virtual_camera": "parent"})
-        assert graph.scene_uses_idle_source("child") is visible
-        assert graph.scene_uses_idle_source("parent") is visible
-        assert not graph.scene_uses_idle_source("hidden-parent")
+        graph.hydrate(document, {"virtual_camera": "parent"}, shared)
+        assert graph.scene_uses_presentation_source("child") is visible
+        assert graph.scene_uses_presentation_source("parent") is visible
+        assert not graph.scene_uses_presentation_source("hidden-parent")
         assert bool(runtime.scenes[0].items) is visible
         if visible:
             assert runtime.scenes[0].items[0].source is shared
@@ -1292,20 +1307,26 @@ def test_idle_demand_index_ignores_unavailable_idle_producer_and_its_ancestors()
     runtime = _CompositingRuntime()
     graph = LibobsSceneGraph(runtime)
     try:
-        graph.hydrate({
-            "sources": [
-                {"id": "idle", "type": "idle_screen", "configuration": {}},
-                {"id": "reference", "type": "scene_reference",
-                 "configuration": {"target_scene_id": "child"}},
-            ],
-            "scenes": [
-                {"id": "child", "layers": [{"id": "idle-layer", "source_id": "idle"}]},
-                {"id": "parent", "layers": [{"id": "nested-layer", "source_id": "reference"}]},
-            ],
-        }, {"virtual_camera": "parent"})
+        graph.hydrate(
+            {
+                "sources": [
+                    {"id": "idle", "type": "solin_content", "configuration": {}},
+                    {
+                        "id": "reference",
+                        "type": "scene_reference",
+                        "configuration": {"target_scene_id": "child"},
+                    },
+                ],
+                "scenes": [
+                    {"id": "child", "layers": [{"id": "idle-layer", "source_id": "idle"}]},
+                    {"id": "parent", "layers": [{"id": "nested-layer", "source_id": "reference"}]},
+                ],
+            },
+            {"virtual_camera": "parent"},
+        )
         assert runtime.scenes[0].items  # unavailable idle has a visible placeholder
-        assert not graph.scene_uses_idle_source("child")
-        assert not graph.scene_uses_idle_source("parent")
+        assert not graph.scene_uses_presentation_source("child")
+        assert not graph.scene_uses_presentation_source("parent")
     finally:
         graph.clear()
 
@@ -1347,7 +1368,14 @@ def test_crop_survives_hydration_live_edit_and_content_replacement():
         "crop": {"left": 0.1, "top": 0.2, "right": 0.3, "bottom": 0.1},
     }
     source = _FakeColorSource("content", "first", {"width": 1280, "height": 720})
-    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    graph.hydrate(
+        {
+            "sources": [{"id": "solin.content.current", "type": "solin_content"}],
+            "scenes": [{"id": "s", "layers": [layer]}],
+        },
+        {},
+        source,
+    )
     scene = runtime.scenes[0]
     assert scene.items[0].crop == (128, 144, 384, 72)
     assert scene.items[0].crop_to_bounds is True
@@ -1410,7 +1438,14 @@ def test_normalized_crop_tracks_late_and_changed_source_dimensions():
     graph = LibobsSceneGraph(runtime)
     source = _FakeColorSource("content", "loading", {"width": 0, "height": 0})
     layer = {"id": "L", "source_id": "solin.content.current", "crop": {"left": 0.25}}
-    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    graph.hydrate(
+        {
+            "sources": [{"id": "solin.content.current", "type": "solin_content"}],
+            "scenes": [{"id": "s", "layers": [layer]}],
+        },
+        {},
+        source,
+    )
     item = runtime.scenes[0].items[0]
     source.width, source.height = 1280, 720
     for callback in runtime.render_callbacks:
@@ -1440,7 +1475,13 @@ def test_geometry_keeps_the_center_pivot_and_resets_mirror_and_cover(rotation):
         "rotation_degrees": rotation, "mirror_x": True, "mirror_y": True,
         "crop": {"left": 0.1, "right": 0.2}, "fit_mode": "cover",
     }
-    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {})
+    graph.hydrate(
+        {
+            "sources": [{"id": "solin.content.current", "type": "solin_content"}],
+            "scenes": [{"id": "s", "layers": [layer]}],
+        },
+        {},
+    )
     item = runtime.scenes[0].items[0]
     assert item.pos == pytest.approx((768, 432))
     assert item.alignment == 0
@@ -1466,7 +1507,10 @@ def test_crop_rounding_leaves_a_visible_pixel_and_clear_drops_old_items():
     source = _FakeColorSource("content", "tiny", {"width": 2, "height": 2})
     layer = {"id": "L", "source_id": "solin.content.current",
              "crop": {"left": 0.49, "right": 0.49, "top": 0.49, "bottom": 0.49}}
-    document = {"scenes": [{"id": "s", "layers": [layer]}]}
+    document = {
+        "sources": [{"id": "solin.content.current", "type": "solin_content"}],
+        "scenes": [{"id": "s", "layers": [layer]}],
+    }
     graph.hydrate(document, {}, source)
     item = runtime.scenes[0].items[0]
     assert item.crop == (1, 1, 0, 0)
@@ -1574,7 +1618,14 @@ def test_crop_refresh_reports_contention_and_retries_without_blocking_graphics()
     graph = LibobsSceneGraph(runtime)
     source = _FakeColorSource("content", "loading", {"width": 0, "height": 0})
     layer = {"id": "L", "source_id": "solin.content.current", "crop": {"left": 0.25}}
-    graph.hydrate({"scenes": [{"id": "s", "layers": [layer]}]}, {}, source)
+    graph.hydrate(
+        {
+            "sources": [{"id": "solin.content.current", "type": "solin_content"}],
+            "scenes": [{"id": "s", "layers": [layer]}],
+        },
+        {},
+        source,
+    )
     try:
         source.width, source.height = 1280, 720
         results = []
@@ -1681,13 +1732,15 @@ def two_scene_wire_document():
         document_id="transition-test",
         revision=0,
         sources=(
-            SourceDefinition(CONTENT_SOURCE_ID, SourceKind.SOLIN_CONTENT,
-                             "Content", SolinContentConfig()),
-            SourceDefinition(NO_SIGNAL_SOURCE_ID, SourceKind.COLOR,
-                             "No signal", ColorSourceConfig()),
+            SourceDefinition(
+                CONTENT_SOURCE_ID, SourceKind.SOLIN_CONTENT, "Content", SolinContentConfig()
+            ),
+            SourceDefinition(
+                NO_SIGNAL_SOURCE_ID, SourceKind.COLOR, "No signal", ColorSourceConfig()
+            ),
         ),
         scenes=(SceneDefinition("a", "A"), SceneDefinition("b", "B")),
-        outputs=tuple(OutputRoute(bus_id, "a") for bus_id in DELIVERY_BUSES),
+        outputs=tuple(OutputRoute(bus_id) for bus_id in DELIVERY_BUSES),
         automation=tuple(AutomationMap(bus_id, ()) for bus_id in DELIVERY_BUSES),
     )
     record = scene_engine_document_record(document)
@@ -2971,7 +3024,8 @@ def test_clearing_content_publishes_empty_composition_without_mutating_outputs()
         response = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
         assert _ack_from_envelope(response).applied
         empty = graph.content_source
-        assert empty.settings["color"] == 0  # transparent: underlying scene layers survive
+        assert graph.media_only_source.settings["color"] == 0
+        assert any(source is empty for _owner, source in engine._idle_presentations.values())
         assert graph.active_scene_source is origin
         assert old_scene.items[0].source is image and old_scene.released == 0
         assert graph._scenes["s1"].items[0].source is empty
@@ -2984,10 +3038,10 @@ def test_clearing_content_publishes_empty_composition_without_mutating_outputs()
         # Full-state synchronization must keep empty, not resurrect ingress.
         engine.handle(_request("hydrate", {"document": _MEDIA_DOC, "active_scenes": {}}))
         assert engine._scene_graph.content_source is empty
-        assert empty.released == 0
+        assert any(source is empty for _owner, source in engine._idle_presentations.values())
     finally:
         engine.shutdown()
-    assert empty.released == 1
+    assert not engine._idle_presentations
 
 
 @pytest.mark.parametrize("failure", ["none", "exception"])
@@ -3004,6 +3058,8 @@ def test_empty_source_allocation_failure_preserves_committed_content(monkeypatch
             raise RuntimeError("allocation failed")
         return None
 
+    engine._empty_content_source.release()
+    engine._empty_content_source = None
     monkeypatch.setattr(runtime.ob.Source, "create", fail)
     try:
         response = engine.handle(_request("clear_content_presentation", {"content_media_epoch": 2}))
@@ -3024,7 +3080,7 @@ def test_clear_content_validates_epoch_before_native_mutation(invalid):
     try:
         with pytest.raises(SceneIpcError):
             engine.handle(_request("clear_content_presentation", {"content_media_epoch": invalid}))
-        assert engine._empty_content_source is None
+        assert engine._empty_content_source is not None
     finally:
         engine.shutdown()
 
@@ -3052,7 +3108,7 @@ def test_clear_content_rejects_stale_identity_without_replacing_current_presenta
         response = engine.handle(request)
         assert not _ack_from_envelope(response).applied
         assert engine._scene_graph.content_source is before
-        assert engine._empty_content_source is None
+        assert engine._empty_content_source is not None
         assert engine._session_id == "sess-1" and engine._process_generation == "gen-1"
     finally:
         engine.shutdown()
@@ -3109,6 +3165,163 @@ def test_content_presentation_preserves_layer_order_and_keeps_outgoing_placehold
     assert placeholder.released == 1
 
 
+def test_content_modes_share_foreground_and_keep_idle_out_of_media_only_nested_layers():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    idle, empty, foreground = object(), object(), object()
+    document = {
+        "sources": [
+            {
+                "id": "presentation",
+                "type": "solin_content",
+                "configuration": {"mode": "presentation"},
+            },
+            {"id": "only", "type": "solin_content", "configuration": {"mode": "media_only"}},
+            {
+                "id": "nested",
+                "type": "scene_reference",
+                "configuration": {"target_scene_id": "child"},
+            },
+        ],
+        "scenes": [
+            {
+                "id": "child",
+                "layers": [
+                    {"id": "combined", "source_id": "presentation"},
+                    {"id": "media", "source_id": "only"},
+                ],
+            },
+            {"id": "parent", "layers": [{"id": "reference", "source_id": "nested"}]},
+        ],
+    }
+    try:
+        graph.hydrate(document, {}, idle, media_only_source=empty)
+        origin = graph._scenes["child"]
+        assert [item.source for item in origin.items] == [idle, empty]
+        with graph.content_presentation(foreground) as presentation:
+            child = presentation.scenes["child"]
+            parent = presentation.scenes["parent"]
+            assert [item.source for item in child.items] == [foreground, foreground]
+            assert parent.items[0].source is child.as_source()
+            assert [item.source for item in origin.items] == [idle, empty]
+            presentation.commit()
+        with graph.content_presentation(idle, media_only_source=empty) as presentation:
+            assert [item.source for item in presentation.scenes["child"].items] == [idle, empty]
+            assert [item.source for item in child.items] == [foreground, foreground]
+            presentation.commit()
+    finally:
+        graph.shutdown()
+
+
+def test_content_identity_is_defined_by_type_and_never_by_a_reserved_id():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    content = object()
+    try:
+        graph.hydrate(
+            {
+                "sources": [
+                    {
+                        "id": "solin.content.current",
+                        "type": "color",
+                        "configuration": {"color": "#00FF00"},
+                    }
+                ],
+                "scenes": [
+                    {"id": "s", "layers": [{"id": "l", "source_id": "solin.content.current"}]}
+                ],
+            },
+            {},
+            content,
+        )
+        source = graph._scenes["s"].items[0].source
+        assert source is not content
+        assert source.settings["color"] == 0xFF00FF00
+        assert graph._content_items == []
+    finally:
+        graph.shutdown()
+
+
+def test_media_only_without_a_presentation_source_starts_transparent_without_idle_resources():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    try:
+        document = {
+            "sources": [{"id": "only", "type": "solin_content",
+                         "configuration": {"mode": "media_only"}}],
+            "scenes": [{"id": "s", "layers": [{"id": "l", "source_id": "only"}]}],
+        }
+        assert _ack_from_envelope(engine.handle(_request("hydrate", {
+            "document": document, "active_scenes": {"virtual_camera": "s"},
+        }))).applied
+        graph = engine._scene_graph
+        empty = graph.content_source
+        assert empty.settings["color"] == 0
+        assert graph._scenes["s"].items[0].source is empty
+        assert engine._idle_presentations == {}
+        assert engine._idle_source._producer is None
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s",
+            "content_media_epoch": 1, "content_source_kind": "idle",
+        }))
+        assert prepared.message_type == "scene_prepared"
+        assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+            "bus_id": "virtual_camera", "preparation_token": prepared.payload["preparation_token"],
+        }))).applied
+        assert graph.content_source is empty
+        assert engine._idle_presentations == {}
+    finally:
+        engine.shutdown()
+
+
+def test_idle_preparation_binds_configuration_revision_and_never_replaces_a_stale_origin():
+    from solin.core.scenes.idle import IdleScreenState
+
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    try:
+        assert _ack_from_envelope(engine.handle(_request("hydrate", {
+            "document": _MEDIA_DOC, "active_scenes": {"virtual_camera": "s1"},
+        }))).applied
+        graph = engine._scene_graph
+        original = graph.active_scene_source
+        prepared = engine.handle(_request("prepare_scene", {
+            "bus_id": "virtual_camera", "scene_id": "s1",
+            "content_source_kind": "idle", "content_media_epoch": 2,
+        }))
+        assert prepared.message_type == "scene_prepared"
+        assert _ack_from_envelope(engine.handle(_request("set_idle_screen", {
+            "idle_screen": IdleScreenState(revision=1).to_record(),
+        }))).applied
+        taken = engine.handle(_request("take_prepared", {
+            "bus_id": "virtual_camera", "preparation_token": prepared.payload["preparation_token"],
+        }))
+        assert not _ack_from_envelope(taken).applied
+        assert taken.payload["error_code"] == "source_unavailable"
+        assert graph.active_scene_source is original
+        assert engine._prepared_content == {}
+        for bus in ("virtual_camera", "media_windows"):
+            prepared = engine.handle(_request("prepare_scene", {
+                "bus_id": bus, "scene_id": "s1",
+                "content_source_kind": "idle", "content_media_epoch": 3,
+            }))
+            assert prepared.message_type == "scene_prepared"
+            assert _ack_from_envelope(engine.handle(_request("take_prepared", {
+                "bus_id": bus, "preparation_token": prepared.payload["preparation_token"],
+            }))).applied
+        assert graph.active_scene_source is not original
+        assert engine._projection_route.scene_source is graph.active_scene_source
+        assert engine._current_content_source((ContentSourceKind.IDLE, 3)) is graph.content_source
+    finally:
+        engine.shutdown()
+
+
 def test_libobs_media_source_open_applies_volume_speed_and_local_flag():
     from solin.core.scenes.libobs_media_source import LibobsMediaSource
 
@@ -3142,7 +3355,7 @@ def test_engine_open_media_decodes_privately_without_changing_the_live_content()
     assert media.media_state == 1
     assert media.volume == 0.8
     assert all(i.source is not media for i in runtime.scenes[0].items)
-    assert engine._effective_content_source() is None
+    assert engine._effective_content_source() is not media
     event = _media_playback_event_from_envelope(events[-1])
     assert event.state.path == "/clip.mp4"
     assert event.state.state is MediaPlaybackState.PLAYING
@@ -4172,11 +4385,13 @@ def test_engine_hydrate_configures_program_egress():
 
 @pytest.mark.parametrize(
     ("failed_output", "retry"),
-    [(None, False), ("program", False), ("preview", False),
-     ("program", True), ("preview", True)],
+    [(None, False), ("program", False), ("preview", False), ("program", True), ("preview", True)],
 )
 def test_engine_rehydrate_configures_outputs_with_program_detached(
-    request, monkeypatch, failed_output, retry,
+    request,
+    monkeypatch,
+    failed_output,
+    retry,
 ):
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
@@ -4196,12 +4411,20 @@ def test_engine_rehydrate_configures_outputs_with_program_detached(
     }
     assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
     assert runtime.channels
-    old_scenes = tuple(runtime.scenes)
-    old_sources = tuple(runtime.sources)
+    old_scene_count, old_source_count = len(runtime.scenes), len(runtime.sources)
+    old_scenes = tuple(engine._scene_graph._scenes.values())
+    old_sources = tuple(engine._scene_graph._sources)
     events = []
 
     class RebuildGuard:
         held = False
+
+        def acquire(self, blocking=True):
+            self.held = True
+            return True
+
+        def release(self):
+            self.held = False
 
         def __enter__(self):
             self.held = True
@@ -4216,6 +4439,7 @@ def test_engine_rehydrate_configures_outputs_with_program_detached(
 
     class Thumbnails:
         suspended = False
+        scene_ids = ()
 
         def suspend(self):
             self.suspended = True
@@ -4271,16 +4495,25 @@ def test_engine_rehydrate_configures_outputs_with_program_detached(
         assert not guard.held and not thumbnails.suspended
         configured = ["program"] if failed_output == "program" else ["program", "preview"]
         assert events == ["suspend", "clear", *configured, "resume"]
-        failed_scenes = tuple(runtime.scenes[len(old_scenes):])
-        failed_sources = tuple(runtime.sources[len(old_sources):])
+        failed_scenes = tuple(runtime.scenes[old_scene_count:])
+        failed_sources = tuple(runtime.sources[old_source_count:])
         assert failed_scenes and all(scene.released == 0 for scene in failed_scenes)
         if not retry:
             return  # The finalizer must also release a failed graph without retry.
         events.clear()
         failed_output = None
-        ack = _ack_from_envelope(engine.handle(_request("hydrate", {
-            **payload, "program_egress": descriptor, "preview_egress": descriptor,
-        })))
+        ack = _ack_from_envelope(
+            engine.handle(
+                _request(
+                    "hydrate",
+                    {
+                        **payload,
+                        "program_egress": descriptor,
+                        "preview_egress": descriptor,
+                    },
+                )
+            )
+        )
         assert all(scene.released == 1 for scene in failed_scenes)
         assert all(source.released == 1 for source in failed_sources)
 
@@ -4530,13 +4763,21 @@ def editor_source_preview_engine():
     engine._preview_egress = egress
     document = {
         "revision": 7,
-        "sources": [{"id": "color", "type": "color",
-                     "configuration": {"color": "#336699"}}],
-        "scenes": [{"id": "edit", "layers": [
-            {"id": "layer", "source_id": "color", "mirror_x": True},
-            {"id": "hidden", "source_id": "color", "visible": False},
-            {"id": "content", "source_id": "solin.content.current"},
-        ]}, {"id": "other", "layers": [{"id": "layer", "source_id": "color"}]}],
+        "sources": [
+            {"id": "solin.content.current", "type": "solin_content"},
+            {"id": "color", "type": "color", "configuration": {"color": "#336699"}},
+        ],
+        "scenes": [
+            {
+                "id": "edit",
+                "layers": [
+                    {"id": "layer", "source_id": "color", "mirror_x": True},
+                    {"id": "hidden", "source_id": "color", "visible": False},
+                    {"id": "content", "source_id": "solin.content.current"},
+                ],
+            },
+            {"id": "other", "layers": [{"id": "layer", "source_id": "color"}]},
+        ],
     }
     payload = {"document": document, "active_scenes": {
         "editor": "edit", "media_windows": "other", "virtual_camera": "edit",
@@ -5119,17 +5360,26 @@ def test_content_layer_uses_the_content_source_and_is_not_released():
     runtime = _CompositingRuntime()
     graph = LibobsSceneGraph(runtime)
     document = {
+        "sources": [{"id": "solin.content.current", "type": "solin_content"}],
         "scenes": [
             {
                 "id": "s",
                 "layers": [
-                    {"id": "c", "source_id": "solin.content.current", "visible": True,
-                     "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}},
-                    {"id": "p", "source_id": "other", "visible": True,
-                     "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}},
+                    {
+                        "id": "c",
+                        "source_id": "solin.content.current",
+                        "visible": True,
+                        "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+                    },
+                    {
+                        "id": "p",
+                        "source_id": "other",
+                        "visible": True,
+                        "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5},
+                    },
                 ],
             }
-        ]
+        ],
     }
     content_source = object()  # referenced, never created by the builder
 
@@ -5256,7 +5506,9 @@ def test_prepare_requires_ready_content_but_not_ingress_for_decoded_media():
         waited.append((epoch, deadline))
         return epoch == 2
 
-    engine._content_consumer = SimpleNamespace(wait_for_epoch=wait_for_epoch)
+    engine._content_consumer = SimpleNamespace(
+        wait_for_epoch=wait_for_epoch, source_for_epoch=lambda epoch: "ready-frames"
+    )
     payload = {
         "bus_id": "virtual_camera", "scene_id": "b",
         "transition": {"kind": "cut", "duration_ms": 0}, "content_media_epoch": 1,
@@ -5267,7 +5519,8 @@ def test_prepare_requires_ready_content_but_not_ingress_for_decoded_media():
     assert engine._scene_graph._pending == {}
     payload["content_media_epoch"] = 2
     assert engine.handle(_request("prepare_scene", payload)).message_type == "scene_prepared"
-    assert waited == [(1, 123.456), (2, 123.456)]
+    assert [epoch for epoch, _deadline in waited] == [1, 2]
+    assert all(deadline > time.monotonic() for _epoch, deadline in waited)
 
     engine._media_source = SimpleNamespace(source="decoded-media")
     payload["content_media_epoch"] = 3

@@ -6073,11 +6073,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Nie udało się przywołać ustawienia wstępnego PTZ.</translation>
     </message>
     <message>
-        <location line="+129"/>
-        <source>Default</source>
-        <translation>Domyślna</translation>
-    </message>
-    <message>
         <location line="+2"/>
         <source>Media</source>
         <translation>Multimedia</translation>
@@ -6198,8 +6193,8 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Sceny</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Ekran bezczynności</translation>
+        <source>Solin Content</source>
+        <translation>Treści Solin</translation>
     </message>
 </context>
 <context>
@@ -6897,11 +6892,6 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Usuń jako domyślną</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Set as default</source>
-        <translation>Ustaw jako domyślną</translation>
-    </message>
-    <message>
         <location line="+7"/>
         <source>Remove media</source>
         <translation>Usuń jako scenę multimedialną</translation>
@@ -7232,8 +7222,8 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Otwórz folder</translation>
     </message>
     <message>
-        <source>Idle screen</source>
-        <translation>Ekran bezczynności</translation>
+        <source>Solin Content</source>
+        <translation>Treści Solin</translation>
     </message>
 </context>
 <context>
@@ -11570,8 +11560,16 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
 <context>
     <name>_Scenes</name>
     <message>
-        <source>Idle screen</source>
-        <translation>Ekran bezczynności</translation>
+        <source>Solin Content</source>
+        <translation>Treści Solin</translation>
+    </message>
+    <message>
+        <source>Media</source>
+        <translation>Multimedia</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
     </message>
 </context>
 </TS>

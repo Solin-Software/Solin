@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import pytest
+
 from solin.core.scenes.composition import (
     SceneComposition,
     analyze_scene_compositions,
@@ -11,6 +13,8 @@ from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
     SceneDefinition,
+    SolinContentConfig,
+    SolinContentMode,
     SceneLayer,
     SceneReferenceConfig,
     SourceDefinition,
@@ -181,3 +185,13 @@ def test_nested_pip_composition_remains_classified_through_a_scene_reference() -
     )
 
     assert analyze_scene_compositions(document)[scene.id].has_camera_over_content
+
+
+@pytest.mark.parametrize("mode", list(SolinContentMode))
+def test_content_composition_uses_source_type_and_mode_with_arbitrary_identity(mode):
+    document = _document()
+    changed_id = "user.content"
+    sources = tuple(replace(source, id=changed_id, configuration=SolinContentConfig(mode)) if source.id == CONTENT_SOURCE_ID else source for source in document.sources)
+    scenes = tuple(replace(scene, layers=tuple(replace(layer, source_id=changed_id) if layer.source_id == CONTENT_SOURCE_ID else layer for layer in scene.layers)) for scene in document.scenes)
+    changed = replace(document, sources=sources, scenes=scenes)
+    assert analyze_scene_compositions(changed) == analyze_scene_compositions(document)

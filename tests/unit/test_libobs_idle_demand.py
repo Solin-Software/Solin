@@ -53,12 +53,13 @@ def _engine():
             source is not None and target._ptr in source.pointers
         ),
     )
-    engine._idle_scene_source = SimpleNamespace(_ptr=pointer)
+    engine._idle_presentations[(0, 0)] = idle, SimpleNamespace(_ptr=pointer)
     engine._idle_definitions = ("idle-definition",)
     engine._scene_graph = SimpleNamespace(
+        content_source=engine._idle_presentations[(0, 0)][1],
         program_source=program,
         editor_scene_source=lambda scene_id: editor if scene_id == "editor" else _Tree(),
-        scene_uses_idle_source=lambda scene_id: scene_id in {"idle", "nested-idle"},
+        scene_uses_presentation_source=lambda scene_id: scene_id in {"idle", "nested-idle"},
     )
     engine._projection_route = SimpleNamespace(transition_source=projection)
     engine._virtual_camera = SimpleNamespace(active=False)
@@ -286,7 +287,7 @@ def test_source_isolation_counts_the_actual_preview_instead_of_authored_layer_vi
     trees[2].pointers = (pointer,)
     engine._preview_egress.active = True
     # A hidden idle layer can still be displayed in source isolation while framing.
-    engine._scene_graph.scene_uses_idle_source = lambda scene_id: False
+    engine._scene_graph.scene_uses_presentation_source = lambda scene_id: False
     engine._reconcile_idle_demand()
     assert idle.demand
 
@@ -323,7 +324,7 @@ def test_removing_all_idle_definitions_and_consumers_pauses_the_retained_owner()
 
 def test_empty_owner_does_not_create_a_source_from_a_render_callback():
     engine, idle, _, _ = _engine()
-    engine._idle_scene_source = None
+    engine._idle_presentations.clear()
     engine._reconcile_idle_demand()
     assert not idle.demand
 

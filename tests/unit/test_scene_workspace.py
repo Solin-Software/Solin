@@ -22,17 +22,18 @@ from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
     LocalCameraConfig,
     OnvifPtzBinding,
+    SceneLayer,
     NO_SIGNAL_SOURCE_ID,
     SourceDefinition,
     SourceKind,
     TransitionKind,
     TransitionSpec,
+    SolinContentMode,
+    stable_identity,
 )
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_SCENE_ID,
-    DEFAULT_SCENE_ID,
-    IDLE_SCREEN_SOURCE_ID,
     SceneSeedNames,
     create_default_scene_document,
 )
@@ -308,111 +309,62 @@ def test_fresh_workspace_has_one_minimal_profile_and_internal_fallback(scene_wor
 
     assert workspace.active_collection.id == DEFAULT_SCENE_COLLECTION_ID
     assert workspace.active_collection.name == "Profile 1"
-    assert [scene.id for scene in workspace.documents.document.scenes] == [
-        DEFAULT_SCENE_ID,
-        CAMERA_SCENE_ID,
-        CONTENT_SCENE_ID,
-    ]
-    assert {source.id for source in workspace.documents.document.sources} == {
-        CONTENT_SOURCE_ID,
-        DEFAULT_CAMERA_SOURCE_ID,
-        NO_SIGNAL_SOURCE_ID,
-        IDLE_SCREEN_SOURCE_ID,
-    }
-    assert workspace.documents.program_default_scene_id == DEFAULT_SCENE_ID
+    assert [scene.id for scene in workspace.documents.document.scenes] == [CONTENT_SCENE_ID, CAMERA_SCENE_ID]
+    assert {source.id for source in workspace.documents.document.sources} == {CONTENT_SOURCE_ID, NO_SIGNAL_SOURCE_ID}
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
     assert workspace.documents.program_media_scene_id == CONTENT_SCENE_ID
-    assert (
-        paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.backup.json"
-    ).exists()
 
 
-def test_fresh_workspace_default_scene_holds_the_idle_screen_source(scene_workspace_factory, tmp_path: Path) -> None:
-    # First run: the Default scene (the idle fallback) shows the year text, so the
-    # projection and virtual camera both fall back to it when nothing else plays.
-    from solin.core.scenes.model import SourceKind
+def _beta_preset_record(*, customized=False):
+    from copy import deepcopy
 
-    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
-    document = workspace.documents.document
+    seed = create_default_scene_document(_names(), document_id="beta-document", created_at="2026-08-10T12:00:00+00:00")
+    record = replace(seed, scenes=seed.scenes[:2]).to_record()
+    record["schema_version"] = 11
+    content = record["sources"][0]
+    content["configuration"] = {}
+    content["name"] = "Current Solin content"
+    idle = deepcopy(content)
+    idle.update(id="solin.idle.current", type="idle_screen", name="Idle screen")
+    record["sources"].append(idle)
+    default = deepcopy(record["scenes"][0])
+    default.update(id=stable_identity("default-scene:default"), name="Default")
+    default["layers"][0].update(id=stable_identity("default-layer:default:idle"), source_id=idle["id"], name="Idle screen")
+    record["scenes"] = [default, record["scenes"][1], record["scenes"][0]]
+    for route in record["outputs"]:
+        route["default_scene_id"] = default["id"]
+    if customized:
+        default["name"] = "My idle"
+        default["layers"][0]["rect"]["width"] = 0.7
+        default["layers"].append(dict(default["layers"][0], id="duplicate-idle"))
+        record["outputs"][0]["default_scene_id"] = CAMERA_SCENE_ID
+    return record
 
-    idle_screen_sources = [
-        source for source in document.sources if source.kind is SourceKind.IDLE_SCREEN
-    ]
-    assert [source.id for source in idle_screen_sources] == [IDLE_SCREEN_SOURCE_ID]
 
-    default_scene = document.scene(DEFAULT_SCENE_ID)
-    assert [layer.source_id for layer in default_scene.layers] == [IDLE_SCREEN_SOURCE_ID]
-    # The Default scene is the shared idle fallback for every output bus.
-    assert {route.default_scene_id for route in document.outputs} == {DEFAULT_SCENE_ID}
-
-
-def test_workspace_localizes_migrated_idle_names_and_preserves_custom_layers(
-    scene_workspace_factory, tmp_path: Path,
-) -> None:
+@pytest.mark.parametrize("customized", [False, True])
+def test_beta_migration_preserves_custom_collections_and_rebuilds_only_pristine(scene_workspace_factory, tmp_path, customized):
     paths = _paths(tmp_path)
-    first = scene_workspace_factory(paths, seed_names=_names())
-    first.close()
-    collection_file = paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json"
-    record = json.loads(collection_file.read_text(encoding="utf-8"))
-    record["schema_version"] = 10
-    source = next(s for s in record["sources"] if s["type"] == "idle_screen")
-    source.update(type="yeartext", id="solin.yeartext.current", name="Texto do ano")
-    layer = record["scenes"][0]["layers"][0]
-    layer.update(source_id=source["id"], name="Texto do ano")
-    custom = dict(layer, id="custom-idle-layer", name="Backdrop")
-    record["scenes"][1]["layers"].append(custom)
-    record["outputs"][0]["default_scene_id"] = CAMERA_SCENE_ID
-    collection_file.write_text(json.dumps(record), encoding="utf-8")
-    names = replace(_names(), idle_screen_source="Tela de descanso", idle_screen_layer="Tela de descanso")
-
-    workspace = scene_workspace_factory(paths, seed_names=names)
+    record = _beta_preset_record(customized=customized)
+    paths.scenes_file.write_text(json.dumps(record), encoding="utf-8")
+    workspace = scene_workspace_factory(paths, seed_names=_names())
     document = workspace.documents.document
-
-    assert document.source("solin.yeartext.current").name == "Tela de descanso"
-    assert document.scene(DEFAULT_SCENE_ID).layers[0].name == "Tela de descanso"
-    assert document.scene(CAMERA_SCENE_ID).layers[-1].name == "Backdrop"
-    assert document.output(BusId.MEDIA_WINDOWS).default_scene_id == CAMERA_SCENE_ID
-    assert [s.id for s in document.sources if s.kind is SourceKind.IDLE_SCREEN] == [source["id"]]
-    assert json.loads(collection_file.read_text(encoding="utf-8"))["schema_version"] == 11
-
-
-def test_legacy_document_gains_the_idle_screen_default_scene_on_load(scene_workspace_factory, tmp_path: Path) -> None:
-    # A collection saved before the year-text-as-a-scene feature has no Default
-    # scene, so its idle projection would have no year text after upgrading. On
-    # load it is self-healed: the year-text source + Default scene are added and
-    # the Default scene becomes the shared idle default, while the legacy scenes,
-    # sources, and document identity are preserved.
-    paths = _paths(tmp_path)
-    legacy = create_default_scene_document(
-        _names(),
-        document_id="legacy-document",
-        created_at="2026-08-10T12:00:00+00:00",
-    )
-    assert all(scene.id != DEFAULT_SCENE_ID for scene in legacy.scenes)  # precondition
-    assert all(source.id != IDLE_SCREEN_SOURCE_ID for source in legacy.sources)
-    SceneDocumentRepository(paths.scenes_file, seed_factory=lambda: legacy).save(legacy)
-
-    first = scene_workspace_factory(paths, seed_names=_names())
-    healed = first.documents.document
-    first.close()
-
-    idle_screen_sources = [s for s in healed.sources if s.kind is SourceKind.IDLE_SCREEN]
-    assert [s.id for s in idle_screen_sources] == [IDLE_SCREEN_SOURCE_ID]
-    default_scene = healed.scene(DEFAULT_SCENE_ID)
-    assert [layer.source_id for layer in default_scene.layers] == [IDLE_SCREEN_SOURCE_ID]
-    assert {route.default_scene_id for route in healed.outputs} == {DEFAULT_SCENE_ID}
-    # Legacy scenes + identity survive; nothing was dropped.
-    assert healed.document_id == "legacy-document"
-    assert {scene.id for scene in legacy.scenes} <= {scene.id for scene in healed.scenes}
-
-    # Idempotent: reloading heals to the same structure — no duplicate Default
-    # scene or year-text source.
-    second = scene_workspace_factory(paths, seed_names=_names())
-    reloaded = second.documents.document
-    assert [s.id for s in reloaded.scenes] == [s.id for s in healed.scenes]
-    assert sum(s.kind is SourceKind.IDLE_SCREEN for s in reloaded.sources) == 1
-    assert sum(scene.id == DEFAULT_SCENE_ID for scene in reloaded.scenes) == 1
-    assert {route.default_scene_id for route in reloaded.outputs} == {DEFAULT_SCENE_ID}
-    assert len(second.catalog.collections) == 1
+    assert document.document_id == record["document_id"]
+    if customized:
+        assert [scene.id for scene in document.scenes] == [scene["id"] for scene in record["scenes"]]
+        assert document.scenes[0].name == "My idle"
+        assert document.scenes[0].to_record()["layers"] == record["scenes"][0]["layers"]
+        assert document.source("solin.idle.current").configuration.mode is SolinContentMode.PRESENTATION
+        assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
+        assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == record["scenes"][0]["id"]
+    else:
+        assert [scene.id for scene in document.scenes] == [CONTENT_SCENE_ID, CAMERA_SCENE_ID]
+        assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+        assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+    workspace.close()
+    reloaded = scene_workspace_factory(paths, seed_names=_names())
+    assert reloaded.documents.document == document
+    assert json.loads((paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json").read_text())["schema_version"] == 12
 
 
 def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
@@ -689,7 +641,7 @@ def test_runtime_controller_rebinds_to_the_activated_scene_profile(
     assert controller.runtime is workspace.runtime
     assert controller.document.document_id == "document-b"
     assert controller.documents.can_undo is False
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == DEFAULT_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
 
 def test_camera_configuration_is_shared_between_scene_profiles(scene_workspace_factory, tmp_path: Path) -> None:
@@ -700,7 +652,7 @@ def test_camera_configuration_is_shared_between_scene_profiles(scene_workspace_f
         seed_names=_names(),
         identity_factory=lambda: next(identities),
     )
-    camera = workspace.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
+    camera = create_default_scene_document(_names(), document_id="camera-fixture").source(DEFAULT_CAMERA_SOURCE_ID)
     configured = replace(
         camera,
         name="Pulpit camera",
@@ -728,7 +680,7 @@ def test_camera_configuration_is_shared_between_scene_profiles(scene_workspace_f
 def test_shared_cameras_are_isolated_between_general_solin_profiles(scene_workspace_factory, tmp_path: Path) -> None:
     first = scene_workspace_factory(_paths(tmp_path, "first"), seed_names=_names())
     second = scene_workspace_factory(_paths(tmp_path, "second"), seed_names=_names())
-    first_camera = first.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
+    first_camera = create_default_scene_document(_names(), document_id="camera-fixture").source(DEFAULT_CAMERA_SOURCE_ID)
 
     first.upsert_camera(
         replace(
@@ -739,7 +691,7 @@ def test_shared_cameras_are_isolated_between_general_solin_profiles(scene_worksp
     )
 
     assert first.configured_cameras[0].name == "First profile camera"
-    assert second.configured_cameras[0].name == "Default camera"
+    assert second.configured_cameras == ()
 
 
 def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
@@ -748,7 +700,7 @@ def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
 ) -> None:
     paths = _paths(tmp_path)
     workspace = scene_workspace_factory(paths, seed_names=_names())
-    camera = workspace.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
+    camera = create_default_scene_document(_names(), document_id="camera-fixture").source(DEFAULT_CAMERA_SOURCE_ID)
     workspace.upsert_camera(
         replace(
             camera,
@@ -761,11 +713,9 @@ def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
             ),
         )
     )
-    camera_layer = next(
-        layer
-        for layer in workspace.documents.document.scene(CAMERA_SCENE_ID).layers
-        if layer.source_id == DEFAULT_CAMERA_SOURCE_ID
-    )
+    workspace.documents.create_source(workspace.configured_cameras[0])
+    workspace.documents.add_layer(CAMERA_SCENE_ID, SceneLayer(id="camera-layer", source_id=camera.id, name="Camera"))
+    camera_layer = workspace.documents.document.scene(CAMERA_SCENE_ID).layers[0]
 
     workspace.documents.delete_layer_and_orphaned_source(
         CAMERA_SCENE_ID,
@@ -807,16 +757,18 @@ def test_ptz_presets_are_shared_while_scene_actions_remain_collection_local(
         seed_names=_names(),
         identity_factory=lambda: next(identities),
     )
-    camera = workspace.documents.document.source(DEFAULT_CAMERA_SOURCE_ID)
+    camera = create_default_scene_document(_names(), document_id="camera-fixture").source(DEFAULT_CAMERA_SOURCE_ID)
     workspace.upsert_camera(
         replace(
             camera,
             configuration=LocalCameraConfig(
+                device_id="physical-camera-1",
                 ptz_binding=OnvifPtzBinding(
                     endpoint="http://192.0.2.10/onvif/device_service"
                 )
             ),
-        )
+        ),
+        add_to_active_document=True,
     )
     preset = CameraPreset(
         id="preset-pulpit",
@@ -931,3 +883,213 @@ def test_legacy_fresh_profile_camera_reference_recovers_to_configured_camera(
         source.get("id") == camera.id and source.get("type") == "camera_ref"
         for source in persisted["sources"]
     )
+
+
+def test_fresh_camera_is_retained_empty_without_a_configured_device(scene_workspace_factory, tmp_path):
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert workspace.configured_cameras == ()
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+    other = workspace.create_collection("Empty Camera")
+    workspace.activate_collection(other.id)
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+
+
+def test_profile_activation_restores_independent_bases_and_preserves_enabled_outputs(scene_workspace_factory, tmp_path):
+    from solin.core.scenes.model import ContentCategory, OutputMode
+
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    first_id = workspace.active_collection.id
+    workspace.documents.create_scene("A")
+    extra = workspace.documents.document.scenes[-1]
+    workspace.runtime.select_scene(BusId.MEDIA_WINDOWS, extra.id)
+    workspace.runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+    other = workspace.create_collection("Other")
+    workspace.activate_collection(other.id)
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
+    workspace.runtime.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    workspace.runtime.set_output_enabled(BusId.MEDIA_WINDOWS, False)
+    workspace.activate_collection(first_id)
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == extra.id
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CONTENT_SCENE_ID
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.MANUAL
+    assert not any(output.enabled for output in workspace.runtime.state.outputs)
+    # Automatic media is temporary: resolving it never persists it as the base.
+    assert workspace.runtime.resolve_scene(BusId.MEDIA_WINDOWS, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+    workspace.close()
+    restarted = scene_workspace_factory(paths, seed_names=_names())
+    assert restarted.runtime.resolve_scene(BusId.MEDIA_WINDOWS, ContentCategory.IDLE) == extra.id
+    restarted.activate_collection(other.id)
+    assert restarted.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
+    assert not any(output.enabled for output in restarted.runtime.state.outputs)
+
+
+@pytest.mark.parametrize("mutation", ["name", "geometry", "duplicate", "disabled", "route"])
+def test_pristine_fingerprint_rejects_every_customization(mutation):
+    from solin.core.scenes.model import SceneDocument
+    from solin.core.scenes.presets import convert_pristine_beta_preset
+
+    raw = _beta_preset_record()
+    if mutation == "name":
+        raw["scenes"][1]["name"] = "My Camera"
+    elif mutation == "geometry":
+        raw["scenes"][2]["layers"][0]["rect"]["width"] = 0.9
+    elif mutation == "duplicate":
+        raw["scenes"][0]["layers"].append(dict(raw["scenes"][0]["layers"][0], id="extra"))
+    elif mutation == "disabled":
+        raw["sources"][0]["enabled"] = False
+    else:
+        raw["outputs"][0]["default_scene_id"] = CAMERA_SCENE_ID
+    document = SceneDocument.from_record(raw)
+    selections = {BusId(route["bus_id"]): route["default_scene_id"] for route in raw["outputs"]}
+    assert convert_pristine_beta_preset(document, _names(), selections=selections) is document
+
+
+@pytest.mark.parametrize("customized", [False, True])
+@pytest.mark.parametrize("corrupt_primary", [False, True])
+def test_existing_beta_catalog_without_resources_captures_routes_before_normalization(scene_workspace_factory, tmp_path, customized, corrupt_primary):
+    from solin.core.scenes.collections import SceneCollection, SceneCollectionCatalog
+
+    paths = _paths(tmp_path)
+    catalog = SceneCollectionCatalog(revision=0, active_collection_id="old-beta", collections=(SceneCollection(id="old-beta", name="Beta"),))
+    paths.scene_profiles_catalog_file.write_text(json.dumps(catalog.to_record()), encoding="utf-8")
+    raw = _beta_preset_record(customized=customized)
+    primary = paths.scene_profiles_dir / "old-beta.json"
+    backup = paths.scene_profiles_dir / "old-beta.backup.json"
+    primary.write_text("{corrupt" if corrupt_primary else json.dumps(raw), encoding="utf-8")
+    backup.write_text(json.dumps(raw), encoding="utf-8")
+    old_runtime = {
+        "schema_version": 3, "document_id": raw["document_id"], "revision": 8,
+        "outputs": [{"bus_id": bus.value, "mode": "auto", "manual_scene_id": "", "enabled": bus is BusId.MEDIA_WINDOWS} for bus in (BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA)],
+    }
+    paths.scenes_runtime_file.write_text(json.dumps(old_runtime), encoding="utf-8")
+    assert not paths.scene_resources_file.exists()
+    workspace = scene_workspace_factory(paths, seed_names=replace(_names(), content_source="Solin Content", content_scene="Media", content_layer="Solin Content"))
+    assert workspace.runtime.state.revision == 8
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
+    if customized:
+        assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
+        assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == raw["scenes"][0]["id"]
+        assert workspace.documents.document.scenes[0].name == "My idle"
+    else:
+        assert [scene.name for scene in workspace.documents.document.scenes] == ["Media", "Camera"]
+        assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+        assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+        assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+    for path in (primary, backup):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        assert record["schema_version"] == 12
+        assert all("default_scene_id" not in output for output in record["outputs"])
+        if not customized:
+            assert [scene["name"] for scene in record["scenes"]] == ["Media", "Camera"]
+    before = workspace.documents.document
+    workspace.close()
+    assert scene_workspace_factory(paths, seed_names=_names()).documents.document == before
+
+
+@pytest.mark.parametrize("three_scene", [False, True])
+@pytest.mark.parametrize("portuguese", [False, True])
+def test_actual_shipped_beta_labels_convert_to_new_labels(three_scene, portuguese):
+    from solin.core.scenes.model import SceneDocument
+    from solin.core.scenes.presets import convert_pristine_beta_preset
+
+    # Actual previous bootstrap labels, rather than the new Media/Solin Content seed.
+    raw = _beta_preset_record()
+    if not three_scene:
+        raw["scenes"] = [raw["scenes"][1], raw["scenes"][2]]
+        raw["sources"] = raw["sources"][:-1]
+        for route in raw["outputs"]:
+            route["default_scene_id"] = CAMERA_SCENE_ID
+    if portuguese:
+        translations = {"Idle screen": "Tela de descanso"}
+        for scene in raw["scenes"]:
+            scene["name"] = translations.get(scene["name"], scene["name"])
+            for layer in scene["layers"]:
+                layer["name"] = translations.get(layer["name"], layer["name"])
+        for source in raw["sources"]:
+            source["name"] = translations.get(source["name"], source["name"])
+    document = SceneDocument.from_record(raw)
+    selections = {BusId(route["bus_id"]): route["default_scene_id"] for route in raw["outputs"]}
+    modern_names = replace(_names(), content_source="Solin Content", content_scene="Media", content_layer="Solin Content")
+    converted = convert_pristine_beta_preset(document, modern_names, selections=selections)
+    assert converted is not document
+    assert [scene.name for scene in converted.scenes] == ["Media", "Camera"]
+    assert converted.source(CONTENT_SOURCE_ID).name == "Solin Content"
+    assert converted.scene(CONTENT_SCENE_ID).layers[0].name == "Solin Content"
+
+
+def test_deleting_profiles_does_not_accumulate_runtime_states(scene_workspace_factory, tmp_path):
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    first_id = workspace.active_collection.id
+    document_id = workspace.documents.document.document_id
+    for index in range(6):
+        other = workspace.create_collection(f"Temporary {index}")
+        workspace.activate_collection(other.id)
+        workspace.runtime.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+        workspace.activate_collection(first_id)
+        workspace.delete_collection(other.id)
+    record = json.loads(paths.scenes_runtime_file.read_text(encoding="utf-8"))
+    assert [state["document_id"] for state in record["states"]] == [document_id]
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+
+
+def test_profile_activation_preserves_active_automation_preference_per_output(scene_workspace_factory, tmp_path):
+    from solin.core.scenes.model import OutputMode
+
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    first_id = workspace.active_collection.id
+    workspace.runtime.take_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    other = workspace.create_collection("Other")
+    workspace.activate_collection(other.id)
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).mode is OutputMode.MANUAL
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.AUTO
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_SCENE_ID
+    workspace.runtime.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    workspace.runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    workspace.activate_collection(first_id)
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).mode is OutputMode.AUTO
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.MANUAL
+    assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
+    assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
+
+
+def test_failed_runtime_cleanup_keeps_collection_and_files(scene_workspace_factory, tmp_path, monkeypatch):
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    other = workspace.create_collection("Other")
+
+    def fail_delete(_document_id):
+        raise OSError("runtime cleanup failed")
+
+    monkeypatch.setattr(workspace._runtime_repository, "delete", fail_delete)
+    with pytest.raises(OSError, match="runtime cleanup failed"):
+        workspace.delete_collection(other.id)
+    assert workspace.catalog.collection(other.id) == other
+    assert (paths.scene_profiles_dir / f"{other.id}.json").exists()
+
+
+@pytest.mark.parametrize(("idle_name", "media_name", "content_name"), [
+    ("Ruhebild", "Medien", "Solin-Inhalt"),
+    ("\u30a2\u30a4\u30c9\u30eb\u753b\u9762", "\u30e1\u30c7\u30a3\u30a2", "Solin\u30b3\u30f3\u30c6\u30f3\u30c4"),
+])
+def test_shipped_german_and_japanese_beta_presets_keep_new_localized_labels(idle_name, media_name, content_name):
+    from solin.core.scenes.model import SceneDocument
+    from solin.core.scenes.presets import convert_pristine_beta_preset
+
+    raw = _beta_preset_record()
+    raw["sources"][-1]["name"] = idle_name
+    raw["scenes"][0]["layers"][0]["name"] = idle_name
+    document = SceneDocument.from_record(raw)
+    selections = {BusId(route["bus_id"]): route["default_scene_id"] for route in raw["outputs"]}
+    names = replace(_names(), content_source=content_name, content_scene=media_name, content_layer=content_name)
+    converted = convert_pristine_beta_preset(document, names, selections=selections)
+    assert converted is not document
+    assert converted.scene(CONTENT_SCENE_ID).name == media_name
+    assert converted.source(CONTENT_SOURCE_ID).name == content_name
+    assert converted.scene(CONTENT_SCENE_ID).layers[0].name == content_name
