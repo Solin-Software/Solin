@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2172" height="724" viewBox="0 0 2172 724" role="img" aria-labelledby="title desc">
+  <title id="title">Solin</title>
+  <desc id="desc">Open-source media management and presentation</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="0.35">
+      <stop offset="0" stop-color="#030918"/>
+      <stop offset="0.48" stop-color="#0c1739"/>
+      <stop offset="1" stop-color="#263f88"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.93" cy="0.54" r="0.65">
+      <stop offset="0" stop-color="#9b8df3" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#6672d8" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#23376d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g>
+    <rect width="2172" height="724" rx="32" fill="url(#background)"/>
+    <rect width="2172" height="724" rx="32" fill="url(#glow)"/>
+    <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+      <text x="360" y="374" fill="#ffffff" font-size="210" font-weight="600" textLength="495" lengthAdjust="spacingAndGlyphs">Solin</text>
+      <text x="360" y="438" fill="#aaa4ff" font-size="50" textLength="1165" lengthAdjust="spacingAndGlyphs">Open-source media management and presentation</text>
+    </g>
+  </g>
+</svg>
