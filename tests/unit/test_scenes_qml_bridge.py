@@ -620,9 +620,12 @@ def test_bridge_add_content_adds_full_size_layers_and_reuses_presentation_source
     assert source.kind is SourceKind.SOLIN_CONTENT
     assert source.configuration.mode is SolinContentMode.PRESENTATION
     assert first.rect == NormalizedRect()
+    assert first.fit_mode is FitMode.CONTAIN
     bridge.createScene("Consideration")
     bridge.addContentSource()
-    assert controller.document.scene(bridge.selectedSceneId).layers[0].source_id == source.id
+    second = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert second.source_id == source.id
+    assert second.fit_mode is FitMode.CONTAIN
     assert not hasattr(bridge, "addIdleScreen")
     assert not hasattr(bridge, "contentIdle")
 
@@ -645,6 +648,7 @@ def test_bridge_add_content_creates_presentation_when_only_media_exists(scene_br
     assert source.name == "Solin Content"
     assert source.configuration.mode is SolinContentMode.PRESENTATION
     assert bridge.layersModel.get(0)["kind"] == "solin_content"
+    assert layer.fit_mode is FitMode.CONTAIN
 
 
 def test_bridge_add_content_reuses_arbitrary_presentation_identity(scene_bridge_factory) -> None:
@@ -659,7 +663,87 @@ def test_bridge_add_content_reuses_arbitrary_presentation_identity(scene_bridge_
     controller.documents.create_source(source)
     bridge.createScene("Talk")
     bridge.addContentSource()
-    assert controller.document.scene(bridge.selectedSceneId).layers[0].source_id == source.id
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert layer.source_id == source.id
+    assert layer.fit_mode is FitMode.CONTAIN
+
+
+def test_bridge_new_content_layer_preserves_existing_authored_transform_and_undo(
+    scene_bridge_factory,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    original = controller.document.scene(CONTENT_SCENE_ID).layers[0]
+    authored = replace(
+        original,
+        rect=NormalizedRect(x=0.1, y=0.2, width=0.6, height=0.5),
+        crop=Crop(left=0.1, top=0.2),
+        fit_mode=FitMode.COVER,
+    )
+    controller.documents.update_layer(CONTENT_SCENE_ID, original.id, authored)
+    bridge.createScene("Talk")
+    scene_id = bridge.selectedSceneId
+
+    bridge.addContentSource()
+
+    added = controller.document.scene(scene_id).layers[0]
+    assert added.source_id == authored.source_id
+    assert added.rect == NormalizedRect()
+    assert added.crop == Crop()
+    assert added.fit_mode is FitMode.CONTAIN
+    assert controller.document.scene(CONTENT_SCENE_ID).layers[0] == authored
+    controller.documents.undo()
+    assert not controller.document.scene(scene_id).layers
+    controller.documents.redo()
+    assert controller.document.scene(scene_id).layers == (added,)
+    assert controller.document.scene(CONTENT_SCENE_ID).layers[0] == authored
+
+
+@pytest.mark.parametrize("kind", [SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA])
+@pytest.mark.parametrize("over_content", [False, True])
+def test_bridge_new_camera_layers_contain_the_complete_frame(
+    scene_bridge_factory, kind: SourceKind, over_content: bool,
+) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    camera = SourceDefinition(
+        id=new_identity(), kind=kind, name="Stage camera",
+        configuration=(
+            LocalCameraConfig(device_id="stage-camera")
+            if kind is SourceKind.LOCAL_CAMERA
+            else RtspCameraConfig(uri="rtsp://camera.example/live")
+        ),
+    )
+    bridge.createScene("Stage")
+    if over_content:
+        bridge.addContentSource()
+    workspace.upsert_camera(camera, add_to_active_document=False)
+
+    bridge.addConfiguredCamera(camera.id)
+
+    layer = controller.document.scene(bridge.selectedSceneId).layers[-1]
+    assert layer.source_id == camera.id
+    assert layer.fit_mode is FitMode.CONTAIN
+    assert layer.crop == Crop()
+    assert layer.rect == (
+        NormalizedRect(x=0.72, y=0.68, width=0.25, height=0.25)
+        if over_content else NormalizedRect()
+    )
+
+
+def test_bridge_new_scene_reference_uses_generic_fit_and_allows_explicit_cover(
+    scene_bridge_factory,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    bridge.createScene("Nested camera")
+    bridge.addSceneReference(CAMERA_SCENE_ID)
+
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert layer.fit_mode is FitMode.CONTAIN
+    bridge.setLayerFit(layer.id, "cover")
+    changed = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert changed.fit_mode is FitMode.COVER
+    assert changed.to_record()["fit_mode"] == "cover"
+    controller.documents.undo()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == layer
 
 
 def test_bridge_preserves_enums_and_transform_contracts(scene_bridge_factory) -> None:

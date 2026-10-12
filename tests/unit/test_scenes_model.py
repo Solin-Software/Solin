@@ -26,6 +26,7 @@ from solin.core.scenes.model import (
     CameraPreset,
     CameraMediaType,
     ContentCategory,
+    FitMode,
     ImageSourceConfig,
     LocalCameraConfig,
     NormalizedRect,
@@ -79,6 +80,20 @@ def _document() -> SceneDocument:
         document_id="test-scene-document",
         created_at="2026-08-02T12:00:00+00:00",
     )
+
+
+def test_new_layer_and_record_without_fit_contain_the_complete_source() -> None:
+    layer = SceneLayer(id="layer", source_id="source", name="Source")
+    assert layer.fit_mode is FitMode.CONTAIN
+    record = layer.to_record()
+    del record["fit_mode"]
+    assert SceneLayer.from_record(record).fit_mode is FitMode.CONTAIN
+
+
+@pytest.mark.parametrize("fit_mode", tuple(FitMode))
+def test_saved_layer_preserves_its_explicit_fit_mode(fit_mode: FitMode) -> None:
+    layer = SceneLayer(id="layer", source_id="source", name="Source", fit_mode=fit_mode)
+    assert SceneLayer.from_record(layer.to_record()) == layer
 
 
 def test_default_document_has_stable_sources_scenes_and_two_output_buses() -> None:

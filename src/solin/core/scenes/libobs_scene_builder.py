@@ -14,7 +14,7 @@ from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
-from solin.core.scenes.model import Crop, NormalizedRect
+from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, Crop, NormalizedRect
 from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.libobs_transitions import (
     FALLBACK_TRANSITION_KIND,
@@ -67,7 +67,6 @@ def _parse_color(hex_color: str) -> int:
     return _PLACEHOLDER_COLOR
 
 
-_DEFAULT_FIT_MODE = "contain"
 # libobs centres bounded content when no edge flag is set; there is no CENTER member.
 _CENTER_ALIGNMENT = 0
 
@@ -83,7 +82,7 @@ def _bounds_type(ob: Any, fit_mode: str) -> Any:
 
 
 def _layer_fit_mode(layer: dict) -> str:
-    return str(layer.get("fit_mode") or _DEFAULT_FIT_MODE)
+    return str(layer.get("fit_mode") or DEFAULT_LAYER_FIT_MODE.value)
 
 
 class LibobsSceneGraph:
