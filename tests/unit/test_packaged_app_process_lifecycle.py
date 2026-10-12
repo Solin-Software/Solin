@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import os
+import selectors
 import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from pathlib import Path
+from typing import BinaryIO
 
 import pytest
 
@@ -83,8 +86,8 @@ def _launcher(tmp_path: Path, *, early_exit: bool = False, ignore_term: bool = F
         "server = socket.socket(socket.AF_UNIX)\n"
         "server.bind(sys.argv[1])\n"
         "server.listen()\n"
-        "open(sys.argv[1] + '.ready', 'w').write('listening')\n"
-        "print('ready', flush=True)\n"
+        "open(sys.argv[1] + '.ready', 'w').write(sys.argv[2])\n"
+        "print('ready ' + sys.argv[2], flush=True)\n"
         "while True: time.sleep(1)\n",
         encoding="utf-8",
     )
@@ -92,13 +95,39 @@ def _launcher(tmp_path: Path, *, early_exit: bool = False, ignore_term: bool = F
     launcher.write_text(
         f"#!{sys.executable}\n"
         "import subprocess, sys, time\n"
-        f"child = subprocess.Popen([sys.executable, {str(child)!r}, sys.argv[1]], stdout=subprocess.PIPE)\n"
-        "assert child.stdout.readline() == b'ready\\n'\n"
+        f"child = subprocess.Popen([sys.executable, {str(child)!r}, *sys.argv[1:]], stdout=subprocess.PIPE)\n"
+        "ready = child.stdout.readline()\n"
+        "assert ready == ('ready ' + sys.argv[2] + '\\n').encode()\n"
+        "sys.stdout.buffer.write(ready)\n"
+        "sys.stdout.buffer.flush()\n"
         + ("sys.exit(0)\n" if early_exit else "child.wait()\n"),
         encoding="utf-8",
     )
     launcher.chmod(0o755)
     return launcher
+
+
+def _assert_launcher_survives_startup(launcher: Path, listener: Path) -> None:
+    launch_id = uuid.uuid4().hex
+
+    def wait_for_ready(stream: BinaryIO) -> None:
+        # This is a failure watchdog, not an assumed initialization duration.
+        with selectors.DefaultSelector() as selector:
+            selector.register(stream, selectors.EVENT_READ)
+            assert selector.select(timeout=10), "The fixture did not acknowledge readiness."
+        assert stream.readline() == f"ready {launch_id}\n".encode(), (
+            "The fixture acknowledged a different launch."
+        )
+        assert Path(str(listener) + ".ready").read_text() == launch_id, (
+            "The readiness marker belongs to a different launch."
+        )
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(0.1)
+            client.connect(str(listener))
+
+    assert_process_survives_startup(
+        launcher, args=(str(listener), launch_id), wait_for_ready=wait_for_ready,
+    )
 
 
 def _assert_no_listener(path: Path) -> None:
@@ -136,9 +165,9 @@ def test_startup_cleanup_stops_children_even_if_launcher_exits(process_root, mon
     try:
         if early_exit:
             with pytest.raises(pytest.fail.Exception, match="exited during startup with 0"):
-                assert_process_survives_startup(launcher, args=(str(listener),))
+                _assert_launcher_survives_startup(launcher, listener)
         else:
-            assert_process_survives_startup(launcher, args=(str(listener),))
+            _assert_launcher_survives_startup(launcher, listener)
         _assert_no_listener(listener)
     finally:
         # Rescue descendants when this regression is exercised on the old helper.
@@ -151,7 +180,7 @@ def test_startup_cleanup_escalates_for_unresponsive_descendants(process_root, mo
     launcher = _launcher(process_root, ignore_term=True)
     listener = process_root / "ipc.sock"
     try:
-        assert_process_survives_startup(launcher, args=(str(listener),))
+        _assert_launcher_survives_startup(launcher, listener)
         _assert_no_listener(listener)
     finally:
         _rescue_child(listener)
@@ -163,7 +192,7 @@ def test_sequential_launches_can_reuse_the_same_ipc_endpoint(process_root, monke
     listener = process_root / "ipc.sock"
     try:
         for _ in range(2):
-            assert_process_survives_startup(launcher, args=(str(listener),))
+            _assert_launcher_survives_startup(launcher, listener)
             _assert_no_listener(listener)
             listener.unlink()
     finally:
@@ -179,7 +208,7 @@ def test_cleanup_keeps_unrelated_ipc_listeners_alive(process_root, monkeypatch):
         unrelated.bind(str(unrelated_path))
         unrelated.listen()
         try:
-            assert_process_survives_startup(launcher, args=(str(listener),))
+            _assert_launcher_survives_startup(launcher, listener)
             _assert_no_listener(listener)
             with socket.socket(socket.AF_UNIX) as client:
                 client.settimeout(1)
