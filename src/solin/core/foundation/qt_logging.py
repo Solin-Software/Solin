@@ -19,21 +19,9 @@ QT_DIAGNOSTIC_LOGGING_ENABLED = True
 
 _QT_LOGGER_NAME = "solin.qt"
 _QT_BASE_LOGGING_RULES = ("qt.qpa.mime=false",)
-_QT_DIAGNOSTIC_LOGGING_RULES = (
-    "qt.multimedia.warning=true",
-    "qt.multimedia.critical=true",
-    "qt.multimedia.*.warning=true",
-    "qt.multimedia.*.critical=true",
-)
-_QT_DISABLED_LOGGING_RULES = ("qt.multimedia.ffmpeg=false",)
-_LEGACY_DISABLED_RULES = frozenset(_QT_DISABLED_LOGGING_RULES)
 
 _IGNORED_MESSAGE_FRAGMENTS = (
     "cannot be used as a native child widget",
-    # Some playable H.264/AVI streams carry no packet PTS. Qt reconstructs the
-    # cadence successfully but emits this warning once per frame, so routing it
-    # through Python creates sustained work without an actionable diagnostic.
-    "QFFmpeg::Demuxer received AVPacket with pts == AV_NOPTS_VALUE",
 )
 _MAX_MESSAGE_LENGTH = 8 * 1024
 _MAX_CONTEXT_LENGTH = 512
@@ -215,20 +203,12 @@ class QtMessageRouter:
 _ROUTER = QtMessageRouter()
 
 
-def configure_qt_logging_rules(
-    *,
-    enabled: bool = QT_DIAGNOSTIC_LOGGING_ENABLED,
-) -> None:
+def configure_qt_logging_rules() -> None:
     """Set Qt category rules before importing Qt while preserving caller rules."""
     existing = os.environ.get("QT_LOGGING_RULES", "")
     entries = [entry.strip() for entry in existing.split(";") if entry.strip()]
-    if enabled:
-        entries = [entry for entry in entries if entry not in _LEGACY_DISABLED_RULES]
-        required = _QT_BASE_LOGGING_RULES + _QT_DIAGNOSTIC_LOGGING_RULES
-    else:
-        required = _QT_BASE_LOGGING_RULES + _QT_DISABLED_LOGGING_RULES
     configured = set(entries)
-    entries.extend(rule for rule in required if rule not in configured)
+    entries.extend(rule for rule in _QT_BASE_LOGGING_RULES if rule not in configured)
     os.environ["QT_LOGGING_RULES"] = ";".join(entries)
 
 

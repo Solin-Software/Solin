@@ -153,7 +153,7 @@ def test_remote_audio_invalid_embedded_image_is_failure_not_absence(monkeypatch)
     extractor.cancel()
 
 
-def test_remote_title_only_result_does_not_start_qmedia_stream(monkeypatch):
+def test_remote_title_only_result_skips_stream_metadata_extraction(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         media_info_module,
@@ -185,7 +185,7 @@ def test_remote_title_only_result_does_not_start_qmedia_stream(monkeypatch):
     assert len(scheduled) == 1
 
 
-def test_remote_title_only_failure_retries_without_qmedia_stream(monkeypatch):
+def test_remote_title_only_failure_retries_without_stream_metadata_extraction(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         media_info_module,
@@ -1094,7 +1094,7 @@ def test_duration_only_request_does_not_cache_or_emit_opportunistic_media(
     assert disk_writes == []
 
 
-def test_remote_audio_duration_requirement_falls_back_to_qmedia(
+def test_remote_audio_duration_requirement_falls_back_to_metadata_extraction(
     monkeypatch,
     tmp_path,
 ):

@@ -35,7 +35,6 @@ class ShutdownServices:
     program_content: Any | None = None
     content_frame_ingress: Any | None = None
     scene_frame_egresses: tuple[Any, ...] = ()
-    camera: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,9 +131,8 @@ class ShutdownController:
     def stop_media_services(self) -> None:
         services = self._dependencies.services
         services.projection_integrations.cleanup()
-        # Stop the scene data plane in reverse dependency order. Producers must
-        # stop before their consumers so no frame worker can be left waiting on
-        # a mapping/mutex that disappeared with the native engine.
+        # Close recording and content ingress, then join app-side frame workers
+        # before closing the scene runtime and its libobs sidecar.
         if services.program_recording is not None:
             services.program_recording.close()
         if services.program_content is not None:
@@ -148,8 +146,6 @@ class ShutdownController:
         services.background_song.shutdown()
         services.media_controller.stop()
         services.ndi.stop(wait=True)
-        if services.camera is not None:
-            services.camera.stop()
         services.obs.stop(wait=True)
         services.zoom.stop(wait=True)
 

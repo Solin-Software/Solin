@@ -1,10 +1,7 @@
-"""Factory + selection for the libobs scene engine (a supervised sidecar).
+"""Factory for the supervised libobs scene engine.
 
-The libobs engine reuses main's :class:`~solin.core.scenes.process_engine.SubprocessSceneEngine`
-supervision (launch, heartbeat, restart, IPC) but points it at the libobs sidecar
-(:mod:`solin.core.scenes.libobs_sidecar`) instead of the native GStreamer
-executable. On this branch libobs is THE engine, so it is selected by default;
-``SOLIN_SCENE_ENGINE`` only exists as an escape hatch to opt back out.
+The sidecar uses the shared process supervisor for launch, heartbeat, restart
+and IPC on every supported platform.
 """
 
 from __future__ import annotations
@@ -20,19 +17,6 @@ from solin.core.scenes.process_engine import (
 )
 
 _SIDECAR_MODULE = "solin.core.scenes.libobs_sidecar"
-ENGINE_SELECTION_ENV = "SOLIN_SCENE_ENGINE"
-_LIBOBS_SELECTION_VALUE = "libobs"
-
-
-def libobs_scene_engine_selected() -> bool:
-    """True unless the operator explicitly asked for a different engine.
-
-    libobs is the only media engine on this branch, so it is the default and
-    needs no environment variable. ``SOLIN_SCENE_ENGINE`` remains an escape
-    hatch: set it to anything other than ``libobs`` (e.g. ``native``) to opt out.
-    """
-    selection = os.environ.get(ENGINE_SELECTION_ENV, "").strip().lower()
-    return not selection or selection == _LIBOBS_SELECTION_VALUE
 
 
 def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessSceneEngine:
@@ -40,9 +24,7 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
 
     Source runs launch ``<python> -m solin.core.scenes.libobs_sidecar``; compiled
     runs launch the application executable in its dedicated sidecar role. Both use
-    ``SubprocessSceneEngine`` client that drives the native engine, so all of the
-    supervision / heartbeat / restart / protocol machinery is shared. No
-    GStreamer runtime is configured (libobs is self-contained via pylibobs).
+    the shared ``SubprocessSceneEngine`` supervisor; libobs is provided by pylibobs.
 
     ``images_dir`` (the profile's scene images directory) is exported so the
     sidecar can resolve image scene sources' asset ids to files; it is passed
@@ -50,8 +32,6 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
     when it launches the sidecar).
     """
     if images_dir is not None:
-        # Callers may hand this over as a plain string; libobs is the default
-        # engine now, so this runs on every start and must not care.
         images_dir = Path(images_dir)
         os.environ["SOLIN_SCENE_IMAGES_DIR"] = str(images_dir)
     return SubprocessSceneEngine(

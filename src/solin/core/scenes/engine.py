@@ -103,9 +103,7 @@ class SceneEngineStatus(StrEnum):
 
 
 class FrameChannelTransport(StrEnum):
-    D3D11_SHARED_TEXTURE = "d3d11_shared_texture"
     SHARED_MEMORY_BGRA = "shared_memory_bgra"
-    SHARED_MEMORY_VIDEO = "shared_memory_video"
 
 
 class FrameProducerKind(StrEnum):
@@ -129,7 +127,6 @@ class SceneEngineCapabilities:
     rtsp_cameras: bool
     hardware_compositing: bool
     virtual_camera: bool
-    d3d11_shared_textures: bool
     program_recording: bool
     audio_input_capture: bool
     system_audio_capture: bool
@@ -142,7 +139,6 @@ class SceneEngineCapabilities:
             self.rtsp_cameras,
             self.hardware_compositing,
             self.virtual_camera,
-            self.d3d11_shared_textures,
             self.program_recording,
             self.audio_input_capture,
             self.system_audio_capture,
@@ -310,21 +306,8 @@ class FrameChannelDescriptor:
         _bounded_int(self.height, 1, 4320, "frame height")
         if not isinstance(self.pixel_format, VideoPixelFormat):
             raise ValueError("Invalid frame pixel format")
-        if (
-            self.transport is FrameChannelTransport.SHARED_MEMORY_BGRA
-            and self.pixel_format is not VideoPixelFormat.BGRA
-        ):
+        if self.pixel_format is not VideoPixelFormat.BGRA:
             raise ValueError("Shared-memory frame channels require BGRA pixels")
-        if (
-            self.transport is FrameChannelTransport.SHARED_MEMORY_VIDEO
-            and self.pixel_format is not VideoPixelFormat.DYNAMIC
-        ):
-            raise ValueError("Dynamic shared-memory channels require dynamic pixels")
-        if self.pixel_format is VideoPixelFormat.DYNAMIC and self.transport not in {
-            FrameChannelTransport.SHARED_MEMORY_VIDEO,
-            FrameChannelTransport.D3D11_SHARED_TEXTURE,
-        }:
-            raise ValueError("Dynamic pixels require a dynamic video channel")
         if not isinstance(self.color_space, VideoColorSpace):
             raise ValueError("Invalid frame color space")
         if not isinstance(self.color_range, VideoColorRange):

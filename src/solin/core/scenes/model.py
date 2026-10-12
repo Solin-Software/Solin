@@ -17,7 +17,7 @@ MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
 MAXIMUM_CAMERA_SOURCE_FPS = 60
-# GStreamer stores each exact rational component as a signed 32-bit integer.
+# Exact camera FPS rational components are bounded to signed 32-bit integers.
 MAXIMUM_CAMERA_FPS_COMPONENT = 2_147_483_647
 MAX_SOURCES = 256
 MAX_SCENES = 256
@@ -262,7 +262,6 @@ class SceneTransitionPolicy:
 
 
 class VideoPixelFormat(StrEnum):
-    DYNAMIC = "dynamic"
     BGRA = "bgra"
     NV12 = "nv12"
 
@@ -527,10 +526,7 @@ class VideoFormat:
         frames_per_second = self.fps_numerator / self.fps_denominator
         if not 1.0 <= frames_per_second <= 240.0:
             raise SceneValidationError("Video frame rate must be between 1 and 240 fps")
-        if (
-            not isinstance(self.pixel_format, VideoPixelFormat)
-            or self.pixel_format is VideoPixelFormat.DYNAMIC
-        ):
+        if not isinstance(self.pixel_format, VideoPixelFormat):
             raise SceneValidationError("Invalid video pixel format")
         if not isinstance(self.color_space, VideoColorSpace):
             raise SceneValidationError("Invalid video color space")

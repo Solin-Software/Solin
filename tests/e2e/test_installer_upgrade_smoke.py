@@ -367,15 +367,39 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             obsolete_extension = install_dir / "backports" / "zstd" / "_obsolete.pyd"
             obsolete_extension.parent.mkdir(parents=True, exist_ok=True)
             obsolete_extension.write_bytes(b"previous build extension")
+            obsolete_engine = install_dir / "native" / "media-engine"
+            for relative in (
+                "solin-media-engine.exe",
+                "qt-media-bridge/obsolete.pyd",
+                "gstreamer/bin/obsolete.dll",
+            ):
+                path = obsolete_engine / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"retired engine payload")
             unrelated_file = install_dir / "user-kept.txt"
             unrelated_file.write_text("user-owned file", encoding="utf-8")
+            unrelated_native = install_dir / "native" / "user-kept.dll"
+            unrelated_native.write_bytes(b"user-owned native file")
 
             _run_installer(new_installer, install_dir, env, "user")
             assert not obsolete_extension.exists(), "obsolete Python extension survived upgrade"
+            assert not obsolete_engine.exists(), "retired media-engine payload survived upgrade"
             assert unrelated_file.read_text(encoding="utf-8") == "user-owned file"
+            assert unrelated_native.read_bytes() == b"user-owned native file"
             assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "user")
             registration_paths = _camera_registration_paths("user")
+            for architecture, managed_filter in registration_paths.items():
+                packaged_filter = (
+                    install_dir
+                    / "native"
+                    / "virtual-camera"
+                    / architecture
+                    / "solin-virtual-camera.dll"
+                )
+                assert packaged_filter.read_bytes() == managed_filter.read_bytes(), (
+                    f"installed and managed {architecture} camera filters differ"
+                )
             _run_rollback_injection(rollback_installer, install_dir, env, "user")
             assert _camera_registration_paths("user") == registration_paths
             _assert_camera_registered(env, "user")

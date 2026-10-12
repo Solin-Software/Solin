@@ -1,10 +1,4 @@
-"""Zoom and pan must reach the projected frame.
-
-Framing travels beside the pixels as a control, and under the libobs engine
-nothing consumed it: the publisher's set_image_transform is a no-op, so an image
-was shown unframed however the operator had zoomed or panned it. The framing is
-now baked into the published frame, the way the retired native compositor did it.
-"""
+"""Published image pixels include the operator's zoom and pan."""
 
 from __future__ import annotations
 

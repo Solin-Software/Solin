@@ -77,7 +77,6 @@ class MediaProjectionContext:
     playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
     content_frame_sink: Callable[[object], None] = _discard_content_frame
-    camera_service: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,8 +331,6 @@ class MediaProjectionController:
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.ndi_service.stop()
-        if context.camera_service is not None:
-            context.camera_service.stop()
         context.media_controller.stop()
         context.ndi_service.stop()
 
@@ -431,8 +428,6 @@ class MediaProjectionController:
             self._session.set_tab_projection_active(True)
             context.media_controller.stop()
             context.ndi_service.stop()
-            if context.camera_service is not None:
-                context.camera_service.stop()
             context.projection_bar.set_playlist([])
             for projection_window in context.projection_windows():
                 projection_window.clear()
@@ -755,8 +750,6 @@ class MediaProjectionController:
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
         context.ndi_service.stop()
-        if context.camera_service is not None:
-            context.camera_service.stop()
         if playlist is not None:
             if playback_order is None:
                 context.projection_bar.set_playlist(

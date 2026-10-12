@@ -9,8 +9,7 @@ Used both directions of the libobs sidecar boundary:
   editor preview (sidecar = writer, app = reader/creator).
 
 Either side may **create** the block; the other **attaches** to it by name.
-main's transport is Windows-only shared memory + D3D11; this is the
-cross-platform equivalent on :class:`multiprocessing.shared_memory.SharedMemory`
+The channel uses :class:`multiprocessing.shared_memory.SharedMemory`
 (POSIX shm on Linux/macOS, a named file mapping on Windows).
 
 One writer and one reader share a fixed-size block: a small header + a BGRA

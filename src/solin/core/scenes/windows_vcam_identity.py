@@ -1,6 +1,6 @@
 r"""Per-user identity for the Windows virtual-camera broker pipe.
 
-Mirrors ``native/media_engine/src/windows_virtual_camera_contract.cpp`` so the
+Mirrors ``native/virtual_camera/src/windows_virtual_camera_contract.cpp`` so the
 Python broker binds the exact pipe name the registered DirectShow filter probes:
 
     \\.\pipe\Solin.VirtualCamera.FrameBroker.v3.<hash>

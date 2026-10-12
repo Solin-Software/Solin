@@ -16,20 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from ..core.meetings.preparation import MeetingPreparationService
-from ..core.scenes.libobs_engine import libobs_scene_engine_selected
-
-
-def _scenes_ui_enabled() -> bool:
-    """Whether to expose the Scenes UI: any platform once a scene engine backs it.
-
-    The native engine ships only on Windows (``NATIVE_SCENES_SUPPORTED``), but the
-    libobs sidecar engine runs on every platform when ``SOLIN_SCENE_ENGINE=libobs``
-    is selected — matching exactly when bootstrap actually creates a scene engine,
-    so the UI never appears without an engine behind it.
-    """
-    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
 from ..styles.icons import (
     ICON_CLAPPERBOARD,
     ICON_MENU,
@@ -157,8 +144,6 @@ class MainWindowUiContext:
     jw_songs_store: Any
     jwpub_service_factory: Callable[[QObject], Any]
     memorial_service_factory: Callable[[QObject], Any]
-    camera_service: Any | None = None
-    camera_settings: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,8 +162,6 @@ class MainWindowUiHandlers:
     quick_obs_return_scene_change: Callable[..., Any]
     project_obs_stream: Callable[..., Any]
     profile_switch_requested: Callable[..., Any]
-    project_camera_stream: Callable[..., Any] | None = None
-    camera_selection_changed: Callable[..., Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,19 +258,11 @@ class MainWindowUiController:
 
     @classmethod
     def nav_button_specs(cls) -> tuple[tuple[str, str, str, int], ...]:
-        if _scenes_ui_enabled():
-            return cls._NAV_BUTTON_SPECS
-        return tuple(
-            spec for spec in cls._NAV_BUTTON_SPECS if spec[0] != "nav_scenes_btn"
-        )
+        return cls._NAV_BUTTON_SPECS
 
     @classmethod
     def sidebar_layout_order(cls) -> tuple[str, ...]:
-        if _scenes_ui_enabled():
-            return cls._SIDEBAR_LAYOUT_ORDER
-        return tuple(
-            name for name in cls._SIDEBAR_LAYOUT_ORDER if name != "nav_scenes_btn"
-        )
+        return cls._SIDEBAR_LAYOUT_ORDER
 
     def build_ui(self) -> MainWindowUiResources:
         context = self._context
@@ -367,8 +342,7 @@ class MainWindowUiController:
             int(MainPage.SETTINGS): pages.settings_widget.qml_load_handle,
             int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
         }
-        if _scenes_ui_enabled():
-            on_demand_tasks[int(MainPage.SCENES)] = pages.scenes_widget.preparation_handle
+        on_demand_tasks[int(MainPage.SCENES)] = pages.scenes_widget.preparation_handle
         preparation = UiPreparationCoordinator(
             {
                 -4: quick_toolbar.qml_load_handle,
@@ -725,12 +699,8 @@ class MainWindowUiController:
             obs_settings=context.obs_settings,
             app_settings=context.app_settings,
             background_song_service=context.background_song_service,
-            scene_runtime=(context.scene_runtime if _scenes_ui_enabled() else None),
-            program_recording=(
-                context.program_recording if _scenes_ui_enabled() else None
-            ),
-            camera_service=context.camera_service,
-            camera_settings=context.camera_settings,
+            scene_runtime=context.scene_runtime,
+            program_recording=context.program_recording,
         )
         toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)

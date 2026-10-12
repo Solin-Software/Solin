@@ -4,8 +4,7 @@ Implements the :class:`~solin.controllers.content_frame_ingress_controller._Fram
 protocol on top of the cross-platform :class:`SharedFrameChannelWriter`, so
 ``ContentFrameIngressController`` can push the app's rendered content (timers,
 browser, framed images) to the libobs sidecar as a ``SHARED_MEMORY_BGRA``
-channel. Injected at bootstrap when the libobs engine is selected, in place of
-main's Windows-only shared-memory / D3D11 publishers.
+channel. This is the default publisher for ``ContentFrameIngressController``.
 
 Media files are decoded by libobs (``ffmpeg_source``), not pushed through here —
 so this channel only ever carries BGRA content frames.
@@ -13,8 +12,7 @@ so this channel only ever carries BGRA content frames.
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from collections.abc import Buffer
 
 from solin.core.scenes.content_frame_channel import SharedFrameChannelWriter
 from solin.core.scenes.engine import (
@@ -27,8 +25,6 @@ from solin.core.scenes.model import (
     VideoColorSpace,
     VideoPixelFormat,
 )
-
-log = logging.getLogger(__name__)
 
 _CHANNEL_ID = "solin-content"
 
@@ -60,69 +56,18 @@ class SharedMemoryContentPublisher:
 
     def publish(
         self,
-        pixels: Any,
+        pixels: Buffer,
         *,
         frame_width: int,
         frame_height: int,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int:
-        return self._write(
-            bytes(pixels),
-            stride=frame_width * 4,
-            width=frame_width,
-            height=frame_height,
-            media_epoch=media_epoch,
-        )
-
-    def publish_planes(
-        self,
-        planes: tuple[Any, ...],
-        *,
-        plane_strides: tuple[int, ...],
-        frame_width: int,
-        frame_height: int,
-        pixel_format: VideoPixelFormat,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
-        media_epoch: int = 0,
-    ) -> int:
-        if pixel_format is not VideoPixelFormat.BGRA:
-            raise ValueError("the libobs content channel accepts only BGRA frames")
-        return self._write(
-            bytes(planes[0]),
-            stride=plane_strides[0],
-            width=frame_width,
-            height=frame_height,
-            media_epoch=media_epoch,
-        )
-
-    def _write(self, data: bytes, *, stride: int, width: int, height: int, media_epoch: int) -> int:
         self._writer.write(
-            data, stride=stride, width=width, height=height, media_epoch=media_epoch,
+            bytes(pixels), stride=frame_width * 4, width=frame_width,
+            height=frame_height, media_epoch=media_epoch,
         )
         self._sequence += 1
         return self._sequence
-
-    def set_media_epoch(self, media_epoch: int) -> None:
-        # Identity is published atomically with each frame; changing the header
-        # separately would relabel pixels from the previous presentation.
-        pass
-
-    def set_image_transform(
-        self,
-        transform: Any,
-        *,
-        media_epoch: int,
-        canvas_width: int,
-        canvas_height: int,
-        animate: bool,
-        duration_ms: int,
-    ) -> None:
-        # Image framing (Ken Burns / letterbox) is applied to the rendered frame
-        # before it reaches this channel, so this is a no-op for now.
-        pass
 
     def close(self) -> None:
         try:

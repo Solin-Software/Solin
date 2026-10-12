@@ -1,19 +1,17 @@
 """Per-user named-pipe broker for the Windows virtual-camera feed.
 
-Python reimplementation of ``native/media_engine/src/virtual_camera_broker.cpp``.
 The registered Solin DirectShow filter connects to a per-user pipe, sends a 32-byte
 v3 request, and expects a 640-byte response naming the shared-memory frame ring;
 on success it keeps the pipe open and streams ``0xA5`` presence markers while it
 consumes frames. This serves that handshake from the libobs sidecar.
 
-Only the frame *producer* differs from the native engine — the wire contract, the
-pipe name, the ACL, and the ring format are identical, so the same installed
-filter binds transparently.
+The wire contract and pipe identity are shared with the filter's consumer code
+in ``native/virtual_camera``. The libobs sidecar owns the broker and frame ring;
+the filter discovers and reads the ring through this handshake.
 
 The status-decision core (:func:`build_response_bytes`) is platform-neutral and
-unit-tested. The pipe server (:class:`WindowsVcamBroker`) is Windows-only ctypes
-over kernel32/advapi32 and is therefore only exercised on Windows hardware — it
-ships **unverified** from non-Windows build hosts.
+unit-tested. The pipe server (:class:`WindowsVcamBroker`) uses Windows-only ctypes
+over kernel32/advapi32; its operating-system integration requires Windows.
 """
 
 from __future__ import annotations
@@ -58,8 +56,7 @@ class VcamBrokerEndpoint:
     fps_denominator: int
 
 
-# Returns the current endpoint, or ``None`` when the ring is not ready — matching
-# the C++ ``frame_sink_->endpoint()`` optional.
+# Returns the current endpoint, or ``None`` when the ring is not ready.
 EndpointProvider = Callable[[], Optional[VcamBrokerEndpoint]]
 
 
@@ -71,7 +68,7 @@ def build_response_bytes(
 ) -> bytes:
     """Decode a request and produce the 640-byte response (broker decision core).
 
-    Mirrors ``handle_client``'s status selection: an unparseable request →
+    Selects the protocol status: an unparseable request →
     ``invalid_request``; an unauthorized client → ``unauthorized``; no ring yet →
     ``transport_unavailable``; otherwise ``ok`` with the ring coordinates. The
     response always echoes the request nonce (zeroed if the request was junk).

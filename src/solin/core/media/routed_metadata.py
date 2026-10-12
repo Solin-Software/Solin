@@ -1,13 +1,10 @@
 """Title + cover-art extraction for libobs-decoded media, via ffprobe/ffmpeg.
 
-libobs is the only media engine, so ``QMediaPlayer`` no longer loads playing files
-and its ``metaDataChanged`` never fires. This reads the title tag + embedded cover
-art out of band with the ``ffprobe``/``ffmpeg`` CLIs (see
+This reads the title tag and embedded cover art out of band with the ``ffprobe``/``ffmpeg`` CLIs (see
 :mod:`solin.core.media.ffprobe_metadata`) on a worker thread, and delivers the
 result as a ``QPixmap`` built on the GUI thread.
 
-Only the embedded cover image is used — never a decoded frame — matching the
-metadata the projection bar showed before the migration.
+Only the embedded cover image is used for metadata artwork.
 """
 
 from __future__ import annotations

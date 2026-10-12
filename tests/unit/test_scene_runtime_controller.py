@@ -310,7 +310,6 @@ class _Engine:
                 rtsp_cameras=True,
                 hardware_compositing=True,
                 virtual_camera=True,
-                d3d11_shared_textures=True,
                 program_recording=True,
                 audio_input_capture=True,
                 system_audio_capture=True,
@@ -1312,7 +1311,6 @@ def _preview_egress_descriptor() -> FrameChannelDescriptor:
 
 
 def _content_ingress_descriptor(
-    transport: FrameChannelTransport,
     *,
     generation: int,
 ) -> FrameChannelDescriptor:
@@ -1320,29 +1318,17 @@ def _content_ingress_descriptor(
         channel_id="content-ingress",
         generation=generation,
         producer_kind=FrameProducerKind.SOLIN_OFFSCREEN,
-        transport=transport,
+        transport=FrameChannelTransport.SHARED_MEMORY_BGRA,
         handle_token=f"content-ingress-{generation}",
         width=1920,
         height=1080,
-        pixel_format=(
-            VideoPixelFormat.NV12
-            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
-            else VideoPixelFormat.DYNAMIC
-        ),
-        color_space=(
-            VideoColorSpace.BT709
-            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
-            else VideoColorSpace.SRGB
-        ),
-        color_range=(
-            VideoColorRange.LIMITED
-            if transport is FrameChannelTransport.D3D11_SHARED_TEXTURE
-            else VideoColorRange.FULL
-        ),
+        pixel_format=VideoPixelFormat.BGRA,
+        color_space=VideoColorSpace.SRGB,
+        color_range=VideoColorRange.FULL,
     )
 
 
-def test_content_transport_hydration_preserves_live_program_before_animated_take(request) -> None:
+def test_content_ingress_generation_hydration_preserves_live_program_before_animated_take(request) -> None:
     class _PendingPrepareEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1368,20 +1354,14 @@ def test_content_transport_hydration_preserves_live_program_before_animated_take
         ),
     )
     controller.set_content_ingress(
-        _content_ingress_descriptor(
-            FrameChannelTransport.SHARED_MEMORY_VIDEO,
-            generation=1,
-        )
+        _content_ingress_descriptor(generation=1)
     )
     controller.start_engine()
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
     projection.set_type("video")
     controller.set_content_ingress(
-        _content_ingress_descriptor(
-            FrameChannelTransport.D3D11_SHARED_TEXTURE,
-            generation=2,
-        )
+        _content_ingress_descriptor(generation=2)
     )
 
     _, handoff = engine.snapshots[-1]
@@ -1392,7 +1372,7 @@ def test_content_transport_hydration_preserves_live_program_before_animated_take
     assert engine.preparations[-1][-1].kind is not TransitionKind.CUT
 
 
-def test_content_transport_retirement_waits_for_the_animated_program_exit(request) -> None:
+def test_content_ingress_generation_retirement_waits_for_the_animated_program_exit(request) -> None:
     class _SwitchablePrepareEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
@@ -1424,10 +1404,7 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit(reques
     )
     projection.set_type("video")
     controller.set_content_ingress(
-        _content_ingress_descriptor(
-            FrameChannelTransport.D3D11_SHARED_TEXTURE,
-            generation=1,
-        )
+        _content_ingress_descriptor(generation=1)
     )
     controller.start_engine()
     _deliver_controller_results(controller)
@@ -1436,10 +1413,7 @@ def test_content_transport_retirement_waits_for_the_animated_program_exit(reques
 
     projection.set_type("idle")
     controller.set_content_ingress(
-        _content_ingress_descriptor(
-            FrameChannelTransport.SHARED_MEMORY_VIDEO,
-            generation=2,
-        )
+        _content_ingress_descriptor(generation=2)
     )
 
     assert len(engine.snapshots) == 1
@@ -3924,7 +3898,7 @@ def test_graph_hydration_preserves_readiness_for_a_replaced_video_take(
     projection.set_type("image")
     controller.set_program_egress(
         replace(
-            _content_ingress_descriptor(FrameChannelTransport.SHARED_MEMORY_VIDEO, generation=1),
+            _content_ingress_descriptor(generation=1),
             channel_id="program-egress",
             producer_kind=FrameProducerKind.NATIVE_COMPOSITOR,
         )

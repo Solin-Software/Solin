@@ -105,7 +105,7 @@ class _ThemedVideoPreview(QWidget):
     """Native-surface host for sidecar-painted video.
 
     The libobs sidecar renders the operator's video into a shared native window handle
-    and letterboxes it internally, so there is no QtMultimedia presenter here.
+    and letterboxes it internally.
 
     The surface is inset to the canvas aspect rather than filling this widget. The
     sidecar's ``obs_display`` is only resized when a fresh window target reaches it, so
@@ -914,11 +914,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.media.media_ended.connect(self._on_media_ended)
         self.media.playback_source_changed.connect(self._on_playback_source_changed)
         # The buffer bar behind the playback position: how much of a streaming
-        # item is already cached on disk. The handler survived the QtMultimedia
-        # removal but its signal did not, so nothing had been driving it.
+        # item is already cached on disk.
         self.media.buffer_progress.connect(self._on_buffer_progress)
-        # The reconnecting slider animation: another handler left without an
-        # emitter by the QtMultimedia removal.
+        # Animate the slider while the media controller reports stream recovery.
         self.media.playback_recovery_changed.connect(self._on_playback_recovery_changed)
 
     def _sync_protected_media_controls(self) -> None:
@@ -1332,10 +1330,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def update_tab_live_preview(self, frame):
         """
-        Update the overlay with the projected tab's live frame (bug 2).
+        Update the overlay with the projected tab's live frame.
 
-        Called at the rate delivered by the live tab's native engine.
-        Render only while the overlay is expanded; no cost when minimized.
+        Accept QImage or QPixmap frames from the active projection feed.
+        Update the preview only while its overlay page is expanded and visible.
         """
         if (
             not self._expanded

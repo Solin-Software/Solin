@@ -2,8 +2,8 @@
 
 libobs is the only media engine: every source (local, cached, or remote/streamed)
 is decoded and composited by the sidecar's ``ffmpeg_source``, with audio routed to
-the host via monitoring. There is no QtMultimedia in the playback path. This
-controller adapts the app's transport API (play/pause/seek/volume/…) onto the
+the host via monitoring. This controller adapts the app's transport API
+(play/pause/seek/volume/…) onto the
 sidecar route and mirrors the sidecar's ``media_playback_state`` events back onto
 the Qt signals the UI binds to.
 
@@ -79,8 +79,8 @@ class MediaController(QObject):
         super().__init__(parent)
         self._settings = settings
         self._cache_manager = cache_manager
-        # Retained only for cache lookups / background caching (get_cached_path,
-        # start, cancel) — no Qt streaming or source-swap under the libobs engine.
+        # Cache lookups and background caching use get_cached_path/start/cancel;
+        # the libobs sidecar plays the selected source.
         self._downloader = downloader_factory(self)
         # The cache download runs behind a streaming item; report it so the
         # transport can show what is already safely on disk.

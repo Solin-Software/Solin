@@ -17,3 +17,6 @@ Source repository: https://github.com/Solin-Software/Solin
 
 Third-party components retain their respective copyright notices and licenses.
 This notice does not relicense those components.
+
+Windows DirectShow camera notices: native/virtual-camera/share/licenses/solin-virtual-camera.
+Source notices and dependency revisions: native/virtual_camera/THIRD_PARTY.md.

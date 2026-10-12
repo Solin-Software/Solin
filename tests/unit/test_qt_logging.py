@@ -5,6 +5,8 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
+import pytest
+
 from solin.core.foundation.qt_logging import (
     QtMessageRouter,
     configure_qt_logging_rules,
@@ -21,10 +23,10 @@ class _Mode(Enum):
 
 @dataclass(frozen=True)
 class _Context:
-    category: str = "qt.multimedia.ffmpeg.decoder"
-    file: str = r"C:\qt\src\qffmpegdecoder.cpp"
+    category: str = "qt.scenegraph.general"
+    file: str = r"C:\qt\src\qsgcontext.cpp"
     line: int = 412
-    function: str = "QFFmpegDecoder::decode"
+    function: str = "QSGContext::initialize"
 
 
 class _RecordingHandler(logging.Handler):
@@ -44,40 +46,43 @@ def _router(*, clock=lambda: 0.0) -> tuple[QtMessageRouter, _RecordingHandler]:
     return router, handler
 
 
-def test_qt_logging_rules_enable_actionable_multimedia_levels(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "existing",
+    [
+        "custom.category.debug=true",
+        "custom.category.debug=true;qt.qpa.mime=false",
+        " ; custom.category.debug=true ; ; qt.qpa.mime=false ; ",
+    ],
+)
+def test_qt_logging_rules_preserve_caller_rules_without_duplicates(monkeypatch, existing) -> None:
     monkeypatch.setenv(
         "QT_LOGGING_RULES",
-        "custom.category.debug=true;qt.multimedia.ffmpeg=false",
+        existing,
     )
 
     configure_qt_logging_rules()
     configure_qt_logging_rules()
 
     rules = [rule for rule in os.environ["QT_LOGGING_RULES"].split(";") if rule]
-    assert "custom.category.debug=true" in rules
-    assert "qt.multimedia.ffmpeg=false" not in rules
-    assert rules.count("qt.qpa.mime=false") == 1
-    assert rules.count("qt.multimedia.*.warning=true") == 1
-    assert rules.count("qt.multimedia.*.critical=true") == 1
-    assert not any(rule.endswith(".debug=true") for rule in rules if rule.startswith("qt."))
-    assert not any(rule.endswith(".info=true") for rule in rules if rule.startswith("qt."))
+    assert rules == ["custom.category.debug=true", "qt.qpa.mime=false"]
 
 
-def test_qt_logging_rules_restore_quiet_ffmpeg_mode_when_disabled(monkeypatch) -> None:
-    monkeypatch.delenv("QT_LOGGING_RULES", raising=False)
+@pytest.mark.parametrize("existing", [None, "", " ; ; "])
+def test_qt_logging_rules_configure_generic_defaults(monkeypatch, existing) -> None:
+    if existing is None:
+        monkeypatch.delenv("QT_LOGGING_RULES", raising=False)
+    else:
+        monkeypatch.setenv("QT_LOGGING_RULES", existing)
 
-    configure_qt_logging_rules(enabled=False)
+    configure_qt_logging_rules()
 
-    rules = os.environ["QT_LOGGING_RULES"].split(";")
-    assert "qt.qpa.mime=false" in rules
-    assert "qt.multimedia.ffmpeg=false" in rules
-    assert "qt.multimedia.*.warning=true" not in rules
+    assert os.environ["QT_LOGGING_RULES"] == "qt.qpa.mime=false"
 
 
 def test_router_buffers_startup_warning_then_preserves_qt_context() -> None:
     router, handler = _router()
 
-    router.handle(_Mode.QtWarningMsg, _Context(), "Hardware decoder failed")
+    router.handle(_Mode.QtWarningMsg, _Context(), "Scene graph initialization failed")
     assert handler.messages == []
 
     router.mark_file_logging_ready()
@@ -86,10 +91,10 @@ def test_router_buffers_startup_warning_then_preserves_qt_context() -> None:
     level, message = handler.messages[0]
     assert level == logging.WARNING
     assert "severity=warning" in message
-    assert "category=qt.multimedia.ffmpeg.decoder" in message
-    assert "source=qffmpegdecoder.cpp:412" in message
-    assert "function=QFFmpegDecoder::decode" in message
-    assert message.endswith("Hardware decoder failed")
+    assert "category=qt.scenegraph.general" in message
+    assert "source=qsgcontext.cpp:412" in message
+    assert "function=QSGContext::initialize" in message
+    assert message.endswith("Scene graph initialization failed")
 
 
 def test_router_records_warning_critical_and_fatal_but_not_debug_or_info() -> None:
@@ -125,28 +130,15 @@ def test_router_suppresses_known_benign_native_child_warning() -> None:
     assert handler.messages == []
 
 
-def test_router_suppresses_repeated_ffmpeg_missing_pts_warning() -> None:
-    router, handler = _router()
-    router.mark_file_logging_ready()
-
-    router.handle(
-        _Mode.QtWarningMsg,
-        _Context(category="default", file="", line=0, function=""),
-        "QFFmpeg::Demuxer received AVPacket with pts == AV_NOPTS_VALUE",
-    )
-
-    assert handler.messages == []
-
-
 def test_router_bounds_repeated_warnings_but_never_suppresses_critical() -> None:
     now = [0.0]
     router, handler = _router(clock=lambda: now[0])
     router.mark_file_logging_ready()
 
     for _index in range(10):
-        router.handle(_Mode.QtWarningMsg, _Context(), "Decoder queue stalled")
+        router.handle(_Mode.QtWarningMsg, _Context(), "Render queue stalled")
     for _index in range(5):
-        router.handle(_Mode.QtCriticalMsg, _Context(), "Decoder crashed")
+        router.handle(_Mode.QtCriticalMsg, _Context(), "Renderer crashed")
 
     warning_messages = [message for level, message in handler.messages if level == logging.WARNING]
     critical_messages = [
@@ -157,11 +149,11 @@ def test_router_bounds_repeated_warnings_but_never_suppresses_critical() -> None
     assert len(critical_messages) == 5
 
     now[0] = 61.0
-    router.handle(_Mode.QtWarningMsg, _Context(), "Decoder queue stalled")
+    router.handle(_Mode.QtWarningMsg, _Context(), "Render queue stalled")
 
     warning_messages = [message for level, message in handler.messages if level == logging.WARNING]
     assert "Suppressed 7 identical Qt warnings" in warning_messages[-2]
-    assert warning_messages[-1].endswith("Decoder queue stalled")
+    assert warning_messages[-1].endswith("Render queue stalled")
 
 
 def test_router_keeps_each_log_entry_on_one_bounded_line() -> None:

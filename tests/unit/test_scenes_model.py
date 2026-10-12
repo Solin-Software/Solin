@@ -983,20 +983,19 @@ def test_engine_snapshot_requires_each_bus_once_and_known_scenes() -> None:
         )
 
 
+def test_video_pixel_format_rejects_removed_dynamic_layout() -> None:
+    with pytest.raises(ValueError):
+        VideoPixelFormat("dynamic")
+
+
 @pytest.mark.parametrize(
-    ("transport", "pixel_format", "accepted"),
+    ("pixel_format", "accepted"),
     [
-        (FrameChannelTransport.SHARED_MEMORY_BGRA, VideoPixelFormat.BGRA, True),
-        (FrameChannelTransport.SHARED_MEMORY_BGRA, VideoPixelFormat.NV12, False),
-        (FrameChannelTransport.SHARED_MEMORY_VIDEO, VideoPixelFormat.DYNAMIC, True),
-        (FrameChannelTransport.SHARED_MEMORY_VIDEO, VideoPixelFormat.BGRA, False),
-        (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.BGRA, True),
-        (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.NV12, True),
-        (FrameChannelTransport.D3D11_SHARED_TEXTURE, VideoPixelFormat.DYNAMIC, True),
+        (VideoPixelFormat.BGRA, True),
+        (VideoPixelFormat.NV12, False),
     ],
 )
-def test_frame_channel_transport_requires_a_compatible_pixel_layout(
-    transport: FrameChannelTransport,
+def test_shared_memory_frame_channel_requires_bgra_pixels(
     pixel_format: VideoPixelFormat,
     accepted: bool,
 ) -> None:
@@ -1004,7 +1003,7 @@ def test_frame_channel_transport_requires_a_compatible_pixel_layout(
         "channel_id": "content-1",
         "generation": 1,
         "producer_kind": FrameProducerKind.SOLIN_OFFSCREEN,
-        "transport": transport,
+        "transport": FrameChannelTransport.SHARED_MEMORY_BGRA,
         "handle_token": "handle-1",
         "width": 1920,
         "height": 1080,

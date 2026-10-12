@@ -98,7 +98,7 @@ def test_quality_gate_waits_for_every_platform():
     for target in quality["platforms"]["strategy"]["matrix"]["include"]:
         assert target["qt_platform"] == ("cocoa" if target["platform"] == "Darwin" else "offscreen")
     steps = {step.get("name"): step for step in quality["platforms"]["steps"]}
-    assert steps["Native protocol and benchmarks"]["if"] == "runner.os == 'Linux'"
+    assert steps["Virtual-camera transport tests"]["if"] == "runner.os == 'Linux'"
     windows = steps["Python suites on Windows"]
     assert windows["if"] == "runner.os == 'Windows'"
     assert "pytest tests/contract --durations=20" in windows["run"]

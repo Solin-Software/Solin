@@ -84,21 +84,9 @@ jobs:
         id: version
         run: python scripts/release.py metadata --github-output
 
-      - name: Cache pinned GStreamer installer
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: build/downloads/gstreamer-1.0-msvc-x86_64-*.exe
-          key: gstreamer-msvc-x86_64-${{ hashFiles('scripts/install_gstreamer_windows.ps1') }}
-
-      - name: Cache pinned Qt bridge SDK archives
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: build/downloads/qt-bridge-sdk
-          key: qt-bridge-sdk-6.11.1-${{ hashFiles('scripts/install_qt_bridge_sdk_windows.ps1') }}
-
-      - name: Build and test native media engine with GStreamer
+      - name: Build and test DirectShow virtual-camera filters
         shell: pwsh
-        run: python scripts\build_native_engine.py --configuration Release
+        run: python scripts\build_virtual_camera.py --configuration Release
 
       - name: Install Inno Setup
         shell: pwsh
@@ -197,18 +185,12 @@ jobs:
             --executable "$env:BUILD_DIR\main.dist\Solin.exe"
           if ($LASTEXITCODE -ne 0) { throw "Packaged libobs qualification failed." }
 
-      - name: Package native media engine and private runtime
+      - name: Package DirectShow virtual-camera filters
         shell: pwsh
         run: |
-          $runtimeRoot = & .\scripts\install_gstreamer_windows.ps1 `
-            -InstallType runtime `
-            -InstallDirectory build\dependencies\gstreamer-runtime\msvc_x86_64
-          if ([string]::IsNullOrWhiteSpace($runtimeRoot)) {
-            throw "GStreamer runtime bootstrap did not return an installation root."
-          }
-          python scripts\package_native_engine_windows.py `
-            --gstreamer-root "$runtimeRoot" `
+          python scripts\package_virtual_camera_windows.py `
             --application-dir "$env:BUILD_DIR\main.dist"
+          if ($LASTEXITCODE -ne 0) { throw "Virtual-camera packaging failed." }
 
       - name: Post-build cleanup
         shell: pwsh
@@ -217,21 +199,9 @@ jobs:
           if (-not (Test-Path "$dist\Solin.exe")) {
             throw "Solin.exe was not produced at $dist"
           }
-          if (-not (Test-Path "$dist\native\media-engine\solin-media-engine.exe")) {
-            throw "The native media engine was not packaged."
-          }
-          if (-not (Test-Path "$dist\native\media-engine\qt-media-bridge\solin_qt_media_bridge*.pyd")) {
-            throw "The Qt media bridge was not packaged."
-          }
-          if (-not (Test-Path "$dist\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll") -or
-              -not (Test-Path "$dist\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll")) {
+          if (-not (Test-Path "$dist\native\virtual-camera\x64\solin-virtual-camera.dll") -or
+              -not (Test-Path "$dist\native\virtual-camera\x86\solin-virtual-camera.dll")) {
             throw "The x86/x64 DirectShow virtual-camera filters were not packaged."
-          }
-          if (-not (Test-Path "$dist\native\media-engine\gstreamer\bin")) {
-            throw "The private GStreamer runtime was not packaged."
-          }
-          if (-not (Test-Path "$dist\native\media-engine\gstreamer\lib\gstreamer-1.0")) {
-            throw "The private GStreamer plugins were not packaged."
           }
           if (-not (Test-Path "$dist\sideview\sideview_native.dll")) {
             throw "The SideView Windows backend was not packaged."
@@ -381,8 +351,8 @@ jobs:
           SOLIN_E2E_ALLOW_INSTALLER_MUTATION: "1"
           SOLIN_E2E_STARTUP_SECONDS: "8"
           SOLIN_E2E_INSTALLER_TIMEOUT: "240"
-          SOLIN_DIRECTSHOW_HARNESS_X64: 'build\native\media-engine-gstreamer\Release\solin-virtual-camera-filter-tests.exe'
-          SOLIN_DIRECTSHOW_HARNESS_X86: 'build\native\directshow-filter-x86\Release\solin-virtual-camera-filter-tests.exe'
+          SOLIN_DIRECTSHOW_HARNESS_X64: 'build\native\virtual-camera-x64\Release\solin-virtual-camera-filter-tests.exe'
+          SOLIN_DIRECTSHOW_HARNESS_X86: 'build\native\virtual-camera-x86\Release\solin-virtual-camera-filter-tests.exe'
         run: |
           python -m pytest tests\e2e\test_installer_upgrade_smoke.py -q
 

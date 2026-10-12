@@ -47,7 +47,6 @@ CAPABILITIES: dict[str, bool] = {
     "rtsp_cameras": False,
     "hardware_compositing": False,
     "virtual_camera": False,
-    "d3d11_shared_textures": False,
     "program_recording": False,
     "audio_input_capture": False,
     "system_audio_capture": False,
@@ -713,7 +712,7 @@ class LibobsSidecarEngine:
             return _ack(request, applied=False, error_code="audio_config_failed",
                         error_message="could not apply the audio device selection")
         # A live change during a recording: republish the state so the app sees any
-        # device-unavailable warning (mirrors the native engine's mid-recording event).
+        # device-unavailable warning from the updated libobs capture sources.
         recorder = self._recorder
         if recorder is not None and recorder.active:
             self._emit_recording_state("recording", path=recorder.path, warnings=warnings)

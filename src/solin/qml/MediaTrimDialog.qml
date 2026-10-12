@@ -144,8 +144,7 @@ Dialog {
             return
         }
         previewPlayer.source = mediaSource
-        // No live preview without QtMultimedia: the item's known duration makes the
-        // range editor ready immediately.
+        // The item's known duration makes the range editor ready immediately.
         previewPrepared = durationMs > 0
         if (!previewPrepared)
             preparationError = qsTr("This media has no known duration to edit.")
@@ -190,10 +189,9 @@ Dialog {
 
     Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.58) }
 
-    // libobs is the only media engine and QtMultimedia is removed, so the trim
-    // dialog no longer previews playback. This inert stand-in keeps the range
-    // editor's bindings intact; the duration comes from the item (initialBaseTicks)
-    // and the range is set numerically / with the timeline handles.
+    // The trim dialog edits ranges without live playback. This object holds the
+    // range editor's position and source bindings; duration comes from the item
+    // (initialBaseTicks), and range changes use numeric fields or timeline handles.
     QtObject {
         id: previewPlayer
         objectName: "trimPreviewPlayer"

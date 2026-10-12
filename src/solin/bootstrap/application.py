@@ -29,7 +29,7 @@ from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
 )
-from solin.core.foundation.constants import IPC_SERVER_NAME, NATIVE_SCENES_SUPPORTED
+from solin.core.foundation.constants import IPC_SERVER_NAME
 from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
 
@@ -49,25 +49,12 @@ def _bind_source_credential_resolver(scene_engine, credentials) -> None:
     binder(resolve)
 
 
-def _scenes_engine_available() -> bool:
-    """True when a scene engine owns the cameras — native (Windows) or libobs.
-
-    When it does, the legacy Qt camera stack must stay off: a V4L2 device opens
-    once, so a second QCamera consumer racing libobs' ``v4l2_input`` triggers
-    "Camera is in use". Only build the legacy camera when nothing else drives it.
-    """
-    from solin.core.scenes.libobs_engine import libobs_scene_engine_selected
-
-    return NATIVE_SCENES_SUPPORTED or libobs_scene_engine_selected()
-
-
 def _build_main_window_profile_settings(profile_settings):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
     from solin.core.integrations.automation.settings import (
         AutoKeySettingsStore,
         AutoShareSettingsStore,
-        CameraSettingsStore,
         OBSSettingsStore,
         ZoomSettingsStore,
     )
@@ -97,11 +84,6 @@ def _build_main_window_profile_settings(profile_settings):
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
-        camera=(
-            CameraSettingsStore.for_profile_settings(profile_settings)
-            if not _scenes_engine_available()
-            else None
-        ),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
         meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_settings),
         media_countdown=(MediaCountdownSettingsStore.for_profile_settings(profile_settings)),
@@ -261,10 +243,6 @@ def _build_main_window_service_factories(
 
     install_id_provider = lambda: get_install_id(installation_settings)
 
-    # The legacy Qt (QtMultimedia) camera has been removed; the libobs sidecar
-    # owns camera capture/discovery, so no app-side camera service is created.
-    camera_factory = None
-
     def create_remote_services(parent):
         from typing import cast
 
@@ -355,7 +333,6 @@ def _build_main_window_service_factories(
         auto_key_dispatcher=AutoKeyDispatcher,
         obs_websocket=OBSWebSocketService,
         ndi_receiver=NDIReceiverService,
-        camera=camera_factory,
         zoom=ZoomService,
         background_song=BackgroundSongService,
         yeartext=lambda parent: YeartextService(
@@ -426,11 +403,7 @@ def _build_main_window_runtime(
         PlaylistStoragePaths,
     )
     from solin.core.foundation.resource_lanes import ResourceLaneRegistry
-    from solin.core.scenes.libobs_engine import (
-        create_libobs_scene_engine,
-        libobs_scene_engine_selected,
-    )
-    from solin.core.scenes.native_engine import create_native_scene_engine
+    from solin.core.scenes.libobs_engine import create_libobs_scene_engine
     from solin.core.scenes.ptz_runtime import create_ptz_runtime_services
 
     playlist_storage_paths = PlaylistStoragePaths(
@@ -494,14 +467,7 @@ def _build_main_window_runtime(
     watched_folder_playlist_store = WatchedFolderPlaylistStore()
     main_window_profile_settings = _build_main_window_profile_settings(profile_settings)
     scene_workspace = _build_scene_workspace(profile_paths)
-    # libobs is the default engine on this branch and runs on any platform;
-    # SOLIN_SCENE_ENGINE only opts back out to the native engine where supported.
-    if libobs_scene_engine_selected():
-        scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
-    elif NATIVE_SCENES_SUPPORTED:
-        scene_engine = create_native_scene_engine(runtime_paths.cache_dir)
-    else:
-        scene_engine = None
+    scene_engine = create_libobs_scene_engine(profile_paths.images_dir)
     ptz_services = create_ptz_runtime_services(active_profile.id)
     scene_workspace.set_credential_cleaner(ptz_services.credentials.delete)
     if scene_engine is not None:

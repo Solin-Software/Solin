@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+from PySide6.QtGui import QImage
+
 from solin.controllers.live_integration_controller import (
     LiveIntegrationContext,
     LiveIntegrationController,
@@ -211,6 +213,37 @@ def test_refresh_obs_stream_availability_updates_toolbar_state():
 
     assert window._quick_toolbar.obs_stream_available is True
     assert window._quick_toolbar.obs_stream_active is True
+
+
+def test_obs_ndi_stream_replaces_content_and_publishes_frames():
+    window = _WindowStub()
+    window._obs_settings.values["ndi_enabled"] = True
+    window._obs_settings.values["ndi_source"] = "Program"
+    stopped = []
+    streams = []
+    previews = []
+    window.media_ctrl = SimpleNamespace(stop=lambda: stopped.append(True))
+    window._ndi_service = SimpleNamespace(
+        start=lambda source, *, max_fps: streams.append((source, max_fps)),
+    )
+    window.proj_bar.set_playlist = lambda _items: None
+    window.proj_bar.is_expanded = lambda: False
+    window.proj_bar.activate_live_stream = lambda _title, *, keep_expanded: None
+    window.proj_bar.update_tab_live_preview = previews.append
+    controller = _controller(window)
+
+    controller.project_obs_ndi_stream()
+    image = QImage(2, 2, QImage.Format.Format_ARGB32)
+    image.fill(0xFF112233)
+    controller.on_obs_ndi_frame(image)
+
+    assert stopped == [True]
+    assert streams == [("Program", 30)]
+    assert window.projection_session.state_type == "obs_stream"
+    assert window._quick_toolbar.obs_stream_active is True
+    assert window.browser_projection_stops == 1
+    assert previews == [image]
+    assert window.content_frames == [image]
 
 
 def test_quick_obs_return_scene_change_only_records_valid_return_scene():

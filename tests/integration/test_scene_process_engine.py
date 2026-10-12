@@ -534,29 +534,6 @@ def test_hydrating_another_document_replaces_the_command_revision() -> None:
     engine.stop()
 
 
-def test_subprocess_engine_locks_gstreamer_to_its_bundled_runtime(tmp_path: Path) -> None:
-    runtime_root = tmp_path / "gstreamer"
-    (runtime_root / "bin").mkdir(parents=True)
-    (runtime_root / "lib" / "gstreamer-1.0").mkdir(parents=True)
-    engine = SubprocessSceneEngine(
-        SceneEngineProcessConfig(
-            executable=Path(sys.executable),
-            arguments=("-u", str(FAKE_ENGINE), "expect_locked_plugins"),
-            gstreamer_runtime_root=runtime_root,
-            gstreamer_registry_path=tmp_path / "cache" / "registry.bin",
-            hello_timeout_ms=1500,
-            heartbeat_interval_ms=50,
-            heartbeat_timeout_ms=500,
-            maximum_restarts=0,
-        )
-    )
-
-    capabilities = engine.start(session_id="integration-session", deadline_ms=2000).result(3)
-
-    assert capabilities.protocol_version == PROTOCOL_VERSION
-    engine.stop()
-
-
 def test_subprocess_engine_force_terminates_a_sidecar_that_hangs_on_stop() -> None:
     engine = _engine("ignore_stop")
     engine.start(session_id="integration-session", deadline_ms=2000).result(3)

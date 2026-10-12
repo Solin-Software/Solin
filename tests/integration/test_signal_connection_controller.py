@@ -112,7 +112,6 @@ class _WindowStub:
                 "zoom_enabled_toggled",
                 "zoom_participants_toggled",
                 "obs_stream_config_changed",
-                "camera_enabled_toggled",
             ),
             remote=SimpleNamespace(),
         )
@@ -166,10 +165,6 @@ class _WindowStub:
             on_obs_ndi_error=_slot("ndi_error"),
             on_obs_ndi_stopped=_slot("ndi_stopped"),
             on_obs_scene_toggle=_slot("obs_scene_toggle"),
-            on_camera_settings_enabled_toggled=_slot("camera_enabled"),
-            on_camera_frame=_slot("camera_frame"),
-            on_camera_error=_slot("camera_error"),
-            on_camera_stopped=_slot("camera_stopped"),
         )
         self._projection_integrations = SimpleNamespace(
             on_auto_share_finished=_slot("auto_share_finished"),
@@ -203,7 +198,7 @@ class _WindowStub:
         self.talk_theme_projection_handler = handler
 
 
-def _sources(window, *, camera_service=None):
+def _sources(window):
     return MainWindowSignalSources(
         library_widget=window.library_widget,
         meetings_widget=window.meetings_widget,
@@ -220,7 +215,6 @@ def _sources(window, *, camera_service=None):
         ndi_service=window._ndi_service,
         auto_share_finished=window._auto_share_finished,
         media_countdown_automation=window._media_countdown_automation,
-        camera_service=camera_service,
     )
 
 
@@ -315,25 +309,25 @@ def test_connect_signals_wires_expected_signal_graph():
     assert integrations.obs_stream_config_changed.connected == [
         window._live_integrations.refresh_obs_stream_availability
     ]
-    assert integrations.camera_enabled_toggled.connected == []
+    assert window._ndi_service.frame_ready.connected == [
+        window._live_integrations.on_obs_ndi_frame
+    ]
+    assert window._ndi_service.error.connected == [window._live_integrations.on_obs_ndi_error]
+    assert window._ndi_service.stopped.connected == [window._live_integrations.on_obs_ndi_stopped]
     assert window.settings_widget.general.theme_changed.connected == []
 
 
-def test_optional_camera_and_theme_consumers_connect_to_settings_domains():
+def test_optional_theme_consumer_connects_to_general_settings():
     window = _WindowStub()
-    camera = _signal_namespace("camera", "frame_ready", "error", "stopped")
     apply_theme = _slot("apply_theme")
     controller = SignalConnectionController(
-        _sources(window, camera_service=camera),
+        _sources(window),
         _handlers(window, apply_theme=apply_theme),
     )
 
     controller.connect_signals()
 
     assert window.settings_widget.general.theme_changed.connected == [apply_theme]
-    assert camera.frame_ready.connected == [window._live_integrations.on_camera_frame]
-    assert camera.error.connected == [window._live_integrations.on_camera_error]
-    assert camera.stopped.connected == [window._live_integrations.on_camera_stopped]
 
 
 def test_controller_uses_explicit_endpoints_instead_of_main_window():

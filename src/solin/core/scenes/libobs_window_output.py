@@ -4,8 +4,8 @@
 each becomes an ``obs_display`` that renders the composited main texture
 (letterboxed). libobs runs in the sidecar while the windows belong to the app
 process — ``pylibobs`` ``Display.from_window`` binds to the server-global window
-handle (X11 ``Window`` XID / Win32 ``HWND``), the same cross-process pattern the
-native engine uses; on X11 it opens its own connection to ``$DISPLAY``.
+handle (X11 ``Window`` XID / Win32 ``HWND``); on X11 it opens its own connection
+to ``$DISPLAY``.
 
 Each target is routed to exactly one thing, in precedence order: a ``scene_id``
 renders that one scene directly on the GPU (the editor's preview surface); a

@@ -94,7 +94,6 @@ _HELLO_FIELDS = frozenset(
         "rtsp_cameras",
         "hardware_compositing",
         "virtual_camera",
-        "d3d11_shared_textures",
         "program_recording",
         "audio_input_capture",
         "system_audio_capture",
@@ -285,8 +284,6 @@ class SceneEngineCommandRejectedError(SceneEngineProcessError):
 class SceneEngineProcessConfig:
     executable: Path
     arguments: tuple[str, ...] = ()
-    gstreamer_runtime_root: Path | None = None
-    gstreamer_registry_path: Path | None = None
     hello_timeout_ms: int = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
     heartbeat_interval_ms: int = 500
     heartbeat_timeout_ms: int = 2000
@@ -304,16 +301,6 @@ class SceneEngineProcessConfig:
             isinstance(argument, str) and argument for argument in self.arguments
         ):
             raise ValueError("Scene engine arguments must be a non-empty string tuple")
-        if self.gstreamer_runtime_root is not None and not isinstance(
-            self.gstreamer_runtime_root, Path
-        ):
-            raise TypeError("GStreamer runtime root must be a Path")
-        if self.gstreamer_registry_path is not None and not isinstance(
-            self.gstreamer_registry_path, Path
-        ):
-            raise TypeError("GStreamer registry path must be a Path")
-        if (self.gstreamer_runtime_root is None) != (self.gstreamer_registry_path is None):
-            raise ValueError("GStreamer runtime and registry paths must be configured together")
         for value, field_name in (
             (self.hello_timeout_ms, "hello timeout"),
             (self.heartbeat_interval_ms, "heartbeat interval"),
@@ -359,7 +346,7 @@ class _PendingRequest:
 
 
 class SubprocessSceneEngine:
-    """Supervised, non-blocking adapter for the isolated native media engine."""
+    """Supervised, non-blocking adapter for an isolated scene-engine process."""
 
     def __init__(
         self,
@@ -1245,7 +1232,6 @@ class SubprocessSceneEngine:
         environment = os.environ.copy()
         environment["SOLIN_MEDIA_ENGINE_PROCESS_GENERATION"] = generation
         environment["SOLIN_MEDIA_ENGINE_PARENT_PROCESS_ID"] = str(os.getpid())
-        self._configure_gstreamer_environment(environment)
         creation_flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         process = subprocess.Popen(  # noqa: S603 - executable is application configuration
             command,
@@ -1264,37 +1250,6 @@ class SubprocessSceneEngine:
             self._process = process
             self._last_received_monotonic = self._monotonic()
         return process
-
-    def _configure_gstreamer_environment(self, environment: dict[str, str]) -> None:
-        runtime_root = self._config.gstreamer_runtime_root
-        registry_path = self._config.gstreamer_registry_path
-        if runtime_root is None or registry_path is None:
-            return
-        runtime_root = runtime_root.resolve()
-        binary_directory = runtime_root / "bin"
-        plugin_directory = runtime_root / "lib" / "gstreamer-1.0"
-        if not binary_directory.is_dir() or not plugin_directory.is_dir():
-            raise OSError("Configured GStreamer runtime is incomplete")
-        registry_path = registry_path.resolve()
-        registry_path.parent.mkdir(parents=True, exist_ok=True)
-        runtime_search_directories = [binary_directory]
-        proxy_backend_directory = runtime_root / "lib" / "libproxy"
-        if proxy_backend_directory.is_dir():
-            runtime_search_directories.append(proxy_backend_directory)
-        existing_path = environment.get("PATH")
-        environment["PATH"] = os.pathsep.join(
-            str(directory)
-            for directory in (
-                *runtime_search_directories,
-                *((existing_path,) if existing_path else ()),
-            )
-        )
-        environment["GST_PLUGIN_PATH_1_0"] = ""
-        environment["GST_PLUGIN_SYSTEM_PATH_1_0"] = str(plugin_directory)
-        environment["GST_REGISTRY_1_0"] = str(registry_path)
-        scanner = runtime_root / "libexec" / "gstreamer-1.0" / "gst-plugin-scanner.exe"
-        if scanner.is_file():
-            environment["GST_PLUGIN_SCANNER_1_0"] = str(scanner)
 
     def _read_stdout(self, process: subprocess.Popen[bytes], generation: str) -> None:
         stream = cast(BinaryIO, process.stdout)
@@ -1704,10 +1659,6 @@ def _capabilities_from_envelope(envelope: SceneIpcEnvelope) -> SceneEngineCapabi
             "hardware composition capability",
         ),
         virtual_camera=require_bool(payload["virtual_camera"], "virtual camera capability"),
-        d3d11_shared_textures=require_bool(
-            payload["d3d11_shared_textures"],
-            "D3D11 shared-texture capability",
-        ),
         program_recording=require_bool(
             payload["program_recording"],
             "Program recording capability",

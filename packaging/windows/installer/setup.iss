@@ -148,13 +148,16 @@ Name: "startupicon"; Description: "Start with Windows";     GroupDescription: "O
 ; behind when its compiled package disappears creates an importable, empty
 ; namespace that breaks urllib3's optional compression detection.
 Type: filesandordirs; Name: "{app}\backports"
+; Retire the previous engine, Qt bridge and private runtime without deleting
+; sibling native payloads or the independently managed camera versions.
+Type: filesandordirs; Name: "{app}\native\media-engine"
 
 ; =============================================================================
 [Files]
 ; Stage the immutable filter pair before application files are installed.
 ; These files and their COM registration have one shared lifecycle owner.
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x64.dll"; Flags: dontcopy
-Source: "{#MyDistDir}\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x86.dll"; Flags: dontcopy
+Source: "{#MyDistDir}\native\virtual-camera\x64\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x64.dll"; Flags: dontcopy
+Source: "{#MyDistDir}\native\virtual-camera\x86\solin-virtual-camera.dll"; DestName: "solin-virtual-camera-x86.dll"; Flags: dontcopy
 ; ── 1. Copy build output (DRY: one line copies the entire app) ────────────────
 Source: "{#MyDistDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

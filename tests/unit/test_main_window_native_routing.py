@@ -5,8 +5,7 @@ import pytest
 from PySide6.QtGui import QImage
 
 import solin.main_window as main_window
-from solin.core.scenes.frame_channel import VideoFrame
-from solin.core.scenes.model import BusId, VideoPixelFormat
+from solin.core.scenes.model import BusId
 from solin.core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from solin.main_window import (
     MainWindow,
@@ -15,37 +14,15 @@ from solin.main_window import (
 )
 
 
-def test_native_routing_supported_on_windows_native_engine(monkeypatch) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
-    assert _native_scene_routing_supported()
-
-
-def test_native_routing_supported_under_libobs_on_xcb(monkeypatch) -> None:
-    # The libobs sidecar paints projection windows by binding an obs_display to a
-    # shared native handle; X11/XWayland (xcb) exposes one, so routing is enabled.
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)
-    monkeypatch.setattr(main_window, "libobs_scene_engine_selected", lambda: True)
+@pytest.mark.parametrize(
+    ("platform", "supported"),
+    [("windows", True), ("xcb", True), ("wayland", False), ("cocoa", False), ("offscreen", False)],
+)
+def test_native_routing_depends_on_shared_window_handles(monkeypatch, platform, supported):
     monkeypatch.setattr(
-        "PySide6.QtGui.QGuiApplication.platformName", staticmethod(lambda: "xcb")
+        "PySide6.QtGui.QGuiApplication.platformName", staticmethod(lambda: platform)
     )
-    assert _native_scene_routing_supported()
-
-
-def test_native_routing_unsupported_under_libobs_on_wayland(monkeypatch) -> None:
-    # Native Wayland cannot share a top-level window handle cross-process, so the
-    # sidecar cannot paint into it — those sessions keep the CPU-readback path.
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)
-    monkeypatch.setattr(main_window, "libobs_scene_engine_selected", lambda: True)
-    monkeypatch.setattr(
-        "PySide6.QtGui.QGuiApplication.platformName", staticmethod(lambda: "wayland")
-    )
-    assert not _native_scene_routing_supported()
-
-
-def test_native_routing_unsupported_without_engine_off_windows(monkeypatch) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)
-    monkeypatch.setattr(main_window, "libobs_scene_engine_selected", lambda: False)
-    assert not _native_scene_routing_supported()
+    assert _native_scene_routing_supported() is supported
 
 
 def test_every_media_surface_uses_native_presentation_for_raw_visual_or_program() -> None:
@@ -117,7 +94,7 @@ def _native_preview_host(*, requested: bool):
 
 
 def test_operator_video_output_uses_the_raw_native_bus(monkeypatch) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
+    monkeypatch.setattr(main_window, "_native_scene_routing_supported", lambda: True)
     host, projection_bar, runtime = _native_preview_host(requested=True)
 
     MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
@@ -135,7 +112,7 @@ def test_operator_video_output_uses_the_raw_native_bus(monkeypatch) -> None:
 def test_operator_video_output_keeps_qt_fallback_without_native_routing(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", False)
+    monkeypatch.setattr(main_window, "_native_scene_routing_supported", lambda: False)
     host, projection_bar, runtime = _native_preview_host(requested=True)
 
     MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
@@ -145,7 +122,7 @@ def test_operator_video_output_keeps_qt_fallback_without_native_routing(
 
 
 def test_losing_native_routing_restores_the_existing_window_in_place(monkeypatch) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
+    monkeypatch.setattr(main_window, "_native_scene_routing_supported", lambda: True)
     host, _projection_bar, runtime = _native_preview_host(requested=False)
     runtime.native_window_routing_ready = False
     restored: list[object] = []
@@ -175,7 +152,7 @@ def test_losing_native_routing_restores_the_existing_window_in_place(monkeypatch
 
 
 def test_audio_only_projection_keeps_the_native_idle_route_stable(monkeypatch) -> None:
-    monkeypatch.setattr(main_window, "NATIVE_SCENES_SUPPORTED", True)
+    monkeypatch.setattr(main_window, "_native_scene_routing_supported", lambda: True)
     host, _projection_bar, runtime = _native_preview_host(requested=False)
     restored: list[object] = []
 
@@ -234,42 +211,9 @@ def test_audio_only_demand_does_not_republish_a_stale_video_frame() -> None:
     assert submitted == []
 
 
-@pytest.mark.parametrize("libobs", [True, False], ids=["libobs", "native"])
-@pytest.mark.parametrize("payload", ["qimage", "bgra", "nv12"])
-def test_program_frames_reach_fallback_windows_and_skip_native_outputs(
-    monkeypatch,
-    libobs: bool,
-    payload: str,
-) -> None:
-    monkeypatch.setattr(main_window, "libobs_scene_engine_selected", lambda: libobs)
+def test_program_frames_reach_fallback_windows_and_skip_native_outputs() -> None:
     image = QImage(2, 2, QImage.Format.Format_ARGB32)
     image.fill(0xFF112233)
-    frame: QImage | VideoFrame = image
-    conversions: list[VideoFrame] = []
-    if payload != "qimage":
-        frame = VideoFrame(
-            sequence=1,
-            presentation_timestamp_ns=0,
-            duration_ns=16_666_667,
-            produced_monotonic_ns=0,
-            media_epoch=0,
-            width=2,
-            height=2,
-            pixel_format=VideoPixelFormat(payload),
-            pixels=(
-                bytes(image.constBits())
-                if payload == "bgra"
-                else bytes([16, 16, 16, 16, 128, 128])
-            ),
-        )
-    if payload == "nv12":
-        # NV12 conversion belongs to the shared converter; this regression
-        # verifies that the shell still delegates transported frames to it.
-        def convert(transported: VideoFrame) -> QImage:
-            conversions.append(transported)
-            return image
-
-        monkeypatch.setattr(main_window, "video_frame_to_image", convert)
 
     class Window:
         def __init__(self, native_output_active: bool) -> None:
@@ -288,7 +232,7 @@ def test_program_frames_reach_fallback_windows_and_skip_native_outputs(
         proj_bar=SimpleNamespace(update_tab_live_preview=previews.append),
     )
 
-    MainWindow._on_scene_program_frame(cast(MainWindow, host), frame)
+    MainWindow._on_scene_program_frame(cast(MainWindow, host), image)
 
     assert len(fallback.frames) == 1
     received, cache_pixmap = fallback.frames[0]
@@ -297,8 +241,6 @@ def test_program_frames_reach_fallback_windows_and_skip_native_outputs(
     assert native.frames == []
     assert len(previews) == 1
     assert previews[0] is received
-    if payload == "nv12":
-        assert conversions == [frame]
 
 
 @pytest.mark.parametrize("mirror_enabled", [False, True])

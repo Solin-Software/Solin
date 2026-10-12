@@ -1523,42 +1523,23 @@ def test_ndi_runtime_path_policy_has_no_framework_or_native_loader_dependencies(
     assert violations == []
 
 
-def test_camera_option_model_has_no_framework_dependencies():
-    path = PROJECT_ROOT / "src" / "solin" / "core" / "integrations" / "camera_options.py"
+def test_absolute_application_imports_resolve_to_existing_modules():
     violations: list[str] = []
 
-    for node in _imports(path):
-        roots = (
-            [alias.name.split(".", 1)[0] for alias in node.names]
-            if isinstance(node, ast.Import)
-            else [(node.module or "").split(".", 1)[0]]
-        )
-        if any(root in {"PySide6", "solin"} for root in roots):
-            violations.append(_display(path, node))
+    for codebase in CODEBASES:
+        for path in codebase.python_files():
+            for node in _imports(path):
+                if isinstance(node, ast.Import):
+                    targets = [tuple(alias.name.split(".")) for alias in node.names]
+                elif node.level == 0:
+                    targets = [tuple((node.module or "").split("."))]
+                else:
+                    continue
+                for target in targets:
+                    if target[0] == codebase.package and target not in codebase.modules:
+                        violations.append(_display(path, node))
 
-    assert violations == []
-
-
-def test_camera_option_consumers_import_model_from_defining_module():
-    source_root = PROJECT_ROOT / "src" / "solin"
-    forbidden = "core.integrations.camera import CameraOption"
-    violations: list[str] = []
-
-    for path in (
-        source_root / "controllers" / "live_integration_controller.py",
-        source_root / "widgets" / "quick_access_toolbar.py",
-    ):
-        if forbidden in path.read_text(encoding="utf-8"):
-            violations.append(str(path.relative_to(PROJECT_ROOT)))
-
-    # The QtMultimedia CameraService module and the camera popup widget were
-    # removed; CameraOption now lives only in the framework-free model module.
-    assert not (source_root / "core" / "integrations" / "camera.py").exists()
-    assert not (source_root / "widgets" / "camera_popup.py").exists()
-    assert "class CameraOption" in (
-        source_root / "core" / "integrations" / "camera_options.py"
-    ).read_text(encoding="utf-8")
-    assert violations == []
+    assert violations == [], "Missing application modules:\n" + "\n".join(violations)
 
 
 def test_remote_policies_have_no_framework_or_network_dependencies():
