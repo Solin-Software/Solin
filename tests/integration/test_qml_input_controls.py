@@ -341,7 +341,7 @@ def test_native_ancestor_exit_preserves_capture_until_mouse_release(request, mon
 
 
 def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(request, monkeypatch):
-    old_host, old_container, widget, root = _native_hover_host(request)
+    old_host, old_container, widget, root = _native_hover_host(request, sync_cursor=True)
     outside = old_host.mapToGlobal(QPoint(old_host.width() - 2, old_host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
     _reordered_native_exit(old_host, old_container)
@@ -452,8 +452,11 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     assert not widget.underMouse()
 
 
-def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypatch):
-    host, container, widget, root = _native_hover_host(request, depth=2)
+@pytest.mark.parametrize("exit_ancestor", ["container", "replacement_parent"])
+def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypatch, exit_ancestor):
+    # Qualify native hover before changing the hierarchy. A synthetic Enter
+    # initializes QWidget state without establishing Cocoa's native tracking.
+    host, container, widget, root = _native_hover_host(request, depth=2, sync_cursor=True)
     old_parent = container.parentWidget()
     parent = QWidget(host)
     parent.setGeometry(10, 10, 400, 340)
@@ -474,7 +477,8 @@ def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypa
     QCoreApplication.sendEvent(old_parent, QEvent(QEvent.Type.Leave))
     QCoreApplication.processEvents()
     assert root.property("hovered")
-    _reordered_native_exit(host, container)
+    assert root.property("exits") == exits
+    _reordered_native_exit(host, parent if exit_ancestor == "replacement_parent" else container)
     wait_until(lambda: not root.property("hovered"), description="rebound ancestor exit")
     assert root.property("exits") == exits + 1
 
