@@ -33,9 +33,7 @@ from solin.core.scenes.ipc_protocol import (
     read_envelope,
 )
 from solin.core.scenes.libobs_engine import (
-    ENGINE_SELECTION_ENV,
     create_libobs_scene_engine,
-    libobs_scene_engine_selected,
 )
 from solin.core.scenes.libobs_sidecar import (
     CAPABILITIES,
@@ -5533,7 +5531,7 @@ def test_prepare_requires_ready_content_but_not_ingress_for_decoded_media():
     assert len(waited) == 2
 
 
-# ── factory + selection ──────────────────────────────────────────────────────
+# ── factory ──────────────────────────────────────────────────────
 
 
 def test_factory_targets_the_sidecar_module():
@@ -5541,9 +5539,6 @@ def test_factory_targets_the_sidecar_module():
     config = engine._config
     assert config.executable == Path(sys.executable)
     assert config.arguments == ("-m", _SIDECAR_MODULE)
-    # No GStreamer runtime — libobs is self-contained via pylibobs.
-    assert config.gstreamer_runtime_root is None
-    assert config.gstreamer_registry_path is None
 
 
 def test_compiled_factory_launches_the_application_sidecar_role(monkeypatch):
@@ -5566,20 +5561,6 @@ def test_factory_is_resilient_to_transient_engine_stalls():
     assert config.heartbeat_timeout_ms > config.heartbeat_interval_ms
     assert config.maximum_restarts >= 20
     assert config.restart_window_seconds >= 120
-
-
-def test_selection_reads_the_environment(monkeypatch):
-    monkeypatch.setenv(ENGINE_SELECTION_ENV, "libobs")
-    assert libobs_scene_engine_selected() is True
-    monkeypatch.setenv(ENGINE_SELECTION_ENV, "  LibOBS ")
-    assert libobs_scene_engine_selected() is True
-    monkeypatch.setenv(ENGINE_SELECTION_ENV, "native")
-    assert libobs_scene_engine_selected() is False
-    # libobs is the default engine on this branch: no env var needed.
-    monkeypatch.delenv(ENGINE_SELECTION_ENV, raising=False)
-    assert libobs_scene_engine_selected() is True
-    monkeypatch.setenv(ENGINE_SELECTION_ENV, "   ")
-    assert libobs_scene_engine_selected() is True
 
 
 # ── end-to-end: real subprocess under the real supervisor ────────────────────

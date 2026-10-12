@@ -19,7 +19,10 @@ Solin's license does not replace dependency licenses. In particular:
   their upstream terms and notices. Check the exact versions and components
   included in a distribution.
 - Notices for vendored native sources are kept alongside them in
-  [`native/media_engine/third_party`](../native/media_engine/third_party).
+  [`native/virtual_camera/third_party`](../native/virtual_camera/third_party).
+  The DirectShow filters include Microsoft DirectShow base classes and libyuv;
+  their versions and terms are documented in
+  [`native/virtual_camera/THIRD_PARTY.md`](../native/virtual_camera/THIRD_PARTY.md).
 
 The GPL's “or later” option permits use of GPL-2.0-or-later components under
 GPL version 3 when combining them with Solin. GNU's
@@ -46,8 +49,9 @@ all corresponding dependency source.
 
 The runtime staging step preserves `pylibobs` notices and copies Solin's
 `LICENSE` and `NOTICE` into `licenses/solin` in standalone builds. Linux runtime
-packaging also collects notices for copied system libraries. These files are
-part of distribution preparation, not a substitute for checking the complete
-dependency inventory and corresponding source for the binary being released.
+packaging also collects notices for copied system libraries. Windows camera
+packaging preserves the DirectShow base classes and libyuv notices under `native/virtual-camera/share/licenses/solin-virtual-camera`.
+These files are part of distribution preparation, not a substitute for checking
+the complete dependency inventory and corresponding source for the binary being released.
 
 [Back to the README](../README.md)

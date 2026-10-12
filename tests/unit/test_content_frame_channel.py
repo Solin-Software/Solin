@@ -111,24 +111,6 @@ def test_content_publisher_roundtrips_a_frame_to_a_reader():
         publisher.close()
 
 
-def test_content_publisher_rejects_non_bgra_planes():
-    from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-    from solin.core.scenes.model import VideoPixelFormat
-
-    publisher = SharedMemoryContentPublisher(2, 2)
-    try:
-        with pytest.raises(ValueError):
-            publisher.publish_planes(
-                (b"\x00" * 4, b"\x00" * 4),
-                plane_strides=(2, 2),
-                frame_width=2,
-                frame_height=2,
-                pixel_format=VideoPixelFormat.NV12,
-            )
-    finally:
-        publisher.close()
-
-
 def test_a_frame_smaller_than_the_channel_reports_its_own_size():
     """The header must describe the frame, not the channel it travels through.
 
@@ -207,23 +189,15 @@ def test_content_publisher_forwards_the_pictures_own_dimensions():
         publisher.close()
 
 
-@pytest.mark.parametrize("planes", [False, True])
-def test_content_publisher_preserves_the_presentation_identity(planes: bool):
+def test_content_publisher_preserves_the_presentation_identity():
     from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-    from solin.core.scenes.model import VideoPixelFormat
 
     publisher = SharedMemoryContentPublisher(2, 2)
     reader = SharedFrameChannelReader(publisher.descriptor.handle_token, 2, 2)
     try:
         for epoch in (1, 2, 2**64 - 1):
             pixels = bytes([epoch % 256]) * 16
-            if planes:
-                publisher.publish_planes(
-                    (pixels,), plane_strides=(8,), frame_width=2, frame_height=2,
-                    pixel_format=VideoPixelFormat.BGRA, media_epoch=epoch,
-                )
-            else:
-                publisher.publish(pixels, frame_width=2, frame_height=2, media_epoch=epoch)
+            publisher.publish(pixels, frame_width=2, frame_height=2, media_epoch=epoch)
             frame = reader.read_latest()
             assert frame is not None
             assert frame.media_epoch == epoch

@@ -76,14 +76,14 @@ echo  =========================================
 echo.
 
 echo  =========================================
-echo   Compilando e testando o motor nativo...
+echo   Compilando e testando os filtros DirectShow...
 echo  =========================================
 echo.
 
-"%PYTHON%" "%PROJECT_ROOT%scripts\build_native_engine.py" --configuration Release
+"%PYTHON%" "%PROJECT_ROOT%scripts\build_virtual_camera.py" --configuration Release
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  [ERRO] Compilacao do motor nativo falhou com codigo %ERRORLEVEL%.
+    echo  [ERRO] Compilacao dos filtros DirectShow falhou com codigo %ERRORLEVEL%.
     pause
     exit /b %ERRORLEVEL%
 )
@@ -306,36 +306,22 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-"%PYTHON%" "%PROJECT_ROOT%scripts\package_native_engine_windows.py" ^
-    --gstreamer-root "%PROJECT_ROOT%build\dependencies\gstreamer\msvc_x86_64" ^
-    --gstreamer-licenses "%PROJECT_ROOT%build\dependencies\gstreamer\msvc_x86_64\share\licenses" ^
+"%PYTHON%" "%PROJECT_ROOT%scripts\package_virtual_camera_windows.py" ^
     --application-dir "%DIST%"
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  [ERRO] Empacotamento do motor nativo falhou com codigo %ERRORLEVEL%.
+    echo  [ERRO] Empacotamento dos filtros DirectShow falhou com codigo %ERRORLEVEL%.
     pause
     exit /b %ERRORLEVEL%
 )
 
-if not exist "%DIST%\native\media-engine\solin-media-engine.exe" (
-    echo  [ERRO] O motor nativo nao foi empacotado.
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST%\native\media-engine\qt-media-bridge\solin_qt_media_bridge*.pyd" (
-    echo  [ERRO] O bridge Qt/D3D11 nao foi empacotado.
-    pause
-    exit /b 1
-)
-
-if not exist "%DIST%\native\media-engine\virtual-camera\x64\solin-virtual-camera.dll" (
+if not exist "%DIST%\native\virtual-camera\x64\solin-virtual-camera.dll" (
     echo  [ERRO] O filtro DirectShow x64 nao foi empacotado.
     pause
     exit /b 1
 )
 
-if not exist "%DIST%\native\media-engine\virtual-camera\x86\solin-virtual-camera.dll" (
+if not exist "%DIST%\native\virtual-camera\x86\solin-virtual-camera.dll" (
     echo  [ERRO] O filtro DirectShow x86 nao foi empacotado.
     pause
     exit /b 1

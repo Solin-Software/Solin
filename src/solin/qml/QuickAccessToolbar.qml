@@ -270,33 +270,6 @@ Item {
                 }
             }
 
-            // ── Camera ───────────────────────────────────────────────
-            Item {
-                visible: bridge.cameraVisible
-                width: 30; height: 30
-
-                Rectangle {
-                    anchors.fill: parent; radius: 15
-                    color: cameraMA.pressed
-                           ? root.toolbarPressed
-                           : cameraMA.containsMouse
-                             ? root.toolbarHover : "transparent"
-                }
-                Image {
-                    anchors.centerIn: parent
-                    source: "image://icons/camera/14/" + bridge.cameraIconColor
-                    sourceSize: Qt.size(14, 14)
-                    cache: false
-                }
-                MouseArea {
-                    id: cameraMA; anchors.fill: parent
-                    hoverEnabled: true
-                    onEntered: root.beginButtonHover(cameraMA, bridge.cameraTooltip)
-                    onExited: root.endButtonHover(cameraMA)
-                    onClicked: bridge.onCameraClicked()
-                }
-            }
-
             // ── Zoom ─────────────────────────────────────────────────
             Item {
                 visible: bridge.zoomVisible

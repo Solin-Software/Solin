@@ -3,9 +3,9 @@
 On Linux libobs' ``virtualcam_output`` writes straight to a v4l2loopback device.
 Windows has no such output; instead a registered Solin DirectShow filter consumes
 frames from a per-user shared-memory ring whose location it learns from a per-user
-named-pipe broker. The native GStreamer engine normally plays broker + producer,
-but it does not run under the libobs engine — so this reimplements both in Python,
-feeding the ring from libobs' main-mix NV12 frames.
+named-pipe broker. The libobs sidecar owns the Python broker and frame producer,
+feeding the ring from libobs' main-mix NV12 frames. The shipped filter is built
+from ``native/virtual_camera`` and adapts those frames to the consumer's format.
 
 Pieces:
 * :mod:`windows_vcam_transport` — byte-exact wire + ring formats (tested).
@@ -14,9 +14,9 @@ Pieces:
 * here — the shared ring *file* and the ``add_raw_video_callback`` → ``pack_nv12``
   → ring writer producer, wired to the broker's endpoint.
 
-The frame contract is identical to the native engine's, so the same installed
-filter binds transparently. The Windows-only glue (file mapping, ctypes) ships
-**unverified** from non-Windows build hosts; only the byte formats are unit-tested.
+The broker and ring formats are shared with the shipped filter. Byte-format
+tests are platform-neutral; file mapping and named-pipe integration require
+Windows.
 """
 
 from __future__ import annotations
@@ -205,8 +205,8 @@ def _sweep_orphaned_rings() -> int:
 
     The producer unlinks its ring on close, but a killed or crashed sidecar never gets
     there — and each ring is the full mapping size (~8.9 MB at 1080p), so a restart loop
-    can leave hundreds behind. Exclusive-open is the liveness test: if the file opens with
-    no sharing, nothing has it mapped and it is safe to remove.
+    can leave hundreds behind. Unlinking removes abandoned files; Windows rejects
+    deletion while a file still has an active memory-mapped section.
     """
     removed = 0
     directory = Path(tempfile.gettempdir())
@@ -235,7 +235,7 @@ class _WindowsSharedRingFile:
     Creates ``%TEMP%\\Solin.VirtualCamera.{GUID}.frames`` with a duplex-shared
     handle so the filter can map it read-only while this process writes, sizes it
     to the mapping size, and exposes a writable ``mmap`` for the ring writer.
-    Follows the native channel's DACL lifecycle: created ``D:P(A;;GA;;;SY)(A;;GA;;;SID)``
+    The DACL is created as ``D:P(A;;GA;;;SY)(A;;GA;;;SID)``
     then tightened to ``…(A;;GRSD;;;SID)`` once our writable mapping exists, so no
     later same-user opener can write the ring the filter trusts. DELETE stays granted
     so the producer can still unlink the ring on close.
@@ -348,8 +348,8 @@ class _WindowsSharedRingFile:
             handle = None  # ownership transferred to the fd
             self._buffer = mmap.mmap(self._fd, mapping_size)
             # Tighten the on-disk DACL to read-only for the user now that our
-            # writable mapping is established (the filter only reads it) — matching
-            # the native channel and denying same-user tampering with the ring.
+            # writable mapping is established (the filter only reads it), denying
+            # later same-user writes to the ring.
             # Best-effort: the mapping already works, so a failure only forfeits
             # this hardening rather than the camera.
             self._tighten_dacl_to_read_only(k32, a32, ctypes, wintypes, sid,

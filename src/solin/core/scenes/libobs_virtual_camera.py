@@ -5,16 +5,15 @@ device. On Linux libobs' ``virtualcam_output`` (linux-v4l2 plugin) writes to a
 v4l2loopback device directly, so this binds that output to the main mix — the
 program the scene builder composites on channel 0.
 
-The output is bound to the main video/audio (``ctx.get_video()`` /
+The Linux output is bound to the main video/audio (``ctx.get_video()`` /
 ``ctx.get_audio()``), i.e. it mirrors the main mix rather than a separate view.
 
 Windows has no libobs ``virtualcam_output``; instead a registered Solin
 DirectShow filter consumes the main mix from a per-user shared-memory frame ring
 whose location it learns from a per-user named-pipe broker. On Windows this
 delegates to :class:`~solin.core.scenes.libobs_windows_virtual_camera.LibobsWindowsVirtualCamera`,
-which reimplements that broker + NV12 producer in Python (see that module). The
-frame contract is identical to Solin's native engine, so the same installed
-filter binds transparently.
+which owns the broker + NV12 video producer in Python (see that module). The
+shipped filter in ``native/virtual_camera`` shares this wire and frame contract.
 """
 
 from __future__ import annotations

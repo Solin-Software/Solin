@@ -20,8 +20,11 @@ from solin.core.integrations.automation.settings import OBSSettingsStore
 from solin.core.scenes.presets import SceneSeedNames
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.ui.popup_hover import PopupHoverController
+from solin.ui.incremental_load import IncrementalLoadState
 from solin.widgets.common.popup_hover_button import PopupHoverButton
 from solin.widgets.quick_access_toolbar import QuickAccessToolbar
+from solin.widgets.obs_scene_popup import _SceneChipButton
+from solin.widgets.scenes.control_popup import SceneControlPopup
 from tests._qt import mouse_click, mouse_move, wait_for_geometry, wait_until
 
 
@@ -377,6 +380,54 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory):
 
     request.addfinalizer(unload_toolbar)
     return parent, toolbar
+
+
+def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):
+    _parent, toolbar = toolbar_host
+    toolbar.auxiliary_preparation_handle.complete_now()
+
+    assert toolbar.auxiliary_preparation_handle.state is IncrementalLoadState.READY
+    assert toolbar._scene_popup is not None
+    assert isinstance(toolbar._solin_scene_popup, SceneControlPopup)
+    assert toolbar._solin_scene_popup._controller is toolbar._scene_runtime
+    camera_scene = next(
+        scene for scene in toolbar._scene_runtime.document.scenes if scene.name == "Camera"
+    )
+    assert camera_scene.id in toolbar._solin_scene_popup._scene_cards
+
+
+def test_toolbar_preserves_obs_selection_return_and_ndi_signals(toolbar_host):
+    _parent, toolbar = toolbar_host
+    selections = []
+    returns = []
+    streams = []
+    toolbar.obs_scene_change.connect(selections.append)
+    toolbar.obs_return_scene_change.connect(returns.append)
+    toolbar.obs_stream_requested.connect(lambda: streams.append(True))
+    toolbar.set_obs_stream_available(True)
+    toolbar.set_obs_stream_active(True)
+
+    popup = toolbar._ensure_scene_popup()
+    assert popup._stream_btn.text() == popup.tr("Stop Stream")
+    assert not popup._stream_btn.isHidden()
+    popup._stream_btn.click()
+    assert streams == [True]
+
+    toolbar.set_obs_stream_available(False)
+    assert not popup._stream_btn.isHidden()
+    toolbar.set_obs_stream_active(False)
+    assert popup._stream_btn.isHidden()
+    toolbar.set_obs_stream_available(True)
+    assert popup._stream_btn.text() == popup.tr("Show Stream")
+
+    popup.populate(["Camera", "Media"], "Media", "Camera", "Media")
+    camera = next(chip for chip in popup.findChildren(_SceneChipButton) if chip.text() == "Camera")
+    camera.right_clicked.emit()
+    assert returns == ["Camera"]
+    assert selections == []
+    camera.click()
+    assert selections == ["Camera"]
+    assert toolbar._ensure_scene_popup() is popup
 
 
 @pytest.fixture

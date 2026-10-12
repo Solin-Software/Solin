@@ -1,11 +1,9 @@
 """Qt-free media metadata + thumbnail extraction via the ffprobe/ffmpeg CLIs.
 
-libobs is the only media engine, so QtMultimedia (``QMediaPlayer``/``QMediaMetaData``)
-no longer decodes anything. Title, duration, embedded cover art, and thumbnail
-frames come from the ``ffprobe`` and ``ffmpeg`` command-line tools instead. These
-helpers return plain Python data (``str``/``int``/``bytes``); callers assemble a
-``QPixmap``/``QImage`` from the returned image bytes (that is ``QtGui``, not
-``QtMultimedia``).
+Title, duration, embedded cover art, and thumbnail frames come from the
+``ffprobe`` and ``ffmpeg`` command-line tools. These helpers return plain Python
+data (``str``/``int``/``bytes``); callers assemble a ``QPixmap``/``QImage`` from
+the returned image bytes. Playback and scene composition use the libobs sidecar.
 
 All functions are best-effort and never raise: a missing binary, an unreadable
 file, or a timeout yields ``None``/empty so the UI degrades gracefully.

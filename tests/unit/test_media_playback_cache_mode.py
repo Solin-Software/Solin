@@ -319,11 +319,7 @@ def test_a_cached_copy_still_reports_offline(tmp_path):
 
 
 def test_cache_progress_is_reported_while_a_stream_plays(tmp_path):
-    """The transport draws how much is already on disk behind the position.
-
-    The handler for this survived the QtMultimedia removal but its signal did
-    not, so the buffer bar had nothing driving it.
-    """
+    """The transport draws cached bytes behind the playback position."""
     controller, downloader = _controller_with_downloader(tmp_path, auto_download=True)
     controller.set_engine_media_route(_FakeRoute())
     reported: list[tuple[int, int]] = []
@@ -366,11 +362,7 @@ def test_stopping_playback_stops_reporting_buffer(tmp_path):
 
 
 def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
-    """The engine reports a dropped read as buffering; say so in the transport.
-
-    The reconnecting slider animation lost its emitter with QtMultimedia, so a
-    stream re-establishing itself just looked frozen.
-    """
+    """The transport shows recovery while the engine reconnects a dropped stream."""
     from solin.core.media.playback_state import (
         ENGINE_STATE_BUFFERING,
         ENGINE_STATE_PLAYING,

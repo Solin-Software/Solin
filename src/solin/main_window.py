@@ -66,13 +66,8 @@ from .controllers.profile_switch_controller import ProfileSwitchController
 from .controllers.program_recording_controller import ProgramRecordingController
 from .controllers.scene_runtime_controller import SceneRuntimeController
 from .controllers.content_frame_ingress_controller import ContentFrameIngressController
-from .core.scenes.libobs_engine import libobs_scene_engine_selected
 from .controllers.program_content_controller import ProgramContentController
-from .controllers.scene_frame_egress_controller import (
-    SceneFrameEgressController,
-    SceneVideoFrameEgressController,
-    video_frame_to_image,
-)
+from .controllers.shared_memory_preview_egress import SharedMemoryPreviewEgressController
 from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
@@ -119,7 +114,7 @@ from .core.projection.application import (
     projection_presentation_type,
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
-from .core.scenes.model import BusId, CONTENT_SOURCE_ID, SceneDocument
+from .core.scenes.model import BusId, SceneDocument
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
 from .core.timer.application import TimerSession
@@ -142,7 +137,6 @@ from .ui.scene_engine_status import scene_engine_error_summary
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
-from .core.foundation.constants import NATIVE_SCENES_SUPPORTED
 from .core.foundation.qt_threads import OwnedQThreadRegistry
 from .core.playlists.storage import PlaylistRepository, PlaylistStoragePaths
 from .core.meetings.tree_store import MeetingTreeStore
@@ -171,16 +165,11 @@ def _use_native_media_presentation(
 def _native_scene_routing_supported() -> bool:
     """Whether the sidecar can paint scene video into shared native window handles.
 
-    True on the Windows native engine, and under the libobs engine on any platform
-    whose top-level window handles can be shared cross-process with the sidecar so
-    it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
+    Supported on platforms whose top-level window handles can be shared
+    cross-process with the libobs sidecar so it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
     Native Wayland cannot share a window handle, so those sessions keep the
     CPU-readback (egress) path instead of direct native painting.
     """
-    if NATIVE_SCENES_SUPPORTED:
-        return True
-    if not libobs_scene_engine_selected():
-        return False
     from PySide6.QtGui import QGuiApplication
 
     return QGuiApplication.platformName() in ("xcb", "windows")
@@ -319,7 +308,6 @@ class MainWindow(QWidget):
         self._zoom_settings = profile_settings_bundle.zoom
         self._auto_share_settings = profile_settings_bundle.auto_share
         self._auto_key_settings = profile_settings_bundle.auto_key
-        self._camera_settings = profile_settings_bundle.camera
         self._media_settings = profile_settings_bundle.media
         self._browser_settings = profile_settings_bundle.browser
         self._projection_playback_settings = profile_settings_bundle.projection_playback
@@ -340,29 +328,14 @@ class MainWindow(QWidget):
         )
         self.scene_workspace = scene_workspace
         program_output = self.scene_documents.document.output(BusId.VIRTUAL_CAMERA)
-        if libobs_scene_engine_selected():
-            # The libobs engine consumes a cross-platform SHARED_MEMORY_BGRA
-            # channel; publish content through it and skip the D3D11 transport.
-            from .core.scenes.content_frame_publisher import SharedMemoryContentPublisher
-
-            self._content_frame_ingress = ContentFrameIngressController(
-                self,
-                canvas_width=program_output.video_format.width,
-                canvas_height=program_output.video_format.height,
-                publisher_factory=lambda width, height: SharedMemoryContentPublisher(width, height),
-                accelerated_publisher_factory=lambda width, height: None,
-            )
-        else:
-            self._content_frame_ingress = ContentFrameIngressController(
-                self,
-                canvas_width=program_output.video_format.width,
-                canvas_height=program_output.video_format.height,
-            )
-        # Fork A: with the libobs engine, local media files decode in the sidecar.
-        # Route the foreground controller through the engine and mirror its
-        # media_playback_state events back onto the controller's usual signals.
+        self._content_frame_ingress = ContentFrameIngressController(
+            self,
+            canvas_width=program_output.video_format.width,
+            canvas_height=program_output.video_format.height,
+        )
+        # Route local media playback through the sidecar and mirror its events.
         self._unsubscribe_media_engine = None
-        if libobs_scene_engine_selected() and scene_engine is not None:
+        if scene_engine is not None:
             from .controllers.media_engine_route import SceneEngineMediaRoute
             from .core.scenes.media_control import MEDIA_SLOT_BACKGROUND
 
@@ -417,9 +390,6 @@ class MainWindow(QWidget):
         )
         self._content_frame_ingress.descriptor_changed.connect(
             self.scene_runtime.set_content_ingress
-        )
-        self.scene_runtime.source_health_changed.connect(
-            self._on_native_content_source_health_changed
         )
         self.scene_runtime.set_content_ingress(self._content_frame_ingress.descriptor)
         self.scene_runtime.content_ingress_demand_changed.connect(
@@ -478,7 +448,6 @@ class MainWindow(QWidget):
             self._projection_targets.on_idle_media_applied
         )
         self._media_mirror_was_enabled = self._program_mirror_enabled()
-        self._native_fallback_mirror_required = False
         self._native_window_output_suppressed = False
         # Surfaces whose geometry_changed is already wired to the reconcile.
         self._geometry_watched_surfaces: list[weakref.ref] = []
@@ -496,51 +465,23 @@ class MainWindow(QWidget):
         document = self.scene_documents.document
         preview_output = document.output(BusId.MEDIA_WINDOWS)
         program_output = document.output(BusId.VIRTUAL_CAMERA)
-        if libobs_scene_engine_selected():
-            # The libobs sidecar composites the edited scene into a
-            # cross-platform BGRA block the app owns (see libobs_preview_egress).
-            from .controllers.shared_memory_preview_egress import (
-                SharedMemoryPreviewEgressController,
-            )
-
-            self._scene_preview_egress = SharedMemoryPreviewEgressController(
-                preview_output.video_format.width,
-                preview_output.video_format.height,
-                self,
-            )
-        else:
-            self._scene_preview_egress = SceneFrameEgressController(
-                preview_output.video_format.width,
-                preview_output.video_format.height,
-                self,
-                worker_name="solin-scene-preview-egress",
-            )
+        self._scene_preview_egress = SharedMemoryPreviewEgressController(
+            preview_output.video_format.width,
+            preview_output.video_format.height,
+            self,
+        )
         self._scene_preview_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )
         self._scene_preview_egress.frame_ready.connect(
             self._on_scene_preview_frame
         )
-        if libobs_scene_engine_selected():
-            # The libobs sidecar mirrors the program main mix into a
-            # cross-platform BGRA block for the operator Program tab.
-            from .controllers.shared_memory_preview_egress import (
-                SharedMemoryPreviewEgressController,
-            )
-
-            self._scene_program_egress = SharedMemoryPreviewEgressController(
-                program_output.video_format.width,
-                program_output.video_format.height,
-                self,
-                channel_id="solin-program",
-            )
-        else:
-            self._scene_program_egress = SceneVideoFrameEgressController(
-                program_output.video_format.width,
-                program_output.video_format.height,
-                self,
-                worker_name="solin-scene-program-egress",
-            )
+        self._scene_program_egress = SharedMemoryPreviewEgressController(
+            program_output.video_format.width,
+            program_output.video_format.height,
+            self,
+            channel_id="solin-program",
+        )
         self._scene_program_egress.descriptor_changed.connect(
             self._on_scene_frame_egress_descriptor_changed
         )
@@ -619,11 +560,6 @@ class MainWindow(QWidget):
         # OBS/DistroAV NDI program stream receiver
         self._ndi_service = service_factories.ndi_receiver(self)
 
-        self._camera_service = (
-            service_factories.camera(self)
-            if service_factories.camera is not None
-            else None
-        )
 
         # Zoom Meetings integration
         self._zoom_service = service_factories.zoom(self._zoom_settings, self)
@@ -688,12 +624,10 @@ class MainWindow(QWidget):
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
-                camera_service=self._camera_service,
                 app_settings=self._app_settings,
                 obs_settings=self._obs_settings,
                 zoom_settings=self._zoom_settings,
                 auto_share_settings=self._auto_share_settings,
-                camera_settings=self._camera_settings,
                 auto_key_settings=self._auto_key_settings,
                 media_settings=self._media_settings,
                 playback_protection=self.playback_protection,
@@ -789,10 +723,6 @@ class MainWindow(QWidget):
                     self._live_integrations.on_quick_obs_return_scene_change(scene_name)
                 ),
                 project_obs_stream=lambda: self._live_integrations.project_obs_ndi_stream(),
-                project_camera_stream=lambda: self._live_integrations.project_camera_stream(),
-                camera_selection_changed=(
-                    lambda option: self._live_integrations.on_camera_selection_changed(option)
-                ),
                 profile_switch_requested=self._profile_switch.request_switch,
             ),
             media_info_queue_factory=media_info_queue_factory,
@@ -900,7 +830,6 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
-                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 playlist_edit_is_temp=lambda: getattr(
                     self.playlist_widget, "is_temporary_edit", False
@@ -932,7 +861,6 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
-                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 auto_share_configured=(self._projection_integrations.auto_share_configured),
             ),
@@ -941,9 +869,6 @@ class MainWindow(QWidget):
                 update_projection_status=(self._projection_integrations.update_status),
                 set_obs_stream_active=lambda active: self._live_integrations.set_obs_stream_active(
                     active
-                ),
-                set_camera_stream_active=lambda active: (
-                    self._live_integrations.set_camera_stream_active(active)
                 ),
             ),
         )
@@ -970,8 +895,6 @@ class MainWindow(QWidget):
                 projection_windows=self._raw_projection_windows,
                 playback_protection=self.playback_protection,
                 content_frame_sink=self._program_content.submit_frame,
-                camera_settings=self._camera_settings,
-                camera_service=self._camera_service,
             ),
             LiveIntegrationHandlers(
                 stop_projection=self._projection_stop.stop_projection,
@@ -985,7 +908,6 @@ class MainWindow(QWidget):
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 ndi_service=self._ndi_service,
-                camera_service=self._camera_service,
                 projection_windows=self._raw_projection_windows,
                 playback_protection=self.playback_protection,
                 program_content=self._program_content,
@@ -1020,7 +942,6 @@ class MainWindow(QWidget):
                 settings_widget=self.settings_widget,
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
-                camera_service=self._camera_service,
                 auto_share_finished=self._auto_share_finished,
                 media_countdown_automation=self._media_countdown_automation,
             ),
@@ -1092,7 +1013,6 @@ class MainWindow(QWidget):
                     media_tree_runtime=self.media_tree_runtime,
                     media_controller=self.media_ctrl,
                     ndi=self._ndi_service,
-                    camera=self._camera_service,
                     obs=self._obs_service,
                     zoom=self._zoom_service,
                     ipc=lambda: self._ipc_controller,
@@ -1148,14 +1068,8 @@ class MainWindow(QWidget):
 
     def _reconcile_scene_media_egress(self) -> None:
         self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
-        # Under libobs the sidecar paints projection windows directly, so the
-        # program egress only feeds the operator Program tab — demand it whenever
-        # the program is mirrored. The native engine demands it as a window
-        # fallback instead.
-        if libobs_scene_engine_selected():
-            program_required = self._program_mirror_enabled()
-        else:
-            program_required = self._native_fallback_mirror_required
+        # Program egress feeds the operator preview and fallback projection windows.
+        program_required = self._program_mirror_enabled()
         self.scene_runtime.set_program_egress(
             self._scene_program_egress.descriptor if program_required else None
         )
@@ -1230,15 +1144,6 @@ class MainWindow(QWidget):
         else:
             self.media_ctrl.on_engine_media_state(event.state)
 
-    def _on_native_content_source_health_changed(self, source_id: str) -> None:
-        if source_id != CONTENT_SOURCE_ID:
-            return
-        health = self.scene_runtime.source_health(source_id)
-        if health is not None and health.error_code:
-            self._content_frame_ingress.recover_accelerated_transport(
-                health.error_code
-            )
-
     def _reconcile_native_scene_surfaces(self) -> None:
         mirror_enabled = self._program_mirror_enabled()
         render_bus = (
@@ -1252,7 +1157,6 @@ class MainWindow(QWidget):
             "browser",
             "timer",
             "obs_stream",
-            "camera_stream",
         }
         # Native windows follow their independent scene selections. Solin Content
         # presents foreground visuals or idle inside the selected composition.
@@ -1330,15 +1234,6 @@ class MainWindow(QWidget):
                     )
                 )
 
-        fallback_windows = (
-            tuple(self.projection_session.all_windows())
-            if mirror_enabled
-            else ()
-        )
-        self._native_fallback_mirror_required = any(
-            not getattr(window, "native_output_active", False)
-            for window in fallback_windows
-        )
         if targets:
             self.scene_runtime.set_window_targets(tuple(targets))
         else:
@@ -1427,12 +1322,10 @@ class MainWindow(QWidget):
     def _on_scene_preview_frame(self, image) -> None:
         self.scene_runtime.publish_preview_frame(image)
 
-    def _on_scene_program_frame(self, frame) -> None:
+    def _on_scene_program_frame(self, image: QImage) -> None:
         if not self._program_mirror_enabled():
             return
-        # The libobs egress emits a QImage directly; the native one a VideoFrame.
-        image = frame if isinstance(frame, QImage) else video_frame_to_image(frame)
-        if image is None or image.isNull():
+        if image.isNull():
             return
         # Egress feeds each window whose surface is not owned by the native
         # renderer, including libobs fallback after native-output failure.

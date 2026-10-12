@@ -45,8 +45,8 @@ def test_parse_runtime_args_supports_profile_equals_form(tmp_path):
     assert runtime_args.media_files == (str(csv_file),)
 
 
-def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypatch):
-    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
+def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(monkeypatch):
+    monkeypatch.setenv("SOLIN_SCENE_ENGINE", "native")
     events = []
     file_args = ["clip.mp4", "song.mp3"]
     runtime_paths = SimpleNamespace()
@@ -244,8 +244,8 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
         lambda _paths: scene_workspace,
     )
     monkeypatch.setattr(
-        "solin.core.scenes.native_engine.create_native_scene_engine",
-        lambda _cache_dir: scene_engine,
+        "solin.core.scenes.libobs_engine.create_libobs_scene_engine",
+        lambda _images_dir: scene_engine,
     )
     monkeypatch.setattr(
         "solin.core.scenes.ptz_runtime.create_ptz_runtime_services",
@@ -322,7 +322,7 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
     assert window.active_profile is active_profile
     assert window.talk_theme_output_settings is talk_theme_output_settings
     assert window.scene_workspace is scene_workspace
-    assert window.scene_engine is not None
+    assert window.scene_engine is scene_engine
     assert window.ptz_executor is ptz_executor
     assert window.ptz_credentials is ptz_credentials
     assert credential_cleaners == [ptz_credentials.delete]
@@ -345,7 +345,6 @@ def test_build_main_window_runtime_wires_services_to_stable_window_host(monkeypa
 
 
 def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monkeypatch):
-    monkeypatch.setattr(main, "NATIVE_SCENES_SUPPORTED", True)
     events = []
     runtime_paths = SimpleNamespace()
     profile_paths = SimpleNamespace(
@@ -536,8 +535,8 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         lambda _paths: scene_workspace,
     )
     monkeypatch.setattr(
-        "solin.core.scenes.native_engine.create_native_scene_engine",
-        lambda _cache_dir: scene_engine,
+        "solin.core.scenes.libobs_engine.create_libobs_scene_engine",
+        lambda _images_dir: scene_engine,
     )
     monkeypatch.setattr(
         "solin.core.scenes.ptz_runtime.create_ptz_runtime_services",

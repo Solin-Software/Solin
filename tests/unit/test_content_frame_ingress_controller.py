@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from PySide6.QtCore import QCoreApplication, Qt
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QImage, QPixmap
 
 from solin.controllers.content_frame_ingress_controller import (
     ContentFrameIngressController,
@@ -21,6 +21,61 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import VideoColorRange, VideoColorSpace, VideoPixelFormat
 from solin.core.projection.image_framing import ImageTransform
+
+
+def test_default_ingress_publishes_cross_platform_content(monkeypatch) -> None:
+    from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
+
+    monkeypatch.setattr("sys.platform", "linux")
+    controller = ContentFrameIngressController(canvas_width=2, canvas_height=2)
+    try:
+        descriptor = controller.descriptor
+        assert descriptor is not None
+        assert descriptor.transport is FrameChannelTransport.SHARED_MEMORY_BGRA
+        reader = SharedFrameChannelReader(descriptor.handle_token, 2, 2)
+        try:
+            image = QImage(2, 2, QImage.Format.Format_ARGB32)
+            image.fill(QColor("red"))
+            controller.submit_frame(image)
+            frames = []
+
+            def received() -> bool:
+                frame = reader.read_latest()
+                if frame is not None:
+                    frames.append(frame)
+                return bool(frames)
+
+            assert _wait_for(received)
+            assert frames[0].data == bytes(image.constBits())
+        finally:
+            reader.close()
+    finally:
+        controller.close()
+
+
+def test_ingress_retries_channel_creation_after_resource_failure() -> None:
+    from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
+
+    attempts = []
+
+    def create_publisher(width, height):
+        attempts.append((width, height))
+        if len(attempts) == 1:
+            raise OSError("Shared memory could not be allocated")
+        return SharedMemoryContentPublisher(width, height)
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher, canvas_width=2, canvas_height=2,
+    )
+    try:
+        assert controller.descriptor is None
+        image = QImage(2, 2, QImage.Format.Format_ARGB32)
+        image.fill(QColor("red"))
+        controller.submit_frame(image)
+        assert _wait_for(lambda: controller.descriptor is not None)
+        assert attempts == [(2, 2), (2, 2)]
+    finally:
+        controller.close()
 
 
 def test_ingress_rejects_worker_construction_before_acquiring_resources() -> None:
@@ -59,8 +114,6 @@ class _Publisher:
         self.frames: list[bytes] = []
         self.frame_sizes: list[tuple[int, int]] = []
         self.media_epochs: list[int] = []
-        self.requested_media_epochs: list[int] = []
-        self.image_transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
         self.publish_started_at: list[float] = []
         self.publish_delay = publish_delay
         self.published = threading.Event()
@@ -72,12 +125,8 @@ class _Publisher:
         *,
         frame_width: int,
         frame_height: int,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int:
-        assert presentation_timestamp_ns == 0
-        assert duration_ns == 0
         assert media_epoch >= 0
         self.publish_started_at.append(time.monotonic())
         if self.publish_delay:
@@ -88,17 +137,6 @@ class _Publisher:
         self.media_epochs.append(media_epoch)
         self.published.set()
         return len(self.frames)
-
-    def set_media_epoch(self, media_epoch: int) -> None:
-        assert media_epoch >= 0
-        self.requested_media_epochs.append(media_epoch)
-
-    def set_image_transform(
-        self,
-        transform: ImageTransform | None,
-        **options: object,
-    ) -> None:
-        self.image_transforms.append((transform, options))
 
     def close(self) -> None:
         self.closed = True
@@ -130,8 +168,6 @@ class _BlockingFirstPublishPublisher(_Publisher):
         *,
         frame_width: int,
         frame_height: int,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int:
         self.publish_calls += 1
@@ -144,8 +180,6 @@ class _BlockingFirstPublishPublisher(_Publisher):
             pixels,
             frame_width=frame_width,
             frame_height=frame_height,
-            presentation_timestamp_ns=presentation_timestamp_ns,
-            duration_ns=duration_ns,
             media_epoch=media_epoch,
         )
 
@@ -161,8 +195,6 @@ class _BackpressuredPublisher(_Publisher):
         *,
         frame_width: int,
         frame_height: int,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int:
         self.attempts += 1
@@ -172,21 +204,8 @@ class _BackpressuredPublisher(_Publisher):
             pixels,
             frame_width=frame_width,
             frame_height=frame_height,
-            presentation_timestamp_ns=presentation_timestamp_ns,
-            duration_ns=duration_ns,
             media_epoch=media_epoch,
         )
-
-
-class _ImageSource:
-    """A minimal object exposing ``.toImage()`` — the only non-QImage input
-    ``_owned_frame`` still accepts."""
-
-    def __init__(self, image: QImage) -> None:
-        self._image = image
-
-    def toImage(self) -> QImage:
-        return self._image
 
 
 def test_content_ingress_converts_qt_images_to_bounded_bgra_frames() -> None:
@@ -272,46 +291,36 @@ def test_content_ingress_does_not_publish_an_epoch_before_its_first_frame() -> N
     assert not publishers[0].published.wait(0.05)
     controller.close()
     assert publishers[0].media_epochs == [0]
-    assert publishers[0].requested_media_epochs == []
 
 
-def test_content_ingress_coalesces_image_transform_state_independently_from_pixels() -> None:
-    publishers: list[_Publisher] = []
-
-    def create_publisher(width: int, height: int) -> _Publisher:
-        publisher = _Publisher(width, height, len(publishers) + 1)
-        publishers.append(publisher)
-        return publisher
-
+def test_content_ingress_keeps_future_transform_out_of_the_current_epoch() -> None:
+    publisher = _Publisher(8, 4, 1)
     controller = ContentFrameIngressController(
-        publisher_factory=create_publisher,
-        canvas_width=320,
-        canvas_height=180,
+        publisher_factory=lambda *_: publisher, maximum_fps=60,
+        canvas_width=8, canvas_height=4,
     )
-
-    controller.set_image_transform(
-        ImageTransform(2.0, 0.25, -0.1),
-        media_epoch=7,
-        canvas_width=320,
-        canvas_height=180,
-        animate=True,
-    )
-
-    assert _wait_for(lambda: bool(publishers[0].image_transforms))
-    assert publishers[0].frames == []
-    assert publishers[0].image_transforms == [
-        (
-            ImageTransform(2.0, 0.25, -0.1),
-            {
-                "media_epoch": 7,
-                "canvas_width": 320,
-                "canvas_height": 180,
-                "animate": True,
-                "duration_ms": 2100,
-            },
+    image = QImage(4, 4, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    try:
+        controller.begin_presentation(1)
+        controller.submit_frame(image)
+        assert _wait_for(lambda: len(publisher.frames) == 1)
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=2,
+            canvas_width=8, canvas_height=4, animate=False,
         )
-    ]
-    controller.close()
+        controller.submit_frame(image)
+        assert _wait_for(lambda: len(publisher.frames) >= 2)
+        assert publisher.frame_sizes[-1] == (4, 4)
+        assert publisher.media_epochs[-1] == 1
+
+        controller.begin_presentation(2)
+        controller.submit_frame(image)
+        assert _wait_for(lambda: publisher.media_epochs[-1] == 2)
+        assert publisher.frame_sizes[-1] == (8, 4)
+        assert publisher.frames[-1] == bytes((0, 0, 255, 255)) * 32
+    finally:
+        controller.close()
 
 
 def test_content_ingress_keeps_a_stable_channel_when_input_dimensions_change() -> None:
@@ -346,35 +355,219 @@ def test_content_ingress_keeps_a_stable_channel_when_input_dimensions_change() -
 
 
 def test_content_ingress_applies_image_transform_before_its_pixels() -> None:
-    publishers: list[_Publisher] = []
+    publisher = _Publisher(8, 4, 1)
+    controller = ContentFrameIngressController(
+        publisher_factory=lambda *_: publisher, maximum_fps=60,
+        canvas_width=8, canvas_height=4,
+    )
+    image = QImage(4, 4, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    try:
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=1,
+            canvas_width=8, canvas_height=4, animate=False,
+        )
+        controller.begin_presentation(1)
+        controller.submit_frame(image)
+        assert publisher.published.wait(1.0)
+        assert publisher.frame_sizes == [(8, 4)]
+        assert publisher.frames == [bytes((0, 0, 255, 255)) * 32]
+        assert publisher.media_epochs == [1]
+    finally:
+        controller.close()
 
-    def create_publisher(width: int, height: int) -> _Publisher:
-        publisher = _Publisher(width, height, len(publishers) + 1)
-        publishers.append(publisher)
+
+def test_new_epoch_animation_starts_without_the_previous_epochs_zoom() -> None:
+    from solin.core.projection.transform_animation import ProjectionTransformAnimation
+
+    publisher = _Publisher(8, 4, 1)
+    controller = ContentFrameIngressController(
+        publisher_factory=lambda *_: publisher, maximum_fps=60,
+        canvas_width=8, canvas_height=4,
+    )
+    controller._animation = ProjectionTransformAnimation(clock=lambda: 0.0)
+    sleeping = threading.Event()
+    wait = controller._condition.wait
+
+    def observe_wait(timeout=None):
+        if timeout is None:
+            sleeping.set()
+        return wait(timeout)
+
+    controller._condition.wait = observe_wait
+    image = QImage(4, 4, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    try:
+        controller.begin_presentation(1)
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=1,
+            canvas_width=8, canvas_height=4, animate=False,
+        )
+        controller.submit_frame(image)
+        assert _wait_for(lambda: bool(publisher.frames))
+        assert publisher.frame_sizes[0] == (8, 4)
+        with controller._condition:
+            sleeping.clear()
+            controller._condition.notify()
+        assert sleeping.wait(1.0)
+        # Let the previous frame pacing deadline expire while the worker sleeps.
+        time.sleep(0.03)
+
+        # Wake the sleeping worker with the target, epoch and pixels together.
+        with controller._condition:
+            controller.set_image_transform(
+                ImageTransform(1.5, 0.0, 0.0), media_epoch=2,
+                canvas_width=8, canvas_height=4, animate=True,
+            )
+            controller.begin_presentation(2)
+            controller.submit_frame(image)
+        assert _wait_for(lambda: 2 in publisher.media_epochs)
+        first = publisher.media_epochs.index(2)
+        assert publisher.frame_sizes[first] == (4, 4)
+        assert publisher.frames[first] == bytes(image.constBits())
+    finally:
+        controller.close()
+
+
+def test_channel_recreation_announces_descriptor_after_epoch_cancellation() -> None:
+    publisher = _Publisher(2, 2, 1)
+    creating = threading.Event()
+    release = threading.Event()
+    attempts = []
+
+    def create_publisher(*dimensions):
+        attempts.append(dimensions)
+        if len(attempts) == 1:
+            raise OSError("Allocation temporarily unavailable")
+        creating.set()
+        assert release.wait(2.0)
         return publisher
 
     controller = ContentFrameIngressController(
-        publisher_factory=create_publisher,
-        maximum_fps=60,
-        canvas_width=2,
-        canvas_height=2,
+        publisher_factory=create_publisher, canvas_width=2, canvas_height=2,
     )
-    controller.set_image_transform(
-        ImageTransform(2.0, 0.0, 0.0),
-        media_epoch=1,
-        canvas_width=2,
-        canvas_height=2,
-        animate=False,
-    )
-    controller.begin_presentation(1)
-    controller.submit_frame(QImage(2, 2, QImage.Format.Format_ARGB32))
+    descriptors = []
+    controller.descriptor_changed.connect(descriptors.append)
+    image = QImage(2, 2, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    try:
+        controller.submit_frame(image)
+        assert creating.wait(1.0)
+        controller.begin_presentation(1)
+        controller.submit_frame(image)
+        release.set()
+        assert _wait_for(lambda: bool(publisher.frames))
+        assert publisher.media_epochs == [1]
+        assert _wait_for(lambda: descriptors == [publisher.descriptor])
+    finally:
+        release.set()
+        controller.close()
 
-    assert publishers[0].published.wait(1.0)
-    # The transform for the epoch is delivered before the epoch's first frame.
-    assert publishers[0].image_transforms[0][0] == ImageTransform(2.0, 0.0, 0.0)
-    assert publishers[0].media_epochs == [1]
-    assert len(publishers) == 1
-    controller.close()
+
+def test_transform_recreates_channel_and_announces_it_before_pixels() -> None:
+    publisher = _Publisher(8, 4, 1)
+    attempts = []
+
+    def create_publisher(*dimensions):
+        attempts.append(dimensions)
+        if len(attempts) == 1:
+            raise OSError("Allocation temporarily unavailable")
+        return publisher
+
+    controller = ContentFrameIngressController(
+        publisher_factory=create_publisher, canvas_width=8, canvas_height=4,
+    )
+    descriptors = []
+    controller.descriptor_changed.connect(descriptors.append)
+    try:
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=0,
+            canvas_width=8, canvas_height=4, animate=False,
+        )
+        assert _wait_for(lambda: descriptors == [publisher.descriptor])
+        assert controller.descriptor == publisher.descriptor
+        assert publisher.frames == []
+        assert attempts == [(8, 4), (8, 4)]
+    finally:
+        controller.close()
+
+
+def test_epoch_change_cancels_pixels_being_transformed(monkeypatch) -> None:
+    from solin.controllers import content_frame_ingress_controller as ingress
+
+    publisher = _Publisher(8, 4, 1)
+    rendering = threading.Event()
+    release = threading.Event()
+    render = ingress._framed_for_canvas
+
+    def block_render(*args):
+        rendering.set()
+        assert release.wait(2.0)
+        return render(*args)
+
+    monkeypatch.setattr(ingress, "_framed_for_canvas", block_render)
+    controller = ContentFrameIngressController(
+        publisher_factory=lambda *_: publisher, canvas_width=8, canvas_height=4,
+    )
+    first = QImage(4, 4, QImage.Format.Format_ARGB32)
+    first.fill(QColor("red"))
+    second = QImage(4, 4, QImage.Format.Format_ARGB32)
+    second.fill(QColor("blue"))
+    try:
+        controller.begin_presentation(1)
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=1,
+            canvas_width=8, canvas_height=4, animate=False,
+        )
+        controller.submit_frame(first)
+        assert rendering.wait(1.0)
+        controller.begin_presentation(2)
+        controller.submit_frame(second)
+        release.set()
+        assert _wait_for(lambda: bool(publisher.frames))
+        assert publisher.media_epochs == [2]
+        assert publisher.frame_sizes == [(4, 4)]
+        assert publisher.frames == [bytes(second.constBits())]
+    finally:
+        release.set()
+        controller.close()
+
+
+def test_animated_transform_redraws_retained_pixels_until_the_target(monkeypatch) -> None:
+    from solin.controllers import content_frame_ingress_controller as ingress
+    from solin.core.projection.transform_animation import ProjectionTransformAnimation
+
+    now = [0.0]
+    monkeypatch.setattr(
+        ingress, "ProjectionTransformAnimation",
+        lambda: ProjectionTransformAnimation(duration_seconds=1.0, clock=lambda: now[0]),
+    )
+    publisher = _Publisher(8, 4, 1)
+    controller = ContentFrameIngressController(
+        publisher_factory=lambda *_: publisher, maximum_fps=60,
+        canvas_width=8, canvas_height=4,
+    )
+    image = QImage(4, 4, QImage.Format.Format_ARGB32)
+    image.fill(QColor("red"))
+    try:
+        controller.begin_presentation(1)
+        controller.submit_frame(image)
+        assert _wait_for(lambda: len(publisher.frames) == 1)
+        controller.set_image_transform(
+            ImageTransform(2.0, 0.0, 0.0), media_epoch=1,
+            canvas_width=8, canvas_height=4, animate=True,
+        )
+        assert _wait_for(lambda: len(publisher.frames) >= 2)
+        now[0] = 0.1
+        assert _wait_for(lambda: publisher.frame_sizes[-1] == (8, 4))
+        intermediate = publisher.frames[-1]
+        target = bytes((0, 0, 255, 255)) * 32
+        assert intermediate != target
+        now[0] = 1.0
+        assert _wait_for(lambda: publisher.frames[-1] == target)
+        assert set(publisher.media_epochs) == {1}
+    finally:
+        controller.close()
 
 
 def test_content_ingress_preserves_smaller_source_dimensions_for_gpu_scaling() -> None:
@@ -513,11 +706,11 @@ def test_content_ingress_shutdown_budget_does_not_join_native_worker(
     assert publishers[0].closed
 
 
-def test_content_ingress_materializes_toimage_source_before_worker_handoff() -> None:
+def test_content_ingress_materializes_qpixmap_before_worker_handoff() -> None:
     image = QImage(2, 2, QImage.Format.Format_ARGB32)
     image.fill(QColor("#112233"))
 
-    owned = _owned_frame(_ImageSource(image))
+    owned = _owned_frame(QPixmap.fromImage(image))
 
     assert isinstance(owned, QImage)
     assert not owned.isNull()

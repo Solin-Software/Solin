@@ -70,15 +70,6 @@ def main() -> int:
     marker = Path(sys.argv[2]) if len(sys.argv) >= 3 else None
     crash_this_generation = mode == "crash_first" and marker is not None and not marker.exists()
     recording_path = ""
-    if mode == "expect_locked_plugins":
-        plugin_path = os.environ.get("GST_PLUGIN_SYSTEM_PATH_1_0", "")
-        registry_path = os.environ.get("GST_REGISTRY_1_0", "")
-        if (
-            os.environ.get("GST_PLUGIN_PATH_1_0") != ""
-            or not plugin_path.endswith(os.path.join("lib", "gstreamer-1.0"))
-            or not registry_path.endswith("registry.bin")
-        ):
-            return 73
     while request := read_envelope(sys.stdin.buffer):
         if request.process_generation != os.environ["SOLIN_MEDIA_ENGINE_PROCESS_GENERATION"]:
             return 70
@@ -91,7 +82,6 @@ def main() -> int:
                     "rtsp_cameras": False,
                     "hardware_compositing": False,
                     "virtual_camera": False,
-                    "d3d11_shared_textures": False,
                     "program_recording": True,
                     "audio_input_capture": True,
                     "system_audio_capture": True,
@@ -176,7 +166,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_recording_payload",
-                        "error_message": "Recording payload did not match protocol v5",
+                        "error_message": "Recording payload did not match the scene IPC contract",
                     },
                 )
                 continue
@@ -207,7 +197,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_recording_audio_payload",
-                        "error_message": "Recording audio payload did not match protocol v5",
+                        "error_message": "Recording audio payload did not match the scene IPC contract",
                     },
                 )
                 continue
@@ -246,7 +236,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_prepare_payload",
-                        "error_message": "Prepare payload did not match protocol v5",
+                        "error_message": "Prepare payload did not match the scene IPC contract",
                     },
                 )
                 continue
@@ -287,7 +277,7 @@ def main() -> int:
                     "error",
                     {
                         "error_code": "invalid_take_payload",
-                        "error_message": "Take payload did not match protocol v5",
+                        "error_message": "Take payload did not match the scene IPC contract",
                     },
                 )
                 continue

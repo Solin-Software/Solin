@@ -885,7 +885,7 @@ class LocalAudioInfoExtractor(_ThreadedMediaInfoExtractor):
 class MediaInfoExtractor(QObject):
     """Thumbnail + title + duration extraction via the ffprobe/ffmpeg CLIs.
 
-    libobs is the only media engine, so there is no ``QMediaPlayer`` to probe.
+    Metadata is extracted with ffprobe independently of libobs playback.
     Metadata is read out of band on a worker thread:
 
       1. ``ffprobe`` for the title tag, duration, and whether an embedded cover

@@ -1,9 +1,7 @@
 """
 NDI receiver service for OBS/DistroAV program output.
 
-The service intentionally uses the NDI runtime directly instead of routing the
-feed through QMediaPlayer. NDI is a live video transport, not a seekable media
-URL, so the public surface is frame-oriented: start a named source, emit QImage
+The service uses the NDI runtime directly. Its public surface is frame-oriented: start a named source, emit QImage
 frames, and stop cleanly.
 """
 

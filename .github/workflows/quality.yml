@@ -156,12 +156,12 @@ jobs:
 
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
 
-      - name: Native protocol and benchmarks
+      - name: Virtual-camera transport tests
         if: runner.os == 'Linux'
         run: |
-          cmake -S native/media_engine -B build/native/media-engine-ci -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/native/media-engine-ci --config Release --parallel
-          ctest --test-dir build/native/media-engine-ci -C Release --output-on-failure
+          cmake -S native/virtual_camera -B build/native/virtual-camera-ci -DCMAKE_BUILD_TYPE=Release -DSOLIN_VIRTUAL_CAMERA_BUILD_TESTS=ON
+          cmake --build build/native/virtual-camera-ci --config Release --parallel
+          ctest --test-dir build/native/virtual-camera-ci -C Release --output-on-failure
 
       - name: Python suites on Linux
         if: runner.os == 'Linux'

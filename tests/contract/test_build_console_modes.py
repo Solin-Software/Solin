@@ -64,7 +64,7 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert 'export PATH="$APP_DIR/bin${PATH:+:$PATH}"' in script
     assert '"${WORK_ROOT}/main.build"' in script
     assert "bash scripts/build_solin.sh" in workflow
-    assert "gstreamer1.0-plugins-bad" in workflow
+    assert "gstreamer1.0-plugins-bad" not in workflow
     assert "xdotool" in workflow
     assert "runs-on: ubuntu-24.04" in workflow
     assert "scripts/package_solin_appimage.sh" in workflow

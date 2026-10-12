@@ -5,12 +5,16 @@ import hashlib
 import json
 import os
 import shutil
-import struct
 import subprocess
 import sys
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+if __package__:
+    from . import _windows_pe
+else:
+    import _windows_pe
 
 try:
     import winreg
@@ -27,7 +31,7 @@ DEFAULT_FILTER_X64 = (
     REPOSITORY_ROOT
     / "build"
     / "native"
-    / "media-engine-gstreamer"
+    / "virtual-camera-x64"
     / "Release"
     / FILTER_FILENAME
 )
@@ -35,7 +39,7 @@ DEFAULT_FILTER_X86 = (
     REPOSITORY_ROOT
     / "build"
     / "native"
-    / "directshow-filter-x86"
+    / "virtual-camera-x86"
     / "Release"
     / FILTER_FILENAME
 )
@@ -96,32 +100,13 @@ def _managed_staging_root() -> Path:
     return Path(local_app_data) / "Solin" / "VirtualCamera" / "versions"
 
 
-def _pe_machine(path: Path) -> int:
-    try:
-        with path.open("rb") as binary:
-            if binary.read(2) != b"MZ":
-                return 0
-            binary.seek(0x3C)
-            pe_offset_bytes = binary.read(4)
-            if len(pe_offset_bytes) != 4:
-                return 0
-            pe_offset = struct.unpack("<I", pe_offset_bytes)[0]
-            binary.seek(pe_offset)
-            if binary.read(4) != b"PE\0\0":
-                return 0
-            machine = binary.read(2)
-            return struct.unpack("<H", machine)[0] if len(machine) == 2 else 0
-    except OSError:
-        return 0
-
-
 def _validate_filter(path: Path, expected_machine: int, architecture: str) -> Path:
     resolved = path.resolve(strict=True)
     if resolved.name.casefold() != FILTER_FILENAME:
         raise VirtualCameraRegistrationError(
             f"Unexpected {architecture} filter filename: {resolved.name}"
         )
-    if _pe_machine(resolved) != expected_machine:
+    if _windows_pe.pe_machine(resolved) != expected_machine:
         raise VirtualCameraRegistrationError(
             f"The {architecture} filter has the wrong PE architecture: {resolved}"
         )
@@ -213,7 +198,7 @@ def _registration_state(architecture: str) -> RegistrationState:
             and isinstance(filter_data, bytes)
             and bool(filter_data)
             and Path(dll_path).is_absolute()
-            and _pe_machine(Path(dll_path)) == expected_machine
+            and _windows_pe.pe_machine(Path(dll_path)) == expected_machine
         )
         return RegistrationState(
             architecture,

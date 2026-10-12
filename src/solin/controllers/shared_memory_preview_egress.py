@@ -1,15 +1,13 @@
 """App-side cross-platform preview egress for the libobs engine.
 
-The editor canvas shows a live composite of the scene being edited. main's
-transport is a Windows-only shared-memory subscriber; this is the cross-platform
-equivalent: the app **creates and owns** a ``SHARED_MEMORY_BGRA`` block, and the
-libobs sidecar **attaches as a writer** and composites the edited scene into it
-(see ``core/scenes/libobs_preview_egress.py``).
+The app **creates and owns** a ``SHARED_MEMORY_BGRA`` block, and the libobs
+sidecar **attaches as a writer**. The preview channel carries the scene being
+edited; the program channel carries the program composite (see
+``core/scenes/libobs_preview_egress.py`` and ``libobs_program_egress.py``).
 
-It mirrors :class:`SceneFrameEgressController`'s surface (``frame_ready`` /
-``descriptor_changed`` / ``descriptor`` / ``reconfigure`` / ``close``) so
-``main_window`` wires it identically; a worker thread polls the channel and
-emits each new frame as a detached :class:`QImage`.
+``main_window`` wires ``frame_ready`` and ``descriptor_changed`` to the scene
+runtime and projection consumers. A worker thread polls the channel and emits
+each new frame as a detached :class:`QImage`.
 """
 
 from __future__ import annotations
@@ -145,7 +143,7 @@ class SharedMemoryPreviewEgressController(QObject):
                 continue
             if frame is None:
                 continue
-            # BGRA reinterpreted as ARGB32 (matches the native egress path); copy
+            # BGRA reinterpreted as ARGB32; copy
             # so the QImage owns its pixels once the transient frame is dropped.
             image = QImage(
                 frame.data, frame.width, frame.height, frame.stride,

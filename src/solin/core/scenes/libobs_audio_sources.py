@@ -1,10 +1,10 @@
 """Audio capture sources (microphone + system audio) for the libobs sidecar.
 
-The recorder and the virtual camera both bind the libobs **main audio mix**
+The recorder and Linux virtual-camera output bind the libobs **main audio mix**
 (``context.get_audio()``). Any source placed on a global output channel is summed
 into that mix, so this module turns the app's per-recording audio *selection*
 (a microphone + a system-audio choice) into libobs capture sources routed onto
-their own channels — the recording and the vcam then carry that audio for free.
+their own channels. The Windows DirectShow virtual camera receives video only.
 
 Two selections are handled, each an :class:`AudioDeviceSelection` reduced to its
 wire form ``{"mode", "device_id"}`` (see ``recording.py``):
@@ -23,7 +23,7 @@ left live.
 When a selection names a device that is no longer present (or the capture source
 cannot be created), :meth:`apply` reports a ``device_unavailable`` warning for
 that slot so the sidecar can surface it to the app without interrupting the
-recording — mirroring the native engine's ``microphone_warning`` behaviour.
+recording.
 
 Discovery (:meth:`list_devices`) enumerates the real devices behind each capture
 kind via libobs source *properties*; the synthetic ``default`` / ``__custom__``

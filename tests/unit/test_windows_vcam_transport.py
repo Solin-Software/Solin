@@ -1,7 +1,7 @@
 """Byte-exactness tests for the Windows vcam wire + ring formats.
 
 The reader helpers here mirror the C++ ``decode_virtual_camera_broker_response``,
-``parse_header`` and ``read_current_slot`` in native/media_engine, so a passing
+``parse_header`` and ``read_current_slot`` in native/virtual_camera, so a passing
 round-trip proves the Python producer emits bytes the shipped DirectShow filter
 accepts.
 """

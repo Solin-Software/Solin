@@ -69,26 +69,14 @@ def exclude_from_aero_peek(hwnd: int) -> None:
 
 class VideoDisplayWidget(QWidget):
     """
-    High-performance video/image display widget.
+    Paint QImage content for the Qt projection fallback.
 
-    Video path (per frame):
-      • Receives QVideoFrame via set_video_frame() — no conversion yet.
-      • Calls self.update() *only once* per pending paint (throttle flag).
-      • paintEvent converts the frame to QImage and draws it directly onto
-        the widget via QPainter.drawImage(), with SmoothPixmapTransform
-        render hint so the GPU compositor handles the scaling instead of
-        doing pixmap.scaled() on the CPU.
-      • The aspect-ratio destination rect is cached and recalculated only
-        when the widget is resized.
+    ``set_image`` stores the image; ``paintEvent`` draws it with QPainter and
+    smooth scaling. The aspect-ratio destination rect is cached until the widget
+    or source size changes. Zoom/pan uses the shared time-based transform
+    animation, with paint requests coalesced while an update is pending.
 
-    Image path (static content):
-      • Receives QImage via set_image() — stored and painted the same way.
-      • Keeps a QPixmap copy for faster subsequent paints (no CPU re-scale).
-
-    Zoom/pan transform (images only):
-      • set_image_transform(zoom, norm_x, norm_y) applies an offset on top
-        of the centred fit-to-widget base rect.
-      • Uses a time-based premium easing curve so projector motion stays smooth.
+    The libobs sidecar renders video into the sibling ``NativeVideoSurface``.
     """
 
     def __init__(self, parent=None):
@@ -591,14 +579,9 @@ class BaseProjectionView(QWidget):
             self.set_native_output_active(False)
         self._fallback_media_entry_pending = False
         if native_presentation_is_active:
-            # Raw remains a native presentation across media->media and
-            # media->idle changes. Hiding this stable host for each logical
-            # item tears down visibility underneath d3d11videosink; a one-shot
-            # image can then be published while its swap chain is unavailable,
-            # leaving the previous frame on screen until a video supplies more
-            # frames. Route ownership belongs exclusively to the native surface
-            # reconciler, which will disable it when the destination genuinely
-            # changes to the Qt fallback.
+            # Keep the libobs display host visible across media->media and
+            # media->idle changes. The surface reconciler owns route changes
+            # and disables this host when the destination uses the Qt fallback.
             self._clear_timer_presentation()
             self._stop_all_anims()
             self._current_pixmap = None

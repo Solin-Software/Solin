@@ -40,8 +40,12 @@ $env:SOLIN_DIRECTSHOW_HARNESS_X86 = "C:\path\to\x86\solin-virtual-camera-filter-
 The upgrade smoke installs into a temporary directory, seeds profile,
 settings, playlist, and meeting-tree sentinels, installs the new full
 installer over it, verifies that user state survived, starts the upgraded app,
-then runs the generated uninstaller and removes its test registry keys. It is
-also wired into the Windows release workflow after the Inno Setup build. The
+then runs the generated uninstaller and removes its test registry keys. It
+also seeds obsolete `backports` extensions and the retired `native/media-engine`
+payload, verifies their removal, and preserves unrelated application and native
+files. The current `native/virtual-camera` DLLs must match the independently
+managed registered pair.
+The smoke is wired into the Windows release workflow after the Inno Setup build. The
 workflow resolves the previous setup and verifies its SHA-256 before execution.
 The smoke validates current-user and all-users DirectShow registration in both
 WOW64 registry views, loads each installed DLL through its architecture-matched

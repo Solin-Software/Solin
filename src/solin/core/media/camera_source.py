@@ -40,17 +40,16 @@ def camera_source_spec(
 ) -> tuple[str, dict]:
     """The libobs capture-source kind + settings for a camera, per platform.
 
-    ``QCameraDevice.id()`` yields the platform-native device id — Linux:
-    ``/dev/videoN``; Windows: the DirectShow device path; macOS: the AVFoundation
-    ``uniqueID`` — and each OBS capture source expects it under a different key:
+    Device ids use the platform capture backend: Linux ``/dev/videoN``,
+    Windows DirectShow device paths, and macOS AVFoundation ``uniqueID``.
+    Each OBS capture source expects its id under a different key:
 
     * Linux  → ``v4l2_input``        ``device_id``
     * Windows→ ``dshow_input``       ``video_device_id`` (``"<name>:<path>"``)
     * macOS  → ``av_capture_input``  ``device``
 
-    (Windows' dshow matches ``"<friendly name>:<device path>"``; the plain path is
-    a best-effort fallback.) If the native source can't be created the caller
-    keeps its fallback path, so an imperfect id degrades, it doesn't break.
+    Windows dshow matches ``"<friendly name>:<device path>"``. Persisted plain
+    paths are combined with the friendly name when available.
 
     On Linux a selected ``pixel_format`` + ``width``/``height`` pins the v4l2
     capture format. This matters for performance: with only ``device_id`` the
@@ -84,11 +83,8 @@ def libobs_cameras() -> list[tuple[str, str]]:
     ids correct by construction: whatever comes back is, by definition, something
     the matching capture source accepts.
 
-    Windows is why it matters. Qt's ``QMediaDevices`` enumerated through Media
-    Foundation while libobs opens cameras through DirectShow — different
-    namespaces, different id formats. Handing a Qt id to ``dshow_input`` produced
-    ``DecodeDeviceId failed`` and a black picture, because the device was never
-    opened.
+    Windows capture uses DirectShow ids from ``dshow_input``. Enumerating the
+    same source avoids mixing ids from incompatible device namespaces.
 
     Returns ``[]`` when libobs is unavailable, so callers can degrade rather
     than lose the camera list entirely.

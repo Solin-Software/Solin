@@ -1,13 +1,12 @@
 """Wire + shared-memory formats for the Windows virtual-camera feed.
 
-Pure-Python, byte-exact reimplementations of the formats the shipped Solin
-DirectShow filter DLL already speaks, so the libobs sidecar can act as the
-broker + frame producer on Windows (the native GStreamer engine normally plays
-that role, but it does not run under the libobs engine). Mirrors:
+Pure-Python implementations of the wire and frame formats shared by the libobs
+sidecar's broker + frame producer and the shipped Solin DirectShow filter DLL.
+Mirrors:
 
-* ``native/media_engine/src/virtual_camera_broker_protocol.cpp`` — the v3
+* ``native/virtual_camera/src/virtual_camera_broker_protocol.cpp`` — the v3
   broker request/response frames exchanged over the per-user named pipe.
-* ``native/media_engine/src/shared_video_frame_channel.cpp`` +
+* ``native/virtual_camera/src/shared_video_frame_channel.cpp`` +
   ``video_frame.cpp`` — the ``SLNVDO01`` shared-memory frame ring (128-byte
   header + 3 seqlock slots) the filter reads.
 

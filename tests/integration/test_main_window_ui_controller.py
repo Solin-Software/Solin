@@ -2,13 +2,10 @@ import inspect
 
 import pytest
 
-import solin.controllers.main_window_ui_controller as ui_controller_module
 from solin.controllers.main_window_ui_controller import MainWindowUiController
 
 
-def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable(monkeypatch):
-    monkeypatch.setattr(ui_controller_module, "NATIVE_SCENES_SUPPORTED", True)
-
+def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable():
     specs = MainWindowUiController.nav_button_specs()
     attr_names = [attr_name for attr_name, _icon, _label, _index in specs]
     page_indices = [index for _attr_name, _icon, _label, index in specs]
@@ -37,22 +34,8 @@ def test_nav_button_specs_keep_page_indices_and_sidebar_order_stable(monkeypatch
     )
 
 
-def test_native_scenes_navigation_is_absent_on_unsupported_platforms(monkeypatch):
-    monkeypatch.setattr(ui_controller_module, "NATIVE_SCENES_SUPPORTED", False)
-    monkeypatch.setenv("SOLIN_SCENE_ENGINE", "native")
-
-    attr_names = [
-        attr_name
-        for attr_name, _icon, _label, _index in MainWindowUiController.nav_button_specs()
-    ]
-
-    assert "nav_scenes_btn" not in attr_names
-    assert "nav_scenes_btn" not in MainWindowUiController.sidebar_layout_order()
-
-
-@pytest.mark.parametrize("selection", [None, "libobs"])
-def test_libobs_scenes_navigation_is_available_on_all_platforms(monkeypatch, selection):
-    monkeypatch.setattr(ui_controller_module, "NATIVE_SCENES_SUPPORTED", False)
+@pytest.mark.parametrize("selection", [None, "libobs", "native", "invalid"])
+def test_scenes_navigation_ignores_retired_engine_selection(monkeypatch, selection):
     if selection is None:
         monkeypatch.delenv("SOLIN_SCENE_ENGINE", raising=False)
     else:

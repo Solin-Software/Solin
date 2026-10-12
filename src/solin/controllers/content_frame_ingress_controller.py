@@ -5,7 +5,7 @@ import threading
 import time
 from collections.abc import Buffer, Callable
 from dataclasses import dataclass
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 from PySide6.QtCore import (
     QObject,
@@ -16,14 +16,10 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QImage, QPainter
+from PySide6.QtGui import QImage, QPainter, QPixmap
 
 from solin.core.scenes.engine import FrameChannelDescriptor
-from solin.core.scenes.frame_channel import (
-    FrameChannelStaleFrameError,
-    FrameChannelUnavailableError,
-    SharedMemoryVideoFramePublisher,
-)
+from solin.core.scenes.content_frame_publisher import SharedMemoryContentPublisher
 from solin.core.projection.image_framing import (
     ImageTransform,
     normalize_image_transform,
@@ -33,7 +29,6 @@ from solin.core.projection.image_framing import (
     is_identity_image_transform,
 )
 from solin.core.projection.transform_animation import (
-    PROJECTION_TRANSFORM_DURATION_SECONDS,
     ProjectionTransformAnimation,
 )
 
@@ -43,7 +38,6 @@ _DEFAULT_MAXIMUM_FPS = 30
 _DEFAULT_CANVAS_WIDTH = 1920
 _DEFAULT_CANVAS_HEIGHT = 1080
 _SHUTDOWN_BUDGET_SECONDS = 0.5
-_TRANSFORM_DURATION_MS = round(PROJECTION_TRANSFORM_DURATION_SECONDS * 1_000)
 # Redraw rate while a zoom/pan is in flight; the sidecar polls at 1/60.
 _ANIMATION_INTERVAL = 1.0 / 60.0
 
@@ -57,6 +51,10 @@ class _ImageTransformRequest:
     animate: bool
 
 
+class _StaleContentFrameError(RuntimeError):
+    """Content was superseded or disabled before publication completed."""
+
+
 class _FramePublisher(Protocol):
     @property
     def descriptor(self) -> FrameChannelDescriptor: ...
@@ -67,23 +65,8 @@ class _FramePublisher(Protocol):
         *,
         frame_width: int,
         frame_height: int,
-        presentation_timestamp_ns: int = 0,
-        duration_ns: int = 0,
         media_epoch: int = 0,
     ) -> int: ...
-
-    def set_media_epoch(self, media_epoch: int) -> None: ...
-
-    def set_image_transform(
-        self,
-        transform: ImageTransform | None,
-        *,
-        media_epoch: int,
-        canvas_width: int,
-        canvas_height: int,
-        animate: bool,
-        duration_ms: int,
-    ) -> None: ...
 
     def close(self) -> None: ...
 
@@ -105,8 +88,6 @@ class ContentFrameIngressController(QObject):
         parent: QObject | None = None,
         *,
         publisher_factory: Callable[[int, int], _FramePublisher] | None = None,
-        accelerated_publisher_factory: Callable[..., object] | None = None,
-        enable_accelerated: bool | None = None,
         maximum_fps: int = _DEFAULT_MAXIMUM_FPS,
         canvas_width: int = _DEFAULT_CANVAS_WIDTH,
         canvas_height: int = _DEFAULT_CANVAS_HEIGHT,
@@ -114,10 +95,6 @@ class ContentFrameIngressController(QObject):
         if not QThread.isMainThread():
             raise RuntimeError("ContentFrameIngressController must be created on the main Qt thread")
         super().__init__(parent)
-        # accelerated_publisher_factory / enable_accelerated are accepted for
-        # backward-compatible call sites but ignored — the Qt/D3D11 accelerated
-        # path is gone with QtMultimedia.
-        del accelerated_publisher_factory, enable_accelerated
         if isinstance(maximum_fps, bool) or not isinstance(maximum_fps, int):
             raise ValueError("Content ingress FPS must be an integer")
         if not 1 <= maximum_fps <= 60:
@@ -128,7 +105,7 @@ class ContentFrameIngressController(QObject):
             raise ValueError("Content ingress height must be an integer")
         if canvas_width <= 0 or canvas_height <= 0:
             raise ValueError("Content ingress dimensions must be positive")
-        self._publisher_factory = publisher_factory or SharedMemoryVideoFramePublisher
+        self._publisher_factory = publisher_factory or SharedMemoryContentPublisher
         self._canvas_size = QSize(canvas_width, canvas_height)
         self._maximum_fps = maximum_fps
         self._minimum_interval = 1.0 / maximum_fps
@@ -143,6 +120,7 @@ class ContentFrameIngressController(QObject):
         self._pending_image_transform: _ImageTransformRequest | None = None
         # Worker-thread only: interpolates zoom/pan so a reframe glides.
         self._animation = ProjectionTransformAnimation()
+        self._animation_media_epoch = 0
         self._retained_frame: tuple[QImage, int] | None = None
         self._media_epoch = 0
         self._image_transform = _ImageTransformRequest(
@@ -152,7 +130,6 @@ class ContentFrameIngressController(QObject):
             canvas_height=canvas_height,
             animate=False,
         )
-        self._next_video_materialization_at = 0.0
         self._enabled = True
         self._closed = False
         self._publisher: _FramePublisher | None = self._create_publisher()
@@ -178,12 +155,6 @@ class ContentFrameIngressController(QObject):
         with self._condition:
             return self._enabled and not self._closed
 
-    def recover_accelerated_transport(self, error_code: str) -> bool:
-        # No accelerated transport exists any more; the shared-memory channel is
-        # already the only route. Kept for call-site compatibility.
-        del error_code
-        return False
-
     @Slot(bool)
     def set_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -191,7 +162,6 @@ class ContentFrameIngressController(QObject):
             if self._closed or self._enabled == enabled:
                 return
             self._enabled = enabled
-            self._next_video_materialization_at = 0.0
             self._pending_frame = (
                 (QImage(self._retained_frame[0]), self._retained_frame[1])
                 if enabled and self._retained_frame is not None
@@ -212,7 +182,6 @@ class ContentFrameIngressController(QObject):
             if self._closed or media_epoch <= self._media_epoch:
                 return
             self._media_epoch = media_epoch
-            self._next_video_materialization_at = 0.0
             if self._pending_frame is not None and self._pending_frame[1] < media_epoch:
                 self._pending_frame = None
             if self._retained_frame is not None and self._retained_frame[1] < media_epoch:
@@ -222,6 +191,9 @@ class ContentFrameIngressController(QObject):
                 and self._pending_image_transform.media_epoch < media_epoch
             ):
                 self._pending_image_transform = None
+            if self._image_transform.media_epoch == media_epoch:
+                self._pending_image_transform = self._image_transform
+            self._condition.notify_all()
 
     def set_image_transform(
         self,
@@ -255,7 +227,10 @@ class ContentFrameIngressController(QObject):
             animate=bool(animate),
         )
         with self._condition:
-            if self._closed or request == self._image_transform:
+            if (
+                self._closed or media_epoch < self._media_epoch
+                or request == self._image_transform
+            ):
                 return
             self._image_transform = request
             self._pending_image_transform = request
@@ -293,11 +268,13 @@ class ContentFrameIngressController(QObject):
         try:
             while True:
                 with self._condition:
+                    if self._animation_media_epoch != self._media_epoch:
+                        self._animation.reset()
                     while (
                         not self._closed
                         and self._pending_frame is None
                         and self._pending_image_transform is None
-                        and not self._animation.is_active
+                        and not (self._enabled and self._animation.is_active)
                     ):
                         self._condition.wait()
                     if self._closed:
@@ -311,28 +288,22 @@ class ContentFrameIngressController(QObject):
                     pending_image_transform = self._pending_image_transform
                     self._pending_image_transform = None
                 publish_started_at = time.monotonic()
-                controls_ready = True
                 if pending_image_transform is not None:
-                    self._animation.set_target(
-                        pending_image_transform.transform or IDENTITY_IMAGE_TRANSFORM,
-                        animate=pending_image_transform.animate,
-                    )
                     try:
-                        self._publish_image_transform(pending_image_transform)
-                    except FrameChannelUnavailableError:
-                        log.info("Content frame transport is unavailable on this platform")
-                        self.descriptor_changed.emit(None)
-                        return
-                    except Exception:  # noqa: BLE001 - native frame transport boundary
-                        log.warning("Could not publish the content image transform", exc_info=True)
+                        applied = self._apply_image_transform(pending_image_transform)
+                        if applied and pending is None:
+                            with self._condition:
+                                retained = self._retained_frame
+                                if (
+                                    self._enabled and retained is not None
+                                    and retained[1] == self._media_epoch
+                                ):
+                                    pending = retained
+                    except Exception:  # noqa: BLE001 - shared-memory transport boundary
+                        log.warning("Could not prepare the content image transform", exc_info=True)
                         self._reset_publisher()
                         self.descriptor_changed.emit(None)
-                if pending is not None and not controls_ready:
-                    with self._condition:
-                        if not self._closed and self._pending_frame is None:
-                            self._pending_frame = pending
-                            self._condition.notify()
-                elif pending is not None:
+                if pending is not None:
                     frame, media_epoch = pending
                     try:
                         self._publish(frame, media_epoch)
@@ -348,13 +319,9 @@ class ContentFrameIngressController(QObject):
                             ):
                                 self._pending_frame = (frame, media_epoch)
                                 self._condition.notify()
-                    except FrameChannelStaleFrameError:
+                    except _StaleContentFrameError:
                         pass
-                    except FrameChannelUnavailableError:
-                        log.info("Content frame transport is unavailable on this platform")
-                        self.descriptor_changed.emit(None)
-                        return
-                    except Exception:  # noqa: BLE001 - native frame transport boundary
+                    except Exception:  # noqa: BLE001 - shared-memory transport boundary
                         log.warning("Could not publish a content frame", exc_info=True)
                         self._reset_publisher()
                         self.descriptor_changed.emit(None)
@@ -381,7 +348,13 @@ class ContentFrameIngressController(QObject):
     def _publish(self, image: QImage, media_epoch: int) -> None:
         if image.isNull() or image.width() <= 0 or image.height() <= 0:
             return
-        framing = self._animation.sample()
+        with self._condition:
+            self._require_current_frame(media_epoch)
+            framing = (
+                self._animation.sample()
+                if self._animation_media_epoch == media_epoch
+                else IDENTITY_IMAGE_TRANSFORM
+            )
         if not is_identity_image_transform(framing):
             # Bake the operator's zoom/pan into the frame. Only when it is actually
             # framed: with no transform the raw image is published as before and the
@@ -389,78 +362,60 @@ class ContentFrameIngressController(QObject):
             image = _framed_for_canvas(image, framing, self._canvas_size)
         bgra = _prepare_bgra_for_capacity(image, self._canvas_size)
         with self._condition:
-            if self._closed or not self._enabled or media_epoch != self._media_epoch:
-                raise FrameChannelStaleFrameError
-            request = self._image_transform
+            self._require_current_frame(media_epoch)
         pixels = _packed_bgra(bgra)
         descriptor: FrameChannelDescriptor | None = None
-        with self._publisher_lock:
-            publisher = self._publisher
-            created = publisher is None
-            if publisher is None:
-                publisher = self._create_publisher()
+        try:
+            with self._publisher_lock:
+                publisher = self._publisher
                 if publisher is None:
-                    return
-                self._publisher = publisher
-            if created:
-                self._synchronize_publisher_state(
-                    publisher,
+                    publisher = self._create_publisher()
+                    if publisher is None:
+                        return
+                    self._publisher = publisher
+                    descriptor = publisher.descriptor
+                with self._condition:
+                    self._require_current_frame(media_epoch)
+                publisher.publish(
+                    pixels, frame_width=bgra.width(), frame_height=bgra.height(),
                     media_epoch=media_epoch,
-                    request=request,
                 )
-            publisher.publish(
-                pixels,
-                frame_width=bgra.width(),
-                frame_height=bgra.height(),
-                media_epoch=media_epoch,
-            )
-            with self._condition:
-                if self._closed or not self._enabled or media_epoch != self._media_epoch:
-                    raise FrameChannelStaleFrameError
-            if created:
-                descriptor = publisher.descriptor
-        if descriptor is not None:
-            self._request_descriptor_change(descriptor)
+                with self._condition:
+                    self._require_current_frame(media_epoch)
+        finally:
+            # Cancellation retires the pixels, not a successfully created channel.
+            if descriptor is not None:
+                self._request_descriptor_change(descriptor)
 
-    def _publish_image_transform(self, request: _ImageTransformRequest) -> None:
+    def _require_current_frame(self, media_epoch: int) -> None:
+        # Caller holds the condition; pixels and identity must retire together.
+        if self._closed or not self._enabled or media_epoch != self._media_epoch:
+            raise _StaleContentFrameError
+
+    def _apply_image_transform(self, request: _ImageTransformRequest) -> bool:
+        with self._condition:
+            if (
+                self._closed or request.media_epoch != self._media_epoch
+                or request != self._image_transform
+            ):
+                return False
+            if self._animation_media_epoch != request.media_epoch:
+                self._animation.reset()
+            self._animation.set_target(
+                request.transform or IDENTITY_IMAGE_TRANSFORM, animate=request.animate,
+            )
+            self._animation_media_epoch = request.media_epoch
         descriptor: FrameChannelDescriptor | None = None
         with self._publisher_lock:
-            publisher = self._publisher
-            if publisher is None:
+            if self._publisher is None:
                 publisher = self._create_publisher()
                 if publisher is None:
-                    return
+                    return True
                 self._publisher = publisher
                 descriptor = publisher.descriptor
-            publisher.set_image_transform(
-                request.transform,
-                media_epoch=request.media_epoch,
-                canvas_width=request.canvas_width,
-                canvas_height=request.canvas_height,
-                animate=request.animate,
-                duration_ms=_TRANSFORM_DURATION_MS,
-            )
         if descriptor is not None:
             self._request_descriptor_change(descriptor)
-
-    @staticmethod
-    def _synchronize_publisher_state(
-        publisher: _FramePublisher,
-        *,
-        media_epoch: int,
-        request: _ImageTransformRequest,
-    ) -> None:
-        if request.media_epoch == media_epoch and (
-            request.media_epoch != 0 or request.transform is not None
-        ):
-            publisher.set_image_transform(
-                request.transform,
-                media_epoch=request.media_epoch,
-                canvas_width=request.canvas_width,
-                canvas_height=request.canvas_height,
-                animate=False,
-                duration_ms=_TRANSFORM_DURATION_MS,
-            )
+        return True
 
     def _request_descriptor_change(
         self,
@@ -487,8 +442,8 @@ class ContentFrameIngressController(QObject):
                 self._canvas_size.width(),
                 self._canvas_size.height(),
             )
-        except FrameChannelUnavailableError:
-            log.info("Content frame transport is unavailable on this platform")
+        except OSError:
+            log.warning("Could not create the content frame channel", exc_info=True)
             return None
 
     def _reset_publisher(self) -> None:
@@ -506,11 +461,9 @@ class ContentFrameIngressController(QObject):
 def _owned_frame(frame: object) -> QImage | None:
     if isinstance(frame, QImage):
         return QImage(frame)
-    to_image = getattr(frame, "toImage", None)
-    if callable(to_image):
-        image: Any = to_image()
-        if isinstance(image, QImage) and not image.isNull():
-            return QImage(image)
+    if isinstance(frame, QPixmap):
+        image = frame.toImage()
+        return image if not image.isNull() else None
     return None
 
 
@@ -535,11 +488,6 @@ def _framed_for_canvas(
     canvas: QSize,
 ) -> QImage:
     """Draw ``image`` into a canvas-sized frame at ``transform``'s zoom and pan.
-
-    Zoom/pan travels beside the pixels as a control, and under the libobs engine
-    nothing consumed it — the publisher's set_image_transform is a no-op, so the
-    raw image was shown however the operator framed it. Bake it in here instead,
-    which is what the retired native compositor did in C++.
 
     The maths mirrors the operator's own preview so the two agree: fit the image to
     the canvas, scale by zoom about the centre, then offset by a pan expressed as a

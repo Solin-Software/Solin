@@ -54,25 +54,37 @@ otherwise it uses the repository environment when available and then the
 `python` command. The installer recipe is
 `packaging/windows/installer/setup.iss` and requires Inno Setup 6.
 
-Build and test the native scene engine, the DirectShow filters for x64 and x86
-consumers, and the pinned GStreamer development runtime with one command. Use
-Release for camera installation and performance qualification:
+Build and test the DirectShow filters and camera transport for x64 and x86
+consumers with CMake and the MSVC C++ tools. Use Release for camera installation
+and performance qualification:
 
 ```text
-python scripts/build_native_engine.py --configuration Release
+python scripts/build_virtual_camera.py --configuration Release
 ```
 
-The C++ source and DirectShow filters remain in this repository; generated
-executables and DLLs do not. Building the C++ engine is required for the optional
-Windows backend selected with `SOLIN_SCENE_ENGINE=native`, and for the DirectShow
-filters used by the Windows virtual camera. The default libobs scene engine
-does not depend on that C++ executable. The launcher discovers the optional
-native configuration under `build/native/`. Use the same Python environment
-that runs Solin, for example:
+The C++ camera source lives in [`native/virtual_camera`](../native/virtual_camera).
+Windows builds produce `build/native/virtual-camera-x64/Release/solin-virtual-camera.dll`
+and `build/native/virtual-camera-x86/Release/solin-virtual-camera.dll`. The camera
+transport is independent of the libobs scene engine; the libobs sidecar publishes
+frames for the DirectShow filters. Generated DLLs are not committed.
+
+The local build and Windows workflow stage the pair with
+`scripts/package_virtual_camera_windows.py --application-dir build/main.dist`.
+The defaults use the Release paths above. Custom builds pass
+`--virtual-camera-filter-x64` and `--virtual-camera-filter-x86` explicitly.
+The payload contains `native/virtual-camera/{x64,x86}/solin-virtual-camera.dll`,
+third-party notices under `native/virtual-camera/share/licenses/solin-virtual-camera`,
+and a `runtime-manifest.json` recording architectures, system imports and SHA-256
+hashes. Architecture and import audits always run. Verification checks the staged
+manifest and file inventory before transactional replacement of an existing pair;
+`--skip-verification` skips that final check.
+
+Portable transport tests can also run on Linux or macOS:
 
 ```text
-.venv\Scripts\python scripts\build_native_engine.py --configuration Release
-.venv\Scripts\python main.py
+cmake -S native/virtual_camera -B build/native/virtual-camera-ci -DCMAKE_BUILD_TYPE=Release -DSOLIN_VIRTUAL_CAMERA_BUILD_TESTS=ON
+cmake --build build/native/virtual-camera-ci --config Release --parallel
+ctest --test-dir build/native/virtual-camera-ci -C Release --output-on-failure
 ```
 
 Both filter DLLs are packaged with every Windows build. A current-user install
@@ -113,8 +125,8 @@ paths (1080p NV12 copy, 720p-to-1080p scale, and 1080p YUY2 conversion). It can
 also be run directly:
 
 ```text
-cmake --build build/native/media-engine-gstreamer --config Release --target solin-virtual-camera-frame-adapter-benchmark
-build\native\media-engine-gstreamer\Release\solin-virtual-camera-frame-adapter-benchmark.exe
+cmake --build build/native/virtual-camera-x64 --config Release --target solin-virtual-camera-frame-adapter-benchmark
+build\native\virtual-camera-x64\Release\solin-virtual-camera-frame-adapter-benchmark.exe
 ```
 
 CTest fails the Release build if any measured P95 exceeds the budget.
@@ -126,10 +138,6 @@ overproduction. Separate tests use controlled time to verify 30 fps deadlines,
 lateness boundaries and recovery without bursts; the graph watchdog bounds a
 stalled test rather than requiring a fixed frame count from a busy runner.
 
-For the historical QtMultimedia-to-native media route measurements, including
-fixture generation, explicit one-second CPU buckets, and provenance requirements, see
-[Native media performance measurements](native-media-performance.md).
-
 The `Build Solin Windows` workflow first creates a Nuitka staging tree and then
 the single full installer used for clean installs and upgrades. The staging tree
 is an installer input, not a public portable distribution. This is required
@@ -138,11 +146,15 @@ rollback that a copied directory cannot provide. Release runs resolve and
 verify their predecessor automatically; a manual diagnostic run may disable
 upgrade smoke testing.
 
-Upgrades replace the installer-owned `backports` runtime directory before
-copying the new payload. Optional extensions left by an older local build must
-not remain importable when their compiled Python package is absent from the
-new executable. The upgrade smoke seeds an obsolete extension and verifies
-its removal, HTTP operation and preservation of unrelated files and user state.
+Upgrades remove the installer-owned `backports` runtime directory and retired
+`native/media-engine` payload before copying the new files. This removes the old
+engine executable, Qt bridge and private runtime. Optional extensions left by
+an older local build must not remain importable when their compiled Python
+package is absent from the new executable. Cleanup leaves `native/virtual-camera`,
+other native files and the independently managed camera versions intact.
+The upgrade smoke seeds an obsolete extension and retired engine files and
+verifies their removal, the current packaged and managed camera pair, HTTP
+operation and preservation of unrelated files and user state.
 
 The DirectShow filters are staged as an immutable x64/x86 pair identified by
 their binary hashes, independently of the application version. Reinstalling

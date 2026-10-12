@@ -63,11 +63,6 @@ elif sys.platform.startswith("linux"):
 else:
     APP_PLATFORM: str = sys.platform
 
-# The complete native scenes feature is currently qualified only on Windows.
-# This capability is the single source of truth for exposing its UI, starting
-# its engine, and selecting the legacy Qt camera workflow on other platforms.
-NATIVE_SCENES_SUPPORTED: bool = APP_PLATFORM == "windows"
-
 # Temporary streaming files (cache OFF)
 # Required prefix for every temporary file and lock file created by Solin.
 # Startup cleanup of orphaned files filters EXCLUSIVELY by this prefix,

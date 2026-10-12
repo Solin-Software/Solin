@@ -85,7 +85,6 @@ jobs:
             libjavascriptcoregtk-4.1-0 \
             libva-x11-2 \
             pipewire-bin \
-            gstreamer1.0-plugins-bad \
             libxcb-cursor0 \
             libxcb-icccm4 \
             libxcb-keysyms1 \

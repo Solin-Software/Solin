@@ -1,7 +1,7 @@
 """Qt-free media playback-state vocabulary.
 
-Replaces ``QMediaPlayer.PlaybackState`` as the app-wide play/pause/stop state that
-``MediaController.state_changed`` carries. libobs is the only media engine, so the
+The app-wide play/pause/stop state is carried by
+``MediaController.state_changed``. libobs is the only media engine, so the
 state originates from the sidecar's ``obs_media_state`` integers and is mapped to
 these three members for the UI. The value never crosses a process boundary — the
 wire vocabularies (``core.scenes.media_control.MediaPlaybackState`` and

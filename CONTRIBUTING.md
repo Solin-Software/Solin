@@ -60,8 +60,9 @@ Application changes run tests on Windows, Linux, Intel macOS, and Apple Silicon.
 Documentation-only changes and verified version-only increases use static checks;
 version increases also validate release metadata and the matching release notes.
 Release tags always run the complete platform suite.
-Native protocol tests and benchmarks run on the Linux reference runner;
-Windows builds also qualify the native camera components. Lint, locale validation,
+Portable virtual-camera transport tests run on the Linux reference runner;
+Windows builds qualify both DirectShow architectures and gate the Release
+frame-adapter benchmark. Lint, locale validation,
 release-note validation, and workflow validation run once. Branch protection should require the aggregate
 `Quality Gate` result.
 

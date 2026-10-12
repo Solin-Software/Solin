@@ -1,7 +1,6 @@
-"""Route media playback through the libobs scene-engine sidecar (Fork A).
+"""Route media playback through the libobs scene-engine sidecar.
 
-When the libobs engine is active, a **local** media file is decoded by the
-sidecar's ``ffmpeg_source`` instead of Qt ``QMediaPlayer``: the frames are
+Media files are decoded by the sidecar's ``ffmpeg_source``: the frames are
 composited straight into the content slot and never shipped as BGRA. This adapts
 the small transport vocabulary the :class:`~solin.core.media.playback.MediaController`
 needs onto the scene-engine control protocol (``open_media`` / ``control_media`` /

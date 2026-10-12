@@ -980,7 +980,7 @@ class SceneRuntimeController(QObject):
                 )
             )
             if entering_content_scene:
-                # A preparation bound to the previous SHM/D3D11 generation can
+                # A preparation bound to the previous shared-memory generation can
                 # only animate stale pixels. Rebuild the currently live scene on
                 # the new registry generation first, then prepare the desired
                 # content scene against that same generation.

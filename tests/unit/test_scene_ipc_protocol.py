@@ -16,6 +16,7 @@ from solin.core.scenes.ipc_protocol import (
     encode_envelope,
     read_envelope,
 )
+from solin.core.scenes.process_engine import _capabilities_from_envelope
 
 
 def _envelope(**overrides: object) -> SceneIpcEnvelope:
@@ -59,6 +60,47 @@ def test_decoder_rejects_a_sidecar_from_the_previous_protocol_generation() -> No
 
     with pytest.raises(SceneIpcMessageError, match="protocol version"):
         decode_envelope(json.dumps(record).encode())
+
+
+def _capabilities_payload() -> dict[str, object]:
+    return {
+        "local_cameras": True,
+        "rtsp_cameras": True,
+        "hardware_compositing": True,
+        "virtual_camera": True,
+        "program_recording": False,
+        "audio_input_capture": True,
+        "system_audio_capture": False,
+    }
+
+
+def test_scene_handshake_decodes_current_capabilities() -> None:
+    envelope = _envelope(message_type="hello_ack", payload=_capabilities_payload())
+
+    capabilities = _capabilities_from_envelope(envelope)
+
+    assert capabilities.protocol_version == PROTOCOL_VERSION
+    assert capabilities.process_generation == envelope.process_generation
+    assert capabilities.local_cameras
+    assert capabilities.hardware_compositing
+    assert capabilities.virtual_camera
+    assert not capabilities.program_recording
+    assert not capabilities.system_audio_capture
+
+
+@pytest.mark.parametrize("invalid", ["missing_field", "extra_field", "non_boolean"])
+def test_scene_handshake_rejects_malformed_capabilities(invalid: str) -> None:
+    payload = _capabilities_payload()
+    if invalid == "missing_field":
+        payload.pop("virtual_camera")
+    elif invalid == "extra_field":
+        payload["unexpected_capability"] = False
+    else:
+        payload["program_recording"] = 0
+    envelope = _envelope(message_type="hello_ack", payload=payload)
+
+    with pytest.raises(SceneIpcMessageError):
+        _capabilities_from_envelope(envelope)
 
 
 def test_decoder_rejects_non_finite_json_and_invalid_utf8() -> None:
