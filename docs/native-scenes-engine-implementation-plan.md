@@ -580,6 +580,9 @@ OBS WebSocket scenes keep their existing icon, settings, popup, and behavior.
   the designated scene may itself be a base or return target.
 - Adding a local camera that already exists reuses the existing physical-device source. Two
   scenes never create competing capture sessions for the same device.
+- All newly added source layers use `contain`, matching the initial scenes and
+  preserving the complete image at its original aspect ratio. Fit remains editable per layer;
+  adding a shared source does not change existing layers' transforms.
 - Scene references support the `Overview` → `Speaker`/`Speaker + reader` workflow while cycle
   validation prevents output feedback.
 

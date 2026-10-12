@@ -91,6 +91,9 @@ class FitMode(StrEnum):
     STRETCH = "stretch"
 
 
+DEFAULT_LAYER_FIT_MODE = FitMode.CONTAIN
+
+
 class RtspTransport(StrEnum):
     TCP = "tcp"
     UDP = "udp"
@@ -1295,7 +1298,7 @@ class SceneLayer:
     rect: NormalizedRect = field(default_factory=NormalizedRect)
     crop: Crop = field(default_factory=Crop)
     rotation_degrees: float = 0.0
-    fit_mode: FitMode = FitMode.COVER
+    fit_mode: FitMode = DEFAULT_LAYER_FIT_MODE
     opacity: float = 1.0
     visible: bool = True
     locked: bool = False
@@ -1400,7 +1403,7 @@ class SceneLayer:
             ),
             fit_mode=_enum(
                 FitMode,
-                data.get("fit_mode", FitMode.COVER.value),
+                data.get("fit_mode", DEFAULT_LAYER_FIT_MODE.value),
                 field_name="layer.fit_mode",
             ),
             opacity=_number(data.get("opacity", 1.0), field_name="layer.opacity"),

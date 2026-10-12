@@ -20,6 +20,7 @@ from solin.core.scenes.model import (
     CameraPreset,
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
+    FitMode,
     LocalCameraConfig,
     OnvifPtzBinding,
     SceneLayer,
@@ -322,6 +323,7 @@ def _beta_preset_record(*, customized=False):
     seed = create_default_scene_document(_names(), document_id="beta-document", created_at="2026-08-10T12:00:00+00:00")
     record = replace(seed, scenes=seed.scenes[:2]).to_record()
     record["schema_version"] = 11
+    record["scenes"][1]["layers"][0]["fit_mode"] = "cover"
     content = record["sources"][0]
     content["configuration"] = {}
     content["name"] = "Current Solin content"
@@ -354,6 +356,7 @@ def test_beta_migration_preserves_custom_collections_and_rebuilds_only_pristine(
         assert [scene.id for scene in document.scenes] == [scene["id"] for scene in record["scenes"]]
         assert document.scenes[0].name == "My idle"
         assert document.scenes[0].to_record()["layers"] == record["scenes"][0]["layers"]
+        assert document.scene(CAMERA_SCENE_ID).layers[0].fit_mode is FitMode.COVER
         assert document.source("solin.idle.current").configuration.mode is SolinContentMode.PRESENTATION
         assert workspace.runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CAMERA_SCENE_ID
         assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == record["scenes"][0]["id"]
@@ -839,6 +842,7 @@ def test_new_scene_profile_uses_the_configured_camera_identity(scene_workspace_f
 
     assert activated.id == created.id
     assert workspace.documents.document.source(camera.id) == camera
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers[0].fit_mode is FitMode.CONTAIN
     assert all(
         layer.source_id != DEFAULT_CAMERA_SOURCE_ID
         for scene in workspace.documents.document.scenes

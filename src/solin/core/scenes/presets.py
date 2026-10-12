@@ -6,6 +6,7 @@ from typing import Any
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
+    DEFAULT_LAYER_FIT_MODE,
     NO_SIGNAL_SOURCE_ID,
     AutomationMap,
     BusId,
@@ -297,7 +298,13 @@ def convert_pristine_beta_preset(
         no_signal_source=no_signal.name,
     )
     seed = create_default_scene_document(beta_names, document_id=document.document_id)
-    expected = replace(seed, scenes=(seed.scene(CONTENT_SCENE_ID), seed.scene(CAMERA_SCENE_ID)))
+    # Compare against the shipped beta geometry, independently of current defaults.
+    beta_camera_scene = seed.scene(CAMERA_SCENE_ID)
+    beta_camera_scene = replace(
+        beta_camera_scene,
+        layers=tuple(replace(layer, fit_mode=FitMode.COVER) for layer in beta_camera_scene.layers),
+    )
+    expected = replace(seed, scenes=(seed.scene(CONTENT_SCENE_ID), beta_camera_scene))
     if three_scene:
         idle = next((source for source in document.sources if source.id == "solin.idle.current"), None)
         default_scene = document.scene(old_default_id)
@@ -338,7 +345,7 @@ def _layer(
     name: str,
     *,
     rect: NormalizedRect | None = None,
-    fit_mode: FitMode = FitMode.COVER,
+    fit_mode: FitMode = DEFAULT_LAYER_FIT_MODE,
     border_color: str = "#00000000",
     border_width: float = 0.0,
     corner_radius: float = 0.0,
