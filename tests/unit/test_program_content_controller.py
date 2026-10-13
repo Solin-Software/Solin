@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import pytest
+import shiboken6
 
 from solin.controllers import program_content_controller as program_module
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QThread, Qt, Signal
 from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
@@ -17,6 +22,61 @@ from solin.core.timer.models import MediaCountdownPresentation
 _APP = QApplication.instance() or QApplication([])
 
 
+_PARENTLESS_GC_DIAGNOSTIC = r'''
+import gc
+import json
+import threading
+import weakref
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QThread, Qt, Signal
+from PySide6.QtWidgets import QApplication
+from solin.controllers.program_content_controller import ProgramContentController
+from solin.core.projection.application import ProjectionSession
+
+app = QApplication([])
+destroyed, finalized = [], []
+
+class Fonts(QObject):
+    font_ready = Signal(str)
+    def ensure(self, _name): pass
+    def family(self, _name): return "Arial"
+
+def prepare():
+    controller = ProgramContentController(
+        ProjectionSession(), Fonts(), lambda _frame: None, lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None, width=64, height=36, parent=None,
+    )
+    refs = []
+    for label, obj in (("yearly", controller._yearly_widget),
+                       ("timer", controller._timer_widget), ("controller", controller)):
+        obj.destroyed.connect(
+            lambda _obj=None, label=label: destroyed.append((label, QThread.isMainThread())),
+            Qt.ConnectionType.DirectConnection,
+        )
+        # Neither observation keeps the QObject wrapper alive.
+        refs.append(weakref.ref(obj))
+        weakref.finalize(obj, lambda label=label: finalized.append((label, QThread.isMainThread())))
+    try:
+        app.processEvents()
+    finally:
+        controller.close()
+    return refs
+
+refs = prepare()
+worker = threading.Thread(target=gc.collect)
+worker.start()
+worker.join(timeout=5)
+assert not worker.is_alive(), "worker GC did not finish"
+print(json.dumps({"phase": "worker_gc", "destroyed": destroyed,
+                  "finalized": finalized, "alive": [ref() is not None for ref in refs]}), flush=True)
+assert not destroyed, "native GUI objects were destroyed before GUI deferred destruction"
+QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+print(json.dumps({"phase": "gui_drain", "destroyed": destroyed,
+                  "finalized": finalized, "alive": [ref() is not None for ref in refs]}), flush=True)
+assert destroyed == [("yearly", True), ("timer", True), ("controller", True)], destroyed
+assert all(ref() is None for ref in refs), "closed wrappers remained retained"
+'''
+
+
 class _FontManager(QObject):
     font_ready = Signal(str)
 
@@ -27,10 +87,128 @@ class _FontManager(QObject):
         return "Arial"
 
 
-def test_program_content_publishes_idle_and_timer_surfaces() -> None:
+@pytest.fixture
+def content_factory(request, qt_object_owner):
+    """Register shutdown as soon as construction succeeds, before any assertion."""
+    def create(*args, **kwargs):
+        kwargs.setdefault("parent", qt_object_owner)
+        controller = ProgramContentController(*args, **kwargs)
+        request.addfinalizer(controller.close)
+        return controller
+
+    return create
+
+
+def _idle_controller(content_factory, session=None, **kwargs):
+    return content_factory(
+        session if session is not None else ProjectionSession(),
+        _FontManager(), lambda _frame: None, lambda: ("", "", ""),
+        media_epoch_sink=lambda _epoch: None, width=64, height=36, **kwargs,
+    )
+
+
+def test_close_consumes_subscription_once_and_destroys_native_objects_on_gui(content_factory):
+    session = ProjectionSession()
+    controller = _idle_controller(content_factory, session)
+    objects = (controller._yearly_widget, controller._timer_widget, controller)
+    destroyed = []
+    for index, obj in enumerate(objects):
+        obj.destroyed.connect(
+            lambda _obj=None, index=index: destroyed.append((index, QThread.isMainThread())),
+            Qt.ConnectionType.DirectConnection,
+        )
+
+    controller.close()
+    controller.close()
+
+    assert controller._unsubscribe is None
+    assert not session._listeners
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert destroyed == [(0, True), (1, True), (2, True)]
+    assert all(not shiboken6.isValid(obj) for obj in objects)
+    controller.close()
+    controller.submit_frame(object())
+    controller.refresh()
+    controller.update_yearly_text("Quote", "Reference", "E")
+    controller.set_timer_blink(True)
+    controller._on_projection_changed()
+    controller._initialize_content()
+
+
+def test_close_cancels_deferred_startup_before_callbacks_run(content_factory, monkeypatch):
+    callbacks = []
+    monkeypatch.setattr(
+        ProgramContentController, "render_yeartext_source_image",
+        lambda _self: callbacks.append("yeartext"),
+    )
+    monkeypatch.setattr(
+        ProgramContentController, "refresh", lambda _self: callbacks.append("refresh"),
+    )
+    controller = _idle_controller(content_factory)
+    assert callbacks == []
+
+    controller.close()
+    _APP.processEvents()
+
+    assert callbacks == []
+
+
+def test_close_schedules_destruction_even_when_unsubscribe_raises(content_factory, monkeypatch):
+    session = ProjectionSession()
+    controller = _idle_controller(content_factory, session)
+    unsubscribe = controller._unsubscribe
+    objects = (controller._yearly_widget, controller._timer_widget, controller)
+
+    def fail_unsubscribe():
+        unsubscribe()
+        raise RuntimeError("unsubscribe failed")
+
+    monkeypatch.setattr(controller, "_unsubscribe", fail_unsubscribe)
+    with pytest.raises(RuntimeError, match="unsubscribe failed"):
+        controller.close()
+
+    controller.close()
+    assert controller._unsubscribe is None
+    assert not session._listeners
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert all(not shiboken6.isValid(obj) for obj in objects)
+
+
+def test_closed_parentless_content_is_destroyed_on_gui_after_worker_gc(tmp_path):
+    result = subprocess.run(
+        [sys.executable, "-B", "-X", "faulthandler", "-c", _PARENTLESS_GC_DIAGNOSTIC],
+        cwd=tmp_path, env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+        capture_output=True, text=True, timeout=15, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("failing_widget", ["_yearly_widget", "_timer_widget"])
+def test_close_continues_native_cleanup_when_widget_close_raises(
+    content_factory, monkeypatch, request, failing_widget,
+):
+    controller = _idle_controller(content_factory)
+    objects = (controller._yearly_widget, controller._timer_widget, controller)
+    for obj in objects:
+        # Keep the failing implementation's orphaned widgets safe after assertion failure.
+        request.addfinalizer(lambda obj=obj: obj.deleteLater() if shiboken6.isValid(obj) else None)
+
+    def fail_close():
+        raise RuntimeError("widget close failed")
+
+    monkeypatch.setattr(getattr(controller, failing_widget), "close", fail_close)
+    with pytest.raises(RuntimeError, match="widget close failed"):
+        controller.close()
+
+    controller.close()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert all(not shiboken6.isValid(obj) for obj in objects)
+
+
+def test_program_content_publishes_idle_and_timer_surfaces(content_factory) -> None:
     session = ProjectionSession()
     frames: list[QImage] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda frame: frames.append(QImage(frame)),
@@ -56,10 +234,10 @@ def test_program_content_publishes_idle_and_timer_surfaces() -> None:
     controller.close()
 
 
-def test_program_content_unsubscribes_on_close() -> None:
+def test_program_content_unsubscribes_on_close(content_factory) -> None:
     session = ProjectionSession()
     frames: list[object] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -77,10 +255,10 @@ def test_program_content_unsubscribes_on_close() -> None:
     assert len(frames) == before
 
 
-def test_program_content_requests_current_identity_before_publishing() -> None:
+def test_program_content_requests_current_identity_before_publishing(content_factory) -> None:
     session = ProjectionSession()
     events: list[tuple[str, int]] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: events.append(("frame", session.session_id)),
@@ -103,10 +281,10 @@ def test_program_content_requests_current_identity_before_publishing() -> None:
     controller.close()
 
 
-def test_program_content_uses_canonical_output_canvas_for_image_framing() -> None:
+def test_program_content_uses_canonical_output_canvas_for_image_framing(content_factory) -> None:
     session = ProjectionSession()
     events: list[tuple[object, ...]] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: events.append(("frame", session.session_id)),
@@ -146,11 +324,11 @@ def test_program_content_uses_canonical_output_canvas_for_image_framing() -> Non
     controller.close()
 
 
-def test_program_content_retargets_the_active_image_without_relabeling_media() -> None:
+def test_program_content_retargets_the_active_image_without_relabeling_media(content_factory) -> None:
     session = ProjectionSession()
     epochs: list[int] = []
     transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: None,
@@ -189,10 +367,10 @@ def test_program_content_retargets_the_active_image_without_relabeling_media() -
     controller.close()
 
 
-def test_program_content_keeps_retained_image_framing_stable_on_refresh() -> None:
+def test_program_content_keeps_retained_image_framing_stable_on_refresh(content_factory) -> None:
     session = ProjectionSession()
     transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: None,
@@ -218,12 +396,12 @@ def test_program_content_keeps_retained_image_framing_stable_on_refresh() -> Non
     controller.close()
 
 
-def test_program_content_does_not_republish_static_video_controls_per_frame() -> None:
+def test_program_content_does_not_republish_static_video_controls_per_frame(content_factory) -> None:
     session = ProjectionSession()
     epochs: list[int] = []
     transforms: list[tuple[ImageTransform | None, dict[str, object]]] = []
     frames: list[object] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -256,10 +434,10 @@ def test_program_content_does_not_republish_static_video_controls_per_frame() ->
     controller.close()
 
 
-def test_program_content_keeps_the_idle_epoch_during_audio_only_playback() -> None:
+def test_program_content_keeps_the_idle_epoch_during_audio_only_playback(content_factory) -> None:
     session = ProjectionSession()
     epochs: list[int] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: None,
@@ -278,10 +456,10 @@ def test_program_content_keeps_the_idle_epoch_during_audio_only_playback() -> No
     controller.close()
 
 
-def test_program_content_publishes_idle_once_when_audio_replaces_visual_media() -> None:
+def test_program_content_publishes_idle_once_when_audio_replaces_visual_media(content_factory) -> None:
     session = ProjectionSession()
     epochs: list[int] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda _frame: None,
@@ -302,11 +480,11 @@ def test_program_content_publishes_idle_once_when_audio_replaces_visual_media() 
     controller.close()
 
 
-def test_idle_publishes_a_transparent_frame_not_the_year_text() -> None:
+def test_idle_publishes_a_transparent_frame_not_the_year_text(content_factory) -> None:
     """Idle is not content: the year text belongs to its own scene source."""
     session = ProjectionSession()
     frames: list[QImage] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         lambda frame: frames.append(QImage(frame)),
@@ -326,10 +504,10 @@ def test_idle_publishes_a_transparent_frame_not_the_year_text() -> None:
     controller.close()
 
 
-def test_idle_blanks_the_content_channel_only_once_per_presentation() -> None:
+def test_idle_blanks_the_content_channel_only_once_per_presentation(content_factory) -> None:
     session = ProjectionSession()
     frames: list[object] = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -355,10 +533,10 @@ def test_idle_blanks_the_content_channel_only_once_per_presentation() -> None:
 
 @pytest.mark.parametrize("idle_path", ["", "idle.png", "idle.mp4"])
 @pytest.mark.parametrize("audio_only", [False, True])
-def test_idle_content_is_transparent_regardless_of_the_shared_source(idle_path, audio_only):
+def test_idle_content_is_transparent_regardless_of_the_shared_source(idle_path, audio_only, content_factory):
     session = ProjectionSession()
     frames = []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -385,10 +563,10 @@ def test_idle_content_is_transparent_regardless_of_the_shared_source(idle_path, 
         controller.close()
 
 
-def test_idle_change_during_active_image_preserves_content_and_epoch():
+def test_idle_change_during_active_image_preserves_content_and_epoch(content_factory):
     session = ProjectionSession()
     frames, epochs = [], []
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -410,12 +588,12 @@ def test_idle_change_during_active_image_preserves_content_and_epoch():
         controller.close()
 
 
-def test_yeartext_renderer_announces_only_committed_explicit_path(tmp_path, monkeypatch):
+def test_yeartext_renderer_announces_only_committed_explicit_path(tmp_path, monkeypatch, content_factory):
     path = tmp_path / "yeartext.png"
     unused = tmp_path / "unused.png"
     monkeypatch.setenv("SOLIN_YEARTEXT_IMAGE", str(unused))
     events = []
-    controller = ProgramContentController(
+    controller = content_factory(
         ProjectionSession(),
         _FontManager(),
         lambda _frame: None,
@@ -440,12 +618,12 @@ def test_yeartext_renderer_announces_only_committed_explicit_path(tmp_path, monk
 
 
 @pytest.mark.parametrize("failure", ["open", "encode", "commit"])
-def test_failed_yeartext_write_retains_file_and_revision(tmp_path, monkeypatch, failure):
+def test_failed_yeartext_write_retains_file_and_revision(tmp_path, monkeypatch, failure, content_factory):
     path = tmp_path / "yeartext.png"
     original = b"previous committed image"
     path.write_bytes(original)
     events = []
-    controller = ProgramContentController(
+    controller = content_factory(
         ProjectionSession(),
         _FontManager(),
         lambda _frame: None,
@@ -478,11 +656,11 @@ def test_failed_yeartext_write_retains_file_and_revision(tmp_path, monkeypatch, 
         controller.close()
 
 
-def test_yeartext_update_preserves_active_yearly_countdown(tmp_path):
+def test_yeartext_update_preserves_active_yearly_countdown(tmp_path, content_factory):
     session = ProjectionSession()
     frames = []
     quote = ["Original"]
-    controller = ProgramContentController(
+    controller = content_factory(
         session,
         _FontManager(),
         frames.append,
@@ -511,11 +689,8 @@ def test_yeartext_update_preserves_active_yearly_countdown(tmp_path):
         controller.close()
 
 
-def test_initial_yeartext_render_waits_for_settings_and_publishes_revision(tmp_path, monkeypatch):
-    pending, rendered = [], []
-    monkeypatch.setattr(
-        program_module.QTimer, "singleShot", lambda _ms, callback: pending.append(callback)
-    )
+def test_initial_yeartext_render_waits_for_settings_and_publishes_revision(tmp_path, content_factory):
+    rendered = []
     settings_ready = False
 
     def yearly_text():
@@ -523,7 +698,7 @@ def test_initial_yeartext_render_waits_for_settings_and_publishes_revision(tmp_p
         return "Quote", "Reference", "E"
 
     path = tmp_path / "yeartext.png"
-    controller = ProgramContentController(
+    controller = content_factory(
         ProjectionSession(),
         _FontManager(),
         lambda _frame: None,
@@ -538,8 +713,7 @@ def test_initial_yeartext_render_waits_for_settings_and_publishes_revision(tmp_p
         assert not path.exists()
         assert rendered == []
         settings_ready = True
-        for callback in pending:
-            callback()
+        _APP.processEvents()
         assert rendered == [(str(path), 1)]
         assert not QImage(str(path)).isNull()
     finally:

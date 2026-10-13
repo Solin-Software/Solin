@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Mapping
+from contextlib import ExitStack
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, QDateTime, QIODevice, QSaveFile, Qt, QTimer, Slot
+from PySide6.QtCore import QObject, QDateTime, QIODevice, QSaveFile, QThread, Qt, QTimer, Slot
 from PySide6.QtGui import QColor, QImage, QImageWriter
 from PySide6.QtWidgets import QWidget
 
@@ -60,6 +61,8 @@ class ProgramContentController(QObject):
         height: int,
         parent: QObject | None = None,
     ) -> None:
+        if not QThread.isMainThread():
+            raise RuntimeError("Program content must be created on the main Qt thread")
         super().__init__(parent)
         if width <= 0 or height <= 0:
             raise ValueError("Program content dimensions must be positive")
@@ -82,14 +85,23 @@ class ProgramContentController(QObject):
         for widget in (self._yearly_widget, self._timer_widget):
             widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen)
             widget.resize(width, height)
-        self._unsubscribe = session.subscribe(self._on_projection_changed)
+        self._unsubscribe: Callable[[], None] | None = session.subscribe(self._on_projection_changed)
         # Render the year-text source image on the next event-loop turn, not now:
         # the yearly-text provider reads the settings widget, which is constructed
         # after this controller. Deferring lets it exist; the on-disk PNG (from a
         # prior run) covers the first hydrate until then, and update_yearly_text
         # refreshes it live thereafter.
-        QTimer.singleShot(0, self.render_yeartext_source_image)
-        QTimer.singleShot(0, self.refresh)
+        self._startup_timer = QTimer(self)
+        self._startup_timer.setSingleShot(True)
+        self._startup_timer.timeout.connect(self._initialize_content)
+        self._startup_timer.start(0)
+
+    @Slot()
+    def _initialize_content(self) -> None:
+        if self._closed:
+            return
+        self.render_yeartext_source_image()
+        self.refresh()
 
     @Slot(object)
     def submit_frame(self, frame: object) -> None:
@@ -110,6 +122,8 @@ class ProgramContentController(QObject):
 
     @Slot(bool)
     def set_timer_blink(self, enabled: bool) -> None:
+        if self._closed:
+            return
         self._timer_widget.set_blink(bool(enabled))
         state = self._session.state
         if state.get("type") == "timer" and state.get("presentation") == (
@@ -141,12 +155,25 @@ class ProgramContentController(QObject):
     def close(self) -> None:
         if self._closed:
             return
+        if not QThread.isMainThread():
+            raise RuntimeError("Program content must be closed on the main Qt thread")
         self._closed = True
-        self._unsubscribe()
-        self._yearly_widget.close()
-        self._timer_widget.close()
+        self._startup_timer.stop()
+        unsubscribe, self._unsubscribe = self._unsubscribe, None
+        # Each cleanup runs even if unsubscribe or another widget's close fails.
+        # Closing a parentless QWidget only hides it; Qt must own its destruction
+        # before Python cyclic GC can release the wrapper on a worker thread.
+        with ExitStack() as cleanup:
+            cleanup.callback(self.deleteLater)
+            for widget in (self._timer_widget, self._yearly_widget):
+                cleanup.callback(widget.deleteLater)
+                cleanup.callback(widget.close)
+            if unsubscribe is not None:
+                unsubscribe()
 
     def _on_projection_changed(self) -> None:
+        if self._closed:
+            return
         media_epoch = self._session.presentation_session_id
         self._publish_projection_identity(media_epoch)
         self._publish_image_transform(

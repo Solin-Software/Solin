@@ -72,7 +72,7 @@ solin = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra --basetemp=.pytest-tmp -p no:cacheprovider"
+addopts = "-ra -p no:cacheprovider"
 tmp_path_retention_policy = "failed"
 markers = [
     "unit: fast tests for pure domain and application services",

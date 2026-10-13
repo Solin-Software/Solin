@@ -97,6 +97,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       QT_QPA_PLATFORM: ${{ matrix.qt_platform }}
+      SOLIN_TEST_PROGRESS_LOG: build/test-progress-${{ matrix.runner }}.jsonl
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,6 +118,7 @@ jobs:
             "${libobs_packages[@]}" \
             cmake \
             ffmpeg \
+            gdb \
             libegl1 \
             libgl1 \
             libgtk-3-dev \
@@ -166,6 +168,8 @@ jobs:
       - name: Python suites on Linux
         if: runner.os == 'Linux'
         run: |
+          sudo sysctl -w kernel.core_pattern="$RUNNER_TEMP/solin-core.%p"
+          ulimit -c unlimited
           xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e --durations=20
           xvfb-run --auto-servernum python -m pytest tests/unit --durations=20
 
@@ -220,6 +224,34 @@ jobs:
               finally:
                   print("::endgroup::")
           PY
+
+      - name: Report Linux native crashes
+        if: failure() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          destination="$RUNNER_TEMP/solin-native-crashes"
+          mkdir -p "$destination"
+          for core in "$RUNNER_TEMP"/solin-core.*; do
+            report="$destination/$(basename "$core").txt"
+            if ! timeout 60s gdb --batch \
+              --ex "set pagination off" \
+              --ex "info sharedlibrary" \
+              --ex "thread apply all bt full" \
+              "$(command -v python)" "$core" > "$report" 2>&1; then
+              echo "::warning::Native backtrace collection did not complete for $(basename "$core")" >> "$report"
+            fi
+            cat "$report"
+          done
+
+      - name: Preserve test progress and Linux crash reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-diagnostics-${{ matrix.runner }}
+          path: |
+            build/test-progress-${{ matrix.runner }}.jsonl
+            ${{ runner.temp }}/solin-native-crashes
 
       - name: Preserve macOS native crash reports
         if: failure() && runner.os == 'macOS'

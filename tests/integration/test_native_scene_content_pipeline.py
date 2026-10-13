@@ -605,7 +605,7 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
     ids=["automatic-preview", "thumbnail-only", "content-preview"],
 )
 def test_closing_image_preserves_outgoing_pixels_until_return_transition(
-    tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject,
+    tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject, request,
     transition: TransitionSpec, preview_content: str,
 ) -> None:
     paths = ProfilePaths.from_roots(
@@ -632,7 +632,9 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
         projection, _FontManager(), ingress.submit_frame, lambda: ("", "", ""),
         media_epoch_sink=ingress.begin_presentation,
         width=_TRANSITION_CANVAS[0], height=_TRANSITION_CANVAS[1],
+        parent=qt_object_owner,
     )
+    request.addfinalizer(content.close)
     controller = SceneRuntimeController(workspace, projection, engine=engine, parent=qt_object_owner)
     application = QCoreApplication.instance()
     assert application is not None
