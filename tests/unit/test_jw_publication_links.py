@@ -395,6 +395,14 @@ def test_resolve_publication_media_link_falls_back_to_document_id(monkeypatch) -
 
 def test_publication_media_resolver_resolves_video_request(monkeypatch) -> None:
     calls = []
+    mediator_calls = []
+
+    def get_json(url, *, timeout, headers):
+        mediator_calls.append((url, timeout, headers))
+        return {"media": [{"duration": 12.5}]}
+
+    # The catalog below lacks duration, so the resolver enriches it via Mediator.
+    monkeypatch.setattr(publication_links, "get_json", get_json)
 
     monkeypatch.setattr(
         publication_links,
@@ -429,7 +437,27 @@ def test_publication_media_resolver_resolves_video_request(monkeypatch) -> None:
 
     assert media_file is not None
     assert media_file.url == "https://example.test/video.mp4"
-    assert calls[0]["pub"] == "mwb"
+    assert media_file.title == "Resolved"
+    assert media_file.thumbnail_url == "https://example.test/thumb.jpg"
+    assert media_file.duration_ticks == 125_000_000
+    assert calls == [
+        {
+            "pub": "mwb",
+            "track": 3,
+            "langwritten": "T",
+            "fileformat": "mp4,m4v",
+            "output": "json",
+            "alllangs": "0",
+            "issue": 202605,
+        }
+    ]
+    assert mediator_calls == [
+        (
+            "https://b.jw-cdn.org/apis/mediator/v1/media-items/T/pub-mwb_202605_3_VIDEO",
+            publication_links.DEFAULT_TIMEOUT,
+            {"User-Agent": publication_links.DEFAULT_USER_AGENT},
+        )
+    ]
 
 
 def test_publication_media_resolver_returns_jwpub_info(monkeypatch) -> None:

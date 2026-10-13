@@ -67,30 +67,32 @@ def pytest_runtest_protocol(item, nextitem):
         try:
             return (yield)
         finally:
-            _record_test_progress(item.nodeid, "deferred-destruction")
-            # processEvents() does not finish DeferredDelete outside an event
-            # loop. Complete finalizers' scheduled destruction in this protocol,
-            # before draining its native pool or starting another test.
-            capture = item.config.pluginmanager.getplugin("capturemanager")
-            diagnostics = (
-                capture.global_and_fixture_disabled() if capture is not None else nullcontext()
-            )
-            # Fatal Qt destruction messages cannot wait for pytest's summary:
-            # abort() would discard its captured output along with the process.
-            with diagnostics:
-                previous = None
+            try:
+                _record_test_progress(item.nodeid, "deferred-destruction")
+            finally:
+                # processEvents() does not finish DeferredDelete outside an event
+                # loop. Complete finalizers' scheduled destruction even when the
+                # progress log fails, before draining the pool or the next test.
+                capture = item.config.pluginmanager.getplugin("capturemanager")
+                diagnostics = (
+                    capture.global_and_fixture_disabled() if capture is not None else nullcontext()
+                )
+                # Fatal Qt destruction messages cannot wait for pytest's summary:
+                # abort() would discard its captured output along with the process.
+                with diagnostics:
+                    previous = None
 
-                def report_destruction(mode, context, message):
-                    if previous is None or mode == QtMsgType.QtFatalMsg:
-                        print(qFormatLogMessage(mode, context, message), file=sys.stderr, flush=True)
-                    if previous is not None:
-                        previous(mode, context, message)
+                    def report_destruction(mode, context, message):
+                        if previous is None or mode == QtMsgType.QtFatalMsg:
+                            print(qFormatLogMessage(mode, context, message), file=sys.stderr, flush=True)
+                        if previous is not None:
+                            previous(mode, context, message)
 
-                previous = qInstallMessageHandler(report_destruction)
-                try:
-                    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-                finally:
-                    qInstallMessageHandler(previous)
+                    previous = qInstallMessageHandler(report_destruction)
+                    try:
+                        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+                    finally:
+                        qInstallMessageHandler(previous)
 
 
 @pytest.fixture(autouse=True)

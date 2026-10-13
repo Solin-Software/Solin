@@ -8,8 +8,36 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
+
+from PySide6.QtCore import QObject
+import pytest
 
 from tests._paths import REPO_ROOT
+
+
+def test_progress_log_write_failure_does_not_skip_deferred_destruction(tmp_path, monkeypatch):
+    from tests import conftest
+
+    destroyed = []
+    owned = QObject()
+    owned.destroyed.connect(lambda: destroyed.append(True))
+    item = SimpleNamespace(
+        nodeid="diagnostic-write-failure",
+        config=SimpleNamespace(
+            pluginmanager=SimpleNamespace(getplugin=lambda _name: None),
+        ),
+    )
+    # Opening a directory as the JSONL file fails on every supported platform.
+    # Restore the destination before pytest's real protocol teardown runs.
+    with monkeypatch.context() as context:
+        context.setenv("SOLIN_TEST_PROGRESS_LOG", str(tmp_path))
+        protocol = conftest.pytest_runtest_protocol(item, None)
+        next(protocol)
+        owned.deleteLater()
+        with pytest.raises(OSError):
+            protocol.send(None)
+        assert destroyed == [True], "Diagnostics prevented Qt-owned destruction"
 
 
 def test_concurrent_pytest_invocations_preserve_each_others_temporary_files(tmp_path):
