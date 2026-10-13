@@ -238,9 +238,19 @@ def test_macos_crash_report_collection_survives_debugger_failure(
 
 def test_python_suite_preserves_fatal_qt_destruction_diagnostic(tmp_path):
     child = tmp_path / "test_deferred_fatal.py"
+    # The intentional fatal exit must not wait for Windows crash reporting.
+    # Configure only this child; preserve the parent suite's crash diagnostics.
     child.write_text(
         "import os\n"
-        "if os.name == 'posix':\n"
+        "if os.name == 'nt':\n"
+        "    import ctypes\n"
+        "    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)\n"
+        "    kernel32.GetErrorMode.restype = ctypes.c_uint\n"
+        "    kernel32.SetErrorMode.argtypes = [ctypes.c_uint]\n"
+        "    kernel32.SetErrorMode.restype = ctypes.c_uint\n"
+        "    SEM_NOGPFAULTERRORBOX = 0x0002\n"
+        "    kernel32.SetErrorMode(kernel32.GetErrorMode() | SEM_NOGPFAULTERRORBOX)\n"
+        "elif os.name == 'posix':\n"
         "    import resource\n"
         "    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))\n"
         "from PySide6.QtCore import QObject, qFatal\n"
