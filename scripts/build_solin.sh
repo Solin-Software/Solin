@@ -72,8 +72,14 @@ libobs_runtime_packages=(
     libxkbcommon0
     zlib1g
 )
+media_extract_build_packages=(
+    libavcodec-dev
+    libavformat-dev
+    libavutil-dev
+    libswscale-dev
+)
 if [[ "${1:-}" == "--print-native-packages" && "$#" == 1 ]]; then
-    printf '%s\n' "${libobs_runtime_packages[@]}"
+    printf '%s\n' "${libobs_runtime_packages[@]}" "${media_extract_build_packages[@]}"
     exit 0
 fi
 [[ "$#" == 0 ]] || fail "Usage: $0 [--print-native-packages]"
@@ -138,10 +144,12 @@ if libc != "glibc" or tuple(map(int, version.split("."))) < (2, 38):
     )
 PY
 
-for command_name in curl dpkg-deb gcc patchelf readelf sha256sum; do
+for command_name in cmake curl dpkg-deb gcc patchelf pkg-config readelf sha256sum; do
     command -v "${command_name}" >/dev/null || fail \
-        "${command_name} is required. On Ubuntu run: sudo apt install binutils build-essential curl dpkg patchelf"
+        "${command_name} is required. Install the native build packages documented in docs/building.md."
 done
+
+"${PYTHON}" scripts/build_media_extract.py --build-dir "${WORK_ROOT}/native/media-extract"
 
 # The published Linux wheel omits usr/local/bin/obs-ffmpeg-mux. Extract the
 # matching official release without installing OBS or changing apt sources.
@@ -353,7 +361,11 @@ done
 cat > "${DIST_DIR}/run-solin" <<'LAUNCHER'
 #!/bin/sh
 set -eu
-APP_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+case "$0" in
+    */*) APP_PARENT=${0%/*} ;;
+    *) APP_PARENT=. ;;
+esac
+APP_DIR=$(CDPATH= cd -- "${APP_PARENT:-/}" && pwd)
 export PATH="$APP_DIR/bin${PATH:+:$PATH}"
 export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
 exec "$APP_DIR/Solin.bin" "$@"

@@ -28,9 +28,20 @@ Packaged smoke tests also launch the delivered executable in its headless
 streamed responses and HTTP error handling through the production adapter,
 without opening the GUI, changing preferences or contacting external services.
 
-Install the `ffprobe` and `ffmpeg` command-line tools on PATH for titles,
-durations, embedded cover art, and video thumbnails. Python dependencies alone
-do not install those executables.
+The compiled executable also accepts the isolated
+`--verify-media-runtime <fixture-directory>` role. Packaged smokes pass
+`tests/fixtures/media_extract` and require ordered metadata, frame, video-cover,
+audio-cover and absent-cover checks through the delivered Python client and its
+production helper locator. The role emits `solin.media-runtime.v1` JSON and exits
+after closing its owned extraction processes, before importing Qt or creating
+application state. The E2E harness clears PATH, graphics variables and injected
+loader paths; the AppImage launcher uses shell builtins for payload discovery.
+
+Titles, durations, embedded cover art, and video thumbnails use Solin's small
+`solin-media-extract` executable and the FFmpeg libraries already supplied with
+the private libobs runtime. No external `ffprobe` or `ffmpeg` executable is
+required. Extraction does not initialize OBS, a graphics session, or a render
+context.
 
 Install the Python dependencies before invoking a build. On Intel macOS, use the
 [macOS binding bootstrap](#macos) below. On other platforms:
@@ -40,6 +51,46 @@ python -m pip install -r requirements-dev.txt
 python -m pip install -r requirements-build.txt
 python -m pip install -e .
 ```
+
+Before running from source or executing the Python suites, install CMake 3.25+
+and a C++17 toolchain (MSVC on Windows, Clang on macOS, the Ubuntu build tools on
+Linux), then run with the application's Python interpreter:
+
+```text
+python scripts/build_media_extract.py
+```
+
+The build uses `native/media_extract`, writes compiler output under
+`build/native/media-extract`, and installs the qualified helper next to the
+installed `pylibobs/_libs/<platform>/<architecture>` runtime. It replaces only
+Solin's own helper. Linux fills missing dependency files from the same installed
+Ubuntu packages without overwriting existing wheel libraries; macOS adds relative
+FFmpeg library aliases when necessary. Release recipes run this bootstrap
+automatically. Python dependency installation alone does not compile the helper.
+
+Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
+SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
+libavcodec/libavformat 61, libavutil 59 and libswscale 8. SDK binaries are build
+inputs only and are never substituted for the installed runtime. Ubuntu 24.04
+uses the same archive's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
+`libswscale-dev`, matching runtime majors 60/60/58/7. The helper checks header
+and loaded runtime versions and exports their actual library paths through
+`--version`; packaging rejects a mismatched ABI or a library outside the private
+runtime.
+
+Successful staging includes `media-extract-manifest.json` beside the helper. The
+receipt records protocol, target architecture, compiled/loaded library versions,
+relative library paths, SHA-256 hashes, and completed qualification checks. It
+contains no build-machine paths. Qualification removes native runtime overrides
+so it can only validate the staged dependency graph.
+
+The packaging script qualifies metadata, Unicode titles, covers and decoded BGRA
+pixels before publishing the runtime. It uses generated WAV/PNG data and the
+small repository fixtures under `tests/fixtures/media_extract`, with external
+CLI and graphics environment lookup disabled. Use `--qualification-fixtures`
+to supply that fixture directory explicitly to `package_libobs_runtime.py`.
+FFmpeg executables available on CI are optional fixture-development tools, not
+application runtime dependencies.
 
 ## Windows
 
@@ -233,7 +284,7 @@ package list used by both CI workflows; apt resolves its transitive dependencies
 mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
 sudo apt-get update
 sudo apt-get install --no-install-recommends "${libobs_packages[@]}" \
-    binutils build-essential curl dpkg patchelf pkg-config xdotool ffmpeg \
+    binutils build-essential cmake curl dpkg patchelf pkg-config xdotool \
     libgtk-3-dev libwebkit2gtk-4.1-dev libxcb-cursor0 libxkbcommon-x11-0 xauth xvfb
 ```
 

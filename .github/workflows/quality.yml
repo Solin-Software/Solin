@@ -114,8 +114,11 @@ jobs:
           )
           sudo apt-get "${apt_options[@]}" update
           mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
+          # FFmpeg executables supply test fixtures only; extraction uses bundled libraries.
           sudo apt-get "${apt_options[@]}" install --no-install-recommends -y \
             "${libobs_packages[@]}" \
+            binutils \
+            build-essential \
             cmake \
             ffmpeg \
             gdb \
@@ -128,6 +131,7 @@ jobs:
             libxcb-cursor0 \
             libxkbcommon-x11-0 \
             pkg-config \
+            patchelf \
             xauth \
             xvfb
 
@@ -155,6 +159,9 @@ jobs:
       - name: Install dependencies
         if: runner.os != 'macOS'
         run: python -m pip install -r requirements-dev.txt -e .
+
+      - name: Build and qualify bundled media extraction
+        run: python scripts/build_media_extract.py
 
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
 

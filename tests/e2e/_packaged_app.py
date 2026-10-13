@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -253,6 +253,35 @@ def _signal_process_group(group_id: int, sig: signal.Signals) -> None:
             pgid, state = row.split()
             if int(pgid) == group_id and not state.startswith("Z"):
                 raise
+
+
+def run_packaged_headless(
+    executable: Path, arguments: Sequence[str], *, env: dict[str, str],
+    timeout: float, purpose: str,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run an external artifact and reap its complete owned launcher group."""
+    command = [str(executable), *arguments]
+    process = subprocess.Popen(
+        command, cwd=executable.parent, env=env,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        start_new_session=os.name == "posix",
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+    try:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"Packaged {purpose} qualification exceeded {timeout:g} seconds.")
+    finally:
+        # An AppImage launcher can exit before its descendants or leave pipes open.
+        if os.name == "posix":
+            _signal_process_group(process.pid, signal.SIGKILL)
+        elif process.poll() is None:
+            process.kill()
+        process.wait(timeout=5)
+        # Drain and close captured pipes, including Windows reader threads.
+        process.communicate(timeout=5)
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
 
 
 def assert_process_survives_startup(

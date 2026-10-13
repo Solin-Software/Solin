@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import plistlib
 import shutil
@@ -12,6 +13,25 @@ from PIL import Image
 
 from scripts import package_libobs_runtime as packaging
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, encode_envelope, read_envelope
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_extraction_helper(monkeypatch):
+    """Inventory fixtures are not executables; real helper qualification is tested below."""
+    verify = packaging.verify_media_extract
+    audit = packaging._audit_windows_media_extract
+
+    def qualify(helper, **kwargs):
+        if helper.read_bytes() != b"fixture":
+            return verify(helper, **kwargs)
+        return {"protocol": 1, "helper": {"path": helper.name}, "qualified": ["synthetic_inventory"]}
+
+    def inspect(root, helper, architecture):
+        if helper.read_bytes() != b"fixture":
+            audit(root, helper, architecture)
+
+    monkeypatch.setattr(packaging, "verify_media_extract", qualify)
+    monkeypatch.setattr(packaging, "_audit_windows_media_extract", inspect)
 
 
 def test_smoke_png_checksums_and_decoded_pixels_are_valid():
@@ -115,6 +135,7 @@ def _runtime(package: Path, target: str) -> Path:
     suffix = {"windows": ".dll", "linux": ".so", "macos": ".dylib"}[target]
     for name in names[target]:
         _touch(root / name)
+    _touch(root / packaging.media_extract_name(target))
     if target == "macos":
         _framework(root)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
@@ -399,6 +420,8 @@ def test_staging_copies_only_the_host_architecture_preserves_layout_and_notices(
     )
     assert destination == app / "pylibobs" / "_libs" / target / "x86_64"
     assert (destination / "plugins-extra-data.bin").read_bytes() == b"fixture"
+    receipt = json.loads((destination / "media-extract-manifest.json").read_text())
+    assert receipt["helper"]["path"] == packaging.media_extract_name(target)
     assert not (destination.parent / "arm64").exists()
     assert (app / "licenses/pylibobs/0-LICENSE").read_bytes() == b"redistribution notice"
     repository = Path(packaging.__file__).resolve().parents[1]
@@ -452,6 +475,25 @@ def test_staging_replaces_old_plugins_and_never_keeps_stale_runtime_files(tmp_pa
         license_files=[tmp_path / "LICENSE"],
     )
     assert not (destination / "old-plugin.dll").exists()
+
+
+def test_failed_extraction_qualification_preserves_the_previous_packaged_runtime(tmp_path, monkeypatch):
+    package, app = tmp_path / "installed", tmp_path / "application"
+    _runtime(package, "windows")
+    _touch(tmp_path / "LICENSE")
+    previous = app / "pylibobs/_libs/windows/x86_64/previous.dll"
+    _touch(previous, b"qualified previous runtime")
+
+    def fail_qualification(*_args, **_kwargs):
+        raise packaging.LibobsPackagingError("native extraction failed")
+
+    monkeypatch.setattr(packaging, "verify_media_extract", fail_qualification)
+    with pytest.raises(packaging.LibobsPackagingError, match="native extraction failed"):
+        packaging.stage_runtime(
+            package_dir=package, application_dir=app, target_platform="windows",
+            architecture="x86_64", license_files=[tmp_path / "LICENSE"],
+        )
+    assert previous.read_bytes() == b"qualified previous runtime"
 
 
 def test_runtime_publish_restores_previous_payload_on_filesystem_failure(tmp_path, monkeypatch):
@@ -519,6 +561,7 @@ def test_runtime_publish_retries_transient_windows_sharing_violation(tmp_path, m
     "missing",
     [
         "obs.dll",
+        "solin-media-extract.exe",
         "obs-ffmpeg-mux.exe",
         "obs-plugins/obs-ffmpeg.dll",
         "data/libobs/default.effect",
@@ -848,9 +891,10 @@ def test_linux_dependency_probe_rejects_missing_libraries_and_incompatible_abi(
         packaging._linux_linked_libraries(Path("libobs.so.0"))
 
 
-def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, monkeypatch):
+@pytest.mark.parametrize("external", [False, True])
+def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, monkeypatch, external):
     root = tmp_path / "runtime"
-    binary = root / "obs-plugins/image-source.so"
+    binary = tmp_path / "system/libpulsecommon.so" if external else root / "obs-plugins/image-source.so"
     captured_environment = {}
     monkeypatch.setenv("LD_LIBRARY_PATH", "/host/injected")
     monkeypatch.setenv("LD_PRELOAD", "/host/preload.so")
@@ -872,12 +916,52 @@ def test_linux_dependency_probe_uses_only_staged_runtime_search_paths(tmp_path, 
     libraries = packaging._linux_linked_libraries(binary, private_root=root)
 
     assert libraries == {"libobs.so.30": Path("/runtime/libobs.so.30").resolve()}
-    assert captured_environment["LD_LIBRARY_PATH"].split(os.pathsep) == [
-        str(binary.resolve().parent),
-        str(root.resolve()),
-    ]
+    expected_paths = [str(root.resolve())]
+    if not external:
+        expected_paths.insert(0, str(binary.resolve().parent))
+    assert captured_environment["LD_LIBRARY_PATH"].split(os.pathsep) == expected_paths
     assert "LD_PRELOAD" not in captured_environment
     assert "/host/injected" not in captured_environment["LD_LIBRARY_PATH"]
+
+
+def test_linux_external_graft_reuses_previously_relocated_private_provider(tmp_path, monkeypatch):
+    root, system = tmp_path / "runtime", tmp_path / "system"
+    core = root / "libobs.so.30"
+    private_x11 = root / "libX11.so.6"
+    original_x11 = system / private_x11.name
+    external = system / "pulseaudio/libpulsecommon-16.1.so"
+    for binary in (core, original_x11, external):
+        _touch(binary, b"\x7fELF" + binary.name.encode())
+    # The helper bootstrap already changed X11's RPATH; it remains the runtime's
+    # canonical provider even though its ELF bytes differ from the distro file.
+    _touch(private_x11, original_x11.read_bytes() + b"-private-rpath")
+    private_bytes = private_x11.read_bytes()
+    probes, notices = [], []
+
+    def dependencies(binary, *, private_root=None):
+        probes.append((binary, private_root))
+        if binary == core:
+            return {external.name: external if private_root is not None else root / external.name}
+        if binary == external:
+            return {private_x11.name: private_x11 if private_root == root.resolve() else original_x11}
+        if binary == root / external.name:
+            return {private_x11.name: private_x11}
+        return {}
+
+    monkeypatch.setattr(packaging, "_linux_linked_libraries", dependencies)
+    monkeypatch.setattr(packaging, "_set_linux_rpath", lambda *_args: None)
+    monkeypatch.setattr(
+        packaging, "_copy_linux_dependency_notice", lambda library, _root: notices.append(library)
+    )
+
+    packaging._relocate_linux(root)
+
+    assert private_x11.read_bytes() == private_bytes
+    assert (root / external.name).read_bytes() == external.read_bytes()
+    assert (external, root.resolve()) in probes
+    assert (external, None) not in probes
+    assert notices == [external]
+    assert all((binary, None) in probes for binary in (core, private_x11, root / external.name))
 
 
 def test_linux_dependency_probe_ignores_transitive_host_graph(tmp_path, monkeypatch):

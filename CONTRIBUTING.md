@@ -24,10 +24,21 @@ Start the application with the installed `solin` command or the local launcher:
 python main.py
 ```
 
-Install `ffmpeg` and `ffprobe` on `PATH` for metadata, embedded cover art, and
-thumbnails. Playback and scene composition use a supervised libobs process
-through `pylibobs`. See [Building and platform requirements](docs/building.md)
-for native dependencies and standalone packaging.
+Build the metadata and thumbnail helper after installing Python and native
+dependencies, using the same interpreter as the application:
+
+```text
+python scripts/build_media_extract.py
+```
+
+The script compiles and qualifies `solin-media-extract`, then installs only that
+executable beside the installed `pylibobs` runtime. Windows and macOS use
+checksum-pinned OBS FFmpeg SDK headers; Linux uses matching Ubuntu development
+packages and stages missing native dependencies without replacing wheel libraries.
+Rebuild after changing the helper or upgrading native dependencies. Media
+extraction requires no `ffmpeg` or `ffprobe` executable. Playback and scene
+composition use the supervised libobs process. See
+[Building and platform requirements](docs/building.md) for toolchains and packaging.
 
 ## Change workflow
 
@@ -55,6 +66,10 @@ python scripts/check_locales.py
 Run focused tests while developing, then run the complete applicable suite
 before requesting review. Packaged-app and installer tests are run when their
 platform or delivery contract changes.
+
+Media extraction integration fixtures are included in the repository; running
+those tests and qualifying the helper requires neither FFmpeg command-line tools
+nor a graphics session. CI builds the helper before the Python suites.
 
 Register cleanup when a fixture acquires a resource, before assertions can fail.
 Stop and join owned workers before destroying their Qt consumers or restoring

@@ -53,6 +53,7 @@ class ProjectionPlaylistMixin:
 
         self._live_thumb_timer.stop()
         self._thumb_queue.clear()
+        self._thumbnail_sources: dict[int, tuple[str, str]] = {}
         self._panel_populated = False
         self._live_thumb_captured = False
         if self.playlist_panel.is_open():
@@ -321,10 +322,13 @@ class ProjectionPlaylistMixin:
             and self._audio_cover_pixmap
             and not self._audio_cover_pixmap.isNull()
         ):
-            self._thumb_queue._cache[index] = (self._audio_cover_pixmap, "")
-            self.playlist_panel.set_thumbnail(index, self._audio_cover_pixmap)
+            self._thumb_queue.feed_live_cover(index, self._audio_cover_pixmap)
             return
 
+        source = (url, media_type)
+        if self._thumbnail_sources.get(index) == source:
+            return
+        self._thumbnail_sources[index] = source
         self._thumb_queue.request(index, url, media_type)
 
     def _on_thumbnail_ready(self, index: int, pixmap: QPixmap, _title: str = ""):
@@ -337,41 +341,28 @@ class ProjectionPlaylistMixin:
             self._live_thumb_timer.start(3_000)
 
     def _do_live_thumb_capture(self):
-        # Best-effort fallback for the currently-playing local file when the ffprobe
-        # thumbnail queue produced nothing. libobs decodes the media, so the cover /
-        # frame is read out of band with ffprobe/ffmpeg (local files only — a remote
-        # probe would stall the GUI thread).
+        """Ask the thumbnail queue to resolve missing artwork asynchronously."""
         if self._live_thumb_captured or self._mode != "video":
+            return
+        idx = self._playlist_index
+        if idx < 0 or idx >= len(self._playlist):
+            return
+        if self._thumb_queue.has_real_thumb(idx):
+            self._live_thumb_captured = True
             return
         path = self.media.local_path
         if not path or path.startswith(("http://", "https://", "rtsp://", "rtmp://")):
             return
-
-        from solin.core.media import ffprobe_metadata as fm
-
-        idx = self._playlist_index
-        tags = fm.probe_tags(path)
-        image = None
-        is_cover = tags.cover_stream_index >= 0
-        if is_cover:
-            image = fm.extract_cover(path, tags.cover_stream_index)
-        if not image and not self._is_audio:
-            at_ms = int((self.media.duration or tags.duration_ms) * 0.05) or 1000
-            image = fm.extract_thumbnail(path, at_ms)
-        if not image:
-            return
-        pixmap = QPixmap()
-        pixmap.loadFromData(image)
-        if pixmap.isNull():
-            return
-
-        self._live_thumb_captured = True
-        self._thumb_queue.invalidate(idx)
-        if is_cover:
-            self._thumb_queue.feed_live_cover(idx, pixmap)
-            self.playlist_panel.set_thumbnail(idx, pixmap)
-        elif self._thumb_queue.feed_live_frame(idx, pixmap):
-            self.playlist_panel.set_thumbnail(idx, pixmap)
+        item = self._playlist[idx]
+        # The original source keeps pending work, terminal absence and retry
+        # ownership intact, including the completed-cache fallback for HTTP.
+        self._request_thumbnail(
+            idx,
+            {
+                "url": item.get("url") or path,
+                "type": "audio" if self._is_audio else item.get("type", "video"),
+            },
+        )
 
     def _redraw_current_preview(self):
         if self._mode == "image" and self._image_pixmap:
