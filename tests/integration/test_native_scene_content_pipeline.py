@@ -1034,9 +1034,8 @@ def test_slow_native_video_loading_preserves_image_then_updates_every_bus(
     tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject, autoplay: bool, monkeypatch,
 ) -> None:
     from http.server import BaseHTTPRequestHandler
-    from socketserver import ThreadingMixIn
     from threading import Thread
-    from tests._http import LoopbackHTTPServer
+    from tests._http import ThreadingLoopbackHTTPServer
 
     path = tmp_path / "slow-video.gif"
     images = [Image.new("RGB", (160, 90), (255 - index % 2, 0, 0)) for index in range(40)]
@@ -1074,10 +1073,7 @@ def test_slow_native_video_loading_preserves_image_then_updates_every_bus(
         def log_message(self, *_args):
             pass
 
-    class Server(ThreadingMixIn, LoopbackHTTPServer):
-        daemon_threads = True
-
-    server = Server(Handler)
+    server = ThreadingLoopbackHTTPServer(Handler)
     server_thread = Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     paths = ProfilePaths.from_roots(data_dir=tmp_path / "data", cache_dir=tmp_path / "cache",
@@ -1279,7 +1275,6 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
         from http.server import BaseHTTPRequestHandler
         from pathlib import Path
         from queue import SimpleQueue
-        from socketserver import ThreadingMixIn
         from threading import Event, Thread
         from pylibobs._ffi import ffi, get_lib
         from solin.core.media.obs_runtime import ObsRuntime
@@ -1288,7 +1283,7 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
         from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
 
         sys.path.insert(0, sys.argv[4])
-        from tests._http import LoopbackHTTPServer
+        from tests._http import ThreadingLoopbackHTTPServer
 
         lib = get_lib()
         get_weak = ffi.cast(
@@ -1327,10 +1322,7 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
 
                 def log_message(self, *_args):
                     pass
-            class Server(ThreadingMixIn, LoopbackHTTPServer):
-                daemon_threads = True
-
-            server = Server(Handler)
+            server = ThreadingLoopbackHTTPServer(Handler)
             server_thread = Thread(target=server.serve_forever, daemon=True)
             server_thread.start()
             path = f"http://127.0.0.1:{server.server_port}/{Path(path).name}"
