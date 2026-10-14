@@ -172,7 +172,9 @@ class LibobsIdleVideo:
         self._check(deadline_ms, check_current)
         if frame is None:
             raise IdleVideoError("idle_media_invalid")
-        self._still = create_frame_source(self._runtime, f"{self._name}-initial-frame")
+        self._still = create_frame_source(
+            self._runtime, f"{self._name}-initial-frame", cancelled=self._closed,
+        )
         if self._still is None or not self._still.push_bgra(
             frame[0], width, height, frame[1], reset=True,
         ):

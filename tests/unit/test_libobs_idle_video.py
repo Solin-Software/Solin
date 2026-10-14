@@ -244,7 +244,11 @@ def video_helper(monkeypatch, tmp_path):
         return bytes([23, 41, 67, 255]) * width * height, width * 4
 
     monkeypatch.setattr(module, "render_source_to_bgra", capture)
-    monkeypatch.setattr(module, "create_frame_source", lambda _runtime, _name: _Still(runtime))
+    def create_still(_runtime, _name, *, cancelled):
+        assert cancelled is video._closed
+        return _Still(runtime)
+
+    monkeypatch.setattr(module, "create_frame_source", create_still)
     yield video, runtime, path
     video.close()
 
@@ -421,7 +425,7 @@ def test_failed_initial_preparation_releases_all_partial_native_resources(
     elif failure == "capture":
         monkeypatch.setattr(module, "render_source_to_bgra", lambda *_args, **_kwargs: None)
     elif failure == "frame_source":
-        monkeypatch.setattr(module, "create_frame_source", lambda *_args: None)
+        monkeypatch.setattr(module, "create_frame_source", lambda *_args, **_kwargs: None)
     elif failure == "upload":
         monkeypatch.setattr(_Still, "push_bgra", lambda *_args, **_kwargs: False)
     else:
@@ -635,6 +639,60 @@ def test_failed_native_playback_hides_and_retires_possibly_started_decoder(video
         assert runtime.peak_decoders == 1
     finally:
         runtime.resume_reprepare.set()
+
+
+def test_close_cancels_pending_initial_upload_before_releasing_decoder(
+    video_helper, monkeypatch,
+):
+    video, runtime, _path = video_helper
+    entered, resume = threading.Event(), threading.Event()
+    errors = []
+    cancellations = []
+
+    class PendingStill(_Still):
+        def push_bgra(self, *_args, **_kwargs):
+            entered.set()
+            assert resume.wait(2), "Test did not release pending native upload"
+            assert self.source.released == 0
+            assert cancellations[0] is video._closed
+            assert cancellations[0].is_set()
+            return False
+
+    def create(_runtime, _name, *, cancelled=None):
+        cancellations.append(cancelled)
+        return PendingStill(runtime)
+
+    monkeypatch.setattr(module, "create_frame_source", create)
+
+    def prepare():
+        try:
+            _prepare(video)
+        except BaseException as error:  # noqa: BLE001 - report worker assertions to the test owner
+            errors.append(error)
+
+    preparing = threading.Thread(target=prepare)
+    closing = threading.Thread(target=video.close)
+    try:
+        preparing.start()
+        assert entered.wait(2)
+        closing.start()
+        assert video._closed.wait(2)
+        assert closing.is_alive()
+        assert all(source.released == 0 for source in runtime.sources)
+        resume.set()
+        preparing.join(2)
+        closing.join(2)
+        assert not preparing.is_alive() and not closing.is_alive()
+        assert len(errors) == 1 and isinstance(errors[0], IdleVideoError)
+        assert errors[0].error_code == "idle_source_unavailable"
+        assert not runtime.scenes
+        assert all(source.released == 1 for source in runtime.sources)
+    finally:
+        resume.set()
+        if preparing.ident is not None:
+            preparing.join(2)
+        if closing.ident is not None:
+            closing.join(2)
 
 
 def test_close_drains_concurrent_initial_capture_before_releasing_decoder(

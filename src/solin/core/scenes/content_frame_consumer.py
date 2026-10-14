@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from functools import partial
 from typing import Any, Callable
 
 log = logging.getLogger(__name__)
@@ -28,10 +29,12 @@ _POLL_SECONDS = 1.0 / 60.0
 FrameSourceFactory = Callable[[Any, str], Any]
 
 
-def _default_frame_source_factory(runtime: Any, name: str) -> Any:
+def _default_frame_source_factory(
+    runtime: Any, name: str, *, cancelled: threading.Event,
+) -> Any:
     from solin.core.media.obs_frame_source import create_frame_source
 
-    return create_frame_source(runtime, name)
+    return create_frame_source(runtime, name, cancelled=cancelled)
 
 
 class ContentFrameConsumer:
@@ -46,12 +49,14 @@ class ContentFrameConsumer:
     ) -> None:
         self._runtime = runtime
         self._descriptor = descriptor
-        self._frame_source_factory = frame_source_factory or _default_frame_source_factory
+        self._stop = threading.Event()
+        self._frame_source_factory = frame_source_factory or partial(
+            _default_frame_source_factory, cancelled=self._stop,
+        )
         self._reader: Any | None = None
         self._frame_source: Any | None = None
         self._sources: list[Any] = []
         self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
         # Native uploads can wait for the graphics context. Keep their resource
         # lifetime separate from the condition used for IPC deadlines.
         self._pump_lock = threading.Lock()

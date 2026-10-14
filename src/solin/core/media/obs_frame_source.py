@@ -15,7 +15,11 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
+from collections.abc import Callable
+from concurrent.futures import Future, TimeoutError
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -107,7 +111,63 @@ def _is_opaque_bgra(data: bytes, width: int, height: int, stride: int) -> bool:
     )
 
 
-def create_frame_source(runtime, name: str = "solin-frame-source"):
+def _upload_on_render_thread(
+    runtime: Any, upload: Callable[[], None], *, cancelled: threading.Event | None,
+) -> None:
+    """Borrow the first frame until one native render callback is drained.
+
+    The caller keeps its frame/source alive while waiting. Clear and preload
+    stay outside this callback: only texture upload enters the render phase.
+    Native callback removal happens on the calling thread, outside OBS's draw
+    callback lock. An upload already running must finish before cancellation
+    or source teardown can release its resources.
+    """
+    result: Future[None] = Future()
+    claim_lock = threading.Lock()
+    claimed = False
+
+    def prepare(_width: int, _height: int) -> None:
+        nonlocal claimed
+        with claim_lock:
+            if claimed:
+                return
+            claimed = True
+            if not result.set_running_or_notify_cancel():
+                return
+        try:
+            upload()
+        except BaseException as error:  # noqa: BLE001 - transfer callback failure to the waiting owner
+            result.set_exception(error)
+        else:
+            result.set_result(None)
+
+    if cancelled is not None and cancelled.is_set():
+        result.cancel()
+        result.result()
+    callback = runtime.ob.add_main_render_callback(prepare)
+    try:
+        if cancelled is None:
+            result.result()
+            return
+        while True:
+            try:
+                result.result(timeout=0.02)
+                return
+            except TimeoutError:
+                if result.done():
+                    # Preserve a TimeoutError raised by the upload itself.
+                    result.result()
+                if cancelled.is_set():
+                    result.cancel()
+                    result.result()
+                    return
+    finally:
+        runtime.ob.remove_main_render_callback(callback)
+
+
+def create_frame_source(
+    runtime, name: str = "solin-frame-source", *, cancelled: threading.Event | None = None,
+):
     """Create a ``solin_frame_source`` and wrap it. Returns None if the plugin
     is not registered (e.g. the module failed to load)."""
     _ensure_frame_source_registered(runtime)
@@ -147,14 +207,19 @@ def create_frame_source(runtime, name: str = "solin-frame-source"):
         lib.obs_source_set_async_unbuffered(source._ptr, True)
     except Exception:  # noqa: BLE001 - optional, libobs boundary
         log.debug("obs_source_set_async_unbuffered unavailable", exc_info=True)
-    return ObsFrameSource(source)
+    return ObsFrameSource(
+        source, upload_first_frame=partial(_upload_on_render_thread, runtime, cancelled=cancelled),
+    )
 
 
 class ObsFrameSource:
     """Wraps a ``solin_frame_source`` libobs Source; push QImages to display them."""
 
-    def __init__(self, source) -> None:
+    def __init__(
+        self, source, *, upload_first_frame: Callable[[Callable[[], None]], None],
+    ) -> None:
         self._source = source  # pylibobs Source
+        self._upload_first_frame = upload_first_frame
 
     @property
     def source(self):
@@ -181,7 +246,7 @@ class ObsFrameSource:
         """Output one raw BGRA frame. No Qt — used by the sidecar consumer.
 
         ``reset`` clears the async queue and uploads the first frame of a
-        presentation synchronously before a prepared scene can use it.
+        presentation in the native render phase before a prepared scene can use it.
         Subsequent frames use the low-latency async path. libobs copies the bytes.
         """
         source = self._source
@@ -214,12 +279,12 @@ class ObsFrameSource:
             out_lib: Any = get_lib()
             if reset:
                 # Retire the async queue first, then synchronously upload the first
-                # frame of the new presentation. show_preloaded_video owns the
-                # graphics-context boundary internally; wrapping the whole sequence
-                # here would invert its lock order against OBS's async video tick.
+                # frame of the new presentation. Clear/preload keep their lock
+                # order outside graphics. Upload runs on OBS's render thread so
+                # its existing context cannot starve a worker behind readbacks.
                 out_lib.obs_source_output_video(source._ptr, ffi.NULL)
                 out_lib.obs_source_preload_video(source._ptr, frame_ptr)
-                out_lib.obs_source_show_preloaded_video(source._ptr)
+                self._upload_first_frame(lambda: out_lib.obs_source_show_preloaded_video(source._ptr))
             else:
                 out_lib.obs_source_output_video(source._ptr, frame_ptr)
             return True
