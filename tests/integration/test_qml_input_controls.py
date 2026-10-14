@@ -225,29 +225,26 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
     assert QTest.qWaitForWindowExposed(native.windowHandle(), 3000), "Native input host was not exposed"
     point = inside if inside is not None else QPoint(60, 60)
     if sync_cursor:
-        # Establish a top-level -> child crossing independently of the previous
-        # pointer position. Qualify uncovered top-level space before entering
-        # the requested point inside the native child. Warping again within the
-        # child can generate a spurious native Leave/Enter through overlapping
-        # QWidget QWindows on the offscreen test backend.
-        host = widget.window()
-        outside = QPoint(host.width() - 2, host.height() - 2)
-        assert host.childAt(outside) is None, "Native hover requires uncovered host space"
+        # Establish a fresh crossing from uncovered space into the child.
+        # A second warp within the child may generate a redundant Leave/Enter
+        # through overlapping native QWidget windows.
         if QGuiApplication.platformName() == "cocoa":
-            # Cocoa can position the cursor over uncovered parent space while
-            # dispatching its CGEvent to a different overlapping QWindow. The
-            # parent itself is therefore not a reliable delivery witness. Seed
-            # the physical position, then qualify delivery on the native child.
-            global_outside = host.mapToGlobal(outside)
-            QCursor.setPos(global_outside)
-            QGuiApplication.sync()
+            # The host's uncovered corner may be owned by a different QWindow
+            # on Cocoa. Cross into uncovered space in the embedded control's
+            # own native parent so delivery and the ensuing Leave are observable.
+            parent = widget.parentWidget()
+            assert parent is not None and parent.windowHandle() is not None
+            margin = QPoint(parent.width() - 2, parent.height() - 2)
+            assert parent.childAt(margin) is None, "Native hover requires uncovered parent space"
+            mouse_move(parent, margin, sync_cursor=True)
             wait_until(
-                lambda: QCursor.pos() == global_outside,
-                description=f"cursor positioned outside native child at {global_outside}",
+                lambda: not widget.underMouse(),
+                description="native child Leave before the next hover crossing",
             )
-            entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
-            mouse_move(widget, entry, sync_cursor=True)
         else:
+            host = widget.window()
+            outside = QPoint(host.width() - 2, host.height() - 2)
+            assert host.childAt(outside) is None, "Native hover requires uncovered host space"
             mouse_move(host, outside, sync_cursor=True)
         mouse_move(widget, point, sync_cursor=True)
         # Native preparation owns one input stream. Replaying synthetic Enter
