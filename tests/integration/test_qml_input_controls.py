@@ -226,8 +226,13 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
     point = inside if inside is not None else QPoint(60, 60)
     entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
     if sync_cursor:
-        # New or changed native hosts can queue real crossings. Qualify distinct
-        # movements so a cursor already at the target cannot skip acknowledgement.
+        # Establish a top-level -> child crossing independently of the previous
+        # pointer position. Two points inside the child cannot establish a new
+        # exit/reentry. Qualify uncovered top-level space before entering it.
+        host = widget.window()
+        outside = QPoint(host.width() - 2, host.height() - 2)
+        assert host.childAt(outside) is None, "Native hover requires uncovered host space"
+        mouse_move(host, outside, sync_cursor=QGuiApplication.platformName() == "cocoa")
         mouse_move(widget, entry, sync_cursor=True)
         mouse_move(widget, point, sync_cursor=True)
     # These ordered-stream regressions exercise QWidgetWindow dispatch directly.
@@ -450,6 +455,23 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     _reordered_native_exit(host, container)
     wait_until(lambda: not root.property("hovered"), description="owned tool native ancestor exit")
     assert not widget.underMouse()
+
+
+def test_native_hover_preparation_establishes_a_fresh_crossing_from_inside(request):
+    host, _container, widget, root = _native_hover_host(request)
+    outside = QPoint(host.width() - 2, host.height() - 2)
+    assert host.childAt(outside) is None
+    physical = QGuiApplication.platformName() == "cocoa"
+    mouse_move(host, outside, sync_cursor=physical)
+    wait_until(lambda: not root.property("hovered"), description="native preparation outside")
+    mouse_move(widget, QPoint(60, 60), sync_cursor=physical)
+    wait_until(lambda: root.property("hovered"), description="native preparation already inside")
+    exits = root.property("exits")
+
+    _enter_native_hover(widget, sync_cursor=True)
+
+    assert root.property("hovered")
+    assert root.property("exits") == exits + 1
 
 
 @pytest.mark.parametrize("exit_ancestor", ["container", "replacement_parent"])
