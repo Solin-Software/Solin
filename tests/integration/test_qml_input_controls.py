@@ -464,6 +464,9 @@ def test_native_hover_preparation_establishes_a_fresh_crossing_from_inside(reque
     physical = QGuiApplication.platformName() == "cocoa"
     mouse_move(host, outside, sync_cursor=physical)
     wait_until(lambda: not root.property("hovered"), description="native preparation outside")
+    # Entering a native parent and delivering movement to its alien child are
+    # distinct operations. Seed both before asserting the child's hover state.
+    mouse_move(widget, QPoint(30, 30), sync_cursor=physical)
     mouse_move(widget, QPoint(60, 60), sync_cursor=physical)
     wait_until(lambda: root.property("hovered"), description="native preparation already inside")
     exits = root.property("exits")
