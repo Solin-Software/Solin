@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, replace
+from multiprocessing import shared_memory
 from pathlib import Path
 from pprint import pformat
 from queue import Empty, SimpleQueue
@@ -178,6 +179,39 @@ class _BgraEgress:
     def close(self) -> None:
         self._reader.close()
         self._controller.close()
+
+
+class _RawProgramFrameTrace:
+    """Record every native Program callback, including frames a latest-only reader skips."""
+
+    _CAPACITY = 512
+    _SLOT_BYTES = 16
+
+    def __init__(self) -> None:
+        self._shm = shared_memory.SharedMemory(
+            create=True, size=8 + self._CAPACITY * self._SLOT_BYTES,
+        )
+        struct.pack_into("<Q", self._shm.buf, 0, 0)
+
+    @property
+    def name(self) -> str:
+        return self._shm.name
+
+    def position(self) -> int:
+        return struct.unpack_from("<Q", self._shm.buf, 0)[0]
+
+    def read_since(self, position: int) -> list[tuple[int, bytes]]:
+        end = self.position()
+        assert end - position < self._CAPACITY, "Native Program trace capacity exceeded"
+        return [
+            struct.unpack_from("<Q4s", self._shm.buf,
+                             8 + (index % self._CAPACITY) * self._SLOT_BYTES)
+            for index in range(position, end)
+        ]
+
+    def close(self) -> None:
+        self._shm.close()
+        self._shm.unlink()
 
 
 def _wait_for(
@@ -564,7 +598,9 @@ class _FontManager(QObject):
 _TRANSITION_CANVAS = (320, 180)
 
 
-def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
+def _create_native_transition_engine(
+    tmp_path: Path, *, raw_trace: _RawProgramFrameTrace | None = None,
+) -> SubprocessSceneEngine:
     """Measure transport/transition behavior at a bounded native render cost.
 
     Full HD geometry/readback is qualified separately below. These tests need
@@ -572,23 +608,54 @@ def _create_native_transition_engine(tmp_path: Path) -> SubprocessSceneEngine:
     renders through a software OpenGL driver.
     """
     width, height = _TRANSITION_CANVAS
+    trace_name = raw_trace.name if raw_trace is not None else None
     script = tmp_path / "native_transition_engine.py"
     script.write_text(textwrap.dedent(f'''
         import sys
+        import struct
         from solin.core.media.obs_runtime import ObsRuntime
         from solin.core.scenes.libobs_sidecar import (
             LibobsSidecarEngine, _reserve_protocol_stream, serve,
         )
+
+        trace = None
+        if {trace_name!r} is not None:
+            from solin.core.scenes.content_frame_channel import _attach_shared_memory
+            from solin.core.scenes.libobs_program_egress import LibobsProgramEgress
+
+            trace = _attach_shared_memory({trace_name!r})
+            original_frame = LibobsProgramEgress._on_frame
+            trace_position = 0
+
+            def record_raw_frame(self, planes, linesizes, width, height, fmt, timestamp):
+                global trace_position
+                original_frame(self, planes, linesizes, width, height, fmt, timestamp)
+                if not planes or not linesizes:
+                    return
+                offset = (height // 2) * int(linesizes[0]) + (width // 2) * 4
+                center = planes[0][offset:offset + 4]
+                if len(center) != 4:
+                    return
+                slot = 8 + (trace_position % {_RawProgramFrameTrace._CAPACITY}) * 16
+                struct.pack_into("<Q4s", trace.buf, slot, int(timestamp), center)
+                trace_position += 1
+                struct.pack_into("<Q", trace.buf, 0, trace_position)
+
+            LibobsProgramEgress._on_frame = record_raw_frame
 
         def runtime_factory():
             runtime = ObsRuntime()
             runtime.ensure_started(width={width}, height={height})
             return runtime
 
-        serve(
-            sys.stdin.buffer, _reserve_protocol_stream(),
-            engine=LibobsSidecarEngine(runtime_factory),
-        )
+        try:
+            serve(
+                sys.stdin.buffer, _reserve_protocol_stream(),
+                engine=LibobsSidecarEngine(runtime_factory),
+            )
+        finally:
+            if trace is not None:
+                trace.close()
     '''), encoding="utf-8")
     config = create_libobs_scene_engine()._config
     return SubprocessSceneEngine(replace(config, arguments=(str(script),)))
@@ -616,7 +683,8 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
     workspace.documents.set_program_transition(transition)
     content_scene_id = workspace.documents.program_media_scene_id
     return_scene_id = _select_black_return_scene(workspace)
-    engine = _create_native_transition_engine(tmp_path)
+    raw_trace = _RawProgramFrameTrace()
+    engine = _create_native_transition_engine(tmp_path, raw_trace=raw_trace)
     ingress = ContentFrameIngressController(
         publisher_factory=SharedMemoryContentPublisher,
         canvas_width=_TRANSITION_CANVAS[0], canvas_height=_TRANSITION_CANVAS[1],
@@ -675,6 +743,7 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
             ) is not None
         time.sleep(0.7)
         with _record_program_centers(program) as samples:
+            raw_start = raw_trace.position()
             projection.reset_state()
             # Allow ingress to deliver idle's transparent frame while Qt has not
             # yet processed the asynchronous return Take acknowledgement.
@@ -699,8 +768,10 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
             f"Program did not finish its return to its selected base: {samples!r}"
         )
         if transition.kind is not TransitionKind.CUT:
-            assert any(6 < pixel[1] < 249 for _, pixel in samples), (
-                f"The outgoing image never faded into its selected base: {samples!r}"
+            native_samples = raw_trace.read_since(raw_start)
+            assert any(6 < pixel[1] < 249 for _, pixel in native_samples), (
+                "The native Program output never faded into its selected base: "
+                f"raw={native_samples!r}, reader={samples!r}"
             )
             # Program egress can repeat an earlier GPU readback and subsequently
             # publish a later render. Delivery cadence cannot bound the pixel
@@ -726,6 +797,7 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
         program.close()
         if thumbnails is not None:
             thumbnails.close()
+        raw_trace.close()
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])
