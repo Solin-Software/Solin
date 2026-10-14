@@ -232,9 +232,12 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
         host = widget.window()
         outside = QPoint(host.width() - 2, host.height() - 2)
         assert host.childAt(outside) is None, "Native hover requires uncovered host space"
-        mouse_move(host, outside, sync_cursor=QGuiApplication.platformName() == "cocoa")
+        mouse_move(host, outside, sync_cursor=True)
         mouse_move(widget, entry, sync_cursor=True)
         mouse_move(widget, point, sync_cursor=True)
+        # Native preparation owns one input stream. Replaying synthetic Enter
+        # events afterward would mix it with a separate Qt dispatcher state.
+        return
     # These ordered-stream regressions exercise QWidgetWindow dispatch directly.
     # Physical cursor transport is covered by the native-surface tests above.
     local = QPointF(widget.mapTo(native, entry))
@@ -348,25 +351,27 @@ def test_native_ancestor_exit_preserves_capture_until_mouse_release(request, mon
 def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(request, monkeypatch):
     old_host, old_container, widget, root = _native_hover_host(request, sync_cursor=True)
     outside = old_host.mapToGlobal(QPoint(old_host.width() - 2, old_host.height() - 2))
-    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
-    _reordered_native_exit(old_host, old_container)
-    host = QWidget()
-    request.addfinalizer(lambda: dispose_widget(host))
-    host.resize(440, 380)
-    container = QWidget(host)
-    container.setGeometry(10, 10, 400, 340)
-    container.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
-    widget.setParent(container)
+    with monkeypatch.context() as cursor_snapshot:
+        cursor_snapshot.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
+        _reordered_native_exit(old_host, old_container)
+        host = QWidget()
+        request.addfinalizer(lambda: dispose_widget(host))
+        host.resize(440, 380)
+        container = QWidget(host)
+        container.setGeometry(10, 10, 400, 340)
+        container.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+        widget.setParent(container)
     widget.show()
     show_and_activate(host)
     _enter_native_hover(widget, QPoint(80, 70), sync_cursor=True)
     wait_until(lambda: root.property("hovered"), description="reparented embedded hover")
+    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
+    monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
     exits = root.property("exits")
     QCoreApplication.sendEvent(old_container, QEvent(QEvent.Type.Leave))
     QCoreApplication.processEvents()
     assert root.property("hovered")
     assert root.property("exits") == exits
-    outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     _reordered_native_exit(host, container)
     wait_until(lambda: not root.property("hovered"), description="new native ancestor exit")
     assert root.property("exits") == exits + 1
@@ -458,17 +463,7 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
 
 
 def test_native_hover_preparation_establishes_a_fresh_crossing_from_inside(request):
-    host, _container, widget, root = _native_hover_host(request)
-    outside = QPoint(host.width() - 2, host.height() - 2)
-    assert host.childAt(outside) is None
-    physical = QGuiApplication.platformName() == "cocoa"
-    mouse_move(host, outside, sync_cursor=physical)
-    wait_until(lambda: not root.property("hovered"), description="native preparation outside")
-    # Entering a native parent and delivering movement to its alien child are
-    # distinct operations. Seed both before asserting the child's hover state.
-    mouse_move(widget, QPoint(30, 30), sync_cursor=physical)
-    mouse_move(widget, QPoint(60, 60), sync_cursor=physical)
-    wait_until(lambda: root.property("hovered"), description="native preparation already inside")
+    _host, _container, widget, root = _native_hover_host(request, sync_cursor=True)
     exits = root.property("exits")
 
     _enter_native_hover(widget, sync_cursor=True)
