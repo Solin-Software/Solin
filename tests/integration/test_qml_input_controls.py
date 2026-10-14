@@ -479,7 +479,7 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
 
 
 def test_native_parent_mouse_route_emits_one_exit_before_reentry(request):
-    _host, container, widget, root = _native_hover_host(request, sync_cursor=True)
+    _host, container, widget, root = _native_hover_host(request)
     exits = root.property("exits")
 
     # Cocoa's system cursor can reach uncovered space without dispatching the

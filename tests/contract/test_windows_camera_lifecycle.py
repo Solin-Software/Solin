@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from tests.contract._inno import compile_inno_probe
 
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -25,11 +26,6 @@ def _compile_staging_probe(
     rollback: bool = False,
     preparation_failure: bool = False,
 ) -> Path:
-    if os.name != "nt":
-        pytest.skip("The Inno staging contract requires Windows.")
-    compiler = Path(os.environ["ProgramFiles(x86)"]) / "Inno Setup 6" / "ISCC.exe"
-    if not compiler.is_file():
-        pytest.skip("The Inno staging contract requires Inno Setup 6.")
     root.mkdir(parents=True)
     (root / "x64.dll").write_bytes(x64)
     (root / "x86.dll").write_bytes(x86)
@@ -86,16 +82,9 @@ end;
         script = script.replace(
             "PrepareCameraFilterPair();", "RaiseException('Injected pair preparation failure.');"
         )
-    (root / "probe.iss").write_text(script, encoding="utf-8")
-    compiled = subprocess.run(  # noqa: S603 - trusted installed Inno compiler
-        [str(compiler), "/Q", str(root / "probe.iss")],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    assert compiled.returncode == 0, compiled.stdout + compiled.stderr
-    return root / "probe.exe"
+    probe_script = root / "probe.iss"
+    probe_script.write_text(script, encoding="utf-8")
+    return compile_inno_probe(probe_script)
 
 
 def _run_staging_probe(probe: Path) -> str:
