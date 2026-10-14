@@ -1,5 +1,5 @@
-from types import SimpleNamespace
 import threading
+from types import SimpleNamespace
 
 import pylibobs._ffi as pylibobs_ffi
 import pytest
@@ -299,3 +299,133 @@ def test_first_frame_registration_failure_is_not_accepted(queued_frame_source):
     assert not state.source.push_bgra(b"\x20\x40\xe0\xff", 1, 1, 4, reset=True)
     assert state.callbacks == []
     assert state.removed == []
+
+
+@pytest.mark.parametrize("reason", ["stale_revision", "deadline_exceeded"])
+def test_waiting_upload_checks_generation_and_deadline_without_a_render_tick(
+    queued_frame_source, reason,
+):
+    state = queued_frame_source
+    invalidated = threading.Event()
+    checked = threading.Event()
+
+    def check_current():
+        checked.set()
+        if invalidated.is_set():
+            raise RuntimeError(reason)
+
+    source = create_frame_source(
+        state.runtime, cancelled=state.cancelled, check_current=check_current,
+    )
+    assert source is not None
+    results = []
+    worker = threading.Thread(target=lambda: results.append(
+        source.push_bgra(b"\x20\x40\xe0\xff", 1, 1, 4, reset=True),
+    ))
+    try:
+        worker.start()
+        assert state.registered.wait(2)
+        assert checked.wait(2)
+        invalidated.set()
+        worker.join(2)
+        assert not worker.is_alive(), "Stale upload still waits for a missing render callback"
+        assert results == [False] and state.removed == state.callbacks
+        state.callbacks[0](1920, 1080)
+        assert "show" not in [action for action, _thread in state.calls]
+    finally:
+        invalidated.set()
+        state.cancelled.set()
+        worker.join(2)
+        source.release()
+
+
+def test_stale_running_upload_drains_before_releasing_its_native_source(queued_frame_source):
+    state = queued_frame_source
+    entered, finish = threading.Event(), threading.Event()
+    invalidated, checked = threading.Event(), threading.Event()
+
+    def check_current():
+        if invalidated.is_set():
+            checked.set()
+            raise RuntimeError("stale_revision")
+
+    def upload(_source):
+        entered.set()
+        assert finish.wait(2), "Native upload was not released"
+
+    state.lib.obs_source_show_preloaded_video = upload
+    source = create_frame_source(
+        state.runtime, cancelled=state.cancelled, check_current=check_current,
+    )
+    assert source is not None
+    results = []
+    worker = threading.Thread(target=lambda: results.append(
+        source.push_bgra(b"\x20\x40\xe0\xff", 1, 1, 4, reset=True),
+    ))
+    renderer = None
+    try:
+        worker.start()
+        assert state.registered.wait(2)
+        renderer = threading.Thread(target=lambda: state.callbacks[0](1920, 1080))
+        renderer.start()
+        assert entered.wait(2)
+        invalidated.set()
+        assert checked.wait(2)
+        assert worker.is_alive() and state.removed == []
+        assert source.source is not None
+        finish.set()
+        renderer.join(2)
+        worker.join(2)
+        assert not renderer.is_alive() and not worker.is_alive()
+        assert results == [False] and state.removed == state.callbacks
+    finally:
+        finish.set()
+        state.cancelled.set()
+        if renderer is not None:
+            renderer.join(2)
+        worker.join(2)
+        source.release()
+
+
+@pytest.mark.parametrize("rendered", [False, True])
+def test_failed_callback_removal_keeps_source_and_handle_for_release_retry(
+    queued_frame_source, rendered,
+):
+    state = queued_frame_source
+    released = []
+    state.source.source.release = lambda: released.append("source")
+    attempts = []
+    fail_removal = True
+
+    def remove(callback):
+        attempts.append(callback)
+        if fail_removal:
+            raise RuntimeError("native removal failed")
+        state.removed.append(callback)
+
+    state.runtime.ob.remove_main_render_callback = remove
+    worker, results = _first_frame_worker(state)
+    try:
+        assert state.registered.wait(2)
+        if rendered:
+            state.callbacks[0](1920, 1080)
+        else:
+            state.cancelled.set()
+        worker.join(2)
+        assert not worker.is_alive()
+        assert results == [False]
+        with pytest.raises(RuntimeError, match="native removal failed"):
+            state.source.release()
+        assert state.source.source is not None and released == []
+        state.callbacks[0](1920, 1080)
+        assert [action for action, _thread in state.calls].count("show") == int(rendered)
+
+        fail_removal = False
+        state.source.release()
+        state.source.release()
+        assert released == ["source"]
+        assert state.removed == state.callbacks
+        assert attempts == state.callbacks * 3
+    finally:
+        state.cancelled.set()
+        worker.join(2)

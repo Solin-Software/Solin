@@ -94,13 +94,22 @@ class ContentFrameConsumer:
                 and not any(wrapper.source is source for source in referenced_sources)
                 and not wrapper.source.showing
             ]
-            for wrapper in retired:
-                self._sources.remove(wrapper)
         for wrapper in retired:
             try:
                 wrapper.release()
-            except Exception:  # noqa: BLE001 - cleanup must not break supervision
+            except Exception:  # noqa: BLE001 - preserve owner for the next collection
                 log.warning("Could not release a retired content source", exc_info=True)
+            else:
+                with self._condition:
+                    self._sources.remove(wrapper)
+
+    def _release_unpublished(self, wrapper: Any) -> None:
+        try:
+            wrapper.release()
+        except Exception:  # noqa: BLE001 - failed native removal needs an owned retry
+            with self._condition:
+                self._sources.append(wrapper)
+            log.warning("Could not release an unpublished content source", exc_info=True)
 
     def start(self) -> bool:
         """Open the channel and start pumping. False if unusable or stopped."""
@@ -164,11 +173,11 @@ class ContentFrameConsumer:
                 )
             except Exception:  # noqa: BLE001 - release new epoch source before re-raising
                 if new_epoch:
-                    frame_source.release()
+                    self._release_unpublished(frame_source)
                 raise
             if not uploaded:
                 if new_epoch:
-                    frame_source.release()
+                    self._release_unpublished(frame_source)
                 return False
             with self._condition:
                 if new_epoch:
@@ -199,12 +208,16 @@ class ContentFrameConsumer:
             except Exception:  # noqa: BLE001 - the pump must never die on one bad frame
                 log.debug("content frame pump errored", exc_info=True)
 
-    def stop(self) -> None:
+    def stop(self) -> tuple[Any, ...]:
+        """Stop ingress; return any native sources still needing release retries."""
+        pending = []
         for frame_source in self.detach_sources():
             try:
                 frame_source.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("content frame source release errored", exc_info=True)
+            except Exception:  # noqa: BLE001 - transfer callback ownership to the caller
+                pending.append(frame_source)
+                log.warning("content frame source release errored", exc_info=True)
+        return tuple(pending)
 
     def detach_sources(self) -> tuple[Any, ...]:
         """Stop ingress and transfer its frozen native sources to the caller.

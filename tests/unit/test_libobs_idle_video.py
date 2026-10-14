@@ -244,8 +244,9 @@ def video_helper(monkeypatch, tmp_path):
         return bytes([23, 41, 67, 255]) * width * height, width * 4
 
     monkeypatch.setattr(module, "render_source_to_bgra", capture)
-    def create_still(_runtime, _name, *, cancelled):
+    def create_still(_runtime, _name, *, cancelled, check_current):
         assert cancelled is video._closed
+        assert callable(check_current)
         return _Still(runtime)
 
     monkeypatch.setattr(module, "create_frame_source", create_still)
@@ -658,8 +659,9 @@ def test_close_cancels_pending_initial_upload_before_releasing_decoder(
             assert cancellations[0].is_set()
             return False
 
-    def create(_runtime, _name, *, cancelled=None):
+    def create(_runtime, _name, *, cancelled=None, check_current=None):
         cancellations.append(cancelled)
+        assert callable(check_current)
         return PendingStill(runtime)
 
     monkeypatch.setattr(module, "create_frame_source", create)
@@ -684,7 +686,7 @@ def test_close_cancels_pending_initial_upload_before_releasing_decoder(
         closing.join(2)
         assert not preparing.is_alive() and not closing.is_alive()
         assert len(errors) == 1 and isinstance(errors[0], IdleVideoError)
-        assert errors[0].error_code == "idle_source_unavailable"
+        assert errors[0].error_code == "closed"
         assert not runtime.scenes
         assert all(source.released == 1 for source in runtime.sources)
     finally:
@@ -745,6 +747,65 @@ def test_close_drains_concurrent_initial_capture_before_releasing_decoder(
             preparing.join(2)
         if closing.ident is not None:
             closing.join(2)
+
+
+@pytest.mark.parametrize("reason", ["stale_revision", "deadline_exceeded"])
+def test_initial_upload_observes_preparation_generation_and_deadline(
+    video_helper, monkeypatch, reason,
+):
+    video, runtime, _path = video_helper
+    pending, abort = threading.Event(), threading.Event()
+    errors = []
+    stills = []
+
+    def create(_runtime, _name, *, cancelled, check_current):
+        assert cancelled is video._closed
+
+        class PendingStill(_Still):
+            def push_bgra(self, *_args, **_kwargs):
+                pending.set()
+                while not video._closed.is_set():
+                    try:
+                        check_current()
+                    except IdleVideoError:
+                        return False
+                    abort.wait(0.005)
+                return False
+
+        still = PendingStill(runtime)
+        stills.append(still)
+        return still
+
+    monkeypatch.setattr(module, "create_frame_source", create)
+
+    def current():
+        if abort.is_set() and reason == "stale_revision":
+            raise IdleVideoError("stale_revision")
+
+    def prepare():
+        try:
+            video.prepare(2000, current)
+        except IdleVideoError as error:
+            errors.append(error.error_code)
+
+    worker = threading.Thread(target=prepare)
+    try:
+        worker.start()
+        assert pending.wait(2)
+        assert all(source.released == 0 for source in runtime.sources)
+        if reason == "deadline_exceeded":
+            runtime.now_ms = 2000
+        abort.set()
+        worker.join(2)
+        assert not worker.is_alive(), "Initial upload did not observe the expired preparation"
+        assert errors == [reason]
+        assert stills[0].source.released == 1
+        assert all(decoder.released == 1 for decoder in runtime.decoders)
+        assert runtime.scenes == []
+    finally:
+        video._closed.set()
+        abort.set()
+        worker.join(2)
 
 
 @pytest.mark.parametrize("exception", [None, RuntimeError("transaction failed"), KeyboardInterrupt()])
