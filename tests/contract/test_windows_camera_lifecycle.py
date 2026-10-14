@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import hashlib
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from tests.contract._inno import compile_inno_probe
+from tests.e2e._windows_process import run_windows_process_tree
 
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -88,12 +88,9 @@ end;
 
 
 def _run_staging_probe(probe: Path) -> str:
-    result = subprocess.run(  # noqa: S603 - locally compiled InitializeSetup-only probe
+    result = run_windows_process_tree(
         [str(probe), "/VERYSILENT", "/SUPPRESSMSGBOXES"],
-        capture_output=True,
-        text=True,
         timeout=30,
-        check=False,
     )
     assert result.returncode == 1, "The probe must exit before installation"
     return (probe.parent / "result.txt").read_text()
