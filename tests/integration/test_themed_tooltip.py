@@ -56,6 +56,11 @@ def _wait_tooltip(tooltip):
     )
 
 
+def _simulate_cursor(monkeypatch, position):
+    # Virtual monitor geometry requires a cursor in the same simulated space.
+    monkeypatch.setattr(themed_tooltip, "QCursor", SimpleNamespace(pos=lambda: position))
+
+
 def test_tooltip_filter_is_owned_by_widget_and_installed_once(button):
     themed_tooltip.install_themed_tooltip(button)
     themed_tooltip.install_themed_tooltip(button)
@@ -113,7 +118,7 @@ def test_tooltip_uses_anchor_monitor_and_fits_every_corner(tooltip, monkeypatch,
     x = available.right() - 28 if corner.endswith("right") else available.left()
     y = available.bottom() - 28 if corner.startswith("bottom") else available.top()
     anchor = QRect(x, y, 28, 28)
-    QCursor.setPos(anchor.center())
+    _simulate_cursor(monkeypatch, anchor.center())
     themed_tooltip.show_themed_tooltip(anchor, "Long description with enough words to wrap. " * 4)
     assert anchors == [anchor.center()]
     assert available.adjusted(8, 8, -8, -8).contains(tooltip.geometry())
@@ -127,7 +132,7 @@ def test_text_wraps_without_losing_newlines_or_interpreting_markup(tooltip, monk
     )
     text = "<media & title>\n" + "日本語👩🏽‍💻é" * 12
     anchor = QRect(200, 440, 28, 28)
-    QCursor.setPos(anchor.center())
+    _simulate_cursor(monkeypatch, anchor.center())
     themed_tooltip.show_themed_tooltip(anchor, text)
     assert tooltip._document.toPlainText() == text
     assert tooltip._document.size().height() + 26 <= tooltip.height()
@@ -141,7 +146,9 @@ def test_overlong_text_uses_whole_lines_and_ellipsis_on_short_screen(tooltip, mo
         QGuiApplication, "screenAt", lambda _: SimpleNamespace(availableGeometry=lambda: available)
     )
     text = "A long description 👨‍👩‍👧‍👦 with several lines. " * 80
-    themed_tooltip.show_themed_tooltip(QRect(-150, 140, 28, 28), text)
+    anchor = QRect(-150, 140, 28, 28)
+    _simulate_cursor(monkeypatch, anchor.center())
+    themed_tooltip.show_themed_tooltip(anchor, text)
     assert available.adjusted(8, 8, -8, -8).contains(tooltip.geometry())
     assert tooltip._document.toPlainText().endswith("…")
     assert tooltip._document.size().height() + 26 <= tooltip.height()
@@ -253,7 +260,7 @@ def test_long_tooltip_on_short_screen_does_not_cover_cursor(tooltip, monkeypatch
         QGuiApplication, "screenAt", lambda _: SimpleNamespace(availableGeometry=lambda: available)
     )
     anchor = QRect(146, 76, 28, 28)
-    QCursor.setPos(anchor.center())
+    _simulate_cursor(monkeypatch, anchor.center())
     themed_tooltip.show_themed_tooltip(anchor, "A long description with several lines. " * 80)
     assert tooltip.isVisible()
     assert available.contains(tooltip.geometry())
