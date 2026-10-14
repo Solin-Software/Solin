@@ -224,22 +224,23 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
     assert native is not None and native.windowHandle() is not None
     assert QTest.qWaitForWindowExposed(native.windowHandle(), 3000), "Native input host was not exposed"
     point = inside if inside is not None else QPoint(60, 60)
-    entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
     if sync_cursor:
         # Establish a top-level -> child crossing independently of the previous
-        # pointer position. Two points inside the child cannot establish a new
-        # exit/reentry. Qualify uncovered top-level space before entering it.
+        # pointer position. Qualify uncovered top-level space before entering
+        # the requested point inside the native child. Warping again within the
+        # child can generate a spurious native Leave/Enter through overlapping
+        # QWidget QWindows on the offscreen test backend.
         host = widget.window()
         outside = QPoint(host.width() - 2, host.height() - 2)
         assert host.childAt(outside) is None, "Native hover requires uncovered host space"
         mouse_move(host, outside, sync_cursor=True)
-        mouse_move(widget, entry, sync_cursor=True)
         mouse_move(widget, point, sync_cursor=True)
         # Native preparation owns one input stream. Replaying synthetic Enter
         # events afterward would mix it with a separate Qt dispatcher state.
         return
     # These ordered-stream regressions exercise QWidgetWindow dispatch directly.
     # Physical cursor transport is covered by the native-surface tests above.
+    entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
     local = QPointF(widget.mapTo(native, entry))
     QCoreApplication.sendEvent(
         native.windowHandle(),
