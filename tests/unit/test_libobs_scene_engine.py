@@ -12,6 +12,7 @@ import io
 import os
 import sys
 import tempfile
+import threading
 import time
 import types
 from dataclasses import replace
@@ -3591,8 +3592,12 @@ def test_ingress_replacement_preserves_committed_source_ownership_until_a_new_ta
             self.released += 1
 
     sources = []
+    cancellations = []
 
-    def create(*_args):
+    def create(*_args, cancelled):
+        assert isinstance(cancelled, threading.Event)
+        assert not cancelled.is_set()
+        cancellations.append(cancelled)
         source = FrameSource()
         sources.append(source)
         return source
@@ -3610,9 +3615,11 @@ def test_ingress_replacement_preserves_committed_source_ownership_until_a_new_ta
     try:
         engine._reconcile_content_ingress(descriptor(first_channel))
         origin = sources[0]
+        assert cancellations[0] is engine._content_consumer._stop
         _hydrate_media_graph(engine, origin.source)
         # Removing/replacing the producer must not mark its published source removed.
         engine._reconcile_content_ingress(descriptor(next_channel) if replacement == "new_channel" else None)
+        assert cancellations[0].is_set()
         assert engine._effective_content_source() is origin.source
         assert origin.released == 0
         assert origin in engine._retired_frame_sources
@@ -3635,6 +3642,7 @@ def test_ingress_replacement_preserves_committed_source_ownership_until_a_new_ta
             channel.close()
             channel.unlink()
     assert all(source.released == 1 for source in sources)
+    assert all(cancelled.is_set() for cancelled in cancellations)
 
 
 def test_engine_control_media_drives_transport_with_trim_offset():
