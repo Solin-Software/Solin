@@ -233,7 +233,22 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
         host = widget.window()
         outside = QPoint(host.width() - 2, host.height() - 2)
         assert host.childAt(outside) is None, "Native hover requires uncovered host space"
-        mouse_move(host, outside, sync_cursor=True)
+        if QGuiApplication.platformName() == "cocoa":
+            # Cocoa can position the cursor over uncovered parent space while
+            # dispatching its CGEvent to a different overlapping QWindow. The
+            # parent itself is therefore not a reliable delivery witness. Seed
+            # the physical position, then qualify delivery on the native child.
+            global_outside = host.mapToGlobal(outside)
+            QCursor.setPos(global_outside)
+            QGuiApplication.sync()
+            wait_until(
+                lambda: QCursor.pos() == global_outside,
+                description=f"cursor positioned outside native child at {global_outside}",
+            )
+            entry = QPoint(30, 30) if point != QPoint(30, 30) else QPoint(40, 30)
+            mouse_move(widget, entry, sync_cursor=True)
+        else:
+            mouse_move(host, outside, sync_cursor=True)
         mouse_move(widget, point, sync_cursor=True)
         # Native preparation owns one input stream. Replaying synthetic Enter
         # events afterward would mix it with a separate Qt dispatcher state.
