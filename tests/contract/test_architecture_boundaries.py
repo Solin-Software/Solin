@@ -2009,10 +2009,9 @@ def test_media_info_workers_are_injected_from_composition():
         encoding="utf-8"
     )
 
-    # The queue/service extractors still receive their worker pool from
-    # composition. (The standalone ffprobe extractor runs on its own daemon
-    # thread bounded by the ffprobe/ffmpeg CLI timeouts.)
+    # Queue/service extractors receive their owned worker pool from composition.
     assert "worker_pool" in media_info_source
+    assert "threading.Thread" not in media_info_source
     assert "ThreadedWorkerPool" in composition_source
     assert "_media_info_workers" in composition_source
 

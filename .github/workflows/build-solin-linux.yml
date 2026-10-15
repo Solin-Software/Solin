@@ -61,6 +61,7 @@ jobs:
           )
           sudo apt-get "${apt_options[@]}" update
           mapfile -t libobs_packages < <(bash scripts/build_solin.sh --print-native-packages)
+          # FFmpeg executables are available for fixtures; the delivered helper uses private libraries.
           sudo apt-get "${apt_options[@]}" install --yes --no-install-recommends \
             "${libobs_packages[@]}" \
             binutils \
@@ -173,6 +174,7 @@ jobs:
             --server-args="-screen 0 1280x720x24" \
             python -m pytest \
               tests/e2e/test_packaged_app_smoke.py::test_packaged_app_survives_startup_window \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_media_runtime \
               tests/e2e/test_packaged_app_smoke.py::test_packaged_http_runtime -q
 
       - name: Download verified predecessor

@@ -4,10 +4,10 @@ Centralized asynchronous thumbnail/title extraction without fully downloading
 remote files.
 
 Metadata sources, in priority order:
-  Local audio: raw header bytes (ID3v2/MP4 atoms/FLAC/OGG), without a player.
+  Local audio: raw header bytes (ID3v2/MP4 atoms/FLAC/OGG), then native extraction.
   Remote audio: HTTP Range request (512 KB maximum), using the same byte parsers.
-  Local video: ffprobe (title/duration), then ffmpeg (cover or frame at 5%).
-  Remote video: ffprobe/ffmpeg on the URL, without a full download.
+  Local video: bundled media extraction for title, duration, cover or frame.
+  Remote video: bundled media extraction on the URL, without a full download.
   Any URL: RemotePageMetaExtractor, og:image/og:title via partial HTTP HEAD/GET.
   Local fallback: complete remote file with .done, used after source failure.
 
@@ -16,10 +16,10 @@ Main signal: info_ready(index, pixmap, title).
   - title: metadata title, or "" if unavailable.
 
 For live input from a playing source, use feed_live_frame() / feed_live_cover()
-on ThumbnailQueue; these emit info_ready with title="".
+on MediaInfoQueue; these emit info_ready with title="".
 
 Independent of the JW.org API: thumbnails and titles come directly from
-media streams (ffprobe/ffmpeg) or page HTML metadata.
+media streams or page HTML metadata.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ import os
 import re
 import struct
 import tempfile
-import threading
 import time
 import zlib
 
@@ -44,7 +43,16 @@ from PySide6.QtCore import QObject, Signal, Slot, QTimer
 from PySide6.QtGui import QPixmap, QImage
 
 from ..core.foundation.exception_logging import log_ignored_exception
-from ..core.media import ffprobe_metadata
+from ..core.foundation.constants import THUMB_JPEG_QUALITY
+from ..core.media.media_extract import (
+    ImagePolicy,
+    MediaExtractCancelled,
+    MediaExtractError,
+    MediaExtractRequest,
+    MediaExtractResult,
+    get_media_extract_service,
+)
+from .thumbnail_images import media_extract_image_to_qimage
 from ..core.foundation.thread_workers import CancellationFlag, WorkerHandle, WorkerPool
 from ..core.media.info_queue import (
     MediaInfoFailure,
@@ -71,8 +79,8 @@ log = logging.getLogger(__name__)
 _DEFAULT_METADATA_READ_BYTES = 512 * 1024
 _MAX_ID3_TAG_BYTES = 8 * 1024 * 1024
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-# Earlier extractions could persist UTF-8 titles decoded with the Windows locale.
-_MEDIA_INFO_CACHE_SCHEMA = 4
+# Native extraction replaces CLI-derived titles and thumbnail pixels.
+_MEDIA_INFO_CACHE_SCHEMA = 5
 _SOURCE_CHANGE_RETRY_DELAYS_MS = (100, 300, 1_000)
 
 
@@ -123,6 +131,7 @@ class _PendingMediaInfoResult:
     job: MediaInfoJob
     pixmap: QPixmap
     title: str
+    failure: MediaInfoFailure | None = None
 
 
 def _media_info_cache_source_identity(url: str) -> str:
@@ -250,7 +259,7 @@ def _save_media_info_disk_cache(
             )
             os.close(image_fd)
             temp_paths.append(temp_image_path)
-            if not image.save(temp_image_path, quality=90):
+            if not image.save(temp_image_path, quality=THUMB_JPEG_QUALITY):
                 raise OSError("Qt could not encode the media info thumbnail")
         meta_fd, temp_meta_path = tempfile.mkstemp(
             prefix="media-info-",
@@ -298,6 +307,8 @@ def _save_media_info_disk_cache(
 
 
 def _failure_from_exception(exc: BaseException) -> MediaInfoFailure:
+    if isinstance(exc, MediaExtractError):
+        return exc.failure
     if isinstance(exc, HttpStatusError):
         status = exc.status_code
         transient = status in {408, 409, 423, 425, 429} or status >= 500
@@ -380,7 +391,7 @@ def _embedded_image_is_complete(data: bytes) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Metadata parsers (operate on bytes: no file I/O, no player)
+# Metadata parsers (operate on bytes without file I/O)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _audio_info_from_bytes(data: bytes, ext: str) -> "tuple[bytes | None, str]":
@@ -749,6 +760,8 @@ class _ThreadedMediaInfoExtractor(QObject):
         return True
 
     def _deliver_worker_result(self, image_bytes: bytes, title: str) -> None:
+        if self._cancelled.is_set():
+            return
         pixmap = QPixmap()
         if image_bytes:
             if not _embedded_image_is_complete(image_bytes):
@@ -788,6 +801,8 @@ class _ThreadedMediaInfoExtractor(QObject):
         self.deleteLater()
 
     def _deliver_worker_failure(self, failure: MediaInfoFailure) -> None:
+        if self._cancelled.is_set():
+            return
         self.thumbnail_failed.emit(self._index, failure)
         self.deleteLater()
 
@@ -883,54 +898,43 @@ class LocalAudioInfoExtractor(_ThreadedMediaInfoExtractor):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class MediaInfoExtractor(QObject):
-    """Thumbnail + title + duration extraction via the ffprobe/ffmpeg CLIs.
+    """Extract media in an owned worker and create pixmaps on the Qt thread.
 
-    Metadata is extracted with ffprobe independently of libobs playback.
-    Metadata is read out of band on a worker thread:
-
-      1. ``ffprobe`` for the title tag, duration, and whether an embedded cover
-         (attached picture / image stream) is present.
-      2. embedded cover art via ``ffmpeg`` when present, else a decoded frame at
-         ~5% of the duration.
-
-    Signals (unchanged contract):
-      info_ready(index, pixmap, title)  — extraction done (pixmap may be null)
-      thumbnail_failed(index, failure)  — no decodable thumbnail for a video
-      duration_ready(index, dur_ms)     — real duration (emitted before info_ready)
-
-    The extraction is deferred to the next event-loop tick so a caller can set the
-    request intent right after construction (as the existing call sites do).
+    Extraction starts on the next event-loop tick so callers can configure intent.
+    A successful extraction without artwork is authoritative absence; failures
+    retain their domain classification for the queue's fallback and retry policy.
     """
 
-    info_ready       = Signal(int, QPixmap, str)   # (index, pixmap, title)
+    info_ready = Signal(int, QPixmap, str)  # (index, pixmap, title)
     thumbnail_failed = Signal(int, object)
-    duration_ready   = Signal(int, int)            # (index, duration_ms)
+    duration_ready = Signal(int, int)  # (index, duration_ms)
 
-    # Internal: worker-thread result hopped to the GUI thread (queued) so the
-    # QPixmap is built there. Payload: (duration_ms, image_bytes|None, title).
     _result_ready = Signal(object)
-
-    _THUMBNAIL_FRACTION = 0.05
-    _MIN_THUMBNAIL_MS = 1000
+    _worker_failed = Signal(object)
 
     def __init__(
         self,
         index: int,
         url: str,
-        media_type: str = "video",
+        media_type: str,
+        worker_pool: WorkerPool,
         parent=None,
     ):
         super().__init__(parent)
-        self._index          = index
-        self._url            = url
-        self._media_type     = media_type
+        self._index = index
+        self._url = url
+        self._media_type = media_type
+        self._worker_pool = worker_pool
+        self._worker: WorkerHandle | None = None
         self._require_thumbnail = True
         self._require_title = True
         self._require_duration = False
         self._started = False
-        self._cancelled = threading.Event()
-        self.destroyed.connect(lambda *_a: self._cancelled.set())
+        self._cancelled = CancellationFlag()
+        cancelled = self._cancelled
+        self.destroyed.connect(lambda *_: cancelled.set())
         self._result_ready.connect(self._deliver)
+        self._worker_failed.connect(self._deliver_failure)
         QTimer.singleShot(0, self._start)
 
     def set_require_duration(self, required: bool) -> None:
@@ -948,8 +952,10 @@ class MediaInfoExtractor(QObject):
         self._require_duration = require_duration
 
     def cancel(self, *, wait: bool = False, timeout: float = 2.0) -> None:
-        del wait, timeout  # the worker is a daemon bounded by ffprobe/ffmpeg timeouts
         self._cancelled.set()
+        worker = self._worker
+        if wait and worker is not None and not worker.is_current():
+            worker.join(timeout=max(0.0, timeout))
         self.deleteLater()
 
     # ── worker ────────────────────────────────────────────────────────────────
@@ -958,71 +964,85 @@ class MediaInfoExtractor(QObject):
         if self._cancelled.is_set() or self._started:
             return
         self._started = True
-        threading.Thread(
-            target=self._run, name="solin-media-info", daemon=True,
-        ).start()
+        try:
+            self._worker = self._worker_pool.submit("solin-media-info", self._run)
+        except RuntimeError as exc:
+            self._deliver_failure(_failure_from_exception(exc))
+            return
+        if self._worker is None:
+            self._deliver_failure(
+                MediaInfoFailure(
+                    MediaInfoFailureKind.TRANSIENT,
+                    "The media extraction worker pool is stopped",
+                    "worker-unavailable",
+                )
+            )
 
     def _run(self) -> None:
         if self._cancelled.is_set():
             return
-        duration_ms = 0
-        title = ""
-        image: bytes | None = None
         try:
-            tags = ffprobe_metadata.probe_tags(self._url)
-            if self._require_title:
-                title = tags.title
-            if self._require_duration:
-                duration_ms = tags.duration_ms
+            image_policy = ImagePolicy.NONE
             if self._require_thumbnail:
-                if tags.cover_stream_index >= 0:
-                    image = ffprobe_metadata.extract_cover(
-                        self._url, tags.cover_stream_index,
-                    )
-                if not image:
-                    at_ms = (
-                        int(tags.duration_ms * self._THUMBNAIL_FRACTION)
-                        if tags.duration_ms
-                        else self._MIN_THUMBNAIL_MS
-                    )
-                    image = ffprobe_metadata.extract_thumbnail(self._url, at_ms)
-        except Exception:  # noqa: BLE001 - metadata worker boundary (subprocess/IO)
+                image_policy = (
+                    ImagePolicy.COVER_ONLY
+                    if self._media_type == "audio"
+                    else ImagePolicy.COVER_OR_FRAME
+                )
+            result = get_media_extract_service().extract(
+                MediaExtractRequest(
+                    source=self._url,
+                    image_policy=image_policy,
+                    require_title=self._require_title,
+                    require_duration=self._require_duration,
+                ),
+                cancel=self._cancelled,
+            )
+        except MediaExtractCancelled:
+            return
+        except Exception as exc:  # noqa: BLE001 - media extraction worker boundary
             log.debug("media info extraction failed for %s", self._url, exc_info=True)
+            if self._cancelled.is_set() or not shiboken6.isValid(self):
+                return
+            try:
+                self._worker_failed.emit(_failure_from_exception(exc))
+            except RuntimeError:
+                return
+            return
         if self._cancelled.is_set() or not shiboken6.isValid(self):
             return
         try:
-            self._result_ready.emit((duration_ms, image, title))
+            self._result_ready.emit(result)
         except RuntimeError:
             pass  # extractor deleted before the worker finished
 
     @Slot(object)
-    def _deliver(self, payload) -> None:
+    def _deliver(self, result: MediaExtractResult) -> None:
         if self._cancelled.is_set():
             return
-        duration_ms, image_bytes, title = payload
-        if self._require_duration and duration_ms > 0:
-            self.duration_ready.emit(self._index, duration_ms)
-        if not self._require_thumbnail:
-            self.info_ready.emit(self._index, QPixmap(), title)
-            self.deleteLater()
-            return
+        if self._require_duration and result.duration_ms > 0:
+            self.duration_ready.emit(self._index, result.duration_ms)
         pixmap = QPixmap()
-        if image_bytes:
-            pixmap.loadFromData(image_bytes)
-        if not pixmap.isNull():
-            self.info_ready.emit(self._index, pixmap, title)
-        elif self._media_type == "audio":
-            # The file opened but carries no embedded cover — a valid empty result.
-            self.info_ready.emit(self._index, QPixmap(), title)
-        else:
-            self.thumbnail_failed.emit(
-                self._index,
-                MediaInfoFailure(
-                    MediaInfoFailureKind.TRANSIENT,
-                    "No decodable thumbnail could be extracted",
-                    "thumbnail-unavailable",
-                ),
-            )
+        if self._require_thumbnail and result.image is not None:
+            try:
+                image = media_extract_image_to_qimage(result.image)
+                if image.isNull():
+                    raise ValueError("The extracted image could not be converted")
+                pixmap = QPixmap.fromImage(image)
+                if pixmap.isNull():
+                    raise ValueError("The extracted image could not be converted to a pixmap")
+            except (RuntimeError, ValueError) as exc:
+                self._deliver_failure(_failure_from_exception(exc))
+                return
+        title = result.title if self._require_title else ""
+        self.info_ready.emit(self._index, pixmap, title)
+        self.deleteLater()
+
+    @Slot(object)
+    def _deliver_failure(self, failure: MediaInfoFailure) -> None:
+        if self._cancelled.is_set():
+            return
+        self.thumbnail_failed.emit(self._index, failure)
         self.deleteLater()
 
 
@@ -1155,7 +1175,7 @@ class RemotePageMetaExtractor(_ThreadedMediaInfoExtractor):
 class _RemoteVideoMetaThenStream(QObject):
     """
     For remote video/media URLs, first try HTML metadata (og:image/og:title)
-    without using the player. On failure, fall back to MediaInfoExtractor
+    with bounded HTTP reads. On failure, fall back to MediaInfoExtractor
     to extract a video frame.
 
     This handles JW.org and other sites without an external API. The thumbnail
@@ -1179,6 +1199,7 @@ class _RemoteVideoMetaThenStream(QObject):
         self._index      = index
         self._url        = url
         self._media_type = media_type
+        self._worker_pool = worker_pool
         self._done       = False
         self._require_thumbnail = True
         self._require_title = True
@@ -1244,6 +1265,7 @@ class _RemoteVideoMetaThenStream(QObject):
             index,
             self._url,
             self._media_type,
+            self._worker_pool,
             self,
         )
         self._stream_ex.set_request_intent(
@@ -1265,19 +1287,6 @@ class _RemoteVideoMetaThenStream(QObject):
             if not self._page_pixmap.isNull()
             else pixmap
         )
-        if (
-            self._require_thumbnail
-            and (result_pixmap is None or result_pixmap.isNull())
-        ):
-            self._on_stream_failed(
-                index,
-                MediaInfoFailure(
-                    MediaInfoFailureKind.FORMAT,
-                    "The remote video did not yield a thumbnail",
-                    "no-video-frame",
-                ),
-            )
-            return
         self._done = True
         self.info_ready.emit(index, result_pixmap, title or self._page_title)
         QTimer.singleShot(0, self.deleteLater)
@@ -1308,8 +1317,8 @@ class _RemoteVideoMetaThenStream(QObject):
         self.deleteLater()
 
 
-class _LocalAudioMetaThenPlayer(QObject):
-    """Read audio metadata in a worker, then use Qt only for missing fields."""
+class _LocalAudioMetaThenExtract(QObject):
+    """Read audio headers first, then extract any missing fields in a worker."""
 
     info_ready = Signal(int, QPixmap, str)
     thumbnail_failed = Signal(int, object)
@@ -1327,6 +1336,7 @@ class _LocalAudioMetaThenPlayer(QObject):
         self._index = index
         self._url = url
         self._media_type = media_type
+        self._worker_pool = worker_pool
         self._done = False
         self._require_thumbnail = True
         self._require_title = True
@@ -1334,7 +1344,7 @@ class _LocalAudioMetaThenPlayer(QObject):
         self._metadata_pixmap = QPixmap()
         self._metadata_title = ""
         self._metadata_image_failed = False
-        self._player_ex: MediaInfoExtractor | None = None
+        self._native_ex: MediaInfoExtractor | None = None
 
         self._metadata_ex = LocalAudioInfoExtractor(
             index,
@@ -1375,7 +1385,7 @@ class _LocalAudioMetaThenPlayer(QObject):
         if metadata_satisfies_request:
             self._finish(index, self._metadata_pixmap, self._metadata_title)
             return
-        self._start_player(index)
+        self._start_native(index)
 
     def _on_metadata_failed(
         self,
@@ -1386,33 +1396,34 @@ class _LocalAudioMetaThenPlayer(QObject):
             return
         if failure.kind is MediaInfoFailureKind.FORMAT:
             self._metadata_image_failed = True
-            self._start_player(index)
+            self._start_native(index)
             return
         self._done = True
         self.thumbnail_failed.emit(index, failure)
         QTimer.singleShot(0, self.deleteLater)
 
-    def _start_player(self, index: int) -> None:
-        if self._player_ex is not None:
+    def _start_native(self, index: int) -> None:
+        if self._native_ex is not None:
             return
-        self._player_ex = MediaInfoExtractor(
+        self._native_ex = MediaInfoExtractor(
             index,
             self._url,
             self._media_type,
+            self._worker_pool,
             self,
         )
-        self._player_ex.set_request_intent(
+        self._native_ex.set_request_intent(
             require_thumbnail=(
                 self._require_thumbnail and self._metadata_pixmap.isNull()
             ),
             require_title=(self._require_title and not self._metadata_title),
             require_duration=self._require_duration,
         )
-        self._player_ex.info_ready.connect(self._on_player_ready)
-        self._player_ex.thumbnail_failed.connect(self._on_player_failed)
-        self._player_ex.duration_ready.connect(self.duration_ready)
+        self._native_ex.info_ready.connect(self._on_native_ready)
+        self._native_ex.thumbnail_failed.connect(self._on_native_failed)
+        self._native_ex.duration_ready.connect(self.duration_ready)
 
-    def _on_player_ready(self, index: int, pixmap: QPixmap, title: str) -> None:
+    def _on_native_ready(self, index: int, pixmap: QPixmap, title: str) -> None:
         if self._done:
             return
         result_pixmap = (
@@ -1425,7 +1436,7 @@ class _LocalAudioMetaThenPlayer(QObject):
             and (result_pixmap is None or result_pixmap.isNull())
             and self._metadata_image_failed
         ):
-            self._on_player_failed(
+            self._on_native_failed(
                 index,
                 MediaInfoFailure(
                     MediaInfoFailureKind.FORMAT,
@@ -1436,7 +1447,7 @@ class _LocalAudioMetaThenPlayer(QObject):
             return
         self._finish(index, result_pixmap, title or self._metadata_title)
 
-    def _on_player_failed(self, index: int, failure: MediaInfoFailure) -> None:
+    def _on_native_failed(self, index: int, failure: MediaInfoFailure) -> None:
         if self._done:
             return
         self._done = True
@@ -1453,7 +1464,7 @@ class _LocalAudioMetaThenPlayer(QObject):
             return
         self._done = True
         deadline = time.monotonic() + max(0.0, timeout)
-        for extractor in (self._metadata_ex, self._player_ex):
+        for extractor in (self._metadata_ex, self._native_ex):
             if extractor is None:
                 continue
             cancel = getattr(extractor, "cancel", None)
@@ -1509,7 +1520,7 @@ def _local_audio_factory(
     worker_pool: WorkerPool,
     parent: QObject,
 ) -> QObject:
-    return _LocalAudioMetaThenPlayer(
+    return _LocalAudioMetaThenExtract(
         index,
         url,
         media_type,
@@ -1532,10 +1543,10 @@ def _local_media_factory(
     index: int,
     url: str,
     media_type: str,
-    _worker_pool: WorkerPool,
+    worker_pool: WorkerPool,
     parent: QObject,
 ) -> QObject:
-    return MediaInfoExtractor(index, url, media_type, parent)
+    return MediaInfoExtractor(index, url, media_type, worker_pool, parent)
 
 
 _EXTRACTOR_FACTORIES: dict[tuple[bool, str | None], ExtractorFactory] = {
@@ -1694,6 +1705,7 @@ class MediaInfoQueue(QObject):
                 self._duration_cache[lookup.index] = result.duration_ms
                 QTimer.singleShot(
                     0,
+                    self,
                     lambda v=lookup.version, i=lookup.index, duration=result.duration_ms:
                         self._emit_duration_if_current(v, i, duration),
                 )
@@ -1971,6 +1983,7 @@ class MediaInfoQueue(QObject):
         queued_pixmap = QPixmap(pixmap)
         QTimer.singleShot(
             0,
+            self,
             lambda v=version, i=index, px=queued_pixmap, t=title:
                 self._emit_info_if_current(v, i, px, t)
         )
@@ -1983,6 +1996,7 @@ class MediaInfoQueue(QObject):
         version = self._scheduler.version_for(index)
         QTimer.singleShot(
             0,
+            self,
             lambda v=version, i=index, current=failure:
                 self._emit_terminal_failure_if_current(v, i, current),
         )
@@ -2122,6 +2136,7 @@ class MediaInfoQueue(QObject):
                 job.index,
                 job.url,
                 job.media_type,
+                self._worker_pool,
                 self,
             )
         except Exception as exc:  # noqa: BLE001 - Qt factory boundary
@@ -2234,8 +2249,10 @@ class MediaInfoQueue(QObject):
         job: MediaInfoJob,
         pixmap: QPixmap,
         title: str,
+        *,
+        failure: MediaInfoFailure | None = None,
     ) -> None:
-        pending = _PendingMediaInfoResult(job, QPixmap(pixmap), title)
+        pending = _PendingMediaInfoResult(job, QPixmap(pixmap), title, failure)
         self._pending_results[job.index] = pending
         state = self._request_states.get(job.index)
         source_url = state.source_url if state is not None else ""
@@ -2255,8 +2272,11 @@ class MediaInfoQueue(QObject):
             return
         self._pending_results.pop(job.index, None)
         if self._scheduler.fail(job, job.index):
-            self._request_states.pop(job.index, None)
-            self._pump()
+            if failure is not None:
+                self._handle_failure(job, job.index, failure)
+            else:
+                self._request_states.pop(job.index, None)
+                self._pump()
 
     @Slot(object, str)
     def _on_source_identity_checked(
@@ -2315,6 +2335,14 @@ class MediaInfoQueue(QObject):
             )
             self._pump()
             return
+        if pending.failure is not None:
+            if not self._scheduler.fail(job, job.index):
+                return
+            self._extractors.pop(job.index, None)
+            if state.partial_duration_ms > 0:
+                self._publish_duration(job.index, state.partial_duration_ms)
+            self._handle_failure(job, job.index, pending.failure)
+            return
         self._finalize_ready(
             job,
             job.index,
@@ -2361,10 +2389,7 @@ class MediaInfoQueue(QObject):
             state is not None
             and state.require_thumbnail
             and (pixmap is None or pixmap.isNull())
-            and (
-                state.media_type != "audio"
-                or state.embedded_image_failed
-            )
+            and state.embedded_image_failed
         ):
             if not self._scheduler.complete(job, index):
                 return
@@ -2374,16 +2399,8 @@ class MediaInfoQueue(QObject):
                 index,
                 MediaInfoFailure(
                     MediaInfoFailureKind.FORMAT,
-                    (
-                        "The embedded image could not be decoded"
-                        if state.embedded_image_failed
-                        else "Extraction completed without a usable thumbnail"
-                    ),
-                    (
-                        "invalid-embedded-image"
-                        if state.embedded_image_failed
-                        else "empty-thumbnail"
-                    ),
+                    "The embedded image could not be decoded",
+                    "invalid-embedded-image",
                 ),
             )
             return
@@ -2425,10 +2442,8 @@ class MediaInfoQueue(QObject):
         index: int,
         failure: object = None,
     ) -> None:
-        self._pending_results.pop(index, None)
-        if not self._scheduler.fail(job, index):
+        if not self._scheduler.accepts_result(job, index):
             return
-        self._extractors.pop(index, None)
         classified = (
             failure
             if isinstance(failure, MediaInfoFailure)
@@ -2438,6 +2453,20 @@ class MediaInfoQueue(QObject):
                 "unknown",
             )
         )
+        state = self._request_states.get(index)
+        if (
+            state is not None
+            and state.partial_duration_ms > 0
+            and state.source_identity
+            and not state.source_url.startswith(("http://", "https://"))
+        ):
+            self._extractors.pop(index, None)
+            self._schedule_source_identity_check(job, QPixmap(), "", failure=classified)
+            return
+        self._pending_results.pop(index, None)
+        if not self._scheduler.fail(job, index):
+            return
+        self._extractors.pop(index, None)
         self._handle_failure(job, index, classified)
 
     def _handle_failure(
@@ -2549,6 +2578,7 @@ class MediaInfoQueue(QObject):
             state.origin_failure = None
         state.partial_pixmap = None
         state.partial_title = ""
+        state.partial_duration_ms = 0
         state.duration_fallback_started = False
         self._enqueue(
             index,

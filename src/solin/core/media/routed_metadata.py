@@ -1,55 +1,76 @@
-"""Title + cover-art extraction for libobs-decoded media, via ffprobe/ffmpeg.
-
-This reads the title tag and embedded cover art out of band with the ``ffprobe``/``ffmpeg`` CLIs (see
-:mod:`solin.core.media.ffprobe_metadata`) on a worker thread, and delivers the
-result as a ``QPixmap`` built on the GUI thread.
-
-Only the embedded cover image is used for metadata artwork.
-"""
+"""Title and embedded cover extraction with delivery on the Qt thread."""
 
 from __future__ import annotations
 
 import logging
-import threading
-from typing import Callable
+import weakref
+from collections.abc import Callable
+from typing import Protocol
 
 import shiboken6
 from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QPixmap
 
-from solin.core.media import ffprobe_metadata
+from solin.core.foundation.thread_workers import CancellationFlag, ThreadedWorkerPool
+from solin.core.media.media_extract import (
+    ImagePolicy,
+    MediaExtractCancelled,
+    MediaExtractError,
+    MediaExtractRequest,
+    MediaExtractResult,
+    get_media_extract_service,
+)
+from solin.ui.thumbnail_images import media_extract_image_to_qimage
 
 log = logging.getLogger(__name__)
 
-# (path) -> (title, cover_image_bytes | None). Injectable for tests.
-MetadataFn = Callable[[str], "tuple[str, bytes | None]"]
-# Runs the extraction callable; default spawns a daemon thread, tests pass a
-# synchronous runner.
+
+class MetadataFn(Protocol):
+    def __call__(
+        self,
+        request: MediaExtractRequest,
+        *,
+        cancel: CancellationFlag,
+    ) -> MediaExtractResult: ...
+
+
 Runner = Callable[[Callable[[], None]], None]
 
 
-def _default_metadata_fn(path: str) -> tuple[str, bytes | None]:
-    tags = ffprobe_metadata.probe_tags(path)
-    cover = ffprobe_metadata.extract_cover(path, tags.cover_stream_index)
-    return tags.title, cover
+def _default_metadata_fn(
+    request: MediaExtractRequest,
+    *,
+    cancel: CancellationFlag,
+) -> MediaExtractResult:
+    return get_media_extract_service().extract(request, cancel=cancel)
 
 
-def _default_runner(work: Callable[[], None]) -> None:
-    threading.Thread(target=work, name="solin-routed-metadata", daemon=True).start()
+class _ExtractionLifetime:
+    """Cancel work on QObject destruction without retaining the QObject."""
+
+    def __init__(self, workers: ThreadedWorkerPool | None) -> None:
+        self.workers = workers
+        self.cancellation: CancellationFlag | None = None
+
+    def cancel(self) -> None:
+        if self.cancellation is not None:
+            self.cancellation.set()
+            self.cancellation = None
+
+    def close(self) -> None:
+        self.cancel()
+        if self.workers is not None:
+            # Cancellation stops the native child. Do not block Qt destruction
+            # while the worker reaps it; the pool retains work until it exits.
+            self.workers.shutdown(timeout=0)
 
 
 class RoutedMediaMetadataExtractor(QObject):
-    """Reads title + cover for one media file at a time via ffprobe/ffmpeg.
-
-    :meth:`request` supersedes any in-flight read; the result carries the caller's
-    ``session_id`` so a late result for a superseded playback can be dropped.
-    """
+    """Read title and embedded cover for the latest playback request."""
 
     # (session_id, title, cover) — cover is a QPixmap or None.
     metadata_ready = Signal(int, str, object)
-    # Internal: (generation, session_id, title, cover_bytes|None) hopped from the
-    # worker thread to the GUI thread (queued) so the QPixmap is built there.
-    _result_ready = Signal(int, int, str, object)
+    _result_ready = Signal(int, int, object)
 
     def __init__(
         self,
@@ -60,49 +81,95 @@ class RoutedMediaMetadataExtractor(QObject):
     ) -> None:
         super().__init__(parent)
         self._metadata_fn = metadata_fn or _default_metadata_fn
-        self._runner = runner or _default_runner
+        self._runner = runner
+        self._lifetime = _ExtractionLifetime(ThreadedWorkerPool() if runner is None else None)
         self._generation = 0
         self._result_ready.connect(self._deliver)
+        self.destroyed.connect(self._lifetime.close)
+        # PySide can disconnect Python callbacks before deleting an unparented
+        # wrapper. The finalizer owns only the lifetime state, never this QObject.
+        weakref.finalize(self, self._lifetime.close)
 
     def request(self, session_id: int, path: str) -> None:
-        """Begin reading metadata for ``path``, tagging the result ``session_id``."""
-        self._generation += 1
+        """Supersede the previous extraction with a cancellable cover-only read."""
+        self.cancel()
         generation = self._generation
         if not path:
             self.metadata_ready.emit(session_id, "", None)
             return
+        try:
+            request = MediaExtractRequest(
+                source=path,
+                image_policy=ImagePolicy.COVER_ONLY,
+                require_title=True,
+                require_duration=False,
+            )
+        except ValueError:
+            log.debug("Invalid routed metadata source %r", path, exc_info=True)
+            self.metadata_ready.emit(session_id, "", None)
+            return
+        cancellation = CancellationFlag()
+        self._lifetime.cancellation = cancellation
         metadata_fn = self._metadata_fn
+        owner_ref = weakref.ref(self)
 
         def _work() -> None:
-            title, cover_bytes = "", None
-            try:
-                title, cover_bytes = metadata_fn(path)
-            except Exception:  # noqa: BLE001 - extraction boundary (subprocess/IO)
-                log.debug("routed metadata read errored for %r", path, exc_info=True)
-            # The C++ object may have been deleted (e.g. its parent went away)
-            # while this daemon thread ran; emitting on a dead object would crash.
-            if not shiboken6.isValid(self):
+            if cancellation.is_set():
                 return
+            result = None
             try:
-                self._result_ready.emit(generation, session_id, title, cover_bytes)
-            except RuntimeError:
-                pass
+                result = metadata_fn(request, cancel=cancellation)
+            except MediaExtractCancelled:
+                return
+            except MediaExtractError as error:
+                log.debug("Routed metadata read failed for %r: %s", path, error.failure)
+            except Exception:  # noqa: BLE001 - injected extraction/IO boundary
+                log.debug("routed metadata read errored for %r", path, exc_info=True)
 
-        self._runner(_work)
+            def _emit_result() -> None:
+                owner = owner_ref()
+                if owner is None or not shiboken6.isValid(owner):
+                    return
+                try:
+                    owner._result_ready.emit(generation, session_id, result)
+                except RuntimeError:
+                    # Destruction can win between isValid() and signal emission.
+                    log.debug("Routed metadata owner was destroyed before delivery")
+
+            cancellation.run_if_active(_emit_result)
+
+        if self._runner is not None:
+            self._runner(_work)
+        else:
+            workers = self._lifetime.workers
+            assert workers is not None
+            workers.submit("solin-routed-metadata", _work)
 
     def cancel(self) -> None:
-        """Drop any in-flight read without emitting (its result is superseded)."""
+        """Cancel the active extraction and invalidate any queued result."""
         self._generation += 1
+        self._lifetime.cancel()
 
-    @Slot(int, int, str, object)
-    def _deliver(self, generation: int, session_id: int, title: str, cover_bytes) -> None:
+    @Slot(int, int, object)
+    def _deliver(
+        self,
+        generation: int,
+        session_id: int,
+        result: MediaExtractResult | None,
+    ) -> None:
         if generation != self._generation:
             return  # a newer request (or cancel) superseded this read
+        title = result.title if result is not None else ""
         cover: QPixmap | None = None
-        if cover_bytes:
-            image = QImage.fromData(cover_bytes)
-            if not image.isNull():
+        if result is not None and result.image is not None and result.image.kind == "cover":
+            try:
+                image = media_extract_image_to_qimage(result.image)
+            except ValueError:
+                log.debug("Invalid routed metadata cover", exc_info=True)
+            else:
                 cover = QPixmap.fromImage(image)
+                if cover.isNull():
+                    cover = None
         self.metadata_ready.emit(session_id, title, cover)
 
 

@@ -37,7 +37,6 @@ the message using your distribution's package manager.
 
 - Install LibreOffice to import Office documents and presentations as static
   pages. Animations and embedded-media playback are not preserved.
-- Install FFmpeg for media thumbnails, file information, and embedded cover art.
 
 ## macOS first launch
 

@@ -10,6 +10,10 @@ from solin.bootstrap.config import AppConfig
 from solin.bootstrap.lifecycle import ApplicationLifecycle
 from solin.bootstrap.maintenance import DeferredApplicationMaintenance
 from solin.core.foundation.runtime_paths import RuntimePaths
+from solin.core.media.media_extract import (
+    initialize_media_extract_service,
+    shutdown_media_extract_service,
+)
 from solin.core.foundation.settings_store import (
     GlobalSettingsStore,
     InstallationSettingsStore,
@@ -56,6 +60,7 @@ class ApplicationContainer:
 
 
 def initialize_application_container(app, config: AppConfig) -> ApplicationContainer:
+    initialize_media_extract_service()
     from solin.core.foundation.logging_config import configure_logging
     from solin.bootstrap.media import MediaComposition
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
@@ -140,6 +145,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     lifecycle.install()
     lifecycle.register_cleanup(media.cache_manager.cancel_all)
     lifecycle.register_cleanup(media.shutdown)
+    lifecycle.register_cleanup(shutdown_media_extract_service)
     lifecycle.register_cleanup(font_manager.shutdown)
     lifecycle.register_cleanup(jw_songs_store.shutdown)
     deferred_maintenance = DeferredApplicationMaintenance(

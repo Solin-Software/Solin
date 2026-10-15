@@ -80,6 +80,10 @@ jobs:
           pip install --no-deps -e .
           pip install -r requirements-build.txt
 
+      - name: Build and qualify bundled media extraction
+        shell: pwsh
+        run: python scripts/build_media_extract.py
+
       - name: Read app version
         id: version
         run: python scripts/release.py metadata --github-output

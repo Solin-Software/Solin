@@ -105,8 +105,8 @@ class MediaController(QObject):
         self._engine_media_ended_emitted = False
         self._engine_media_state_received.connect(self._apply_engine_media_state)
 
-        # Title + embedded cover come from ffprobe/ffmpeg out of band, since the
-        # sidecar does not surface container tags.
+        # Title and embedded cover come from the isolated media extractor,
+        # since the sidecar does not surface container tags.
         if metadata_extractor_factory is None:
             from solin.core.media.routed_metadata import RoutedMediaMetadataExtractor
 

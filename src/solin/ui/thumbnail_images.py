@@ -3,12 +3,41 @@
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QBuffer, QIODevice
 from PySide6.QtGui import QImage, QImageReader, QPixmap
 
 from solin.core.foundation.constants import THUMB_JPEG_QUALITY
 from solin.core.media.thumbnail_store import ThumbnailStore
+
+if TYPE_CHECKING:
+    from solin.core.media.media_extract import MediaExtractImage
+
+
+def media_extract_image_to_qimage(image: MediaExtractImage) -> QImage:
+    """Copy packed native BGRA pixels into an independently owned Qt image.
+
+    Invalid geometry or incomplete buffers are rejected before Qt can read them.
+    Format_ARGB32 maps to native BGRA bytes on the supported little-endian hosts.
+    """
+    width, height, stride = image.width, image.height, image.stride
+    if (
+        type(width) is not int
+        or type(height) is not int
+        or type(stride) is not int
+        or not 0 < width < 2**31
+        or not 0 < height < 2**31
+        or not 0 < stride < 2**31
+        or stride != width * 4
+        or not isinstance(image.data, bytes)
+        or len(image.data) != stride * height
+    ):
+        raise ValueError("Invalid extracted BGRA image geometry or buffer")
+    result = QImage(image.data, width, height, stride, QImage.Format.Format_ARGB32).copy()
+    if result.isNull():
+        raise ValueError("Could not copy extracted BGRA pixels into a Qt image")
+    return result
 
 
 def load_thumbnail(store: ThumbnailStore, item_id: str) -> QPixmap | None:

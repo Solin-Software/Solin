@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import gzip
 import json
-import os
-import signal
-import subprocess
 import tempfile
 import threading
 from collections.abc import Iterator
@@ -18,7 +15,7 @@ import pytest
 
 from solin.bootstrap.runtime_verification import HTTP_RUNTIME_CHECKS, HTTP_RUNTIME_PAYLOAD
 from tests._http import LoopbackHTTPServer
-from tests.e2e._packaged_app import _signal_process_group, isolated_app_env
+from tests.e2e._packaged_app import isolated_app_env, run_packaged_headless
 
 
 class _HttpRuntimeHandler(BaseHTTPRequestHandler):
@@ -88,30 +85,11 @@ def assert_packaged_http_runtime(
         for name in ("PYTHONPATH", "PYTHONHOME"):
             environment.pop(name, None)
         with _http_runtime_server() as (url, requests):
-            process = subprocess.Popen(
-                [str(executable), "--verify-http-runtime", url],
-                cwd=executable.parent,
-                env=environment,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=os.name == "posix",
+            process = run_packaged_headless(
+                executable, ["--verify-http-runtime", url], env=environment,
+                timeout=timeout, purpose="HTTP",
             )
-            try:
-                try:
-                    stdout, stderr = process.communicate(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    pytest.fail(f"Packaged HTTP qualification exceeded {timeout:g} seconds.")
-            finally:
-                # Own the full AppImage process group, even when its launcher
-                # exits before descendants or leaves a captured pipe open.
-                if os.name == "posix":
-                    _signal_process_group(process.pid, signal.SIGKILL)
-                elif process.poll() is None:
-                    process.kill()
-                process.wait(timeout=5)
-                # Drain and close captured pipes after timeout cleanup as well
-                # as normal completion (including Windows reader threads).
-                process.communicate(timeout=5)
+            stdout, stderr = process.stdout, process.stderr
             diagnostics = stderr.decode("utf-8", errors="replace")[-16000:]
             assert process.returncode == 0, (
                 f"Packaged HTTP qualification exited with {process.returncode}:\n"

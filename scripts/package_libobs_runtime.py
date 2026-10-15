@@ -8,10 +8,12 @@ import filecmp
 import hashlib
 import importlib.metadata
 import io
+import json
 import os
 import platform
 import plistlib
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -22,6 +24,11 @@ import wave
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from xml.parsers.expat import ExpatError
+
+if __package__:
+    from . import _windows_pe
+else:
+    import _windows_pe
 
 from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
@@ -60,6 +67,297 @@ _MACOS_LIBOBS_EFFECTS = (
     "default", "default_rect", "opaque", "solid", "repeat", "format_conversion",
     "bicubic_scale", "lanczos_scale", "area", "bilinear_lowres_scale", "premultiplied_alpha",
 )
+_MEDIA_EXTRACT_ABI = {
+    "windows": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
+    "linux": {"avcodec": 60, "avformat": 60, "avutil": 58, "swscale": 7},
+    "macos": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
+}
+_MEDIA_EXTRACT_MANIFEST = "media-extract-manifest.json"
+_WINDOWS_REDISTRIBUTABLES = frozenset({
+    "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll",
+})
+_WINDOWS_SYSTEM_IMPORTS = frozenset({
+    "advapi32.dll", "bcrypt.dll", "crypt32.dll", "gdi32.dll", "kernel32.dll",
+    "msvcrt.dll", "ncrypt.dll", "ole32.dll", "oleaut32.dll", "secur32.dll",
+    "shell32.dll", "user32.dll", "version.dll", "winmm.dll", "ws2_32.dll",
+    "ucrtbase.dll",
+})
+
+
+def media_extract_name(target_platform: str) -> str:
+    return "solin-media-extract.exe" if target_platform == "windows" else "solin-media-extract"
+
+
+def _stage_windows_redists(root: Path, application_dir: Path) -> None:
+    """Reuse Nuitka's existing redistributables beside the private helper."""
+    required = {
+        name.casefold()
+        for binary in [root / media_extract_name("windows"), *root.glob("*.dll")]
+        for name in _windows_pe.pe_imports(binary)
+        if name.casefold() in _WINDOWS_REDISTRIBUTABLES
+    }
+    for name in required:
+        destination = root / name
+        if not destination.is_file():
+            source = application_dir / name
+            _require_file(source)
+            shutil.copy2(source, destination)
+
+
+def _audit_windows_media_extract(root: Path, helper: Path, architecture: str) -> None:
+    expected = {f"{name}-{major}.dll" for name, major in _MEDIA_EXTRACT_ABI["windows"].items()}
+    imports = {name.casefold() for name in _windows_pe.pe_imports(helper)}
+    if not imports or any(name.startswith("obs") for name in imports):
+        raise LibobsPackagingError("Extraction helper must run independently of OBS")
+    for name in expected:
+        _require_file(root / name)
+    pending = [helper, *(root / name for name in expected)]
+    visited: set[Path] = set()
+    while pending:
+        binary = pending.pop()
+        if binary in visited:
+            continue
+        visited.add(binary)
+        if architecture != "x86_64" or _windows_pe.pe_machine(binary) != 0x8664:
+            raise LibobsPackagingError(f"Invalid extraction runtime PE architecture: {binary}")
+        for name in _windows_pe.pe_imports(binary):
+            lowered = name.casefold()
+            if lowered in _WINDOWS_SYSTEM_IMPORTS or lowered.startswith(("api-ms-win-", "ext-ms-win-")):
+                continue
+            dependency = root / name
+            if dependency.is_file():
+                if not dependency.resolve().is_relative_to(root.resolve()):
+                    raise LibobsPackagingError(f"Extraction dependency escapes its runtime: {name}")
+                pending.append(dependency)
+            elif lowered not in _WINDOWS_REDISTRIBUTABLES:
+                raise LibobsPackagingError(f"Unbundled extraction dependency: {name}")
+
+
+def stage_media_extract_dependencies(root: Path, target_platform: str) -> None:
+    """Fill missing Linux dependencies from the installed archive, never replace wheel libraries."""
+    if target_platform == "macos":
+        for name, major in _MEDIA_EXTRACT_ABI["macos"].items():
+            alias = root / "Frameworks" / f"lib{name}.{major}.dylib"
+            if not alias.exists():
+                canonical = alias.with_name(f"lib{name}.dylib")
+                _require_file(canonical)
+                alias.symlink_to(canonical.name)
+        return
+    if target_platform != "linux":
+        return
+    result = subprocess.run(
+        ["pkg-config", "--variable=libdir", "libavformat"],
+        check=True, capture_output=True, text=True,
+    )
+    libdir = Path(result.stdout.strip())
+    pending = [
+        (f"lib{name}.so.{major}", libdir / f"lib{name}.so.{major}")
+        for name, major in _MEDIA_EXTRACT_ABI["linux"].items()
+    ]
+    visited: set[str] = set()
+    while pending:
+        name, source = pending.pop()
+        if name in visited or _linux_host_library(name):
+            continue
+        visited.add(name)
+        destination = root / name
+        if destination.exists():
+            _require_file(destination)
+            continue
+        _require_file(source)
+        dependencies = _linux_linked_libraries(source)
+        with tempfile.NamedTemporaryFile(dir=root, delete=False) as stream:
+            candidate = Path(stream.name)
+        try:
+            shutil.copy2(source, candidate)
+            _set_linux_rpath(root, candidate)
+            candidate.replace(destination)
+        finally:
+            candidate.unlink(missing_ok=True)
+        _copy_linux_dependency_notice(source, root)
+        pending.extend(dependencies.items())
+
+
+def relocate_media_extract(root: Path, helper: Path, target_platform: str, architecture: str) -> None:
+    """Bind the helper to one private native dependency graph before qualification."""
+    if target_platform == "windows":
+        _audit_windows_media_extract(root, helper, architecture)
+    elif target_platform == "linux":
+        _relocate_linux(root, binaries=[helper])
+        for name, major in _MEDIA_EXTRACT_ABI["linux"].items():
+            binary = root / f"lib{name}.so.{major}"
+            _require_file(binary)
+            for dependency, library in _linux_linked_libraries(binary).items():
+                if not _linux_host_library(dependency) and not library.is_relative_to(root.resolve()):
+                    raise LibobsPackagingError(f"Extraction dependency escaped the private runtime: {dependency}")
+    elif target_platform == "macos":
+        result = subprocess.run(
+            ["lipo", str(helper), "-verify_arch", architecture], check=True, capture_output=True,
+        )
+        if result.returncode != 0:
+            raise LibobsPackagingError(f"Invalid extraction helper architecture: {helper}")
+        _relocate_macos(root, binaries=[helper])
+    else:
+        raise LibobsPackagingError(f"Unsupported extraction platform: {target_platform}")
+
+
+def _media_extract_environment(target_platform: str) -> dict[str, str]:
+    environment = os.environ.copy()
+    for name in ("LD_LIBRARY_PATH", "LD_PRELOAD", "DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH",
+                 "DYLD_INSERT_LIBRARIES", "DISPLAY", "WAYLAND_DISPLAY", "LIBOBS_PATH", "OBS_DATA_PATH",
+                 "SOLIN_MEDIA_EXTRACT_FFMPEG_DIR"):
+        environment.pop(name, None)
+    environment["PATH"] = (
+        str(Path(environment.get("SystemRoot", "C:/Windows")) / "System32")
+        if target_platform == "windows" else ""
+    )
+    return environment
+
+
+def _run_media_extract(command: list[str], *, environment: dict[str, str], cwd: Path) -> tuple[dict, bytes]:
+    result = subprocess.run(command, capture_output=True, timeout=35, env=environment, cwd=cwd)
+    if result.returncode != 0:
+        diagnostics = result.stderr or result.stdout.partition(b"\n")[0]
+        raise LibobsPackagingError(
+            f"Extraction helper failed qualification (exit {result.returncode}): "
+            + diagnostics.decode("utf-8", errors="replace")[-4000:]
+        )
+    header, separator, pixels = result.stdout.partition(b"\n")
+    try:
+        metadata = json.loads(header)
+    except (UnicodeDecodeError, ValueError) as error:
+        raise LibobsPackagingError("Extraction helper returned invalid JSON") from error
+    if (not separator or not isinstance(metadata, dict) or metadata.get("protocol") != 1
+            or metadata.get("status") != "ok"):
+        raise LibobsPackagingError("Extraction helper protocol is unsupported")
+    return metadata, pixels
+
+
+def _verify_media_extract_abi(version: dict, root: Path, target_platform: str) -> None:
+    abi = version.get("abi")
+    expected = _MEDIA_EXTRACT_ABI[target_platform]
+    if not isinstance(abi, dict) or set(abi) != set(expected):
+        raise LibobsPackagingError("Extraction helper FFmpeg ABI inventory is incomplete")
+    for name, major in expected.items():
+        entry = abi[name]
+        if not isinstance(entry, dict):
+            raise LibobsPackagingError("Extraction helper FFmpeg ABI record is invalid")
+        compiled, runtime = entry.get("compiled"), entry.get("runtime")
+        if (type(compiled) is not int or type(runtime) is not int or compiled >> 16 != major
+                or runtime >> 16 != major or runtime < compiled):
+            raise LibobsPackagingError("Extraction helper FFmpeg ABI does not match the packaged runtime")
+        filename = (
+            f"{name}-{major}.dll" if target_platform == "windows"
+            else f"lib{name}.so.{major}" if target_platform == "linux"
+            else f"Frameworks/lib{name}.{major}.dylib"
+        )
+        library = entry.get("library")
+        wanted = root / filename
+        _require_file(wanted)
+        if (not isinstance(library, str) or not Path(library).is_absolute()
+                or Path(library).resolve() != wanted.resolve()
+                or not wanted.resolve().is_relative_to(root.resolve())):
+            raise LibobsPackagingError(f"Extraction helper loaded an unbundled FFmpeg library: {name}")
+
+
+def verify_media_extract(
+    helper: Path, *, target_platform: str, qualification_fixtures: Path | None = None,
+    architecture: str | None = None,
+) -> dict:
+    """Exercise the actual helper without FFmpeg executables, OBS or graphics."""
+    _require_file(helper)
+    environment = _media_extract_environment(target_platform)
+    with tempfile.TemporaryDirectory(prefix="solin-extraction-smoke-") as directory:
+        work = Path(directory)
+        version, extra = _run_media_extract(
+            [str(helper.resolve()), "--version"], environment=environment, cwd=work,
+        )
+        if extra:
+            raise LibobsPackagingError("Extraction helper version must not contain image bytes")
+        _verify_media_extract_abi(version, helper.parent, target_platform)
+        title = "Solin — ação 🎵"
+        audio = work / "canção.wav"
+        with wave.open(str(audio), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(8000)
+            output.writeframes(b"\x00\x00" * 16000)
+        tag = title.encode("utf-8") + b"\x00"
+        info = b"INFOINAM" + struct.pack("<I", len(tag)) + tag
+        info += b"\x00" * (len(tag) % 2)
+        data = audio.read_bytes() + b"LIST" + struct.pack("<I", len(info)) + info
+        audio.write_bytes(data[:4] + struct.pack("<I", len(data) - 8) + data[8:])
+        options = ["--width", "2", "--height", "2", "--title", "1", "--duration", "1"]
+        metadata, pixels = _run_media_extract(
+            [str(helper.resolve()), "--source", str(audio), "--image-policy", "none", *options],
+            environment=environment, cwd=work,
+        )
+        if (metadata.get("title") != title or metadata.get("duration_ms") != 2000
+                or metadata.get("has_video") is not False or pixels):
+            raise LibobsPackagingError("Extraction helper did not read the smoke title and duration")
+        image = work / "imagem.png"
+        image.write_bytes(_smoke_png())
+        metadata, pixels = _run_media_extract(
+            [str(helper.resolve()), "--source", str(image), "--image-policy", "frame", *options],
+            environment=environment, cwd=work,
+        )
+        expected_image = {"width": 2, "height": 2, "stride": 8, "kind": "frame", "bytes": 16}
+        if metadata.get("image") != expected_image or pixels != b"\xff" * 16:
+            raise LibobsPackagingError("Extraction helper did not decode the smoke image to BGRA")
+        fixtures = qualification_fixtures or (
+            Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "media_extract"
+        )
+        for filename, policy, title, has_video in (
+            ("video.mp4", "frame", "Canção — ação 🎵", True),
+            ("video-cover.mp4", "cover", None, True),
+            ("audio-cover.mp3", "cover", None, False),
+        ):
+            source = fixtures / filename
+            _require_file(source)
+            metadata, pixels = _run_media_extract(
+                [str(helper.resolve()), "--source", str(source.resolve()),
+                 "--image-policy", policy, *options],
+                environment=environment, cwd=work,
+            )
+            image_metadata = metadata.get("image")
+            if (not isinstance(image_metadata, dict) or image_metadata.get("kind") != policy
+                    or image_metadata.get("bytes") != len(pixels) or not pixels
+                    or (title is not None and metadata.get("title") != title)
+                    or metadata.get("has_video") is not has_video
+                    or type(metadata.get("duration_ms")) is not int or metadata["duration_ms"] <= 0):
+                raise LibobsPackagingError(f"Extraction helper did not qualify the media fixture: {filename}")
+            width, height, stride = (image_metadata.get(key) for key in ("width", "height", "stride"))
+            if (type(width) is not int or type(height) is not int or type(stride) is not int
+                    or not 1 <= width <= 2 or not 1 <= height <= 2 or stride != width * 4
+                    or len(pixels) != height * stride):
+                raise LibobsPackagingError(f"Extraction helper returned invalid fixture geometry: {filename}")
+            offset = (height // 2) * stride + (width // 2) * 4
+            blue, green, red, alpha = pixels[offset:offset + 4]
+            if (alpha != 255 or blue >= 25
+                    or (policy == "frame" and (red <= 230 or green >= 25))
+                    or (policy == "cover" and (green <= 190 or red >= 25))):
+                raise LibobsPackagingError(f"Extraction helper returned invalid fixture pixels: {filename}")
+    return {
+        "protocol": 1,
+        "target": {
+            "platform": target_platform,
+            "architecture": architecture or _ARCHITECTURES.get(platform.machine().lower()),
+        },
+        "helper": {
+            "path": media_extract_name(target_platform),
+            "sha256": _native_library_digest(helper).hex(),
+        },
+        "libraries": {
+            name: {
+                "path": Path(entry["library"]).resolve().relative_to(helper.parent.resolve()).as_posix(),
+                "sha256": _native_library_digest(Path(entry["library"])).hex(),
+                "compiled": entry["compiled"],
+                "runtime": entry["runtime"],
+            }
+            for name, entry in version["abi"].items()
+        },
+        "qualified": ["private_abi_origins", "unicode_title", "duration", "bgra_pixels", "embedded_covers"],
+    }
 
 
 def _mux_helper(root: Path, target_platform: str) -> Path:
@@ -200,6 +498,7 @@ def validate_runtime(
         suffix = ".dylib"
     else:
         raise LibobsPackagingError(f"Unsupported libobs platform: {target_platform}")
+    _require_file(root / media_extract_name(target_platform))
     if linux_mux_helper is not None and target_platform != "linux":
         raise LibobsPackagingError("An external mux helper is only supported for Linux.")
     _require_file(linux_mux_helper if linux_mux_helper is not None else _mux_helper(root, target_platform))
@@ -276,7 +575,10 @@ def _linux_linked_libraries(
     environment["LC_ALL"] = "C"
     if private_root is not None:
         private_root = private_root.resolve()
-        search_paths = list(dict.fromkeys((binary.resolve().parent, private_root)))
+        resolved_binary = binary.resolve()
+        search_paths = [private_root]
+        if resolved_binary.is_relative_to(private_root):
+            search_paths = list(dict.fromkeys((resolved_binary.parent, private_root)))
         environment["LD_LIBRARY_PATH"] = os.pathsep.join(map(str, search_paths))
     result = subprocess.run(
         ["ldd", str(binary)], check=True, capture_output=True, env=environment,
@@ -378,7 +680,7 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
     }
     # Fingerprint immutable payloads before patchelf changes ELF bytes. Comparing
     # a relocated copy with its original creates false SONAME conflicts.
-    identities = {path.resolve(): _linux_library_digest(path) for path in initial}
+    identities = {path.resolve(): _native_library_digest(path) for path in initial}
     pending: list[tuple[Path, dict[str, Path]]] = []
     for binary in initial:
         resolved = binary.resolve()
@@ -400,13 +702,16 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
             if destination.exists():
                 if not destination.is_file():
                     raise LibobsPackagingError(f"Private libobs dependency is not a file: {name}")
-                if identities.get(destination.resolve()) != _linux_library_digest(library):
+                if identities.get(destination.resolve()) != _native_library_digest(library):
                     raise LibobsPackagingError(f"Conflicting private libobs dependency: {name}")
                 _copy_linux_dependency_notice(library, root)
                 continue
-            dependency_libraries = _linux_linked_libraries(library)
+            # Expand new host dependencies against the canonical private graph.
+            # A previous bootstrap may already have relocated their providers;
+            # probing the host graph would compare patched ELF bytes to originals.
+            dependency_libraries = _linux_linked_libraries(library, private_root=root_resolved)
             shutil.copy2(library, destination)
-            identities[destination.resolve()] = _linux_library_digest(library)
+            identities[destination.resolve()] = _native_library_digest(library)
             _copy_linux_dependency_notice(library, root)
             _set_linux_rpath(root, destination)
             pending.append((destination.resolve(), dependency_libraries))
@@ -425,7 +730,7 @@ def _relocate_linux(root: Path, *, binaries: Sequence[Path] | None = None) -> No
                 )
 
 
-def _linux_library_digest(binary: Path) -> bytes:
+def _native_library_digest(binary: Path) -> bytes:
     with binary.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").digest()
 
@@ -559,6 +864,7 @@ def stage_runtime(
     architecture: str,
     license_files: Sequence[Path],
     linux_mux_helper: Path | None = None,
+    qualification_fixtures: Path | None = None,
 ) -> Path:
     """Copy one installed target without leaving references to the build machine."""
     source = package_dir / "_libs" / target_platform / architecture
@@ -590,7 +896,20 @@ def stage_runtime(
         elif target_platform == "macos":
             _normalize_macos_frameworks(staging)
             _relocate_macos(staging)
+        else:
+            _stage_windows_redists(staging, application_dir)
+            _audit_windows_media_extract(staging, staging / media_extract_name(target_platform), architecture)
         validate_runtime(staging, target_platform)
+        receipt = verify_media_extract(
+            staging / media_extract_name(target_platform), target_platform=target_platform,
+            qualification_fixtures=qualification_fixtures,
+            architecture=architecture,
+        )
+        if not isinstance(receipt, dict):
+            raise LibobsPackagingError("Extraction qualification did not produce a receipt")
+        (staging / _MEDIA_EXTRACT_MANIFEST).write_text(
+            json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+        )
         _publish_runtime(staging, destination)
     notices = application_dir / "licenses" / "pylibobs"
     notices.mkdir(parents=True, exist_ok=True)
@@ -880,6 +1199,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("--application-dir", type=Path, required=True)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--linux-mux-helper", type=Path)
+    parser.add_argument("--qualification-fixtures", type=Path)
     options = parser.parse_args(arguments)
     try:
         import pylibobs
@@ -905,6 +1225,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
             architecture=architecture,
             license_files=licenses,
             linux_mux_helper=options.linux_mux_helper,
+            qualification_fixtures=options.qualification_fixtures,
         )
         verify_packaged_sidecar(options.executable)
     except (ImportError, OSError, LibobsPackagingError, subprocess.SubprocessError) as error:

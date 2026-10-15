@@ -83,6 +83,21 @@ def test_every_standalone_build_includes_and_qualifies_the_libobs_runtime():
         assert "QtMultimedia" not in recipe
 
 
+def test_every_build_and_quality_environment_bootstraps_media_extraction_before_consumers():
+    for relative in (
+        "scripts/build_solin.bat", "scripts/build_solin.sh",
+        ".github/workflows/build-solin-windows.yml", ".github/workflows/build-solin-macos.yml",
+        ".github/workflows/quality.yml",
+    ):
+        recipe = _read(relative)
+        assert "build_media_extract.py" in recipe
+        consumer = "python scripts/typecheck.py" if relative.endswith("quality.yml") else "--include-package=pylibobs"
+        assert recipe.index("build_media_extract.py") < recipe.index(consumer)
+    script = _read("scripts/build_solin.sh")
+    for component in ("avcodec", "avformat", "avutil", "swscale"):
+        assert f"lib{component}-dev" in script
+
+
 def test_macos_resolves_pylibobs_from_the_custom_wheel_during_dependency_download():
     workflow = _read(".github/workflows/build-solin-macos.yml")
     assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")
