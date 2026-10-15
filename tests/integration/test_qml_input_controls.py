@@ -369,6 +369,12 @@ def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(reque
         container.setGeometry(10, 10, 400, 340)
         container.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         widget.setParent(container)
+    # A posted Cocoa move can still reach the old, overlapping native window
+    # after Qt reports the replacement active and exposed.
+    # Retain its objects for the stale-observer assertion without competing
+    # with the replacement's physical input. Hide only after reparenting so
+    # the hierarchy change remains responsible for cancelling the old exit.
+    old_host.hide()
     widget.show()
     show_and_activate(host)
     _enter_native_hover(widget, QPoint(80, 70), sync_cursor=True)
