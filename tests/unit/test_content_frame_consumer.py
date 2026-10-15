@@ -38,6 +38,7 @@ class _Source:
         self.entered = threading.Event()
         self.resume = threading.Event()
         self.released = 0
+        self.fail_release = False
         self.created_sources: list[_Source] = []
 
     def push_bgra(self, data, width, height, stride, *, reset=False) -> bool:
@@ -51,6 +52,8 @@ class _Source:
         return data[0] != 99
 
     def release(self) -> None:
+        if self.fail_release:
+            raise RuntimeError("native callback removal failed")
         self.released += 1
         self.events.append("source released")
 
@@ -125,6 +128,24 @@ def test_epoch_deadline_expires_while_native_upload_is_blocked(consumer):
     assert returned.wait(1), "Epoch deadline waited behind an unfinished native upload"
     assert result == [False]
     assert not source.resume.is_set()
+
+
+def test_collection_does_not_wait_for_an_unfinished_native_upload(consumer):
+    instance, reader, source, _events, run = consumer
+    reader.frames.append(_frame(1, 1))
+    source.block = True
+    run(instance.pump_once)
+    assert source.entered.wait(1)
+    collected = threading.Event()
+
+    def collect():
+        instance.collect_unused_sources(())
+        collected.set()
+
+    run(collect)
+    assert collected.wait(1), "Control-thread collection waited behind a native upload"
+    assert not source.resume.is_set()
+    assert source.released == 0
 
 
 def test_stop_wakes_epoch_waiter_and_drains_upload_before_disposal(consumer):
@@ -317,3 +338,54 @@ def test_same_epoch_stream_reuses_source_and_superseded_epochs_are_collected(con
     assert len(first.created_sources) == 29
     assert all(source.uploads == [(1, True), (2, False)] for source in first.created_sources)
     assert sum(source.released for source in first.created_sources) == 28
+
+
+def test_failed_unpublished_epoch_cleanup_keeps_callback_owner_for_retry(consumer):
+    instance, reader, first, _events, _run = consumer
+    reader.frames.append(_frame(1, 1))
+    assert instance.pump_once()
+    create = instance._frame_source_factory
+
+    def failing_source(*args):
+        candidate = create(*args)
+        candidate.fail_release = True
+        return candidate
+
+    instance._frame_source_factory = failing_source
+    reader.frames.append(_frame(99, 2))
+    assert not instance.pump_once()
+    candidate = first.created_sources[1]
+    assert candidate.released == 0 and candidate in instance._sources
+
+    instance.collect_unused_sources(())
+    assert candidate in instance._sources and candidate.released == 0
+    candidate.fail_release = False
+    instance.collect_unused_sources(())
+    assert candidate not in instance._sources and candidate.released == 1
+    assert instance.source_for_epoch(1) is first.source
+
+
+def test_failed_retired_epoch_cleanup_keeps_wrapper_until_success(consumer):
+    instance, reader, first, _events, _run = consumer
+    reader.frames.extend((_frame(1, 1), _frame(2, 2)))
+    assert instance.pump_once() and instance.pump_once()
+    first.fail_release = True
+    instance.collect_unused_sources(())
+    assert first in instance._sources and first.released == 0
+    first.fail_release = False
+    instance.collect_unused_sources(())
+    assert first not in instance._sources and first.released == 1
+    instance.collect_unused_sources(())
+    assert first.released == 1
+
+
+def test_stop_transfers_failed_native_cleanup_for_owner_retry(consumer):
+    instance, _reader, first, _events, _run = consumer
+    first.fail_release = True
+    pending = instance.stop()
+    assert pending == (first,) and first.released == 0
+    assert not instance.detach_sources()
+    first.fail_release = False
+    for wrapper in pending:
+        wrapper.release()
+    assert first.released == 1

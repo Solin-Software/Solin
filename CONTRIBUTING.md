@@ -56,6 +56,17 @@ Run focused tests while developing, then run the complete applicable suite
 before requesting review. Packaged-app and installer tests are run when their
 platform or delivery contract changes.
 
+Register cleanup when a fixture acquires a resource, before assertions can fail.
+Stop and join owned workers before destroying their Qt consumers or restoring
+test doubles. Independent finalizers must still run if another cleanup fails.
+Destroy GUI objects on the Qt thread and cancel owned timers and callbacks;
+flushing deferred deletion does not cancel unrelated queued work.
+
+Wait for observable readiness when preparing native input or asynchronous
+layouts. Preserve timing assertions that are part of the behavior contract.
+Use pytest's per-invocation temporary directories; concurrent invocations must
+not share a fixed `--basetemp`. Passing a rerun does not establish a correction.
+
 Application changes run tests on Windows, Linux, Intel macOS, and Apple Silicon.
 Documentation-only changes and verified version-only increases use static checks;
 version increases also validate release metadata and the matching release notes.

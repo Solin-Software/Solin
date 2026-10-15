@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
 
 from PySide6.QtCore import QCoreApplication, QThread
 
@@ -168,6 +171,114 @@ def test_threaded_worker_pool_drains_workers_on_shutdown():
     assert pool.active_count == 0
     assert not handle.is_alive()
     assert pool.submit("after-shutdown", _worker) is None
+
+
+def test_threaded_worker_pool_shutdown_serializes_with_pending_start(monkeypatch):
+    pool = ThreadedWorkerPool()
+    start_pending = threading.Event()
+    allow_start = threading.Event()
+    shutdown_acquiring = threading.Event()
+    worker_ran = threading.Event()
+    shutdown_thread = None
+    real_lock = pool._lock
+    real_start = threading.Thread.start
+
+    class ObservedLock:
+        def __enter__(self):
+            if threading.current_thread() is shutdown_thread:
+                shutdown_acquiring.set()
+            return real_lock.__enter__()
+
+        def __exit__(self, *args):
+            return real_lock.__exit__(*args)
+
+    def gated_start(thread):
+        if thread.name == "pending-pool-worker":
+            start_pending.set()
+            assert allow_start.wait(5), "Test did not release the pending worker start"
+        return real_start(thread)
+
+    def shutdown():
+        nonlocal shutdown_thread
+        shutdown_thread = threading.current_thread()
+        return pool.shutdown(timeout=2)
+
+    monkeypatch.setattr(pool, "_lock", ObservedLock())
+    monkeypatch.setattr(threading.Thread, "start", gated_start)
+    with ThreadPoolExecutor(max_workers=2) as controllers:
+        submitting = controllers.submit(pool.submit, "pending-pool-worker", worker_ran.set)
+        try:
+            assert start_pending.wait(2)
+            stopping = controllers.submit(shutdown)
+            assert shutdown_acquiring.wait(2)
+            stopped_before_start = pool.is_stopped
+        finally:
+            allow_start.set()
+        try:
+            handle = submitting.result(timeout=5)
+            assert stopping.result(timeout=5) == ()
+            assert not stopped_before_start
+            assert handle is not None and not handle.is_alive()
+            assert worker_ran.is_set()
+            assert pool.is_stopped and pool.active_count == 0
+            assert pool.submit("after-shutdown", worker_ran.set) is None
+        finally:
+            assert pool.shutdown(timeout=2) == ()
+
+
+def test_threaded_worker_pool_failed_start_rolls_back_registration(monkeypatch):
+    pool = ThreadedWorkerPool()
+    worker_ran = threading.Event()
+    failure = RuntimeError("cannot start a new thread")
+    real_start = threading.Thread.start
+
+    def fail_start(thread):
+        if thread.name == "failed-pool-worker":
+            raise failure
+        return real_start(thread)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(threading.Thread, "start", fail_start)
+        with pytest.raises(RuntimeError) as caught:
+            pool.submit("failed-pool-worker", worker_ran.set)
+    assert caught.value is failure
+    assert pool.active_count == 0
+    assert not worker_ran.is_set() and not pool.is_stopped
+    try:
+        handle = pool.submit("replacement-pool-worker", worker_ran.set)
+        assert handle is not None
+        handle.join(timeout=2)
+        assert not handle.is_alive() and worker_ran.is_set()
+    finally:
+        assert pool.shutdown(timeout=2) == ()
+
+
+def test_threaded_worker_pool_worker_can_shutdown_without_joining_itself():
+    pool = ThreadedWorkerPool()
+    allow_shutdown = threading.Event()
+    result = []
+    worker_completed = threading.Event()
+
+    def worker():
+        try:
+            assert allow_shutdown.wait(5), "Test did not release worker shutdown"
+            result.append(pool.shutdown(timeout=2))
+        finally:
+            worker_completed.set()
+
+    handle = pool.submit("self-shutdown-worker", worker)
+    try:
+        assert handle is not None
+        allow_shutdown.set()
+        assert worker_completed.wait(2)
+        handle.join(timeout=2)
+        assert not handle.is_alive()
+        assert result == [("self-shutdown-worker",)]
+        assert pool.active_count == 0 and pool.is_stopped
+        assert pool.submit("after-self-shutdown", worker) is None
+    finally:
+        allow_shutdown.set()
+        assert pool.shutdown(timeout=2) == ()
 
 
 def test_font_manager_shutdown_cancels_and_joins_workers(tmp_path):

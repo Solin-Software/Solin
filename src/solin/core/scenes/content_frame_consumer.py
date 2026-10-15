@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from functools import partial
 from typing import Any, Callable
 
 log = logging.getLogger(__name__)
@@ -28,10 +29,12 @@ _POLL_SECONDS = 1.0 / 60.0
 FrameSourceFactory = Callable[[Any, str], Any]
 
 
-def _default_frame_source_factory(runtime: Any, name: str) -> Any:
+def _default_frame_source_factory(
+    runtime: Any, name: str, *, cancelled: threading.Event,
+) -> Any:
     from solin.core.media.obs_frame_source import create_frame_source
 
-    return create_frame_source(runtime, name)
+    return create_frame_source(runtime, name, cancelled=cancelled)
 
 
 class ContentFrameConsumer:
@@ -46,12 +49,14 @@ class ContentFrameConsumer:
     ) -> None:
         self._runtime = runtime
         self._descriptor = descriptor
-        self._frame_source_factory = frame_source_factory or _default_frame_source_factory
+        self._stop = threading.Event()
+        self._frame_source_factory = frame_source_factory or partial(
+            _default_frame_source_factory, cancelled=self._stop,
+        )
         self._reader: Any | None = None
         self._frame_source: Any | None = None
         self._sources: list[Any] = []
         self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
         # Native uploads can wait for the graphics context. Keep their resource
         # lifetime separate from the condition used for IPC deadlines.
         self._pump_lock = threading.Lock()
@@ -89,13 +94,22 @@ class ContentFrameConsumer:
                 and not any(wrapper.source is source for source in referenced_sources)
                 and not wrapper.source.showing
             ]
-            for wrapper in retired:
-                self._sources.remove(wrapper)
         for wrapper in retired:
             try:
                 wrapper.release()
-            except Exception:  # noqa: BLE001 - cleanup must not break supervision
+            except Exception:  # noqa: BLE001 - preserve owner for the next collection
                 log.warning("Could not release a retired content source", exc_info=True)
+            else:
+                with self._condition:
+                    self._sources.remove(wrapper)
+
+    def _release_unpublished(self, wrapper: Any) -> None:
+        try:
+            wrapper.release()
+        except Exception:  # noqa: BLE001 - failed native removal needs an owned retry
+            with self._condition:
+                self._sources.append(wrapper)
+            log.warning("Could not release an unpublished content source", exc_info=True)
 
     def start(self) -> bool:
         """Open the channel and start pumping. False if unusable or stopped."""
@@ -159,11 +173,11 @@ class ContentFrameConsumer:
                 )
             except Exception:  # noqa: BLE001 - release new epoch source before re-raising
                 if new_epoch:
-                    frame_source.release()
+                    self._release_unpublished(frame_source)
                 raise
             if not uploaded:
                 if new_epoch:
-                    frame_source.release()
+                    self._release_unpublished(frame_source)
                 return False
             with self._condition:
                 if new_epoch:
@@ -194,12 +208,16 @@ class ContentFrameConsumer:
             except Exception:  # noqa: BLE001 - the pump must never die on one bad frame
                 log.debug("content frame pump errored", exc_info=True)
 
-    def stop(self) -> None:
+    def stop(self) -> tuple[Any, ...]:
+        """Stop ingress; return any native sources still needing release retries."""
+        pending = []
         for frame_source in self.detach_sources():
             try:
                 frame_source.release()
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("content frame source release errored", exc_info=True)
+            except Exception:  # noqa: BLE001 - transfer callback ownership to the caller
+                pending.append(frame_source)
+                log.warning("content frame source release errored", exc_info=True)
+        return tuple(pending)
 
     def detach_sources(self) -> tuple[Any, ...]:
         """Stop ingress and transfer its frozen native sources to the caller.

@@ -172,10 +172,19 @@ class LibobsIdleVideo:
         self._check(deadline_ms, check_current)
         if frame is None:
             raise IdleVideoError("idle_media_invalid")
-        self._still = create_frame_source(self._runtime, f"{self._name}-initial-frame")
-        if self._still is None or not self._still.push_bgra(
+        self._still = create_frame_source(
+            self._runtime, f"{self._name}-initial-frame", cancelled=self._closed,
+            check_current=lambda: self._check(deadline_ms, check_current),
+        )
+        if self._still is None:
+            raise IdleVideoError("idle_source_unavailable")
+        uploaded = self._still.push_bgra(
             frame[0], width, height, frame[1], reset=True,
-        ):
+        )
+        # The upload can have been cancelled while waiting for a render tick,
+        # or become obsolete after a running native callback has drained.
+        self._check(deadline_ms, check_current)
+        if not uploaded:
             raise IdleVideoError("idle_source_unavailable")
         self._scene = self._runtime.ob.Scene.create_private(f"{self._name}-presentation")
         if self._scene is None:

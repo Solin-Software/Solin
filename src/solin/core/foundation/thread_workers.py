@@ -110,13 +110,19 @@ class ThreadedWorkerPool:
             if self._stop.is_set():
                 return None
             self._threads.add(thread)
-        thread.start()
+            started = False
+            try:
+                thread.start()
+                started = True
+            finally:
+                if not started:
+                    self._threads.discard(thread)
         return ThreadWorkerHandle(thread)
 
     def shutdown(self, timeout: float = 8.0) -> tuple[str, ...]:
-        self._stop.set()
         deadline = time.monotonic() + max(0.0, timeout)
         with self._lock:
+            self._stop.set()
             threads = tuple(self._threads)
         for thread in threads:
             remaining = deadline - time.monotonic()

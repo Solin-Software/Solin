@@ -1509,7 +1509,7 @@ class LibobsSidecarEngine:
                 if retain_sources:
                     self._retired_frame_sources.extend(consumer.detach_sources())
                 else:
-                    consumer.stop()
+                    self._retired_frame_sources.extend(consumer.stop())
             except Exception:  # noqa: BLE001 - shutdown must not raise
                 log.warning("content frame consumer stop errored", exc_info=True)
 
@@ -1980,12 +1980,13 @@ class LibobsSidecarEngine:
             self._release_retired_media_source(source)
         self._prepared_content.clear()
         self._stop_content_consumer()
-        for wrapper in self._retired_frame_sources:
+        for wrapper in tuple(self._retired_frame_sources):
             try:
                 wrapper.release()
             except Exception:  # noqa: BLE001 - shutdown must release remaining sources
                 log.warning("Could not release a detached content source", exc_info=True)
-        self._retired_frame_sources.clear()
+            else:
+                self._retired_frame_sources.remove(wrapper)
         empty, self._empty_content_source = self._empty_content_source, None
         if empty is not None:
             try:

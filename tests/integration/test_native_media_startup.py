@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 import json
 from queue import SimpleQueue
-from socketserver import ThreadingMixIn
 import shutil
 import struct
 import subprocess
@@ -66,7 +65,7 @@ def _write_segmented_avi(path: Path, *, duration_seconds: float = _DURATION_SECO
 
 @contextmanager
 def _serve_clip(path: Path) -> Iterator[str]:
-    from tests._http import LoopbackHTTPServer
+    from tests._http import ThreadingLoopbackHTTPServer
 
     data = path.read_bytes()
 
@@ -101,10 +100,7 @@ def _serve_clip(path: Path) -> Iterator[str]:
         def log_message(self, _format: str, *_args: object) -> None:
             return
 
-    class Server(ThreadingMixIn, LoopbackHTTPServer):
-        daemon_threads = True
-
-    server = Server(Handler)
+    server = ThreadingLoopbackHTTPServer(Handler)
     thread = Thread(target=lambda: server.serve_forever(poll_interval=0.02), daemon=True)
     thread.start()
     try:

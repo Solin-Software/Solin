@@ -1,7 +1,7 @@
 """Real HTTP test servers confined to loopback, without hostname discovery."""
 
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import TCPServer
+from socketserver import TCPServer, ThreadingMixIn
 
 
 class LoopbackHTTPServer(HTTPServer):
@@ -15,3 +15,9 @@ class LoopbackHTTPServer(HTTPServer):
         TCPServer.server_bind(self)
         self.server_name = "localhost"
         self.server_port = self.server_address[1]
+
+
+class ThreadingLoopbackHTTPServer(ThreadingMixIn, LoopbackHTTPServer):
+    """Serve concurrent loopback requests without host discovery."""
+
+    daemon_threads = True
