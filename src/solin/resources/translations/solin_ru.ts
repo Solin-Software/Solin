@@ -6016,11 +6016,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Камеры не найдены. Автоматическая камера остаётся доступной.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Система Windows обнаружила некоторые камеры, но проверить их не удалось. Их всё равно можно попробовать использовать в автоматическом режиме; если захват не удастся, проверьте журнал приложения.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Не удалось открыть папку для записей.</translation>
@@ -6132,11 +6127,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>%1 (виртуальная)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (не проверена)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6194,6 +6184,30 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <source>Solin Content</source>
         <translation>Контент Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Информация о возможностях камеры недоступна. Можно попробовать автоматический режим или обновить список камер.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Ожидание кадров с камеры…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Камера передаёт изображение с разрешением, отличным от выбранного. Выберите поддерживаемый режим или обновите список камер.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Кадры с камеры не получены. Проверьте подключение, разрешения конфиденциальности или используется ли она другим приложением.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Камера не смогла применить выбранный режим. Выберите другое разрешение, частоту кадров или формат.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Не удалось проверить захват изображения с камеры. Обновите список камер или переподключите устройство.</translation>
     </message>
 </context>
 <context>
@@ -7223,6 +7237,70 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Solin Content</source>
         <translation>Контент Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Недоступное устройство</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Автоматически</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Недоступно</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Сохранённый режим камеры недоступен. Обновите список камер или выберите другой режим.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Разрешение</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Частота кадров</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Пользовательская частота кадров</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>например, 29.97 или 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Эта частота кадров не поддерживается при выбранных разрешении и формате.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Дополнительно</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Показать дополнительные настройки</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Пользовательское разрешение</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Проверить</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Проверка поддерживаемых режимов камеры…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Это разрешение выходит за пределы поддерживаемого камерой диапазона или не соответствует допустимому шагу изменения размеров.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Обновите список камер или выберите другое разрешение.</translation>
     </message>
 </context>
 <context>

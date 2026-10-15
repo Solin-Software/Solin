@@ -5985,11 +5985,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Geen camera&apos;s gevonden. De automatische camera blijft beschikbaar.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows heeft enkele camera’s gedetecteerd, maar deze konden niet worden geverifieerd. U kunt ze toch proberen in de automatische modus; controleer het toepassingslogboek als de opname mislukt.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>De opnamemap kon niet worden geopend.</translation>
@@ -6101,11 +6096,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>%1 (virtueel)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (niet geverifieerd)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6163,6 +6153,30 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
     <message>
         <source>Solin Content</source>
         <translation>Solin-inhoud</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>De cameramogelijkheden zijn niet beschikbaar. Je kunt de automatische modus proberen of de camera’s vernieuwen.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Wachten op camerabeelden…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>De camera verzendt een andere resolutie dan geselecteerd. Kies een ondersteunde modus of vernieuw de camera’s.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Er zijn geen beelden van de camera ontvangen. Controleer de verbinding, de privacyrechten of of een andere toepassing de camera gebruikt.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>De camera kon de geselecteerde modus niet toepassen. Kies een andere resolutie, beeldsnelheid of indeling.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>De camera-opname kon niet worden gecontroleerd. Vernieuw de camera’s of sluit het apparaat opnieuw aan.</translation>
     </message>
 </context>
 <context>
@@ -7192,6 +7206,70 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Solin-inhoud</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Niet-beschikbaar apparaat</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automatisch</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Niet beschikbaar</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>De opgeslagen cameramodus is niet beschikbaar. Vernieuw de camera’s of kies een andere modus.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolutie</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Beeldsnelheid</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Aangepaste beeldsnelheid</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>bijv. 29.97 of 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Deze beeldsnelheid wordt niet ondersteund bij de geselecteerde resolutie en indeling.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Geavanceerd</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Geavanceerde instellingen tonen</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Aangepaste resolutie</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Controleren</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Ondersteunde cameramodi worden gecontroleerd…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Deze resolutie valt buiten de grenzen of voldoet niet aan de stapgroottes die de camera ondersteunt.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>De ondersteunde modi voor deze resolutie konden niet worden opgehaald. Vernieuw de camera’s of kies een andere resolutie.</translation>
     </message>
 </context>
 <context>

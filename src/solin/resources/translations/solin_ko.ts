@@ -5953,11 +5953,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>카메라를 찾을 수 없습니다. 자동 카메라는 계속 사용할 수 있습니다.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows에서 일부 카메라를 감지했지만 확인하지 못했습니다. 자동 모드에서 계속 시도할 수 있습니다. 캡처에 실패하면 애플리케이션 로그를 확인하십시오.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>녹화 폴더를 열 수 없습니다.</translation>
@@ -6069,11 +6064,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>%1 (가상)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (확인되지 않음)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6131,6 +6121,30 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <source>Solin Content</source>
         <translation>Solin 콘텐츠</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>카메라 기능 정보를 사용할 수 없습니다. 자동 모드를 사용해 보거나 카메라를 새로 고치십시오.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>카메라 프레임을 기다리는 중…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>카메라가 선택한 해상도와 다른 해상도로 전송하고 있습니다. 지원되는 모드를 선택하거나 카메라를 새로 고치십시오.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>카메라에서 수신된 프레임이 없습니다. 연결, 개인 정보 권한, 다른 프로그램이 사용 중인지 확인하십시오.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>카메라에 선택한 모드를 적용할 수 없습니다. 다른 해상도, 프레임 속도 또는 형식을 선택하십시오.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>카메라 캡처를 확인할 수 없습니다. 카메라를 새로 고치거나 장치를 다시 연결하십시오.</translation>
     </message>
 </context>
 <context>
@@ -7160,6 +7174,70 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Solin Content</source>
         <translation>Solin 콘텐츠</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>사용할 수 없는 장치</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>자동</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>사용 불가</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>저장된 카메라 모드를 사용할 수 없습니다. 카메라를 새로 고치거나 다른 모드를 선택하십시오.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>해상도</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>프레임 속도</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>사용자 지정 프레임 속도</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>예: 29.97 또는 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>선택한 해상도와 형식에서는 이 프레임 속도가 지원되지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>고급</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>고급 설정 표시</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>사용자 지정 해상도</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>확인</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>지원되는 카메라 모드 확인 중…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>이 해상도는 카메라가 지원하는 범위를 벗어나거나 지원되는 증분 간격에 맞지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>이 해상도에서 지원되는 모드를 가져올 수 없습니다. 카메라를 새로 고치거나 다른 해상도를 선택하십시오.</translation>
     </message>
 </context>
 <context>

@@ -7,13 +7,13 @@ instance can be reused rather than opening the device twice.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 
 log = logging.getLogger(__name__)
 
-#: The libobs capture source whose device list is authoritative per platform —
-#: the same source Solin then opens, so an id from here always works.
+#: Capture backend and device-list property used by the platform plugin.
 #: ``(source id, device-list property)`` per platform. The property name differs
 #: because each capture source names its device setting differently — the same
 #: key :func:`camera_source_spec` writes.
@@ -37,57 +37,90 @@ def camera_source_spec(
     pixel_format: str = "",
     width: int = 0,
     height: int = 0,
+    fps_numerator: int = 0,
+    fps_denominator: int = 1,
+    media_type: str = "",
 ) -> tuple[str, dict]:
-    """The libobs capture-source kind + settings for a camera, per platform.
+    """Encode an exact mode or explicit defaults for the OBS 32.1.2 plugin.
 
-    Device ids use the platform capture backend: Linux ``/dev/videoN``,
-    Windows DirectShow device paths, and macOS AVFoundation ``uniqueID``.
-    Each OBS capture source expects its id under a different key:
-
-    * Linux  → ``v4l2_input``        ``device_id``
-    * Windows→ ``dshow_input``       ``video_device_id`` (``"<name>:<path>"``)
-    * macOS  → ``av_capture_input``  ``device``
-
-    Windows dshow matches ``"<friendly name>:<device path>"``. Persisted plain
-    paths are combined with the friendly name when available.
-
-    On Linux a selected ``pixel_format`` + ``width``/``height`` pins the v4l2
-    capture format. This matters for performance: with only ``device_id`` the
-    plugin defaults to an uncompressed mode (e.g. YUYV 1080p) that a UVC camera
-    can only deliver at a few FPS — visibly sluggish. Selecting a compressed
-    format (MJPG) at the same resolution restores full frame rate. ``framerate``
-    is deliberately left unset — pinning it makes the v4l2 plugin reject the mode
-    (empty 0×0 capture); the plugin picks the format's native rate on its own.
+    Pixel tokens are native: decimal DShow VideoFormat (not OBS VideoFormat),
+    four ASCII characters for AVFoundation, and a V4L2 FourCC on Linux.
+    Every controlled mode key is present so ``Source.update`` can reset a
+    previous manual selection without inheriting stale user settings.
     """
+    components = (width, height, fps_numerator, fps_denominator)
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 0xFFFFFFFF
+        for value in components
+    ):
+        raise ValueError("Invalid camera dimensions or frame rate")
+    automatic = (
+        width == height == fps_numerator == 0 and fps_denominator == 1
+        and not media_type and not pixel_format
+    )
+    if not automatic and not (
+        width > 0 and height > 0 and fps_numerator > 0 and fps_denominator > 0
+        and media_type in {"video/x-raw", "image/jpeg", "video/x-h264"}
+        and isinstance(pixel_format, str) and pixel_format
+    ):
+        raise ValueError("Camera mode must be fully automatic or exact")
+
     if sys.platform == "win32":
-        # libobs already reports ids as "<name>:<path>"; prefixing again would
-        # yield "Cam:Cam:..." and fail to decode.
-        if ":" in device_path or not device_name:
-            vid = device_path
-        else:
-            vid = f"{device_name}:{device_path}"
-        return "dshow_input", {"video_device_id": vid, "last_video_device_id": vid}
+        # Discovery returns the complete name:path identifier; old plain device
+        # paths still need a friendly name when supplied by a caller.
+        vid = device_path if ":" in device_path or not device_name else f"{device_name}:{device_path}"
+        settings = {
+            "video_device_id": vid, "last_video_device_id": vid,
+            "res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0,
+        }
+        if not automatic:
+            if not pixel_format.isascii() or not pixel_format.isdecimal():
+                raise ValueError("DirectShow camera format must be a native enum value")
+            native_format = int(pixel_format)
+            if not 1 < native_format <= 0x7FFFFFFF:
+                raise ValueError("DirectShow camera format must be explicit")
+            # Round rational seconds to the nearest DirectShow 100 ns unit.
+            interval = (10_000_000 * fps_denominator + fps_numerator // 2) // fps_numerator
+            if interval <= 0:
+                raise ValueError("Camera frame interval is below DirectShow precision")
+            settings.update(res_type=1, resolution=f"{width}x{height}",
+                            frame_interval=interval, video_format=native_format)
+        return "dshow_input", settings
     if sys.platform == "darwin":
-        return "av_capture_input", {"device": device_path}
-    settings: dict = {"device_id": device_path}
-    if pixel_format and width > 0 and height > 0:
-        settings["pixelformat"] = v4l2_fourcc(pixel_format)
-        settings["resolution"] = (int(width) << 16) | (int(height) & 0xFFFF)
+        settings = {
+            "device": device_path, "use_preset": True, "resolution": "", "input_format": -1,
+            "frame_rate": {"numerator": 0, "denominator": 1},
+        }
+        if not automatic:
+            if len(pixel_format) != 4 or not pixel_format.isascii():
+                raise ValueError("AVFoundation camera format must be a native four-character code")
+            settings.update(
+                use_preset=False,
+                resolution=json.dumps({"width": width, "height": height}, separators=(",", ":")),
+                input_format=int.from_bytes(pixel_format.encode("ascii"), "big"),
+                frame_rate={"numerator": fps_numerator, "denominator": fps_denominator},
+            )
+        return "av_capture_input", settings
+    if not sys.platform.startswith("linux"):
+        raise ValueError(f"Unsupported camera platform: {sys.platform}")
+    settings = {"device_id": device_path, "pixelformat": -1, "resolution": -1, "framerate": -1}
+    if not automatic:
+        if not 1 <= len(pixel_format) <= 4 or not pixel_format.isascii():
+            raise ValueError("V4L2 camera format must be a native four-character code")
+        settings.update(
+            pixelformat=v4l2_fourcc(pixel_format),
+            resolution=(width << 32) | height,
+            # V4L2 expects time per frame, the reciprocal of frames per second.
+            framerate=(fps_denominator << 32) | fps_numerator,
+        )
     return "v4l2_input", settings
 
 
 def libobs_cameras() -> list[tuple[str, str]]:
-    """``(friendly name, device id)`` for every camera **libobs itself** can open.
+    """Read plugin device IDs, releasing properties even if enumeration fails.
 
-    This is the *only* camera enumeration Solin does. Asking libobs makes the
-    ids correct by construction: whatever comes back is, by definition, something
-    the matching capture source accepts.
-
-    Windows capture uses DirectShow ids from ``dshow_input``. Enumerating the
-    same source avoids mixing ids from incompatible device namespaces.
-
-    Returns ``[]`` when libobs is unavailable, so callers can degrade rather
-    than lose the camera list entirely.
+    An unavailable backend raises; an empty list means a successful inventory
+    with no devices. Discovery of Linux devices uses the separate V4L2 adapter.
     """
     entry = next(
         (v for prefix, v in _ENUM_SOURCE_ID.items() if sys.platform.startswith(prefix)),
@@ -99,53 +132,27 @@ def libobs_cameras() -> list[tuple[str, str]]:
     try:
         from .obs_runtime import obs_runtime
 
-        runtime = obs_runtime()
-        runtime.ensure_started()
+        obs_runtime().ensure_started()
         from pylibobs import Properties  # type: ignore[import-not-found]
 
         props = Properties.from_source_id(source_id)
-    except Exception:  # noqa: BLE001 - libobs/optional-dependency boundary
-        # WARNING, not debug: this is the difference between "you have no
-        # cameras" and "Solin could not ask". Reported as the former, it sends
-        # the operator hunting a hardware fault that does not exist — and the
-        # usual cause is the capture plugin (win-dshow / v4l2 / av_capture)
-        # failing to load, which nothing else in the log would reveal.
-        log.warning(
-            "Camera enumeration unavailable: could not create %r properties. "
-            "Is the capture plugin present in the libobs bundle?",
-            source_id,
-            exc_info=True,
-        )
-        return []
-
-    cameras: list[tuple[str, str]] = []
-    try:
-        for prop in props:
-            if getattr(prop, "name", "") != list_property:
-                continue
-            for item in getattr(prop, "items", None) or []:
-                name = (getattr(item, "name", "") or "").strip()
-                value = getattr(item, "value", "") or ""
-                if name and isinstance(value, str):
-                    cameras.append((name, value))
-            break
-    except Exception:  # noqa: BLE001 - property walk is best-effort
-        log.warning("libobs camera property walk failed", exc_info=True)
-        return []
-    if not cameras:
-        # The source exists but listed nothing. Distinguishing this from the
-        # failure above matters: here the capture plugin loaded and genuinely
-        # sees no devices, which points at the OS/driver rather than at Solin.
-        log.warning(
-            "%r loaded but listed no devices under %r — the capture plugin sees "
-            "no cameras at all.",
-            source_id,
-            list_property,
-        )
-    else:
-        log.info(
-            "libobs reports %d camera(s): %s", len(cameras), [n for n, _ in cameras]
-        )
+        try:
+            cameras: list[tuple[str, str]] = []
+            for prop in props:
+                if prop.name != list_property:
+                    continue
+                for item in prop.items or ():
+                    name, value = item.name.strip(), item.value
+                    if name and isinstance(value, str) and value and not item.disabled:
+                        cameras.append((name, value))
+                break
+            else:
+                raise RuntimeError(f"Missing device property {list_property!r}")
+        finally:
+            props.release()
+    except Exception as error:  # noqa: BLE001 - native plugin boundary
+        raise RuntimeError(f"Camera enumeration failed for {source_id}") from error
+    log.info("libobs reports %d camera(s)", len(cameras))
     return cameras
 
 

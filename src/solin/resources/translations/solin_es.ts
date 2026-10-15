@@ -5985,11 +5985,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>No se encontraron cámaras. La cámara automática sigue disponible.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows detectó algunas cámaras, pero no se pudieron verificar. Aun así, puede probarlas en modo automático; consulte el registro de la aplicación si falla la captura.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>No se pudo abrir la carpeta de grabaciones.</translation>
@@ -6101,11 +6096,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (sin verificar)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6163,6 +6153,30 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
     <message>
         <source>Solin Content</source>
         <translation>Contenido de Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Las capacidades de la cámara no están disponibles. Puede probar el modo automático o actualizar las cámaras.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Esperando fotogramas de la cámara…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>La cámara está enviando una resolución distinta de la seleccionada. Elija un modo compatible o actualice las cámaras.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>No se han recibido fotogramas de la cámara. Compruebe la conexión, los permisos de privacidad o si otra aplicación la está usando.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>La cámara no pudo aplicar el modo seleccionado. Elija otra resolución, frecuencia de fotogramas o formato.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>No se pudo comprobar la captura de la cámara. Actualice las cámaras o vuelva a conectar el dispositivo.</translation>
     </message>
 </context>
 <context>
@@ -7192,6 +7206,70 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Contenido de Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Dispositivo no disponible</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automática</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>No disponible</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>El modo de cámara guardado no está disponible. Actualice las cámaras o elija otro modo.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolución</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Frecuencia de fotogramas</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Frecuencia de fotogramas personalizada</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>p. ej., 29.97 o 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Esta frecuencia de fotogramas no es compatible con la resolución y el formato seleccionados.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avanzado</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Mostrar ajustes avanzados</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Resolución personalizada</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Comprobar</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Comprobando los modos de cámara compatibles…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Esta resolución está fuera de los límites o no respeta los incrementos admitidos por la cámara.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>No se pudieron obtener los modos compatibles con esta resolución. Actualice las cámaras o elija otra resolución.</translation>
     </message>
 </context>
 <context>

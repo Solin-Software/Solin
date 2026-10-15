@@ -5,9 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, replace
+from fractions import Fraction
+import json
 import logging
 from urllib.parse import unquote, urlsplit, urlunsplit
 import math
+import re
 from pathlib import Path
 import time
 from typing import Any, Protocol
@@ -35,13 +38,16 @@ from solin.core.scenes.editor_geometry import (
 )
 from solin.core.scenes.engine import (
     LocalCameraDevice,
+    LocalCameraDiscovery,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    LocalVideoFrameRateRange,
     SourceHealthStatus,
     SceneSourcePreview,
 )
 from solin.core.scenes.model import (
     BusId,
+    CameraMediaType,
     CameraPreset,
     Crop,
     FitMode,
@@ -157,6 +163,8 @@ class ScenesBridge(QObject):
     pointerOverrideStarted = Signal(str, int)
     pointerOverrideEnded = Signal(str)
     ptzResult = Signal(str, bool, str)
+    localCameraModesReady = Signal(str, int, int, bool)
+    _camera_modes_result = Signal(object)
     # (x, y, width, height) of the preview canvas frame in the QQuickWidget's
     # logical coordinates — reported by QML so a native GPU preview surface can be
     # pinned exactly over it. (0,0,0,0) means "no canvas" (hide the surface).
@@ -197,6 +205,10 @@ class ScenesBridge(QObject):
             self._consume_framing_result, Qt.ConnectionType.QueuedConnection,
         )
         self._ptz_recall_futures: set[Future[PtzRecallResult]] = set()
+        self._camera_modes_future: Future[LocalCameraDiscovery] | None = None
+        self._camera_modes_result.connect(
+            self._consume_camera_modes_result, Qt.ConnectionType.QueuedConnection,
+        )
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
         self._recording_connections: tuple[tuple[Any, Any], ...] = ()
         self._connect_controller()
@@ -637,15 +649,6 @@ class ScenesBridge(QObject):
             return self.tr("Camera discovery could not be completed.")
         if not discovery.devices:
             return self.tr("No cameras found. The automatic camera remains available.")
-        if any(
-            device.probe.status is LocalCameraProbeStatus.UNVERIFIED
-            for device in discovery.devices
-        ):
-            return self.tr(
-                "Some cameras were detected by Windows but could not be verified. "
-                "You can still try them in automatic mode; check the application log "
-                "if capture fails."
-            )
         return ""
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
@@ -1685,15 +1688,129 @@ class ScenesBridge(QObject):
         return True
 
     @Slot()
+    def ensureLocalCameras(self) -> None:
+        self._refresh_local_cameras(force=False)
+
+    @Slot()
     def refreshLocalCameras(self) -> None:
+        self._refresh_local_cameras(force=True)
+
+    def _refresh_local_cameras(self, *, force: bool) -> None:
         try:
-            self._controller.refresh_local_cameras()
+            self._controller.refresh_local_cameras(force=force)
         except Exception:  # noqa: BLE001 - engine discovery boundary
             log.warning("Could not refresh local cameras", exc_info=True)
             self._notify_failure(
                 self.tr("Camera discovery could not be refreshed."),
                 dedupe_key="scenes-camera-discovery-failed",
             )
+
+    @Slot(str, int, int, result=bool)
+    def queryLocalCameraModes(self, device_id: str, width: int, height: int) -> bool:
+        device = next((item for item in self._controller.local_cameras.devices
+                       if item.device_id == device_id), None)
+        if self._closed or device is None or not any(
+            item.supports(width, height) for item in device.resolution_ranges
+        ):
+            return False
+        try:
+            future = self._controller.query_local_camera_modes(device_id, width, height)
+        except Exception:  # noqa: BLE001 - asynchronous discovery boundary
+            log.warning("Could not query camera resolution modes", exc_info=True)
+            return False
+        if future is None:
+            return False
+        self._camera_modes_future = future
+
+        def completed(done: Future[LocalCameraDiscovery]) -> None:
+            if not self._closed:
+                self._camera_modes_result.emit((done, device_id, width, height))
+
+        future.add_done_callback(completed)
+        return True
+
+    @Slot(object)
+    def _consume_camera_modes_result(self, result: object) -> None:
+        if self._closed or not isinstance(result, tuple) or len(result) != 4:
+            return
+        future, device_id, width, height = result
+        if future is not self._camera_modes_future:
+            return
+        self._camera_modes_future = None
+        success = False
+        try:
+            discovery = future.result()
+            success = not discovery.error_code and any(
+                device.device_id == device_id and any(
+                    item.width == width and item.height == height
+                    for item in (*device.formats, *device.frame_rate_ranges)
+                ) for device in discovery.devices
+            )
+        except Exception:  # noqa: BLE001 - failed or replaced native query
+            log.debug("Camera resolution query did not complete", exc_info=True)
+        self.localCameraModesReady.emit(device_id, width, height, success)
+
+    @Slot(str, str, str, result="QVariantMap")
+    def localCameraCustomFrameRate(
+        self, device_id: str, format_id: str, frame_rate: str,
+    ) -> dict[str, object]:
+        try:
+            if re.fullmatch(r"[0-9]{1,9}(?:\.[0-9]{1,9}|/[0-9]{1,9})?", frame_rate.strip()) is None:
+                return {}
+            rate = Fraction(frame_rate.strip())
+            current = self._local_format(device_id, format_id)
+            if current is None:
+                return {}
+            selected = replace(
+                current, fps_numerator=rate.numerator, fps_denominator=rate.denominator,
+            )
+            # Revalidate the entire tuple against the current device capabilities.
+            self._local_format(device_id, self._format_id(selected))
+            return self._local_format_record(selected)
+        except (SceneValidationError, ValueError, ZeroDivisionError, OverflowError):
+            return {}
+
+    @Slot(str, str, result="QVariantMap")
+    def localCameraFormat(self, device_id: str, format_id: str) -> dict[str, object]:
+        try:
+            video_format = self._local_format(device_id, format_id)
+            return self._local_format_record(video_format) if video_format is not None else {}
+        except SceneValidationError:
+            return {}
+
+    @Slot(str, result=str)
+    def cameraCurrentStatus(self, camera_id: str) -> str:
+        health = self._controller.source_health(camera_id)
+        if health is None:
+            return ""
+        if health.status is SourceHealthStatus.STARTING:
+            return self.tr("Waiting for camera frames…")
+        if not health.error_code and health.status not in {
+            SourceHealthStatus.DEGRADED, SourceHealthStatus.FAILED,
+        }:
+            return ""
+        messages = {
+            "camera_mode_mismatch": self.tr(
+                "The camera is sending a different resolution than selected. "
+                "Choose a supported mode or refresh the cameras."
+            ),
+            "camera_no_frames": self.tr(
+                "No frames received from the camera. Check its connection, privacy "
+                "permissions, or whether another application is using it."
+            ),
+            "camera_update_failed": self.tr(
+                "The camera could not apply the selected mode. Choose another "
+                "resolution, frame rate or format."
+            ),
+            "camera_observation_failed": self.tr(
+                "The camera capture could not be checked. Refresh the cameras "
+                "or reconnect the device."
+            ),
+        }
+        return messages.get(health.error_code, self.tr(
+            "Camera unavailable. Check its connection, privacy permissions, "
+            "or whether another application is using it."
+        ))
 
     @Slot(str, float, float, float, float)
     def movePtz(
@@ -2200,10 +2317,7 @@ class ScenesBridge(QObject):
             ),
             "source_warning": source_warning,
             "source_warning_text": (
-                self.tr(
-                    "Camera unavailable. Check its connection, privacy permissions, "
-                    "or whether another application is using it."
-                )
+                self.cameraCurrentStatus(source.id)
                 if source_warning
                 else ""
             ),
@@ -2324,8 +2438,6 @@ class ScenesBridge(QObject):
             if device.software_device
             else device.display_name
         )
-        if device.probe.status is LocalCameraProbeStatus.UNVERIFIED:
-            name = self.tr("%1 (not verified)").replace("%1", name)
         return {
             "id": device.device_id,
             "name": name,
@@ -2333,14 +2445,29 @@ class ScenesBridge(QObject):
             "available": True,
             "probeStatus": device.probe.status.value,
             "probeErrorCode": device.probe.error_code,
+            "capabilitiesStatus": (
+                self.tr(
+                    "Camera capabilities are unavailable. You can try automatic mode "
+                    "or refresh the cameras."
+                )
+                if not (device.formats or device.frame_rate_ranges)
+                else ""
+            ),
+            "frameRateRanges": [{
+                "mediaType": item.media_type.value, "pixelFormat": item.pixel_format,
+                "resolutionId": f"{item.width}x{item.height}",
+            } for item in device.frame_rate_ranges],
+            "resolutionRanges": [{
+                "mediaType": item.media_type.value, "pixelFormat": item.pixel_format,
+                "minWidth": item.min_width, "maxWidth": item.max_width,
+                "stepWidth": item.step_width, "minHeight": item.min_height,
+                "maxHeight": item.max_height, "stepHeight": item.step_height,
+            } for item in device.resolution_ranges],
             "formats": [
                 {"id": "", "label": self.tr("Automatic")},
                 *[
-                    {
-                        "id": self._format_id(index),
-                        "label": self._format_label(video_format),
-                    }
-                    for index, video_format in enumerate(device.formats)
+                    self._local_format_record(video_format)
+                    for video_format in self._local_device_formats(device)
                 ],
             ],
         }
@@ -2363,7 +2490,7 @@ class ScenesBridge(QObject):
             and current.device_id == device_id
             and current.media_type is not None
             and not bool(values.get("formatSelectionChanged", False))
-            and not format_id
+            and format_id == self._configured_format_id(current)
         )
         if preserve_current_format:
             assert current is not None
@@ -2386,8 +2513,61 @@ class ScenesBridge(QObject):
         )
 
     @staticmethod
-    def _format_id(index: int) -> str:
-        return f"format-{index}"
+    def _range_matches(video_format: LocalVideoFormat, item: LocalVideoFrameRateRange) -> bool:
+        return (
+            video_format.media_type is item.media_type
+            and video_format.pixel_format == item.pixel_format
+            and video_format.width == item.width and video_format.height == item.height
+            and item.supports(video_format.fps_numerator, video_format.fps_denominator)
+        )
+
+    @staticmethod
+    def _local_device_formats(device: LocalCameraDevice) -> tuple[LocalVideoFormat, ...]:
+        modes = dict.fromkeys(device.formats)
+        for item in device.frame_rate_ranges:
+            rates = [
+                Fraction(1, 1) / item.min_interval.seconds,
+                Fraction(1, 1) / item.max_interval.seconds,
+                *(Fraction(rate) for rate in (15, 24, 25, 30, 50, 60)),
+                Fraction(30_000, 1_001), Fraction(60_000, 1_001),
+            ]
+            for rate in rates:
+                if item.supports(rate.numerator, rate.denominator):
+                    modes[LocalVideoFormat(
+                        item.media_type, item.pixel_format, item.width, item.height,
+                        rate.numerator, rate.denominator,
+                    )] = None
+        return tuple(modes)
+
+    @staticmethod
+    def _format_id(video_format: LocalVideoFormat | LocalCameraConfig) -> str:
+        assert video_format.media_type is not None
+        return json.dumps([
+            video_format.media_type.value, video_format.pixel_format,
+            video_format.width, video_format.height,
+            video_format.fps_numerator, video_format.fps_denominator,
+        ], separators=(",", ":"))
+
+    def _local_format_record(
+        self, video_format: LocalVideoFormat, *, available: bool = True,
+    ) -> dict[str, object]:
+        return {
+            "id": self._format_id(video_format),
+            "label": self._format_label(video_format),
+            "available": available,
+            "mediaType": video_format.media_type.value,
+            "pixelFormat": video_format.pixel_format,
+            "formatLabel": self._pixel_format_label(video_format),
+            "width": video_format.width,
+            "height": video_format.height,
+            "resolutionId": f"{video_format.width}x{video_format.height}",
+            "resolutionLabel": f"{video_format.width} × {video_format.height}",
+            "fpsId": f"{video_format.fps_numerator}/{video_format.fps_denominator}",
+            "fpsLabel": (
+                str(video_format.fps_numerator) if video_format.fps_denominator == 1
+                else f"{video_format.frames_per_second:.2f}"
+            ),
+        }
 
     def _local_format(self, device_id: str, format_id: str) -> LocalVideoFormat | None:
         if not format_id:
@@ -2400,12 +2580,40 @@ class ScenesBridge(QObject):
             ),
             None,
         )
-        if device is None or not format_id.startswith("format-"):
+        if device is None:
             raise SceneValidationError("Local camera format is unavailable")
         try:
-            return device.formats[int(format_id.removeprefix("format-"))]
-        except (ValueError, IndexError) as error:
-            raise SceneValidationError("Local camera format is unavailable") from error
+            if len(format_id) > 512:
+                raise ValueError("Mode identifier is too long")
+            parts = json.loads(format_id)
+            if (
+                not isinstance(parts, list) or len(parts) != 6
+                or not all(type(part) is int for part in parts[2:])
+            ):
+                raise ValueError("Invalid camera mode tuple")
+            candidate = LocalVideoFormat(CameraMediaType(parts[0]), *parts[1:])
+            if (
+                self._format_id(candidate) == format_id
+                and (candidate in device.formats or any(
+                    self._range_matches(candidate, item) for item in device.frame_rate_ranges
+                ))
+            ):
+                return candidate
+        except (TypeError, ValueError):
+            pass
+        raise SceneValidationError("Local camera format is unavailable")
+
+    @staticmethod
+    def _pixel_format_label(video_format: LocalVideoFormat) -> str:
+        token = video_format.pixel_format
+        labels = {
+            "100": "ARGB", "101": "XRGB", "200": "I420", "201": "NV12",
+            "202": "YV12", "203": "Y800", "204": "P010", "300": "YVYU",
+            "301": "YUY2", "302": "UYVY", "303": "HDYC", "400": "MJPEG", "401": "H.264",
+            "420v": "NV12 · 420v", "420f": "NV12 · 420f", "2vuy": "UYVY", "yuvs": "YUY2",
+            "jpeg": "JPEG",
+        }
+        return labels.get(token, token)
 
     def _format_label(self, video_format: LocalVideoFormat) -> str:
         fps = (
@@ -2416,7 +2624,7 @@ class ScenesBridge(QObject):
         return self.tr("%1 × %2 · %3 fps · %4").replace(
             "%1", str(video_format.width)
         ).replace("%2", str(video_format.height)).replace("%3", fps).replace(
-            "%4", video_format.pixel_format
+            "%4", self._pixel_format_label(video_format)
         )
 
     def _camera_draft(self, source: SourceDefinition | None) -> dict[str, object]:
@@ -2453,6 +2661,27 @@ class ScenesBridge(QObject):
         if isinstance(configuration, LocalCameraConfig):
             values["deviceId"] = configuration.device_id
             values["formatId"] = self._configured_format_id(configuration)
+            device = next((
+                candidate for candidate in self._controller.local_cameras.devices
+                if candidate.device_id == configuration.device_id
+            ), None)
+            values["deviceName"] = (
+                device.display_name if device is not None
+                else source.name if source is not None else configuration.device_id
+            )
+            if configuration.media_type is not None:
+                video_format = LocalVideoFormat(
+                    configuration.media_type, configuration.pixel_format,
+                    configuration.width, configuration.height,
+                    configuration.fps_numerator, configuration.fps_denominator,
+                )
+                values["format"] = self._local_format_record(
+                    video_format, available=device is not None and (
+                        video_format in device.formats or any(
+                            self._range_matches(video_format, item) for item in device.frame_rate_ranges
+                        )
+                    ),
+                )
         elif isinstance(configuration, RtspCameraConfig):
             values.update(
                 uri=configuration.uri,
@@ -2484,27 +2713,7 @@ class ScenesBridge(QObject):
     def _configured_format_id(self, configuration: LocalCameraConfig) -> str:
         if configuration.media_type is None:
             return ""
-        device = next(
-            (
-                candidate
-                for candidate in self._controller.local_cameras.devices
-                if candidate.device_id == configuration.device_id
-            ),
-            None,
-        )
-        if device is None:
-            return ""
-        for index, video_format in enumerate(device.formats):
-            if (
-                video_format.media_type is configuration.media_type
-                and video_format.pixel_format == configuration.pixel_format
-                and video_format.width == configuration.width
-                and video_format.height == configuration.height
-                and video_format.fps_numerator == configuration.fps_numerator
-                and video_format.fps_denominator == configuration.fps_denominator
-            ):
-                return self._format_id(index)
-        return ""
+        return self._format_id(configuration)
 
     def _ptz_binding(
         self,

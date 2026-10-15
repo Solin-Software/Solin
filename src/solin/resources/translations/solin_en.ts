@@ -4865,11 +4865,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation type="unfinished"></translation>
@@ -4981,11 +4976,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (not verified)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation type="unfinished"></translation>
@@ -5043,6 +5033,30 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <source>Solin Content</source>
         <translation>Solin Content</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Waiting for camera frames…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>The camera capture could not be checked. Refresh the cameras or reconnect the device.</translation>
     </message>
 </context>
 <context>
@@ -5577,12 +5591,12 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+14"/>
         <source>Width</source>
-        <translation type="unfinished"></translation>
+        <translation>Width</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Height</source>
-        <translation type="unfinished"></translation>
+        <translation>Height</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -6071,6 +6085,70 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Solin Content</source>
         <translation>Solin Content</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Unavailable device</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automatic</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Unavailable</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolution</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Frame rate</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Custom frame rate</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>e.g. 29.97 or 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>This frame rate is not supported at the selected resolution and format.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Advanced</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Show advanced settings</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Custom resolution</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Check</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Checking supported camera modes…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>This resolution is outside the camera's supported limits or steps.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</translation>
     </message>
 </context>
 <context>

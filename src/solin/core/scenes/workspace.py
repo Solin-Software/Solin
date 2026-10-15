@@ -21,6 +21,7 @@ from solin.core.scenes.model import (
     LocalCameraConfig,
     RtspCameraConfig,
     SceneDocument,
+    SceneValidationError,
     SourceDefinition,
     SourceKind,
     new_identity,
@@ -277,19 +278,39 @@ class SceneWorkspaceService:
             revision=self._resources.revision + 1,
             cameras=cameras,
         )
+        document = self._documents.document
+        active_source = next(
+            (
+                source
+                for source in document.sources
+                if source.id == camera.id
+            ),
+            None,
+        )
+        configuration = camera.configuration
+        if isinstance(configuration, LocalCameraConfig) and configuration.device_id:
+            device_id = configuration.device_id.casefold()
+            if any(
+                candidate.id != camera.id
+                and isinstance(candidate.configuration, LocalCameraConfig)
+                and candidate.configuration.device_id.casefold() == device_id
+                for candidate in (*cameras, *document.sources)
+            ):
+                raise SceneValidationError("Duplicate local camera device")
+        if active_source is not None or add_to_active_document:
+            sources = (
+                tuple(camera if source.id == camera.id else source for source in document.sources)
+                if active_source is not None
+                else (*document.sources, camera)
+            )
+            # Validate the exact document mutation before publishing shared
+            # resources, including references and required built-in sources.
+            replace(document, sources=sources)
         self._resource_repository.save(
             updated,
             expected_revision=self._resources.revision,
         )
         self._resources = updated
-        active_source = next(
-            (
-                source
-                for source in self._documents.document.sources
-                if source.id == camera.id
-            ),
-            None,
-        )
         if active_source is not None:
             self._documents.update_source(camera.id, camera)
         elif add_to_active_document:

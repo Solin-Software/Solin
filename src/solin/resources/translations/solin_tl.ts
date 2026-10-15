@@ -5985,11 +5985,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Walang nakitang camera. Available pa rin ang awtomatikong camera.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>May ilang camera na natukoy ng Windows pero hindi ma-verify. Maaari pa ring subukan ang mga ito sa awtomatikong mode; tingnan ang log ng application kung mabigo ang pag-capture.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Hindi mabuksan ang folder ng recording.</translation>
@@ -6101,11 +6096,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (hindi na-verify)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6163,6 +6153,30 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
     <message>
         <source>Solin Content</source>
         <translation>Nilalaman ng Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Hindi available ang mga kakayahan ng camera. Maaari mong subukan ang awtomatikong mode o i-refresh ang mga camera.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Hinihintay ang mga frame mula sa camera…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Nagpapadala ang camera ng resolusyong iba sa napili. Pumili ng suportadong mode o i-refresh ang mga camera.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Walang natanggap na mga frame mula sa camera. Tingnan ang koneksyon, mga pahintulot sa privacy, o kung may ibang application na gumagamit nito.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Hindi mailapat ng camera ang napiling mode. Pumili ng ibang resolusyon, frame rate o format.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Hindi masuri ang pagkuha ng video ng camera. I-refresh ang mga camera o ikonektang muli ang device.</translation>
     </message>
 </context>
 <context>
@@ -7192,6 +7206,70 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Nilalaman ng Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Hindi available na device</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Awtomatiko</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Hindi available</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Hindi available ang naka-save na camera mode. I-refresh ang mga camera o pumili ng ibang mode.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolusyon</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Frame rate</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Pasadyang frame rate</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>hal. 29.97 o 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Hindi sinusuportahan ang frame rate na ito sa napiling resolusyon at format.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Advanced</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Ipakita ang mga advanced na setting</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Pasadyang resolusyon</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Suriin</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Sinusuri ang mga suportadong camera mode…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Ang resolusyong ito ay lampas sa mga limitasyon o hindi sumusunod sa mga suportadong dagdag sa sukat ng camera.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. I-refresh ang mga camera o pumili ng ibang resolusyon.</translation>
     </message>
 </context>
 <context>

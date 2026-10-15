@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from solin.core.scenes.engine import LocalCameraProbeStatus
+from solin.core.scenes.engine import LocalCameraModeQuery, LocalCameraProbeStatus
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, SceneIpcMessageError
 from solin.core.scenes.process_engine import (
     SceneEngineProcessConfig,
@@ -16,6 +16,7 @@ from solin.core.scenes.process_engine import (
     SubprocessSceneEngine,
     _PendingRequest,
     _local_camera_discovery_from_envelope,
+    _local_camera_modes_from_envelope,
 )
 
 
@@ -30,6 +31,8 @@ def _camera_payload() -> dict[str, object]:
                 "display_name": "Inventory camera",
                 "software_device": False,
                 "formats": [],
+                "resolution_ranges": [],
+                "frame_rate_ranges": [],
                 "probe": {
                     "status": "unverified",
                     "backend": "media_foundation",
@@ -62,6 +65,22 @@ def test_camera_discovery_parser_retains_structured_unverified_probe() -> None:
     assert discovery.devices[0].probe.status is LocalCameraProbeStatus.UNVERIFIED
     assert discovery.devices[0].probe.failure_stage == "capture_provider"
     assert discovery.devices[0].probe.error_code == "capture_provider_not_reported"
+
+
+@pytest.mark.parametrize("key", ["resolution_ranges", "frame_rate_ranges"])
+@pytest.mark.parametrize("invalid", [None, {}, [None], [{}]])
+def test_camera_discovery_parser_rejects_malformed_ranges(key, invalid):
+    payload = _camera_payload()
+    payload["devices"][0][key] = invalid
+    with pytest.raises(SceneIpcMessageError):
+        _local_camera_discovery_from_envelope(_envelope(payload))
+
+
+def test_camera_discovery_requires_new_range_fields_in_versioned_contract():
+    payload = _camera_payload()
+    del payload["devices"][0]["resolution_ranges"]
+    with pytest.raises(SceneIpcMessageError, match="fields"):
+        _local_camera_discovery_from_envelope(_envelope(payload))
 
 
 @pytest.mark.parametrize(
@@ -228,3 +247,74 @@ def test_camera_diagnostics_do_not_echo_invalid_numeric_strings() -> None:
     diagnostics = failure.value.diagnostics
     assert diagnostics["format_values"]["fps_numerator"] == {"type": "str"}
     assert "private-device-serial" not in json.dumps(diagnostics)
+
+
+def _mode_query():
+    return LocalCameraModeQuery("camera://private-device-serial", 1920, 1080)
+
+
+def _mode_query_payload():
+    payload = _invalid_format_payload()
+    payload["devices"][0]["formats"][0]["fps_denominator"] = 1
+    return payload
+
+
+def test_exact_size_query_parser_returns_only_the_requested_device_and_size():
+    discovery = _local_camera_modes_from_envelope(_envelope(_mode_query_payload()), _mode_query())
+    assert len(discovery.devices) == 1
+    assert discovery.devices[0].formats[0].height == 1080
+
+
+@pytest.mark.parametrize("mismatch", ["device", "size", "devices", "range"])
+def test_exact_size_query_parser_rejects_cross_device_or_cross_resolution_data(mismatch):
+    payload = _mode_query_payload()
+    device = payload["devices"][0]
+    if mismatch == "device":
+        device["device_id"] = "camera://another"
+    elif mismatch == "size":
+        device["formats"][0]["width"] = 1280
+    elif mismatch == "devices":
+        extra = deepcopy(device)
+        extra["device_id"] = "camera://another"
+        payload["devices"].append(extra)
+    else:
+        device["frame_rate_ranges"] = [{
+            "media_type": "video/x-raw", "pixel_format": "NV12", "width": 640, "height": 480,
+            "min_interval": {"numerator": 1, "denominator": 30},
+            "max_interval": {"numerator": 1, "denominator": 5}, "step_interval": None,
+        }]
+    with pytest.raises(SceneIpcMessageError, match="Camera mode query"):
+        _local_camera_modes_from_envelope(_envelope(payload), _mode_query())
+
+
+def test_exact_size_query_parser_preserves_explicit_query_failure():
+    payload = _camera_payload()
+    payload["devices"] = []
+    payload["error_code"] = "capability_query_failed"
+    assert _local_camera_modes_from_envelope(_envelope(payload), _mode_query()).error_code == "capability_query_failed"
+    payload["error_code"] = ""
+    with pytest.raises(SceneIpcMessageError, match="no result"):
+        _local_camera_modes_from_envelope(_envelope(payload), _mode_query())
+
+
+def test_subprocess_exact_size_query_uses_typed_request_and_strict_converter(monkeypatch):
+    engine = SubprocessSceneEngine(SceneEngineProcessConfig(executable=Path("unused")))
+    requests = []
+    pending = Future()
+    def request(**fields):
+        requests.append(fields)
+        return pending
+    monkeypatch.setattr(engine, "_request", request)
+    assert engine.query_local_camera_modes(_mode_query().device_id, 1920, 1080,
+                                           request_id="custom-size", deadline_ms=5000) is pending
+    fields = requests[0]
+    assert fields["message_type"] == "query_local_camera_modes"
+    assert fields["expected_message_type"] == "local_camera_modes"
+    assert fields["payload"] == {"device_id": _mode_query().device_id, "width": 1920, "height": 1080}
+    assert fields["request_id"] == "custom-size"
+    assert fields["deadline_ms"] == 5000
+    assert fields["converter"](_envelope(_mode_query_payload())).devices[0].formats
+    with pytest.raises(ValueError):
+        engine.query_local_camera_modes(_mode_query().device_id, True, 1080,
+                                        request_id="invalid", deadline_ms=5000)
+    assert len(requests) == 1

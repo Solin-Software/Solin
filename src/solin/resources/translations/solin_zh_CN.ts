@@ -5953,11 +5953,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>未找到摄像机。自动摄像机仍然可用。</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows 检测到了一些摄像头，但无法对其进行验证。您仍可在自动模式下尝试使用这些摄像头；如果采集失败，请查看应用程序日志。</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>无法打开录制文件夹。</translation>
@@ -6069,11 +6064,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>%1（虚拟）</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1（未验证）</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6131,6 +6121,30 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <source>Solin Content</source>
         <translation>Solin 内容</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>无法获取摄像机的能力信息。您可以尝试自动模式或刷新摄像机。</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>正在等待摄像机画面…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>摄像机正在发送与所选分辨率不同的画面。请选择支持的模式或刷新摄像机。</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>未收到摄像机画面。请检查连接、隐私权限，或是否有其他程序正在使用它。</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>摄像机无法应用所选模式。请选择其他分辨率、帧率或格式。</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>无法检查摄像机的采集状态。请刷新摄像机或重新连接设备。</translation>
     </message>
 </context>
 <context>
@@ -7160,6 +7174,70 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Solin Content</source>
         <translation>Solin 内容</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>不可用的设备</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>不可用</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>已保存的摄像机模式不可用。请刷新摄像机或选择其他模式。</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>分辨率</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>帧率</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>自定义帧率</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>例如 29.97 或 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>所选分辨率和格式不支持此帧率。</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>高级</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>显示高级设置</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>自定义分辨率</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>检查</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>正在检查摄像机支持的模式…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>此分辨率超出摄像机支持的范围或不符合支持的步长。</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>无法获取此分辨率支持的模式。请刷新摄像机或选择其他分辨率。</translation>
     </message>
 </context>
 <context>

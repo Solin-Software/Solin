@@ -15,6 +15,19 @@ _VIDEO_INIT_ERRORS = {
 }
 
 
+def complete_frame_rate_type_compat(ffi: Any) -> None:
+    """Complete pylibobs 0.1.2's opaque OBS media frame-rate declaration.
+
+    OBS returns this two-uint32 structure by value from property range getters.
+    The pinned binding declares only its name, making those calls unusable.
+    Rechecking its size makes completion idempotent and permits fixed bindings.
+    """
+    try:
+        ffi.sizeof("struct media_frames_per_second")
+    except ValueError:
+        ffi.cdef("struct media_frames_per_second { uint32_t numerator; uint32_t denominator; };")
+
+
 def set_video_compat(
     context: Any,
     *,

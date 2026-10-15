@@ -17,6 +17,7 @@ from solin.core.scenes.engine import (
     FrameChannelDescriptor,
     FrameEgressReadyEvent,
     LocalCameraDiscovery,
+    LocalCameraModeQuery,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
     OutputWindowTarget,
@@ -280,6 +281,9 @@ class SceneRuntimeController(QObject):
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
         self._source_health: dict[str, SourceHealthEvent] = {}
         self._local_camera_request_id = ""
+        self._camera_inventory_epoch = 0
+        self._camera_mode_inflight: dict[tuple[str, int, int], tuple[str, Future[LocalCameraDiscovery]]] = {}
+        self._camera_mode_results: dict[tuple[str, int, int], LocalCameraDiscovery] = {}
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
         self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
@@ -1102,21 +1106,127 @@ class SceneRuntimeController(QObject):
         self._program_recording_required = required
         self._reconcile_engine_outputs()
 
-    def refresh_local_cameras(self) -> Future[LocalCameraDiscovery] | None:
+    def refresh_local_cameras(
+        self, force: bool = True,
+    ) -> Future[LocalCameraDiscovery] | None:
+        """Share pending discovery; reuse successful inventory when opening a dialog."""
         if self._engine is None or not self._engine_ready:
-            self._set_local_cameras(_unavailable_local_cameras("engine_not_ready"))
+            self._reset_local_camera_discovery()
             return None
         if self._local_camera_request_id and self._local_camera_future is not None:
             return self._local_camera_future
+        if (
+            not force
+            and self._local_cameras.supported
+            and self._local_cameras.ready
+            and not self._local_cameras.error_code
+        ):
+            cached: Future[LocalCameraDiscovery] = Future()
+            cached.set_result(self._local_cameras)
+            return cached
         request_id = self._request_id_factory()
+        self._invalidate_camera_mode_inflight()
         self._local_camera_request_id = request_id
-        future = self._engine.list_local_cameras(
-            request_id=request_id,
-            deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
-        )
+        try:
+            future = self._engine.list_local_cameras(
+                request_id=request_id,
+                deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
+            )
+        except Exception:  # noqa: BLE001 - invalidate discovery before propagating dispatch failure
+            self._reset_local_camera_discovery("discovery_request_failed")
+            raise
         self._local_camera_future = future
         self._track_future(future, "local_cameras", request_id)
         return future
+
+    def query_local_camera_modes(
+        self, device_id: str, width: int, height: int,
+    ) -> Future[LocalCameraDiscovery]:
+        """Query rates at a custom size; never infer them from another resolution."""
+        LocalCameraModeQuery(device_id, width, height)
+        key = device_id, width, height
+        pending = self._camera_mode_inflight.get(key)
+        if pending is not None:
+            return pending[1]
+        visible: Future[LocalCameraDiscovery] = Future()
+        cached = self._camera_mode_results.get(key)
+        if cached is not None:
+            visible.set_result(cached)
+            return visible
+        if self._engine is None or not self._engine_ready:
+            visible.set_exception(SceneEngineNotReadyError("Camera discovery is unavailable"))
+            return visible
+        device = next((item for item in self._local_cameras.devices if item.device_id == device_id), None)
+        if device is None or not any(item.supports(width, height) for item in device.resolution_ranges):
+            visible.set_exception(ValueError("Camera resolution is outside its reported capabilities"))
+            return visible
+        request_id = self._request_id_factory()
+        self._camera_mode_inflight[key] = request_id, visible
+        context = request_id, key, self._camera_inventory_epoch
+        try:
+            future = self._engine.query_local_camera_modes(
+                device_id, width, height, request_id=request_id,
+                deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
+            )
+        except Exception as error:  # noqa: BLE001 - deliver dispatch failure to the dialog's future
+            self._camera_mode_inflight.pop(key, None)
+            visible.set_exception(error)
+        else:
+            self._track_future(future, "camera_modes", context)
+        return visible
+
+    def _invalidate_camera_mode_inflight(self) -> None:
+        self._camera_inventory_epoch += 1
+        self._camera_mode_results.clear()
+        pending, self._camera_mode_inflight = self._camera_mode_inflight, {}
+        for _request_id, future in pending.values():
+            future.cancel()
+
+    def _finish_camera_modes(self, context: object, result: object, error: object) -> None:
+        request_id, key, epoch = cast(tuple[str, tuple[str, int, int], int], context)
+        pending = self._camera_mode_inflight.get(key)
+        if pending is None or pending[0] != request_id or epoch != self._camera_inventory_epoch:
+            return
+        self._camera_mode_inflight.pop(key)
+        visible = pending[1]
+        if visible.done():
+            return
+        if error is not None:
+            visible.set_exception(error if isinstance(error, BaseException) else RuntimeError(str(error)))
+            return
+        if (not isinstance(result, LocalCameraDiscovery) or not result.ready or not result.supported or result.error_code
+                or len(result.devices) != 1 or result.devices[0].device_id != key[0]):
+            visible.set_exception(ValueError("Camera capability query failed"))
+            return
+        queried = result.devices[0]
+        if (queried.probe.error_code or queried.resolution_ranges
+                or any((item.width, item.height) != key[1:] for item in (*queried.formats, *queried.frame_rate_ranges))):
+            visible.set_exception(ValueError("Camera capability query returned unrelated modes"))
+            return
+        try:
+            devices = tuple(
+                replace(
+                    device,
+                    formats=tuple(dict.fromkeys((*device.formats, *queried.formats))),
+                    frame_rate_ranges=tuple(dict.fromkeys((*device.frame_rate_ranges, *queried.frame_rate_ranges))),
+                ) if device.device_id == key[0] else device
+                for device in self._local_cameras.devices
+            )
+            merged = replace(self._local_cameras, devices=devices)
+        except ValueError as failure:
+            visible.set_exception(failure)
+            return
+        self._set_local_cameras(merged)
+        self._camera_mode_results[key] = result
+        visible.set_result(result)
+
+    def _reset_local_camera_discovery(self, error_code: str = "engine_not_ready") -> None:
+        # An old native request still owns its future. Forget its identity so its
+        # eventual completion cannot overwrite inventory from a new process.
+        self._local_camera_request_id = ""
+        self._local_camera_future = None
+        self._invalidate_camera_mode_inflight()
+        self._set_local_cameras(_unavailable_local_cameras(error_code))
 
     def recall_camera_preset(
         self,
@@ -1286,9 +1396,7 @@ class SceneRuntimeController(QObject):
             self._engine.stop()
         else:
             self._cancel_all_pending(cancel_native=False)
-        self._local_camera_request_id = ""
-        self._local_camera_future = None
-        self._set_local_cameras(_unavailable_local_cameras("engine_not_ready"))
+        self._reset_local_camera_discovery()
         self._set_engine_ready(False)
         self._engine_started = False
         self._process_generation = ""
@@ -1481,6 +1589,23 @@ class SceneRuntimeController(QObject):
         if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
+            if event.configuration_id:
+                from solin.core.scenes.camera_catalog import camera_configuration_id
+
+                profile = self._profile_activation
+                document = (profile.snapshot.document
+                            if profile is not None and self._profile_idle_waiter is None
+                            else self._documents.document)
+                source = next((item for item in document.sources if item.id == event.source_id), None)
+                revision = (profile.snapshot.document.revision
+                            if profile is not None and self._profile_idle_waiter is None
+                            else self._hydrate_in_flight[1].document.revision
+                            if self._hydrate_in_flight is not None
+                            else self._engine_document_revision)
+                if (source is None or not isinstance(source.configuration, LocalCameraConfig)
+                        or camera_configuration_id(source.configuration) != event.configuration_id
+                        or event.document_revision < revision):
+                    return
             # Only fresh events from a dispatched profile belong to its commit.
             # Record before deduplication: a new source may reuse an old ID and
             # report the same value without inheriting that source's old cache.
@@ -1528,6 +1653,7 @@ class SceneRuntimeController(QObject):
             generation_changed = health.process_generation != self._process_generation
             was_ready = self._engine_ready
             if generation_changed:
+                self._reset_local_camera_discovery()
                 self._clear_source_health()
                 self._reset_idle_update()
                 self._ready_video_epoch = None
@@ -1553,9 +1679,7 @@ class SceneRuntimeController(QObject):
             self._ready_video_epoch = None
             self._empty_content_in_flight = None
             self._cancel_all_pending(cancel_native=False)
-            self._local_camera_request_id = ""
-            self._local_camera_future = None
-            self._set_local_cameras(_unavailable_local_cameras("engine_not_ready"))
+            self._reset_local_camera_discovery()
             self._set_engine_ready(False)
             self._clear_source_health()
             self._set_applied_scenes(())
@@ -2064,6 +2188,9 @@ class SceneRuntimeController(QObject):
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
+        if operation == "camera_modes":
+            self._finish_camera_modes(context, result, error)
+            return
         if operation == "clear_content":
             self._finish_empty_content(context, result, error)
             return
@@ -2150,6 +2277,8 @@ class SceneRuntimeController(QObject):
             raise RuntimeError("Scene engine returned invalid capabilities")
         generation_changed = result.process_generation != self._process_generation
         was_ready = self._engine_ready
+        if generation_changed:
+            self._reset_local_camera_discovery()
         self._process_generation = result.process_generation
         self._set_engine_ready(True)
         self.engine_capabilities_changed.emit(result)
@@ -2550,9 +2679,7 @@ class SceneRuntimeController(QObject):
 
     def _clear_failed_pending(self, operation: object, context: object) -> None:
         if operation == "local_cameras" and context == self._local_camera_request_id:
-            self._local_camera_request_id = ""
-            self._local_camera_future = None
-            self._set_local_cameras(_unavailable_local_cameras("discovery_request_failed"))
+            self._reset_local_camera_discovery("discovery_request_failed")
             return
         if operation == "ptz" and isinstance(context, _PtzActionContext):
             if self._pending.get(context.bus_id) == context.expected:

@@ -5984,11 +5984,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Inga kameror hittades. Den automatiska kameran är fortfarande tillgänglig.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows identifierade några kameror, men de kunde inte verifieras. De kan ändå provas i automatiskt läge; kontrollera programloggen om bildinsamlingen misslyckas.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Det gick inte att öppna inspelningsmappen.</translation>
@@ -6100,11 +6095,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>%1 (virtuell)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (inte verifierad)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6162,6 +6152,30 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
     <message>
         <source>Solin Content</source>
         <translation>Solin-innehåll</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Kamerans funktioner är inte tillgängliga. Du kan prova automatiskt läge eller uppdatera kamerorna.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Väntar på bildrutor från kameran…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Kameran skickar en annan upplösning än den valda. Välj ett läge som stöds eller uppdatera kamerorna.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Inga bildrutor har tagits emot från kameran. Kontrollera anslutningen, sekretessbehörigheterna eller om ett annat program använder den.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Kameran kunde inte tillämpa det valda läget. Välj en annan upplösning, bildfrekvens eller ett annat format.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Kamerans bildinsamling kunde inte kontrolleras. Uppdatera kamerorna eller anslut enheten igen.</translation>
     </message>
 </context>
 <context>
@@ -7191,6 +7205,70 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Solin-innehåll</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Enheten är inte tillgänglig</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automatisk</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Inte tillgänglig</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Det sparade kameraläget är inte tillgängligt. Uppdatera kamerorna eller välj ett annat läge.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Upplösning</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Bildfrekvens</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Anpassad bildfrekvens</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>t.ex. 29.97 eller 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Den här bildfrekvensen stöds inte med den valda upplösningen och det valda formatet.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avancerat</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Visa avancerade inställningar</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Anpassad upplösning</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Kontrollera</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Kontrollerar kameralägen som stöds…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Den här upplösningen ligger utanför de gränser eller följer inte de stegstorlekar som kameran stöder.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Det gick inte att hämta lägen som stöds för den här upplösningen. Uppdatera kamerorna eller välj en annan upplösning.</translation>
     </message>
 </context>
 <context>
