@@ -465,7 +465,10 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     request.addfinalizer(lambda: dispose_widget(owner))
     owner.resize(600, 440)
     show_and_activate(owner)
-    host, container, widget, root = _native_hover_host(request, owner=owner, sync_cursor=True)
+    # This regression controls Leave ordering and the cursor snapshot explicitly.
+    # Seed through QWidgetWindow too, without unrelated Cocoa cursor transport.
+    # Physical hover delivery is qualified by the native-surface cases above.
+    host, container, widget, root = _native_hover_host(request, owner=owner)
     outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
     exits = root.property("exits")
@@ -475,7 +478,9 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     assert root.property("exits") == exits
     _reordered_native_exit(host, container)
     wait_until(lambda: not root.property("hovered"), description="owned tool native ancestor exit")
+    assert not root.property("handlerHovered")
     assert not widget.underMouse()
+    assert root.property("exits") == exits + 1
 
 
 def test_native_parent_mouse_route_emits_one_exit_before_reentry(request):
