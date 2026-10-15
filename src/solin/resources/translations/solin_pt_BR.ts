@@ -6014,11 +6014,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Nenhuma câmera encontrada. A câmera automática continua disponível.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Algumas câmeras foram detectadas pelo Windows, mas não puderam ser verificadas. Ainda é possível testá-las no modo automático; confira o log do aplicativo se a captura falhar.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Não foi possível abrir a pasta de gravações.</translation>
@@ -6124,11 +6119,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (não verificada)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6192,6 +6182,30 @@ A organização atual e os arquivos serão preservados. As alterações pendente
     <message>
         <source>Solin Content</source>
         <translation>Mídia do Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Os recursos da câmera estão indisponíveis. Você pode tentar o modo automático ou atualizar as câmeras.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Aguardando quadros da câmera…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>A câmera está enviando uma resolução diferente da selecionada. Escolha um modo compatível ou atualize as câmeras.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Nenhum quadro recebido da câmera. Verifique a conexão, as permissões de privacidade ou se outro aplicativo está usando-a.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>A câmera não conseguiu aplicar o modo selecionado. Escolha outra resolução, taxa de quadros ou formato.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Não foi possível verificar a captura da câmera. Atualize as câmeras ou reconecte o dispositivo.</translation>
     </message>
 </context>
 <context>
@@ -7225,6 +7239,70 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Mídia do Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Dispositivo indisponível</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automática</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Indisponível</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>O modo de câmera salvo está indisponível. Atualize as câmeras ou escolha outro modo.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolução</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Taxa de quadros</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Taxa de quadros personalizada</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>ex.: 29.97 ou 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Esta taxa de quadros não é compatível com a resolução e o formato selecionados.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Avançado</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Mostrar configurações avançadas</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Resolução personalizada</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Verificar</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Verificando os modos compatíveis da câmera…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Esta resolução está fora dos limites ou não segue os incrementos compatíveis com a câmera.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Não foi possível obter os modos compatíveis com esta resolução. Atualize as câmeras ou escolha outra resolução.</translation>
     </message>
 </context>
 <context>

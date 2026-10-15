@@ -28,6 +28,12 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    LocalVideoFrameInterval,
+    LocalVideoFrameRateRange,
+    LocalVideoResolutionRange,
+    LocalCameraModeQuery,
+    MAXIMUM_LOCAL_CAMERA_CAPABILITIES,
+    MAXIMUM_LOCAL_CAMERA_DEVICES,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
     OutputWindowTarget,
@@ -113,11 +119,11 @@ _PREPARATION_FIELDS = frozenset(
 )
 _TRANSITION_FIELDS = frozenset({"kind", "duration_ms"})
 _HEARTBEAT_FIELDS = frozenset({"monotonic_ms"})
-_SOURCE_HEALTH_FIELDS = frozenset({"source_id", "status", "error_code", "message"})
+_SOURCE_HEALTH_FIELDS = frozenset({"source_id", "status", "error_code", "message", "configuration_id"})
 _FRAME_EGRESS_READY_FIELDS = frozenset({"channel_id", "generation", "handle_token"})
 _LOCAL_CAMERA_LIST_FIELDS = frozenset({"supported", "ready", "generation", "devices", "error_code"})
 _LOCAL_CAMERA_FIELDS = frozenset(
-    {"device_id", "display_name", "software_device", "formats", "probe"}
+    {"device_id", "display_name", "software_device", "formats", "probe", "resolution_ranges", "frame_rate_ranges"}
 )
 _LOCAL_CAMERA_PROBE_FIELDS = frozenset(
     {"status", "backend", "failure_stage", "error_code", "native_error_code"}
@@ -565,6 +571,27 @@ class SubprocessSceneEngine:
             deadline_ms=deadline_ms,
             payload={},
             converter=_local_camera_discovery_from_envelope,
+        )
+
+    def query_local_camera_modes(
+        self,
+        device_id: str,
+        width: int,
+        height: int,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[LocalCameraDiscovery]:
+        query = LocalCameraModeQuery(device_id, width, height)
+        return self._request(
+            message_type="query_local_camera_modes",
+            expected_message_type="local_camera_modes",
+            request_id=request_id,
+            sequence=0,
+            document_revision=0,
+            deadline_ms=deadline_ms,
+            payload={"device_id": query.device_id, "width": query.width, "height": query.height},
+            converter=lambda envelope: _local_camera_modes_from_envelope(envelope, query),
         )
 
     def list_audio_devices(
@@ -1803,6 +1830,8 @@ def _source_health_from_envelope(envelope: SceneIpcEnvelope) -> SourceHealthEven
         status=status,
         error_code=require_text(payload["error_code"], "source error code", maximum=128),
         message=require_text(payload["message"], "source health message"),
+        configuration_id=require_text(payload["configuration_id"], "source health configuration id", maximum=64),
+        document_revision=envelope.document_revision,
     )
 
 
@@ -1838,7 +1867,7 @@ def _local_camera_discovery_from_envelope(
             payload["generation"], "local camera discovery generation"
         )
         raw_devices = payload["devices"]
-        if not isinstance(raw_devices, list) or len(raw_devices) > 64:
+        if not isinstance(raw_devices, list) or len(raw_devices) > MAXIMUM_LOCAL_CAMERA_DEVICES:
             raise SceneIpcMessageError("Invalid local camera device list")
         devices: list[LocalCameraDevice] = []
         for current_device_index, raw_device in enumerate(raw_devices):
@@ -1851,7 +1880,7 @@ def _local_camera_discovery_from_envelope(
                 message_type="local camera",
             )
             raw_formats = device["formats"]
-            if not isinstance(raw_formats, list) or len(raw_formats) > 256:
+            if not isinstance(raw_formats, list) or len(raw_formats) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES:
                 raise SceneIpcMessageError("Invalid local camera format list")
             formats: list[LocalVideoFormat] = []
             for current_format_index, raw_format in enumerate(raw_formats):
@@ -1911,6 +1940,8 @@ def _local_camera_discovery_from_envelope(
                     ),
                     formats=tuple(formats),
                     probe=_local_camera_probe(device["probe"]),
+                    resolution_ranges=_local_resolution_ranges(device["resolution_ranges"]),
+                    frame_rate_ranges=_local_frame_rate_ranges(device["frame_rate_ranges"]),
                 )
             )
         device_index = None
@@ -1933,6 +1964,71 @@ def _local_camera_discovery_from_envelope(
             format_index=format_index,
             raw_format=raw_format,
         ) from exc
+
+
+def _local_camera_modes_from_envelope(
+    envelope: SceneIpcEnvelope, query: LocalCameraModeQuery,
+) -> LocalCameraDiscovery:
+    discovery = _local_camera_discovery_from_envelope(envelope)
+    if not discovery.devices:
+        if not discovery.error_code:
+            raise SceneIpcMessageError("Camera mode query returned no result or failure")
+        return discovery
+    if len(discovery.devices) != 1:
+        raise SceneIpcMessageError("Camera mode query returned multiple devices")
+    device = discovery.devices[0]
+    if device.device_id != query.device_id or device.resolution_ranges:
+        raise SceneIpcMessageError("Camera mode query returned mismatching device capabilities")
+    if any((mode.width, mode.height) != (query.width, query.height)
+           for mode in (*device.formats, *device.frame_rate_ranges)):
+        raise SceneIpcMessageError("Camera mode query returned mismatching resolution")
+    return discovery
+
+
+def _local_resolution_ranges(raw: object) -> tuple[LocalVideoResolutionRange, ...]:
+    if not isinstance(raw, list) or len(raw) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES:
+        raise SceneIpcMessageError("Invalid local camera resolution ranges")
+    fields = frozenset({"media_type", "pixel_format", "min_width", "max_width", "step_width",
+                        "min_height", "max_height", "step_height"})
+    result = []
+    for entry in raw:
+        item = require_payload_fields(entry, fields, message_type="camera resolution range")
+        result.append(LocalVideoResolutionRange(
+            CameraMediaType(require_text(item["media_type"], "range media type", maximum=80)),
+            require_text(item["pixel_format"], "range pixel format", maximum=80),
+            *(require_non_negative_int(item[key], key) for key in (
+                "min_width", "max_width", "step_width", "min_height", "max_height", "step_height")),
+        ))
+    return tuple(result)
+
+
+def _local_frame_interval(raw: object) -> LocalVideoFrameInterval:
+    item = require_payload_fields(
+        raw, frozenset({"numerator", "denominator"}), message_type="camera frame interval",
+    )
+    return LocalVideoFrameInterval(
+        require_non_negative_int(item["numerator"], "frame interval numerator"),
+        require_non_negative_int(item["denominator"], "frame interval denominator"),
+    )
+
+
+def _local_frame_rate_ranges(raw: object) -> tuple[LocalVideoFrameRateRange, ...]:
+    if not isinstance(raw, list) or len(raw) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES:
+        raise SceneIpcMessageError("Invalid local camera frame rate ranges")
+    fields = frozenset({"media_type", "pixel_format", "width", "height", "min_interval",
+                        "max_interval", "step_interval"})
+    result = []
+    for entry in raw:
+        item = require_payload_fields(entry, fields, message_type="camera frame rate range")
+        result.append(LocalVideoFrameRateRange(
+            CameraMediaType(require_text(item["media_type"], "range media type", maximum=80)),
+            require_text(item["pixel_format"], "range pixel format", maximum=80),
+            require_non_negative_int(item["width"], "range width"),
+            require_non_negative_int(item["height"], "range height"),
+            _local_frame_interval(item["min_interval"]), _local_frame_interval(item["max_interval"]),
+            None if item["step_interval"] is None else _local_frame_interval(item["step_interval"]),
+        ))
+    return tuple(result)
 
 
 def _local_camera_probe(raw_probe: object) -> LocalCameraProbe:

@@ -589,6 +589,7 @@ class _CompositingRuntime:
         self.transitions: list[_FakeTransition] = []
         self.outputs: list[_FakeOutput] = []
         self.camera_sources: list[tuple[str, str]] = []
+        self.camera_modes: list[dict] = []
         self.rtsp_sources: dict[str, object] = {}
         self.rtsp_requests: list[tuple[str, str]] = []
         self.channels: dict[int, object] = {}
@@ -754,8 +755,13 @@ class _CompositingRuntime:
 
     # shared camera source (runtime-owned)
     def camera_source(self, device_id: str, name: str = "", *,
-                      pixel_format: str = "", width: int = 0, height: int = 0):
+                      pixel_format: str = "", width: int = 0, height: int = 0,
+                      fps_numerator: int = 0, fps_denominator: int = 1,
+                      media_type: str = ""):
         self.camera_sources.append((device_id, name))
+        self.camera_modes.append(dict(pixel_format=pixel_format, width=width, height=height,
+                                      fps_numerator=fps_numerator, fps_denominator=fps_denominator,
+                                      media_type=media_type))
         return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
 
     # shared IP camera source (runtime-owned) — one per camera, not per layer
@@ -1175,6 +1181,30 @@ def test_camera_layer_uses_the_shared_runtime_source_and_is_not_released():
     assert runtime.sources == []  # no color placeholder created for it
 
     graph.clear()  # must not try to release the runtime-owned camera source
+
+
+@pytest.mark.parametrize("mode", [
+    {"width": 1920, "height": 1080, "fps_numerator": 30000, "fps_denominator": 1001,
+     "media_type": "image/jpeg", "pixel_format": "400"},
+    {"width": 0, "height": 0, "fps_numerator": 0, "fps_denominator": 1,
+     "media_type": "", "pixel_format": ""},
+])
+def test_camera_document_forwards_full_capture_mode_to_runtime(mode):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [{"id": "cam", "type": "local_camera", "name": "Camera",
+                     "configuration": {"device_id": "device", **mode}}],
+        "scenes": [{"id": "s", "layers": [{"id": "L", "source_id": "cam", "visible": True,
+                    "rect": {"x": 0, "y": 0, "width": 1, "height": 1}}]}],
+    }
+    try:
+        graph.hydrate(document, {"virtual_camera": "s"})
+        assert runtime.camera_modes == [mode]
+    finally:
+        graph.clear()
 
 
 def test_color_source_uses_the_configured_color():

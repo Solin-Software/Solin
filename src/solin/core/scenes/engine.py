@@ -4,6 +4,7 @@ from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass
 from enum import StrEnum
+from fractions import Fraction
 from math import gcd, isfinite
 from typing import Protocol, TypeAlias
 
@@ -34,6 +35,8 @@ from solin.core.scenes.recording import (
 
 MAXIMUM_OUTPUT_WINDOW_TARGETS = 32
 DEFAULT_ENGINE_STARTUP_DEADLINE_MS = 15_000
+MAXIMUM_LOCAL_CAMERA_CAPABILITIES = 4096
+MAXIMUM_LOCAL_CAMERA_DEVICES = 64
 
 
 def scene_engine_document_record(document: SceneDocument) -> dict[str, object]:
@@ -194,6 +197,101 @@ class LocalVideoFormat:
         return self.fps_numerator / self.fps_denominator
 
 
+@dataclass(frozen=True, slots=True)
+class LocalVideoFrameInterval:
+    """An exact, reduced duration in seconds (the reciprocal of FPS)."""
+
+    numerator: int
+    denominator: int
+
+    def __post_init__(self) -> None:
+        _bounded_int(self.numerator, 1, MAXIMUM_CAMERA_FPS_COMPONENT, "frame interval numerator")
+        _bounded_int(self.denominator, 1, MAXIMUM_CAMERA_FPS_COMPONENT, "frame interval denominator")
+        if gcd(self.numerator, self.denominator) != 1:
+            raise ValueError("Frame interval must be reduced")
+
+    @property
+    def seconds(self) -> Fraction:
+        return Fraction(self.numerator, self.denominator)
+
+
+@dataclass(frozen=True, slots=True)
+class LocalVideoFrameRateRange:
+    """Intervals for one format at one fixed resolution, never a size range."""
+
+    media_type: CameraMediaType
+    pixel_format: str
+    width: int
+    height: int
+    min_interval: LocalVideoFrameInterval
+    max_interval: LocalVideoFrameInterval
+    step_interval: LocalVideoFrameInterval | None = None
+
+    def __post_init__(self) -> None:
+        # Reuse exact-mode validation for the shared format and dimension contract.
+        LocalVideoFormat(self.media_type, self.pixel_format, self.width, self.height, 1, 1)
+        if not isinstance(self.min_interval, LocalVideoFrameInterval) or not isinstance(
+            self.max_interval, LocalVideoFrameInterval
+        ):
+            raise ValueError("Invalid frame interval bounds")
+        if self.min_interval.seconds > self.max_interval.seconds:
+            raise ValueError("Reversed frame interval range")
+        if self.step_interval is not None and not isinstance(self.step_interval, LocalVideoFrameInterval):
+            raise ValueError("Invalid frame interval step")
+
+    def supports(self, fps_numerator: int, fps_denominator: int) -> bool:
+        try:
+            LocalVideoFormat(
+                self.media_type, self.pixel_format, self.width, self.height,
+                fps_numerator, fps_denominator,
+            )
+        except (TypeError, ValueError):
+            return False
+        interval = Fraction(fps_denominator, fps_numerator)
+        if not self.min_interval.seconds <= interval <= self.max_interval.seconds:
+            return False
+        return self.step_interval is None or (
+            (interval - self.min_interval.seconds) / self.step_interval.seconds
+        ).denominator == 1
+
+
+@dataclass(frozen=True, slots=True)
+class LocalVideoResolutionRange:
+    """A size grid without any implied frame-rate capability."""
+
+    media_type: CameraMediaType
+    pixel_format: str
+    min_width: int
+    max_width: int
+    step_width: int
+    min_height: int
+    max_height: int
+    step_height: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.media_type, CameraMediaType):
+            raise ValueError("Invalid resolution range media type")
+        if not self.pixel_format:
+            raise ValueError("Resolution range pixel format is required")
+        _bounded_text(self.pixel_format, 80, "resolution range pixel format")
+        for name in ("min_width", "max_width", "step_width", "min_height", "max_height", "step_height"):
+            _bounded_int(getattr(self, name), 1, 65535, name)
+        if self.min_width > self.max_width or self.min_height > self.max_height:
+            raise ValueError("Reversed resolution range")
+
+    def supports(self, width: int, height: int) -> bool:
+        try:
+            LocalVideoFormat(self.media_type, self.pixel_format, width, height, 1, 1)
+        except (TypeError, ValueError):
+            return False
+        return (
+            self.min_width <= width <= self.max_width
+            and self.min_height <= height <= self.max_height
+            and (width - self.min_width) % self.step_width == 0
+            and (height - self.min_height) % self.step_height == 0
+        )
+
+
 class LocalCameraProbeStatus(StrEnum):
     READY = "ready"
     UNVERIFIED = "unverified"
@@ -230,6 +328,8 @@ class LocalCameraDevice:
     software_device: bool
     formats: tuple[LocalVideoFormat, ...]
     probe: LocalCameraProbe
+    resolution_ranges: tuple[LocalVideoResolutionRange, ...] = ()
+    frame_rate_ranges: tuple[LocalVideoFrameRateRange, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.device_id:
@@ -240,17 +340,39 @@ class LocalCameraDevice:
             raise ValueError("Local camera software-device flag must be a boolean")
         if (
             not isinstance(self.formats, tuple)
-            or len(self.formats) > 256
+            or len(self.formats) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES
             or not all(isinstance(item, LocalVideoFormat) for item in self.formats)
             or len(self.formats) != len(set(self.formats))
         ):
             raise ValueError("Invalid local camera format list")
+        for items, kind in (
+            (self.resolution_ranges, LocalVideoResolutionRange),
+            (self.frame_rate_ranges, LocalVideoFrameRateRange),
+        ):
+            if (not isinstance(items, tuple) or len(items) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES
+                    or not all(isinstance(item, kind) for item in items)
+                    or len(items) != len(set(items))):
+                raise ValueError("Invalid local camera capability ranges")
         if not isinstance(self.probe, LocalCameraProbe):
             raise ValueError("Invalid local camera probe")
-        if self.probe.status is LocalCameraProbeStatus.UNVERIFIED and self.formats:
+        has_capabilities = bool(self.formats or self.resolution_ranges or self.frame_rate_ranges)
+        if self.probe.status is LocalCameraProbeStatus.UNVERIFIED and has_capabilities:
             raise ValueError("Unverified local camera cannot contain verified formats")
-        if self.probe.status is LocalCameraProbeStatus.READY and not self.formats:
+        if self.probe.status is LocalCameraProbeStatus.READY and not has_capabilities:
             raise ValueError("Ready local camera requires at least one verified format")
+
+
+@dataclass(frozen=True, slots=True)
+class LocalCameraModeQuery:
+    device_id: str
+    width: int
+    height: int
+
+    def __post_init__(self) -> None:
+        if not self.device_id:
+            raise ValueError("Local camera mode query requires a device")
+        _bounded_text(self.device_id, 1024, "camera mode query device id")
+        LocalVideoFormat(CameraMediaType.RAW, "validation", self.width, self.height, 1, 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,7 +389,7 @@ class LocalCameraDiscovery:
         _non_negative_int(self.generation, "local camera discovery generation")
         if (
             not isinstance(self.devices, tuple)
-            or len(self.devices) > 64
+            or len(self.devices) > MAXIMUM_LOCAL_CAMERA_DEVICES
             or not all(isinstance(item, LocalCameraDevice) for item in self.devices)
         ):
             raise ValueError("Invalid local camera device list")
@@ -558,6 +680,8 @@ class SourceHealthEvent:
     status: SourceHealthStatus
     error_code: str = ""
     message: str = ""
+    configuration_id: str = ""
+    document_revision: int = 0
 
     def __post_init__(self) -> None:
         _identity(self.source_id, "source health id")
@@ -565,6 +689,8 @@ class SourceHealthEvent:
             raise ValueError("Invalid source health status")
         _bounded_text(self.error_code, 128, "source health error code")
         _bounded_text(self.message, 1024, "source health message")
+        _bounded_text(self.configuration_id, 64, "source health configuration id")
+        _non_negative_int(self.document_revision, "source health document revision")
         if self.status is SourceHealthStatus.FAILED and not self.error_code:
             raise ValueError("A failed source health event requires an error code")
         if self.status is SourceHealthStatus.READY and self.error_code:
@@ -657,6 +783,16 @@ class SceneEngine(Protocol):
 
     def list_local_cameras(
         self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[LocalCameraDiscovery]: ...
+
+    def query_local_camera_modes(
+        self,
+        device_id: str,
+        width: int,
+        height: int,
         *,
         request_id: str,
         deadline_ms: int,

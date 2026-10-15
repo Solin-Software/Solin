@@ -389,3 +389,154 @@ def test_failed_obs_startup_closes_the_owned_x11_display(
         runtime.ensure_started()
 
     assert events == ["display", "platform", "startup", "shutdown", "xclose"]
+
+
+# Camera capture settings and ownership are exercised without loading libobs.
+@pytest.fixture
+def camera_runtime(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    runtime = obs_runtime.ObsRuntime()
+    events = []
+    created = []
+    automatic_modes = []
+
+    class Source:
+        def __init__(self, settings):
+            self.settings = dict(settings)
+            self.updates = []
+            self.reject_update = False
+            self.releases = 0
+
+        def update(self, settings):
+            self.updates.append(dict(settings))
+            if self.reject_update:
+                raise RuntimeError("device rejected update")
+            self.settings.update(settings)
+
+        def release(self):
+            self.releases += 1
+
+    def create(kind, name, settings):
+        source = Source(settings)
+        created.append((kind, name, source))
+        return source
+
+    def automatic_mode(device, **kwargs):
+        # Another thread must be able to start/use the runtime while discovery
+        # waits for a catalog scan. Holding runtime._lock here deadlocks it.
+        import threading
+        unlocked = []
+
+        def acquire():
+            acquired = runtime._lock.acquire(timeout=1)
+            unlocked.append(acquired)
+            if acquired:
+                runtime._lock.release()
+
+        worker = threading.Thread(target=acquire)
+        worker.start()
+        worker.join(timeout=2)
+        assert not worker.is_alive() and unlocked == [True]
+        assert events and events[-1] == "started"
+        events.append((device, kwargs))
+        return automatic_modes[-1] if automatic_modes else None
+
+    monkeypatch.setattr(runtime, "ensure_started", lambda: events.append("started"))
+    monkeypatch.setattr(runtime, "watch_camera_video", lambda source, **_kwargs: SimpleNamespace(
+        update=lambda settings, **_dimensions: source.update(settings), close=lambda: None,
+    ))
+    runtime._pylibobs = SimpleNamespace(Source=SimpleNamespace(create=create))
+    monkeypatch.setitem(sys.modules, "solin.core.scenes.camera_catalog", SimpleNamespace(
+        camera_catalog=lambda: SimpleNamespace(automatic_mode=automatic_mode),
+    ))
+    return runtime, created, events, automatic_modes
+
+
+def _exact_camera_mode(**changes):
+    return dict(width=1920, height=1080, fps_numerator=30000, fps_denominator=1001,
+                media_type="image/jpeg", pixel_format="MJPG") | changes
+
+
+def test_camera_rate_only_change_updates_existing_shared_source(camera_runtime):
+    runtime, created, _events, _modes = camera_runtime
+    first = runtime.camera_source("/dev/video0", **_exact_camera_mode())
+    assert runtime.camera_source("/dev/video0", **_exact_camera_mode()) is first
+    assert first.updates == []
+    assert runtime.camera_source("/dev/video0", **_exact_camera_mode(
+        fps_numerator=25, fps_denominator=1,
+    )) is first
+    assert len(created) == 1
+    assert first.settings["framerate"] == (1 << 32) | 25
+    assert len(first.updates) == 1
+
+
+def test_camera_full_mode_signature_includes_media_type(camera_runtime):
+    runtime, _created, _events, _modes = camera_runtime
+    first = runtime.camera_source("device", **_exact_camera_mode())
+    runtime.camera_source("device", **_exact_camera_mode(media_type="video/x-raw"))
+    assert len(first.updates) == 1
+
+
+def test_camera_automatic_is_resolved_once_after_start_outside_runtime_lock(camera_runtime):
+    runtime, created, events, modes = camera_runtime
+    modes.append(SimpleNamespace(**_exact_camera_mode()))
+    source = runtime.camera_source("/dev/video0")
+    assert source.settings["resolution"] == (1920 << 32) | 1080
+    assert source.settings["framerate"] == (1001 << 32) | 30000
+    assert runtime.camera_source("/dev/video0") is source
+    assert len(created) == 1
+    assert events == ["started", ("/dev/video0", {
+        "canvas_width": runtime.video.width, "canvas_height": runtime.video.height,
+    })]
+
+
+@pytest.mark.parametrize(("platform", "token", "expected"), [
+    ("win32", "400", {"res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0}),
+    ("darwin", "420v", {"use_preset": True, "resolution": "", "input_format": -1,
+                        "frame_rate": {"numerator": 0, "denominator": 1}}),
+    ("linux", "MJPG", {"pixelformat": -1, "resolution": -1, "framerate": -1}),
+])
+def test_camera_manual_to_automatic_clears_pinned_settings(
+    monkeypatch, camera_runtime, platform, token, expected,
+):
+    monkeypatch.setattr(sys, "platform", platform)
+    runtime, created, _events, _modes = camera_runtime
+    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format=token))
+    assert runtime.camera_source("device") is source
+    assert len(created) == 1
+    assert {key: source.settings[key] for key in expected} == expected
+
+
+def test_camera_failed_update_is_reported_and_does_not_cache_rejected_mode(camera_runtime):
+    runtime, created, _events, _modes = camera_runtime
+    original = _exact_camera_mode()
+    source = runtime.camera_source("device", **original)
+    source.reject_update = True
+    changed = _exact_camera_mode(fps_numerator=25, fps_denominator=1)
+    for _ in range(2):
+        with pytest.raises(obs_runtime.ObsRuntimeError, match="update") as error:
+            runtime.camera_source("device", **changed)
+        assert isinstance(error.value.__cause__, RuntimeError)
+    assert len(source.updates) == 2
+    assert len(created) == 1
+    source.reject_update = False
+    assert runtime.camera_source("device", **original) is source
+    assert len(source.updates) == 3
+    assert source.settings["framerate"] == (1001 << 32) | 30000
+
+
+def test_windows_aliases_share_one_camera_source(monkeypatch, camera_runtime):
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, created, _events, _modes = camera_runtime
+    mode = _exact_camera_mode(pixel_format="400")
+    source = runtime.camera_source("Camera:USB-DEVICE", **mode)
+    assert runtime.camera_source("usb-device", "Renamed", **mode) is source
+    assert len(created) == 1
+    runtime._release_camera_sources()
+    assert source.releases == 1 and not runtime._camera_sources
+
+
+def test_camera_empty_device_does_not_start_runtime(camera_runtime):
+    runtime, created, events, _modes = camera_runtime
+    assert runtime.camera_source("") is None
+    assert not created and not events

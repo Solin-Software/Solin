@@ -8,7 +8,7 @@ from contextlib import ExitStack
 
 import pytest
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, QSize, Qt, Signal
+from PySide6.QtCore import Q_ARG, QCoreApplication, QEvent, QMetaObject, QObject, QPoint, QPointF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
@@ -17,8 +17,8 @@ from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.scenes.engine import SceneSourcePreview
-from solin.core.scenes.model import BusId, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
+from solin.core.scenes.engine import LocalCameraDevice, LocalCameraDiscovery, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat, LocalVideoFrameInterval, LocalVideoFrameRateRange, LocalVideoResolutionRange, SceneSourcePreview, SourceHealthEvent, SourceHealthStatus
+from solin.core.scenes.model import BusId, CameraMediaType, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
 from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
 from solin.core.scenes.recording import (
     AudioDevice,
@@ -781,3 +781,180 @@ def test_scene_qml_attaches_ptz_keys_to_an_item() -> None:
     assert "contentItem: FocusScope" in ptz_popup
     assert "Keys.onPressed" in ptz_popup
     assert ptz_popup.index("Keys.onPressed") > ptz_popup.index("contentItem: FocusScope")
+
+
+
+def test_camera_dialog_keeps_dependent_modes_and_selection_after_refresh(
+    scene_editor_factory, tmp_path, monkeypatch,
+) -> None:
+    _workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    hd = LocalVideoFormat(CameraMediaType.JPEG, "MJPG", 1920, 1080, 30_000, 1_001)
+    low_rate = replace(hd, fps_numerator=15, fps_denominator=1)
+    raw = replace(hd, media_type=CameraMediaType.RAW, pixel_format="NV12")
+    sd = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    camera = LocalCameraDevice("camera://usb", "USB camera", False,
+        (hd, low_rate, raw, sd), LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"))
+    discovery = LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=(camera,))
+    controller._set_local_cameras(discovery)
+    refreshes = []
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: refreshes.append(force))
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert dialog is not None
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    QCoreApplication.processEvents()
+    assert refreshes == [False]
+    device_combo = dialog.findChild(QObject, "cameraDeviceCombo")
+    resolution_combo = dialog.findChild(QObject, "cameraResolutionCombo")
+    fps_combo = dialog.findChild(QObject, "cameraFrameRateCombo")
+    format_combo = dialog.findChild(QObject, "cameraFormatCombo")
+    assert all((device_combo, resolution_combo, fps_combo, format_combo))
+    device_combo.setProperty("currentIndex", 1)
+    assert QMetaObject.invokeMethod(device_combo, "activated", Q_ARG(int, 1))
+    assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1920x1080"))
+    QCoreApplication.processEvents()
+    assert resolution_combo.property("count") == 3  # Automatic, HD, SD.
+    assert fps_combo.property("count") == 2  # Only rates supported at HD.
+    assert format_combo.property("count") == 2  # Only formats supported at HD / 29.97.
+    selected_id = dialog.property("formatId")
+    assert not format_combo.property("visible")
+    controller._set_local_cameras(replace(discovery, generation=2, devices=(replace(camera, formats=(sd, raw, low_rate, hd)),)))
+    QCoreApplication.processEvents()
+    assert dialog.property("formatId") == selected_id
+    assert resolution_combo.property("currentText") == "1920 × 1080"
+    assert fps_combo.property("currentText") == "29.97"
+    controller._set_local_cameras(replace(discovery, generation=3, devices=()))
+    QCoreApplication.processEvents()
+    assert dialog.property("deviceId") == "camera://usb"
+    assert dialog.property("formatId") == selected_id
+    assert "Unavailable device" in device_combo.property("currentText")
+    assert "1920 × 1080" in resolution_combo.property("currentText")
+    assert not fps_combo.property("enabled")
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+
+def test_camera_dialog_validates_custom_rate_and_retains_it_during_refresh(
+    scene_editor_factory, tmp_path, monkeypatch,
+) -> None:
+    _workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    mode = LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1)
+    rates = LocalVideoFrameRateRange(
+        mode.media_type, mode.pixel_format, mode.width, mode.height,
+        LocalVideoFrameInterval(1, 30), LocalVideoFrameInterval(1, 10),
+    )
+    camera = LocalCameraDevice("camera://usb", "USB camera", False,
+        (mode,), LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"), frame_rate_ranges=(rates,))
+    discovery = LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=(camera,))
+    controller._set_local_cameras(discovery)
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    dialog.setProperty("deviceId", camera.device_id)
+    assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1280x720"))
+    QCoreApplication.processEvents()
+    field = dialog.findChild(QObject, "cameraCustomFrameRateField")
+    assert field.property("visible")
+    assert QMetaObject.invokeMethod(dialog, "applyCustomFrameRate", Q_ARG("QVariant", "20"))
+    QCoreApplication.processEvents()
+    mode_id = dialog.property("formatId")
+    fps_combo = dialog.findChild(QObject, "cameraFrameRateCombo")
+    assert fps_combo.property("currentText") == "20"
+    assert not dialog.property("customFrameRateInvalid")
+    controller._set_local_cameras(replace(discovery, generation=2))
+    QCoreApplication.processEvents()
+    assert dialog.property("formatId") == mode_id
+    assert fps_combo.property("currentText") == "20"
+    message = dialog.findChild(QObject, "cameraCapabilitiesMessage")
+    assert not message.property("visible")
+    assert QMetaObject.invokeMethod(dialog, "applyCustomFrameRate", Q_ARG("QVariant", "31"))
+    assert dialog.property("customFrameRateInvalid")
+    assert dialog.property("formatId") == mode_id
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+
+def test_camera_dialog_updates_capture_status_when_frames_recover(
+    scene_editor_factory, tmp_path, monkeypatch,
+) -> None:
+    workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    controller._set_local_cameras(LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=()))
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    camera_id = workspace.configured_cameras[0].id
+    dialog.setProperty("cameraId", camera_id)
+    controller._consume_engine_event(SourceHealthEvent(
+        source_id=camera_id, status=SourceHealthStatus.FAILED, error_code="camera_no_frames",
+    ))
+    QCoreApplication.processEvents()
+    message = dialog.findChild(QObject, "cameraCapabilitiesMessage")
+    assert "No frames received" in message.property("text")
+    controller._consume_engine_event(SourceHealthEvent(source_id=camera_id, status=SourceHealthStatus.READY))
+    QCoreApplication.processEvents()
+    assert "No frames received" not in message.property("text")
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+@pytest.mark.parametrize("query_succeeds", [True, False])
+def test_camera_dialog_queries_custom_size_before_exposing_its_frame_rates(
+    scene_editor_factory, tmp_path, monkeypatch, query_succeeds,
+) -> None:
+    _workspace, controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    mode = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    camera = LocalCameraDevice("camera://usb", "Camera", False, (mode,),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "v4l2"),
+        resolution_ranges=(LocalVideoResolutionRange(
+            mode.media_type, mode.pixel_format, 320, 1920, 16, 240, 1080, 16,
+        ),))
+    discovery = LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=(camera,))
+    controller._set_local_cameras(discovery)
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    pending = Future()
+    requests = []
+    monkeypatch.setattr(controller, "query_local_camera_modes",
+        lambda *args: requests.append(args) or pending, raising=False)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    dialog.setProperty("deviceId", camera.device_id)
+    width = dialog.findChild(QObject, "cameraCustomWidthField")
+    height = dialog.findChild(QObject, "cameraCustomHeightField")
+    assert width is not None and height is not None
+    width.setProperty("text", "1281")
+    height.setProperty("text", "720")
+    assert QMetaObject.invokeMethod(dialog, "requestCustomResolution")
+    assert not requests
+    assert dialog.property("customResolutionError")
+    width.setProperty("text", "1280")
+    assert QMetaObject.invokeMethod(dialog, "requestCustomResolution")
+    assert dialog.property("customResolutionPending")
+    assert requests == [(camera.device_id, 1280, 720)]
+    assert dialog.property("formatId") == ""
+    if not query_succeeds:
+        pending.set_exception(RuntimeError("native query failed"))
+        QCoreApplication.processEvents()
+        assert not dialog.property("customResolutionPending")
+        assert "Supported modes could not be retrieved" in dialog.property("customResolutionError")
+        assert dialog.property("formatId") == ""
+        assert QMetaObject.invokeMethod(dialog, "close")
+        return
+    queried = replace(camera, formats=(replace(mode, width=1280, height=720, fps_numerator=20),), resolution_ranges=())
+    controller._set_local_cameras(replace(discovery, devices=(replace(camera, formats=(*camera.formats, *queried.formats)),)))
+    pending.set_result(replace(discovery, devices=(queried,)))
+    QCoreApplication.processEvents()
+    QCoreApplication.processEvents()
+    assert not dialog.property("customResolutionPending")
+    assert not dialog.property("customResolutionError")
+    fps = dialog.findChild(QObject, "cameraFrameRateCombo")
+    assert fps.property("currentText") == "20"
+    assert fps.property("count") == 1
+    assert dialog.findChild(QObject, "cameraResolutionCombo").property("currentText") == "1280 × 720"
+    assert QMetaObject.invokeMethod(dialog, "close")

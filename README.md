@@ -79,6 +79,7 @@ running from source, validation, and the review workflow.
 | Technical reference | Scope |
 | --- | --- |
 | [Building and platform requirements](docs/building.md) | Native dependencies, integration support, and packaging |
+| [Camera capture](docs/camera-capture.md) | Capability discovery, mode negotiation, caching, and capture health |
 | [Remote-control architecture](docs/remote-control.md) | Device trust, security, and the service contract |
 | [Linked-folder synchronization](docs/linked-folder-sync.md) | Shared-state protocol, conflict handling, and migration |
 | [Translations](docs/translations.md) | Catalogs and translation tooling |

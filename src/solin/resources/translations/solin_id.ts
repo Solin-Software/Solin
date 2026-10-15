@@ -5953,11 +5953,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Tidak ada kamera yang ditemukan. Kamera otomatis tetap tersedia.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Beberapa kamera terdeteksi oleh Windows, tetapi tidak dapat diverifikasi. Kamera tersebut tetap dapat dicoba dalam mode otomatis; periksa log aplikasi jika pengambilan gambar gagal.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Folder rekaman tidak dapat dibuka.</translation>
@@ -6069,11 +6064,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>%1 (virtual)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (belum diverifikasi)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6131,6 +6121,30 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     <message>
         <source>Solin Content</source>
         <translation>Konten Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Kapabilitas kamera tidak tersedia. Anda dapat mencoba mode otomatis atau menyegarkan kamera.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Menunggu bingkai dari kamera…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Kamera mengirimkan resolusi yang berbeda dari yang dipilih. Pilih mode yang didukung atau segarkan kamera.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Tidak ada bingkai yang diterima dari kamera. Periksa koneksi, izin privasi, atau apakah aplikasi lain sedang memakainya.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Kamera tidak dapat menerapkan mode yang dipilih. Pilih resolusi, laju bingkai, atau format lain.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Pengambilan gambar kamera tidak dapat diperiksa. Segarkan kamera atau sambungkan kembali perangkat.</translation>
     </message>
 </context>
 <context>
@@ -7160,6 +7174,70 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Konten Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Perangkat tidak tersedia</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Otomatis</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Tidak tersedia</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Mode kamera yang tersimpan tidak tersedia. Segarkan kamera atau pilih mode lain.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resolusi</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Laju bingkai</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Laju bingkai khusus</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>mis. 29.97 atau 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Laju bingkai ini tidak didukung pada resolusi dan format yang dipilih.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Lanjutan</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Tampilkan pengaturan lanjutan</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Resolusi khusus</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Periksa</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Memeriksa mode kamera yang didukung…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Resolusi ini berada di luar batas atau tidak sesuai dengan kelipatan ukuran yang didukung kamera.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Mode yang didukung untuk resolusi ini tidak dapat diperoleh. Segarkan kamera atau pilih resolusi lain.</translation>
     </message>
 </context>
 <context>

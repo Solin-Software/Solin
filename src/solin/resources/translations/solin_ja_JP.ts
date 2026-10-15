@@ -5953,11 +5953,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>カメラが見つかりません。自動カメラは引き続き利用できます。</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows で一部のカメラが検出されましたが、確認できませんでした。自動モードで試すことはできます。映像を取り込めない場合は、アプリケーションのログを確認してください。</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>録画フォルダーを開けませんでした。</translation>
@@ -6069,11 +6064,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>%1 (仮想)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1（未確認）</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6131,6 +6121,30 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <source>Solin Content</source>
         <translation>Solinのコンテンツ</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>カメラの機能情報を取得できません。自動モードを試すか、カメラを更新してください。</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>カメラのフレームを待機中…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>カメラは選択した解像度とは異なる解像度で送信しています。対応するモードを選択するか、カメラを更新してください。</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>カメラからフレームを受信していません。接続、プライバシーの権限、または他のアプリが使用していないかを確認してください。</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>カメラに選択したモードを適用できませんでした。別の解像度、フレームレート、または形式を選択してください。</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>カメラのキャプチャを確認できませんでした。カメラを更新するか、デバイスを接続し直してください。</translation>
     </message>
 </context>
 <context>
@@ -7160,6 +7174,70 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Solin Content</source>
         <translation>Solinのコンテンツ</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>利用できないデバイス</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>自動</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>利用不可</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>保存済みのカメラモードは利用できません。カメラを更新するか、別のモードを選択してください。</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>解像度</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>フレームレート</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>カスタムフレームレート</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>例: 29.97 または 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>選択した解像度と形式では、このフレームレートはサポートされていません。</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>詳細設定</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>詳細設定を表示</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>カスタム解像度</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>確認</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>カメラの対応モードを確認中…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>この解像度は、カメラが対応する範囲外か、対応する刻み幅に合っていません。</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>この解像度に対応するモードを取得できませんでした。カメラを更新するか、別の解像度を選択してください。</translation>
     </message>
 </context>
 <context>

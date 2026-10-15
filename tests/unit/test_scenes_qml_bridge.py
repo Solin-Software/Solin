@@ -21,6 +21,9 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    LocalVideoFrameInterval,
+    LocalVideoFrameRateRange,
+    LocalVideoResolutionRange,
     SourceHealthEvent,
     SourceHealthStatus,
     SceneSourcePreview,
@@ -515,6 +518,30 @@ def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_
     )
     assert recovered_record["source_warning"] is False
     assert recovered_record["source_warning_text"] == ""
+
+
+@pytest.mark.parametrize("code,expected", [
+    ("camera_mode_mismatch", "different resolution than selected"),
+    ("camera_no_frames", "No frames received"),
+    ("camera_update_failed", "could not apply the selected mode"),
+    ("camera_observation_failed", "capture could not be checked"),
+    ("camera_create_failed", "Camera unavailable"),
+])
+def test_camera_capture_errors_have_contextual_status(scene_bridge_factory, code, expected) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    bridge.selectScene(CAMERA_SCENE_ID)
+    camera_id = workspace.configured_cameras[0].id
+    controller._consume_engine_event(SourceHealthEvent(
+        source_id=camera_id, status=SourceHealthStatus.FAILED,
+        error_code=code, message="Untrusted backend detail",
+    ))
+    assert expected in bridge.cameraCurrentStatus(camera_id)
+    record = next(
+        bridge.layersModel.get(row) for row in range(bridge.layersModel.rowCount())
+        if bridge.layersModel.get(row)["source_id"] == camera_id
+    )
+    assert record["source_warning_text"] == bridge.cameraCurrentStatus(camera_id)
+    assert "Untrusted" not in record["source_warning_text"]
 
 
 def test_bridge_persists_shared_ptz_presets_and_scene_actions(scene_bridge_factory) -> None:
@@ -1490,7 +1517,7 @@ def test_bridge_uses_exact_local_camera_format(scene_bridge_factory, rate: tuple
             "kind": "local_camera",
             "name": "Front camera",
             "deviceId": "camera://stable-id",
-            "formatId": "format-0",
+            "formatId": bridge.localCameraDevices[1]["formats"][1]["id"],
         },
         False,
     )
@@ -1505,7 +1532,7 @@ def test_bridge_uses_exact_local_camera_format(scene_bridge_factory, rate: tuple
     assert configuration.keep_active
 
 
-def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
+def test_bridge_exposes_camera_with_unavailable_capabilities_for_automatic_capture(
     scene_bridge_factory,
 ) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
@@ -1537,8 +1564,11 @@ def test_bridge_exposes_unverified_windows_camera_for_automatic_capture(
     assert camera["available"] is True
     assert camera["probeStatus"] == "unverified"
     assert camera["formats"] == [{"id": "", "label": "Automatic"}]
-    assert "not verified" in str(camera["name"])
-    assert "application log" in bridge.localCameraStatus
+    assert camera["name"] == "HD Pro Webcam C920"
+    assert camera["capabilitiesStatus"] == (
+        "Camera capabilities are unavailable. You can try automatic mode or refresh the cameras."
+    )
+    assert bridge.localCameraStatus == ""
     assert bridge.saveCamera(
         {
             "kind": "local_camera",
@@ -1624,7 +1654,7 @@ def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
             "kind": "local_camera",
             "name": "Front camera",
             "deviceId": "camera://stable-id",
-            "formatId": "format-0",
+            "formatId": bridge.localCameraDevices[1]["formats"][1]["id"],
         },
         False,
     )
@@ -1679,6 +1709,251 @@ def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
     assert configuration.width == 1920
     assert configuration.height == 1080
     assert configuration.fps_numerator == 30
+
+
+def _publish_camera_modes(controller, formats, *, generation=1):
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=generation,
+        devices=(LocalCameraDevice(
+            device_id="camera://stable-id", display_name="Camera", software_device=False,
+            formats=tuple(formats),
+            probe=LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+        ),),
+    ))
+
+
+def test_camera_mode_identity_survives_reordered_discovery(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    hd = LocalVideoFormat(CameraMediaType.JPEG, "MJPG", 1920, 1080, 30_000, 1_001)
+    sd = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    _publish_camera_modes(controller, (hd, sd))
+    mode_id = bridge.localCameraDevices[1]["formats"][1]["id"]
+    _publish_camera_modes(controller, (sd, hd), generation=2)
+
+    assert bridge.localCameraDevices[1]["formats"][2]["id"] == mode_id
+    assert bridge.saveCamera({
+        "kind": "local_camera", "name": "Front camera",
+        "deviceId": "camera://stable-id", "formatId": mode_id,
+    }, False)
+    config = next(c.configuration for c in workspace.configured_cameras if c.name == "Front camera")
+    assert (config.width, config.height, config.pixel_format) == (1920, 1080, "MJPG")
+    assert (config.fps_numerator, config.fps_denominator) == (30_000, 1_001)
+
+
+@pytest.mark.parametrize("missing_device", [False, True])
+def test_camera_draft_retains_unavailable_mode_and_device(scene_bridge_factory, missing_device) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    hd = LocalVideoFormat(CameraMediaType.JPEG, "MJPG", 1920, 1080, 30, 1)
+    sd = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    _publish_camera_modes(controller, (hd,))
+    original_id = bridge.localCameraDevices[1]["formats"][1]["id"]
+    assert bridge.saveCamera({
+        "kind": "local_camera", "name": "Front camera",
+        "deviceId": "camera://stable-id", "formatId": original_id,
+    }, False)
+    camera = next(c for c in workspace.configured_cameras if c.name == "Front camera")
+    if missing_device:
+        controller._set_local_cameras(LocalCameraDiscovery(
+            supported=True, ready=True, generation=2, devices=(),
+        ))
+    else:
+        _publish_camera_modes(controller, (sd,), generation=2)
+
+    draft = bridge.cameraDraft(camera.id)
+    assert draft["deviceId"] == "camera://stable-id"
+    assert draft["formatId"] == original_id
+    assert draft["format"]["available"] is False
+    assert draft["format"]["width"] == 1920
+    draft.update(name="Renamed camera", formatSelectionChanged=False)
+    assert bridge.saveCamera(draft, False)
+    updated = next(c for c in workspace.configured_cameras if c.id == camera.id)
+    assert updated.configuration == camera.configuration
+
+
+@pytest.mark.parametrize("invalid_id", ["format--1", "format-0", "invented-mode"])
+def test_camera_rejects_non_tuple_format_identifiers(scene_bridge_factory, invalid_id) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    _publish_camera_modes(controller, (LocalVideoFormat(CameraMediaType.RAW, "NV12", 640, 480, 30, 1),))
+    original = workspace.configured_cameras
+    assert not bridge.saveCamera({
+        "kind": "local_camera", "name": "Invalid camera",
+        "deviceId": "camera://stable-id", "formatId": invalid_id,
+    }, False)
+    assert workspace.configured_cameras == original
+
+
+def test_camera_revalidates_mode_removed_after_selection(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    hd = LocalVideoFormat(CameraMediaType.JPEG, "MJPG", 1920, 1080, 30, 1)
+    sd = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    _publish_camera_modes(controller, (hd,))
+    mode_id = bridge.localCameraDevices[1]["formats"][1]["id"]
+    _publish_camera_modes(controller, (sd,), generation=2)
+    original = workspace.configured_cameras
+    assert not bridge.saveCamera({
+        "kind": "local_camera", "name": "Front camera",
+        "deviceId": "camera://stable-id", "formatId": mode_id, "formatSelectionChanged": True,
+    }, False)
+    assert workspace.configured_cameras == original
+
+
+@pytest.mark.parametrize("step,rate,accepted", [
+    (None, "29.97", True),
+    (None, "30000/1001", True),
+    (None, "60", False),
+    (LocalVideoFrameInterval(1, 30), "20", False),
+    (LocalVideoFrameInterval(1, 30), "15", True),
+])
+def test_camera_validates_custom_frame_rate_against_exact_size_and_format(
+    scene_bridge_factory, step, rate, accepted,
+) -> None:
+    workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1)
+    _publish_camera_modes(controller, (mode,))
+    discovery = controller.local_cameras
+    camera = discovery.devices[0]
+    interval_range = LocalVideoFrameRateRange(
+        mode.media_type, mode.pixel_format, mode.width, mode.height,
+        LocalVideoFrameInterval(1, 30), LocalVideoFrameInterval(1, 10), step,
+    )
+    controller._set_local_cameras(replace(discovery, devices=(replace(
+        camera, frame_rate_ranges=(interval_range,),
+    ),)))
+    mode_id = bridge.localCameraDevices[1]["formats"][1]["id"]
+    custom = bridge.localCameraCustomFrameRate(camera.device_id, mode_id, rate)
+    assert bool(custom) is accepted
+    if accepted:
+        assert bridge.saveCamera({
+            "kind": "local_camera", "name": "Custom rate", "deviceId": camera.device_id,
+            "formatId": custom["id"], "formatSelectionChanged": True,
+        }, False)
+        config = next(c.configuration for c in workspace.configured_cameras if c.name == "Custom rate")
+        assert f"{config.fps_numerator}/{config.fps_denominator}" == custom["fpsId"]
+
+
+def test_camera_custom_rate_does_not_cross_format_or_resolution(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1)
+    other = replace(mode, pixel_format="YUY2", width=640, height=480)
+    _publish_camera_modes(controller, (mode, other))
+    discovery = controller.local_cameras
+    controller._set_local_cameras(replace(discovery, devices=(replace(
+        discovery.devices[0], frame_rate_ranges=(LocalVideoFrameRateRange(
+            mode.media_type, mode.pixel_format, mode.width, mode.height,
+            LocalVideoFrameInterval(1, 30), LocalVideoFrameInterval(1, 10),
+        ),),
+    ),)))
+    wrong_mode = next(m for m in bridge.localCameraDevices[1]["formats"] if m.get("pixelFormat") == "YUY2")
+    assert bridge.localCameraCustomFrameRate("camera://stable-id", wrong_mode["id"], "20") == {}
+
+
+def test_camera_size_grid_alone_does_not_invent_frame_rates(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    camera = LocalCameraDevice(
+        "camera://grid", "Camera", False, (),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "v4l2"),
+        resolution_ranges=(LocalVideoResolutionRange(
+            CameraMediaType.RAW, "YUY2", 320, 1920, 16, 240, 1080, 16,
+        ),),
+    )
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=1, devices=(camera,),
+    ))
+    record = bridge.localCameraDevices[1]
+    assert record["formats"] == [{"id": "", "label": "Automatic"}]
+    assert record["capabilitiesStatus"]
+    assert record["frameRateRanges"] == []
+
+
+@pytest.mark.parametrize("width,height,accepted", [
+    (1280, 720, True), (1281, 720, False), (1280, 721, False),
+    (0, 720, False), (1921, 1080, False),
+])
+def test_camera_custom_resolution_checks_grid_before_async_query(
+    scene_bridge_factory, monkeypatch, width, height, accepted,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    _publish_camera_modes(controller, (mode,))
+    discovery = controller.local_cameras
+    controller._set_local_cameras(replace(discovery, devices=(replace(
+        discovery.devices[0], resolution_ranges=(LocalVideoResolutionRange(
+            mode.media_type, mode.pixel_format, 320, 1920, 16, 240, 1080, 16,
+        ),),
+    ),)))
+    requests = []
+    pending = Future()
+    monkeypatch.setattr(controller, "query_local_camera_modes",
+        lambda *args: requests.append(args) or pending, raising=False)
+    assert bridge.queryLocalCameraModes("camera://stable-id", width, height) is accepted
+    assert len(requests) == int(accepted)
+    assert bridge.localCameraDevices[1]["resolutionRanges"][0]["stepWidth"] == 16
+    assert all(m.get("width") != 1280 for m in bridge.localCameraDevices[1]["formats"])
+
+
+def test_camera_custom_resolution_ignores_replaced_query_completion(
+    scene_bridge_factory, monkeypatch,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
+    _publish_camera_modes(controller, (mode,))
+    discovery = controller.local_cameras
+    device = replace(discovery.devices[0], resolution_ranges=(LocalVideoResolutionRange(
+        mode.media_type, mode.pixel_format, 320, 1920, 16, 240, 1080, 16,
+    ),))
+    controller._set_local_cameras(replace(discovery, devices=(device,)))
+    futures = [Future(), Future()]
+    monkeypatch.setattr(controller, "query_local_camera_modes",
+        lambda *args: futures.pop(0), raising=False)
+    old, current = futures
+    results = []
+    bridge.localCameraModesReady.connect(lambda *args: results.append(args))
+    assert bridge.queryLocalCameraModes(device.device_id, 1280, 720)
+    assert bridge.queryLocalCameraModes(device.device_id, 1600, 960)
+    queried = replace(device, formats=(replace(mode, width=1600, height=960),), resolution_ranges=())
+    current.set_result(replace(discovery, devices=(queried,)))
+    old.set_exception(RuntimeError("replaced"))
+    QCoreApplication.processEvents()
+    assert results == [(device.device_id, 1600, 960, True)]
+
+
+def test_camera_load_uses_cache_but_refresh_requests_fresh_capabilities(
+    scene_bridge_factory, monkeypatch,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    calls = []
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: calls.append(force))
+    bridge.ensureLocalCameras()
+    bridge.refreshLocalCameras()
+    assert calls == [False, True]
+
+
+@pytest.mark.parametrize("token,label", [
+    ("201", "NV12"), ("301", "YUY2"),
+    ("400", "MJPEG"), ("401", "H.264"),
+    ("420v", "NV12 · 420v"),
+])
+def test_camera_ui_humanizes_native_format_without_changing_token(
+    scene_bridge_factory, token, label,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, token, 1280, 720, 30, 1)
+    _publish_camera_modes(controller, (mode,))
+    record = bridge.localCameraDevices[1]["formats"][1]
+    assert record["pixelFormat"] == token
+    assert record["formatLabel"] == label
+    assert bridge.localCameraFormat("camera://stable-id", record["id"])["pixelFormat"] == token
+
+
+@pytest.mark.parametrize("text", ["", "0", "1/0", "-30", "NaN", "1e100", "x" * 65])
+def test_camera_custom_rate_rejects_malformed_or_unbounded_values(
+    scene_bridge_factory, text,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1)
+    _publish_camera_modes(controller, (mode,))
+    mode_id = bridge.localCameraDevices[1]["formats"][1]["id"]
+    assert bridge.localCameraCustomFrameRate("camera://stable-id", mode_id, text) == {}
 
 
 def test_bridge_protects_onvif_credentials_from_scene_documents(scene_bridge_factory) -> None:

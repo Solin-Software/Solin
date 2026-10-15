@@ -250,7 +250,10 @@ class ObsRuntime:
         # ONE shared capture source per camera device — a V4L2 device can't be
         # opened twice, so the projector and the virtual camera reference the same
         # source (see :meth:`camera_source`).
-        self._camera_sources: dict[str, Any] = {}
+        self._camera_sources: dict[str, tuple[Any, tuple[object, ...] | None]] = {}
+        self._camera_probes: dict[str, Any] = {}
+        self._camera_failures: dict[str, Any] = {}
+        self._video_observers: Any | None = None
         self._rtsp_sources: dict[str, Any] = {}
         self._rtsp_source_seq = 0
         self._camera_source_seq = 0
@@ -288,56 +291,123 @@ class ObsRuntime:
         pixel_format: str = "",
         width: int = 0,
         height: int = 0,
+        fps_numerator: int = 0,
+        fps_denominator: int = 1,
+        media_type: str = "",
     ) -> Any:
-        """The ONE shared capture source for ``device_path``, created on first use.
+        """Return the runtime-owned capture shared by every device consumer.
 
-        A camera device can be opened only once, so every consumer (the projector's
-        program scene and the virtual camera's view) must reference the SAME libobs
-        source — a source can be in multiple scenes/views at once, and libobs opens
-        the device once while it is active in any of them. The runtime owns these
-        sources and frees them on shutdown; callers add them ``owned=False``.
-        Returns None (logged) if the source can't be created.
-
-        The capture format (``pixel_format`` + ``width``/``height``) is applied to
-        the source. Changing it for the same device updates the existing shared
-        source in place — so selecting a new resolution/format takes effect live
-        without reopening the device.
+        The complete requested mode identifies the cache entry. Automatic is
+        resolved through the catalog only when entering that mode or creating a
+        source. Discovery runs outside the runtime lock: a catalog scan may need
+        this same runtime to start before it can finish. Updating a rejected mode
+        raises and invalidates the cached request so a subsequent selection is
+        explicitly reapplied, including a return to the previous working mode.
         """
         if not device_path:
             return None
         from .camera_source import camera_source_spec
 
-        signature = (pixel_format, int(width), int(height))
+        # DShow names may change, but the device path identifies the capture.
+        # AVFoundation IDs and Linux paths retain their native case sensitivity.
+        device_key = device_path.split(":", 1)[-1].casefold() if sys.platform == "win32" else device_path
+        signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator)
         with self._lock:
-            existing = self._camera_sources.get(device_path)
+            existing = self._camera_sources.get(device_key)
+            if existing is not None and existing[1] == signature:
+                return existing[0]
+
+        # Validate the whole request before resolving Automatic or mutating OBS.
+        kind, settings = camera_source_spec(
+            device_path, device_name, pixel_format=pixel_format, width=width, height=height,
+            fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
+        )
+        self.ensure_started()
+        capture_width, capture_height = width, height
+        if width == 0:
+            from solin.core.scenes.camera_catalog import camera_catalog
+
+            try:
+                selected = camera_catalog().automatic_mode(
+                    device_path, canvas_width=self.video.width, canvas_height=self.video.height,
+                )
+            except Exception:  # noqa: BLE001 - native preference remains an explicit fallback
+                log.warning("Camera capabilities unavailable; trying the native preferred mode",
+                            exc_info=True)
+                selected = None
+            if selected is not None:
+                capture_width, capture_height = selected.width, selected.height
+                kind, settings = camera_source_spec(
+                    device_path, device_name,
+                    pixel_format=selected.pixel_format, width=selected.width, height=selected.height,
+                    fps_numerator=selected.fps_numerator, fps_denominator=selected.fps_denominator,
+                    media_type=selected.media_type,
+                )
+
+        with self._lock:
+            # Another consumer may have created the device while discovery ran.
+            existing = self._camera_sources.get(device_key)
             if existing is not None:
                 source, cached_signature = existing
                 if cached_signature != signature:
-                    _, settings = camera_source_spec(
-                        device_path, device_name,
-                        pixel_format=pixel_format, width=width, height=height)
                     try:
-                        source.update(settings)  # re-negotiate the capture format live
-                        self._camera_sources[device_path] = (source, signature)
-                    except Exception:  # noqa: BLE001 - update/plugin boundary
-                        log.warning("Could not update %s format", device_path, exc_info=True)
+                        self._camera_probes[device_key].update(
+                            settings, width=capture_width, height=capture_height,
+                        )
+                    except Exception as error:  # noqa: BLE001 - native update boundary
+                        self._camera_sources[device_key] = (source, None)
+                        raise ObsRuntimeError(f"Could not update camera mode for {device_path}") from error
+                    self._camera_sources[device_key] = (source, signature)
                 return source
-            self.ensure_started()
-            kind, settings = camera_source_spec(
-                device_path, device_name,
-                pixel_format=pixel_format, width=width, height=height)
             self._camera_source_seq += 1
             try:
                 source = self.ob.Source.create(
-                    kind, f"solin-shared-cam-{self._camera_source_seq}", settings
+                    kind, f"solin-shared-cam-{self._camera_source_seq}", settings,
                 )
             except Exception:  # noqa: BLE001 - source-creation / plugin boundary
                 log.warning("Could not create %s for %s", kind, device_path, exc_info=True)
+                self._camera_creation_failed(device_key)
                 return None
             if source is None:
+                self._camera_creation_failed(device_key)
                 return None
-            self._camera_sources[device_path] = (source, signature)
+            try:
+                probe = self.watch_camera_video(source, width=capture_width, height=capture_height)
+            except Exception:  # noqa: BLE001 - release unobserved source before propagating
+                source.release()
+                raise
+            self._camera_probes[device_key] = probe
+            self._camera_failures.pop(device_key, None)
+            self._camera_sources[device_key] = (source, signature)
             return source
+
+    def _camera_creation_failed(self, device_key: str) -> None:
+        from .obs_camera_capture import CameraCaptureState
+
+        previous = self._camera_failures.get(device_key)
+        self._camera_failures[device_key] = CameraCaptureState(
+            previous.generation + 1 if previous is not None else 1,
+            "failed", "camera_create_failed",
+        )
+
+    def watch_camera_video(self, source: Any, *, width: int, height: int):
+        from .obs_camera_capture import ObsCameraCaptureProbe
+
+        return ObsCameraCaptureProbe(self, source, width=width, height=height)
+
+    def camera_capture_state(self, device_path: str):
+        key = device_path.split(":", 1)[-1].casefold() if sys.platform == "win32" else device_path
+        with self._lock:
+            probe = self._camera_probes.get(key)
+            return probe.state if probe is not None else self._camera_failures.get(key)
+
+    def observe_source_video(self, source: Any, callback: Any):
+        from .obs_video_observer import ObsVideoObserverRegistration
+
+        with self._lock:
+            if self._video_observers is None:
+                self._video_observers = ObsVideoObserverRegistration(self.ob)
+            return self._video_observers.observe(source, callback)
 
     def rtsp_source(self, camera_id: str, uri: str, settings: dict) -> Any:
         """The ONE shared ``ffmpeg_source`` for ``camera_id``, created on first use.
@@ -388,6 +458,10 @@ class ObsRuntime:
         self._rtsp_sources.clear()
 
     def _release_camera_sources(self) -> None:
+        for probe in self._camera_probes.values():
+            probe.close()
+        self._camera_probes.clear()
+        self._camera_failures.clear()
         for source, _signature in self._camera_sources.values():
             try:
                 source.release()
@@ -599,6 +673,7 @@ class ObsRuntime:
                 log.warning("libobs context shutdown errored", exc_info=True)
             finally:
                 self._context = None
+                self._video_observers = None
                 self._graphics_module_owner = None
                 self._release_owned_x11_display()
 

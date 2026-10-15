@@ -30,6 +30,7 @@ from solin.core.scenes.engine import (
     LocalCameraProbe,
     LocalCameraProbeStatus,
     LocalVideoFormat,
+    LocalVideoResolutionRange,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
     OutputWindowTarget,
@@ -1532,6 +1533,40 @@ def test_source_health_is_retained_until_ready_or_stopped(request) -> None:
     )
 
 
+@pytest.mark.parametrize("stale", ["configuration", "revision"])
+def test_camera_health_cannot_replace_current_state_with_an_old_configuration(request, stale):
+    from solin.core.scenes.camera_catalog import camera_configuration_id
+
+    engine = _Engine()
+    document = _document()
+    config = LocalCameraConfig(device_id="camera://one")
+    document = replace(document, revision=5, sources=tuple(
+        replace(source, configuration=config) if source.id == DEFAULT_CAMERA_SOURCE_ID else source
+        for source in document.sources
+    ))
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(), document=document,
+    )
+    controller.start_engine()
+    ready = SourceHealthEvent(
+        source_id=DEFAULT_CAMERA_SOURCE_ID, status=SourceHealthStatus.READY,
+        configuration_id=camera_configuration_id(config), document_revision=5,
+    )
+    engine.listener(ready)
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == ready
+    delayed = replace(
+        ready, status=SourceHealthStatus.FAILED, error_code="camera_no_frames",
+        configuration_id=camera_configuration_id(replace(config, device_id="camera://old"))
+        if stale == "configuration" else ready.configuration_id,
+        document_revision=4 if stale == "revision" else 5,
+    )
+    engine.listener(delayed)
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == ready
+    current = replace(ready, status=SourceHealthStatus.FAILED, error_code="camera_no_frames")
+    engine.listener(current)
+    assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == current
+
+
 def test_scene_profile_is_published_only_after_native_hydration_ack(
     scene_workspace_factory, request, tmp_path: Path
 ) -> None:
@@ -1712,6 +1747,59 @@ def test_runtime_refreshes_local_cameras_without_blocking_the_caller(request) ->
     assert controller.local_cameras.devices[0].device_id == "camera://one"
 
 
+@pytest.mark.parametrize("completion", ["success", "failure", "refresh", "wrong-size"])
+def test_runtime_custom_camera_size_query_is_correlated_cached_and_invalidated(request, completion):
+    class Engine(_Engine):
+        def __init__(self):
+            super().__init__()
+            self.mode_future = Future()
+            self.mode_calls = []
+
+        def query_local_camera_modes(self, device_id, width, height, **kwargs):
+            self.mode_calls.append((device_id, width, height))
+            return self.mode_future
+
+    engine = Engine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.refresh_local_cameras()
+    device = controller.local_cameras.devices[0]
+    descriptor = LocalVideoResolutionRange(CameraMediaType.RAW, "NV12", 640, 1920, 16, 480, 1080, 8)
+    controller._set_local_cameras(replace(controller.local_cameras, devices=(
+        replace(device, resolution_ranges=(descriptor,)),
+    )))
+    first = controller.query_local_camera_modes(device.device_id, 800, 600)
+    assert not first.done()
+    assert controller.query_local_camera_modes(device.device_id, 800, 600) is first
+    assert engine.mode_calls == [(device.device_id, 800, 600)]
+    if completion == "refresh":
+        controller.refresh_local_cameras()
+        assert first.cancelled()
+    queried = replace(device, formats=(replace(device.formats[0], width=800, height=600, fps_numerator=15),))
+    if completion == "failure":
+        engine.mode_future.set_exception(RuntimeError("query failed"))
+    else:
+        if completion == "wrong-size":
+            queried = device
+        engine.mode_future.set_result(LocalCameraDiscovery(True, True, 1, (queried,)))
+    _deliver_controller_results(controller)
+    if completion == "success":
+        assert first.result().devices == (queried,)
+        assert queried.formats[0] in controller.local_cameras.devices[0].formats
+        assert controller.query_local_camera_modes(device.device_id, 800, 600).result() == first.result()
+        assert len(engine.mode_calls) == 1
+    elif completion == "refresh":
+        assert controller.local_cameras.devices == (device,)
+    else:
+        with pytest.raises((RuntimeError, ValueError)):
+            first.result()
+        assert controller.local_cameras.devices[0].formats == device.formats
+    rejected = controller.query_local_camera_modes(device.device_id, 801, 600)
+    with pytest.raises(ValueError, match="outside"):
+        rejected.result()
+    assert len(engine.mode_calls) == 1
+
+
 def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight(request) -> None:
     class _PendingCameraEngine(_Engine):
         def __init__(self) -> None:
@@ -1744,6 +1832,149 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight(request
     assert first is engine.camera_future
     assert second is first
     assert engine.camera_requests == ["list-cameras"]
+
+
+def test_runtime_camera_dialog_open_reuses_successful_discovery(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    first = controller.refresh_local_cameras()
+    assert first is not None
+
+    def unexpected_request(**kwargs):
+        pytest.fail("Opening the camera dialog must reuse the ready discovery")
+
+    engine.list_local_cameras = unexpected_request
+
+    cached = controller.refresh_local_cameras(force=False)
+
+    assert cached is not None and cached.done()
+    assert cached.result() is first.result()
+
+
+def test_runtime_explicit_camera_refresh_replaces_cached_empty_inventory(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    original = engine.list_local_cameras
+    empty = replace(original(request_id="fixture", deadline_ms=1000).result(), devices=())
+    requests = []
+
+    def discover(**kwargs):
+        requests.append(kwargs["request_id"])
+        return _completed(empty)
+
+    engine.list_local_cameras = discover
+    controller.refresh_local_cameras(force=False)
+    assert len(requests) == 1
+    cached = controller.refresh_local_cameras(force=False)
+    assert cached is not None and cached.result() is empty
+    assert len(requests) == 1
+    controller.refresh_local_cameras()
+    assert len(requests) == 2
+
+
+def test_runtime_camera_dispatch_failure_clears_cache_and_allows_retry(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    original = engine.list_local_cameras
+    controller.refresh_local_cameras()
+
+    def fail(**kwargs):
+        raise RuntimeError("Dispatch failed")
+
+    engine.list_local_cameras = fail
+    with pytest.raises(RuntimeError, match="Dispatch failed"):
+        controller.refresh_local_cameras()
+    assert controller.local_cameras.error_code == "discovery_request_failed"
+    engine.list_local_cameras = original
+    retry = controller.refresh_local_cameras(force=False)
+    assert retry is not None and retry.result().supported
+
+
+@pytest.mark.parametrize("reset", ["ready_generation", "start_generation", "failed", "stop"])
+def test_runtime_camera_cache_is_invalidated_when_engine_resets(request, reset) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    first = controller.refresh_local_cameras()
+    assert first is not None
+    if reset in {"ready_generation", "start_generation"}:
+        engine.generation = "replacement-generation"
+        if reset == "ready_generation":
+            engine.emit_health(SceneEngineStatus.READY)
+        else:
+            controller._handle_started(engine.start(session_id=engine.session_id, deadline_ms=1000).result())
+    elif reset == "failed":
+        engine.emit_health(SceneEngineStatus.FAILED)
+        engine.emit_health(SceneEngineStatus.READY)
+    else:
+        controller.stop_engine()
+        controller.start_engine()
+
+    assert not controller.local_cameras.supported
+    refreshed = controller.refresh_local_cameras(force=False)
+    assert refreshed is not None and refreshed is not first
+    assert controller.local_cameras.supported
+
+
+def test_runtime_camera_refresh_failure_does_not_cache_stale_inventory(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    controller.refresh_local_cameras()
+    pending: Future[LocalCameraDiscovery] = Future()
+    original = engine.list_local_cameras
+    engine.list_local_cameras = lambda **kwargs: pending
+    assert controller.refresh_local_cameras() is pending
+    assert controller.refresh_local_cameras(force=False) is pending
+    pending.set_exception(RuntimeError("Discovery failed"))
+    assert controller.local_cameras.error_code == "discovery_request_failed"
+    engine.list_local_cameras = original
+
+    retry = controller.refresh_local_cameras(force=False)
+
+    assert retry is not None and retry is not pending
+    assert controller.local_cameras.supported
+
+
+@pytest.mark.parametrize("old_request_failed", [False, True])
+def test_runtime_camera_refresh_ignores_previous_generation_completion(request, old_request_failed) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    original = engine.list_local_cameras
+    result = original(request_id="fixture", deadline_ms=1000).result()
+    old: Future[LocalCameraDiscovery] = Future()
+    current: Future[LocalCameraDiscovery] = Future()
+    engine.list_local_cameras = lambda **kwargs: old
+    assert controller.refresh_local_cameras() is old
+    engine.generation = "replacement-generation"
+    engine.emit_health(SceneEngineStatus.READY)
+    engine.list_local_cameras = lambda **kwargs: current
+    assert controller.refresh_local_cameras(force=False) is current
+
+    if old_request_failed:
+        old.set_exception(RuntimeError("Obsolete discovery failed"))
+    else:
+        old.set_result(result)
+    assert not controller.local_cameras.supported
+    assert controller.refresh_local_cameras(force=False) is current
+    current.set_result(replace(result, generation=2))
+    assert controller.local_cameras.generation == 2
 
 
 def test_idle_fallback_updates_without_rehydrating_or_changing_foreground(request) -> None:

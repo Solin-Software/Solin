@@ -96,6 +96,7 @@ def main() -> int:
                     {
                         "source_id": "camera-1",
                         "status": "not-a-status",
+                        "configuration_id": "",
                         "error_code": "",
                         "message": "",
                     },
@@ -309,6 +310,8 @@ def main() -> int:
                                 "error_code": "",
                                 "native_error_code": "",
                             },
+                            "resolution_ranges": [],
+                            "frame_rate_ranges": [],
                             "formats": [
                                 {
                                     "media_type": "video/x-raw",
@@ -336,6 +339,8 @@ def main() -> int:
                                 "error_code": "capture_provider_not_reported",
                                 "native_error_code": "",
                             },
+                            "resolution_ranges": [],
+                            "frame_rate_ranges": [],
                             "formats": [],
                         }
                     ],

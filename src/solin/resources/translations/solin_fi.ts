@@ -5985,11 +5985,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Kameroita ei löytynyt. Automaattinen kamera on edelleen käytettävissä.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>Windows havaitsi joitakin kameroita, mutta niitä ei voitu vahvistaa. Niitä voi silti kokeilla automaattisessa tilassa; jos kuvaaminen epäonnistuu, tarkista sovelluksen loki.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Tallennuskansiota ei voitu avata.</translation>
@@ -6101,11 +6096,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>%1 (virtuaalinen)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (ei vahvistettu)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6163,6 +6153,30 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
     <message>
         <source>Solin Content</source>
         <translation>Solinin sisältö</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Kameran ominaisuudet eivät ole käytettävissä. Voit kokeilla automaattista tilaa tai päivittää kamerat.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Odotetaan kameran kuvia…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Kamera lähettää eri resoluutiota kuin valittu. Valitse tuettu tila tai päivitä kamerat.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Kamerasta ei ole vastaanotettu kuvia. Tarkista yhteys, tietosuoja-asetukset tai onko jokin toinen sovellus käyttämässä sitä.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Kamera ei voinut ottaa valittua tilaa käyttöön. Valitse toinen resoluutio, kuvataajuus tai muoto.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Kameran kuvankaappausta ei voitu tarkistaa. Päivitä kamerat tai yhdistä laite uudelleen.</translation>
     </message>
 </context>
 <context>
@@ -7192,6 +7206,70 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Solinin sisältö</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Laite ei ole käytettävissä</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automaattinen</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Ei käytettävissä</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Tallennettu kameratila ei ole käytettävissä. Päivitä kamerat tai valitse toinen tila.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Resoluutio</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Kuvataajuus</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Mukautettu kuvataajuus</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>esim. 29.97 tai 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Tätä kuvataajuutta ei tueta valitulla resoluutiolla ja muodolla.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Lisäasetukset</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Näytä lisäasetukset</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Mukautettu resoluutio</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Tarkista</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Tarkistetaan tuettuja kameratiloja…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Tämä resoluutio on kameran tukemien rajojen ulkopuolella tai ei vastaa tuettuja askelvälejä.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Tämän resoluution tuettuja tiloja ei voitu hakea. Päivitä kamerat tai valitse toinen resoluutio.</translation>
     </message>
 </context>
 <context>

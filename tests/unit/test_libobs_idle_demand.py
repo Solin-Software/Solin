@@ -165,6 +165,7 @@ def test_transport_recovery_clears_health_once():
     assert len(events) == 4
     assert all(event.payload == {
         "source_id": source_id, "status": "ready", "error_code": "", "message": "",
+        "configuration_id": "",
     } for event, source_id in zip(events[2:], engine._idle_definitions, strict=True))
 
 

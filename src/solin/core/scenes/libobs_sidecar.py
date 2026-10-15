@@ -3,8 +3,8 @@
 The scene-engine protocol runs over stdin/stdout. Runtime boot is injectable for
 tests; failed boot completes the handshake with unavailable capabilities. Scene
 hydration restores output routing and the session's explicit idle state. Idle
-preparation runs separately from foreground commands and heartbeat handling;
-shutdown drains that preparation before releasing the shared native owners.
+preparation and camera discovery run separately from foreground commands and
+heartbeat handling; shutdown drains both before releasing shared native owners.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from solin.core.scenes.ipc_protocol import (
     write_envelope,
 )
 from solin.core.scenes.model import SceneValidationError
-from solin.core.scenes.engine import SceneSourcePreview
+from solin.core.scenes.engine import LocalCameraModeQuery, SceneSourcePreview
 from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.idle import IdleScreenState
 
@@ -203,6 +203,113 @@ class _PreparedContentBinding:
         return self.kind, self.epoch
 
 
+class _CameraDiscoveryRequests:
+    """One native query for concurrent callers, with individually correlated replies.
+
+    Closing suppresses late responses and joins native work before runtime teardown.
+    The worker never dispatches foreground handlers or changes their session state.
+    """
+
+    def __init__(
+        self,
+        discover: Callable[[], Mapping[str, object]],
+        emit: Callable[[SceneIpcEnvelope], None],
+        *,
+        query_modes: Callable[[LocalCameraModeQuery], Mapping[str, object]] | None = None,
+    ) -> None:
+        self._discover = discover
+        self._query_modes = query_modes
+        self._emit = emit
+        self._condition = threading.Condition()
+        self._requests: list[SceneIpcEnvelope] = []
+        self._authority: tuple[str, str] | None = None
+        self._closed = False
+        self._worker = threading.Thread(target=self._run, name="solin-camera-discovery")
+        self._worker.start()
+
+    def submit(self, request: SceneIpcEnvelope) -> None:
+        with self._condition:
+            if self._closed:
+                return
+            try:
+                self._query(request)
+            except (ValueError, TypeError):
+                self._emit(self._error(request, "invalid_request"))
+                return
+            if time.monotonic() * 1000 >= request.deadline_monotonic_ms:
+                self._emit(self._error(request, "deadline_exceeded"))
+                return
+            self._authority = request.session_id, request.process_generation
+            self._requests.append(request)
+            self._condition.notify()
+
+    @staticmethod
+    def _query(request: SceneIpcEnvelope) -> LocalCameraModeQuery | None:
+        if request.message_type == "list_local_cameras" and not request.payload:
+            return None
+        if request.message_type == "query_local_camera_modes" and set(request.payload) == {"device_id", "width", "height"}:
+            return LocalCameraModeQuery(**cast(dict[str, Any], request.payload))
+        raise ValueError("Invalid camera metadata request")
+
+    def close(self) -> None:
+        with self._condition:
+            self._closed = True
+            self._requests.clear()
+            self._condition.notify_all()
+        self._worker.join()
+
+    @staticmethod
+    def _error(request: SceneIpcEnvelope, code: str) -> SceneIpcEnvelope:
+        return _reply(request, "error", {
+            "error_code": code,
+            "error_message": "The camera discovery request could not be completed",
+        })
+
+    def _run(self) -> None:
+        while True:
+            with self._condition:
+                self._condition.wait_for(lambda: self._closed or bool(self._requests))
+                if self._closed:
+                    return
+                query = self._query(self._requests[0])
+            try:
+                if query is None:
+                    payload = self._discover()
+                elif self._query_modes is None:
+                    payload = _unavailable_discovery("capability_query_failed")
+                else:
+                    payload = self._query_modes(query)
+            except Exception:  # noqa: BLE001 - one failed query must allow retries
+                log.exception("Camera discovery worker failed")
+                payload = _unavailable_discovery("camera_enumeration_failed")
+            with self._condition:
+                if self._closed:
+                    return
+                requests = [item for item in self._requests if self._query(item) == query]
+                self._requests = [item for item in self._requests if self._query(item) != query]
+                for request in requests:
+                    code = ""
+                    if (request.session_id, request.process_generation) != self._authority:
+                        code = "stale_request"
+                    elif time.monotonic() * 1000 >= request.deadline_monotonic_ms:
+                        code = "deadline_exceeded"
+                    response = (
+                        self._error(request, code) if code
+                        else _reply(request, "local_camera_list" if query is None else "local_camera_modes", payload)
+                    )
+                    try:
+                        self._emit(response)
+                    except Exception:  # noqa: BLE001 - a broken sink cannot strand shutdown
+                        log.exception("Could not emit camera discovery response")
+
+
+@dataclass(frozen=True, slots=True)
+class _CameraHealthBinding:
+    source_id: str
+    device_id: str
+    configuration_id: str
+
+
 class LibobsSidecarEngine:
     """Owns the libobs runtime lifecycle behind the control protocol.
 
@@ -228,6 +335,9 @@ class LibobsSidecarEngine:
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
         self._camera_generation = 0
+        self._camera_health_bindings: tuple[_CameraHealthBinding, ...] = ()
+        self._camera_health_request: SceneIpcEnvelope | None = None
+        self._camera_health: dict[str, tuple[int, str, str, int, int]] = {}
         self._media_source: Any | None = None
         self._bg_media_source: Any | None = None
         # Transport close must not replace the outgoing picture with old ingress
@@ -368,6 +478,7 @@ class LibobsSidecarEngine:
             return _reply(request, "hello_ack", self._capabilities())
         if message_type == "ping":
             self._collect_retired_presentations()
+            self._publish_camera_health()
             return build_response(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
@@ -385,6 +496,11 @@ class LibobsSidecarEngine:
             if not self._runtime_started:
                 return _reply(request, "local_camera_list", _unavailable_discovery())
             return _reply(request, "local_camera_list", self._local_camera_list())
+        if message_type == "query_local_camera_modes":
+            query = _CameraDiscoveryRequests._query(request)
+            assert query is not None
+            payload = self._local_camera_modes(query) if self._runtime_started else _unavailable_discovery()
+            return _reply(request, "local_camera_modes", payload)
         if message_type == "list_audio_devices":
             return _reply(request, "audio_device_list", self._audio_device_list())
         if message_type == "hydrate":
@@ -470,6 +586,7 @@ class LibobsSidecarEngine:
         for source_id in self._idle_definitions:
             sink(_reply(request, "source_health", {
                 "source_id": source_id, "status": "failed" if error_code else "ready",
+                "configuration_id": "",
                 "error_code": error_code,
                 "message": message,
             }))
@@ -741,13 +858,11 @@ class LibobsSidecarEngine:
             return _unavailable_discovery("audio_enumeration_failed")
 
     def _local_camera_list(self) -> dict[str, object]:
-        from solin.core.scenes.v4l2_camera_discovery import (
-            discover_local_cameras,
-            serialize_camera_device,
-        )
+        from solin.core.scenes.camera_catalog import camera_catalog
+        from solin.core.scenes.v4l2_camera_discovery import serialize_camera_device
 
         try:
-            devices = discover_local_cameras()
+            devices = camera_catalog().devices(refresh=True)
         except Exception:  # noqa: BLE001 - enumeration boundary
             log.warning("libobs camera enumeration failed", exc_info=True)
             return _unavailable_discovery("camera_enumeration_failed")
@@ -759,6 +874,95 @@ class LibobsSidecarEngine:
             "devices": [serialize_camera_device(device) for device in devices],
             "error_code": "",
         }
+
+    def _local_camera_modes(self, query: LocalCameraModeQuery) -> dict[str, object]:
+        from solin.core.scenes.camera_catalog import camera_catalog
+        from solin.core.scenes.v4l2_camera_discovery import serialize_camera_device
+
+        try:
+            device = camera_catalog().modes(query)
+        except Exception:  # noqa: BLE001 - native capability failures are contextual metadata results
+            log.warning("Camera resolution capability query failed", exc_info=True)
+            return _unavailable_discovery("capability_query_failed")
+        return {
+            "supported": True, "ready": True, "generation": self._camera_generation,
+            "devices": [serialize_camera_device(device)], "error_code": "",
+        }
+
+    def _bind_camera_health(
+        self, request: SceneIpcEnvelope, source_records: list[object] | tuple[object, ...],
+    ) -> None:
+        from solin.core.scenes.camera_catalog import camera_configuration_id
+        from solin.core.scenes.model import LocalCameraConfig
+
+        bindings = []
+        for source in source_records:
+            if not isinstance(source, dict) or source.get("type") != "local_camera":
+                continue
+            config = LocalCameraConfig.from_record(source.get("configuration", {}))
+            if config.device_id:
+                bindings.append(_CameraHealthBinding(
+                    str(source["id"]), config.device_id, camera_configuration_id(config),
+                ))
+        self._camera_health_bindings = tuple(bindings)
+        self._camera_health_request = request
+        self._camera_health.clear()
+        self._publish_camera_health()
+
+    def _publish_camera_health(self) -> None:
+        """Publish observed capture state, fenced by configuration and native generation."""
+        request, bindings = self._camera_health_request, self._camera_health_bindings
+        sink, runtime = self._event_sink, self._runtime
+        if request is None or sink is None or runtime is None:
+            return
+        if (request.session_id, request.process_generation) != (
+            self._session_id, self._process_generation,
+        ):
+            return
+        for binding in bindings:
+            previous = self._camera_health.get(binding.source_id)
+            try:
+                state = cast(Any, runtime).camera_capture_state(binding.device_id)
+                health = (
+                    (state.generation, str(state.status), state.error_code, state.width, state.height)
+                    if state is not None else (0, "starting", "", 0, 0)
+                )
+            except Exception:  # noqa: BLE001 - observation must not break heartbeat handling
+                if previous is None or previous[2] != "camera_observation_failed":
+                    log.warning("Could not read camera capture health", exc_info=True)
+                health = (
+                    previous[0] if previous is not None else 0,
+                    "failed", "camera_observation_failed", 0, 0,
+                )
+            # An observation may complete after a newer document was installed.
+            if request is not self._camera_health_request or bindings is not self._camera_health_bindings:
+                return
+            generation, status, code, width, height = health
+            if status not in {"starting", "ready", "failed"}:
+                status, code = "failed", "camera_observation_failed"
+            if status == "failed":
+                code = code or "camera_capture_failed"
+            else:
+                code = ""
+            health = generation, status, code, width, height
+            if previous == health or (previous is not None and generation < previous[0]):
+                continue
+            messages = {
+                "camera_no_frames": "The camera is not delivering video frames",
+                "camera_mode_mismatch": (
+                    f"The camera delivered {width}×{height} instead of the requested resolution"
+                ),
+                "camera_update_failed": "The camera configuration could not be applied",
+                "camera_observation_failed": "The camera capture state could not be observed",
+            }
+            sink(_reply(request, "source_health", {
+                "source_id": binding.source_id,
+                "configuration_id": binding.configuration_id,
+                "status": status,
+                "error_code": code,
+                "message": messages.get(code, "Camera capture failed" if code else ""),
+            }))
+            self._camera_health[binding.source_id] = health
 
     def _emit_recording_state(
         self,
@@ -1281,8 +1485,12 @@ class LibobsSidecarEngine:
             return _ack(request, applied=False, error_code="stale_request",
                         error_message="the graph update was superseded by newer editor state")
         self._idle_suspended = True
+        source_records: list[object] | tuple[object, ...] = ()
         try:
             self._document_revision = None
+            self._camera_health_bindings = ()
+            self._camera_health_request = None
+            self._camera_health.clear()
             self._editor_preview_sequence = max(self._editor_preview_sequence, request.sequence)
             payload = request.payload
             self._prepared_content.clear()
@@ -1298,9 +1506,10 @@ class LibobsSidecarEngine:
                 thumbnails.suspend()
             active_scenes = _payload_object(payload.get("active_scenes") or {})
             document = _payload_object(payload.get("document") or {})
-            source_records = document.get("sources", ())
-            if not isinstance(source_records, (list, tuple)):
+            raw_sources = document.get("sources", ())
+            if not isinstance(raw_sources, (list, tuple)):
                 raise SceneIpcError("Invalid sources")
+            source_records = raw_sources
             self._idle_definitions = tuple(
                 str(source["id"])
                 for source in source_records
@@ -1375,6 +1584,7 @@ class LibobsSidecarEngine:
                     media_only_source=media_only_source,
                 )
                 self._document_revision = request.document_revision
+            self._bind_camera_health(request, source_records)
             if thumbnails is not None:
                 thumbnails.resume()
             self._reconcile_projection(active_scenes)
@@ -1411,6 +1621,13 @@ class LibobsSidecarEngine:
                     log.warning("libobs hydrate virtual-camera restore failed", exc_info=True)
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
+            # A rejected camera update still belongs to the requested mode.
+            # Publish that failure against its new fingerprint, not the graph
+            # that preceded this transaction.
+            try:
+                self._bind_camera_health(request, source_records)
+            except (ValueError, KeyError):
+                log.debug("Rejected document has no valid camera health bindings", exc_info=True)
             # Never leave the thumbnails suspended: a failed rebuild would freeze
             # every card until the next successful hydrate.
             thumbnails = self._thumbnail_egress
@@ -1897,6 +2114,12 @@ class LibobsSidecarEngine:
         return _ack(request, applied=True)
 
     def shutdown(self) -> None:
+        from solin.core.scenes.camera_catalog import camera_catalog
+
+        self._camera_health_bindings = ()
+        self._camera_health_request = None
+        self._camera_health.clear()
+        camera_catalog().invalidate()
         self._idle_suspended = True
         callback, self._idle_callback = self._idle_callback, None
         if callback is not None and self._runtime is not None:
@@ -2030,9 +2253,9 @@ def serve(
 
     Exiting the loop lets the supervising client observe the process end and
     apply its restart policy. The engine is always shut down on the way out so
-    the libobs runtime is released even on an unclean channel. Idle updates use
-    one coalescing worker; other commands remain on this control loop. Shutdown
-    cancels and joins that worker before releasing the engine's native owners.
+    the libobs runtime is released even on an unclean channel. Idle preparation
+    and camera discovery use separate workers. Shutdown joins
+    both before releasing the engine's native owners.
     """
     from solin.core.scenes.libobs_idle_updates import IdleScreenUpdates
 
@@ -2046,6 +2269,9 @@ def serve(
     idle_updates = IdleScreenUpdates(
         active.handle, emit, active.cancel_idle_preparation, admit=active.admit_idle_screen,
     )
+    camera_discovery = _CameraDiscoveryRequests(
+        active._local_camera_list, emit, query_modes=active._local_camera_modes,
+    )
     active.set_event_sink(idle_updates.emit_event)
     try:
         while True:
@@ -2057,6 +2283,9 @@ def serve(
                 return  # clean EOF: the parent closed the pipe or exited
             if request.message_type == "set_idle_screen":
                 idle_updates.submit(request)
+                continue
+            if request.message_type in {"list_local_cameras", "query_local_camera_modes"} and active.runtime_started:
+                camera_discovery.submit(request)
                 continue
             try:
                 response = active.handle(request)
@@ -2070,7 +2299,10 @@ def serve(
                 emit(response)
     finally:
         try:
-            idle_updates.close()
+            try:
+                camera_discovery.close()
+            finally:
+                idle_updates.close()
         finally:
             active.set_event_sink(None)
             active.shutdown()

@@ -6017,11 +6017,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Nie znaleziono kamer. Kamera automatyczna pozostaje dostępna.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Some cameras were detected by Windows but could not be verified. You can still try them in automatic mode; check the application log if capture fails.</source>
-        <translation>System Windows wykrył niektóre kamery, ale nie można było ich zweryfikować. Nadal można je wypróbować w trybie automatycznym; jeśli przechwytywanie się nie powiedzie, należy sprawdzić dziennik aplikacji.</translation>
-    </message>
-    <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
         <translation>Nie można otworzyć folderu nagrań.</translation>
@@ -6133,11 +6128,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>%1 (wirtualna)</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>%1 (not verified)</source>
-        <translation>%1 (niezweryfikowana)</translation>
-    </message>
-    <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
         <translation>%1 × %2 · %3 fps · %4</translation>
@@ -6195,6 +6185,30 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
     <message>
         <source>Solin Content</source>
         <translation>Treści Solin</translation>
+    </message>
+    <message>
+        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
+        <translation>Informacje o możliwościach kamery są niedostępne. Możesz wypróbować tryb automatyczny lub odświeżyć kamery.</translation>
+    </message>
+    <message>
+        <source>Waiting for camera frames…</source>
+        <translation>Oczekiwanie na klatki z kamery…</translation>
+    </message>
+    <message>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
+        <translation>Kamera przesyła obraz w innej rozdzielczości niż wybrana. Wybierz obsługiwany tryb lub odśwież kamery.</translation>
+    </message>
+    <message>
+        <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
+        <translation>Nie odebrano klatek z kamery. Sprawdź połączenie, uprawnienia prywatności lub czy nie używa jej inna aplikacja.</translation>
+    </message>
+    <message>
+        <source>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</source>
+        <translation>Kamera nie mogła zastosować wybranego trybu. Wybierz inną rozdzielczość, liczbę klatek na sekundę lub format.</translation>
+    </message>
+    <message>
+        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
+        <translation>Nie udało się sprawdzić przechwytywania obrazu z kamery. Odśwież kamery lub podłącz urządzenie ponownie.</translation>
     </message>
 </context>
 <context>
@@ -7224,6 +7238,70 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     <message>
         <source>Solin Content</source>
         <translation>Treści Solin</translation>
+    </message>
+    <message>
+        <source>Unavailable device</source>
+        <translation>Niedostępne urządzenie</translation>
+    </message>
+    <message>
+        <source>Automatic</source>
+        <translation>Automatyczna</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Niedostępne</translation>
+    </message>
+    <message>
+        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
+        <translation>Zapisany tryb kamery jest niedostępny. Odśwież kamery lub wybierz inny tryb.</translation>
+    </message>
+    <message>
+        <source>Resolution</source>
+        <translation>Rozdzielczość</translation>
+    </message>
+    <message>
+        <source>Frame rate</source>
+        <translation>Liczba klatek na sekundę</translation>
+    </message>
+    <message>
+        <source>Custom frame rate</source>
+        <translation>Niestandardowa liczba klatek na sekundę</translation>
+    </message>
+    <message>
+        <source>e.g. 29.97 or 30000/1001</source>
+        <translation>np. 29.97 lub 30000/1001</translation>
+    </message>
+    <message>
+        <source>This frame rate is not supported at the selected resolution and format.</source>
+        <translation>Ta liczba klatek na sekundę nie jest obsługiwana przy wybranej rozdzielczości i formacie.</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>Zaawansowane</translation>
+    </message>
+    <message>
+        <source>Show advanced settings</source>
+        <translation>Pokaż ustawienia zaawansowane</translation>
+    </message>
+    <message>
+        <source>Custom resolution</source>
+        <translation>Niestandardowa rozdzielczość</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Sprawdź</translation>
+    </message>
+    <message>
+        <source>Checking supported camera modes…</source>
+        <translation>Sprawdzanie obsługiwanych trybów kamery…</translation>
+    </message>
+    <message>
+        <source>This resolution is outside the camera's supported limits or steps.</source>
+        <translation>Ta rozdzielczość wykracza poza obsługiwane przez kamerę limity lub nie odpowiada obsługiwanym przyrostom wymiarów.</translation>
+    </message>
+    <message>
+        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
+        <translation>Nie udało się pobrać obsługiwanych trybów dla tej rozdzielczości. Odśwież kamery lub wybierz inną rozdzielczość.</translation>
     </message>
 </context>
 <context>

@@ -527,14 +527,17 @@ class LibobsSceneGraph:
         if kind == "local_camera":
             device = str(config.get("device_id", ""))
             name = str(definition.get("name", "")) if definition else ""
-            # Pin the selected capture format (empty when "Automatic"); pinning MJPG
-            # at a resolution restores full frame rate vs the plugin's heavy default.
+            # Forward the complete persisted mode; Automatic is resolved once
+            # by the runtime for every consumer of the shared capture.
             return (
                 self._runtime.camera_source(
                     device, name,
                     pixel_format=str(config.get("pixel_format", "")),
                     width=int(config.get("width", 0) or 0),
                     height=int(config.get("height", 0) or 0),
+                    fps_numerator=int(config.get("fps_numerator", 0) or 0),
+                    fps_denominator=int(config.get("fps_denominator", 1)),
+                    media_type=str(config.get("media_type", "") or ""),
                 ),
                 False,  # runtime-owned
             )

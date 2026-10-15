@@ -24,6 +24,7 @@ from solin.core.scenes.model import (
     LocalCameraConfig,
     OnvifPtzBinding,
     SceneLayer,
+    SceneValidationError,
     NO_SIGNAL_SOURCE_ID,
     SourceDefinition,
     SourceKind,
@@ -695,6 +696,88 @@ def test_shared_cameras_are_isolated_between_general_solin_profiles(scene_worksp
 
     assert first.configured_cameras[0].name == "First profile camera"
     assert second.configured_cameras == ()
+
+
+@pytest.mark.parametrize("add_to_document", [False, True])
+@pytest.mark.parametrize("existing_in_document", [False, True])
+def test_camera_alias_is_rejected_before_persisting_shared_resources(
+    scene_workspace_factory, tmp_path: Path, add_to_document: bool,
+    existing_in_document: bool,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = replace(
+        create_default_scene_document(_names(), document_id="fixture").source(DEFAULT_CAMERA_SOURCE_ID),
+        configuration=LocalCameraConfig(device_id="physical-camera-1"),
+    )
+    workspace.upsert_camera(camera, add_to_active_document=existing_in_document)
+    before_resources = workspace.resources
+    before_document = workspace.documents.document
+    stored = paths.scene_resources_file.read_bytes()
+    events = []
+    unsubscribe = workspace.subscribe(events.append)
+    try:
+        with pytest.raises(SceneValidationError, match="local camera device"):
+            workspace.upsert_camera(
+                replace(camera, id="camera-alias", configuration=LocalCameraConfig(device_id="PHYSICAL-CAMERA-1")),
+                add_to_active_document=add_to_document,
+            )
+    finally:
+        unsubscribe()
+
+    assert workspace.resources == before_resources
+    assert workspace.documents.document == before_document
+    assert paths.scene_resources_file.read_bytes() == stored
+    assert events == []
+
+
+def test_camera_update_conflict_is_rejected_before_persisting_shared_resources(
+    scene_workspace_factory, tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = replace(
+        create_default_scene_document(_names(), document_id="fixture").source(DEFAULT_CAMERA_SOURCE_ID),
+        configuration=LocalCameraConfig(device_id="physical-camera-1"),
+    )
+    workspace.upsert_camera(camera, add_to_active_document=True)
+    second = replace(camera, id="second-camera", configuration=LocalCameraConfig(device_id="physical-camera-2"))
+    workspace.upsert_camera(second, add_to_active_document=True)
+    before_resources = workspace.resources
+    before_document = workspace.documents.document
+    stored = paths.scene_resources_file.read_bytes()
+
+    with pytest.raises(SceneValidationError, match="local camera device"):
+        workspace.upsert_camera(replace(second, configuration=camera.configuration))
+
+    assert workspace.resources == before_resources
+    assert workspace.documents.document == before_document
+    assert paths.scene_resources_file.read_bytes() == stored
+
+
+def test_invalid_active_camera_replacement_is_rejected_before_resource_save(
+    scene_workspace_factory, tmp_path: Path,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = replace(
+        create_default_scene_document(_names(), document_id="fixture").source(DEFAULT_CAMERA_SOURCE_ID),
+        configuration=LocalCameraConfig(device_id="physical-camera-1"),
+    )
+    workspace.upsert_camera(camera)
+    before_resources = workspace.resources
+    before_document = workspace.documents.document
+    stored = paths.scene_resources_file.read_bytes()
+
+    with pytest.raises(SceneValidationError, match="no-signal fallback source"):
+        workspace.upsert_camera(replace(
+            camera, id=NO_SIGNAL_SOURCE_ID,
+            configuration=LocalCameraConfig(device_id="physical-camera-2"),
+        ))
+
+    assert workspace.resources == before_resources
+    assert workspace.documents.document == before_document
+    assert paths.scene_resources_file.read_bytes() == stored
 
 
 def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
