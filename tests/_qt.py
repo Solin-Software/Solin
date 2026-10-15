@@ -61,6 +61,22 @@ def wait_for_geometry(widget: QWidget, *, size: QSize) -> None:
     wait_until(matches, description=diagnostic)
 
 
+def _cocoa_window_exposed(widget: QWidget) -> bool:
+    from ctypes import c_void_p
+
+    import AppKit
+    import objc
+
+    # Read the existing NSView without promoting an alien QWidget to native.
+    handle = int(widget.internalWinId())
+    assert handle, "Visible Cocoa widget has no native view"
+    view = objc.objc_object(c_void_p=c_void_p(handle))
+    window = view.window()
+    return window is not None and bool(
+        window.isVisible() and window.occlusionState() & AppKit.NSWindowOcclusionStateVisible
+    )
+
+
 def show_and_activate(widget: QWidget, *, size: QSize | None = None) -> None:
     if size is not None:
         widget.resize(size)
@@ -72,6 +88,11 @@ def show_and_activate(widget: QWidget, *, size: QSize | None = None) -> None:
     window.raise_()
     window.activateWindow()
     assert QTest.qWaitForWindowActive(native_window, 3000), "Window was not activated"
+    if QGuiApplication.platformName() == "cocoa":
+        # Cocoa exposes Qt's surface while preparing its first draw, before the
+        # NSWindow becomes visible. CGEvents posted then can still target the
+        # previous window, even after Qt reports activation and exposure.
+        wait_until(lambda: _cocoa_window_exposed(window), description="native Cocoa window exposure")
     if size is not None:
         # Native backends may constrain the initial size on a small screen.
         widget.resize(size)
