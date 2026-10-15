@@ -61,6 +61,22 @@ def wait_for_geometry(widget: QWidget, *, size: QSize) -> None:
     wait_until(matches, description=diagnostic)
 
 
+def _cocoa_window_exposed(widget: QWidget) -> bool:
+    from ctypes import c_void_p
+
+    import AppKit
+    import objc
+
+    # Read the existing NSView without promoting an alien QWidget to native.
+    handle = int(widget.internalWinId())
+    assert handle, "Visible Cocoa widget has no native view"
+    view = objc.objc_object(c_void_p=c_void_p(handle))
+    window = view.window()
+    return window is not None and bool(
+        window.isVisible() and window.occlusionState() & AppKit.NSWindowOcclusionStateVisible
+    )
+
+
 def show_and_activate(widget: QWidget, *, size: QSize | None = None) -> None:
     if size is not None:
         widget.resize(size)
@@ -72,6 +88,11 @@ def show_and_activate(widget: QWidget, *, size: QSize | None = None) -> None:
     window.raise_()
     window.activateWindow()
     assert QTest.qWaitForWindowActive(native_window, 3000), "Window was not activated"
+    if QGuiApplication.platformName() == "cocoa":
+        # Cocoa exposes Qt's surface while preparing its first draw, before the
+        # NSWindow becomes visible. CGEvents posted then can still target the
+        # previous window, even after Qt reports activation and exposure.
+        wait_until(lambda: _cocoa_window_exposed(window), description="native Cocoa window exposure")
     if size is not None:
         # Native backends may constrain the initial size on a small screen.
         widget.resize(size)
@@ -155,6 +176,29 @@ def _move_cocoa_cursor(widget: QWidget, global_position: QPoint) -> None:
         app.removeEventFilter(delivery)
 
 
+def dispatch_mouse_move(
+    widget: QWidget, pos: QPoint, *,
+    modifiers: Qt.KeyboardModifier = Qt.KeyboardModifier.NoModifier,
+) -> None:
+    """Deliver an ordered move through QWidgetWindow without the QPA cursor cache.
+
+    Pair this with directly dispatched Enter events. QTest's QPA path filters
+    moves matching its last global position, even after a separate dispatcher
+    stream has established a different receiver. Physical input qualification
+    continues to use ``mouse_move(..., sync_cursor=True)``.
+
+    Dispatch is synchronous: do not pump unrelated platform input into an
+    explicitly ordered sequence before its caller can inspect the result.
+    """
+    window, position = _window_position(widget, pos)
+    event = QMouseEvent(
+        QEvent.Type.MouseMove, QPointF(position), QPointF(position),
+        QPointF(widget.mapToGlobal(pos)), Qt.MouseButton.NoButton,
+        QGuiApplication.mouseButtons(), modifiers,
+    )
+    QCoreApplication.sendEvent(window, event)
+
+
 def mouse_move(widget: QWidget, pos: QPoint, *, delay: int = -1, sync_cursor: bool = False) -> None:
     """Move through the input backend; Cocoa warps await positioned input delivery.
 
@@ -190,17 +234,14 @@ def mouse_move(widget: QWidget, pos: QPoint, *, delay: int = -1, sync_cursor: bo
         if delay > 0:
             QTest.qWait(delay)
         # Sync and delay process callbacks which can recreate the native host.
-        window, position = _window_position(widget, widget.mapFromGlobal(global_position))
         # The warp can update QGuiApplication's last global position through a
         # different native surface. A subsequent QTest QPA move at that same
         # position is discarded before QWidgetWindow can route it to our host.
         # Deliver the move through the target window's widget dispatcher.
-        event = QMouseEvent(
-            QEvent.Type.MouseMove, QPointF(position), QPointF(position),
-            QPointF(global_position), Qt.MouseButton.NoButton,
-            QGuiApplication.mouseButtons(), QGuiApplication.keyboardModifiers(),
+        dispatch_mouse_move(
+            widget, widget.mapFromGlobal(global_position),
+            modifiers=QGuiApplication.keyboardModifiers(),
         )
-        QCoreApplication.sendEvent(window, event)
         QCoreApplication.processEvents()
     else:
         window, position = _window_position(widget, pos)
