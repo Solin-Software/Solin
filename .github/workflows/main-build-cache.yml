@@ -1,0 +1,59 @@
+name: Main build cache
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Classify changes
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      application_required: ${{ steps.classify.outputs.application_required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0
+      - name: Detect documentation and version-only changes
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: python scripts/classify_quality_changes.py
+
+  # Builders serialize per platform/ref. Classify first so a documentation-only
+  # push cannot replace a queued compilation before it has populated the cache.
+  windows:
+    needs: changes
+    if: needs.changes.outputs.application_required == 'true'
+    uses: ./.github/workflows/build-solin-windows.yml
+    with:
+      release: false
+      retention_days: 1
+
+  linux:
+    needs: changes
+    if: needs.changes.outputs.application_required == 'true'
+    uses: ./.github/workflows/build-solin-linux.yml
+    with:
+      release: false
+      retention_days: 1
+
+  macos:
+    needs: changes
+    if: needs.changes.outputs.application_required == 'true'
+    uses: ./.github/workflows/build-solin-macos.yml
+    with:
+      release: false
+      retention_days: 1

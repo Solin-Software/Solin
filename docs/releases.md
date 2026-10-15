@@ -167,6 +167,38 @@ draft.
 The platform workflows remain manually runnable for diagnostics. Manual output
 is short lived and is not distribution.
 
+## Shared compilation cache
+
+**Main build cache** runs the same platform builders after pushes to `main`,
+including both macOS architectures. It uses the Quality change classifier to
+skip documentation-only changes and version increases accompanied only by
+Markdown notes. A manual run on `main` always rebuilds, including when a cache
+has expired. Runs on other branches are skipped.
+
+These builds populate the default branch's pip and Nuitka caches, which GitHub
+allows subsequent branch and tag builds to restore. They do not publish a
+release or run the release-only installation and upgrade tests. Their diagnostic
+packages are retained for one day; tag publication still runs every required
+release check. Each platform lets its running build finish before another starts,
+so frequent pushes do not repeatedly cancel compilation before the cache can be
+saved. Classification happens before joining these queues, so documentation-only
+pushes do not replace a queued compilation.
+
+All builders store Nuitka's cache, including its `ccache` or `clcache` output,
+under `NUITKA_CACHE_DIR`. Compilation snapshots are separated by operating
+system, architecture, Python version, and dependency/build-tool requirements.
+The commit identifies each immutable snapshot; a restore prefix can reuse the
+latest compatible snapshot when source code or the release version changes.
+The compiler cache still validates individual compilation inputs and compiler
+identity before reusing an object file.
+
+The first successful main build populates the cache. Later builds still perform
+Nuitka analysis, linking, packaging, and their configured checks; restoring a
+snapshot does not mean every compiled file will be a cache hit. Missing or
+evicted caches cause a normal full compilation. Wait for **Main build cache**
+to finish before tagging when immediate reuse matters. See GitHub's
+[cache access restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
+
 ## Qualifying a branch before tagging
 
 Run the same platform build workflows on a pushed working branch before preparing

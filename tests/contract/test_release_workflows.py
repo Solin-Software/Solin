@@ -31,6 +31,61 @@ def test_publication_requires_all_platforms_and_quality():
     assert {row["architecture"] for row in mac["strategy"]["matrix"]["include"]} == {"arm64", "x86_64"}
 
 
+def test_main_cache_builds_are_trusted_serialized_and_skip_release_preparation():
+    configuration = workflow("main-build-cache.yml")
+    assert set(configuration["on"]) == {"push", "workflow_dispatch"}
+    assert configuration["on"]["push"] == {"branches": ["main"]}
+    assert configuration["permissions"] == {"contents": "read"}
+    assert "concurrency" not in configuration  # Classify before entering a build queue.
+    assert set(configuration["jobs"]) == {"changes", "windows", "linux", "macos"}
+    changes = configuration["jobs"]["changes"]
+    assert changes["if"] == "github.ref == 'refs/heads/main'"
+    checkout = next(step for step in changes["steps"] if "actions/checkout@" in step.get("uses", ""))
+    assert checkout["with"]["fetch-depth"] == "0"
+    quality = workflow("quality.yml")["jobs"]["changes"]
+    classifier = next(step for step in changes["steps"] if step.get("id") == "classify")
+    quality_classifier = next(step for step in quality["steps"] if step.get("id") == "classify")
+    assert classifier["run"] == quality_classifier["run"]
+    assert classifier["env"] == {
+        "BASE_SHA": "${{ github.event.before }}",
+        "HEAD_SHA": "${{ github.sha }}",
+        "REF_TYPE": "${{ github.ref_type }}",
+    }  # Manual dispatch has no base, so the classifier requests a full build.
+    assert changes["outputs"]["application_required"] == quality["outputs"]["application_required"]
+    for platform in ("windows", "linux", "macos"):
+        job = configuration["jobs"][platform]
+        assert job["needs"] == "changes"
+        assert job["if"] == "needs.changes.outputs.application_required == 'true'"
+        assert job["uses"] == f"./.github/workflows/build-solin-{platform}.yml"
+        assert job["with"] == {"release": "false", "retention_days": "1"}
+        assert "secrets" not in job
+        concurrency = workflow(f"build-solin-{platform}.yml")["concurrency"]
+        assert concurrency["cancel-in-progress"] == "false"
+        assert "github.ref" in concurrency["group"]
+
+
+@pytest.mark.parametrize("platform", ["windows", "linux", "macos"])
+def test_compilation_snapshots_share_a_path_and_restore_only_compatible_inputs(platform):
+    configuration = workflow(f"build-solin-{platform}.yml")
+    assert configuration["env"]["NUITKA_CACHE_DIR"] == "${{ github.workspace }}/.cache/nuitka"
+    caches = [
+        step["with"] for step in configuration["jobs"]["build"]["steps"]
+        if "actions/cache@" in step.get("uses", "")
+        and "-pip-" not in step["with"]["key"]
+    ]
+    assert len(caches) == 1  # Nuitka owns the C compiler cache under the same root.
+    cache = caches[0]
+    assert cache["path"] == "${{ env.NUITKA_CACHE_DIR }}"
+    prefix = cache["restore-keys"].strip()
+    assert cache["key"] == prefix + "${{ github.sha }}"
+    assert "\n" not in prefix  # No fallback across Python or dependency/tool versions.
+    assert all(component in prefix for component in (
+        "${{ runner.os }}", "${{ runner.arch }}", "${{ env.PYTHON_VERSION }}",
+        "hashFiles('requirements*.txt', 'pyproject.toml')",
+    ))
+    assert "github.ref" not in prefix  # Main snapshots remain discoverable from tags.
+
+
 @pytest.mark.parametrize("name,job_name,contents", [
     ("release.yml", "publish", "write"),
     ("release-contributors.yml", None, "read"),

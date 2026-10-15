@@ -75,11 +75,10 @@ jobs:
       - name: Cache Nuitka and C compilation
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .cache/nuitka
-          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}-${{ hashFiles('**/*.py') }}
+          path: ${{ env.NUITKA_CACHE_DIR }}
+          key: ${{ runner.os }}-${{ runner.arch }}-nuitka-v2-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements*.txt', 'pyproject.toml') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}-
-            ${{ runner.os }}-${{ runner.arch }}-nuitka-${{ env.PYTHON_VERSION }}-
+            ${{ runner.os }}-${{ runner.arch }}-nuitka-v2-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements*.txt', 'pyproject.toml') }}-
 
       - name: Verify required macOS inputs
         shell: bash
