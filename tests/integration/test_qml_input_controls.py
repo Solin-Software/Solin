@@ -10,7 +10,7 @@ from weakref import ref
 import pytest
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, Qt, QUrl
-from PySide6.QtGui import QCursor, QEnterEvent, QGuiApplication, QMouseEvent
+from PySide6.QtGui import QCursor, QEnterEvent, QGuiApplication
 from PySide6.QtQml import QQmlComponent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QTest
@@ -20,7 +20,7 @@ from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml import host as qml_host
 from tests._paths import REPO_ROOT
 from tests._qt import (
-    dispose_widget, mouse_click, mouse_move, mouse_press, mouse_release,
+    dispatch_mouse_move, dispose_widget, mouse_click, mouse_move, mouse_press, mouse_release,
     show_and_activate, wait_until,
 )
 
@@ -261,15 +261,7 @@ def _enter_native_hover(widget, inside=None, *, sync_cursor=False):
         native.windowHandle(),
         QEnterEvent(local, local, QPointF(widget.mapToGlobal(entry))),
     )
-    local = QPointF(widget.mapTo(native, point))
-    QCoreApplication.sendEvent(
-        native.windowHandle(),
-        QMouseEvent(
-            QEvent.Type.MouseMove, local, local, QPointF(widget.mapToGlobal(point)),
-            Qt.MouseButton.NoButton, QGuiApplication.mouseButtons(), Qt.KeyboardModifier.NoModifier,
-        ),
-    )
-    QCoreApplication.processEvents()
+    dispatch_mouse_move(widget, point)
 
 
 def _capture_hover_host(request):
@@ -483,22 +475,29 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     assert root.property("exits") == exits + 1
 
 
-def test_native_parent_mouse_route_emits_one_exit_before_reentry(request):
-    _host, container, widget, root = _native_hover_host(request)
-    exits = root.property("exits")
-
-    # Cocoa's system cursor can reach uncovered space without dispatching the
-    # corresponding CGEvent to this window. Exercise QWidgetWindow's routing
-    # deterministically through its native QWindow; physical delivery is
-    # verified separately by the native-surface input tests above.
+@pytest.mark.parametrize("cached_position", ["child", "parent_margin", "host_margin"])
+def test_native_parent_mouse_route_emits_one_exit_before_reentry(request, cached_position):
+    host, container, widget, root = _native_hover_host(request)
     margin = QPoint(container.width() - 2, container.height() - 2)
     assert container.windowHandle() is not None
     assert container.childAt(margin) is None
-    mouse_move(container, margin)
+    cache_target, cache_point = {
+        "child": (widget, QPoint(60, 60)),
+        "parent_margin": (container, margin),
+        "host_margin": (host, QPoint(host.width() - 2, host.height() - 2)),
+    }[cached_position]
+    # Reproduce input state inherited from a previous QPA move, then establish
+    # this regression's ordered stream through QWidgetWindow independently.
+    mouse_move(cache_target, cache_point)
+    _enter_native_hover(widget)
+    wait_until(lambda: root.property("hovered"), description="hover after cached QPA move")
+    exits = root.property("exits")
+
+    dispatch_mouse_move(container, margin)
     wait_until(lambda: not root.property("hovered"), description="native parent exit")
     assert root.property("exits") == exits + 1
 
-    mouse_move(widget, QPoint(60, 60))
+    dispatch_mouse_move(widget, QPoint(60, 60))
     wait_until(lambda: root.property("hovered"), description="native child re-entry")
     assert root.property("exits") == exits + 1
 
