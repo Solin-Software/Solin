@@ -464,15 +464,24 @@ def test_owned_tool_window_does_not_observe_its_owners_pointer_exit(request, mon
     outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
     exits = root.property("exits")
+    recovery = widget._qml_pointer_event_filter
     QCoreApplication.sendEvent(owner, QEvent(QEvent.Type.Leave))
-    QCoreApplication.processEvents()
     assert root.property("hovered")
     assert root.property("exits") == exits
+    assert not recovery._pending_exit
+    assert not recovery._exit_timer.isActive()
     _reordered_native_exit(host, container)
-    wait_until(lambda: not root.property("hovered"), description="owned tool native ancestor exit")
+    assert recovery._pending_exit
+    assert recovery._exit_timer.isActive()
+    # Complete the controlled sequence through the connected timeout. Pumping
+    # platform input here can introduce a fresh Enter that cancels this exit.
+    recovery._exit_timer.timeout.emit()
+    assert not root.property("hovered")
     assert not root.property("handlerHovered")
     assert not widget.underMouse()
     assert root.property("exits") == exits + 1
+    assert not recovery._pending_exit
+    assert not recovery._exit_timer.isActive()
 
 
 @pytest.mark.parametrize("cached_position", ["child", "parent_margin", "host_margin"])
@@ -493,12 +502,23 @@ def test_native_parent_mouse_route_emits_one_exit_before_reentry(request, cached
     wait_until(lambda: root.property("hovered"), description="hover after cached QPA move")
     exits = root.property("exits")
 
+    # A separate platform stream can already have an entry queued. The ordered
+    # exit/reentry below must complete before admitting that unrelated input.
+    position = QPointF(widget.mapTo(container, QPoint(60, 60)))
+    QCoreApplication.postEvent(
+        container.windowHandle(),
+        QEnterEvent(position, position, QPointF(widget.mapToGlobal(QPoint(60, 60)))),
+    )
     dispatch_mouse_move(container, margin)
-    wait_until(lambda: not root.property("hovered"), description="native parent exit")
+    assert not root.property("hovered")
+    assert not root.property("handlerHovered")
+    assert not widget.underMouse()
     assert root.property("exits") == exits + 1
 
     dispatch_mouse_move(widget, QPoint(60, 60))
-    wait_until(lambda: root.property("hovered"), description="native child re-entry")
+    assert root.property("hovered")
+    assert root.property("handlerHovered")
+    assert widget.underMouse()
     assert root.property("exits") == exits + 1
 
 

@@ -165,6 +165,9 @@ def dispatch_mouse_move(
     moves matching its last global position, even after a separate dispatcher
     stream has established a different receiver. Physical input qualification
     continues to use ``mouse_move(..., sync_cursor=True)``.
+
+    Dispatch is synchronous: do not pump unrelated platform input into an
+    explicitly ordered sequence before its caller can inspect the result.
     """
     window, position = _window_position(widget, pos)
     event = QMouseEvent(
@@ -173,7 +176,6 @@ def dispatch_mouse_move(
         QGuiApplication.mouseButtons(), modifiers,
     )
     QCoreApplication.sendEvent(window, event)
-    QCoreApplication.processEvents()
 
 
 def mouse_move(widget: QWidget, pos: QPoint, *, delay: int = -1, sync_cursor: bool = False) -> None:
@@ -219,6 +221,7 @@ def mouse_move(widget: QWidget, pos: QPoint, *, delay: int = -1, sync_cursor: bo
             widget, widget.mapFromGlobal(global_position),
             modifiers=QGuiApplication.keyboardModifiers(),
         )
+        QCoreApplication.processEvents()
     else:
         window, position = _window_position(widget, pos)
         QTest.mouseMove(window, position, delay)
