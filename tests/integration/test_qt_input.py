@@ -12,6 +12,42 @@ from PySide6.QtWidgets import QApplication, QWidget
 from tests import _qt
 
 
+def test_window_activation_waits_for_native_cocoa_exposure(monkeypatch):
+    host = QWidget()
+    host.resize(320, 200)
+    timer = QTimer(host)
+    timer.setSingleShot(True)
+    exposed = False
+    observations = []
+
+    def expose():
+        nonlocal exposed
+        exposed = True
+
+    def native_exposed(window):
+        assert window is host
+        assert window.windowHandle().isExposed()
+        assert window.windowHandle().isActive()
+        observations.append(exposed)
+        if len(observations) == 1:
+            timer.start(80)
+        return exposed
+
+    timer.timeout.connect(expose)
+    try:
+        # Qt's active/exposed flags can precede Cocoa's native visibility.
+        # Preparation must await the latter before callers post physical input.
+        _qt.show_and_activate(host)
+        monkeypatch.setattr(QGuiApplication, "platformName", lambda: "cocoa")
+        monkeypatch.setattr(_qt, "_cocoa_window_exposed", native_exposed)
+        _qt.show_and_activate(host)
+        assert exposed, "Activation returned before native Cocoa exposure"
+        assert observations[0] is False and observations[-1] is True
+    finally:
+        timer.stop()
+        _qt.dispose_widget(host)
+
+
 def _posted_cursor(monkeypatch, initial, on_post):
     class PostedCursor:
         current = initial
