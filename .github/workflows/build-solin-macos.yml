@@ -143,6 +143,10 @@ jobs:
             --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \
             --qt-framework-output-dir "${BUILD_DIR}/qmlcache/qt-libs"
 
+      - name: Compile translation catalogs
+        shell: bash
+        run: python scripts/compile_translations.py --output-dir "${BUILD_DIR}/translations/macos"
+
       - name: Remove Homebrew OpenSSL unversioned symlinks
         shell: bash
         run: |
@@ -199,7 +203,7 @@ jobs:
             --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
-            --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
+            --include-data-files="${BUILD_DIR}/translations/macos/*.qm=solin/resources/translations/" \
             --include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib" \
             --enable-plugin=pyside6 \
             --include-qt-plugins=platforms,styles,imageformats,position \

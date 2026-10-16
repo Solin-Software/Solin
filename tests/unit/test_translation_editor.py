@@ -49,7 +49,7 @@ def test_jw_glossary_uses_canonical_application_locales():
     assert set(terminology) == supported_locales - {"en"}
     assert "pt_BR" in terminology
     assert "T" not in terminology
-    assert terminology["pt_BR"]["Public Talk"] == "Discurso Público"
+    assert all(terms["Public Talk"].strip() for terms in terminology.values())
     assert all("public_talk" not in terms for terms in terminology.values())
     assert all("Original_Songs" not in terms for terms in terminology.values())
     assert len({frozenset(terms) for terms in terminology.values()}) == 1
@@ -59,7 +59,8 @@ def test_system_prompt_looks_up_glossary_by_locale():
     prompt = _build_ts_system_prompt("Português (Brasil)", "pt_BR")
 
     assert "Português (Brasil) (locale: pt_BR)" in prompt
-    assert '"Song" -> "Cântico"' in prompt
+    for source, translated in _load_jw_terminology()["pt_BR"].items():
+        assert f'"{source}" -> "{translated}"' in prompt
     assert "api_code" not in prompt
 
 

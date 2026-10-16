@@ -8,7 +8,7 @@ Workflow:
   2. Translate in the table.
   3. Fill empty entries → automatic translation via the Gemini genai SDK.
   4. Save → write .ts.
-  5. Compile .qm (lrelease) → generate the production binary.
+  5. Restart the application → development startup prepares .qm catalogs.
 
 Core concept:
   • The SOURCE language (English) is the literal text in self.tr("...").
@@ -51,6 +51,10 @@ import xml.etree.ElementTree as ET
 # ── Paths ──────────────────────────────────────────────────────────────────────
 _HERE         = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir, os.pardir))
+sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
+
+from solin.core.i18n.compiler import TranslationCompilationError, qt_tool_path  # noqa: E402
+
 _TRANS_DIR    = os.path.join(
     _PROJECT_ROOT,
     "src",
@@ -84,9 +88,6 @@ QPushButton{{background:{C['bg2']};color:{C['text']};border:1px solid {C['border
 QPushButton:hover{{background:{C['bg3']};border-color:{C['accent']};}}
 QPushButton:pressed{{background:{C['accent_dim']};}}
 QPushButton:disabled{{color:{C['text_muted']};border-color:{C['bg3']};}}
-QPushButton#Compile{{background:{C['accent']};color:white;border:none;font-weight:600;padding:7px 18px;}}
-QPushButton#Compile:hover{{background:#58a6ff;}}
-QPushButton#Compile:disabled{{background:{C['bg3']};color:{C['text_muted']};}}
 QPushButton#Lupdate{{background:{C['yellow_dim']};color:{C['yellow']};border:1px solid {C['yellow']};font-weight:600;}}
 QPushButton#Lupdate:hover{{background:{C['yellow']};color:#0d1117;}}
 QPushButton#Lupdate:disabled{{background:{C['bg2']};color:{C['text_muted']};border-color:{C['bg3']};}}
@@ -306,54 +307,6 @@ def _run_ts_auto_translate(
 # Toolchain
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _find_tool(name: str) -> list[str]:
-    """
-    Return command tokens for a PySide6 tool.
-
-    Strategy:
-      1. Wrapper script on PATH (standard pip installation).
-      2. Binary directly inside the PySide6 package
-         (Anaconda installs lupdate.exe in site-packages/PySide6/).
-      3. python -m PySide6.<tool> (universal fallback).
-    Return [] if not found.
-    """
-    import shutil, importlib.util
-
-    short    = name.removeprefix("pyside6-")          # "lupdate" | "lrelease"
-    exe_dir  = os.path.dirname(os.path.abspath(sys.executable))
-
-    # 1. wrapper script
-    for candidate in [
-        name, name + ".exe",
-        os.path.join(exe_dir,            name),
-        os.path.join(exe_dir,            name + ".exe"),
-        os.path.join(exe_dir, "Scripts", name),
-        os.path.join(exe_dir, "Scripts", name + ".exe"),
-        os.path.join(exe_dir, "bin",     name),
-        os.path.join(exe_dir, "bin",     name + ".exe"),
-    ]:
-        if shutil.which(candidate):
-            return [candidate]
-
-    # 2. Binary inside the PySide6 package (Anaconda/conda)
-    spec = importlib.util.find_spec("PySide6")
-    if spec and spec.submodule_search_locations:
-        pdir = list(spec.submodule_search_locations)[0]
-        for suf in ("", ".exe"):
-            full = os.path.join(pdir, short + suf)
-            if os.path.isfile(full):
-                return [full]
-
-    # 3. Python module: works in any environment.
-    try:
-        importlib.import_module(f"PySide6.{short}")
-        return [sys.executable, "-m", f"PySide6.{short}"]
-    except ImportError:
-        pass
-
-    return []
-
-
 def _collect_translation_sources(root: str) -> list[str]:
     # Include "venv_solin" and other common ignore patterns.
     skip = {"__pycache__", ".git", "build", "dist", "venv", ".venv",
@@ -383,13 +336,10 @@ def _collect_translation_sources(root: str) -> list[str]:
 def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
     project_root = os.path.abspath(project_root)
     ts_path = os.path.abspath(ts_path)
-    cmd_base = _find_tool("pyside6-lupdate")
-    if not cmd_base:
-        return False, (
-            "pyside6-lupdate não encontrado.\n\n"
-            f"Python: {sys.executable}\n\n"
-            "Instale com:  pip install pyside6"
-        )
+    try:
+        cmd_base = [os.fspath(qt_tool_path("lupdate"))]
+    except TranslationCompilationError as exc:
+        return False, str(exc)
 
     source_files = _collect_translation_sources(project_root)
     if not source_files:
@@ -446,27 +396,6 @@ def run_lupdate(project_root: str, ts_path: str) -> tuple[bool, str]:
                 pass
             except OSError as exc:
                 log.warning("Could not remove lupdate response file %s: %s", lst_path, exc)
-
-
-def run_lrelease(ts_path: str) -> tuple[bool, str]:
-    """Compila .ts → .qm."""
-    cmd_base = _find_tool("pyside6-lrelease")
-    if not cmd_base:
-        return False, (
-            "pyside6-lrelease não encontrado.\n\n"
-            f"Python: {sys.executable}\n\n"
-            "Instale com:  pip install pyside6"
-        )
-    qm = ts_path.replace(".ts", ".qm")
-    try:
-        r = subprocess.run(cmd_base + [ts_path, "-qm", qm],
-                           capture_output=True, text=True, timeout=60)
-        out = (r.stdout + "\n" + r.stderr).strip()
-        return r.returncode == 0, out
-    except subprocess.TimeoutExpired:
-        return False, "Timeout (>60s)."
-    except (OSError, subprocess.SubprocessError) as exc:
-        return False, f"Erro: {exc}"
 
 
 # Worker (subprocess in a separate thread)
@@ -824,7 +753,7 @@ class TsFile:
 def load_languages() -> list[dict]:
     """
     Return all languages defined in translations/locales/*.json.
-    Fields: code, name, is_source, ts (path|None), qm (path|None).
+    Fields: code, name, api_code, is_source, json_path, ts (path|None).
     """
     import glob
     langs: dict[str, dict] = {}
@@ -842,16 +771,13 @@ def load_languages() -> list[dict]:
                 "is_source": code == SOURCE_LANG,
                 "json_path": jpath,
                 "ts":        None,
-                "qm":        None,
             }
         except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):
             log.debug("Could not read locale metadata from %s", jpath, exc_info=True)
 
     for code, info in langs.items():
         ts = os.path.join(_TRANS_DIR, f"solin_{code}.ts")
-        qm = os.path.join(_TRANS_DIR, f"solin_{code}.qm")
         if os.path.isfile(ts): info["ts"] = ts
-        if os.path.isfile(qm): info["qm"] = qm
 
     return list(langs.values())
 
@@ -1531,20 +1457,11 @@ class TranslationEditor(QMainWindow):
         self._btn_sv = QPushButton("💾  Salvar  (Ctrl+S)")
         self._btn_sv.setObjectName("Save")
         self._btn_sv.setMinimumHeight(36)
+        self._btn_sv.setToolTip("Salva o catálogo. Reinicie o Solin para aplicar as alterações.")
         self._btn_sv.setEnabled(False)
         self._btn_sv.clicked.connect(self._do_save)
         QShortcut(QKeySequence("Ctrl+S"), self, self._do_save)
         lay.addWidget(self._btn_sv)
-
-        # lrelease
-        self._btn_lr = QPushButton("▶  Compilar .qm  (lrelease)")
-        self._btn_lr.setObjectName("Compile")
-        self._btn_lr.setMinimumHeight(36)
-        self._btn_lr.setToolTip(
-            "Compila o .ts em .qm binário para produção.\n"
-            "Somente o .qm é necessário no app — nunca o .ts.")
-        self._btn_lr.clicked.connect(self._do_lrelease)
-        lay.addWidget(self._btn_lr)
 
         return bar
 
@@ -1655,7 +1572,6 @@ class TranslationEditor(QMainWindow):
         self._update_stats()
 
         self._btn_lu.setEnabled(True)
-        self._btn_lr.setEnabled(True)
         self._btn_auto_tr.setEnabled(False)
 
         ts = lang.get("ts")
@@ -1823,31 +1739,6 @@ class TranslationEditor(QMainWindow):
             self._set_status(f"Erro ao salvar: {exc}", error=True)
             return False
 
-    def _do_lrelease(self):
-        if not self._current or not self._current.get("ts"):
-            QMessageBox.warning(self, "Sem .ts",
-                "Rode o lupdate primeiro para gerar o .ts.")
-            return
-        if self._busy_operation:
-            return
-        if self._model.dirty and not self._do_save():
-            return
-        self._set_busy(True, "lr")
-        w = _Worker(run_lrelease, self._current["ts"])
-        w.signals.done.connect(self._lr_done)
-        self._pool.start(w)
-
-    @Slot(bool, str)
-    def _lr_done(self, ok: bool, output: str):
-        self._set_busy(False, "lr")
-        OutputDialog("lrelease — " + ("OK" if ok else "Falhou"),
-                     output, ok, self).exec()
-        if ok and self._current:
-            qm = self._current["ts"].replace(".ts", ".qm")
-            self._current["qm"] = qm
-            kb = os.path.getsize(qm) // 1024 if os.path.isfile(qm) else 0
-            self._set_status(f"✓  Compilado: {os.path.basename(qm)}  ({kb} KB)")
-
     def _do_auto_translate(self):
         if not self._current or not self._tsfile or self._busy_operation:
             return
@@ -1988,9 +1879,6 @@ class TranslationEditor(QMainWindow):
         self._table.setEnabled(not busy)
         self._detail.setEnabled(not busy)
         self._btn_lu.setEnabled(not busy and self._current is not None)
-        self._btn_lr.setEnabled(
-            not busy and self._current is not None and bool(self._current.get("ts"))
-        )
         self._btn_sv.setEnabled(not busy and self._model.dirty)
         has_pending = bool(
             self._tsfile
@@ -2008,9 +1896,6 @@ class TranslationEditor(QMainWindow):
         if which == "lu":
             self._btn_lu.setText("⏳  Rodando lupdate…" if busy
                                   else "↻  Extrair strings  (lupdate)")
-        elif which == "lr":
-            self._btn_lr.setText("⏳  Compilando…" if busy
-                                  else "▶  Compilar .qm  (lrelease)")
         elif which == "auto_tr":
             self._btn_auto_tr.setText("⏳  Traduzindo…" if busy
                                       else "✦  Preencher vazios")

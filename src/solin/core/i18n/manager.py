@@ -21,12 +21,9 @@ The English catalog is also loaded. Common strings can fall back to their
 source, but numerus messages need solin_en.qm to turn neutral sources such
 as "%n item(s)" into the English forms "item" and "items".
 
-Production files:
-  src/solin/resources/translations/solin_<code>.qm ← compiled by lrelease
-  src/solin/resources/translations/locales/<code>.json ← language metadata
-
-Development files (NOT included in production):
-  src/solin/resources/translations/solin_<code>.ts ← lupdate / Qt Linguist / lrelease source
+Catalogs are generated from versioned TS sources during build or development
+preparation. The bootstrap injects their directory separately from the packaged
+locale metadata. Installed applications only load their packaged QM files.
 """
 
 from __future__ import annotations
@@ -58,13 +55,7 @@ def _get_jw_language_service_class():
     from solin.core.jw.languages import JWLanguageService
     return JWLanguageService
 
-# Path resolution
-def _translation_root() -> Path:
-    return application_translation_root()
-
-
-_TRANS_DIR    = os.fspath(_translation_root())
-_LANG_DIR     = os.path.join(_TRANS_DIR, "locales")
+_LANG_DIR     = os.fspath(application_translation_root() / "locales")
 _QT_TRANS_DIR = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
 
 
@@ -89,6 +80,7 @@ class LanguageManager(QObject):
     def __init__(
         self,
         *,
+        catalog_directory: Path,
         global_settings: GlobalSettingsStore,
         jw_languages_cache_file: str | Path,
         jw_language_settings_store_factory: Callable[
@@ -97,6 +89,7 @@ class LanguageManager(QObject):
         parent: Optional[QObject] = None,
     ) -> None:
         super().__init__(parent)
+        self._catalog_directory = catalog_directory
         self._meta:        dict[str, dict] = {}
         self.current_code: str = "pt_BR"
         self._global_settings = global_settings
@@ -216,7 +209,7 @@ class LanguageManager(QObject):
             self._qt_translator = None
 
         # 1. Application translator (solin_<code>.qm)
-        qm_path = os.path.join(_TRANS_DIR, f"solin_{code}.qm")
+        qm_path = os.fspath(self._catalog_directory / f"solin_{code}.qm")
         app_tr  = QTranslator(app)
         if os.path.isfile(qm_path) and app_tr.load(qm_path):
             app.installTranslator(app_tr)

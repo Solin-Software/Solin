@@ -10,6 +10,7 @@ setlocal enabledelayedexpansion
 for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI\"
 set MAIN_SCRIPT=%PROJECT_ROOT%main.py
 set OUTPUT_DIR=%PROJECT_ROOT%build
+set "TRANSLATIONS_DIR=%OUTPUT_DIR%\translations\windows"
 set APP_NAME=Solin
 set ICON=%PROJECT_ROOT%src\solin\resources\assets\icon.ico
 set "PYTHON="
@@ -108,6 +109,11 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
+"%PYTHON%" "%PROJECT_ROOT%scripts\compile_translations.py" ^
+    --source-dir "%PROJECT_ROOT%src\solin\resources\translations" ^
+    --output-dir "%TRANSLATIONS_DIR%"
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+
 "%PYTHON%" -m nuitka ^
     --standalone ^
     --output-dir="%OUTPUT_DIR%" ^
@@ -150,7 +156,7 @@ if %ERRORLEVEL% NEQ 0 (
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
     --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
-    --include-data-files="%PROJECT_ROOT%src\solin\resources\translations\*.qm=solin/resources/translations/" ^
+    --include-data-files="%TRANSLATIONS_DIR%\*.qm=solin/resources/translations/" ^
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,position ^

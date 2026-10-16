@@ -15,7 +15,7 @@ from dataclasses import asdict, replace
 from typing import Any, BinaryIO, cast
 from uuid import uuid4
 
-from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, IS_DEV
+from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, IS_COMPILED
 
 from .engine import LocalCameraDevice, LocalCameraModeQuery
 from .ipc_protocol import (
@@ -175,9 +175,9 @@ class CameraDiscoveryError(RuntimeError):
 
 
 def _command() -> list[str]:
-    if IS_DEV:
-        return [sys.executable, "-m", "solin.core.scenes.camera_discovery_process"]
-    return [sys.executable, CAMERA_DISCOVERY_ARGUMENT]
+    if IS_COMPILED:
+        return [sys.executable, CAMERA_DISCOVERY_ARGUMENT]
+    return [sys.executable, "-m", "solin.core.scenes.camera_discovery_process"]
 
 
 def _kill_and_reap(child: subprocess.Popen) -> None:

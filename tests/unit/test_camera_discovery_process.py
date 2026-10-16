@@ -269,11 +269,16 @@ def test_main_preserves_protocol_against_native_stdout_without_gui():
     assert b"native chatter" in result.stderr
 
 
-def test_source_and_frozen_commands(monkeypatch):
-    monkeypatch.setattr(discovery, "IS_DEV", True)
-    assert discovery._command() == [sys.executable, "-m", "solin.core.scenes.camera_discovery_process"]
-    monkeypatch.setattr(discovery, "IS_DEV", False)
-    assert discovery._command() == [sys.executable, "--camera-discovery"]
+@pytest.mark.parametrize(
+    ("compiled", "arguments"),
+    [
+        (False, ["-m", "solin.core.scenes.camera_discovery_process"]),
+        (True, ["--camera-discovery"]),
+    ],
+)
+def test_helper_command_follows_compilation_mode(monkeypatch, compiled, arguments):
+    monkeypatch.setattr(discovery, "IS_COMPILED", compiled)
+    assert discovery._command() == [sys.executable, *arguments]
 
 
 def test_close_during_popen_registration_reaps_late_child(launch, monkeypatch):

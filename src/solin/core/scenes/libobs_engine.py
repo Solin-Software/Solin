@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 
-from solin.core.foundation.constants import IS_DEV, LIBOBS_SIDECAR_ARGUMENT
+from solin.core.foundation.constants import IS_COMPILED, LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.process_engine import (
     SceneEngineProcessConfig,
     SubprocessSceneEngine,
@@ -22,7 +22,7 @@ _SIDECAR_MODULE = "solin.core.scenes.libobs_sidecar"
 def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessSceneEngine:
     """Build a supervised libobs scene engine.
 
-    Source runs launch ``<python> -m solin.core.scenes.libobs_sidecar``; compiled
+    Python runs launch ``<python> -m solin.core.scenes.libobs_sidecar``; compiled
     runs launch the application executable in its dedicated sidecar role. Both use
     the shared ``SubprocessSceneEngine`` supervisor; libobs is provided by pylibobs.
 
@@ -37,7 +37,7 @@ def create_libobs_scene_engine(images_dir: Path | None = None) -> SubprocessScen
     return SubprocessSceneEngine(
         SceneEngineProcessConfig(
             executable=Path(sys.executable),
-            arguments=("-m", _SIDECAR_MODULE) if IS_DEV else (LIBOBS_SIDECAR_ARGUMENT,),
+            arguments=(LIBOBS_SIDECAR_ARGUMENT,) if IS_COMPILED else ("-m", _SIDECAR_MODULE),
             # Resilience: the sidecar handles IPC (incl. heartbeats) on one thread,
             # so a heavy hydrate under load — many outputs + a flaky camera
             # saturating the single obs graphics thread — can briefly delay a
