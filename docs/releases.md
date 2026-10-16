@@ -110,11 +110,14 @@ linked commit title with its human author and Git coauthors, using the same
 prefix removal for presentation. Unlinked commit authors produce a warning so
 their GitHub email association can be corrected.
 
-An issue is linked only when GitHub records its actual closure by an included
-merged PR and its state is `CLOSED` with state reason `COMPLETED`. A mention,
-a closing keyword, or a suggested closing link alone is insufficient. Open,
-reopened, and not-planned issues are excluded, as are issues closed by a PR
-outside the interval. Issue entries do not credit issue authors.
+Related issues come from an included merged PR's closing links and explicit
+references in its title or description: `#123`, `owner/repository#123`, or a
+GitHub issue URL. References are verified as issues; pull request numbers and
+missing issues are skipped. Comments are not scanned. Issue state, closure
+reason, and which PR closed it do not affect inclusion. These links provide
+context, without asserting that the release fixes every related issue or
+crediting issue authors. An issue already referenced in the PR title is not
+appended again to that entry.
 
 For an already published release, run **Release contributors** from Actions.
 Supply the existing tag and select `apply` to update it; the default is a preview.
@@ -141,7 +144,7 @@ update is a no-op. It does not rebuild packages, upload assets, move tags, chang
 the release channel, or change `latest`.
 
 Publication and the manual workflow require **Pull requests: read** and
-**Issues: read** to resolve merged PRs, their authors, and actual issue closures,
+**Issues: read** to resolve merged PRs, their authors, and related issues,
 alongside **Contents: write** to update the release body.
 
 The manual workflow normally uses `GITHUB_TOKEN`. GitHub can require additional

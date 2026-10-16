@@ -23,9 +23,10 @@ the verified release interval, including documentation, build, and release
 preparation, without categories or a Conventional Commit title requirement.
 Prefixes are removed only for presentation. PR entries credit the PR author and
 Git coauthors, excluding bots; direct commits use linked titles and their authors
-and coauthors as a fallback. Issues require an actual closure by an included
-merged PR and a `CLOSED` state with reason `COMPLETED`, with no issue-author
-attribution.
+and coauthors as a fallback. Related issues come from the included PR's closing
+links and explicit references in its title or description, regardless of issue
+state or closure. They provide context without asserting a fix or crediting issue
+authors. References already in the PR title are not appended again.
 
 Keep these generated entries out of the reviewed localized notes, manifest, and
 in-app notes. See [contributor credits](../releases.md#contributor-credits) for
