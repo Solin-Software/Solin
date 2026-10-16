@@ -6146,6 +6146,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>카메라 캡처를 확인할 수 없습니다. 카메라를 새로 고치거나 장치를 다시 연결하십시오.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>소스 이름과 설정을 확인하십시오.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>카메라를 찾을 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>이 대화 상자가 열려 있는 동안 장면 또는 카메라가 변경되었습니다. 대화 상자를 다시 열고 재시도하십시오.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>이 장치에 충돌하는 카메라 연결이 있습니다. 계속하기 전에 기존 연결을 확인하십시오.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>이 장면을 추가하면 순환 참조가 발생합니다.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>카메라 연결은 저장되었지만 장면을 업데이트하지 못했습니다. 대화 상자를 다시 열고 재시도하십시오.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>이 장면에 같은 이름의 소스가 이미 있습니다.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6934,7 +6962,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>카메라를 계속 활성 상태로 유지</translation>
+        <translation type="vanished">카메라를 계속 활성 상태로 유지</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7238,6 +7266,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>이 해상도에서 지원되는 모드를 가져올 수 없습니다. 카메라를 새로 고치거나 다른 해상도를 선택하십시오.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>장면 추가</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>사용 가능한 장면을 선택하십시오.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>닫기</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>카메라 구성</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>카메라 구성…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>연결</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>연결 이름</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>연결 설정</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>카메라 이름을 입력하십시오.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>이 장면에서 사용할 소스 이름을 입력하십시오.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>RTSP 주소를 입력하십시오.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>이 장면에서의 이름</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP 카메라</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>새 연결…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>검색된 결과가 없습니다.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>소스 이름 바꾸기</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>저장된 카메라 설정</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>연결 검색…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>장면 검색…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>검색…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>이 설정은 이 카메라를 사용하는 모든 장면과 장면 프로필에 영향을 줍니다. 이 장면에서의 이름만 변경하려면 이름 바꾸기…를 사용하십시오.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>이 장치에 충돌하는 카메라 연결이 있습니다. 계속하기 전에 기존 연결을 확인하십시오.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>이 장면은 카메라의 공유 설정을 재사용합니다.</translation>
     </message>
 </context>
 <context>

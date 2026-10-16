@@ -90,6 +90,8 @@ def scene_engine_graph_signature(document: SceneDocument) -> dict[str, object]:
             continue
         for layer in layers:
             if isinstance(layer, dict):
+                # Occurrence labels are UI metadata, independent of capture.
+                layer.pop("name", None)
                 layer.pop("rect", None)
                 layer.pop("crop", None)
                 layer.pop("created_at", None)

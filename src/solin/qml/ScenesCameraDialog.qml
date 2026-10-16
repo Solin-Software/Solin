@@ -42,6 +42,20 @@ Dialog {
     property bool clearStreamCredentials: false
     property bool clearCredentials: false
     property bool addToScene: true
+    property var editContext: ({})
+    property bool layerNameCustom: false
+    property string validationError: ""
+    property bool saveAttempted: false
+    property string nameError: ""
+    property bool deviceConflict: false
+    property bool connectionChoicePending: false
+    readonly property string deviceConflictMessage: qsTr("This device has conflicting camera connections. Check the existing connections before continuing.")
+    property alias layerName: layerNameField.text
+    readonly property bool reusingCamera: addToScene && cameraId.length > 0
+    readonly property bool editingSettings: !reusingCamera && !deviceConflict && !connectionChoicePending
+    readonly property var networkChoices: [{ id: "__new__", name: qsTr("New connection…") }].concat(
+        bridge ? bridge.configuredCameras.filter(function(camera) { return camera.kind === "rtsp_camera" })
+            .map(function(camera) { return Object.assign({}, camera, { selectable: true }) }) : [])
 
     readonly property color surface: theme ? theme.surface : "#172131"
     readonly property color surfaceSoft: theme ? theme.bg : "#111927"
@@ -68,8 +82,15 @@ Dialog {
         return -1
     }
 
+    function validateLayerName() {
+        nameError = bridge && visible && addToScene ? bridge.layerNameError(layerNameField.text, "") : ""
+        return !nameError.length
+    }
+
     function cameraDevices() {
         var items = bridge ? bridge.localCameraDevices.slice() : []
+        if (addToScene)
+            items = items.filter(function(device) { return !!device.id })
         if (deviceId.length && findIndex(items, "id", deviceId) < 0) {
             items.push({ id: deviceId,
                 name: (selectedDeviceSnapshot.name || draft.deviceName || deviceId)
@@ -172,6 +193,7 @@ Dialog {
 
     Connections {
         target: root.bridge
+        function onChanged() { root.validateLayerName() }
         function onLocalCameraModesReady(deviceId, width, height, success) {
             if (!root.customResolutionPending || deviceId !== root.deviceId
                     || deviceId !== root.customResolutionDeviceId
@@ -297,11 +319,50 @@ Dialog {
         customHeightField.text = ""
         advancedExpanded = false
         formatSelectionChanged = false
+        validationError = ""
+        saveAttempted = false
+        deviceConflict = false
+        connectionChoicePending = false
+    }
+
+    function selectDevice(device) {
+        if (!addToScene) {
+            selectedDeviceSnapshot = device
+            deviceId = device.id
+            selectFormat({ id: "" })
+            return
+        }
+        var previousName = layerNameField.text
+        var custom = layerNameCustom
+        var registered = bridge ? bridge.configuredLocalCamera(device.id) : ({})
+        loadDraft(registered.id ? registered : ({ deviceId: device.id, name: device.name }), "local_camera")
+        deviceConflict = registered.conflict === true
+        selectedDeviceSnapshot = device
+        layerNameField.text = custom ? previousName : (registered.name || device.name || "")
+        layerNameCustom = custom
+    }
+
+    function selectNetwork(choice) {
+        var previousName = layerNameField.text
+        var custom = layerNameCustom
+        loadDraft(bridge ? bridge.cameraDraft(choice.id === "__new__" ? "" : choice.id) : ({}), "rtsp_camera")
+        layerNameField.text = custom ? previousName : nameField.text
+        layerNameCustom = custom
     }
 
     function openForCamera(kind) {
         addToScene = true
+        editContext = bridge ? bridge.sourceEditContext() : ({})
+        layerNameCustom = false
+        layerNameField.text = ""
         loadDraft(bridge ? bridge.cameraDraft("") : ({}), kind)
+        networkSelector.reset()
+        connectionChoicePending = kind === "rtsp_camera" && networkChoices.length > 1
+        if (kind === "local_camera") {
+            var availableDevices = devices.filter(function(device) { return device.available !== false })
+            if (availableDevices.length)
+                selectDevice(availableDevices[0])
+        }
         open()
         if (kind === "local_camera" && bridge)
             bridge.ensureLocalCameras()
@@ -309,6 +370,7 @@ Dialog {
 
     function openForSelectedCamera() {
         addToScene = false
+        editContext = bridge ? bridge.sourceEditContext() : ({})
         loadDraft(bridge ? bridge.selectedCameraDraft() : ({}), "")
         open()
         if (cameraKind === "local_camera" && bridge)
@@ -316,6 +378,42 @@ Dialog {
     }
 
     function save() {
+        saveAttempted = true
+        validationError = ""
+        if (connectionChoicePending)
+            return
+        if (deviceConflict) {
+            validationError = deviceConflictMessage
+            return
+        }
+        if (addToScene && cameraKind === "local_camera" && !deviceId.length) {
+            validationError = qsTr("Unavailable device")
+            return
+        }
+        if (addToScene && !layerNameField.text.trim().length) {
+            validationError = qsTr("Enter a name for this source in the scene.")
+            layerNameField.forceActiveFocus()
+            return
+        }
+        if (!validateLayerName()) {
+            layerNameField.forceActiveFocus()
+            return
+        }
+        if (reusingCamera) {
+            if (bridge && bridge.addConfiguredCamera(cameraId, layerNameField.text.trim(), editContext).length)
+                close()
+            return
+        }
+        if (!nameField.text.trim().length) {
+            validationError = qsTr("Enter a camera name.")
+            nameField.forceActiveFocus()
+            return
+        }
+        if (cameraKind === "rtsp_camera" && !uriField.text.trim().length) {
+            validationError = qsTr("Enter an RTSP address.")
+            uriField.forceActiveFocus()
+            return
+        }
         if (customResolutionDirty) {
             requestCustomResolution()
             return
@@ -330,6 +428,7 @@ Dialog {
             id: cameraId,
             kind: cameraKind,
             name: nameField.text.trim(),
+            layerName: layerNameField.text.trim(),
             deviceId: deviceId,
             formatId: formatId,
             formatSelectionChanged: formatSelectionChanged,
@@ -350,13 +449,26 @@ Dialog {
             ptzTransport: viscaTransport.currentIndex === 1 ? "tcp" : "udp",
             ptzSerialDevice: serialDevice.text.trim(),
             ptzBaudRate: [9600, 19200, 38400, 115200][serialBaud.currentIndex],
-            ptzCameraAddress: serialAddress.value,
-            keepActive: draft.keepActive === true
+            ptzCameraAddress: serialAddress.value
         }
-        if (bridge && bridge.saveCamera(values, addToScene)) {
+        if (bridge && (addToScene ? bridge.addCamera(values, editContext).length > 0
+                                : bridge.updateCamera(values, editContext))) {
             passwordField.text = ""
             usernameField.text = ""
             close()
+        }
+    }
+
+    onOpened: {
+        validateLayerName()
+        if (addToScene) {
+            layerNameField.forceActiveFocus()
+            layerNameField.selectAll()
+        } else if (cameraKind === "rtsp_camera") {
+            nameField.forceActiveFocus()
+            nameField.selectAll()
+        } else {
+            deviceCombo.forceActiveFocus()
         }
     }
 
@@ -364,6 +476,8 @@ Dialog {
         resetCustomResolution()
         passwordField.text = ""
         usernameField.text = ""
+        streamPasswordField.text = ""
+        streamUsernameField.text = ""
         if (bridge)
             bridge.stopAllPtz()
     }
@@ -383,7 +497,8 @@ Dialog {
             anchors.rightMargin: 12
             Text {
                 Layout.fillWidth: true
-                text: root.cameraId.length ? qsTr("Edit camera") : qsTr("Add camera")
+                text: !root.addToScene ? qsTr("Configure camera")
+                    : root.cameraKind === "rtsp_camera" ? qsTr("Network camera") : qsTr("Camera")
                 color: root.textPrimary
                 font.pixelSize: 17
                 font.weight: Font.DemiBold
@@ -391,6 +506,11 @@ Dialog {
             Rectangle {
                 Layout.preferredWidth: 34; Layout.preferredHeight: 34; radius: 9
                 color: closeMouse.containsMouse ? root.hover : "transparent"
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("Close")
+                Keys.onReturnPressed: root.close()
+                Keys.onSpacePressed: root.close()
                 Image { anchors.centerIn: parent; width: 14; height: 14; source: "image://sceneicons/close/16/" + String(root.textMuted).replace("#", "") }
                 MouseArea { id: closeMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
             }
@@ -398,21 +518,101 @@ Dialog {
     }
 
     contentItem: ScrollView {
+        id: cameraScroll
         clip: true
+        contentWidth: availableWidth
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         ColumnLayout {
-            width: root.availableWidth
+            width: cameraScroll.availableWidth
             spacing: 14
 
+            Text {
+                Layout.fillWidth: true
+                visible: !root.addToScene
+                text: qsTr("These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….")
+                color: root.textSecondary
+                wrapMode: Text.Wrap
+                font.pixelSize: 12
+                padding: 12
+            }
             FormSection {
-                titleText: qsTr("Camera")
+                visible: root.addToScene
+                titleText: qsTr("Name in this scene")
+                StyledField {
+                    id: layerNameField
+                    objectName: "cameraLayerNameField"
+                    Layout.fillWidth: true
+                    maximumLength: 120
+                    onTextChanged: {
+                        root.validationError = ""
+                        root.saveAttempted = false
+                        root.validateLayerName()
+                    }
+                    onTextEdited: root.layerNameCustom = true
+                }
+                Text {
+                    objectName: "cameraLayerNameError"
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    text: root.nameError
+                    color: root.danger
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                    Accessible.role: Accessible.AlertMessage
+                }
+            }
+            FormSection {
+                visible: root.addToScene && root.cameraKind === "rtsp_camera"
+                titleText: qsTr("Connection")
+                ScenesSourceSelector {
+                    id: networkSelector
+                    objectName: "cameraNetworkSelector"
+                    theme: root.theme
+                    Layout.fillWidth: true
+                    options: root.networkChoices
+                    selectedId: root.connectionChoicePending ? "" : root.cameraId || "__new__"
+                    searchPlaceholder: qsTr("Search connections…")
+                    onChosen: function(choice) { root.selectNetwork(choice) }
+                }
+            }
+            FormSection {
+                visible: root.reusingCamera
+                titleText: qsTr("Saved camera settings")
+                Text {
+                    Layout.fillWidth: true
+                    objectName: "cameraReuseSummary"
+                    text: root.draft.name + (root.draft.summary ? "\n" + root.draft.summary : "")
+                    textFormat: Text.PlainText
+                    color: root.textSecondary
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 12
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("This scene will reuse the camera's shared settings.")
+                    color: root.textSecondary
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 11
+                }
+            }
+            FormSection {
+                visible: root.cameraKind === "local_camera" || root.editingSettings
+                titleText: root.cameraKind === "rtsp_camera" ? qsTr("Connection settings") : qsTr("Camera")
                 GridLayout {
                     Layout.fillWidth: true
                     columns: width >= 470 ? 2 : 1
                     columnSpacing: 12
                     rowSpacing: 9
-                    FieldLabel { text: qsTr("Name") }
-                    StyledField { id: nameField; Layout.fillWidth: true; maximumLength: 120; placeholderText: qsTr("Camera name") }
+                    FieldLabel { visible: root.editingSettings && root.cameraKind === "rtsp_camera"; text: qsTr("Connection name") }
+                    StyledField {
+                        id: nameField
+                        objectName: "cameraConnectionNameField"
+                        visible: root.editingSettings && root.cameraKind === "rtsp_camera"
+                        Layout.fillWidth: true
+                        maximumLength: 120
+                        placeholderText: qsTr("Camera name")
+                        onTextEdited: if (root.addToScene && !root.layerNameCustom) layerNameField.text = text
+                    }
 
                     FieldLabel { visible: root.cameraKind === "local_camera"; text: qsTr("Device") }
                     RowLayout {
@@ -426,21 +626,32 @@ Dialog {
                             model: root.devices
                             currentIndex: root.findIndex(model, "id", root.deviceId)
                             textRole: "name"
+                            delegate: ItemDelegate {
+                                required property int index
+                                required property var modelData
+                                width: deviceCombo.width - 8
+                                text: modelData.name + (modelData.available === false ? " · " + qsTr("Unavailable device") : "")
+                                enabled: {
+                                    var registered = root.bridge ? root.bridge.configuredLocalCamera(modelData.id) : ({})
+                                    return modelData.available !== false || !!registered.id || registered.conflict === true
+                                }
+                                highlighted: deviceCombo.highlightedIndex === index
+                                palette.text: root.textPrimary
+                                palette.highlight: root.hover
+                            }
                             onActivated: {
-                                root.selectedDeviceSnapshot = model[currentIndex]
-                                root.deviceId = model[currentIndex].id
-                                root.selectFormat({ id: "" })
+                                root.selectDevice(model[currentIndex])
                             }
                         }
                         SmallButton { iconName: "refresh"; toolTipText: qsTr("Refresh cameras"); onClicked: root.bridge.refreshLocalCameras() }
                     }
 
-                    FieldLabel { visible: root.cameraKind === "local_camera"; text: qsTr("Resolution") }
+                    FieldLabel { visible: root.cameraKind === "local_camera" && root.editingSettings; text: qsTr("Resolution") }
                     ScenesComboBox {
                         id: resolutionCombo
                         objectName: "cameraResolutionCombo"
                         theme: root.theme
-                        visible: root.cameraKind === "local_camera"
+                        visible: root.cameraKind === "local_camera" && root.editingSettings
                         Layout.fillWidth: true
                         model: root.resolutions
                         textRole: "label"
@@ -448,6 +659,118 @@ Dialog {
                         onActivated: root.selectResolution(model[currentIndex].id)
                     }
 
+                    FieldLabel { visible: root.cameraKind === "local_camera" && root.editingSettings; text: qsTr("Frame rate") }
+                    ScenesComboBox {
+                        id: frameRateCombo
+                        objectName: "cameraFrameRateCombo"
+                        theme: root.theme
+                        visible: root.cameraKind === "local_camera" && root.editingSettings
+                        enabled: root.formatId.length > 0 && root.cameraDevice.available !== false
+                        Layout.fillWidth: true
+                        model: root.frameRates
+                        textRole: "label"
+                        currentIndex: root.findIndex(model, "id", root.selectedFormat.fpsId || "")
+                        onActivated: root.selectFrameRate(model[currentIndex].id)
+                    }
+
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("RTSP address") }
+                    StyledField { id: uriField; objectName: "cameraUriField"; visible: root.cameraKind === "rtsp_camera" && root.editingSettings; Layout.fillWidth: true; placeholderText: "rtsp://camera.local/stream" }
+
+                    // The stream login. Kept out of the address, which is written to
+                    // disk and printed by the engine; stored in the system keyring
+                    // and put back only when connecting. Separate from the PTZ login
+                    // below: the two accounts are routinely different.
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("Stream user name") }
+                    StyledField {
+                        id: streamUsernameField
+                        visible: root.cameraKind === "rtsp_camera" && root.editingSettings
+                        Layout.fillWidth: true
+                        placeholderText: root.hasStreamCredentials
+                            ? qsTr("Leave blank to keep saved credentials")
+                            : qsTr("Only if the camera asks for one")
+                    }
+
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("Stream password") }
+                    StyledField {
+                        id: streamPasswordField
+                        visible: root.cameraKind === "rtsp_camera" && root.editingSettings
+                        Layout.fillWidth: true
+                        echoMode: TextInput.Password
+                        placeholderText: root.hasStreamCredentials
+                            ? qsTr("Leave blank to keep saved credentials")
+                            : ""
+                    }
+
+                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings && root.hasStreamCredentials; text: "" }
+                    ScenesCheckBox {
+                        theme: root.theme
+                        visible: root.cameraKind === "rtsp_camera" && root.editingSettings && root.hasStreamCredentials
+                        text: qsTr("Remove saved stream credentials")
+                        checked: root.clearStreamCredentials
+                        onToggled: root.clearStreamCredentials = checked
+                    }
+                }
+                Text {
+                    objectName: "cameraDeviceConflictMessage"
+                    Layout.fillWidth: true
+                    visible: root.deviceConflict
+                    text: root.deviceConflictMessage
+                    color: root.danger
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                    Accessible.role: Accessible.AlertMessage
+                }
+                Text {
+                    visible: root.cameraKind === "local_camera" && (root.customResolutionPending || root.customResolutionError.length > 0)
+                    Layout.fillWidth: true
+                    text: root.customResolutionPending ? qsTr("Checking supported camera modes…") : root.customResolutionError
+                    color: root.customResolutionPending ? root.textSecondary : root.danger
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    visible: root.cameraKind === "local_camera" && root.customFrameRateInvalid
+                    Layout.fillWidth: true
+                    text: qsTr("This frame rate is not supported at the selected resolution and format.")
+                    color: root.danger
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    objectName: "cameraCapabilitiesMessage"
+                    visible: root.cameraKind === "local_camera" && text.length > 0
+                    text: root.capabilitiesMessage()
+                    color: root.textSecondary
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: root.cameraKind === "rtsp_camera" && root.editingSettings
+                    text: qsTr("Credentials are stored separately. Do not put a username, password, or token in the RTSP address.")
+                    color: root.textMuted
+                    font.pixelSize: 9
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            FormSection {
+                visible: root.editingSettings
+                titleText: qsTr("Advanced")
+                ScenesCheckBox {
+                    objectName: "cameraAdvancedToggle"
+                    theme: root.theme
+                    text: qsTr("Show advanced settings")
+                    checked: root.advancedExpanded
+                    onToggled: root.advancedExpanded = checked
+                }
+                GridLayout {
+                    visible: root.advancedExpanded
+                    Layout.fillWidth: true
+                    columns: width >= 470 ? 2 : 1
+                    columnSpacing: 12
+                    rowSpacing: 9
                     FieldLabel {
                         visible: root.cameraKind === "local_camera" && (root.cameraDevice.resolutionRanges || []).length > 0
                         text: qsTr("Custom resolution")
@@ -482,20 +805,6 @@ Dialog {
                         }
                     }
 
-                    FieldLabel { visible: root.cameraKind === "local_camera"; text: qsTr("Frame rate") }
-                    ScenesComboBox {
-                        id: frameRateCombo
-                        objectName: "cameraFrameRateCombo"
-                        theme: root.theme
-                        visible: root.cameraKind === "local_camera"
-                        enabled: root.formatId.length > 0 && root.cameraDevice.available !== false
-                        Layout.fillWidth: true
-                        model: root.frameRates
-                        textRole: "label"
-                        currentIndex: root.findIndex(model, "id", root.selectedFormat.fpsId || "")
-                        onActivated: root.selectFrameRate(model[currentIndex].id)
-                    }
-
                     FieldLabel {
                         visible: root.cameraKind === "local_camera" && root.customFrameRateAvailable
                         text: qsTr("Custom frame rate")
@@ -510,100 +819,19 @@ Dialog {
                         onEditingFinished: root.applyCustomFrameRate(text)
                     }
 
-                    FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("RTSP address") }
-                    StyledField { id: uriField; visible: root.cameraKind === "rtsp_camera"; Layout.fillWidth: true; placeholderText: "rtsp://camera.local/stream" }
-
                     FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Transport") }
                     ScenesComboBox { id: transportCombo; theme: root.theme; visible: root.cameraKind === "rtsp_camera"; Layout.fillWidth: true; model: ["TCP", "UDP"] }
 
                     FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Network buffer") }
                     ScenesSpinBox { id: latencyField; theme: root.theme; visible: root.cameraKind === "rtsp_camera"; Layout.fillWidth: true; from: 0; to: 10000 }
 
-                    // The stream login. Kept out of the address, which is written to
-                    // disk and printed by the engine; stored in the system keyring
-                    // and put back only when connecting. Separate from the PTZ login
-                    // below: the two accounts are routinely different.
-                    FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Stream user name") }
-                    StyledField {
-                        id: streamUsernameField
-                        visible: root.cameraKind === "rtsp_camera"
-                        Layout.fillWidth: true
-                        placeholderText: root.hasStreamCredentials
-                            ? qsTr("Leave blank to keep saved credentials")
-                            : qsTr("Only if the camera asks for one")
-                    }
-
-                    FieldLabel { visible: root.cameraKind === "rtsp_camera"; text: qsTr("Stream password") }
-                    StyledField {
-                        id: streamPasswordField
-                        visible: root.cameraKind === "rtsp_camera"
-                        Layout.fillWidth: true
-                        echoMode: TextInput.Password
-                        placeholderText: root.hasStreamCredentials
-                            ? qsTr("Leave blank to keep saved credentials")
-                            : ""
-                    }
-
-                    FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.hasStreamCredentials; text: "" }
-                    ScenesCheckBox {
-                        theme: root.theme
-                        visible: root.cameraKind === "rtsp_camera" && root.hasStreamCredentials
-                        text: qsTr("Remove saved stream credentials")
-                        checked: root.clearStreamCredentials
-                        onToggled: root.clearStreamCredentials = checked
-                    }
                 }
-                Text {
-                    visible: root.cameraKind === "local_camera" && (root.customResolutionPending || root.customResolutionError.length > 0)
-                    Layout.fillWidth: true
-                    text: root.customResolutionPending ? qsTr("Checking supported camera modes…") : root.customResolutionError
-                    color: root.customResolutionPending ? root.textSecondary : root.danger
-                    font.pixelSize: 11
-                    wrapMode: Text.Wrap
-                }
-                Text {
-                    visible: root.cameraKind === "local_camera" && root.customFrameRateInvalid
-                    Layout.fillWidth: true
-                    text: qsTr("This frame rate is not supported at the selected resolution and format.")
-                    color: root.danger
-                    font.pixelSize: 11
-                    wrapMode: Text.Wrap
-                }
-                Text {
-                    Layout.fillWidth: true
-                    objectName: "cameraCapabilitiesMessage"
-                    visible: root.cameraKind === "local_camera" && text.length > 0
-                    text: root.capabilitiesMessage()
-                    color: root.textSecondary
-                    font.pixelSize: 11
-                    wrapMode: Text.Wrap
-                }
-                Text {
-                    Layout.fillWidth: true
-                    visible: root.cameraKind === "rtsp_camera"
-                    text: qsTr("Credentials are stored separately. Do not put a username, password, or token in the RTSP address.")
-                    color: root.textMuted
-                    font.pixelSize: 9
-                    wrapMode: Text.Wrap
-                }
-            }
-
-            FormSection {
-                visible: root.cameraKind === "local_camera"
-                titleText: qsTr("Advanced")
-                ScenesCheckBox {
-                    objectName: "cameraAdvancedToggle"
-                    theme: root.theme
-                    text: qsTr("Show advanced settings")
-                    checked: root.advancedExpanded
-                    onToggled: root.advancedExpanded = checked
-                }
-                FieldLabel { visible: root.advancedExpanded; text: qsTr("Format") }
+                FieldLabel { visible: root.advancedExpanded && root.cameraKind === "local_camera"; text: qsTr("Format") }
                 ScenesComboBox {
                     id: formatCombo
                     objectName: "cameraFormatCombo"
                     theme: root.theme
-                    visible: root.advancedExpanded
+                    visible: root.advancedExpanded && root.cameraKind === "local_camera"
                     enabled: root.formatId.length > 0 && root.cameraDevice.available !== false
                     Layout.fillWidth: true
                     model: root.inputFormats
@@ -618,6 +846,7 @@ Dialog {
             }
 
             FormSection {
+                visible: root.editingSettings && root.advancedExpanded
                 titleText: qsTr("PTZ control")
                 ScenesComboBox {
                     id: ptzCombo
@@ -675,16 +904,40 @@ Dialog {
     }
 
     footer: Rectangle {
-        implicitHeight: 64
+        implicitHeight: Math.max(64, footerColumn.implicitHeight + 20)
         color: root.surface
-        RowLayout {
+        ColumnLayout {
+            id: footerColumn
             anchors.fill: parent
+            anchors.margins: 10
             anchors.leftMargin: 18
             anchors.rightMargin: 18
-            spacing: 8
-            Item { Layout.fillWidth: true }
-            ScenesDialogButton { theme: root.theme; text: qsTr("Cancel"); onClicked: root.close() }
-            ScenesDialogButton { theme: root.theme; text: qsTr("Save"); primary: true; enabled: nameField.text.trim().length > 0 && !root.customResolutionPending && !root.customResolutionError.length; onClicked: root.save() }
+            Text {
+                objectName: "cameraSaveError"
+                Layout.fillWidth: true
+                visible: text.length > 0
+                text: root.validationError || (root.saveAttempted && root.bridge ? root.bridge.sourceEditError : "")
+                color: root.danger
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                Accessible.role: Accessible.AlertMessage
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Item { Layout.fillWidth: true }
+                ScenesDialogButton { theme: root.theme; text: qsTr("Cancel"); onClicked: root.close() }
+                ScenesDialogButton {
+                    objectName: "cameraSaveButton"
+                    theme: root.theme
+                    text: root.addToScene ? qsTr("Add") : qsTr("Save")
+                    primary: true
+                    enabled: !root.deviceConflict && !root.connectionChoicePending && !root.customResolutionPending && !root.customResolutionError.length
+                        && (!root.addToScene || root.cameraKind !== "local_camera" || root.deviceId.length > 0)
+                        && (!root.addToScene || (!root.nameError.length && layerNameField.text.trim().length > 0))
+                    onClicked: root.save()
+                }
+            }
         }
     }
 
@@ -717,6 +970,7 @@ Dialog {
 
     component StyledField: ScenesTextField {
         theme: root.theme
+        onAccepted: root.save()
     }
 
     component SmallButton: Rectangle {
@@ -726,7 +980,13 @@ Dialog {
         signal clicked()
         Layout.preferredWidth: 36; Layout.preferredHeight: 34
         radius: 9; color: smallMouse.containsMouse ? root.hover : root.surface
-        border.width: 1; border.color: root.borderColor
+        border.width: 1; border.color: activeFocus ? root.accent : root.borderColor
+        activeFocusOnTab: visible && enabled
+        Accessible.role: Accessible.Button
+        Accessible.name: toolTipText
+        Accessible.onPressAction: small.clicked()
+        Keys.onReturnPressed: small.clicked()
+        Keys.onSpacePressed: small.clicked()
         Image { anchors.centerIn: parent; width: 14; height: 14; source: "image://sceneicons/" + small.iconName + "/16/" + String(root.textMuted).replace("#", "") }
         MouseArea { id: smallMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: small.clicked() }
         ToolTip.visible: smallMouse.containsMouse; ToolTip.text: small.toolTipText

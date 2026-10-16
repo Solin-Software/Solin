@@ -6146,6 +6146,34 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Pengambilan gambar kamera tidak dapat diperiksa. Segarkan kamera atau sambungkan kembali perangkat.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Periksa nama dan pengaturan sumber.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Tidak ada kamera yang ditemukan.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Adegan atau kamera berubah saat dialog ini terbuka. Buka kembali dialog dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Perangkat ini memiliki koneksi kamera yang bertentangan. Periksa koneksi yang ada sebelum melanjutkan.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Adegan ini akan membuat referensi melingkar.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Koneksi kamera telah disimpan, tetapi adegan tidak dapat diperbarui. Buka kembali dialog dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Sumber dengan nama ini sudah ada di adegan ini.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6934,7 +6962,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Jaga kamera tetap aktif</translation>
+        <translation type="vanished">Jaga kamera tetap aktif</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7238,6 +7266,98 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Mode yang didukung untuk resolusi ini tidak dapat diperoleh. Segarkan kamera atau pilih resolusi lain.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Tambahkan adegan</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Pilih adegan yang tersedia.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Tutup</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Konfigurasi kamera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Konfigurasi kamera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Koneksi</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Nama koneksi</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Pengaturan koneksi</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Masukkan nama kamera.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Masukkan nama untuk sumber ini di adegan.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Masukkan alamat RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Nama di adegan ini</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>Kamera IP</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Koneksi baru…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Tidak ada hasil yang ditemukan.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Ubah nama sumber</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Pengaturan kamera tersimpan</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Cari koneksi…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Cari adegan…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Cari…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Pengaturan ini memengaruhi semua adegan dan profil adegan yang memakai kamera ini. Untuk mengubah nama hanya di adegan ini, gunakan Ubah nama….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Perangkat ini memiliki koneksi kamera yang bertentangan. Periksa koneksi yang ada sebelum melanjutkan.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Adegan ini akan menggunakan kembali pengaturan bersama kamera.</translation>
     </message>
 </context>
 <context>

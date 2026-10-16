@@ -13,6 +13,82 @@ _TRANSLATION_CALLS = {"tr", "translate"}
 _TRANSLATION_MARKERS = _TRANSLATION_CALLS | {"QT_TRANSLATE_NOOP"}
 _ANONYMOUS_FORMAT_FIELD = re.compile(r"\{(?:|\d+)\}")
 
+_SCENE_WORKFLOW_QML = (
+    "ScenesCameraDialog.qml",
+    "ScenesWorkspace.qml",
+    "ScenesReferenceDialog.qml",
+    "ScenesRenameDialog.qml",
+    "ScenesSourceSelector.qml",
+)
+
+
+@pytest.mark.parametrize(
+    "catalog",
+    sorted((_SOURCE_ROOT / "resources" / "translations").glob("solin_*.ts")),
+    ids=lambda path: path.stem,
+)
+def test_scene_source_workflow_messages_have_completed_translations(catalog: Path) -> None:
+    # These stream-credential labels predate the scene-source workflow and are
+    # tracked separately from connection reuse, layer naming, and configuration.
+    stream_credential_sources = {
+        "Stream user name",
+        "Stream password",
+        "Remove saved stream credentials",
+        "Only if the camera asks for one",
+    }
+    qml_sources = {
+        ast.literal_eval(match.group(1))
+        for filename in _SCENE_WORKFLOW_QML
+        for match in re.finditer(
+            r'qsTr\(\s*("(?:[^"\\]|\\.)*")',
+            (_SOURCE_ROOT / "qml" / filename).read_text(encoding="utf-8"),
+        )
+    } - stream_credential_sources
+    bridge_tree = ast.parse(
+        (_SOURCE_ROOT / "ui" / "qml" / "scenes_bridge.py").read_text(encoding="utf-8")
+    )
+    bridge_sources = {
+        node.args[0].value
+        for node in ast.walk(bridge_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "tr"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    }
+    bridge_sources.add("A source with this name already exists in this scene.")
+    contexts = {node.findtext("name"): node for node in ET.parse(catalog).findall("context")}
+    for context, sources in {
+        "ScenesEditorView": qml_sources,
+        "ScenesBridge": bridge_sources,
+    }.items():
+        messages = {
+            node.findtext("source"): node.find("translation")
+            for node in contexts[context].findall("message")
+        }
+        for source in sorted(sources):
+            translation = messages.get(source)
+            assert translation is not None, (catalog.name, context, source)
+            assert translation.get("type") not in {"unfinished", "vanished", "obsolete"}, (
+                catalog.name,
+                context,
+                source,
+            )
+            assert "".join(translation.itertext()).strip(), (catalog.name, context, source)
+            assert sorted(re.findall(r"%[1-9]\d*|%n", source)) == sorted(
+                re.findall(r"%[1-9]\d*|%n", "".join(translation.itertext()))
+            ), (catalog.name, context, source)
+    keep_active = next(
+        (
+            node.find("translation")
+            for node in contexts["ScenesEditorView"].findall("message")
+            if node.findtext("source") == "Keep camera active"
+        ),
+        None,
+    )
+    assert keep_active is None or keep_active.get("type") in {"vanished", "obsolete"}
+
 
 @pytest.mark.parametrize("catalog", sorted((_SOURCE_ROOT / "resources" / "translations").glob("solin_*.ts")), ids=lambda path: path.stem)
 def test_camera_mode_and_health_messages_have_completed_translations(catalog: Path) -> None:

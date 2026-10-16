@@ -6210,6 +6210,34 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Nie udało się sprawdzić przechwytywania obrazu z kamery. Odśwież kamery lub podłącz urządzenie ponownie.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Sprawdź nazwę i ustawienia źródła.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Nie znaleziono kamer.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Scena lub kamera zmieniła się, gdy to okno dialogowe było otwarte. Otwórz je ponownie i spróbuj jeszcze raz.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>To urządzenie ma sprzeczne połączenia kamery. Sprawdź istniejące połączenia przed kontynuowaniem.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Ta scena utworzyłaby odwołanie cykliczne.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Połączenie kamery zostało zapisane, ale nie udało się zaktualizować sceny. Otwórz je ponownie i spróbuj jeszcze raz.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Źródło o tej nazwie już istnieje w tej scenie.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6998,7 +7026,7 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Utrzymuj kamerę aktywną</translation>
+        <translation type="vanished">Utrzymuj kamerę aktywną</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7302,6 +7330,98 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Nie udało się pobrać obsługiwanych trybów dla tej rozdzielczości. Odśwież kamery lub wybierz inną rozdzielczość.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Dodaj scenę</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Wybierz dostępną scenę.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Zamknij</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Skonfiguruj kamerę</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Skonfiguruj kamerę…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Połączenie</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Nazwa połączenia</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Ustawienia połączenia</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Wpisz nazwę kamery.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Wpisz nazwę tego źródła w scenie.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Wpisz adres RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Nazwa w tej scenie</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>Kamera IP</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Nowe połączenie…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Nie znaleziono żadnych wyników.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Zmień nazwę źródła</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Zapisane ustawienia kamery</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Szukaj połączeń…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Szukaj scen…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Szukaj…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Te ustawienia wpływają na wszystkie sceny i profile scen korzystające z tej kamery. Aby zmienić tylko nazwę w tej scenie, wybierz Zmień nazwę….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>To urządzenie ma sprzeczne połączenia kamery. Sprawdź istniejące połączenia przed kontynuowaniem.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Ta scena użyje wspólnych ustawień kamery.</translation>
     </message>
 </context>
 <context>

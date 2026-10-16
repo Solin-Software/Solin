@@ -11,6 +11,7 @@ from solin.core.scenes.application import (
     SceneNotFoundError,
 )
 from solin.core.scenes.model import (
+    CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
     CameraPreset,
     ColorSourceConfig,
@@ -21,11 +22,13 @@ from solin.core.scenes.model import (
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
+    SceneValidationError,
     SourceDefinition,
     SourceKind,
     TransitionKind,
     TransitionSpec,
 )
+from solin.core.scenes.engine import scene_engine_graph_signature
 from solin.core.scenes.presets import (
     CAMERA_SCENE_ID,
     CONTENT_SCENE_ID,
@@ -392,3 +395,210 @@ def test_failed_persistence_leaves_document_and_history_unchanged() -> None:
     assert service.document.scene(CONTENT_SCENE_ID).name == "Content"
     assert not service.can_undo
     assert not service.can_redo
+
+
+def test_source_and_occurrence_are_one_undoable_insertion() -> None:
+    service = _service()
+    before = service.document
+    source = SourceDefinition(
+        id="new-background", kind=SourceKind.COLOR, name="Shared background",
+        configuration=ColorSourceConfig("#123456FF"),
+    )
+    layer = SceneLayer(id="new-occurrence", source_id=source.id, name="Background here")
+
+    service.add_source_layer(CONTENT_SCENE_ID, source, layer)
+
+    assert service.document.revision == before.revision + 1
+    assert service.document.source(source.id) == source
+    assert service.document.scene(CONTENT_SCENE_ID).layers[-1] == layer
+    service.undo()
+    assert service.document.sources == before.sources
+    assert service.document.scenes == before.scenes
+    assert not service.can_undo
+    service.redo()
+    assert service.document.source(source.id) == source
+    assert service.document.scene(CONTENT_SCENE_ID).layers[-1] == layer
+
+
+def test_rejected_scene_cycle_does_not_leave_an_orphaned_source_or_history() -> None:
+    service = _service()
+    before = service.document
+    source = SourceDefinition(
+        id="self-reference", kind=SourceKind.SCENE_REFERENCE, name="Self",
+        configuration=SceneReferenceConfig(CONTENT_SCENE_ID),
+    )
+    layer = SceneLayer(id="self-layer", source_id=source.id, name="Self")
+
+    with pytest.raises(SceneValidationError):
+        service.add_source_layer(CONTENT_SCENE_ID, source, layer)
+
+    assert service.document is before
+    assert not service.can_undo
+    assert not service.can_redo
+
+
+def test_failed_source_insertion_does_not_publish_partial_document_or_history() -> None:
+    class RejectingStore:
+        def save(self, document, *, expected_revision=None):
+            raise OSError("disk full")
+
+    service = SceneDocumentService(_document(), store=RejectingStore())
+    before = service.document
+    changes = []
+    unsubscribe = service.subscribe(changes.append)
+    source = SourceDefinition(
+        id="new-background", kind=SourceKind.COLOR, name="Background",
+        configuration=ColorSourceConfig("#123456FF"),
+    )
+    try:
+        with pytest.raises(OSError, match="disk full"):
+            service.add_source_layer(
+                CONTENT_SCENE_ID, source,
+                SceneLayer(id="new-layer", source_id=source.id, name="Background"),
+            )
+    finally:
+        unsubscribe()
+
+    assert service.document is before
+    assert changes == []
+    assert not service.can_undo
+    assert not service.can_redo
+
+
+def test_rename_changes_only_one_occurrence_and_supports_undo_redo() -> None:
+    service = _service()
+    source = service.document.source(CONTENT_SOURCE_ID)
+    first = service.document.scene(CONTENT_SCENE_ID).layers[0]
+    second = SceneLayer(id="second-content", source_id=source.id, name="Second content")
+    service.add_source_layer(CONTENT_SCENE_ID, source, second)
+    before = service.document
+
+    service.rename_layer(CONTENT_SCENE_ID, first.id, "  Custom content  ")
+
+    layers = service.document.scene(CONTENT_SCENE_ID).layers
+    assert layers[0] == replace(first, name="Custom content")
+    assert layers[-1] == second
+    assert service.document.sources == before.sources
+    assert service.document.scene(CONTENT_SCENE_ID).layers[0].rect == first.rect
+    assert service.document.source(source.id).name == source.name
+    assert scene_engine_graph_signature(service.document) == scene_engine_graph_signature(before)
+    service.undo()
+    assert service.document.scene(CONTENT_SCENE_ID).layers == before.scene(CONTENT_SCENE_ID).layers
+    service.redo()
+    assert service.document.scene(CONTENT_SCENE_ID).layers[0].name == "Custom content"
+
+
+def test_layer_rename_does_not_hide_structural_changes_from_graph_signature() -> None:
+    service = _service()
+    scene = service.document.scene(CONTENT_SCENE_ID)
+    layer = scene.layers[0]
+    before = scene_engine_graph_signature(service.document)
+
+    service.update_layer(CONTENT_SCENE_ID, layer.id, replace(layer, name="Renamed", visible=False))
+
+    assert scene_engine_graph_signature(service.document) != before
+
+
+@pytest.mark.parametrize("name", ["", "  "])
+def test_invalid_layer_rename_preserves_document_and_history(name: str) -> None:
+    service = _service()
+    before = service.document
+    layer = before.scene(CONTENT_SCENE_ID).layers[0]
+
+    with pytest.raises(SceneValidationError, match="layer name"):
+        service.rename_layer(CONTENT_SCENE_ID, layer.id, name)
+
+    assert service.document is before
+    assert not service.can_undo
+
+
+def test_renaming_a_layer_to_its_current_name_does_not_create_history() -> None:
+    service = _service()
+    before = service.document
+    layer = before.scene(CONTENT_SCENE_ID).layers[0]
+
+    service.rename_layer(CONTENT_SCENE_ID, layer.id, layer.name)
+
+    assert service.document is before
+    assert not service.can_undo
+
+
+@pytest.mark.parametrize("operation", ["add", "source", "rename", "draft"])
+@pytest.mark.parametrize("proposed", ["Content", "  content  ", "CONTENT"])
+def test_duplicate_layer_names_are_rejected_without_persistence_or_history(operation, proposed) -> None:
+    class Store:
+        def __init__(self):
+            self.writes = []
+
+        def save(self, document, *, expected_revision=None):
+            self.writes.append(document)
+
+    store = Store()
+    service = SceneDocumentService(_document(), store=store)
+    source = service.document.source(CONTENT_SOURCE_ID)
+    existing = service.document.scene(CONTENT_SCENE_ID).layers[0]
+    second = SceneLayer(id="second", source_id=source.id, name="Detail")
+    if operation in {"rename", "draft"}:
+        service.add_layer(CONTENT_SCENE_ID, second)
+    before = service.document
+    writes_before = len(store.writes)
+    changes = []
+    service.subscribe(changes.append)
+
+    with pytest.raises(SceneConflictError, match="name"):
+        if operation == "add":
+            service.add_layer(CONTENT_SCENE_ID, replace(second, name=proposed))
+        elif operation == "source":
+            service.add_source_layer(CONTENT_SCENE_ID, source, replace(second, name=proposed))
+        elif operation == "rename":
+            service.rename_layer(CONTENT_SCENE_ID, second.id, proposed)
+        else:
+            draft = service.begin_scene_edit(CONTENT_SCENE_ID)
+            draft.update_layer(second.id, replace(second, name=proposed))
+            service.commit_scene_edit(draft)
+
+    assert service.document is before
+    assert len(store.writes) == writes_before
+    assert changes == []
+    assert service.document.scene(CONTENT_SCENE_ID).layers[0] == existing
+    if operation in {"rename", "draft"}:
+        service.undo()
+        assert service.document.scene(CONTENT_SCENE_ID).layers == (existing,)
+        assert not service.can_undo
+    else:
+        assert not service.can_undo
+
+
+def test_layer_names_are_unique_only_within_their_scene_and_exclude_the_renamed_layer() -> None:
+    service = _service()
+    content = service.document.scene(CONTENT_SCENE_ID).layers[0]
+    camera = service.document.scene(CAMERA_SCENE_ID).layers[0]
+
+    service.rename_layer(CAMERA_SCENE_ID, camera.id, content.name)
+    service.validate_layer_name(CAMERA_SCENE_ID, content.name, excluding_layer_id=camera.id)
+    service.rename_layer(CAMERA_SCENE_ID, camera.id, content.name.upper())
+    assert service.document.scene(CAMERA_SCENE_ID).layers[0].name == content.name.upper()
+    service.undo()
+    assert service.document.scene(CAMERA_SCENE_ID).layers[0].name == content.name
+    service.redo()
+    assert service.document.scene(CAMERA_SCENE_ID).layers[0].name == content.name.upper()
+
+
+def test_historical_duplicate_names_allow_other_edits_and_can_be_renamed_away() -> None:
+    document = _document()
+    scene = document.scene(CONTENT_SCENE_ID)
+    original = scene.layers[0]
+    duplicate = replace(original, id="historical-duplicate")
+    legacy_scene = replace(scene, layers=(original, duplicate))
+    service = SceneDocumentService(replace(document, scenes=tuple(
+        legacy_scene if item.id == scene.id else item for item in document.scenes
+    )))
+    before = service.document
+
+    service.rename_layer(scene.id, original.id, original.name)
+    assert service.document is before
+    service.update_layer(scene.id, original.id, replace(original, visible=False))
+    service.rename_layer(scene.id, duplicate.id, "Other content")
+    assert [layer.name for layer in service.document.scene(scene.id).layers] == [original.name, "Other content"]
+    service.undo()
+    assert service.document.scene(scene.id).layers[1].name == original.name

@@ -6177,6 +6177,34 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Kamerans bildinsamling kunde inte kontrolleras. Uppdatera kamerorna eller anslut enheten igen.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Kontrollera källans namn och inställningar.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Inga kameror hittades.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Scenen eller kameran ändrades medan den här dialogrutan var öppen. Öppna den igen och försök på nytt.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Den här enheten har motstridiga kameraanslutningar. Kontrollera de befintliga anslutningarna innan du fortsätter.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Den här scenen skulle skapa en cirkelreferens.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Kameraanslutningen sparades, men det gick inte att uppdatera scenen. Öppna den igen och försök på nytt.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Det finns redan en källa med det namnet i den här scenen.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6965,7 +6993,7 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Håll kameran aktiv</translation>
+        <translation type="vanished">Håll kameran aktiv</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7269,6 +7297,98 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Det gick inte att hämta lägen som stöds för den här upplösningen. Uppdatera kamerorna eller välj en annan upplösning.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Lägg till scen</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Välj en tillgänglig scen.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Stäng</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Konfigurera kamera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Konfigurera kamera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Anslutning</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Anslutningens namn</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Anslutningsinställningar</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Ange ett namn för kameran.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Ange ett namn för den här källan i scenen.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Ange en RTSP-adress.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Namn i den här scenen</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP-kamera</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Ny anslutning…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Inga resultat hittades.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Byt namn på källa</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Sparade kamerainställningar</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Sök anslutningar…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Sök scener…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Sök…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Dessa inställningar påverkar alla scener och scenprofiler som använder den här kameran. Använd Byt namn… för att bara ändra namnet i den här scenen.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Den här enheten har motstridiga kameraanslutningar. Kontrollera de befintliga anslutningarna innan du fortsätter.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Den här scenen återanvänder kamerans gemensamma inställningar.</translation>
     </message>
 </context>
 <context>

@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.scenes.application import SceneDocumentService
 from solin.core.scenes.collections import (
     DEFAULT_SCENE_COLLECTION_ID,
@@ -19,8 +20,8 @@ from solin.core.scenes.model import (
     BusId,
     CameraPreset,
     LocalCameraConfig,
-    RtspCameraConfig,
     SceneDocument,
+    SceneLayer,
     SceneValidationError,
     SourceDefinition,
     SourceKind,
@@ -43,6 +44,7 @@ from solin.core.scenes.repository import (
 )
 from solin.core.scenes.resources import (
     SceneResourceCatalog,
+    camera_credential_references,
     cameras_from_document_sources,
 )
 from solin.core.scenes.recording import SceneRecordingConfig
@@ -61,6 +63,14 @@ class SceneWorkspaceOperationError(RuntimeError):
 
 class SceneWorkspaceBusyError(SceneWorkspaceOperationError):
     pass
+
+
+class LocalCameraConflictError(SceneValidationError):
+    """A device already has another shared connection or ambiguous legacy data."""
+
+
+class SceneCameraApplyError(SceneWorkspaceOperationError):
+    """The catalog was saved but a document write and its compensation failed."""
 
 
 class SceneWorkspaceChangeKind(StrEnum):
@@ -289,14 +299,14 @@ class SceneWorkspaceService:
         )
         configuration = camera.configuration
         if isinstance(configuration, LocalCameraConfig) and configuration.device_id:
-            device_id = configuration.device_id.casefold()
+            device_id = local_camera_device_key(configuration.device_id)
             if any(
                 candidate.id != camera.id
                 and isinstance(candidate.configuration, LocalCameraConfig)
-                and candidate.configuration.device_id.casefold() == device_id
+                and local_camera_device_key(candidate.configuration.device_id) == device_id
                 for candidate in (*cameras, *document.sources)
             ):
-                raise SceneValidationError("Duplicate local camera device")
+                raise LocalCameraConflictError("Duplicate local camera device")
         if active_source is not None or add_to_active_document:
             sources = (
                 tuple(camera if source.id == camera.id else source for source in document.sources)
@@ -306,24 +316,90 @@ class SceneWorkspaceService:
             # Validate the exact document mutation before publishing shared
             # resources, including references and required built-in sources.
             replace(document, sources=sources)
-        self._resource_repository.save(
-            updated,
-            expected_revision=self._resources.revision,
-        )
-        self._resources = updated
-        if active_source is not None:
-            self._documents.update_source(camera.id, camera)
-        elif add_to_active_document:
-            self._documents.create_source(camera)
-        self._publish(SceneWorkspaceChangeKind.RESOURCES)
+        def update_document() -> None:
+            if active_source is not None:
+                self._documents.refresh_resources()
+            elif add_to_active_document:
+                self._documents.create_source(camera)
+
+        self._commit_camera_resources(updated, update_document)
         return camera
 
-    def add_configured_camera_to_active_document(self, camera_id: str) -> SourceDefinition:
-        camera = self._resources.camera(camera_id)
-        if any(source.id == camera.id for source in self._documents.document.sources):
-            return self._documents.document.source(camera.id)
-        self._documents.create_source(camera)
-        return camera
+    def local_camera_for_device(self, device_id: str) -> SourceDefinition | None:
+        """Resolve one connection; incompatible legacy aliases require attention."""
+        key = local_camera_device_key(device_id)
+        if not key:
+            return None
+        by_id = {camera.id: camera for camera in self._documents.document.sources}
+        by_id.update((camera.id, camera) for camera in self.configured_cameras)
+        matches = [camera for camera in by_id.values()
+                   if isinstance(camera.configuration, LocalCameraConfig)
+                   and local_camera_device_key(camera.configuration.device_id) == key]
+        if not matches:
+            return None
+        def connection_settings(camera: SourceDefinition) -> tuple[object, str, bool]:
+            assert isinstance(camera.configuration, LocalCameraConfig)
+            configuration = replace(camera.configuration, device_id=key)
+            return configuration, camera.credential_ref, camera.enabled
+
+        if any(connection_settings(camera) != connection_settings(matches[0])
+               for camera in matches[1:]):
+            raise LocalCameraConflictError("Conflicting local camera connections")
+        # Equivalent legacy connections are not merged. Prefer the identity
+        # already present in this document; otherwise use a stable identity.
+        active_ids = {source.id for source in self._documents.document.sources}
+        return min(matches, key=lambda camera: (camera.id not in active_ids, camera.id))
+
+    def add_camera_layer(
+        self, scene_id: str, camera: SourceDefinition, layer: SceneLayer,
+    ) -> SceneLayer:
+        """Reuse a connection and commit one occurrence, including first use."""
+        if camera.kind not in {SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA}:
+            raise SceneWorkspaceOperationError("Shared scene resources accept only cameras")
+        registered = next((item for item in self.configured_cameras if item.id == camera.id), None)
+        if isinstance(camera.configuration, LocalCameraConfig):
+            registered = self.local_camera_for_device(camera.configuration.device_id) or registered
+        camera = registered or camera
+        layer = replace(layer, source_id=camera.id)
+        self._documents.prepare_source_layer(scene_id, camera, layer)
+        if any(item.id == camera.id for item in self.configured_cameras):
+            self._documents.add_source_layer(scene_id, camera, layer)
+        else:
+            updated = replace(
+                self._resources, revision=self._resources.revision + 1,
+                cameras=(*self.configured_cameras, camera),
+            )
+            self._commit_camera_resources(
+                updated, lambda: self._documents.add_source_layer(scene_id, camera, layer),
+            )
+        return layer
+
+    def _commit_camera_resources(
+        self, resources: SceneResourceCatalog, update_document: Callable[[], object],
+    ) -> None:
+        """Write resources first so document references are never dangling.
+
+        Failed document commits compensate the catalog with a newer revision.
+        Scene history belongs exclusively to the document insertion, while a
+        shared connection edit is rematerialized on any subsequent history step.
+        """
+        previous = self._resources
+        self._resource_repository.save(resources, expected_revision=previous.revision)
+        self._resources = resources
+        try:
+            update_document()
+        except Exception as document_error:  # noqa: BLE001 - compensate a multi-store persistence failure
+            restored = replace(previous, revision=self._resources.revision + 1)
+            try:
+                self._resource_repository.save(restored, expected_revision=self._resources.revision)
+            except Exception:  # noqa: BLE001 - preserve the document failure and the durable resource ownership
+                log.exception("Could not compensate camera catalog after a document write failure")
+                self._publish(SceneWorkspaceChangeKind.RESOURCES)
+                raise SceneCameraApplyError("Camera connection saved but not applied") from document_error
+            else:
+                self._resources = restored
+            raise
+        self._publish(SceneWorkspaceChangeKind.RESOURCES)
 
     def create_camera_preset(self, preset: CameraPreset) -> CameraPreset:
         if any(candidate.id == preset.id for candidate in self._resources.camera_presets):
@@ -403,7 +479,9 @@ class SceneWorkspaceService:
             raise SceneWorkspaceOperationError("Scene profile is already active")
         repository = self._document_repository(collection_id)
         document = self._load_document_for_use(repository)
-        documents = SceneDocumentService(document, store=repository)
+        documents = SceneDocumentService(
+            document, store=repository, materialize=self._materialize_camera_connections,
+        )
         base_runtime = self._runtime_repository.load_or_create(document)
         runtime_state = self._preserved_runtime_state(
             document,
@@ -607,12 +685,16 @@ class SceneWorkspaceService:
         credential_refs = tuple(
             reference
             for camera in removed
-            for reference in self._camera_credential_refs(camera)
+            for reference in camera_credential_references(camera)
+        )
+        surviving_references = frozenset(
+            reference for camera in self._resources.cameras if camera.id not in candidates
+            for reference in camera_credential_references(camera)
         )
         pending_credentials = tuple(
-            dict.fromkeys(
+            reference for reference in dict.fromkeys(
                 (*self._resources.pending_credential_deletions, *credential_refs)
-            )
+            ) if reference not in surviving_references
         )
         updated = replace(
             self._resources,
@@ -744,7 +826,9 @@ class SceneWorkspaceService:
     ]:
         repository = self._document_repository(collection_id)
         document = self._load_document_for_use(repository)
-        documents = SceneDocumentService(document, store=repository)
+        documents = SceneDocumentService(
+            document, store=repository, materialize=self._materialize_camera_connections,
+        )
         runtime_state = self._runtime_repository.load_or_create(document)
         if previous_runtime is not None:
             runtime_state = self._preserved_runtime_state(
@@ -774,19 +858,22 @@ class SceneWorkspaceService:
         return self._materialize_resources(self._load_recovering(repository))
 
     def _materialize_resources(self, document: SceneDocument) -> SceneDocument:
-        camera_by_id = {camera.id: camera for camera in self._resources.cameras}
-        sources = tuple(camera_by_id.get(source.id, source) for source in document.sources)
+        document = self._materialize_camera_connections(document)
         active_camera_ids = {
-            source.id
-            for source in sources
+            source.id for source in document.sources
             if source.kind in {SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA}
         }
         presets = tuple(
-            preset
-            for preset in self._resources.camera_presets
+            preset for preset in self._resources.camera_presets
             if preset.camera_source_id in active_camera_ids
         )
-        return replace(document, sources=sources, camera_presets=presets)
+        return replace(document, camera_presets=presets)
+
+    def _materialize_camera_connections(self, document: SceneDocument) -> SceneDocument:
+        """Refresh shared settings without changing document-owned preset operations."""
+        camera_by_id = {camera.id: camera for camera in self._resources.cameras}
+        sources = tuple(camera_by_id.get(source.id, source) for source in document.sources)
+        return replace(document, sources=sources)
 
     @staticmethod
     def _preserved_runtime_state(
@@ -921,6 +1008,8 @@ class SceneWorkspaceService:
             return
         retained: list[str] = []
         for credential_ref in self._resources.pending_credential_deletions:
+            if credential_ref in self._resources.credential_references:
+                continue
             try:
                 cleaner(credential_ref)
             except Exception:  # noqa: BLE001 - OS credential-store boundary
@@ -948,26 +1037,6 @@ class SceneWorkspaceService:
             self.collect_orphaned_cameras()
         except Exception:  # noqa: BLE001 - cleanup must not break committed edits
             log.exception("Could not collect orphaned shared scene cameras")
-
-    @staticmethod
-    def _camera_credential_refs(camera: SourceDefinition) -> tuple[str, ...]:
-        """Every vault entry this camera owns, so deleting it strands nothing.
-
-        A camera can hold two independent logins: the PTZ account on its binding
-        and the stream account on the source itself. They are routinely different,
-        and harvesting only the first left the other in the keyring forever with
-        nothing left to reference it.
-        """
-        references: list[str] = []
-        stream_ref = camera.credential_ref
-        if isinstance(stream_ref, str) and stream_ref:
-            references.append(stream_ref)
-        configuration = camera.configuration
-        if isinstance(configuration, (LocalCameraConfig, RtspCameraConfig)):
-            ptz_ref = getattr(configuration.ptz_binding, "credential_ref", "")
-            if isinstance(ptz_ref, str) and ptz_ref:
-                references.append(ptz_ref)
-        return tuple(references)
 
     def _publish(self, kind: SceneWorkspaceChangeKind) -> None:
         change = SceneWorkspaceChange(

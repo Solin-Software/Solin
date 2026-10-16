@@ -10,11 +10,29 @@ from solin.core.scenes.model import (
     SceneValidationError,
     SourceDefinition,
     SourceKind,
+    camera_source_from_legacy_record,
 )
 
 
-SCENE_RESOURCE_SCHEMA_VERSION = 1
+SCENE_RESOURCE_SCHEMA_VERSION = 2
 MAX_SHARED_CAMERAS = 128
+
+
+class UnsupportedSceneResourceSchemaError(SceneValidationError):
+    def __init__(self, version: int) -> None:
+        super().__init__(f"Unsupported shared scene-resource schema version: {version}")
+        self.version = version
+
+
+def camera_credential_references(camera: SourceDefinition) -> tuple[str, ...]:
+    """Protected stream and PTZ credentials owned by a connection."""
+    references = [camera.credential_ref] if camera.credential_ref else []
+    configuration = camera.configuration
+    if isinstance(configuration, (LocalCameraConfig, RtspCameraConfig)):
+        reference = getattr(configuration.ptz_binding, "credential_ref", "")
+        if reference:
+            references.append(reference)
+    return tuple(dict.fromkeys(references))
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,8 +46,10 @@ class SceneResourceCatalog:
     schema_version: int = SCENE_RESOURCE_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if isinstance(self.schema_version, bool) or not isinstance(self.schema_version, int):
+            raise SceneValidationError("Shared scene-resource schema version must be an integer")
         if self.schema_version != SCENE_RESOURCE_SCHEMA_VERSION:
-            raise SceneValidationError("Unsupported shared scene-resource schema version")
+            raise UnsupportedSceneResourceSchemaError(self.schema_version)
         if isinstance(self.revision, bool) or not isinstance(self.revision, int) or self.revision < 0:
             raise SceneValidationError("Invalid shared scene-resource revision")
         if not isinstance(self.cameras, tuple) or not all(
@@ -75,6 +95,11 @@ class SceneResourceCatalog:
         except StopIteration as exc:
             raise SceneValidationError("Shared camera does not exist") from exc
 
+    @property
+    def credential_references(self) -> frozenset[str]:
+        return frozenset(reference for camera in self.cameras
+                         for reference in camera_credential_references(camera))
+
     def with_revision(self, revision: int) -> SceneResourceCatalog:
         return replace(self, revision=revision)
 
@@ -89,6 +114,13 @@ class SceneResourceCatalog:
 
     @classmethod
     def from_record(cls, raw: object) -> SceneResourceCatalog:
+        if not isinstance(raw, dict):
+            raise SceneValidationError("Shared scene resources must be an object")
+        schema_version = raw.get("schema_version")
+        if isinstance(schema_version, bool) or not isinstance(schema_version, int):
+            raise SceneValidationError("Shared scene-resource schema version must be an integer")
+        if schema_version not in {1, SCENE_RESOURCE_SCHEMA_VERSION}:
+            raise UnsupportedSceneResourceSchemaError(schema_version)
         data = _strict_mapping(
             raw,
             field_name="shared scene resources",
@@ -100,14 +132,12 @@ class SceneResourceCatalog:
                 "pending_credential_deletions",
             },
         )
-        schema_version = data.get("schema_version")
         revision = data.get("revision")
         cameras = data.get("cameras")
         presets = data.get("camera_presets", [])
         pending_credential_deletions = data.get("pending_credential_deletions", [])
         if (
-            schema_version != SCENE_RESOURCE_SCHEMA_VERSION
-            or not isinstance(revision, int)
+            not isinstance(revision, int)
             or isinstance(revision, bool)
             or not isinstance(cameras, list)
             or not isinstance(presets, list)
@@ -115,9 +145,14 @@ class SceneResourceCatalog:
         ):
             raise SceneValidationError("Invalid shared scene-resource record")
         return cls(
-            schema_version=schema_version,
+            schema_version=SCENE_RESOURCE_SCHEMA_VERSION,
             revision=revision,
-            cameras=tuple(SourceDefinition.from_record(item) for item in cameras),
+            cameras=tuple(
+                camera_source_from_legacy_record(item)
+                if schema_version == 1
+                else SourceDefinition.from_record(item)
+                for item in cameras
+            ),
             camera_presets=tuple(CameraPreset.from_record(item) for item in presets),
             pending_credential_deletions=tuple(pending_credential_deletions),
         )

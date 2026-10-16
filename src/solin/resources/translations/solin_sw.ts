@@ -6178,6 +6178,34 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Upigaji picha wa kamera haukuweza kukaguliwa. Onyesha upya kamera au unganisha kifaa tena.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Angalia jina na mipangilio ya chanzo.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Hakuna kamera zilizopatikana.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Mandhari au kamera imebadilika wakati kidirisha hiki kilikuwa wazi. Fungua kidirisha tena kisha ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Kifaa hiki kina miunganisho ya kamera inayokinzana. Angalia miunganisho iliyopo kabla ya kuendelea.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Mandhari hii ingesababisha rejeleo la mzunguko.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Muunganisho wa kamera umehifadhiwa, lakini mandhari haikuweza kusasishwa. Fungua kidirisha tena kisha ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Chanzo chenye jina hili tayari kipo katika mandhari hii.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6966,7 +6994,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Weka kamera ikiwa hai</translation>
+        <translation type="vanished">Weka kamera ikiwa hai</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7270,6 +7298,98 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Hali zinazotumika kwa ubainifu huu hazikuweza kupatikana. Onyesha upya kamera au chagua ubainifu mwingine.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Ongeza mandhari</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Chagua mandhari inayopatikana.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Funga</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Sanidi kamera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Sanidi kamera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Muunganisho</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Jina la muunganisho</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Mipangilio ya muunganisho</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Weka jina la kamera.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Weka jina la chanzo hiki katika mandhari.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Weka anwani ya RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Jina katika mandhari hii</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>Kamera ya IP</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Muunganisho mpya…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Hakuna matokeo yaliyopatikana.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Badilisha jina la chanzo</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Mipangilio ya kamera iliyohifadhiwa</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Tafuta miunganisho…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Tafuta mandhari…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Tafuta…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Mipangilio hii inaathiri mandhari zote zinazotumia kamera hii na wasifu wote wa mandhari unaoitumia. Ili kubadilisha jina katika mandhari hii pekee, tumia Badilisha jina….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Kifaa hiki kina miunganisho ya kamera inayokinzana. Angalia miunganisho iliyopo kabla ya kuendelea.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Mandhari hii itatumia tena mipangilio ya pamoja ya kamera.</translation>
     </message>
 </context>
 <context>

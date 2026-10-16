@@ -47,6 +47,10 @@ class SceneConflictError(SceneOperationError):
     pass
 
 
+class DuplicateLayerNameError(SceneConflictError):
+    """A new or renamed occurrence would reuse a name in its scene."""
+
+
 class SceneHistoryEmptyError(SceneOperationError):
     pass
 
@@ -105,6 +109,7 @@ class SceneDocumentService:
         identity_factory: Callable[[], str] = new_identity,
         store: SceneDocumentStore | None = None,
         history_limit: int = 100,
+        materialize: Callable[[SceneDocument], SceneDocument] | None = None,
     ) -> None:
         if history_limit < 1:
             raise ValueError("history_limit must be positive")
@@ -112,6 +117,7 @@ class SceneDocumentService:
         self._clock = clock
         self._identity_factory = identity_factory
         self._store = store
+        self._materialize = materialize or (lambda document: document)
         self._history_limit = history_limit
         self._undo: list[SceneDocument] = []
         self._redo: list[SceneDocument] = []
@@ -355,6 +361,96 @@ class SceneDocumentService:
         layers.insert(insertion_index, layer)
         return self.update_scene(scene_id, replace(scene, layers=tuple(layers)))
 
+    def prepare_source_layer(
+        self, scene_id: str, source: SourceDefinition, layer: SceneLayer,
+    ) -> SceneDocument:
+        """Validate an entire insertion before shared resources are persisted."""
+        if layer.source_id != source.id:
+            raise SceneConflictError("Layer references a different source")
+        scene = self._scene(scene_id)
+        if len(scene.layers) >= MAX_LAYERS_PER_SCENE:
+            raise SceneConflictError("Scene has reached the layer limit")
+        if any(candidate.id == layer.id for candidate in scene.layers):
+            raise SceneConflictError(f"Layer already exists: {layer.id}")
+        sources = tuple(
+            source if candidate.id == source.id else candidate
+            for candidate in self._document.sources
+        )
+        if not any(candidate.id == source.id for candidate in sources):
+            sources = (*sources, source)
+        updated_scene = replace(
+            scene, layers=(*scene.layers, layer), updated_at=self._clock(),
+        )
+        candidate = replace(
+            self._document, sources=sources,
+            scenes=tuple(updated_scene if item.id == scene_id else item
+                         for item in self._document.scenes),
+        )
+        self._validate_layer_name_changes(candidate)
+        return candidate
+
+    def add_source_layer(
+        self, scene_id: str, source: SourceDefinition, layer: SceneLayer,
+    ) -> SceneDocument:
+        """Insert a source reference and its occurrence as one undoable edit."""
+        return self._commit(self.prepare_source_layer(scene_id, source, layer))
+
+    def rename_layer(self, scene_id: str, layer_id: str, name: str) -> SceneDocument:
+        layer = self._layer(self._scene(scene_id), layer_id)
+        normalized = name.strip()
+        if normalized == layer.name:
+            return self._document
+        return self.update_layer(scene_id, layer_id, replace(layer, name=normalized))
+
+    def validate_layer_name(self, scene_id: str, name: str, *, excluding_layer_id: str = "") -> None:
+        """Check the same name constraint used when committing editor changes."""
+        scene = self._scene(scene_id)
+        own_layer = next((layer for layer in scene.layers if layer.id == excluding_layer_id), None)
+        if own_layer is not None and own_layer.name == name.strip():
+            return
+        if self._layer_name_conflicts(scene, name, excluding_layer_id=excluding_layer_id):
+            raise DuplicateLayerNameError("A layer with this name already exists in this scene")
+
+    def suggest_layer_name(self, scene_id: str, name: str) -> str:
+        """Choose a free name for an insertion that has no naming form."""
+        scene = self._scene(scene_id)
+        base = name.strip()
+        candidate = base
+        suffix = 2
+        while self._layer_name_conflicts(scene, candidate):
+            candidate = f"{base} ({suffix})"
+            suffix += 1
+        return candidate
+
+    @staticmethod
+    def _layer_name_conflicts(scene: SceneDefinition, name: str, *, excluding_layer_id: str = "") -> bool:
+        key = name.strip().casefold()
+        return any(layer.id != excluding_layer_id and layer.name.strip().casefold() == key
+                   for layer in scene.layers)
+
+    def _validate_layer_name_changes(self, candidate: SceneDocument) -> None:
+        # Existing aliases remain readable and editable; validate names introduced
+        # by this operation rather than rejecting historical documents on load.
+        previous = {(scene.id, layer.id): layer.name
+                    for scene in self._document.scenes for layer in scene.layers}
+        for scene in candidate.scenes:
+            for layer in scene.layers:
+                if previous.get((scene.id, layer.id)) == layer.name:
+                    continue
+                if self._layer_name_conflicts(scene, layer.name, excluding_layer_id=layer.id):
+                    raise DuplicateLayerNameError("A layer with this name already exists in this scene")
+
+    def refresh_resources(self) -> SceneDocument:
+        """Publish current shared definitions without creating scene history."""
+        candidate = self._materialize(self._document)
+        if candidate == self._document:
+            return self._document
+        updated = replace(candidate, revision=self._document.revision + 1)
+        self._persist_if_configured(updated, self._document.revision)
+        self._document = updated
+        self._publish_changed(SceneChangeKind.CONFIGURATION)
+        return updated
+
     def update_layer(
         self,
         scene_id: str,
@@ -582,7 +678,7 @@ class SceneDocumentService:
         if not self._undo:
             raise SceneHistoryEmptyError("There is no scene edit to undo")
         snapshot = self._undo[-1]
-        restored = replace(snapshot, revision=self._document.revision + 1)
+        restored = replace(self._materialize(snapshot), revision=self._document.revision + 1)
         self._persist_if_configured(restored, self._document.revision)
         self._undo.pop()
         self._append_history(self._redo, self._document)
@@ -594,7 +690,7 @@ class SceneDocumentService:
         if not self._redo:
             raise SceneHistoryEmptyError("There is no scene edit to redo")
         snapshot = self._redo[-1]
-        restored = replace(snapshot, revision=self._document.revision + 1)
+        restored = replace(self._materialize(snapshot), revision=self._document.revision + 1)
         self._persist_if_configured(restored, self._document.revision)
         self._redo.pop()
         self._append_history(self._undo, self._document)
@@ -603,10 +699,12 @@ class SceneDocumentService:
         return self._document
 
     def _commit(self, candidate: SceneDocument) -> SceneDocument:
+        candidate = self._materialize(candidate)
         if candidate.document_id != self._document.document_id:
             raise SceneConflictError("A document id cannot be changed")
         if replace(candidate, revision=self._document.revision) == self._document:
             return self._document
+        self._validate_layer_name_changes(candidate)
         updated = replace(candidate, revision=self._document.revision + 1)
         self._persist_if_configured(updated, self._document.revision)
         self._append_history(self._undo, self._document)

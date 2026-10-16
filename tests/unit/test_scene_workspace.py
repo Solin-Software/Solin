@@ -14,15 +14,19 @@ import pytest
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.media import camera_identity
 from solin.core.scenes.collections import DEFAULT_SCENE_COLLECTION_ID
+from solin.core.scenes.application import SceneNotFoundError
 from solin.core.scenes.model import (
     BusId,
+    CameraMediaType,
     CameraPreset,
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
     FitMode,
     LocalCameraConfig,
     OnvifPtzBinding,
+    RtspCameraConfig,
     SceneLayer,
     SceneValidationError,
     NO_SIGNAL_SOURCE_ID,
@@ -43,6 +47,8 @@ from solin.core.scenes.repository import SceneDocumentRepository
 from solin.core.scenes.repository import SceneCollectionDocumentRepository
 from solin.core.scenes.resources import SceneResourceCatalog
 from solin.core.scenes.workspace import (
+    LocalCameraConflictError,
+    SceneCameraApplyError,
     SceneWorkspaceBusyError,
     SceneWorkspaceChangeKind,
     SceneWorkspaceOperationError,
@@ -368,7 +374,7 @@ def test_beta_migration_preserves_custom_collections_and_rebuilds_only_pristine(
     workspace.close()
     reloaded = scene_workspace_factory(paths, seed_names=_names())
     assert reloaded.documents.document == document
-    assert json.loads((paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json").read_text())["schema_version"] == 12
+    assert json.loads((paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json").read_text())["schema_version"] == 13
 
 
 def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
@@ -698,12 +704,338 @@ def test_shared_cameras_are_isolated_between_general_solin_profiles(scene_worksp
     assert second.configured_cameras == ()
 
 
+def _local_camera(device_id: str = "physical-camera-1", *, camera_id: str = "shared-camera") -> SourceDefinition:
+    return SourceDefinition(
+        id=camera_id, kind=SourceKind.LOCAL_CAMERA, name="Shared camera",
+        configuration=LocalCameraConfig(
+            device_id=device_id, width=640, height=480,
+            fps_numerator=30, fps_denominator=1,
+            media_type=CameraMediaType.RAW, pixel_format="YUY2",
+        ),
+    )
+
+
+def test_camera_occurrences_reuse_connection_without_changing_configuration(
+    scene_workspace_factory, tmp_path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(camera_identity, "sys", SimpleNamespace(platform="win32"))
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = _local_camera(r"Original:\\?\USB#CAMERA")
+    first = SceneLayer(id="first-occurrence", source_id=camera.id, name="Lectern")
+    before = workspace.documents.document
+    inserted = workspace.add_camera_layer(CAMERA_SCENE_ID, camera, first)
+    assert inserted == first
+    assert workspace.documents.document.revision == before.revision + 1
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers[-1] == first
+    stored_resources = paths.scene_resources_file.read_bytes()
+
+    alias = replace(
+        camera, id="proposed-duplicate", name="Another name",
+        configuration=LocalCameraConfig(device_id=r"Renamed:\\?\usb#camera"),
+    )
+    second = SceneLayer(id="second-occurrence", source_id=alias.id, name="Wide angle")
+    reused = workspace.add_camera_layer(CAMERA_SCENE_ID, alias, second)
+    third = workspace.add_camera_layer(
+        CONTENT_SCENE_ID, alias,
+        SceneLayer(id="third-occurrence", source_id=alias.id, name="Picture in picture"),
+    )
+
+    assert reused.source_id == third.source_id == camera.id
+    assert reused.name == "Wide angle"
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (first, reused)
+    assert workspace.documents.document.source(camera.id) == camera
+    assert workspace.configured_cameras == (camera,)
+    assert paths.scene_resources_file.read_bytes() == stored_resources
+
+
+@pytest.mark.parametrize("failing_store", ["catalog", "document"])
+def test_camera_insertion_failure_restores_resources_document_and_history(
+    scene_workspace_factory, tmp_path, monkeypatch, failing_store,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    before_document = workspace.documents.document
+    before_resources = workspace.resources
+    document_path = paths.scene_profiles_dir / f"{workspace.active_collection.id}.json"
+    stored_document = document_path.read_bytes()
+    changes = []
+    unsubscribe = workspace.subscribe(changes.append)
+    camera = _local_camera()
+
+    def reject_save(*args, **kwargs):
+        raise OSError("injected storage failure")
+
+    target = workspace._resource_repository if failing_store == "catalog" else workspace.documents._store
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(target, "save", reject_save)
+            with pytest.raises(OSError, match="injected storage failure"):
+                workspace.add_camera_layer(
+                    CAMERA_SCENE_ID, camera,
+                    SceneLayer(id="failed-layer", source_id=camera.id, name="Camera"),
+                )
+    finally:
+        unsubscribe()
+
+    assert workspace.documents.document == before_document
+    assert document_path.read_bytes() == stored_document
+    assert workspace.resources.cameras == before_resources.cameras
+    assert workspace._resource_repository.load() == workspace.resources
+    assert changes == []
+    assert not workspace.documents.can_undo
+    assert not workspace.documents.can_redo
+    workspace.close()
+    reloaded = scene_workspace_factory(paths, seed_names=_names())
+    assert reloaded.configured_cameras == ()
+    assert reloaded.documents.document == before_document
+
+
+def test_invalid_camera_occurrence_is_rejected_before_catalog_write(
+    scene_workspace_factory, tmp_path,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    before = workspace.documents.document
+    resources = paths.scene_resources_file.read_bytes()
+    camera = _local_camera()
+
+    with pytest.raises(SceneNotFoundError, match="does not exist"):
+        workspace.add_camera_layer(
+            "missing-scene", camera,
+            SceneLayer(id="missing-scene-layer", source_id=camera.id, name="Camera"),
+        )
+
+    assert workspace.documents.document == before
+    assert paths.scene_resources_file.read_bytes() == resources
+    assert not workspace.documents.can_undo
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_camera_reuse_preserves_case_sensitive_backend_identity(
+    scene_workspace_factory, tmp_path, monkeypatch, platform,
+) -> None:
+    monkeypatch.setattr(camera_identity, "sys", SimpleNamespace(platform=platform))
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    first = _local_camera("Native-ID")
+    second = _local_camera("native-id", camera_id="other-camera")
+    workspace.upsert_camera(first)
+    workspace.upsert_camera(second)
+
+    assert workspace.local_camera_for_device("Native-ID") == first
+    assert workspace.local_camera_for_device("native-id") == second
+    assert workspace.local_camera_for_device("NATIVE-ID") is None
+
+
+def test_unbound_camera_does_not_match_another_unbound_connection(scene_workspace_factory, tmp_path) -> None:
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    first = _local_camera("")
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, first,
+        SceneLayer(id="unbound-first", source_id=first.id, name="First unbound"),
+    )
+    second = _local_camera("", camera_id="another-unbound")
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, second,
+        SceneLayer(id="unbound-second", source_id=second.id, name="Second unbound"),
+    )
+
+    assert workspace.local_camera_for_device("") is None
+    assert workspace.configured_cameras == (first, second)
+
+
+@pytest.mark.parametrize("compatible", [False, True])
+def test_legacy_camera_aliases_are_resolved_only_when_settings_are_equivalent(
+    scene_workspace_factory, tmp_path, monkeypatch, compatible,
+) -> None:
+    monkeypatch.setattr(camera_identity, "sys", SimpleNamespace(platform="win32"))
+    paths = _paths(tmp_path)
+    first = _local_camera(r"Old name:\\?\USB#CAMERA", camera_id="camera-a")
+    configuration = replace(first.configuration, device_id=r"New name:\\?\usb#camera")
+    if not compatible:
+        configuration = replace(configuration, fps_numerator=15)
+    second = replace(first, id="camera-b", name="Other connection", configuration=configuration)
+    legacy = SceneResourceCatalog(revision=4, cameras=(second, first))
+    paths.scene_resources_file.write_text(json.dumps(legacy.to_record()), encoding="utf-8")
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    stored = paths.scene_resources_file.read_bytes()
+
+    if compatible:
+        assert workspace.local_camera_for_device(r"Current name:\\?\usb#camera") == first
+    else:
+        with pytest.raises(LocalCameraConflictError, match="Conflicting"):
+            workspace.local_camera_for_device(r"Current name:\\?\usb#camera")
+        with pytest.raises(LocalCameraConflictError, match="Conflicting"):
+            workspace.add_camera_layer(
+                CAMERA_SCENE_ID, first,
+                SceneLayer(id="ambiguous-layer", source_id=first.id, name="Ambiguous"),
+            )
+    assert paths.scene_resources_file.read_bytes() == stored
+    assert workspace.configured_cameras == (second, first)
+    assert not workspace.documents.can_undo
+
+
+def test_shared_camera_updates_survive_layer_undo_redo_and_reload(
+    scene_workspace_factory, tmp_path,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = _local_camera()
+    first = SceneLayer(id="first-layer", source_id=camera.id, name="First camera")
+    second = SceneLayer(id="second-layer", source_id=camera.id, name="Second camera")
+    workspace.add_camera_layer(CAMERA_SCENE_ID, camera, first)
+    workspace.add_camera_layer(CAMERA_SCENE_ID, camera, second)
+    updated = replace(camera, configuration=replace(camera.configuration, fps_numerator=15))
+
+    workspace.upsert_camera(updated)
+
+    assert workspace.documents.document.source(camera.id) == updated
+    workspace.documents.undo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (first,)
+    assert workspace.documents.document.source(camera.id) == updated
+    workspace.documents.undo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert all(source.id != camera.id for source in workspace.documents.document.sources)
+    assert workspace.configured_cameras == (updated,)
+    workspace.documents.redo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (first,)
+    assert workspace.documents.document.source(camera.id) == updated
+    workspace.documents.redo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (first, second)
+    assert workspace.documents.document.source(camera.id) == updated
+    workspace.documents.rename_layer(CAMERA_SCENE_ID, first.id, "My camera")
+    workspace.close()
+    reloaded = scene_workspace_factory(paths, seed_names=_names())
+
+    assert reloaded.documents.document.source(camera.id) == updated
+    layers = reloaded.documents.document.scene(CAMERA_SCENE_ID).layers
+    assert layers == (replace(first, name="My camera"), second)
+
+
+@pytest.mark.parametrize("failing_store", ["catalog", "document"])
+def test_failed_shared_camera_update_preserves_previous_settings_and_scene_history(
+    scene_workspace_factory, tmp_path, monkeypatch, failing_store,
+) -> None:
+    paths = _paths(tmp_path)
+    workspace = scene_workspace_factory(paths, seed_names=_names())
+    camera = _local_camera()
+    layer = SceneLayer(id="camera-layer", source_id=camera.id, name="My camera")
+    workspace.add_camera_layer(CAMERA_SCENE_ID, camera, layer)
+    before = workspace.documents.document
+    updated = replace(camera, configuration=replace(camera.configuration, fps_numerator=15))
+
+    def reject_save(*args, **kwargs):
+        raise OSError("injected update failure")
+
+    target = workspace._resource_repository if failing_store == "catalog" else workspace.documents._store
+    with monkeypatch.context() as patch:
+        patch.setattr(target, "save", reject_save)
+        with pytest.raises(OSError, match="injected update failure"):
+            workspace.upsert_camera(updated)
+
+    assert workspace.configured_cameras == (camera,)
+    assert workspace._resource_repository.load() == workspace.resources
+    assert workspace.documents.document == before
+    workspace.documents.undo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert not workspace.documents.can_undo
+    workspace.documents.redo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (layer,)
+    assert workspace.documents.document.source(camera.id) == camera
+
+
+def test_shared_camera_double_persistence_failure_reports_durable_catalog_and_original_cause(
+    scene_workspace_factory, tmp_path, monkeypatch,
+) -> None:
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    camera = _local_camera()
+    layer = SceneLayer(id="camera-layer", source_id=camera.id, name="My camera")
+    workspace.add_camera_layer(CAMERA_SCENE_ID, camera, layer)
+    before_document = workspace.documents.document
+    document_path = workspace.documents._store.path
+    stored_document = document_path.read_bytes()
+    before_resources = workspace.resources
+    updated = replace(camera, configuration=replace(camera.configuration, fps_numerator=15))
+    document_error = OSError("document persistence failed")
+    compensation_error = OSError("catalog compensation failed")
+    save_resources = workspace._resource_repository.save
+    catalog_attempts = []
+    changes = []
+    unsubscribe = workspace.subscribe(changes.append)
+
+    def save_then_reject_compensation(resources, **kwargs):
+        catalog_attempts.append(resources)
+        if len(catalog_attempts) == 2:
+            raise compensation_error
+        return save_resources(resources, **kwargs)
+
+    def reject_document(*args, **kwargs):
+        raise document_error
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(workspace._resource_repository, "save", save_then_reject_compensation)
+            patch.setattr(workspace.documents._store, "save", reject_document)
+            with pytest.raises(SceneCameraApplyError) as failure:
+                workspace.upsert_camera(updated)
+    finally:
+        unsubscribe()
+
+    assert failure.value.__cause__ is document_error
+    assert len(catalog_attempts) == 2
+    assert catalog_attempts[1].cameras == (camera,)
+    assert workspace.resources == replace(
+        before_resources, revision=before_resources.revision + 1, cameras=(updated,),
+    )
+    assert workspace._resource_repository.load() == workspace.resources
+    assert workspace.documents.document == before_document
+    assert document_path.read_bytes() == stored_document
+    assert [change.kind for change in changes] == [SceneWorkspaceChangeKind.RESOURCES]
+    workspace.documents.undo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == ()
+    assert not workspace.documents.can_undo
+    workspace.documents.redo()
+    assert workspace.documents.document.scene(CAMERA_SCENE_ID).layers == (layer,)
+    assert workspace.documents.document.source(camera.id) == updated
+
+
+def test_ip_camera_reuse_preserves_connection_and_identical_urls_are_not_deduplicated(
+    scene_workspace_factory, tmp_path,
+) -> None:
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    first = SourceDefinition(
+        id="first-ip", kind=SourceKind.RTSP_CAMERA, name="Front camera",
+        configuration=RtspCameraConfig(uri="rtsp://camera.invalid/live"),
+    )
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, first,
+        SceneLayer(id="first-ip-layer", source_id=first.id, name="Front"),
+    )
+    reuse_proposal = replace(
+        first, name="Changed connection", configuration=RtspCameraConfig(uri="rtsp://other.invalid/live"),
+    )
+    reused = workspace.add_camera_layer(
+        CONTENT_SCENE_ID, reuse_proposal,
+        SceneLayer(id="reused-ip-layer", source_id=first.id, name="Front in content"),
+    )
+    second = replace(first, id="second-ip", name="Separate connection")
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, second,
+        SceneLayer(id="second-ip-layer", source_id=second.id, name="Separate"),
+    )
+
+    assert reused.source_id == first.id
+    assert workspace.configured_cameras == (first, second)
+    assert workspace.documents.document.source(first.id) == first
+
+
 @pytest.mark.parametrize("add_to_document", [False, True])
 @pytest.mark.parametrize("existing_in_document", [False, True])
 def test_camera_alias_is_rejected_before_persisting_shared_resources(
     scene_workspace_factory, tmp_path: Path, add_to_document: bool,
-    existing_in_document: bool,
+    existing_in_document: bool, monkeypatch,
 ) -> None:
+    monkeypatch.setattr(camera_identity, "sys", SimpleNamespace(platform="win32"))
     paths = _paths(tmp_path)
     workspace = scene_workspace_factory(paths, seed_names=_names())
     camera = replace(
@@ -778,6 +1110,96 @@ def test_invalid_active_camera_replacement_is_rejected_before_resource_save(
     assert workspace.resources == before_resources
     assert workspace.documents.document == before_document
     assert paths.scene_resources_file.read_bytes() == stored
+
+
+@pytest.mark.parametrize("survivor_owns_ptz", [False, True])
+def test_orphaned_camera_gc_preserves_credentials_shared_with_surviving_camera(
+    scene_workspace_factory, tmp_path, survivor_owns_ptz,
+) -> None:
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    shared_ref = "shared-camera-credential"
+    survivor_ref = "survivor-only-credential"
+    orphan_ref = "orphan-only-credential"
+    survivor = SourceDefinition(
+        id="surviving-ip", kind=SourceKind.RTSP_CAMERA, name="Surviving camera",
+        credential_ref=survivor_ref if survivor_owns_ptz else shared_ref,
+        configuration=RtspCameraConfig(
+            uri="rtsp://survivor.invalid/live",
+            ptz_binding=OnvifPtzBinding(
+                endpoint="http://survivor.invalid/onvif/device_service",
+                credential_ref=shared_ref if survivor_owns_ptz else survivor_ref,
+            ),
+        ),
+    )
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, survivor,
+        SceneLayer(id="surviving-layer", source_id=survivor.id, name="Live camera"),
+    )
+    orphan = SourceDefinition(
+        id="orphaned-ip", kind=SourceKind.RTSP_CAMERA, name="Orphaned camera",
+        credential_ref=shared_ref if survivor_owns_ptz else orphan_ref,
+        configuration=RtspCameraConfig(
+            uri="rtsp://orphan.invalid/live",
+            ptz_binding=OnvifPtzBinding(
+                endpoint="http://orphan.invalid/onvif/device_service",
+                credential_ref=orphan_ref if survivor_owns_ptz else shared_ref,
+            ),
+        ),
+    )
+    workspace.upsert_camera(orphan)
+    deleted_credentials = []
+
+    assert workspace.collect_orphaned_cameras() == (orphan,)
+
+    assert workspace.configured_cameras == (survivor,)
+    assert workspace.documents.document.source(survivor.id) == survivor
+    assert workspace.resources.credential_references == frozenset((shared_ref, survivor_ref))
+    assert workspace.resources.pending_credential_deletions == (orphan_ref,)
+    assert workspace._resource_repository.load() == workspace.resources
+
+    workspace.set_credential_cleaner(deleted_credentials.append)
+
+    assert deleted_credentials == [orphan_ref]
+    assert workspace.resources.pending_credential_deletions == ()
+    assert workspace._resource_repository.load() == workspace.resources
+
+
+def test_pending_credential_cleanup_skips_live_stream_and_ptz_references(
+    scene_workspace_factory, tmp_path,
+) -> None:
+    workspace = scene_workspace_factory(_paths(tmp_path), seed_names=_names())
+    camera = SourceDefinition(
+        id="live-ip", kind=SourceKind.RTSP_CAMERA, name="Live camera",
+        credential_ref="live-stream-credential",
+        configuration=RtspCameraConfig(
+            uri="rtsp://camera.invalid/live",
+            ptz_binding=OnvifPtzBinding(
+                endpoint="http://camera.invalid/onvif/device_service",
+                credential_ref="live-ptz-credential",
+            ),
+        ),
+    )
+    workspace.add_camera_layer(
+        CAMERA_SCENE_ID, camera,
+        SceneLayer(id="live-layer", source_id=camera.id, name="Live camera"),
+    )
+    workspace._save_resources(replace(
+        workspace.resources, revision=workspace.resources.revision + 1,
+        pending_credential_deletions=(
+            "live-stream-credential", "orphan-credential", "live-ptz-credential",
+        ),
+    ))
+    deleted_credentials = []
+
+    workspace.set_credential_cleaner(deleted_credentials.append)
+
+    assert deleted_credentials == ["orphan-credential"]
+    assert workspace.configured_cameras == (camera,)
+    assert workspace.resources.credential_references == frozenset((
+        "live-stream-credential", "live-ptz-credential",
+    ))
+    assert workspace.resources.pending_credential_deletions == ()
+    assert workspace._resource_repository.load() == workspace.resources
 
 
 def test_orphaned_camera_cleanup_waits_for_backup_and_retries_credentials(
@@ -1070,7 +1492,7 @@ def test_existing_beta_catalog_without_resources_captures_routes_before_normaliz
         assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
     for path in (primary, backup):
         record = json.loads(path.read_text(encoding="utf-8"))
-        assert record["schema_version"] == 12
+        assert record["schema_version"] == 13
         assert all("default_scene_id" not in output for output in record["outputs"])
         if not customized:
             assert [scene["name"] for scene in record["scenes"]] == ["Media", "Camera"]

@@ -6178,6 +6178,34 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>La capture de la caméra n’a pas pu être vérifiée. Actualisez les caméras ou reconnectez le périphérique.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Vérifiez le nom et les paramètres de la source.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Aucune caméra trouvée.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>La scène ou la caméra a changé pendant que cette boîte de dialogue était ouverte. Rouvrez-la et réessayez.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Cet appareil présente des connexions de caméra en conflit. Vérifiez les connexions existantes avant de continuer.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Cette scène créerait une référence circulaire.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>La connexion de la caméra a été enregistrée, mais la scène n’a pas pu être mise à jour. Rouvrez-la et réessayez.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Une source portant ce nom existe déjà dans cette scène.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6966,7 +6994,7 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Garder la caméra active</translation>
+        <translation type="vanished">Garder la caméra active</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7270,6 +7298,98 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Les modes pris en charge pour cette résolution n’ont pas pu être récupérés. Actualisez les caméras ou choisissez une autre résolution.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Ajouter une scène</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Choisissez une scène disponible.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Fermer</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Configurer la caméra</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Configurer la caméra…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Connexion</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Nom de la connexion</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Paramètres de connexion</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Saisissez un nom de caméra.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Saisissez un nom pour cette source dans la scène.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Saisissez une adresse RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Nom dans cette scène</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>Caméra IP</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Nouvelle connexion…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Aucun résultat trouvé.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Renommer la source</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Paramètres enregistrés de la caméra</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Rechercher des connexions…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Rechercher des scènes…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Rechercher…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Ces paramètres affectent toutes les scènes et tous les profils de scènes qui utilisent cette caméra. Pour modifier uniquement le nom dans cette scène, utilisez Renommer….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Cet appareil présente des connexions de caméra en conflit. Vérifiez les connexions existantes avant de continuer.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Cette scène réutilisera les paramètres partagés de la caméra.</translation>
     </message>
 </context>
 <context>

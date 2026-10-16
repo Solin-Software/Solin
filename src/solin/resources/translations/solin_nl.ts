@@ -6178,6 +6178,34 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>De camera-opname kon niet worden gecontroleerd. Vernieuw de camera’s of sluit het apparaat opnieuw aan.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Controleer de naam en instellingen van de bron.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Geen camera's gevonden.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>De scène of camera is gewijzigd terwijl dit dialoogvenster geopend was. Open het opnieuw en probeer het nogmaals.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Dit apparaat heeft conflicterende cameraverbindingen. Controleer de bestaande verbindingen voordat u doorgaat.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Deze scène zou een kringverwijzing veroorzaken.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>De cameraverbinding is opgeslagen, maar de scène kon niet worden bijgewerkt. Open het opnieuw en probeer het nogmaals.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Er bestaat al een bron met deze naam in deze scène.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6966,7 +6994,7 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Camera actief houden</translation>
+        <translation type="vanished">Camera actief houden</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7270,6 +7298,98 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>De ondersteunde modi voor deze resolutie konden niet worden opgehaald. Vernieuw de camera’s of kies een andere resolutie.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Scène toevoegen</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Kies een beschikbare scène.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Sluiten</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Camera configureren</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Camera configureren…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Verbinding</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Verbindingsnaam</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Verbindingsinstellingen</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Voer een cameranaam in.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Voer een naam in voor deze bron in de scène.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Voer een RTSP-adres in.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Naam in deze scène</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP-camera</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Nieuwe verbinding…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Geen resultaten gevonden.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Naam van bron wijzigen</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Opgeslagen camera-instellingen</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Verbindingen zoeken…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Scènes zoeken…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Zoeken…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Deze instellingen zijn van invloed op alle scènes en scèneprofielen die deze camera gebruiken. Gebruik Naam wijzigen… om alleen de naam in deze scène te wijzigen.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Dit apparaat heeft conflicterende cameraverbindingen. Controleer de bestaande verbindingen voordat u doorgaat.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Deze scène gebruikt de gedeelde instellingen van de camera opnieuw.</translation>
     </message>
 </context>
 <context>
