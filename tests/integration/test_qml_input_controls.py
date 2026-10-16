@@ -357,7 +357,7 @@ def test_native_ancestor_exit_preserves_capture_until_mouse_release(request, mon
 
 
 def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(request, monkeypatch):
-    old_host, old_container, widget, root = _native_hover_host(request, sync_cursor=True)
+    old_host, old_container, widget, root = _native_hover_host(request)
     outside = old_host.mapToGlobal(QPoint(old_host.width() - 2, old_host.height() - 2))
     with monkeypatch.context() as cursor_snapshot:
         cursor_snapshot.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
@@ -371,7 +371,7 @@ def test_reparenting_cancels_old_exit_and_observes_the_new_native_ancestor(reque
         widget.setParent(container)
     widget.show()
     show_and_activate(host)
-    _enter_native_hover(widget, QPoint(80, 70), sync_cursor=True)
+    _enter_native_hover(widget, QPoint(80, 70))
     wait_until(lambda: root.property("hovered"), description="reparented embedded hover")
     outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))
@@ -525,9 +525,9 @@ def test_native_parent_mouse_route_emits_one_exit_before_reentry(request, cached
 
 @pytest.mark.parametrize("exit_ancestor", ["container", "replacement_parent"])
 def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypatch, exit_ancestor):
-    # Qualify native hover before changing the hierarchy. A synthetic Enter
-    # initializes QWidget state without establishing Cocoa's native tracking.
-    host, container, widget, root = _native_hover_host(request, depth=2, sync_cursor=True)
+    # Exercise ancestor rebinding with one ordered Qt input stream. Native
+    # Cocoa pointer transport has separate coverage through physical crossings.
+    host, container, widget, root = _native_hover_host(request, depth=2)
     old_parent = container.parentWidget()
     parent = QWidget(host)
     parent.setGeometry(10, 10, 400, 340)
@@ -540,7 +540,7 @@ def test_ancestor_reparenting_rebinds_pointer_exit_observation(request, monkeypa
     container.show()
     widget.show()
     show_and_activate(host)
-    _enter_native_hover(widget, QPoint(90, 70), sync_cursor=True)
+    _enter_native_hover(widget, QPoint(90, 70))
     wait_until(lambda: root.property("hovered"), description="ancestor-reparented hover")
     outside = host.mapToGlobal(QPoint(host.width() - 2, host.height() - 2))
     monkeypatch.setattr(qml_host, "QCursor", SimpleNamespace(pos=lambda: outside))

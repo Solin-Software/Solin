@@ -191,7 +191,13 @@ def test_cursor_move_accepts_target_widget_entry(input_surface, monkeypatch):
 
     class Recorder(QObject):
         def eventFilter(self, watched, event):  # noqa: N802 - Qt override
-            if watched is widget and event.type() == QEvent.Type.Enter:
+            if (
+                watched is widget
+                and event.type() == QEvent.Type.Enter
+                and event.globalPosition().toPoint() == expected
+            ):
+                # Native pointer events at unrelated coordinates may arrive
+                # while Cocoa or the window system processes the posted input.
                 entries.append((event.position(), event.scenePosition(), event.globalPosition()))
             return False
 
