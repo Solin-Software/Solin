@@ -5458,3 +5458,39 @@ def test_idle_configuration_revision_supersedes_preparation_at_same_epoch(reques
     assert len(engine.takes) == 3
     assert engine.preparation_content_source_kinds == [ContentSourceKind.IDLE] * 4
     assert session.idle_media_path == "latest.mp4"
+
+
+def test_windows_custom_size_alias_queries_current_selector_once(request, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    class Engine(_Engine):
+        def __init__(self):
+            super().__init__()
+            self.mode_future = Future()
+            self.mode_calls = []
+
+        def query_local_camera_modes(self, device_id, width, height, **_kwargs):
+            self.mode_calls.append((device_id, width, height))
+            return self.mode_future
+
+    engine = Engine()
+    _documents, _runtime, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.refresh_local_cameras()
+    device = replace(controller.local_cameras.devices[0], device_id="Current label:USB-DEVICE",
+                     resolution_ranges=(LocalVideoResolutionRange(
+                         CameraMediaType.RAW, "NV12", 640, 1920, 16, 480, 1080, 8,
+                     ),))
+    controller._set_local_cameras(replace(controller.local_cameras, devices=(device,)))
+    first = controller.query_local_camera_modes("Previous label:usb-device", 800, 600)
+    assert controller.query_local_camera_modes(device.device_id, 800, 600) is first
+    assert engine.mode_calls == [(device.device_id, 800, 600)]
+    queried = replace(device, formats=(replace(device.formats[0], width=800, height=600),), resolution_ranges=())
+    engine.mode_future.set_result(LocalCameraDiscovery(True, True, 1, (queried,)))
+    _deliver_controller_results(controller)
+    assert first.result().devices == (queried,)
+    assert queried.formats[0] in controller.local_cameras.devices[0].formats
+    assert controller.query_local_camera_modes("USB-DEVICE", 800, 600).result() == first.result()
+    assert len(engine.mode_calls) == 1

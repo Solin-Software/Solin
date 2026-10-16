@@ -948,6 +948,7 @@ Item {
 
     Menu {
         id: sourceMenu
+        objectName: "scenesAddSourceMenu"
         width: 285
         padding: 6
         background: Rectangle {
@@ -956,24 +957,16 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
-        // Reuse configured cameras so a device is opened only once.
-        Repeater {
-            model: root.bridge ? root.bridge.configuredCameras : []
-            ScenesMenuItem {
-                required property var modelData
-                theme: root.theme
-                text: modelData.name
-                onTriggered: root.bridge.addConfiguredCamera(modelData.id)
-            }
-        }
         ScenesMenuItem {
+            objectName: "scenesAddCameraMenuItem"
             theme: root.theme
-            text: qsTr("New local camera…")
+            text: qsTr("Camera")
             onTriggered: cameraDialog.openForCamera("local_camera")
         }
         ScenesMenuItem {
+            objectName: "scenesAddNetworkCameraMenuItem"
             theme: root.theme
-            text: qsTr("New network camera…")
+            text: qsTr("Network camera")
             onTriggered: cameraDialog.openForCamera("rtsp_camera")
         }
         ScenesMenuItem {
@@ -981,10 +974,17 @@ Item {
             text: qsTr("Solin Content")
             onTriggered: root.bridge.addContentSource()
         }
+        ScenesMenuItem {
+            objectName: "scenesAddSceneMenuItem"
+            theme: root.theme
+            text: qsTr("Scene")
+            onTriggered: sceneReferenceDialog.openForScene()
+        }
     }
 
     Menu {
         id: transformMenu
+        objectName: "scenesSourceContextMenu"
         width: 218
         padding: 6
         delegate: ScenesMenuItem { theme: root.theme }
@@ -995,23 +995,20 @@ Item {
             border.color: root.borderColor
         }
         ScenesMenuItem {
+            objectName: "scenesRenameLayerMenuItem"
             theme: root.theme
-            text: qsTr("Edit camera…")
+            text: qsTr("Rename…")
+            enabled: root.bridge && root.bridge.selectedLayerId.length > 0
+            onTriggered: layerRenameDialog.openForLayer()
+        }
+        ScenesMenuItem {
+            theme: root.theme
+            objectName: "scenesConfigureCameraMenuItem"
+            text: qsTr("Configure camera…")
             visible: root.bridge && (root.bridge.selectedLayer.kind === "local_camera"
                 || root.bridge.selectedLayer.kind === "rtsp_camera")
             height: visible ? implicitHeight : 0
             onTriggered: cameraDialog.openForSelectedCamera()
-        }
-        ScenesMenuItem {
-            theme: root.theme
-            text: qsTr("Keep camera active")
-            visible: root.bridge && (root.bridge.selectedLayer.kind === "local_camera"
-                || root.bridge.selectedLayer.kind === "rtsp_camera")
-            height: visible ? implicitHeight : 0
-            checkable: true
-            checked: root.bridge && root.bridge.selectedLayer.camera_keep_active === true
-            onTriggered: root.bridge.setCameraKeepActive(
-                root.bridge.selectedLayer.source_id, checked)
         }
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
@@ -1102,6 +1099,21 @@ Item {
         }
     }
 
+    Shortcut {
+        sequence: "F2"
+        context: Qt.WindowShortcut
+        enabled: root.visible && root.bridge && root.bridge.selectedLayerId.length > 0
+            && !root.bridge.framingActive && !cameraDialog.visible
+            && !sceneReferenceDialog.visible && !layerRenameDialog.visible
+            && !transformDialog.visible && !transitionDurationDialog.visible
+            && !createSceneDialog.visible && !sceneNameDialog.visible
+            && !createProfileDialog.visible && !renameProfileDialog.visible
+            && !deleteProfileDialog.visible && !deleteSceneDialog.visible
+        onActivated: layerRenameDialog.openForLayer()
+    }
+
+    ScenesRenameDialog { id: layerRenameDialog; bridge: root.bridge; theme: root.theme }
+    ScenesReferenceDialog { id: sceneReferenceDialog; bridge: root.bridge; theme: root.theme }
     ScenesCameraDialog { id: cameraDialog; bridge: root.bridge; theme: root.theme }
     ScenesTransformDialog { id: transformDialog; bridge: root.bridge; theme: root.theme }
     ScenesPtzPopup { id: ptzPopup; bridge: root.bridge; theme: root.theme }

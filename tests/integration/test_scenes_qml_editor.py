@@ -20,6 +20,7 @@ from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import LocalCameraDevice, LocalCameraDiscovery, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat, LocalVideoFrameInterval, LocalVideoFrameRateRange, LocalVideoResolutionRange, SceneSourcePreview, SourceHealthEvent, SourceHealthStatus
 from solin.core.scenes.model import BusId, CameraMediaType, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
 from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
+from solin.core.scenes.workspace import LocalCameraConflictError
 from solin.core.scenes.recording import (
     AudioDevice,
     AudioDeviceDirection,
@@ -811,8 +812,7 @@ def test_camera_dialog_keeps_dependent_modes_and_selection_after_refresh(
     fps_combo = dialog.findChild(QObject, "cameraFrameRateCombo")
     format_combo = dialog.findChild(QObject, "cameraFormatCombo")
     assert all((device_combo, resolution_combo, fps_combo, format_combo))
-    device_combo.setProperty("currentIndex", 1)
-    assert QMetaObject.invokeMethod(device_combo, "activated", Q_ARG(int, 1))
+    _choose_local_device(dialog, camera.device_id)
     assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1920x1080"))
     QCoreApplication.processEvents()
     assert resolution_combo.property("count") == 3  # Automatic, HD, SD.
@@ -854,10 +854,12 @@ def test_camera_dialog_validates_custom_rate_and_retains_it_during_refresh(
     QCoreApplication.processEvents()
     dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
     assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
-    dialog.setProperty("deviceId", camera.device_id)
+    _choose_local_device(dialog, camera.device_id)
     assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1280x720"))
     QCoreApplication.processEvents()
     field = dialog.findChild(QObject, "cameraCustomFrameRateField")
+    assert not field.property("visible")
+    dialog.setProperty("advancedExpanded", True)
     assert field.property("visible")
     assert QMetaObject.invokeMethod(dialog, "applyCustomFrameRate", Q_ARG("QVariant", "20"))
     QCoreApplication.processEvents()
@@ -924,7 +926,7 @@ def test_camera_dialog_queries_custom_size_before_exposing_its_frame_rates(
     QCoreApplication.processEvents()
     dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
     assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
-    dialog.setProperty("deviceId", camera.device_id)
+    _choose_local_device(dialog, camera.device_id)
     width = dialog.findChild(QObject, "cameraCustomWidthField")
     height = dialog.findChild(QObject, "cameraCustomHeightField")
     assert width is not None and height is not None
@@ -958,3 +960,525 @@ def test_camera_dialog_queries_custom_size_before_exposing_its_frame_rates(
     assert fps.property("count") == 1
     assert dialog.findChild(QObject, "cameraResolutionCombo").property("currentText") == "1280 × 720"
     assert QMetaObject.invokeMethod(dialog, "close")
+
+
+
+def _qml_value(value):
+    return value.toVariant() if hasattr(value, "toVariant") else value
+
+
+def _choose_local_device(dialog, device_id: str) -> None:
+    combo = dialog.findChild(QObject, "cameraDeviceCombo")
+    devices = _qml_value(combo.property("model"))
+    index = next(index for index, device in enumerate(devices) if device["id"] == device_id)
+    combo.setProperty("currentIndex", index)
+    assert QMetaObject.invokeMethod(combo, "activated", Q_ARG(int, index))
+    QCoreApplication.processEvents()
+
+
+def _set_edited_text(field, text: str) -> None:
+    field.setProperty("text", text)
+    assert QMetaObject.invokeMethod(field, "textEdited")
+    QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("physical_device", [False, True])
+def test_new_local_camera_requires_a_physical_device_and_preserves_legacy_edit(
+    scene_editor_factory, tmp_path, monkeypatch, physical_device,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    device = LocalCameraDevice(
+        "camera://physical", "Lectern camera", False,
+        (LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1),),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+    )
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=1,
+        devices=(device,) if physical_device else (),
+    ))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    devices = _qml_value(dialog.findChild(QObject, "cameraDeviceCombo").property("model"))
+    assert all(device["id"] for device in devices)
+    if physical_device:
+        assert dialog.property("deviceId") == device.device_id
+        assert dialog.findChild(QObject, "cameraLayerNameField").property("text") == device.display_name
+    else:
+        assert not dialog.findChild(QObject, "cameraSaveButton").property("enabled")
+        cameras = workspace.configured_cameras
+        assert QMetaObject.invokeMethod(dialog, "save")
+        assert dialog.property("visible")
+        assert workspace.configured_cameras == cameras
+    assert QMetaObject.invokeMethod(dialog, "close")
+    widget.bridge.selectScene(CAMERA_SCENE_ID)
+    widget.bridge.selectLayer("configured-camera-layer")
+    assert QMetaObject.invokeMethod(dialog, "openForSelectedCamera")
+    assert dialog.property("deviceId") == ""
+    assert dialog.property("cameraId") == DEFAULT_CAMERA_SOURCE_ID
+    assert not dialog.findChild(QObject, "cameraConnectionNameField").property("visible")
+    assert dialog.findChild(QObject, "cameraDeviceCombo").property("currentIndex") >= 0
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert workspace.configured_cameras[0].configuration.device_id == ""
+
+
+def test_source_menu_has_four_stable_choices(scene_editor_factory, tmp_path) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    root = widget._qml.rootObject()
+    menu = root.findChild(QObject, "scenesAddSourceMenu")
+    assert menu.property("count") == 4
+    assert [root.findChild(QObject, name).property("text") for name in (
+        "scenesAddCameraMenuItem", "scenesAddNetworkCameraMenuItem", "scenesAddSceneMenuItem",
+    )] == ["Camera", "Network camera", "Scene"]
+    assert root.findChild(QObject, "scenesRenameLayerMenuItem").property("text") == "Rename…"
+    assert root.findChild(QObject, "scenesConfigureCameraMenuItem").property("text") == "Configure camera…"
+
+
+def test_local_camera_reuses_disconnected_device_and_allows_repeated_layers(
+    scene_editor_factory, tmp_path, monkeypatch,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    camera = SourceDefinition(
+        id="registered-usb", name="Room camera", kind=SourceKind.LOCAL_CAMERA,
+        configuration=LocalCameraConfig(device_id="camera://offline"),
+    )
+    workspace.upsert_camera(camera, add_to_active_document=True)
+    controller._set_local_cameras(LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=()))
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    for alias in ("Wide shot", "Close shot"):
+        assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+        _choose_local_device(dialog, camera.configuration.device_id)
+        assert dialog.property("cameraId") == camera.id
+        assert dialog.property("reusingCamera")
+        assert dialog.findChild(QObject, "cameraReuseSummary").property("visible")
+        assert not dialog.findChild(QObject, "cameraResolutionCombo").property("visible")
+        alias_field = dialog.findChild(QObject, "cameraLayerNameField")
+        assert alias_field.property("text") == camera.name
+        _set_edited_text(alias_field, alias)
+        _choose_local_device(dialog, camera.configuration.device_id)
+        assert alias_field.property("text") == alias
+        assert QMetaObject.invokeMethod(dialog, "save")
+        assert not dialog.property("visible")
+    scene = controller.document.scene(widget.bridge.selectedSceneId)
+    layers = [layer for layer in scene.layers if layer.source_id == camera.id]
+    assert [layer.name for layer in layers] == ["Wide shot", "Close shot"]
+    assert sum(source.id == camera.id for source in workspace.configured_cameras) == 1
+
+
+@pytest.mark.parametrize("stale_target", ["scene", "profile"])
+def test_network_camera_names_errors_and_stale_scene_keep_the_draft(
+    scene_editor_factory, tmp_path, stale_target,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    connection = dialog.findChild(QObject, "cameraConnectionNameField")
+    alias = dialog.findChild(QObject, "cameraLayerNameField")
+    uri = dialog.findChild(QObject, "cameraUriField")
+    _set_edited_text(connection, "Shared room feed")
+    assert alias.property("text") == "Shared room feed"
+    _set_edited_text(alias, "Lectern")
+    _set_edited_text(connection, "Main connection")
+    assert alias.property("text") == "Lectern"
+    uri.setProperty("text", "invalid-address")
+    count = len(workspace.configured_cameras)
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible")
+    assert dialog.findChild(QObject, "cameraSaveError").property("text")
+    assert alias.property("text") == "Lectern"
+    assert len(workspace.configured_cameras) == count
+    uri.setProperty("text", "rtsp://192.0.2.10/live")
+    context = _qml_value(dialog.property("editContext"))
+    assert context["requestId"]
+    if stale_target == "scene":
+        other = next(scene.id for scene in controller.document.scenes if scene.id != context["sceneId"])
+        widget.bridge.selectScene(other)
+    else:
+        widget.bridge.createSceneProfile("Other scene profile")
+        profile = next(profile for profile in widget.bridge.sceneProfiles if not profile["active"])
+        widget.bridge.activateSceneProfile(profile["id"])
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible")
+    assert _qml_value(dialog.property("editContext")) == context
+    assert alias.property("text") == "Lectern"
+    assert len(workspace.configured_cameras) == count
+    assert dialog.findChild(QObject, "cameraSaveError").property("text")
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_network_existing_choice_searches_reuses_and_does_not_edit_shared_name(
+    scene_editor_factory, tmp_path,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    camera_id = widget.bridge.addCamera({
+        "kind": "rtsp_camera", "name": "Rear connection", "layerName": "Rear",
+        "uri": "rtsp://192.0.2.20/live",
+    }, widget.bridge.sourceEditContext())
+    assert camera_id
+    source_id = controller.document.scene(widget.bridge.selectedSceneId).layers[-1].source_id
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    assert dialog.property("connectionChoicePending")
+    assert not dialog.findChild(QObject, "cameraConnectionNameField").property("visible")
+    assert not dialog.findChild(QObject, "cameraSaveButton").property("enabled")
+    selector = dialog.findChild(QObject, "cameraNetworkSelector")
+    assert selector.property("selectedId") == ""
+    search = selector.findChild(QObject, "cameraNetworkSelectorSearch")
+    search.setProperty("text", "rear")
+    assert len(_qml_value(selector.property("filteredOptions"))) == 1
+    search.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert dialog.property("cameraId") == source_id
+    assert not dialog.property("connectionChoicePending")
+    assert dialog.property("reusingCamera")
+    _set_edited_text(dialog.findChild(QObject, "cameraLayerNameField"), "Rear detail")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert next(camera for camera in workspace.configured_cameras if camera.id == source_id).name == "Rear connection"
+    layers = [layer for layer in controller.document.scene(widget.bridge.selectedSceneId).layers if layer.source_id == source_id]
+    assert [layer.name for layer in layers] == ["Rear", "Rear detail"]
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    assert dialog.property("connectionChoicePending")
+    selector.findChild(QObject, "cameraNetworkSelectorSearch").forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert not dialog.property("connectionChoicePending")
+    assert dialog.property("cameraId") == ""
+    assert dialog.findChild(QObject, "cameraConnectionNameField").property("visible")
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+@pytest.mark.parametrize("camera_scene", [True, False])
+def test_layer_rename_f2_preserves_shared_camera_and_rejects_stale_context(
+    scene_editor_factory, tmp_path, camera_scene,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    scene_id = CAMERA_SCENE_ID if camera_scene else next(
+        scene.id for scene in controller.document.scenes if scene.id != CAMERA_SCENE_ID
+    )
+    widget.bridge.selectScene(scene_id)
+    layer_id = widget.bridge.layersModel.get(0)["id"]
+    widget.bridge.selectLayer(layer_id)
+    widget.resize(1000, 760)
+    show_and_activate(widget)
+    canvas = widget._qml.rootObject().findChild(QQuickItem, "scenesCanvas")
+    canvas.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_F2)
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesRenameLayerDialog")
+    assert _wait_until(lambda: dialog.property("visible"))
+    name = dialog.findChild(QObject, "scenesRenameLayerNameField")
+    name.setProperty("text", "  ")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible")
+    shared_names = [camera.name for camera in workspace.configured_cameras]
+    name.setProperty("text", "Speaker")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert widget.bridge.selectedLayer["name"] == "Speaker"
+    assert [camera.name for camera in workspace.configured_cameras] == shared_names
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    name.setProperty("text", "Stale rename")
+    other = next(scene.id for scene in controller.document.scenes if scene.id != scene_id)
+    widget.bridge.selectScene(other)
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible")
+    assert dialog.findChild(QObject, "scenesRenameLayerError").property("text")
+    assert next(layer for layer in controller.document.scene(scene_id).layers if layer.id == layer_id).name == "Speaker"
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_nested_scene_search_disables_cycles_and_captures_target_context(
+    scene_editor_factory, tmp_path,
+) -> None:
+    _workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    widget.bridge.createScene("Outer composition")
+    outer_id = widget.bridge.selectedSceneId
+    assert widget.bridge.addSceneReference(CAMERA_SCENE_ID, "Camera inset", widget.bridge.sourceEditContext())
+    widget.bridge.selectScene(CAMERA_SCENE_ID)
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    dialog = root.findChild(QObject, "scenesReferenceDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForScene")
+    choices = _qml_value(dialog.property("choices"))
+    cyclic = next(choice for choice in choices if choice["id"] == outer_id)
+    assert cyclic["available"] is False and cyclic["reason"]
+    selector = dialog.findChild(QObject, "scenesReferenceSelector")
+    search = selector.findChild(QObject, "scenesReferenceSelectorSearch")
+    search.setProperty("text", "Outer")
+    QCoreApplication.processEvents()
+    assert len(_qml_value(selector.property("filteredOptions"))) == 1
+    search.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert dialog.property("sceneId") == ""
+    assert not dialog.findChild(QObject, "scenesReferenceAddButton").property("enabled")
+    search.setProperty("text", "Content")
+    QCoreApplication.processEvents()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert dialog.property("canAdd")
+    name = dialog.findChild(QObject, "scenesReferenceNameField")
+    _set_edited_text(name, "Content inset")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert controller.document.scene(CAMERA_SCENE_ID).layers[-1].name == "Content inset"
+
+
+
+def test_camera_configuration_updates_shared_settings_and_keeps_layer_alias(
+    scene_editor_factory, tmp_path,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    dialog = root.findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    _set_edited_text(dialog.findChild(QObject, "cameraConnectionNameField"), "Room connection")
+    _set_edited_text(dialog.findChild(QObject, "cameraLayerNameField"), "Speaker inset")
+    dialog.findChild(QObject, "cameraUriField").setProperty("text", "rtsp://192.0.2.30/live")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    scene = controller.document.scene(widget.bridge.selectedSceneId)
+    layer = next(layer for layer in scene.layers if layer.name == "Speaker inset")
+    # Repeated Enter/click on the completed draft must not insert another occurrence.
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert controller.document.scene(scene.id).layers == scene.layers
+    widget.bridge.selectLayer(layer.id)
+    assert QMetaObject.invokeMethod(root.findChild(QObject, "scenesConfigureCameraMenuItem"), "triggered")
+    assert dialog.property("visible")
+    assert not dialog.property("addToScene")
+    assert dialog.property("cameraId") == layer.source_id
+    assert not dialog.findChild(QObject, "cameraLayerNameField").property("visible")
+    _set_edited_text(dialog.findChild(QObject, "cameraConnectionNameField"), "Renamed connection")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert next(camera for camera in workspace.configured_cameras if camera.id == layer.source_id).name == "Renamed connection"
+    assert next(current for current in controller.document.scene(scene.id).layers if current.id == layer.id).name == "Speaker inset"
+
+
+def test_ambiguous_local_device_blocks_creation_with_inline_explanation(
+    scene_editor_factory, tmp_path, monkeypatch,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    device = LocalCameraDevice(
+        "camera://ambiguous", "Room camera", False,
+        (LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1),),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+    )
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=1, devices=(device,),
+    ))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    original_lookup = workspace.local_camera_for_device
+
+    def lookup(device_id):
+        if device_id == device.device_id:
+            raise LocalCameraConflictError("Conflicting connections")
+        return original_lookup(device_id)
+
+    monkeypatch.setattr(workspace, "local_camera_for_device", lookup)
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    _choose_local_device(dialog, device.device_id)
+    assert dialog.property("deviceConflict")
+    assert not dialog.property("editingSettings")
+    assert not dialog.findChild(QObject, "cameraSaveButton").property("enabled")
+    message = dialog.findChild(QObject, "cameraDeviceConflictMessage")
+    assert message.property("visible")
+    assert "conflicting camera connections" in message.property("text")
+    cameras = workspace.configured_cameras
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible")
+    assert workspace.configured_cameras == cameras
+    monkeypatch.setattr(workspace, "local_camera_for_device", original_lookup)
+    _choose_local_device(dialog, device.device_id)
+    assert not dialog.property("deviceConflict")
+    assert dialog.findChild(QObject, "cameraSaveButton").property("enabled")
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+@pytest.mark.parametrize("viewport", [(420, 540), (760, 620)])
+@pytest.mark.parametrize("kind", ["local_camera", "rtsp_camera"])
+def test_source_dialog_keeps_actions_visible_while_advanced_body_scrolls(
+    scene_editor_factory, tmp_path, monkeypatch, viewport, kind,
+) -> None:
+    _workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=1,
+        devices=(LocalCameraDevice(
+            "camera://physical", "Lectern camera", False,
+            (LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1),),
+            LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+        ),),
+    ))
+    widget.resize(*viewport)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", kind))
+    dialog.setProperty("advancedExpanded", True)
+    QCoreApplication.processEvents()
+    header = dialog.property("header")
+    footer = dialog.property("footer")
+    scroll = dialog.property("contentItem")
+    flickable = scroll.property("contentItem")
+    save = dialog.findChild(QQuickItem, "cameraSaveButton")
+    header_position = header.mapToScene(QPointF())
+    footer_position = footer.mapToScene(QPointF())
+    assert header_position.y() >= 0
+    assert footer_position.y() + footer.height() <= widget._qml.height() + 1
+    assert save.mapToScene(QPointF()).x() + save.width() <= widget._qml.width() + 1
+    assert float(scroll.property("contentWidth")) <= scroll.width() + 1
+    assert float(flickable.property("contentHeight")) > flickable.height()
+    flickable.setProperty("contentY", float(flickable.property("contentHeight")) - flickable.height())
+    QCoreApplication.processEvents()
+    assert header.mapToScene(QPointF()) == header_position
+    assert footer.mapToScene(QPointF()) == footer_position
+    assert save.isVisible()
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_rename_footer_insets_actions_from_dialog_edges(scene_editor_factory, tmp_path) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    widget.bridge.selectScene(CAMERA_SCENE_ID)
+    widget.bridge.selectLayer("configured-camera-layer")
+    widget.resize(420, 540)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesRenameLayerDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    QCoreApplication.processEvents()
+    footer = dialog.property("footer")
+    save = dialog.findChild(QQuickItem, "scenesRenameLayerSaveButton")
+    position = save.mapToItem(footer, QPointF())
+    assert footer.width() - position.x() - save.width() >= 18
+    assert footer.height() - position.y() - save.height() >= 18
+    assert not dialog.property("nameError")
+    assert save.property("enabled")  # The layer's own unchanged name remains valid.
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+@pytest.mark.parametrize("flow", [
+    "rename", "new_camera", "reuse_camera", "new_local_camera", "reuse_local_camera", "scene_reference",
+])
+def test_source_names_validate_live_and_block_duplicate_submissions(
+    scene_editor_factory, tmp_path, monkeypatch, flow,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    bridge = widget.bridge
+    scene_id = bridge.selectedSceneId
+    original = controller.document.scene(scene_id).layers[0]
+    if flow == "rename":
+        added = bridge.addConfiguredCamera(DEFAULT_CAMERA_SOURCE_ID, "Inset", bridge.sourceEditContext())
+        assert added
+        bridge.selectLayer(added)
+    elif flow == "reuse_camera":
+        assert bridge.addCamera({
+            "kind": "rtsp_camera", "name": "Room connection", "layerName": "Room inset",
+            "uri": "rtsp://192.0.2.10/live",
+        }, bridge.sourceEditContext())
+    elif flow in ("new_local_camera", "reuse_local_camera"):
+        device = LocalCameraDevice(
+            "camera://physical", "Room camera", False,
+            (LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1),),
+            LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+        )
+        controller._set_local_cameras(LocalCameraDiscovery(
+            supported=True, ready=True, generation=1, devices=(device,),
+        ))
+        monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+        if flow == "reuse_local_camera":
+            workspace.upsert_camera(SourceDefinition(
+                id="registered-room", name="Room camera", kind=SourceKind.LOCAL_CAMERA,
+                configuration=LocalCameraConfig(device_id=device.device_id),
+            ), add_to_active_document=True)
+    widget.resize(760, 620)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    if flow == "rename":
+        dialog = root.findChild(QObject, "scenesRenameLayerDialog")
+        assert QMetaObject.invokeMethod(dialog, "openForLayer")
+        name = dialog.findChild(QObject, "scenesRenameLayerNameField")
+        error_name = "scenesRenameLayerNameError"
+        save_name = "scenesRenameLayerSaveButton"
+        submission_error_name = "scenesRenameLayerError"
+    elif flow == "scene_reference":
+        dialog = root.findChild(QObject, "scenesReferenceDialog")
+        assert QMetaObject.invokeMethod(dialog, "openForScene")
+        choice = next(choice for choice in _qml_value(dialog.property("choices")) if choice["available"])
+        assert QMetaObject.invokeMethod(dialog, "selectScene", Q_ARG("QVariant", choice))
+        name = dialog.findChild(QObject, "scenesReferenceNameField")
+        error_name = "scenesReferenceNameError"
+        save_name = "scenesReferenceAddButton"
+        submission_error_name = "scenesReferenceError"
+    else:
+        dialog = root.findChild(QObject, "scenesCameraDialog")
+        local = flow in ("new_local_camera", "reuse_local_camera")
+        kind = "local_camera" if local else "rtsp_camera"
+        assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", kind))
+        if local:
+            assert dialog.property("reusingCamera") == (flow == "reuse_local_camera")
+        elif flow == "reuse_camera":
+            selector = dialog.findChild(QObject, "cameraNetworkSelector")
+            selector.findChild(QObject, "cameraNetworkSelectorSearch").setProperty("text", "Room")
+            assert QMetaObject.invokeMethod(selector, "chooseCurrent")
+            assert dialog.property("reusingCamera")
+        else:
+            _set_edited_text(dialog.findChild(QObject, "cameraConnectionNameField"), "Room connection")
+            dialog.findChild(QObject, "cameraUriField").setProperty("text", "rtsp://192.0.2.10/live")
+        name = dialog.findChild(QObject, "cameraLayerNameField")
+        error_name = "cameraLayerNameError"
+        save_name = "cameraSaveButton"
+        submission_error_name = "cameraSaveError"
+    _set_edited_text(name, "  " + original.name.swapcase() + "  ")
+    error = dialog.findChild(QObject, error_name)
+    assert error is not None
+    assert error.property("visible")
+    assert error.property("text") == "A source with this name already exists in this scene."
+    save = dialog.findChild(QObject, save_name)
+    assert not save.property("enabled")
+    layers = controller.document.scene(scene_id).layers
+    assert QMetaObject.invokeMethod(dialog, "save")
+    name.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    assert dialog.property("visible")
+    assert controller.document.scene(scene_id).layers == layers
+    # A rejected bridge submission must not leave its old error beside a corrected draft.
+    assert not bridge.addConfiguredCamera(DEFAULT_CAMERA_SOURCE_ID, original.name, bridge.sourceEditContext())
+    assert bridge.sourceEditError
+    assert dialog.findChild(QObject, submission_error_name).property("text")
+    # "Camera" already names a layer in another scene, which must not conflict.
+    _set_edited_text(name, "Camera")
+    assert not error.property("visible")
+    assert not dialog.findChild(QObject, submission_error_name).property("text")
+    assert save.property("enabled")
+    # Revalidate a draft when another layer acquires and then releases its name.
+    conflict = bridge.addConfiguredCamera(DEFAULT_CAMERA_SOURCE_ID, "Camera", bridge.sourceEditContext())
+    assert conflict
+    assert error.property("visible")
+    assert not save.property("enabled")
+    assert bridge.renameLayer(conflict, "Another inset", bridge.sourceEditContext())
+    assert not error.property("visible")
+    assert save.property("enabled")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    assert any(layer.name == "Camera" for layer in controller.document.scene(scene_id).layers)

@@ -403,7 +403,7 @@ def test_beta_conversion_preserves_custom_source_ids_names_and_duplicate_layers(
     original = deepcopy(record)
     restored = SceneDocument.from_record(record)
     expected = deepcopy(record)
-    expected["schema_version"] = 12
+    expected["schema_version"] = SCHEMA_VERSION
     for source in expected["sources"]:
         if source["type"] in {"yeartext", "solin_content"}:
             source.update(type="solin_content", configuration={"mode": "presentation"})
@@ -461,23 +461,173 @@ def test_local_camera_rejects_unrepresentable_noncanonical_or_over_budget_fps(
         LocalCameraConfig.from_record(record)
 
 
-def test_camera_sources_keep_active_by_default_and_preserve_an_explicit_opt_out() -> None:
-    local_record = LocalCameraConfig(keep_active=False).to_record()
-    local_without_preference = dict(local_record)
-    local_without_preference.pop("keep_active")
-    rtsp_record = RtspCameraConfig(
-        uri="rtsp://camera.local/stream",
-        keep_active=False,
-    ).to_record()
-    rtsp_without_preference = dict(rtsp_record)
-    rtsp_without_preference.pop("keep_active")
+@pytest.mark.parametrize(
+    "config", [LocalCameraConfig(), RtspCameraConfig(uri="rtsp://camera.local/stream")]
+)
+@pytest.mark.parametrize("flag", [True, False, None, 0, "true"])
+def test_current_camera_configs_forbid_keep_active(config, flag) -> None:
+    assert not hasattr(config, "keep_active")
+    record = config.to_record()
+    assert "keep_active" not in record
+    record["keep_active"] = flag
+    with pytest.raises(SceneValidationError, match="Unknown.*keep_active"):
+        type(config).from_record(record)
 
-    assert LocalCameraConfig().keep_active
-    assert RtspCameraConfig(uri="rtsp://camera.local/stream").keep_active
-    assert LocalCameraConfig.from_record(local_without_preference).keep_active
-    assert RtspCameraConfig.from_record(rtsp_without_preference).keep_active
-    assert not LocalCameraConfig.from_record(local_record).keep_active
-    assert not RtspCameraConfig.from_record(rtsp_record).keep_active
+
+@pytest.mark.parametrize("kind", [SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA])
+@pytest.mark.parametrize("flag", ["absent", True, False])
+def test_schema_twelve_removes_legacy_camera_flag_without_mutating_input(kind, flag) -> None:
+    record = _document().to_record()
+    record["schema_version"] = 12
+    camera = next(
+        source for source in record["sources"] if source["id"] == DEFAULT_CAMERA_SOURCE_ID
+    )
+    config = (
+        LocalCameraConfig()
+        if kind is SourceKind.LOCAL_CAMERA
+        else RtspCameraConfig(uri="rtsp://camera.local/live")
+    )
+    camera.update(type=kind.value, configuration=config.to_record())
+    if flag != "absent":
+        camera["configuration"]["keep_active"] = flag
+    original = deepcopy(record)
+
+    restored = SceneDocument.from_record(record)
+
+    assert restored.schema_version == 13
+    assert restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration == config
+    assert (
+        "keep_active" not in restored.source(DEFAULT_CAMERA_SOURCE_ID).to_record()["configuration"]
+    )
+    assert record == original
+
+
+@pytest.mark.parametrize("flag", [None, 0, 1, "false", [], {}])
+def test_legacy_camera_flag_must_be_boolean(flag) -> None:
+    record = _document().to_record()
+    record["schema_version"] = 12
+    camera = next(
+        source for source in record["sources"] if source["id"] == DEFAULT_CAMERA_SOURCE_ID
+    )
+    camera["configuration"]["keep_active"] = flag
+    with pytest.raises(SceneValidationError, match="keep_active"):
+        SceneDocument.from_record(record)
+
+
+@pytest.mark.parametrize("kind", [SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA])
+def test_legacy_camera_migration_preserves_connection_and_ptz(kind) -> None:
+    document = _document()
+    camera = document.source(DEFAULT_CAMERA_SOURCE_ID)
+    binding = OnvifPtzBinding(endpoint="https://camera.local/onvif", credential_ref="ptz-secret")
+    config = (
+        LocalCameraConfig(
+            device_id="native-device",
+            width=1920,
+            height=1080,
+            fps_numerator=30000,
+            fps_denominator=1001,
+            media_type=CameraMediaType.JPEG,
+            pixel_format="MJPG",
+            ptz_binding=binding,
+        )
+        if kind is SourceKind.LOCAL_CAMERA
+        else RtspCameraConfig(uri="rtsps://camera.local/live", latency_ms=400, ptz_binding=binding)
+    )
+    camera = replace(
+        camera, kind=kind, configuration=config, enabled=False, credential_ref="stream-secret"
+    )
+    document = replace(
+        document,
+        sources=tuple(camera if item.id == camera.id else item for item in document.sources),
+    )
+    record = document.to_record()
+    record["schema_version"] = 12
+    next(item for item in record["sources"] if item["id"] == camera.id)["configuration"][
+        "keep_active"
+    ] = False
+
+    assert SceneDocument.from_record(record) == document
+
+
+@pytest.mark.parametrize("invalid", [{"keep_active": None}, {"unexpected": True}])
+def test_schema_five_cannot_hide_invalid_duplicate_camera_data(invalid) -> None:
+    record = _document().to_record()
+    record["schema_version"] = 5
+    camera = next(item for item in record["sources"] if item["id"] == DEFAULT_CAMERA_SOURCE_ID)
+    camera["configuration"]["device_id"] = "native-device"
+    duplicate = deepcopy(camera)
+    duplicate["id"] = "duplicate"
+    duplicate["configuration"].update(invalid)
+    record["sources"].append(duplicate)
+    original = deepcopy(record)
+
+    with pytest.raises(SceneValidationError):
+        SceneDocument.from_record(record)
+    assert record == original
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+@pytest.mark.parametrize(
+    "ids", [("", ""), ("DevicePath", "devicepath"), ("Old:DevicePath", "New:devicepath")]
+)
+def test_model_preserves_camera_selectors_for_contextual_identity_checks(
+    monkeypatch, platform, ids
+) -> None:
+    monkeypatch.setattr("sys.platform", platform)
+    document = _document()
+    camera = document.source(DEFAULT_CAMERA_SOURCE_ID)
+    first = replace(camera, configuration=LocalCameraConfig(device_id=ids[0]))
+    second = replace(camera, id="second-camera", configuration=LocalCameraConfig(device_id=ids[1]))
+    sources = tuple(first if item.id == first.id else item for item in document.sources) + (second,)
+
+    assert replace(document, sources=sources).sources == sources
+
+
+@pytest.mark.parametrize("version", [5, 6, 12, 13])
+def test_legacy_windows_friendly_name_aliases_remain_readable_without_merging(monkeypatch, version):
+    monkeypatch.setattr("sys.platform", "win32")
+    record = _document().to_record()
+    record["schema_version"] = version
+    camera = next(item for item in record["sources"] if item["id"] == DEFAULT_CAMERA_SOURCE_ID)
+    camera["configuration"]["device_id"] = "Old Name:device-path"
+    duplicate = deepcopy(camera)
+    duplicate["id"] = "second-camera"
+    duplicate["configuration"]["device_id"] = "New Name:device-path"
+    record["sources"].append(duplicate)
+    original = deepcopy(record)
+
+    restored = SceneDocument.from_record(record)
+
+    assert restored.source(camera["id"]).configuration.device_id == "Old Name:device-path"
+    assert restored.source(duplicate["id"]).configuration.device_id == "New Name:device-path"
+    assert record == original
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+@pytest.mark.parametrize(
+    "ids", [("device", "device"), ("Device", "device"), ("Old:Device", "New:device")]
+)
+def test_schema_five_preserves_incompatible_camera_connections(monkeypatch, platform, ids):
+    monkeypatch.setattr("solin.core.media.camera_identity.sys.platform", platform)
+    record = _document().to_record()
+    record["schema_version"] = 5
+    camera = next(item for item in record["sources"] if item["id"] == DEFAULT_CAMERA_SOURCE_ID)
+    camera["configuration"]["device_id"] = ids[0]
+    duplicate = deepcopy(camera)
+    duplicate["id"] = "second-camera"
+    duplicate["configuration"]["device_id"] = ids[1]
+    duplicate["configuration"]["ptz_binding"] = OnvifPtzBinding(
+        endpoint="https://camera.local/onvif"
+    ).to_record()
+    duplicate["credential_ref"] = "different-secret"
+    record["sources"].append(duplicate)
+    original = deepcopy(record)
+
+    restored = SceneDocument.from_record(record)
+
+    assert restored.source(camera["id"]).to_record() == camera
+    assert restored.source(duplicate["id"]).to_record() == duplicate
+    assert record == original
 
 
 def test_schema_version_two_infers_the_camera_media_type() -> None:

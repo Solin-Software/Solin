@@ -6146,6 +6146,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>カメラのキャプチャを確認できませんでした。カメラを更新するか、デバイスを接続し直してください。</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>ソースの名前と設定を確認してください。</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>カメラが見つかりません。</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>このダイアログを開いている間にシーンまたはカメラが変更されました。ダイアログを開き直して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>このデバイスには競合するカメラ接続があります。続行する前に既存の接続を確認してください。</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>このシーンを追加すると循環参照が発生します。</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>カメラの接続は保存されましたが、シーンを更新できませんでした。ダイアログを開き直して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>このシーンには同じ名前のソースがすでにあります。</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6934,7 +6962,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>カメラを有効のままにする</translation>
+        <translation type="vanished">カメラを有効のままにする</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7238,6 +7266,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>この解像度に対応するモードを取得できませんでした。カメラを更新するか、別の解像度を選択してください。</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>シーンを追加</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>利用可能なシーンを選択してください。</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>カメラを設定</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>カメラを設定…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>接続</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>接続名</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>接続設定</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>カメラ名を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>このシーンでのソース名を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>RTSP アドレスを入力してください。</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>このシーンでの名前</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP カメラ</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>新しい接続…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>結果が見つかりませんでした。</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>ソースの名前を変更</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>保存済みのカメラ設定</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>接続を検索…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>シーンを検索…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>検索…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>これらの設定は、このカメラを使用するすべてのシーンとシーンプロファイルに影響します。このシーンでの名前だけを変更するには、「名前の変更…」を使用してください。</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>このデバイスには競合するカメラ接続があります。続行する前に既存の接続を確認してください。</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>このシーンでは、カメラの共有設定を再利用します。</translation>
     </message>
 </context>
 <context>

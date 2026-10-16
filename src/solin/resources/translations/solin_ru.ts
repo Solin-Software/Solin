@@ -6209,6 +6209,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Не удалось проверить захват изображения с камеры. Обновите список камер или переподключите устройство.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Проверьте название и настройки источника.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Камеры не найдены.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Сцена или камера изменилась, пока это диалоговое окно было открыто. Откройте его заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>У этого устройства есть конфликтующие подключения камеры. Проверьте существующие подключения, прежде чем продолжить.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Эта сцена создала бы циклическую ссылку.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Подключение камеры сохранено, но не удалось обновить сцену. Откройте его заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Источник с таким названием уже существует в этой сцене.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6997,7 +7025,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Держать камеру активной</translation>
+        <translation type="vanished">Держать камеру активной</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7301,6 +7329,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Обновите список камер или выберите другое разрешение.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Добавить сцену</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Выберите доступную сцену.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Настроить камеру</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Настроить камеру…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Подключение</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Название подключения</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Настройки подключения</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Введите название камеры.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Введите название этого источника в сцене.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Введите адрес RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Название в этой сцене</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP-камера</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Новое подключение…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Результаты не найдены.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Переименовать источник</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Сохранённые настройки камеры</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Поиск подключений…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Поиск сцен…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Поиск…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Эти настройки влияют на все сцены и профили сцен, использующие эту камеру. Чтобы изменить только название в этой сцене, выберите Переименовать….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>У этого устройства есть конфликтующие подключения камеры. Проверьте существующие подключения, прежде чем продолжить.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Эта сцена будет использовать общие настройки камеры.</translation>
     </message>
 </context>
 <context>

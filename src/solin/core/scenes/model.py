@@ -11,8 +11,9 @@ from collections.abc import Collection, Iterable
 from typing import Any, Final, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
+from solin.core.media.camera_identity import local_camera_device_key
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -812,7 +813,6 @@ class LocalCameraConfig:
     media_type: CameraMediaType | None = None
     pixel_format: str = ""
     ptz_binding: PtzBinding | None = None
-    keep_active: bool = True
 
     def __post_init__(self) -> None:
         if (
@@ -833,8 +833,6 @@ class LocalCameraConfig:
             (OnvifPtzBinding, ViscaIpPtzBinding, ViscaSerialPtzBinding),
         ):
             raise SceneValidationError("Invalid local camera PTZ binding")
-        if not isinstance(self.keep_active, bool):
-            raise SceneValidationError("Invalid local camera keep-active state")
         for name, value, maximum in (
             ("width", self.width, MAXIMUM_CAMERA_SOURCE_DIMENSION),
             ("height", self.height, MAXIMUM_CAMERA_SOURCE_DIMENSION),
@@ -889,7 +887,6 @@ class LocalCameraConfig:
             "media_type": self.media_type.value if self.media_type is not None else "",
             "pixel_format": self.pixel_format,
             "ptz_binding": (self.ptz_binding.to_record() if self.ptz_binding is not None else None),
-            "keep_active": self.keep_active,
         }
 
     @classmethod
@@ -906,7 +903,6 @@ class LocalCameraConfig:
                 "media_type",
                 "pixel_format",
                 "ptz_binding",
-                "keep_active",
             },
         )
         return cls(
@@ -958,10 +954,6 @@ class LocalCameraConfig:
                 if data.get("ptz_binding") is None
                 else _ptz_binding_from_record(data["ptz_binding"])
             ),
-            keep_active=_boolean(
-                data.get("keep_active", True),
-                field_name="source.configuration.keep_active",
-            ),
         )
 
 
@@ -971,7 +963,6 @@ class RtspCameraConfig:
     transport: RtspTransport = RtspTransport.TCP
     latency_ms: int = 200
     ptz_binding: PtzBinding | None = None
-    keep_active: bool = True
 
     def __post_init__(self) -> None:
         if not isinstance(self.uri, str):
@@ -995,8 +986,6 @@ class RtspCameraConfig:
             (OnvifPtzBinding, ViscaIpPtzBinding, ViscaSerialPtzBinding),
         ):
             raise SceneValidationError("Invalid RTSP camera PTZ binding")
-        if not isinstance(self.keep_active, bool):
-            raise SceneValidationError("Invalid RTSP camera keep-active state")
         if not 0 <= self.latency_ms <= 10_000:
             raise SceneValidationError("Invalid RTSP latency")
 
@@ -1006,7 +995,6 @@ class RtspCameraConfig:
             "transport": self.transport.value,
             "latency_ms": self.latency_ms,
             "ptz_binding": (self.ptz_binding.to_record() if self.ptz_binding is not None else None),
-            "keep_active": self.keep_active,
         }
 
     @classmethod
@@ -1019,7 +1007,6 @@ class RtspCameraConfig:
                 "transport",
                 "latency_ms",
                 "ptz_binding",
-                "keep_active",
             },
         )
         return cls(
@@ -1039,10 +1026,6 @@ class RtspCameraConfig:
                 None
                 if data.get("ptz_binding") is None
                 else _ptz_binding_from_record(data["ptz_binding"])
-            ),
-            keep_active=_boolean(
-                data.get("keep_active", True),
-                field_name="source.configuration.keep_active",
             ),
         )
 
@@ -1210,6 +1193,19 @@ class SourceDefinition:
                 maximum=256,
             ),
         )
+
+
+def camera_source_from_legacy_record(raw: object) -> SourceDefinition:
+    """Validate a legacy camera, retiring only its optional boolean capture flag."""
+    data = _mapping(raw, field_name="legacy camera source")
+    configuration = _mapping(data.get("configuration", {}), field_name="source.configuration")
+    if "keep_active" in configuration:
+        _boolean(configuration.pop("keep_active"), field_name="source.configuration.keep_active")
+    data["configuration"] = configuration
+    source = SourceDefinition.from_record(data)
+    if source.kind not in {SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA}:
+        raise SceneValidationError("Legacy camera source must be a camera")
+    return source
 
 
 @dataclass(frozen=True, slots=True)
@@ -1876,16 +1872,8 @@ class SceneDocument:
         no_signal_source = source_by_id.get(NO_SIGNAL_SOURCE_ID)
         if no_signal_source is None or no_signal_source.kind is not SourceKind.COLOR:
             raise SceneValidationError("Document must contain the no-signal fallback source")
-        _ensure_unique(
-            (
-                source.configuration.device_id.casefold()
-                for source in self.sources
-                if source.kind is SourceKind.LOCAL_CAMERA
-                and isinstance(source.configuration, LocalCameraConfig)
-                and source.configuration.device_id
-            ),
-            field_name="local camera device",
-        )
+        # Historical connections may share a physical device. Preserve their
+        # source identities; shared-camera mutations check conflicts contextually.
 
         scene_reference_by_source_id: dict[str, str] = {}
         for source in self.sources:
@@ -2004,30 +1992,7 @@ class SceneDocument:
 
     @classmethod
     def from_record(cls, raw: object) -> SceneDocument:
-        data = _mapping(
-            raw,
-            field_name="scene document",
-            allowed_keys={
-                "schema_version",
-                "document_id",
-                "revision",
-                "sources",
-                "scenes",
-                "outputs",
-                "automation",
-                "transition_policy",
-                "camera_presets",
-            },
-        )
-        version = _integer(
-            data.get("schema_version"),
-            field_name="schema_version",
-            minimum=1,
-            maximum=2**31 - 1,
-        )
-        if version > SCHEMA_VERSION:
-            raise UnsupportedSceneSchemaError(version)
-        data = _migrate_scene_document_record(data, version)
+        data = migrate_scene_document_record(raw)
         return cls(
             schema_version=SCHEMA_VERSION,
             document_id=_string(
@@ -2068,6 +2033,35 @@ class SceneDocument:
                 )
             ),
         )
+
+
+def migrate_scene_document_record(raw: object) -> dict[str, Any]:
+    """Copy and upgrade a document record before resolving shared references."""
+    data = _mapping(raw, field_name="scene document")
+    version = _integer(
+        data.get("schema_version"),
+        field_name="schema_version",
+        minimum=1,
+        maximum=2**31 - 1,
+    )
+    if version > SCHEMA_VERSION:
+        raise UnsupportedSceneSchemaError(version)
+    data = _mapping(
+        data,
+        field_name="scene document",
+        allowed_keys={
+            "schema_version",
+            "document_id",
+            "revision",
+            "sources",
+            "scenes",
+            "outputs",
+            "automation",
+            "transition_policy",
+            "camera_presets",
+        },
+    )
+    return _migrate_scene_document_record(data, version)
 
 
 def _normalize_program_destinations_record(migrated: dict[str, Any]) -> None:
@@ -2331,6 +2325,12 @@ def _migrate_scene_document_record(
             sources = migrated.get("sources")
             replacements: dict[str, str] = {}
             if isinstance(sources, list):
+                for source in sources:
+                    if isinstance(source, dict) and source.get("type") in {
+                        "local_camera",
+                        "rtsp_camera",
+                    }:
+                        camera_source_from_legacy_record(source)
                 canonical_by_device: dict[str, dict[str, Any]] = {}
                 retained_sources: list[Any] = []
                 for source in sources:
@@ -2347,7 +2347,7 @@ def _migrate_scene_document_record(
                     if not isinstance(device_id, str) or not device_id or not isinstance(source_id, str):
                         retained_sources.append(source)
                         continue
-                    key = device_id.casefold()
+                    key = local_camera_device_key(device_id)
                     canonical = canonical_by_device.get(key)
                     if canonical is None:
                         canonical_by_device[key] = source
@@ -2357,15 +2357,19 @@ def _migrate_scene_document_record(
                     if not isinstance(canonical_id, str):
                         retained_sources.append(source)
                         continue
-                    replacements[source_id] = canonical_id
-                    canonical_configuration = canonical.get("configuration")
+                    canonical_camera = camera_source_from_legacy_record(canonical)
+                    camera = camera_source_from_legacy_record(source)
+                    # Keep the historical coalescing limited to identical
+                    # selectors and connection settings. Canonical aliases and
+                    # incompatible settings must retain their original sources.
                     if (
-                        isinstance(canonical_configuration, dict)
-                        and canonical_configuration.get("ptz_binding") is None
-                        and isinstance(configuration, dict)
-                        and configuration.get("ptz_binding") is not None
+                        camera.configuration != canonical_camera.configuration
+                        or camera.credential_ref != canonical_camera.credential_ref
+                        or camera.enabled != canonical_camera.enabled
                     ):
-                        canonical_configuration["ptz_binding"] = configuration["ptz_binding"]
+                        retained_sources.append(source)
+                        continue
+                    replacements[source_id] = canonical_id
                 migrated["sources"] = retained_sources
             if replacements:
                 scenes = migrated.get("scenes")
@@ -2435,6 +2439,18 @@ def _migrate_scene_document_record(
                     if isinstance(route, dict):
                         route.pop("default_scene_id", None)
             current_version = 12
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 12:
+            sources = _sequence(migrated.get("sources"), field_name="sources")
+            migrated["sources"] = [
+                camera_source_from_legacy_record(source).to_record()
+                if isinstance(source, dict)
+                and source.get("type") in {"local_camera", "rtsp_camera"}
+                else source
+                for source in sources
+            ]
+            current_version = 13
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

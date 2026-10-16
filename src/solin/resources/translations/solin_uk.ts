@@ -6210,6 +6210,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Не вдалося перевірити захоплення зображення з камери. Оновіть список камер або під’єднайте пристрій знову.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Перевірте назву й налаштування джерела.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Камер не знайдено.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Сцена або камера змінилася, поки це діалогове вікно було відкрите. Відкрийте його знову та повторіть спробу.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Цей пристрій має конфліктні з’єднання камери. Перевірте наявні з’єднання, перш ніж продовжити.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Ця сцена створила б циклічне посилання.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>З’єднання камери збережено, але не вдалося оновити сцену. Відкрийте його знову та повторіть спробу.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Джерело з такою назвою вже існує в цій сцені.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6998,7 +7026,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Тримати камеру активною</translation>
+        <translation type="vanished">Тримати камеру активною</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7302,6 +7330,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Не вдалося отримати підтримувані режими для цієї роздільної здатності. Оновіть список камер або виберіть іншу роздільну здатність.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Додати сцену</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Виберіть доступну сцену.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрити</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Налаштувати камеру</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Налаштувати камеру…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>З’єднання</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Назва з’єднання</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Налаштування з’єднання</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Введіть назву камери.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Введіть назву цього джерела в сцені.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Введіть адресу RTSP.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Назва в цій сцені</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP-камера</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Нове з’єднання…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Результатів не знайдено.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Перейменувати джерело</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Збережені налаштування камери</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Пошук з’єднань…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Пошук сцен…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Пошук…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Ці налаштування впливають на всі сцени та профілі сцен, які використовують цю камеру. Щоб змінити лише назву в цій сцені, виберіть Перейменувати….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Цей пристрій має конфліктні з’єднання камери. Перевірте наявні з’єднання, перш ніж продовжити.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Ця сцена використовуватиме спільні налаштування камери.</translation>
     </message>
 </context>
 <context>

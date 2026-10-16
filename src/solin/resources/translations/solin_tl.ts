@@ -6178,6 +6178,34 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Hindi masuri ang pagkuha ng video ng camera. I-refresh ang mga camera o ikonektang muli ang device.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Tingnan ang pangalan at mga setting ng source.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Walang nakitang camera.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Nagbago ang eksena o camera habang nakabukas ang dialog na ito. Buksan muli ang dialog at subukan ulit.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>May magkasalungat na koneksyon ng camera ang device na ito. Tingnan ang mga kasalukuyang koneksyon bago magpatuloy.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Magkakaroon ng paikot na reference dahil sa eksenang ito.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Na-save ang koneksyon ng camera, pero hindi ma-update ang eksena. Buksan muli ang dialog at subukan ulit.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>May source na ganito ang pangalan sa eksenang ito.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6966,7 +6994,7 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Panatilihing aktibo ang camera</translation>
+        <translation type="vanished">Panatilihing aktibo ang camera</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7270,6 +7298,98 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. I-refresh ang mga camera o pumili ng ibang resolusyon.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Magdagdag ng eksena</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Pumili ng available na eksena.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>I-close</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>I-configure ang camera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>I-configure ang camera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Koneksyon</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Pangalan ng koneksyon</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Mga setting ng koneksyon</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Maglagay ng pangalan ng camera.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Maglagay ng pangalan para sa source na ito sa eksena.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Maglagay ng RTSP address.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Pangalan sa eksenang ito</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP camera</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Bagong koneksyon…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Walang nakitang resulta.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Palitan ang pangalan ng source</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Mga naka-save na setting ng camera</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Maghanap ng mga koneksyon…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Maghanap ng mga eksena…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Maghanap…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Nakaaapekto ang mga setting na ito sa lahat ng eksena at profile ng eksena na gumagamit ng camera na ito. Para palitan lang ang pangalan sa eksenang ito, gamitin ang Palitan ang pangalan….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>May magkasalungat na koneksyon ng camera ang device na ito. Tingnan ang mga kasalukuyang koneksyon bago magpatuloy.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Gagamitin muli ng eksenang ito ang mga nakabahaging setting ng camera.</translation>
     </message>
 </context>
 <context>

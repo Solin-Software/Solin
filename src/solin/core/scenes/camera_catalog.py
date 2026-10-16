@@ -11,6 +11,8 @@ from threading import Lock
 
 from dataclasses import replace
 
+from solin.core.media.camera_identity import local_camera_device_key
+
 from .engine import LocalCameraDevice, LocalCameraModeQuery, LocalVideoFormat
 from .model import LocalCameraConfig
 
@@ -19,7 +21,6 @@ def camera_configuration_id(config: LocalCameraConfig) -> str:
     """Identify the capture request independently of scene geometry or PTZ edits."""
     record = config.to_record()
     record.pop("ptz_binding")
-    record.pop("keep_active")
     return sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -117,10 +118,13 @@ class CameraCatalog:
     def modes(self, query: LocalCameraModeQuery) -> LocalCameraDevice:
         """Query a size's own intervals and cache them until inventory invalidation."""
         devices = self.devices()
-        device = next((item for item in devices if item.device_id == query.device_id), None)
+        device = next((item for item in devices if local_camera_device_key(item.device_id) == local_camera_device_key(query.device_id)), None)
         if device is None or not any(item.supports(query.width, query.height)
                                      for item in device.resolution_ranges):
             raise ValueError("Camera resolution is outside its reported capabilities")
+        # Query with the inventory's original native selector, even when an old
+        # saved selector differs only in its friendly DirectShow name.
+        query = replace(query, device_id=device.device_id)
         with self._lock:
             pending = self._queries.get(query)
             owner = pending is None
@@ -154,7 +158,7 @@ class CameraCatalog:
     def automatic_mode(
         self, device_id: str, *, canvas_width: int = 1920, canvas_height: int = 1080,
     ) -> LocalVideoFormat | None:
-        device = next((device for device in self.devices() if device.device_id == device_id), None)
+        device = next((device for device in self.devices() if local_camera_device_key(device.device_id) == local_camera_device_key(device_id)), None)
         if device is None:
             return None
         return select_automatic_mode(device.formats, canvas_width=canvas_width,

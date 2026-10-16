@@ -8,6 +8,7 @@ from typing import Any, Protocol, cast
 
 from PySide6.QtCore import QObject, Qt, Signal, Slot
 
+from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.projection.application import projection_presentation_type
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
 from solin.core.scenes.composition import scene_uses_content_source
@@ -1144,7 +1145,10 @@ class SceneRuntimeController(QObject):
     ) -> Future[LocalCameraDiscovery]:
         """Query rates at a custom size; never infer them from another resolution."""
         LocalCameraModeQuery(device_id, width, height)
-        key = device_id, width, height
+        device = next((item for item in self._local_cameras.devices
+                       if local_camera_device_key(item.device_id) == local_camera_device_key(device_id)), None)
+        native_id = device.device_id if device is not None else device_id
+        key = native_id, width, height
         pending = self._camera_mode_inflight.get(key)
         if pending is not None:
             return pending[1]
@@ -1156,7 +1160,6 @@ class SceneRuntimeController(QObject):
         if self._engine is None or not self._engine_ready:
             visible.set_exception(SceneEngineNotReadyError("Camera discovery is unavailable"))
             return visible
-        device = next((item for item in self._local_cameras.devices if item.device_id == device_id), None)
         if device is None or not any(item.supports(width, height) for item in device.resolution_ranges):
             visible.set_exception(ValueError("Camera resolution is outside its reported capabilities"))
             return visible
@@ -1165,7 +1168,7 @@ class SceneRuntimeController(QObject):
         context = request_id, key, self._camera_inventory_epoch
         try:
             future = self._engine.query_local_camera_modes(
-                device_id, width, height, request_id=request_id,
+                native_id, width, height, request_id=request_id,
                 deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
             )
         except Exception as error:  # noqa: BLE001 - deliver dispatch failure to the dialog's future

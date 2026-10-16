@@ -20,6 +20,8 @@ from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.core.media.camera_identity import local_camera_device_key
+from solin.core.scenes.application import DuplicateLayerNameError
 from solin.core.scenes.editor_geometry import (
     FramingRect,
     MINIMUM_LAYER_SIZE,
@@ -88,7 +90,8 @@ from solin.core.scenes.ptz import (
     PtzCredentials,
     PtzRecallResult,
 )
-from solin.core.scenes.workspace import SceneWorkspaceBusyError
+from solin.core.scenes.workspace import LocalCameraConflictError, SceneCameraApplyError, SceneWorkspaceBusyError
+from solin.core.scenes.resources import camera_credential_references
 from solin.ui.qml.scenes_models import SceneLayerListModel, SceneListModel
 from solin.ui.scene_engine_status import scene_engine_error_summary
 from solin.ui.scene_recording_status import (
@@ -125,6 +128,10 @@ class ScenePreviewStore(Protocol):
     def publish(self, image: QImage) -> str: ...
 
     def clear(self) -> str: ...
+
+
+class _SourceEditContextExpired(SceneValidationError):
+    pass
 
 
 @dataclass(slots=True)
@@ -199,6 +206,9 @@ class ScenesBridge(QObject):
         self._preview_url = preview_store.clear()
         self._preview_available = False
         self._document_generation = 0
+        self._source_edit_error = ""
+        self._source_edit_contexts: dict[str, dict[str, object]] = {}
+        self._source_edit_connections: dict[str, tuple[SourceDefinition, ...]] = {}
         self._active_guides: tuple[tuple[str, float], ...] = ()
         self._framing_session: _LayerFramingSession | None = None
         self._framing_result.connect(
@@ -596,31 +606,28 @@ class ScenesBridge(QObject):
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def configuredCameras(self) -> list[dict[str, object]]:
-        """Cameras the operator can drop into the selected scene.
-
-        A camera already used by another scene stays on the list: one source shown
-        by several scenes is exactly the point, and a capture device can only be
-        opened once, so making the operator create a second source for the same
-        device just fails to open. Only cameras already in *this* scene are hidden,
-        where a second layer would be a duplicate of itself.
-        """
-        try:
-            in_this_scene = {layer.source_id for layer in self._selected_scene().layers}
-        except Exception:  # noqa: BLE001 - a stale selection must not empty the menu
-            in_this_scene = set()
+        """Shared connections, including cameras already used in this scene."""
         return [
             self._camera_choice(camera)
             for camera in self._controller.workspace.configured_cameras
-            if camera.id not in in_this_scene
         ]
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def referencedScenes(self) -> list[dict[str, object]]:
-        return [
-            {"id": scene.id, "name": scene.name}
-            for scene in self._controller.document.scenes
-            if scene.id != self._selected_scene_id
-        ]
+        records: list[dict[str, object]] = []
+        for scene in self._controller.document.scenes:
+            if scene.id == self._selected_scene_id:
+                continue
+            source = self._scene_reference_source(scene.id)
+            name = self._controller.documents.suggest_layer_name(self._selected_scene_id, scene.name)
+            layer = self._new_source_layer(source, name)
+            try:
+                self._controller.documents.prepare_source_layer(self._selected_scene_id, source, layer)
+                reason = ""
+            except SceneValidationError:
+                reason = self.tr("This scene would create a circular reference.")
+            records.append({"id": scene.id, "name": scene.name, "available": not reason, "reason": reason})
+        return records
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
     def localCameraDevices(self) -> list[dict[str, object]]:
@@ -636,7 +643,99 @@ class ScenesBridge(QObject):
             }
         ]
         records.extend(self._local_device_record(device) for device in discovery.devices)
+        present = {local_camera_device_key(str(record["id"])) for record in records}
+        for camera in self._controller.workspace.configured_cameras:
+            configuration = camera.configuration
+            if not isinstance(configuration, LocalCameraConfig):
+                continue
+            key = local_camera_device_key(configuration.device_id)
+            if key in present:
+                continue
+            present.add(key)
+            records.append({
+                "id": configuration.device_id, "name": camera.name,
+                "software": False, "available": False,
+                "probeStatus": LocalCameraProbeStatus.UNVERIFIED.value,
+                "formats": [],
+            })
         return records
+
+    @Property(str, notify=changed)
+    def sourceEditError(self) -> str:
+        return self._source_edit_error
+
+    @Slot(str, str, result=str)
+    def layerNameError(self, name: str, excluded_layer_id: str) -> str:
+        if self._closed or not name.strip():
+            return ""
+        try:
+            self._controller.documents.validate_layer_name(
+                self._selected_scene_id, name, excluding_layer_id=excluded_layer_id,
+            )
+        except DuplicateLayerNameError:
+            return self.tr("A source with this name already exists in this scene.")
+        return ""
+
+    @Slot(result="QVariantMap")
+    def sourceEditContext(self) -> dict[str, object]:
+        context: dict[str, object] = {
+            "requestId": new_identity(),
+            "documentId": self._controller.document.document_id,
+            "sceneId": self._selected_scene_id,
+            "documentGeneration": self._document_generation,
+            "resourceRevision": self._controller.workspace.resources.revision,
+        }
+        self._source_edit_contexts[str(context["requestId"])] = context
+        self._source_edit_connections[str(context["requestId"])] = self._controller.workspace.configured_cameras
+        if len(self._source_edit_contexts) > 64:
+            oldest = next(iter(self._source_edit_contexts))
+            del self._source_edit_contexts[oldest]
+            self._source_edit_connections.pop(oldest, None)
+        self._source_edit_error = ""
+        return dict(context)
+
+    def _validate_source_context(self, context: dict[str, object], *, shared_edit: bool = False) -> None:
+        saved = self._source_edit_contexts.get(str(context.get("requestId", "")))
+        if (self._closed or saved != context
+            or context.get("documentId") != self._controller.document.document_id
+            or context.get("sceneId") != self._selected_scene_id
+            or context.get("documentGeneration") != self._document_generation
+            or (shared_edit and self._source_edit_connections.get(str(context.get("requestId", ""))) != self._controller.workspace.configured_cameras)):
+            raise _SourceEditContextExpired("Source editor context expired")
+
+    def _source_operation(self, context: dict[str, object], operation: Callable[[], object], *, shared_edit: bool = False) -> bool:
+        self._source_edit_error = ""
+        try:
+            self._validate_source_context(context, shared_edit=shared_edit)
+            operation()
+        except DuplicateLayerNameError:
+            self._source_edit_error = self.tr("A source with this name already exists in this scene.")
+        except LocalCameraConflictError:
+            self._source_edit_error = self.tr("This device has conflicting camera connections. Check the existing connections before continuing.")
+        except SceneCameraApplyError:
+            self._source_edit_error = self.tr("The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.")
+        except _SourceEditContextExpired:
+            self._source_edit_error = self.tr("The scene or camera changed while this dialog was open. Reopen the dialog and try again.")
+        except (SceneValidationError, ValueError, TypeError):
+            self._source_edit_error = self.tr("Check the source name and settings.")
+        except Exception:  # noqa: BLE001 - persistence boundary; keep the populated editor open
+            log.exception("Could not persist source editor operation")
+            self._source_edit_error = self.tr("The scene configuration could not be saved.")
+        else:
+            self._source_edit_contexts.pop(str(context["requestId"]), None)
+            self._source_edit_connections.pop(str(context["requestId"]), None)
+            self._refresh_models()
+            return True
+        self._refresh_models()
+        return False
+
+    @Slot(str, result="QVariantMap")
+    def configuredLocalCamera(self, device_id: str) -> dict[str, object]:
+        try:
+            camera = self._controller.workspace.local_camera_for_device(device_id)
+        except LocalCameraConflictError:
+            return {"conflict": True}
+        return self._camera_draft(camera) if camera is not None else {}
 
     @Property(str, notify=changed)
     def localCameraStatus(self) -> str:
@@ -648,7 +747,7 @@ class ScenesBridge(QObject):
         if discovery.error_code:
             return self.tr("Camera discovery could not be completed.")
         if not discovery.devices:
-            return self.tr("No cameras found. The automatic camera remains available.")
+            return self.tr("No cameras found.")
         return ""
 
     @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
@@ -733,6 +832,8 @@ class ScenesBridge(QObject):
         self._controller.document.scene(scene_id)
         self._clear_framing_session()
         self._selected_scene_id = scene_id
+        self._source_edit_contexts.clear()
+        self._source_edit_connections.clear()
         self._selected_layer_id = ""
         self._active_guides = ()
         # Do NOT blank the canvas here: _on_preview_frame already ignores frames
@@ -1033,73 +1134,58 @@ class ScenesBridge(QObject):
                 name=self.tr("Solin Content"),
                 configuration=SolinContentConfig(mode=SolinContentMode.PRESENTATION),
             )
-            if not self._run_edit(lambda: self._controller.documents.create_source(source)):
-                return
-        self._add_source_layer(source.id)
+        name = self._controller.documents.suggest_layer_name(self._selected_scene_id, source.name)
+        layer = self._new_source_layer(source, name)
+        if self._run_edit(lambda: self._controller.documents.add_source_layer(self._selected_scene_id, source, layer)):
+            self._selected_layer_id = layer.id
+            self._refresh_models()
 
-    @Slot(str)
-    def addConfiguredCamera(self, camera_id: str) -> None:
-        if not self._run_edit(
-            lambda: self._controller.workspace.add_configured_camera_to_active_document(
-                camera_id
-            )
-        ):
-            return
-        self._add_source_layer(camera_id)
+    @Slot(str, str, "QVariantMap", result=str)
+    def addConfiguredCamera(self, camera_id: str, layer_name: str, context: dict[str, object]) -> str:
+        created: list[SceneLayer] = []
 
-    @Slot(str, bool)
-    def setCameraKeepActive(self, camera_id: str, keep_active: bool) -> None:
-        camera = next(
-            (
-                candidate
-                for candidate in self._controller.workspace.configured_cameras
-                if candidate.id == camera_id
-            ),
-            None,
-        )
-        if camera is None or not isinstance(
-            camera.configuration,
-            (LocalCameraConfig, RtspCameraConfig),
-        ):
-            return
-        normalized = bool(keep_active)
-        if camera.configuration.keep_active == normalized:
-            return
-        updated = replace(
-            camera,
-            configuration=replace(camera.configuration, keep_active=normalized),
-        )
-        self._run_edit(
-            lambda: self._controller.workspace.upsert_camera(
-                updated,
-                add_to_active_document=False,
-            )
-        )
+        def add() -> None:
+            camera = self._controller.workspace.resources.camera(camera_id)
+            layer = self._new_source_layer(camera, layer_name)
+            created.append(self._controller.workspace.add_camera_layer(self._selected_scene_id, camera, layer))
 
-    @Slot(str)
-    def addSceneReference(self, scene_id: str) -> None:
+        if not self._source_operation(context, add):
+            return ""
+        self._selected_layer_id = created[0].id
+        self._refresh_models()
+        return created[0].id
+
+    def _scene_reference_source(self, scene_id: str) -> SourceDefinition:
         document = self._controller.document
         target = document.scene(scene_id)
-        source = next(
-            (
-                candidate
-                for candidate in document.sources
-                if candidate.kind is SourceKind.SCENE_REFERENCE
-                and isinstance(candidate.configuration, SceneReferenceConfig)
-                and candidate.configuration.target_scene_id == scene_id
-            ),
-            None,
+        return next((candidate for candidate in document.sources
+                     if isinstance(candidate.configuration, SceneReferenceConfig)
+                     and candidate.configuration.target_scene_id == scene_id), None) or SourceDefinition(
+            id=new_identity(), kind=SourceKind.SCENE_REFERENCE, name=target.name,
+            configuration=SceneReferenceConfig(target_scene_id=scene_id),
         )
-        if source is None:
-            source = SourceDefinition(
-                id=new_identity(),
-                kind=SourceKind.SCENE_REFERENCE,
-                name=target.name,
-                configuration=SceneReferenceConfig(target_scene_id=scene_id),
-            )
-            if not self._run_edit(lambda: self._controller.documents.create_source(source)):
-                return
-        self._add_source_layer(source.id)
+
+    @Slot(str, str, "QVariantMap", result=str)
+    def addSceneReference(self, scene_id: str, layer_name: str, context: dict[str, object]) -> str:
+        created: list[SceneLayer] = []
+
+        def add() -> None:
+            source = self._scene_reference_source(scene_id)
+            layer = self._new_source_layer(source, layer_name)
+            self._controller.documents.add_source_layer(self._selected_scene_id, source, layer)
+            created.append(layer)
+
+        if not self._source_operation(context, add):
+            return ""
+        self._selected_layer_id = created[0].id
+        self._refresh_models()
+        return created[0].id
+
+    @Slot(str, str, "QVariantMap", result=bool)
+    def renameLayer(self, layer_id: str, name: str, context: dict[str, object]) -> bool:
+        return self._source_operation(context, lambda: self._controller.documents.rename_layer(
+            self._selected_scene_id, layer_id, name,
+        ))
 
     @Slot(str)
     def removeLayer(self, layer_id: str) -> None:
@@ -1592,100 +1678,104 @@ class ScenesBridge(QObject):
                 raise SceneValidationError("Stream credentials are incomplete") from exc
         return harvested
 
-    @Slot("QVariantMap", bool, result=bool)
-    def saveCamera(self, values: dict[str, object], add_to_scene: bool) -> bool:
-        source_id = str(values.get("id", ""))
-        existing = next(
-            (
-                source
-                for source in self._controller.workspace.configured_cameras
-                if source.id == source_id
-            ),
-            None,
-        )
-        created_credential_ref = ""
-        created_stream_ref = ""
-        stream_uri, harvested = self._split_stream_credentials(values)
+    @Slot("QVariantMap", "QVariantMap", result=str)
+    def addCamera(self, values: dict[str, object], context: dict[str, object]) -> str:
+        created_refs: list[str] = []
+        created: list[SceneLayer] = []
+
+        def add() -> None:
+            camera_id = str(values.get("id", ""))
+            camera = self._controller.workspace.resources.camera(camera_id) if camera_id else None
+            kind = SourceKind(str(values.get("kind", SourceKind.LOCAL_CAMERA.value)))
+            if camera is None and kind is SourceKind.LOCAL_CAMERA:
+                camera = self._controller.workspace.local_camera_for_device(str(values.get("deviceId", "")))
+            layer_name = str(values.get("layerName", values.get("name", camera.name if camera else "")))
+            self._controller.documents.validate_layer_name(self._selected_scene_id, layer_name)
+            if camera is None:
+                camera = self._build_camera(values, None, created_refs)
+            layer = self._new_source_layer(camera, layer_name)
+            created.append(self._controller.workspace.add_camera_layer(self._selected_scene_id, camera, layer))
+
+        if not self._source_operation(context, add):
+            self._cleanup_camera_credentials(created_refs)
+            return ""
+        self._selected_layer_id = created[0].id
+        self._refresh_models()
+        return created[0].id
+
+    @Slot("QVariantMap", "QVariantMap", result=bool)
+    def updateCamera(self, values: dict[str, object], context: dict[str, object]) -> bool:
+        created_refs: list[str] = []
+        updated: list[tuple[SourceDefinition, SourceDefinition]] = []
+
+        def update() -> None:
+            existing = self._controller.workspace.resources.camera(str(values.get("id", "")))
+            camera = self._build_camera(values, existing, created_refs)
+            self._controller.workspace.upsert_camera(camera)
+            updated.append((existing, camera))
+
+        if not self._source_operation(context, update, shared_edit=True):
+            self._cleanup_camera_credentials(created_refs)
+            return False
+        previous, camera = updated[0]
+        current_refs = camera_credential_references(camera)
+        for reference in camera_credential_references(previous):
+            if reference not in current_refs:
+                self._delete_credential(reference, notify=True)
+        return True
+
+    def _cleanup_camera_credentials(self, references: list[str]) -> None:
+        for reference in references:
+            self._delete_credential(reference, notify=False)
+
+    def _build_camera(
+        self, values: dict[str, object], existing: SourceDefinition | None, created_refs: list[str],
+    ) -> SourceDefinition:
         try:
             kind = SourceKind(str(values.get("kind", SourceKind.LOCAL_CAMERA.value)))
+            if existing is not None and existing.kind is not kind:
+                raise SceneValidationError("Camera kind cannot be changed")
             ptz_binding, credentials = self._ptz_binding(values, existing)
+            harvested = None
             if kind is SourceKind.LOCAL_CAMERA:
-                configuration = self._local_camera_configuration(
-                    values,
-                    existing,
-                    ptz_binding,
-                )
+                configuration = self._local_camera_configuration(values, existing, ptz_binding)
             elif kind is SourceKind.RTSP_CAMERA:
+                stream_uri, harvested = self._split_stream_credentials(values)
                 configuration = RtspCameraConfig(
-                    uri=stream_uri,
-                    transport=RtspTransport(str(values.get("transport", "tcp"))),
-                    latency_ms=_qml_int(values.get("latencyMs", 200)),
-                    ptz_binding=ptz_binding,
-                    keep_active=bool(values.get("keepActive", True)),
+                    uri=stream_uri, transport=RtspTransport(str(values.get("transport", "tcp"))),
+                    latency_ms=_qml_int(values.get("latencyMs", 200)), ptz_binding=ptz_binding,
                 )
             else:
                 raise SceneValidationError("Camera kind is invalid")
             camera = SourceDefinition(
-                id=existing.id if existing is not None else new_identity(),
-                kind=kind,
-                name=str(values.get("name", "")).strip(),
-                configuration=configuration,
-                enabled=existing.enabled if existing is not None else True,
+                id=existing.id if existing is not None else new_identity(), kind=kind,
+                name=(existing.name if existing is not None and kind is SourceKind.LOCAL_CAMERA
+                      else str(values.get("name", "")).strip()),
+                configuration=configuration, enabled=existing.enabled if existing is not None else True,
                 credential_ref=existing.credential_ref if existing is not None else "",
             )
-            if credentials is not None:
+            # Validate both credential pairs before touching protected storage.
+            stream_credentials = self._stream_credentials(values, harvested) if kind is SourceKind.RTSP_CAMERA else None
+            if credentials is not None or stream_credentials is not None:
                 if self._credentials is None:
                     raise SceneValidationError("Protected credential storage is unavailable")
-                created_credential_ref = self._credentials.save(credentials)
-                camera = self._with_ptz_credential_ref(camera, created_credential_ref)
+            if credentials is not None:
+                assert self._credentials is not None
+                reference = self._credentials.save(credentials)
+                created_refs.append(reference)
+                camera = self._with_ptz_credential_ref(camera, reference)
             elif bool(values.get("clearCredentials", False)):
                 camera = self._with_ptz_credential_ref(camera, "")
-            stream_credentials = self._stream_credentials(values, harvested)
             if stream_credentials is not None:
-                if self._credentials is None:
-                    raise SceneValidationError("Protected credential storage is unavailable")
-                created_stream_ref = self._credentials.save(stream_credentials)
-                camera = replace(camera, credential_ref=created_stream_ref)
+                assert self._credentials is not None
+                reference = self._credentials.save(stream_credentials)
+                created_refs.append(reference)
+                camera = replace(camera, credential_ref=reference)
             elif bool(values.get("clearStreamCredentials", False)):
                 camera = replace(camera, credential_ref="")
-        except (SceneValidationError, ValueError, TypeError):
-            log.warning("Invalid camera configuration", exc_info=True)
-            self._notify_failure(
-                self.tr("Check the camera name, connection and PTZ settings."),
-                dedupe_key="scenes-camera-invalid",
-            )
-            return False
-        previous_ref = self._ptz_credential_ref(existing)
-        previous_stream_ref = existing.credential_ref if existing is not None else ""
-        committed = self._run_edit(
-            lambda: self._controller.workspace.upsert_camera(
-                camera,
-                add_to_active_document=existing is None and add_to_scene,
-            )
-        )
-        if not committed:
-            for orphan in (created_credential_ref, created_stream_ref):
-                if orphan:
-                    self._delete_credential(orphan, notify=False)
-            return False
-        current_ref = self._ptz_credential_ref(camera)
-        if previous_ref and previous_ref != current_ref:
-            self._delete_credential(previous_ref, notify=True)
-        if previous_stream_ref and previous_stream_ref != camera.credential_ref:
-            self._delete_credential(previous_stream_ref, notify=True)
-        if harvested is not None:
-            # Say so: the operator typed an address and got a different one back.
-            self._notify_failure(
-                self.tr(
-                    "The user name and password were moved out of the RTSP address "
-                    "and stored securely. Solin adds them again when it connects."
-                ),
-                dedupe_key="scenes-camera-address-credentials-moved",
-                warning=True,
-            )
-        if existing is None and add_to_scene:
-            self._add_source_layer(camera.id)
-        return True
+        except (ValueError, TypeError) as error:
+            raise SceneValidationError("Invalid camera configuration") from error
+        return camera
 
     @Slot()
     def ensureLocalCameras(self) -> None:
@@ -1708,7 +1798,7 @@ class ScenesBridge(QObject):
     @Slot(str, int, int, result=bool)
     def queryLocalCameraModes(self, device_id: str, width: int, height: int) -> bool:
         device = next((item for item in self._controller.local_cameras.devices
-                       if item.device_id == device_id), None)
+                       if local_camera_device_key(item.device_id) == local_camera_device_key(device_id)), None)
         if self._closed or device is None or not any(
             item.supports(width, height) for item in device.resolution_ranges
         ):
@@ -1741,7 +1831,7 @@ class ScenesBridge(QObject):
         try:
             discovery = future.result()
             success = not discovery.error_code and any(
-                device.device_id == device_id and any(
+                local_camera_device_key(device.device_id) == local_camera_device_key(device_id) and any(
                     item.width == width and item.height == height
                     for item in (*device.formats, *device.frame_rate_ranges)
                 ) for device in discovery.devices
@@ -2064,6 +2154,8 @@ class ScenesBridge(QObject):
         if self._closed:
             return
         self._closed = True
+        self._source_edit_contexts.clear()
+        self._source_edit_connections.clear()
         self._clear_framing_session()
         self._disconnect_controller()
         self._disconnect_recording()
@@ -2089,6 +2181,8 @@ class ScenesBridge(QObject):
             self._selected_layer_id = ""
         if previous_document_id and previous_document_id != document.document_id:
             self._document_generation += 1
+            self._source_edit_contexts.clear()
+            self._source_edit_connections.clear()
             self.documentGenerationChanged.emit()
             self._clear_preview()
         if self._active:
@@ -2275,11 +2369,6 @@ class ScenesBridge(QObject):
     ) -> dict[str, object]:
         if source is None:
             source = self._controller.document.source(layer.source_id)
-        camera_configuration = (
-            source.configuration
-            if isinstance(source.configuration, (LocalCameraConfig, RtspCameraConfig))
-            else None
-        )
         health = self._controller.source_health(source.id)
         source_warning = bool(
             source.kind is SourceKind.LOCAL_CAMERA
@@ -2312,9 +2401,6 @@ class ScenesBridge(QObject):
             "opacity": layer.opacity,
             "color": _SOURCE_COLORS[source.kind],
             "ptz_available": bool(self._ptz_camera_ids_for_layer(layer.id)),
-            "camera_keep_active": bool(
-                camera_configuration is not None and camera_configuration.keep_active
-            ),
             "source_warning": source_warning,
             "source_warning_text": (
                 self.cameraCurrentStatus(source.id)
@@ -2325,9 +2411,8 @@ class ScenesBridge(QObject):
             "framing_unavailable_reason": framing_unavailable_reason,
         }
 
-    def _add_source_layer(self, source_id: str) -> None:
+    def _new_source_layer(self, source: SourceDefinition, name: str) -> SceneLayer:
         document = self._controller.document
-        source = document.source(source_id)
         scene = self._selected_scene()
         contains_content = any(
             document.source(layer.source_id).kind is SourceKind.SOLIN_CONTENT
@@ -2339,14 +2424,7 @@ class ScenesBridge(QObject):
             and source.kind in {SourceKind.LOCAL_CAMERA, SourceKind.RTSP_CAMERA}
             else NormalizedRect()
         )
-        layer = SceneLayer(
-            id=new_identity(),
-            source_id=source.id,
-            name=source.name,
-            rect=rect,
-        )
-        self._selected_layer_id = layer.id
-        self._run_edit(lambda: self._controller.documents.add_layer(scene.id, layer))
+        return SceneLayer(id=new_identity(), source_id=source.id, name=name.strip(), rect=rect)
 
     def _update_layer(self, layer_id: str, update, *, allow_locked: bool = False) -> None:
         layer = self._layer(layer_id)
@@ -2487,7 +2565,7 @@ class ScenesBridge(QObject):
         )
         preserve_current_format = bool(
             current is not None
-            and current.device_id == device_id
+            and local_camera_device_key(current.device_id) == local_camera_device_key(device_id)
             and current.media_type is not None
             and not bool(values.get("formatSelectionChanged", False))
             and format_id == self._configured_format_id(current)
@@ -2497,7 +2575,6 @@ class ScenesBridge(QObject):
             return replace(
                 current,
                 ptz_binding=ptz_binding,
-                keep_active=bool(values.get("keepActive", True)),
             )
         selected_format = self._local_format(device_id, format_id)
         return LocalCameraConfig(
@@ -2509,7 +2586,6 @@ class ScenesBridge(QObject):
             media_type=selected_format.media_type if selected_format is not None else None,
             pixel_format=selected_format.pixel_format if selected_format is not None else "",
             ptz_binding=ptz_binding,
-            keep_active=bool(values.get("keepActive", True)),
         )
 
     @staticmethod
@@ -2576,7 +2652,7 @@ class ScenesBridge(QObject):
             (
                 candidate
                 for candidate in self._controller.local_cameras.devices
-                if candidate.device_id == device_id
+                if local_camera_device_key(candidate.device_id) == local_camera_device_key(device_id)
             ),
             None,
         )
@@ -2653,17 +2729,13 @@ class ScenesBridge(QObject):
             "hasStreamCredentials": bool(
                 source.credential_ref if source is not None else ""
             ),
-            "keepActive": bool(
-                isinstance(configuration, (LocalCameraConfig, RtspCameraConfig))
-                and configuration.keep_active
-            ),
         }
         if isinstance(configuration, LocalCameraConfig):
             values["deviceId"] = configuration.device_id
             values["formatId"] = self._configured_format_id(configuration)
             device = next((
                 candidate for candidate in self._controller.local_cameras.devices
-                if candidate.device_id == configuration.device_id
+                if local_camera_device_key(candidate.device_id) == local_camera_device_key(configuration.device_id)
             ), None)
             values["deviceName"] = (
                 device.display_name if device is not None
@@ -2708,6 +2780,9 @@ class ScenesBridge(QObject):
                 ptzBaudRate=binding.baud_rate,
                 ptzCameraAddress=binding.camera_address,
             )
+        if isinstance(configuration, LocalCameraConfig):
+            video_format = values.get("format")
+            values["summary"] = video_format.get("label", "") if isinstance(video_format, dict) else self.tr("Automatic")
         return values
 
     def _configured_format_id(self, configuration: LocalCameraConfig) -> str:
@@ -2793,7 +2868,8 @@ class ScenesBridge(QObject):
         )
 
     def _delete_credential(self, credential_ref: str, *, notify: bool) -> None:
-        if not credential_ref or self._credentials is None:
+        if (not credential_ref or self._credentials is None
+                or credential_ref in self._controller.workspace.resources.credential_references):
             return
         try:
             self._credentials.delete(credential_ref)

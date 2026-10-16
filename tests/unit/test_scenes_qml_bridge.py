@@ -16,6 +16,7 @@ from PySide6.QtTest import QSignalSpy
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import (
+    scene_engine_graph_signature,
     LocalCameraDevice,
     LocalCameraDiscovery,
     LocalCameraProbe,
@@ -621,7 +622,7 @@ def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
 
     bridge.createScene("Custom")
     camera_id = workspace.configured_cameras[0].id
-    bridge.addConfiguredCamera(camera_id)
+    bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
     bridge.takeLive()
 
     scene = controller.document.scene(bridge.selectedSceneId)
@@ -744,7 +745,7 @@ def test_bridge_new_camera_layers_contain_the_complete_frame(
         bridge.addContentSource()
     workspace.upsert_camera(camera, add_to_active_document=False)
 
-    bridge.addConfiguredCamera(camera.id)
+    bridge.addConfiguredCamera(camera.id, "Stage camera", bridge.sourceEditContext())
 
     layer = controller.document.scene(bridge.selectedSceneId).layers[-1]
     assert layer.source_id == camera.id
@@ -761,7 +762,7 @@ def test_bridge_new_scene_reference_uses_generic_fit_and_allows_explicit_cover(
 ) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.createScene("Nested camera")
-    bridge.addSceneReference(CAMERA_SCENE_ID)
+    bridge.addSceneReference(CAMERA_SCENE_ID, "Camera", bridge.sourceEditContext())
 
     layer = controller.document.scene(bridge.selectedSceneId).layers[0]
     assert layer.fit_mode is FitMode.CONTAIN
@@ -1512,14 +1513,14 @@ def test_bridge_uses_exact_local_camera_format(scene_bridge_factory, rate: tuple
         )
     )
 
-    assert bridge.saveCamera(
+    assert bridge.addCamera(
         {
             "kind": "local_camera",
             "name": "Front camera",
             "deviceId": "camera://stable-id",
             "formatId": bridge.localCameraDevices[1]["formats"][1]["id"],
         },
-        False,
+        bridge.sourceEditContext(),
     )
 
     camera = next(camera for camera in workspace.configured_cameras if camera.name == "Front camera")
@@ -1529,7 +1530,6 @@ def test_bridge_uses_exact_local_camera_format(scene_bridge_factory, rate: tuple
     assert configuration.media_type is CameraMediaType.JPEG
     assert configuration.fps_numerator == rate[0]
     assert configuration.fps_denominator == rate[1]
-    assert configuration.keep_active
 
 
 def test_bridge_exposes_camera_with_unavailable_capabilities_for_automatic_capture(
@@ -1569,14 +1569,14 @@ def test_bridge_exposes_camera_with_unavailable_capabilities_for_automatic_captu
         "Camera capabilities are unavailable. You can try automatic mode or refresh the cameras."
     )
     assert bridge.localCameraStatus == ""
-    assert bridge.saveCamera(
+    assert bridge.addCamera(
         {
             "kind": "local_camera",
             "name": "C920",
             "deviceId": "camera://c920",
             "formatId": "",
         },
-        False,
+        bridge.sourceEditContext(),
     )
     saved_camera = next(
         item for item in controller.workspace.configured_cameras if item.name == "C920"
@@ -1649,14 +1649,14 @@ def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
             ),
         )
     )
-    assert bridge.saveCamera(
+    assert bridge.addCamera(
         {
             "kind": "local_camera",
             "name": "Front camera",
             "deviceId": "camera://stable-id",
             "formatId": bridge.localCameraDevices[1]["formats"][1]["id"],
         },
-        False,
+        bridge.sourceEditContext(),
     )
     camera = next(camera for camera in workspace.configured_cameras if camera.name == "Front camera")
     controller._set_local_cameras(
@@ -1700,7 +1700,7 @@ def test_bridge_preserves_persisted_format_when_camera_recovers_before_save(
         )
     )
 
-    assert bridge.saveCamera(draft, False)
+    assert bridge.updateCamera(draft, bridge.sourceEditContext())
 
     updated = next(item for item in workspace.configured_cameras if item.id == camera.id)
     configuration = updated.configuration
@@ -1731,10 +1731,10 @@ def test_camera_mode_identity_survives_reordered_discovery(scene_bridge_factory)
     _publish_camera_modes(controller, (sd, hd), generation=2)
 
     assert bridge.localCameraDevices[1]["formats"][2]["id"] == mode_id
-    assert bridge.saveCamera({
+    assert bridge.addCamera({
         "kind": "local_camera", "name": "Front camera",
         "deviceId": "camera://stable-id", "formatId": mode_id,
-    }, False)
+    }, bridge.sourceEditContext())
     config = next(c.configuration for c in workspace.configured_cameras if c.name == "Front camera")
     assert (config.width, config.height, config.pixel_format) == (1920, 1080, "MJPG")
     assert (config.fps_numerator, config.fps_denominator) == (30_000, 1_001)
@@ -1747,10 +1747,10 @@ def test_camera_draft_retains_unavailable_mode_and_device(scene_bridge_factory, 
     sd = LocalVideoFormat(CameraMediaType.RAW, "YUY2", 640, 480, 30, 1)
     _publish_camera_modes(controller, (hd,))
     original_id = bridge.localCameraDevices[1]["formats"][1]["id"]
-    assert bridge.saveCamera({
+    assert bridge.addCamera({
         "kind": "local_camera", "name": "Front camera",
         "deviceId": "camera://stable-id", "formatId": original_id,
-    }, False)
+    }, bridge.sourceEditContext())
     camera = next(c for c in workspace.configured_cameras if c.name == "Front camera")
     if missing_device:
         controller._set_local_cameras(LocalCameraDiscovery(
@@ -1765,7 +1765,7 @@ def test_camera_draft_retains_unavailable_mode_and_device(scene_bridge_factory, 
     assert draft["format"]["available"] is False
     assert draft["format"]["width"] == 1920
     draft.update(name="Renamed camera", formatSelectionChanged=False)
-    assert bridge.saveCamera(draft, False)
+    assert bridge.updateCamera(draft, bridge.sourceEditContext())
     updated = next(c for c in workspace.configured_cameras if c.id == camera.id)
     assert updated.configuration == camera.configuration
 
@@ -1775,10 +1775,10 @@ def test_camera_rejects_non_tuple_format_identifiers(scene_bridge_factory, inval
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
     _publish_camera_modes(controller, (LocalVideoFormat(CameraMediaType.RAW, "NV12", 640, 480, 30, 1),))
     original = workspace.configured_cameras
-    assert not bridge.saveCamera({
+    assert not bridge.addCamera({
         "kind": "local_camera", "name": "Invalid camera",
         "deviceId": "camera://stable-id", "formatId": invalid_id,
-    }, False)
+    }, bridge.sourceEditContext())
     assert workspace.configured_cameras == original
 
 
@@ -1790,10 +1790,10 @@ def test_camera_revalidates_mode_removed_after_selection(scene_bridge_factory) -
     mode_id = bridge.localCameraDevices[1]["formats"][1]["id"]
     _publish_camera_modes(controller, (sd,), generation=2)
     original = workspace.configured_cameras
-    assert not bridge.saveCamera({
+    assert not bridge.addCamera({
         "kind": "local_camera", "name": "Front camera",
         "deviceId": "camera://stable-id", "formatId": mode_id, "formatSelectionChanged": True,
-    }, False)
+    }, bridge.sourceEditContext())
     assert workspace.configured_cameras == original
 
 
@@ -1823,10 +1823,10 @@ def test_camera_validates_custom_frame_rate_against_exact_size_and_format(
     custom = bridge.localCameraCustomFrameRate(camera.device_id, mode_id, rate)
     assert bool(custom) is accepted
     if accepted:
-        assert bridge.saveCamera({
+        assert bridge.addCamera({
             "kind": "local_camera", "name": "Custom rate", "deviceId": camera.device_id,
             "formatId": custom["id"], "formatSelectionChanged": True,
-        }, False)
+        }, bridge.sourceEditContext())
         config = next(c.configuration for c in workspace.configured_cameras if c.name == "Custom rate")
         assert f"{config.fps_numerator}/{config.fps_denominator}" == custom["fpsId"]
 
@@ -1962,7 +1962,7 @@ def test_bridge_protects_onvif_credentials_from_scene_documents(scene_bridge_fac
         credentials=credentials,
     )
 
-    assert bridge.saveCamera(
+    assert bridge.addCamera(
         {
             "kind": "rtsp_camera",
             "name": "Network camera",
@@ -1975,7 +1975,7 @@ def test_bridge_protects_onvif_credentials_from_scene_documents(scene_bridge_fac
             "ptzUsername": "operator",
             "ptzPassword": "secret",
         },
-        False,
+        bridge.sourceEditContext(),
     )
 
     camera = next(
@@ -2012,14 +2012,14 @@ def test_a_camera_used_by_another_scene_can_still_be_added(scene_bridge_factory)
     camera_id = workspace.configured_cameras[0].id
 
     bridge.createScene("Stage")
-    bridge.addConfiguredCamera(camera_id)
+    bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
     stage_id = bridge.selectedSceneId
 
     bridge.createScene("Wide")
     offered = {camera["id"] for camera in bridge.configuredCameras}
     assert camera_id in offered, "a camera live in another scene must stay offerable"
 
-    bridge.addConfiguredCamera(camera_id)
+    bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
 
     wide = controller.document.scene(bridge.selectedSceneId)
     stage = controller.document.scene(stage_id)
@@ -2029,16 +2029,24 @@ def test_a_camera_used_by_another_scene_can_still_be_added(scene_bridge_factory)
     assert sum(1 for s in controller.document.sources if s.id == camera_id) == 1
 
 
-def test_a_camera_already_in_this_scene_is_not_offered_again(scene_bridge_factory) -> None:
+def test_a_camera_already_in_this_scene_remains_available_for_another_occurrence(scene_bridge_factory) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
     camera_id = workspace.configured_cameras[0].id
 
     bridge.createScene("Stage")
     assert camera_id in {camera["id"] for camera in bridge.configuredCameras}
 
-    bridge.addConfiguredCamera(camera_id)
+    bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
 
-    assert camera_id not in {camera["id"] for camera in bridge.configuredCameras}
+    assert camera_id in {camera["id"] for camera in bridge.configuredCameras}
+    first = controller.document.scene(bridge.selectedSceneId).layers[0]
+    second_id = bridge.addConfiguredCamera(camera_id, "Detail", bridge.sourceEditContext())
+    layers = controller.document.scene(bridge.selectedSceneId).layers
+    assert len(layers) == 2
+    assert [layer.source_id for layer in layers] == [camera_id, camera_id]
+    assert layers[1].id == second_id != first.id
+    assert layers[1].name == "Detail"
+    assert len(workspace.configured_cameras) == 1
 
 
 def test_a_new_scene_becomes_the_one_being_edited(scene_bridge_factory) -> None:
@@ -2098,7 +2106,7 @@ def test_an_rtsp_address_without_credentials_is_not_flagged(scene_bridge_factory
     """The vendor in-path login form must still save; only userinfo is rejected."""
     _workspace, controller, bridge, _preview = scene_bridge_factory()
 
-    saved = bridge.saveCamera(
+    saved = bridge.addCamera(
         {
             "kind": "rtsp_camera",
             "name": "externa",
@@ -2107,10 +2115,10 @@ def test_an_rtsp_address_without_credentials_is_not_flagged(scene_bridge_factory
                 "_channel=0_stream=0&protocol=unicast.sdp?real_stream"
             ),
         },
-        False,
+        bridge.sourceEditContext(),
     )
 
-    assert saved is True
+    assert isinstance(saved, str) and saved
 
 
 def test_a_pasted_address_with_a_login_is_split_not_rejected(scene_bridge_factory) -> None:
@@ -2125,16 +2133,16 @@ def test_a_pasted_address_with_a_login_is_split_not_rejected(scene_bridge_factor
         credentials=credentials
     )
 
-    saved = bridge.saveCamera(
+    saved = bridge.addCamera(
         {
             "kind": "rtsp_camera",
             "name": "externa",
             "uri": "rtsp://admin:hunter2@192.168.0.100:554/stream",
         },
-        False,
+        bridge.sourceEditContext(),
     )
 
-    assert saved is True
+    assert isinstance(saved, str) and saved
     camera = controller.workspace.configured_cameras[-1]
     assert camera.configuration.uri == "rtsp://192.168.0.100:554/stream"
     assert "hunter2" not in camera.configuration.uri
@@ -2147,16 +2155,418 @@ def test_the_stored_address_never_keeps_the_login(scene_bridge_factory) -> None:
         credentials=credentials
     )
 
-    bridge.saveCamera(
+    bridge.addCamera(
         {
             "kind": "rtsp_camera",
             "name": "externa",
             "uri": "rtsp://admin:p%40ss@10.0.0.5:554/s",
         },
-        False,
+        bridge.sourceEditContext(),
     )
 
     camera = controller.workspace.configured_cameras[-1]
     assert "admin" not in camera.configuration.uri
     assert "p%40ss" not in camera.configuration.uri
     assert repr(camera.configuration) .count("pass") == 0
+
+
+def test_rename_changes_only_the_occurrence_and_survives_undo_and_reload(
+    scene_bridge_factory, monkeypatch,
+) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    bridge.selectScene(CAMERA_SCENE_ID)
+    original = controller.document.scene(CAMERA_SCENE_ID).layers[0]
+    second_id = bridge.addConfiguredCamera(
+        original.source_id, "Detail", bridge.sourceEditContext(),
+    )
+    before = controller.document
+    hydrate_requests = []
+    monkeypatch.setattr(controller, "_hydrate_if_ready", lambda: hydrate_requests.append(True))
+
+    assert bridge.renameLayer(original.id, "Wide angle", bridge.sourceEditContext())
+
+    renamed = controller.document.scene(CAMERA_SCENE_ID).layers
+    assert renamed[0] == replace(original, name="Wide angle")
+    assert renamed[1].id == second_id and renamed[1].name == "Detail"
+    assert controller.document.source(original.source_id).name == "Default camera"
+    row = next(bridge.layersModel.get(i) for i in range(bridge.layersModel.rowCount())
+               if bridge.layersModel.get(i)["id"] == original.id)
+    assert row["name"] == "Wide angle"
+    assert scene_engine_graph_signature(controller.document) == scene_engine_graph_signature(before)
+    assert hydrate_requests == []
+    saved = workspace._document_repository(workspace.catalog.active_collection_id).load()
+    assert saved.scene(CAMERA_SCENE_ID).layers == renamed
+    controller.documents.undo()
+    assert controller.document.scene(CAMERA_SCENE_ID).layers[0] == original
+    controller.documents.redo()
+    assert controller.document.scene(CAMERA_SCENE_ID).layers == renamed
+    assert hydrate_requests == []
+
+
+@pytest.mark.parametrize("reuse_by", ["id", "deviceId"])
+def test_adding_registered_camera_ignores_configuration_edits(
+    scene_bridge_factory, monkeypatch, reuse_by,
+) -> None:
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    camera = replace(workspace.configured_cameras[0], configuration=LocalCameraConfig(device_id="physical-device"))
+    workspace.upsert_camera(camera)
+    updates = []
+    monkeypatch.setattr(workspace, "upsert_camera", lambda *_a, **_k: updates.append(True))
+    original_resources = workspace.resources
+    values = {
+        "kind": "local_camera", "name": "Ignored shared name", "layerName": "Another view",
+        "formatId": "invalid-format-would-fail-if-applied", "ptzProtocol": "invalid-protocol",
+        reuse_by: camera.id if reuse_by == "id" else camera.configuration.device_id,
+    }
+
+    layer_id = bridge.addCamera(values, bridge.sourceEditContext())
+
+    assert layer_id
+    layer = controller.document.scene(bridge.selectedSceneId).layers[-1]
+    assert layer.id == layer_id and layer.name == "Another view"
+    assert layer.source_id == camera.id
+    assert workspace.resources == original_resources
+    assert controller.document.source(camera.id) == camera
+    assert updates == [] and credentials.saved == []
+
+
+@pytest.mark.parametrize("action", ["camera", "configured", "reference", "rename"])
+def test_source_editor_context_is_consumed_only_after_success(scene_bridge_factory, action) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    context = bridge.sourceEditContext()
+    camera_id = workspace.configured_cameras[0].id
+    original_layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+
+    def save():
+        if action == "camera":
+            return bridge.addCamera({"kind": "rtsp_camera", "name": "Entrance", "uri": "rtsp://camera.test/live"}, context)
+        if action == "configured":
+            return bridge.addConfiguredCamera(camera_id, "Camera", context)
+        if action == "reference":
+            return bridge.addSceneReference(CAMERA_SCENE_ID, "Nested", context)
+        return bridge.renameLayer(original_layer.id, "Renamed", context)
+
+    assert save()
+    document = controller.document
+    resources = workspace.resources
+    assert not save()
+    assert bridge.sourceEditError
+    assert controller.document == document
+    assert workspace.resources == resources
+
+
+@pytest.mark.parametrize("changed", ["scene", "profile"])
+def test_source_editor_rejects_save_after_context_change(scene_bridge_factory, changed) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    context = bridge.sourceEditContext()
+    if changed == "scene":
+        bridge.selectScene(CAMERA_SCENE_ID)
+    else:
+        workspace.create_collection("Other profile")
+        target = next(c for c in workspace.catalog.collections if c.id != workspace.catalog.active_collection_id)
+        bridge.activateSceneProfile(target.id)
+    before = controller.document
+    resources = workspace.resources
+
+    assert not bridge.addCamera({"kind": "rtsp_camera", "name": "Stale", "uri": "rtsp://camera.test/live"}, context)
+
+    assert bridge.sourceEditError
+    assert controller.document == before
+    assert workspace.resources == resources
+
+
+def test_shared_configuration_rejects_camera_changed_since_open(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    camera = workspace.configured_cameras[0]
+    draft = bridge.cameraDraft(camera.id)
+    context = bridge.sourceEditContext()
+    external = replace(camera, configuration=LocalCameraConfig(device_id="changed-externally"))
+    workspace.upsert_camera(external)
+    before = controller.document
+
+    assert not bridge.updateCamera(draft, context)
+
+    assert bridge.sourceEditError
+    assert workspace.resources.camera(camera.id) == external
+    assert controller.document == before
+
+
+def test_shared_configuration_ignores_unrelated_resource_revision_changes(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    camera_id, _layer_id = _enable_default_camera_ptz(workspace, controller)
+    draft = bridge.cameraDraft(camera_id)
+    context = bridge.sourceEditContext()
+    assert bridge.savePtzPreset({
+        "cameraId": camera_id, "name": "Lectern", "targetMode": "position",
+        "pan": 0.2, "tilt": -0.1, "zoom": 0.4,
+    })
+    assert workspace.resources.revision > context["resourceRevision"]
+    original = workspace.resources.camera(camera_id)
+
+    assert bridge.updateCamera(draft, context)
+
+    assert not bridge.sourceEditError
+    assert workspace.resources.camera(camera_id) == original
+    assert len(workspace.resources.camera_presets) == 1
+
+
+def test_invalid_rename_keeps_context_available_for_corrected_name(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    context = bridge.sourceEditContext()
+    before = controller.document
+
+    assert not bridge.renameLayer(layer.id, "   ", context)
+
+    assert bridge.sourceEditError == "Check the source name and settings."
+    assert controller.document == before
+    assert bridge.renameLayer(layer.id, "Corrected name", context)
+    assert not bridge.sourceEditError
+    assert controller.document.scene(bridge.selectedSceneId).layers[0].name == "Corrected name"
+
+
+@pytest.mark.parametrize("action", ["camera", "configured", "reference", "rename"])
+def test_duplicate_layer_name_is_contextual_and_can_be_corrected_without_reopening(
+    scene_bridge_factory, monkeypatch, action,
+) -> None:
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    bridge.selectScene(CAMERA_SCENE_ID)
+    existing = controller.document.scene(CAMERA_SCENE_ID).layers[0]
+    other_id = bridge.addConfiguredCamera(existing.source_id, "Other angle", bridge.sourceEditContext())
+    before = controller.document
+    resources = workspace.resources
+    writes = []
+    save = workspace._resource_repository.save
+
+    def record_save(*args, **kwargs):
+        writes.append(True)
+        return save(*args, **kwargs)
+
+    monkeypatch.setattr(workspace._resource_repository, "save", record_save)
+    context = bridge.sourceEditContext()
+
+    def submit(name):
+        if action == "camera":
+            return bridge.addCamera({
+                "kind": "rtsp_camera", "name": "Another connection", "layerName": name,
+                "uri": "rtsp://example.invalid/live", "streamUsername": "user", "streamPassword": "secret",
+            }, context)
+        if action == "configured":
+            return bridge.addConfiguredCamera(existing.source_id, name, context)
+        if action == "reference":
+            return bridge.addSceneReference(CONTENT_SCENE_ID, name, context)
+        return bridge.renameLayer(other_id, name, context)
+
+    message = "A source with this name already exists in this scene."
+    assert bridge.layerNameError(f"  {existing.name.upper()}  ", "") == message
+    assert bridge.layerNameError(existing.name, existing.id) == ""
+    assert not submit(f"  {existing.name.upper()}  ")
+    assert bridge.sourceEditError == message
+    assert controller.document is before
+    assert workspace.resources == resources
+    assert writes == []
+    assert credentials.saved == [] and credentials.deleted == []
+    assert submit("Unique view")
+    assert not bridge.sourceEditError
+    assert controller.document.scene(CAMERA_SCENE_ID).layers[-1].name == "Unique view"
+
+
+def test_content_insertion_assigns_unique_names_and_reuses_source(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
+    bridge.createScene("Composition")
+    bridge.addContentSource()
+    bridge.addContentSource()
+    bridge.addContentSource()
+
+    layers = controller.document.scene(bridge.selectedSceneId).layers
+    assert len({layer.source_id for layer in layers}) == 1
+    assert [layer.name for layer in layers] == ["Current content", "Current content (2)", "Current content (3)"]
+    controller.documents.undo()
+    assert len(controller.document.scene(bridge.selectedSceneId).layers) == 2
+
+
+@pytest.mark.parametrize("failure_at", ["catalog", "document"])
+def test_failed_camera_add_preserves_document_cleans_credentials_and_allows_retry(
+    scene_bridge_factory, monkeypatch, failure_at,
+) -> None:
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    before = controller.document
+    resources = workspace.resources
+    values = {
+        "kind": "rtsp_camera", "name": "Entrance", "layerName": "Entrance view",
+        "uri": "rtsp://operator:secret@camera.test/live",
+    }
+    context = bridge.sourceEditContext()
+    repository = workspace._resource_repository if failure_at == "catalog" else controller.documents._store
+    save = repository.save
+
+    def fail(*_args, **_kwargs):
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(repository, "save", fail)
+    assert bridge.addCamera(values, context) == ""
+    assert bridge.sourceEditError
+    assert controller.document == before
+    assert workspace.configured_cameras == resources.cameras
+    assert credentials.deleted == ["credential-ref"]
+    monkeypatch.setattr(repository, "save", save)
+
+    layer_id = bridge.addCamera(values, context)
+
+    assert layer_id
+    assert not bridge.sourceEditError
+    assert controller.document.scene(bridge.selectedSceneId).layers[-1].id == layer_id
+    assert len(workspace.configured_cameras) == len(resources.cameras) + 1
+
+
+def test_cancelled_camera_draft_does_not_change_resources_or_credentials(scene_bridge_factory) -> None:
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    before = controller.document
+    resources = workspace.resources
+    bridge.sourceEditContext()
+    bridge.cameraDraft(workspace.configured_cameras[0].id)
+    assert controller.document == before
+    assert workspace.resources == resources
+    assert credentials.saved == [] and credentials.deleted == []
+
+
+def test_network_cameras_with_same_address_keep_independent_connection_identities(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    values = {"kind": "rtsp_camera", "name": "Entrance", "uri": "rtsp://camera.test/live"}
+    first = bridge.addCamera(values, bridge.sourceEditContext())
+    second = bridge.addCamera(dict(values, name="Backup credentials"), bridge.sourceEditContext())
+    assert first and second and first != second
+    layers = controller.document.scene(bridge.selectedSceneId).layers[-2:]
+    assert layers[0].source_id != layers[1].source_id
+    connections = [workspace.resources.camera(layer.source_id) for layer in layers]
+    assert connections[0].configuration.uri == connections[1].configuration.uri
+
+
+def test_registered_disconnected_camera_can_be_referenced_without_device_replacement(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    camera = replace(workspace.configured_cameras[0], configuration=LocalCameraConfig(device_id="missing-device"))
+    workspace.upsert_camera(camera)
+    controller._set_local_cameras(LocalCameraDiscovery(supported=True, ready=True, generation=1, devices=()))
+    record = next(d for d in bridge.localCameraDevices if d["id"] == "missing-device")
+    assert record["available"] is False
+    assert bridge.configuredLocalCamera("missing-device")["id"] == camera.id
+    layer_id = bridge.addConfiguredCamera(camera.id, "Offline view", bridge.sourceEditContext())
+    assert layer_id
+    assert controller.document.source(camera.id).configuration.device_id == "missing-device"
+
+
+def test_scene_reference_cycle_is_disabled_and_rejected_without_orphan_source(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
+    assert bridge.addSceneReference(CAMERA_SCENE_ID, "Nested camera", bridge.sourceEditContext())
+    original_scene = bridge.selectedSceneId
+    bridge.selectScene(CAMERA_SCENE_ID)
+    candidate = next(scene for scene in bridge.referencedScenes if scene["id"] == original_scene)
+    assert candidate["available"] is False and candidate["reason"]
+    assert CAMERA_SCENE_ID not in {scene["id"] for scene in bridge.referencedScenes}
+    before = controller.document
+    assert not bridge.addSceneReference(original_scene, "Cycle", bridge.sourceEditContext())
+    assert bridge.sourceEditError
+    assert controller.document == before
+
+
+def test_configuring_shared_camera_preserves_connection_and_occurrence_names(scene_bridge_factory) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    bridge.selectScene(CAMERA_SCENE_ID)
+    original = controller.document.scene(CAMERA_SCENE_ID).layers[0]
+    camera = workspace.resources.camera(original.source_id)
+    draft = bridge.cameraDraft(camera.id)
+    draft.update(name="Not a layer rename", deviceId="new-device")
+
+    assert bridge.updateCamera(draft, bridge.sourceEditContext())
+
+    updated = workspace.resources.camera(camera.id)
+    assert updated.name == camera.name
+    assert updated.configuration.device_id == "new-device"
+    assert controller.document.scene(CAMERA_SCENE_ID).layers[0] == original
+    assert bridge.renameLayer(original.id, "Personal view", bridge.sourceEditContext())
+    assert controller.document.scene(CAMERA_SCENE_ID).layers[0].name == "Personal view"
+    assert workspace.resources.camera(camera.id) == updated
+
+
+def test_partial_credential_storage_failure_cleans_only_new_secrets(scene_bridge_factory, monkeypatch) -> None:
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    before = controller.document
+    resources = workspace.resources
+    values = {
+        "kind": "rtsp_camera", "name": "Entrance", "uri": "rtsp://camera.test/live",
+        "streamUsername": "viewer", "streamPassword": "stream-secret",
+        "ptzProtocol": PtzProtocol.ONVIF.value,
+        "ptzEndpoint": "https://camera.test/onvif/ptz", "ptzProfileToken": "profile-one",
+        "ptzUsername": "operator", "ptzPassword": "ptz-secret",
+    }
+
+    def save(secret):
+        credentials.saved.append(secret)
+        if len(credentials.saved) == 2:
+            raise OSError("protected storage unavailable")
+        return "new-ptz-ref"
+
+    monkeypatch.setattr(credentials, "save", save)
+
+    assert not bridge.addCamera(values, bridge.sourceEditContext())
+
+    assert bridge.sourceEditError
+    assert credentials.deleted == ["new-ptz-ref"]
+    assert controller.document == before
+    assert workspace.resources == resources
+
+
+def test_failed_compensation_preserves_credentials_still_referenced_by_catalog(scene_bridge_factory, monkeypatch):
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    before = controller.document
+    save_resources = workspace._resource_repository.save
+    writes = []
+
+    def fail_compensation(resources, **kwargs):
+        writes.append(resources)
+        if len(writes) > 1:
+            raise OSError("resource rollback unavailable")
+        save_resources(resources, **kwargs)
+
+    def fail_document(*_args, **_kwargs):
+        raise OSError("document write unavailable")
+
+    monkeypatch.setattr(workspace._resource_repository, "save", fail_compensation)
+    monkeypatch.setattr(controller.documents._store, "save", fail_document)
+    assert not bridge.addCamera({
+        "kind": "rtsp_camera", "name": "Entrance", "uri": "rtsp://viewer:secret@camera.test/live",
+    }, bridge.sourceEditContext())
+    assert bridge.sourceEditError
+    assert controller.document == before
+    assert workspace.resources == workspace._resource_repository.load()
+    assert workspace.configured_cameras[-1].credential_ref == "credential-ref"
+    # A second storage failure cannot justify deleting a persisted secret.
+    assert credentials.deleted == []
+
+
+def test_updating_one_network_connection_preserves_secret_owned_by_another(scene_bridge_factory):
+    credentials = _Credentials()
+    workspace, controller, bridge, _preview = scene_bridge_factory(credentials=credentials)
+    connections = []
+    for index in range(2):
+        camera = SourceDefinition(
+            id=f"shared-secret-{index}", kind=SourceKind.RTSP_CAMERA, name=f"Connection {index}",
+            configuration=RtspCameraConfig(uri=f"rtsp://camera.test/stream{index}"),
+            credential_ref="legacy-shared-secret",
+        )
+        workspace.add_camera_layer(bridge.selectedSceneId, camera, SceneLayer(
+            id=f"shared-secret-layer-{index}", source_id=camera.id, name=camera.name,
+        ))
+        connections.append(camera)
+    for index, camera in enumerate(connections):
+        draft = bridge.cameraDraft(camera.id)
+        draft['clearStreamCredentials'] = True
+        assert bridge.updateCamera(draft, bridge.sourceEditContext())
+        assert credentials.deleted == ([] if index == 0 else ['legacy-shared-secret'])
+    assert not workspace.resources.credential_references

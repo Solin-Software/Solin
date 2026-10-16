@@ -6146,6 +6146,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>无法检查摄像机的采集状态。请刷新摄像机或重新连接设备。</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>请检查来源名称和设置。</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>未找到摄像机。</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>此对话框打开期间，场景或摄像机已更改。请重新打开对话框后重试。</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>此设备存在冲突的摄像机连接。请先检查现有连接，然后再继续。</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>此场景会导致循环引用。</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>摄像机连接已保存，但无法更新场景。请重新打开对话框后重试。</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>此场景中已存在同名来源。</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6934,7 +6962,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>保持摄像机开启</translation>
+        <translation type="vanished">保持摄像机开启</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7238,6 +7266,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>无法获取此分辨率支持的模式。请刷新摄像机或选择其他分辨率。</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>添加场景</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>请选择可用的场景。</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>配置摄像机</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>配置摄像机……</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>连接</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>连接名称</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>连接设置</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>请输入摄像机名称。</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>请输入此来源在场景中的名称。</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>请输入 RTSP 地址。</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>在此场景中的名称</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP 摄像机</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>新建连接……</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>没有找到结果。</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>重命名来源</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>已保存的摄像机设置</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>搜索连接……</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>搜索场景……</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>搜索…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>这些设置会影响所有使用此摄像机的场景和场景配置文件。如需仅更改此场景中的名称，请使用“重命名……”。</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>此设备存在冲突的摄像机连接。请先检查现有连接，然后再继续。</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>此场景将复用摄像机的共享设置。</translation>
     </message>
 </context>
 <context>

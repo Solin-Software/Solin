@@ -4743,121 +4743,121 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
-        <translation type="unfinished"></translation>
+        <translation>Switching</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Error</source>
-        <translation type="unfinished"></translation>
+        <translation>Error</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>On</source>
-        <translation type="unfinished"></translation>
+        <translation>On</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Off</source>
-        <translation type="unfinished"></translation>
+        <translation>Off</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Preparing scenes…</source>
-        <translation type="unfinished"></translation>
+        <translation>Preparing scenes…</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Scene engine unavailable</source>
-        <translation type="unfinished"></translation>
+        <translation>Scene engine unavailable</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Starting scene engine…</source>
-        <translation type="unfinished"></translation>
+        <translation>Starting scene engine…</translation>
     </message>
     <message>
         <location line="+66"/>
         <location line="+23"/>
         <location line="+18"/>
         <source>Recording is unavailable</source>
-        <translation type="unfinished"></translation>
+        <translation>Recording is unavailable</translation>
     </message>
     <message>
         <location line="-35"/>
         <source>The scene engine must be ready to record.</source>
-        <translation type="unfinished"></translation>
+        <translation>The scene engine must be ready to record.</translation>
     </message>
     <message>
         <location line="+2"/>
         <location line="+35"/>
         <source>Recording is unavailable in this scene engine.</source>
-        <translation type="unfinished"></translation>
+        <translation>Recording is unavailable in this scene engine.</translation>
     </message>
     <message>
         <location line="-18"/>
         <source>Ready to record</source>
-        <translation type="unfinished"></translation>
+        <translation>Ready to record</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Starting recording…</source>
-        <translation type="unfinished"></translation>
+        <translation>Starting recording…</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Recording</source>
-        <translation type="unfinished"></translation>
+        <translation>Recording</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Finishing recording…</source>
-        <translation type="unfinished"></translation>
+        <translation>Finishing recording…</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Recording failed</source>
-        <translation type="unfinished"></translation>
+        <translation>Recording failed</translation>
     </message>
     <message>
         <location line="+55"/>
         <source>Looking for audio devices…</source>
-        <translation type="unfinished"></translation>
+        <translation>Looking for audio devices…</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Audio devices could not be listed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Audio devices could not be listed.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>No audio devices found.</source>
-        <translation type="unfinished"></translation>
+        <translation>No audio devices found.</translation>
     </message>
     <message>
         <location line="+46"/>
         <source>Default camera (automatic)</source>
-        <translation type="unfinished"></translation>
+        <translation>Default camera (automatic)</translation>
     </message>
     <message>
         <location line="+4"/>
         <location line="+1519"/>
         <source>Automatic</source>
-        <translation type="unfinished"></translation>
+        <translation>Automatic</translation>
     </message>
     <message>
         <location line="-1509"/>
         <source>Looking for cameras…</source>
-        <translation type="unfinished"></translation>
+        <translation>Looking for cameras…</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Camera discovery is available when the scene engine is ready.</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera discovery is available when the scene engine is ready.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Camera discovery could not be completed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera discovery could not be completed.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4867,23 +4867,23 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location line="+186"/>
         <source>The recording folder could not be opened.</source>
-        <translation type="unfinished"></translation>
+        <translation>The recording folder could not be opened.</translation>
     </message>
     <message>
         <location line="+36"/>
         <source>%1 copy</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 copy</translation>
     </message>
     <message>
         <location line="+24"/>
         <source>Choose which scene should replace the live scene.</source>
-        <translation type="unfinished"></translation>
+        <translation>Choose which scene should replace the live scene.</translation>
     </message>
     <message>
         <location line="+42"/>
         <location line="+26"/>
         <source>Choose a valid transition and duration.</source>
-        <translation type="unfinished"></translation>
+        <translation>Choose a valid transition and duration.</translation>
     </message>
     <message>
         <location line="+508"/>
@@ -4893,52 +4893,52 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location line="+29"/>
         <source>Camera discovery could not be refreshed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera discovery could not be refreshed.</translation>
     </message>
     <message>
         <location line="+22"/>
         <source>PTZ control failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ control failed.</translation>
     </message>
     <message>
         <location line="+81"/>
         <source>Check the preset name and target.</source>
-        <translation type="unfinished"></translation>
+        <translation>Check the preset name and target.</translation>
     </message>
     <message>
         <location line="+67"/>
         <source>Check the PTZ scene action.</source>
-        <translation type="unfinished"></translation>
+        <translation>Check the PTZ scene action.</translation>
     </message>
     <message>
         <location line="+28"/>
         <source>PTZ preset recall failed.</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ preset recall failed.</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Media</source>
-        <translation type="unfinished"></translation>
+        <translation>Media</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Live</source>
-        <translation type="unfinished"></translation>
+        <translation>Live</translation>
     </message>
     <message>
         <location line="+52"/>
         <source>Cut</source>
-        <translation type="unfinished"></translation>
+        <translation>Cut</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Dissolve</source>
-        <translation type="unfinished"></translation>
+        <translation>Dissolve</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Fade through black</source>
-        <translation type="unfinished"></translation>
+        <translation>Fade through black</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -4968,67 +4968,67 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location line="+97"/>
         <source>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera unavailable. Check its connection, privacy permissions, or whether another application is using it.</translation>
     </message>
     <message>
         <location line="+116"/>
         <source>%1 (virtual)</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 (virtual)</translation>
     </message>
     <message>
         <location line="+88"/>
         <source>%1 × %2 · %3 fps · %4</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 × %2 · %3 fps · %4</translation>
     </message>
     <message>
         <location line="+176"/>
         <source>Obsolete PTZ credentials could not be removed.</source>
-        <translation type="unfinished"></translation>
+        <translation>Obsolete PTZ credentials could not be removed.</translation>
     </message>
     <message>
         <location line="+71"/>
         <source>System default</source>
-        <translation type="unfinished"></translation>
+        <translation>System default</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>None</source>
-        <translation type="unfinished"></translation>
+        <translation>None</translation>
     </message>
     <message>
         <location line="+26"/>
         <source>Unavailable device</source>
-        <translation type="unfinished"></translation>
+        <translation>Unavailable device</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>%1 (unavailable)</source>
-        <translation type="unfinished"></translation>
+        <translation>%1 (unavailable)</translation>
     </message>
     <message>
         <location line="+45"/>
         <source>The recording setting could not be updated.</source>
-        <translation type="unfinished"></translation>
+        <translation>The recording setting could not be updated.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>The scene configuration could not be saved.</source>
-        <translation type="unfinished"></translation>
+        <translation>The scene configuration could not be saved.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>The live scene state could not be saved.</source>
-        <translation type="unfinished"></translation>
+        <translation>The live scene state could not be saved.</translation>
     </message>
     <message>
         <location line="+22"/>
         <source>The Scene profile could not be updated.</source>
-        <translation type="unfinished"></translation>
+        <translation>The Scene profile could not be updated.</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Scenes</source>
-        <translation type="unfinished">Scenes</translation>
+        <translation>Scenes</translation>
     </message>
     <message>
         <source>Solin Content</source>
@@ -5058,6 +5058,34 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>The camera capture could not be checked. Refresh the cameras or reconnect the device.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Check the source name and settings.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>No cameras found.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>This device has conflicting camera connections. Check the existing connections before continuing.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>This scene would create a circular reference.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>A source with this name already exists in this scene.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -5075,136 +5103,136 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+22"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+275"/>
         <source>Camera</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera</translation>
     </message>
     <message>
         <location line="+6"/>
         <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
-        <translation type="unfinished">Name</translation>
+        <translation>Name</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Camera name</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera name</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Device</source>
-        <translation type="unfinished"></translation>
+        <translation>Device</translation>
     </message>
     <message>
         <location line="+17"/>
         <source>Refresh cameras</source>
-        <translation type="unfinished"></translation>
+        <translation>Refresh cameras</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Format</source>
-        <translation type="unfinished"></translation>
+        <translation>Format</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>RTSP address</source>
-        <translation type="unfinished"></translation>
+        <translation>RTSP address</translation>
     </message>
     <message>
         <location line="+3"/>
         <location line="+60"/>
         <source>Transport</source>
-        <translation type="unfinished"></translation>
+        <translation>Transport</translation>
     </message>
     <message>
         <location line="-57"/>
         <source>Network buffer</source>
-        <translation type="unfinished"></translation>
+        <translation>Network buffer</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Credentials are stored separately. Do not put a username, password, or token in the RTSP address.</source>
-        <translation type="unfinished"></translation>
+        <translation>Credentials are stored separately. Do not put a username, password, or token in the RTSP address.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>PTZ control</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ control</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>No PTZ control</source>
-        <translation type="unfinished"></translation>
+        <translation>No PTZ control</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>VISCA over IP</source>
-        <translation type="unfinished"></translation>
+        <translation>VISCA over IP</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>VISCA serial</source>
-        <translation type="unfinished"></translation>
+        <translation>VISCA serial</translation>
     </message>
     <message>
         <location line="+9"/>
         <source>PTZ service</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ service</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Profile token</source>
-        <translation type="unfinished"></translation>
+        <translation>Profile token</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Media profile token</source>
-        <translation type="unfinished"></translation>
+        <translation>Media profile token</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Username</source>
-        <translation type="unfinished">Username</translation>
+        <translation>Username</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+2"/>
         <source>Leave blank to keep saved credentials</source>
-        <translation type="unfinished"></translation>
+        <translation>Leave blank to keep saved credentials</translation>
     </message>
     <message>
         <location line="-1"/>
         <source>Password</source>
-        <translation type="unfinished"></translation>
+        <translation>Password</translation>
     </message>
     <message>
         <location line="+3"/>
         <source>Remove saved credentials</source>
-        <translation type="unfinished"></translation>
+        <translation>Remove saved credentials</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Host</source>
-        <translation type="unfinished"></translation>
+        <translation>Host</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Port</source>
-        <translation type="unfinished"></translation>
+        <translation>Port</translation>
     </message>
     <message>
         <location line="+11"/>
         <source>Serial port</source>
-        <translation type="unfinished"></translation>
+        <translation>Serial port</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Baud rate</source>
-        <translation type="unfinished"></translation>
+        <translation>Baud rate</translation>
     </message>
     <message>
         <location line="+2"/>
         <source>Camera address</source>
-        <translation type="unfinished"></translation>
+        <translation>Camera address</translation>
     </message>
     <message>
         <location line="+17"/>
@@ -5219,7 +5247,7 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+68"/>
         <location line="+448"/>
         <source>Cancel</source>
-        <translation type="unfinished">Cancel</translation>
+        <translation>Cancel</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -5229,7 +5257,7 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
-        <translation type="unfinished">Save</translation>
+        <translation>Save</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
@@ -5445,12 +5473,12 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
-        <translation type="unfinished">Delete</translation>
+        <translation>Delete</translation>
     </message>
     <message>
         <location line="+21"/>
         <source>Add</source>
-        <translation type="unfinished"></translation>
+        <translation>Add</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesPtzPopup.qml" line="-97"/>
@@ -5523,19 +5551,19 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
-        <translation type="unfinished">Scenes</translation>
+        <translation>Scenes</translation>
     </message>
     <message>
         <location line="+228"/>
         <source>Scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Scene</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesSourcePanel.qml" line="+159"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-84"/>
         <location line="+86"/>
         <source>Sources</source>
-        <translation type="unfinished"></translation>
+        <translation>Sources</translation>
     </message>
     <message>
         <location line="+164"/>
@@ -5626,126 +5654,126 @@ Add content, a camera, or another scene.</source>
     <message>
         <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
-        <translation type="unfinished"></translation>
+        <translation>Open scenes</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Open scenes and sources</source>
-        <translation type="unfinished"></translation>
+        <translation>Open scenes and sources</translation>
     </message>
     <message>
         <location line="+23"/>
         <source>Compose cameras and projected content</source>
-        <translation type="unfinished"></translation>
+        <translation>Compose cameras and projected content</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Undo</source>
-        <translation type="unfinished">Undo</translation>
+        <translation>Undo</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Redo</source>
-        <translation type="unfinished">Redo</translation>
+        <translation>Redo</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+485"/>
         <location line="+149"/>
         <source>Cut</source>
-        <translation type="unfinished"></translation>
+        <translation>Cut</translation>
     </message>
     <message>
         <location line="-616"/>
         <source>Off</source>
-        <translation type="unfinished"></translation>
+        <translation>Off</translation>
     </message>
     <message>
         <location line="+75"/>
         <source>Live now</source>
-        <translation type="unfinished"></translation>
+        <translation>Live now</translation>
     </message>
     <message>
         <location line="+15"/>
         <location line="+473"/>
         <source>On air</source>
-        <translation type="unfinished"></translation>
+        <translation>On air</translation>
     </message>
     <message>
         <location line="-473"/>
         <location line="+473"/>
         <source>Take live</source>
-        <translation type="unfinished"></translation>
+        <translation>Take live</translation>
     </message>
     <message>
         <location line="-212"/>
         <source>Canvas</source>
-        <translation type="unfinished">Canvas</translation>
+        <translation>Canvas</translation>
     </message>
     <message>
         <location line="+98"/>
         <source>Program transition</source>
-        <translation type="unfinished"></translation>
+        <translation>Program transition</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Used when scenes go live. Editor preview stays instant.</source>
-        <translation type="unfinished"></translation>
+        <translation>Used when scenes go live. Editor preview stays instant.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Switch immediately</source>
-        <translation type="unfinished"></translation>
+        <translation>Switch immediately</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+150"/>
         <source>Dissolve</source>
-        <translation type="unfinished"></translation>
+        <translation>Dissolve</translation>
     </message>
     <message>
         <location line="-149"/>
         <source>Blend the two scenes</source>
-        <translation type="unfinished"></translation>
+        <translation>Blend the two scenes</translation>
     </message>
     <message>
         <location line="+7"/>
         <location line="+151"/>
         <source>Fade through black</source>
-        <translation type="unfinished"></translation>
+        <translation>Fade through black</translation>
     </message>
     <message>
         <location line="-150"/>
         <source>Fade out, then fade in</source>
-        <translation type="unfinished"></translation>
+        <translation>Fade out, then fade in</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Duration</source>
-        <translation type="unfinished"></translation>
+        <translation>Duration</translation>
     </message>
     <message>
         <location line="+15"/>
         <location line="+452"/>
         <source>ms</source>
-        <translation type="unfinished"></translation>
+        <translation>ms</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
         <location line="+449"/>
         <source>Apply</source>
-        <translation type="unfinished">Apply</translation>
+        <translation>Apply</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
-        <translation type="unfinished"></translation>
+        <translation>Rename…</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Duplicate</source>
-        <translation type="unfinished"></translation>
+        <translation>Duplicate</translation>
     </message>
     <message>
         <location line="+7"/>
@@ -5755,62 +5783,62 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+7"/>
         <source>Remove media</source>
-        <translation type="unfinished"></translation>
+        <translation>Remove media</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Set as media</source>
-        <translation type="unfinished"></translation>
+        <translation>Set as media</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Transition override</source>
-        <translation type="unfinished"></translation>
+        <translation>Transition override</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Use profile transition</source>
-        <translation type="unfinished"></translation>
+        <translation>Use profile transition</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Duration…</source>
-        <translation type="unfinished"></translation>
+        <translation>Duration…</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Delete…</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete…</translation>
     </message>
     <message>
         <location line="+32"/>
         <source>New Scene profile…</source>
-        <translation type="unfinished"></translation>
+        <translation>New Scene profile…</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Rename profile…</source>
-        <translation type="unfinished"></translation>
+        <translation>Rename profile…</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Delete profile…</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete profile…</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Solin Virtual Camera</source>
-        <translation type="unfinished"></translation>
+        <translation>Solin Virtual Camera</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Auto-switch media</source>
-        <translation type="unfinished"></translation>
+        <translation>Auto-switch media</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Show in media windows</source>
-        <translation type="unfinished"></translation>
+        <translation>Show in media windows</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -5845,7 +5873,7 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation type="unfinished"></translation>
+        <translation type="vanished"></translation>
     </message>
     <message>
         <location line="+20"/>
@@ -5855,17 +5883,17 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+5"/>
         <source>Precise transform…</source>
-        <translation type="unfinished"></translation>
+        <translation>Precise transform…</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Reset transform</source>
-        <translation type="unfinished"></translation>
+        <translation>Reset transform</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Center</source>
-        <translation type="unfinished">Center</translation>
+        <translation>Center</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -5875,135 +5903,135 @@ Add content, a camera, or another scene.</source>
     <message>
         <location line="+8"/>
         <source>Fit</source>
-        <translation type="unfinished">Fit</translation>
+        <translation>Fit</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Contain</source>
-        <translation type="unfinished"></translation>
+        <translation>Contain</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Cover</source>
-        <translation type="unfinished"></translation>
+        <translation>Cover</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Stretch</source>
-        <translation type="unfinished"></translation>
+        <translation>Stretch</translation>
     </message>
     <message>
         <location line="+13"/>
         <source>PTZ controls…</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ controls…</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>PTZ presets and scene actions…</source>
-        <translation type="unfinished"></translation>
+        <translation>PTZ presets and scene actions…</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Remove source</source>
-        <translation type="unfinished"></translation>
+        <translation>Remove source</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Transition duration</source>
-        <translation type="unfinished"></translation>
+        <translation>Transition duration</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Set how long this scene&apos;s transition takes.</source>
-        <translation type="unfinished"></translation>
+        <translation>Set how long this scene's transition takes.</translation>
     </message>
     <message>
         <location line="+43"/>
         <source>New scene</source>
-        <translation type="unfinished"></translation>
+        <translation>New scene</translation>
     </message>
     <message>
         <location line="+1"/>
         <location line="+15"/>
         <source>Create</source>
-        <translation type="unfinished"></translation>
+        <translation>Create</translation>
     </message>
     <message>
         <location line="-8"/>
         <source>Rename scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Rename scene</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>New Scene profile</source>
-        <translation type="unfinished"></translation>
+        <translation>New Scene profile</translation>
     </message>
     <message>
         <location line="+6"/>
         <source>Rename Scene profile</source>
-        <translation type="unfinished"></translation>
+        <translation>Rename Scene profile</translation>
     </message>
     <message>
         <location line="+30"/>
         <source>Delete Scene profile</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete Scene profile</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose the Scene profile to show next.</source>
-        <translation type="unfinished"></translation>
+        <translation>Choose the Scene profile to show next.</translation>
     </message>
     <message>
         <location line="+56"/>
         <source>Delete scene</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete scene</translation>
     </message>
     <message>
         <location line="+7"/>
         <source>Delete “%1” and remove every reference to it?</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete “%1” and remove every reference to it?</translation>
     </message>
     <message>
         <location line="+4"/>
         <source>Show this scene instead</source>
-        <translation type="unfinished"></translation>
+        <translation>Show this scene instead</translation>
     </message>
     <message>
         <location line="+159"/>
         <location line="+6"/>
         <source>Program transition: %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Program transition: %1</translation>
     </message>
     <message>
         <location line="+18"/>
         <source>Try recording again</source>
-        <translation type="unfinished"></translation>
+        <translation>Try recording again</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Starting recording…</source>
-        <translation type="unfinished"></translation>
+        <translation>Starting recording…</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Finishing recording…</source>
-        <translation type="unfinished"></translation>
+        <translation>Finishing recording…</translation>
     </message>
     <message>
         <location line="+57"/>
         <source>Retry</source>
-        <translation type="unfinished"></translation>
+        <translation>Retry</translation>
     </message>
     <message>
         <location line="+54"/>
         <location line="+6"/>
         <source>Recording settings</source>
-        <translation type="unfinished"></translation>
+        <translation>Recording settings</translation>
     </message>
     <message>
         <location line="+107"/>
         <source>Output · %1</source>
-        <translation type="unfinished"></translation>
+        <translation>Output · %1</translation>
     </message>
     <message>
         <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
@@ -6014,13 +6042,13 @@ Add content, a camera, or another scene.</source>
         <location line="+58"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
         <source>Record</source>
-        <translation type="unfinished"></translation>
+        <translation>Record</translation>
     </message>
     <message>
         <location line="+1"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
         <source>Stop recording</source>
-        <translation type="unfinished"></translation>
+        <translation>Stop recording</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -6031,19 +6059,19 @@ Add content, a camera, or another scene.</source>
         <location line="+1"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
         <source>Starting…</source>
-        <translation type="unfinished"></translation>
+        <translation>Starting…</translation>
     </message>
     <message>
         <location line="+1"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
         <source>Finishing…</source>
-        <translation type="unfinished"></translation>
+        <translation>Finishing…</translation>
     </message>
     <message>
         <location line="+1"/>
         <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
         <source>Start recording</source>
-        <translation type="unfinished"></translation>
+        <translation>Start recording</translation>
     </message>
     <message>
         <location line="+26"/>
@@ -6149,6 +6177,98 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Add scene</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Choose an available scene.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Configure camera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Configure camera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Connection</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Connection name</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Connection settings</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Enter a camera name.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Enter a name for this source in the scene.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Enter an RTSP address.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Name in this scene</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>Network camera</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>New connection…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>No results found.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Rename source</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Saved camera settings</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Search connections…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Search scenes…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Search…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>This device has conflicting camera connections. Check the existing connections before continuing.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>This scene will reuse the camera's shared settings.</translation>
     </message>
 </context>
 <context>

@@ -18,14 +18,19 @@ from solin.core.scenes.collections import (
 )
 from solin.core.scenes.model import (
     DEFAULT_CAMERA_SOURCE_ID,
+    SCHEMA_VERSION,
     BusId,
     SceneDocument,
     SceneValidationError,
     SourceDefinition,
     SourceKind,
     UnsupportedSceneSchemaError,
+    migrate_scene_document_record,
 )
-from solin.core.scenes.resources import SceneResourceCatalog
+from solin.core.scenes.resources import (
+    SceneResourceCatalog,
+    UnsupportedSceneResourceSchemaError,
+)
 from solin.core.scenes.presets import SceneSeedNames, convert_pristine_beta_preset
 from solin.core.scenes.runtime import (
     SceneRuntimeState,
@@ -154,6 +159,7 @@ class SceneDocumentRepository:
             if current == document:
                 return
             if current is not None:
+                _check_scene_schema_before_overwrite(self._backup.path)
                 recovery_revision = document.revision + 1
                 self._write(
                     self._backup,
@@ -309,6 +315,7 @@ class SceneCollectionDocumentRepository:
             if current_record == candidate_record:
                 return
             if current is not None:
+                _check_scene_schema_before_overwrite(self._backup.path)
                 recovery = replace(current, revision=document.revision + 1)
                 self._backup.write(
                     self._to_storage_record(recovery),
@@ -323,20 +330,43 @@ class SceneCollectionDocumentRepository:
                 trailing_newline=True,
             )
 
-    def normalize_storage(self, *, seed_names: SceneSeedNames | None = None, beta_selections: dict[BusId, str] | None = None) -> None:
+    def normalize_storage(
+        self,
+        *,
+        seed_names: SceneSeedNames | None = None,
+        beta_selections: dict[BusId, str] | None = None,
+    ) -> None:
         """Forward-convert beta presets and normalize shared-camera references."""
 
         with self._transaction_lock():
             if not self._primary.exists():
                 raise FileNotFoundError(self._primary.path)
-            self._normalize_repository(self._primary, seed_names=seed_names, beta_selections=beta_selections)
+            primary_record = self._normalized_storage_record(
+                self._primary,
+                seed_names=seed_names,
+                beta_selections=beta_selections,
+            )
+            prepared = [(self._primary, primary_record)]
             if self._backup.exists():
                 try:
-                    self._normalize_repository(self._backup, seed_names=seed_names)
+                    backup_record = self._normalized_storage_record(
+                        self._backup, seed_names=seed_names
+                    )
                 except SceneRepositoryCorruptError:
-                    current = self._load_repository(self._primary)
-                    self._backup.write(
-                        self._to_storage_record(current),
+                    backup_record = primary_record
+                prepared.append((self._backup, backup_record))
+            # Prepare both recovery points before writing either: a newer backup
+            # must stop normalization just like a newer primary document.
+            for repository, record in prepared:
+                try:
+                    current = _read_json_record(
+                        repository.path, maximum_bytes=MAX_SCENE_DOCUMENT_BYTES
+                    )
+                except (OSError, TypeError, ValueError):
+                    current = None
+                if current != record:
+                    repository.write(
+                        record,
                         indent=2,
                         sort_keys=False,
                         trailing_newline=True,
@@ -363,22 +393,23 @@ class SceneCollectionDocumentRepository:
             )
             return document
 
-    def _normalize_repository(self, repository: JsonFileRepository, *, seed_names: SceneSeedNames | None = None, beta_selections: dict[BusId, str] | None = None) -> None:
+    def _normalized_storage_record(
+        self,
+        repository: JsonFileRepository,
+        *,
+        seed_names: SceneSeedNames | None = None,
+        beta_selections: dict[BusId, str] | None = None,
+    ) -> dict[str, object]:
         document = self._load_repository(repository)
         if seed_names is not None:
-            document = convert_pristine_beta_preset(document, seed_names, selections=read_beta_output_selections(repository.path) if beta_selections is None else beta_selections)
-        record = self._to_storage_record(document)
-        current = _read_json_record(
-            repository.path,
-            maximum_bytes=MAX_SCENE_DOCUMENT_BYTES,
-        )
-        if current != record:
-            repository.write(
-                record,
-                indent=2,
-                sort_keys=False,
-                trailing_newline=True,
+            document = convert_pristine_beta_preset(
+                document,
+                seed_names,
+                selections=read_beta_output_selections(repository.path)
+                if beta_selections is None
+                else beta_selections,
             )
+        return self._to_storage_record(document)
 
     def _load_repository(self, repository: JsonFileRepository) -> SceneDocument:
         try:
@@ -395,9 +426,7 @@ class SceneCollectionDocumentRepository:
             raise SceneRepositoryCorruptError(repository.path) from exc
 
     def _materialize_storage_record(self, raw: object) -> dict[str, Any]:
-        if not isinstance(raw, dict):
-            raise SceneValidationError("Scene collection document must be an object")
-        record = json.loads(json.dumps(raw))
+        record = migrate_scene_document_record(raw)
         raw_sources = record.get("sources")
         if not isinstance(raw_sources, list):
             raise SceneValidationError("Scene collection sources must be an array")
@@ -437,15 +466,15 @@ class SceneCollectionDocumentRepository:
                 SourceKind.LOCAL_CAMERA.value,
                 SourceKind.RTSP_CAMERA.value,
             }:
-                if not isinstance(source_id, str):
-                    raise SceneValidationError("Invalid camera source id")
-                camera = camera_by_id.get(source_id)
+                # Shared resources may supersede a valid historical connection,
+                # but must never hide an invalid inline source or configuration.
+                inline_camera = SourceDefinition.from_record(raw_source)
+                camera = camera_by_id.get(inline_camera.id)
                 if camera is not None:
-                    enabled = raw_source.get("enabled", True)
-                    if not isinstance(enabled, bool):
-                        raise SceneValidationError("Invalid camera source state")
-                    materialized_sources.append(replace(camera, enabled=enabled).to_record())
-                    active_camera_ids.add(source_id)
+                    materialized_sources.append(
+                        replace(camera, enabled=inline_camera.enabled).to_record()
+                    )
+                    active_camera_ids.add(inline_camera.id)
                     continue
             materialized_sources.append(raw_source)
         record["sources"] = materialized_sources
@@ -610,7 +639,10 @@ class SceneResourceCatalogRepository:
         with self._transaction_lock():
             if not self._repository.exists():
                 raise FileNotFoundError(self._repository.path)
-            return self._load()
+            resources, record = self._load()
+            if record["schema_version"] != resources.schema_version:
+                self._write(resources)
+            return resources
 
     def save(
         self,
@@ -619,7 +651,7 @@ class SceneResourceCatalogRepository:
         expected_revision: int | None = None,
     ) -> None:
         with self._transaction_lock():
-            current = self._load() if self._repository.exists() else None
+            current, current_record = self._load() if self._repository.exists() else (None, None)
             if current is None:
                 if expected_revision not in {None, 0}:
                     raise SceneRevisionConflictError(
@@ -635,21 +667,26 @@ class SceneResourceCatalogRepository:
                     raise SceneRevisionConflictError(
                         "A shared scene-resource update must have a newer revision"
                     )
-            if resources != current:
-                self._repository.write(
-                    resources.to_record(),
-                    indent=2,
-                    sort_keys=False,
-                    trailing_newline=True,
-                )
+            if resources.to_record() != current_record:
+                self._write(resources)
 
-    def _load(self) -> SceneResourceCatalog:
+    def _write(self, resources: SceneResourceCatalog) -> None:
+        self._repository.write(
+            resources.to_record(),
+            indent=2,
+            sort_keys=False,
+            trailing_newline=True,
+        )
+
+    def _load(self) -> tuple[SceneResourceCatalog, dict[str, Any]]:
         try:
             record = _read_json_record(
                 self._repository.path,
                 maximum_bytes=MAX_SCENE_RESOURCE_CATALOG_BYTES,
             )
-            return SceneResourceCatalog.from_record(record)
+            return SceneResourceCatalog.from_record(record), record
+        except UnsupportedSceneResourceSchemaError:
+            raise
         except (OSError, TypeError, ValueError) as exc:
             raise SceneRepositoryCorruptError(self._repository.path) from exc
 
@@ -1018,6 +1055,17 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise _DuplicateJsonKeyError(f"Duplicate JSON key: {key}")
         result[key] = value
     return result
+
+
+def _check_scene_schema_before_overwrite(path: Path) -> None:
+    """A corrupt recovery point may be replaced; a newer schema must survive."""
+    try:
+        record = _read_json_record(path, maximum_bytes=MAX_SCENE_DOCUMENT_BYTES)
+    except (OSError, TypeError, ValueError):
+        return
+    version = record.get("schema_version") if isinstance(record, dict) else None
+    if isinstance(version, int) and not isinstance(version, bool) and version > SCHEMA_VERSION:
+        raise UnsupportedSceneSchemaError(version)
 
 
 def _read_json_record(path: Path, *, maximum_bytes: int) -> Any:

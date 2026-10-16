@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .pylibobs_compat import set_video_compat
+from .camera_identity import local_camera_device_key
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
@@ -310,7 +311,7 @@ class ObsRuntime:
 
         # DShow names may change, but the device path identifies the capture.
         # AVFoundation IDs and Linux paths retain their native case sensitivity.
-        device_key = device_path.split(":", 1)[-1].casefold() if sys.platform == "win32" else device_path
+        device_key = local_camera_device_key(device_path)
         signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator)
         with self._lock:
             existing = self._camera_sources.get(device_key)
@@ -396,7 +397,7 @@ class ObsRuntime:
         return ObsCameraCaptureProbe(self, source, width=width, height=height)
 
     def camera_capture_state(self, device_path: str):
-        key = device_path.split(":", 1)[-1].casefold() if sys.platform == "win32" else device_path
+        key = local_camera_device_key(device_path)
         with self._lock:
             probe = self._camera_probes.get(key)
             return probe.state if probe is not None else self._camera_failures.get(key)

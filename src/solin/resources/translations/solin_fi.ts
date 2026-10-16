@@ -6178,6 +6178,34 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
         <translation>Kameran kuvankaappausta ei voitu tarkistaa. Päivitä kamerat tai yhdistä laite uudelleen.</translation>
     </message>
+    <message>
+        <source>Check the source name and settings.</source>
+        <translation>Tarkista lähteen nimi ja asetukset.</translation>
+    </message>
+    <message>
+        <source>No cameras found.</source>
+        <translation>Kameroita ei löytynyt.</translation>
+    </message>
+    <message>
+        <source>The scene or camera changed while this dialog was open. Reopen the dialog and try again.</source>
+        <translation>Näkymä tai kamera muuttui tämän valintaikkunan ollessa auki. Avaa valintaikkuna uudelleen ja yritä uudestaan.</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Tällä laitteella on ristiriitaisia kamerayhteyksiä. Tarkista nykyiset yhteydet ennen jatkamista.</translation>
+    </message>
+    <message>
+        <source>This scene would create a circular reference.</source>
+        <translation>Tämä näkymä loisi kehäviittauksen.</translation>
+    </message>
+    <message>
+        <source>The camera connection was saved, but the scene could not be updated. Reopen the dialog and try again.</source>
+        <translation>Kamerayhteys tallennettiin, mutta näkymän päivittäminen epäonnistui. Avaa valintaikkuna uudelleen ja yritä uudestaan.</translation>
+    </message>
+    <message>
+        <source>A source with this name already exists in this scene.</source>
+        <translation>Samanniminen lähde on jo olemassa tässä näkymässä.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -6966,7 +6994,7 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     <message>
         <location line="+8"/>
         <source>Keep camera active</source>
-        <translation>Pidä kamera aktiivisena</translation>
+        <translation type="vanished">Pidä kamera aktiivisena</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -7270,6 +7298,98 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     <message>
         <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
         <translation>Tämän resoluution tuettuja tiloja ei voitu hakea. Päivitä kamerat tai valitse toinen resoluutio.</translation>
+    </message>
+    <message>
+        <source>Add scene</source>
+        <translation>Lisää näkymä</translation>
+    </message>
+    <message>
+        <source>Choose an available scene.</source>
+        <translation>Valitse käytettävissä oleva näkymä.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Sulje</translation>
+    </message>
+    <message>
+        <source>Configure camera</source>
+        <translation>Määritä kamera</translation>
+    </message>
+    <message>
+        <source>Configure camera…</source>
+        <translation>Määritä kamera…</translation>
+    </message>
+    <message>
+        <source>Connection</source>
+        <translation>Yhteys</translation>
+    </message>
+    <message>
+        <source>Connection name</source>
+        <translation>Yhteyden nimi</translation>
+    </message>
+    <message>
+        <source>Connection settings</source>
+        <translation>Yhteysasetukset</translation>
+    </message>
+    <message>
+        <source>Enter a camera name.</source>
+        <translation>Anna kameran nimi.</translation>
+    </message>
+    <message>
+        <source>Enter a name for this source in the scene.</source>
+        <translation>Anna tälle lähteelle nimi näkymässä.</translation>
+    </message>
+    <message>
+        <source>Enter an RTSP address.</source>
+        <translation>Anna RTSP-osoite.</translation>
+    </message>
+    <message>
+        <source>Name in this scene</source>
+        <translation>Nimi tässä näkymässä</translation>
+    </message>
+    <message>
+        <source>Network camera</source>
+        <translation>IP-kamera</translation>
+    </message>
+    <message>
+        <source>New connection…</source>
+        <translation>Uusi yhteys…</translation>
+    </message>
+    <message>
+        <source>No results found.</source>
+        <translation>Tuloksia ei löytynyt.</translation>
+    </message>
+    <message>
+        <source>Rename source</source>
+        <translation>Nimeä lähde uudelleen</translation>
+    </message>
+    <message>
+        <source>Saved camera settings</source>
+        <translation>Tallennetut kamera-asetukset</translation>
+    </message>
+    <message>
+        <source>Search connections…</source>
+        <translation>Hae yhteyksiä…</translation>
+    </message>
+    <message>
+        <source>Search scenes…</source>
+        <translation>Hae näkymiä…</translation>
+    </message>
+    <message>
+        <source>Search…</source>
+        <translation>Hae…</translation>
+    </message>
+    <message>
+        <source>These settings affect all scenes and scene profiles that use this camera. To change only the name in this scene, use Rename….</source>
+        <translation>Nämä asetukset vaikuttavat kaikkiin tätä kameraa käyttäviin näkymiin ja näkymäprofiileihin. Jos haluat muuttaa vain nimeä tässä näkymässä, valitse Nimeä uudelleen….</translation>
+    </message>
+    <message>
+        <source>This device has conflicting camera connections. Check the existing connections before continuing.</source>
+        <translation>Tällä laitteella on ristiriitaisia kamerayhteyksiä. Tarkista nykyiset yhteydet ennen jatkamista.</translation>
+    </message>
+    <message>
+        <source>This scene will reuse the camera's shared settings.</source>
+        <translation>Tämä näkymä käyttää kameran yhteisiä asetuksia.</translation>
     </message>
 </context>
 <context>

@@ -6,12 +6,16 @@ from threading import Event
 
 import pytest
 
-from solin.core.scenes.camera_catalog import CameraCatalog, select_automatic_mode
+from solin.core.scenes.camera_catalog import (
+    CameraCatalog,
+    camera_configuration_id,
+    select_automatic_mode,
+)
 from solin.core.scenes.engine import (
     LocalCameraDevice, LocalCameraModeQuery, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat,
     LocalVideoResolutionRange,
 )
-from solin.core.scenes.model import CameraMediaType
+from solin.core.scenes.model import CameraMediaType, LocalCameraConfig, OnvifPtzBinding
 
 
 def _mode(width=1920, height=1080, numerator=30, denominator=1, pixel="MJPG"):
@@ -21,6 +25,18 @@ def _mode(width=1920, height=1080, numerator=30, denominator=1, pixel="MJPG"):
 def _device(*formats):
     return LocalCameraDevice("camera", "Camera", False, formats,
                              LocalCameraProbe(LocalCameraProbeStatus.READY, "test"))
+
+
+def test_capture_fingerprint_ignores_ptz_and_tracks_capture_configuration():
+    config = LocalCameraConfig(device_id="camera")
+    fingerprint = camera_configuration_id(config)
+    assert fingerprint == camera_configuration_id(
+        replace(
+            config,
+            ptz_binding=OnvifPtzBinding(endpoint="http://camera.local/onvif"),
+        )
+    )
+    assert fingerprint != camera_configuration_id(replace(config, device_id="other-camera"))
 
 
 def test_automatic_prefers_fluid_hd_over_slow_full_hd():
@@ -151,3 +167,40 @@ def test_failed_custom_size_query_can_retry_and_does_not_merge_other_sizes():
         catalog.modes(query)
     assert catalog.devices() == (device,)
     assert catalog.modes(query).formats == (_mode(800, 600),)
+
+
+@pytest.mark.parametrize("platform,alias,matched", [
+    ("win32", "Previous label:usb-device", True),
+    ("linux", "camera", False),
+    ("darwin", "camera", False),
+])
+def test_automatic_mode_resolves_physical_identity_without_changing_native_id(monkeypatch, platform, alias, matched):
+    import sys
+
+    monkeypatch.setattr(sys, "platform", platform)
+    native_id = "Current label:USB-DEVICE" if platform == "win32" else "Camera"
+    device = replace(_device(_mode()), device_id=native_id)
+    catalog = CameraCatalog(lambda: [device])
+    assert catalog.automatic_mode(alias) == (_mode() if matched else None)
+    assert catalog.devices()[0].device_id == native_id
+
+
+def test_windows_custom_modes_use_inventory_selector_and_share_alias_cache(monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    device = replace(_device(_mode()), device_id="Current label:USB-DEVICE", resolution_ranges=(
+        LocalVideoResolutionRange(CameraMediaType.JPEG, "MJPG", 640, 1920, 16, 480, 1080, 8),
+    ))
+    queried = replace(device, formats=(_mode(800, 600),), resolution_ranges=())
+    queries = []
+
+    def query_modes(query):
+        queries.append(query)
+        return queried
+
+    catalog = CameraCatalog(lambda: [device], query_modes)
+    assert catalog.modes(LocalCameraModeQuery("Old label:usb-device", 800, 600)) == queried
+    assert catalog.modes(LocalCameraModeQuery("USB-DEVICE", 800, 600)) == queried
+    assert queries == [LocalCameraModeQuery(device.device_id, 800, 600)]
+    assert _mode(800, 600) in catalog.devices()[0].formats
