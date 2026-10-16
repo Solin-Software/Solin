@@ -490,6 +490,21 @@ def test_camera_automatic_is_resolved_once_after_start_outside_runtime_lock(came
     })]
 
 
+def test_camera_automatic_with_cold_catalog_does_not_discover(camera_runtime, monkeypatch):
+    from solin.core.scenes import camera_catalog as catalog_module
+
+    runtime, created, _events, _modes = camera_runtime
+    catalog = catalog_module.CameraCatalog(lambda: pytest.fail(
+        "Preparing a scene must not start camera discovery",
+    ))
+    monkeypatch.setitem(sys.modules, "solin.core.scenes.camera_catalog", SimpleNamespace(
+        camera_catalog=lambda: catalog,
+    ))
+    source = runtime.camera_source("device")
+    assert len(created) == 1
+    assert source.settings["resolution"] == -1
+
+
 @pytest.mark.parametrize(("platform", "token", "expected"), [
     ("win32", "400", {"res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0}),
     ("darwin", "420v", {"use_preset": True, "resolution": "", "input_format": -1,

@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.projection.application import projection_presentation_type
 from solin.core.scenes.application import SceneDocumentChange, SceneDocumentService
+from solin.core.scenes.camera_discovery_process import CAMERA_DISCOVERY_DEADLINE_MS
 from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
@@ -87,7 +88,6 @@ _HYDRATE_DEADLINE_MS = 12000
 _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
 _LAYER_GEOMETRY_DEADLINE_MS = 500
-_CAMERA_DISCOVERY_DEADLINE_MS = 3000
 _IDLE_DEADLINE_MS = 5000
 
 log = logging.getLogger(__name__)
@@ -364,6 +364,10 @@ class SceneRuntimeController(QObject):
     @property
     def local_cameras(self) -> LocalCameraDiscovery:
         return self._local_cameras
+
+    @property
+    def local_cameras_pending(self) -> bool:
+        return bool(self._local_camera_request_id)
 
     def source_health(self, source_id: str) -> SourceHealthEvent | None:
         return self._source_health.get(source_id)
@@ -1131,12 +1135,13 @@ class SceneRuntimeController(QObject):
         try:
             future = self._engine.list_local_cameras(
                 request_id=request_id,
-                deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
+                deadline_ms=CAMERA_DISCOVERY_DEADLINE_MS,
             )
-        except Exception:  # noqa: BLE001 - invalidate discovery before propagating dispatch failure
-            self._reset_local_camera_discovery("discovery_request_failed")
+        except Exception as error:  # noqa: BLE001 - invalidate discovery before propagating dispatch failure
+            self._fail_local_camera_discovery(error)
             raise
         self._local_camera_future = future
+        self._set_local_cameras(self._local_cameras, force=True)
         self._track_future(future, "local_cameras", request_id)
         return future
 
@@ -1169,7 +1174,7 @@ class SceneRuntimeController(QObject):
         try:
             future = self._engine.query_local_camera_modes(
                 native_id, width, height, request_id=request_id,
-                deadline_ms=_CAMERA_DISCOVERY_DEADLINE_MS,
+                deadline_ms=CAMERA_DISCOVERY_DEADLINE_MS,
             )
         except Exception as error:  # noqa: BLE001 - deliver dispatch failure to the dialog's future
             self._camera_mode_inflight.pop(key, None)
@@ -1223,13 +1228,32 @@ class SceneRuntimeController(QObject):
         self._camera_mode_results[key] = result
         visible.set_result(result)
 
-    def _reset_local_camera_discovery(self, error_code: str = "engine_not_ready") -> None:
+    def _fail_local_camera_discovery(self, error: object) -> None:
+        if isinstance(error, CancelledError):
+            error_code = "discovery_cancelled"
+        elif isinstance(error, SceneEngineCommandRejectedError):
+            error_code = error.error_code or "discovery_request_failed"
+        elif isinstance(error, SceneEngineRequestTimeoutError):
+            error_code = "discovery_timed_out"
+        else:
+            error_code = "discovery_request_failed"
+        self._reset_local_camera_discovery(error_code, supported=self._engine_ready)
+        if not isinstance(error, CancelledError):
+            log.warning("Camera discovery failed (%s: %s)", error_code, type(error).__name__)
+
+    def _reset_local_camera_discovery(
+        self, error_code: str = "engine_not_ready", *, supported: bool = False,
+    ) -> None:
         # An old native request still owns its future. Forget its identity so its
         # eventual completion cannot overwrite inventory from a new process.
+        was_pending = self.local_cameras_pending
         self._local_camera_request_id = ""
         self._local_camera_future = None
         self._invalidate_camera_mode_inflight()
-        self._set_local_cameras(_unavailable_local_cameras(error_code))
+        self._set_local_cameras(
+            replace(_unavailable_local_cameras(error_code), supported=supported),
+            force=was_pending,
+        )
 
     def recall_camera_preset(
         self,
@@ -2194,6 +2218,17 @@ class SceneRuntimeController(QObject):
         if operation == "camera_modes":
             self._finish_camera_modes(context, result, error)
             return
+        if operation == "local_cameras":
+            if context != self._local_camera_request_id:
+                return
+            if error is not None:
+                self._fail_local_camera_discovery(error)
+                return
+            try:
+                self._handle_local_cameras(context, result)
+            except Exception as failure:  # noqa: BLE001 - metadata cannot change engine health
+                self._fail_local_camera_discovery(failure)
+            return
         if operation == "clear_content":
             self._finish_empty_content(context, result, error)
             return
@@ -2218,8 +2253,6 @@ class SceneRuntimeController(QObject):
                 return
             if operation == "ptz":
                 self._handle_ptz_exception(context)
-                return
-            if operation == "local_cameras" and context != self._local_camera_request_id:
                 return
             if operation == "start":
                 self._set_engine_ready(False)
@@ -2251,8 +2284,6 @@ class SceneRuntimeController(QObject):
                 pass  # thumbnails are best-effort; a failure must not disturb a take
             elif operation == "window_targets":
                 self._handle_window_targets_ack(context, result)
-            elif operation == "local_cameras":
-                self._handle_local_cameras(context, result)
             elif operation == "ptz":
                 self._handle_ptz_result(context, result)
             elif operation == "layer_geometry":
@@ -2589,7 +2620,7 @@ class SceneRuntimeController(QObject):
             raise RuntimeError("Scene engine returned invalid local cameras")
         self._local_camera_request_id = ""
         self._local_camera_future = None
-        self._set_local_cameras(result)
+        self._set_local_cameras(result, force=True)
 
     def _validated_ack(
         self,
@@ -2681,9 +2712,6 @@ class SceneRuntimeController(QObject):
             self._cancel_pending(bus_id, cancel_native=cancel_native)
 
     def _clear_failed_pending(self, operation: object, context: object) -> None:
-        if operation == "local_cameras" and context == self._local_camera_request_id:
-            self._reset_local_camera_discovery("discovery_request_failed")
-            return
         if operation == "ptz" and isinstance(context, _PtzActionContext):
             if self._pending.get(context.bus_id) == context.expected:
                 self._cancel_pending(context.bus_id, cancel_native=True)
@@ -3003,8 +3031,8 @@ class SceneRuntimeController(QObject):
         for source_id in source_ids:
             self.source_health_changed.emit(source_id)
 
-    def _set_local_cameras(self, discovery: LocalCameraDiscovery) -> None:
-        if discovery == self._local_cameras:
+    def _set_local_cameras(self, discovery: LocalCameraDiscovery, *, force: bool = False) -> None:
+        if discovery == self._local_cameras and not force:
             return
         self._local_cameras = discovery
         self.local_cameras_changed.emit(discovery)

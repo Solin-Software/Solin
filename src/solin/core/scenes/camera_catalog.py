@@ -8,6 +8,7 @@ from fractions import Fraction
 from hashlib import sha256
 import json
 from threading import Lock
+from typing import TYPE_CHECKING
 
 from dataclasses import replace
 
@@ -15,6 +16,9 @@ from solin.core.media.camera_identity import local_camera_device_key
 
 from .engine import LocalCameraDevice, LocalCameraModeQuery, LocalVideoFormat
 from .model import LocalCameraConfig
+
+if TYPE_CHECKING:
+    from .camera_discovery_process import CameraDiscoveryProcess
 
 
 def camera_configuration_id(config: LocalCameraConfig) -> str:
@@ -45,36 +49,50 @@ def select_automatic_mode(
     return max(eligible, key=score, default=None)
 
 
-def _discover() -> list[LocalCameraDevice]:
-    from .v4l2_camera_discovery import discover_local_cameras
-
-    return discover_local_cameras()
-
-
-def _query_modes(query: LocalCameraModeQuery) -> LocalCameraDevice:
-    from .v4l2_camera_discovery import query_local_camera_modes
-
-    return query_local_camera_modes(query)
-
-
 class CameraCatalog:
     """Cache native metadata only; never own or open a capture source.
 
-    Native work runs without the cache mutex. In particular, callers must not
-    hold the runtime mutex while waiting on another discovery's future.
+    Native work runs in a disposable helper process, without the cache mutex.
+    Capture reads the last completed snapshot and never waits for discovery.
     """
 
     def __init__(
-        self, discover: Callable[[], list[LocalCameraDevice]] = _discover,
-        query_modes: Callable[[LocalCameraModeQuery], LocalCameraDevice] = _query_modes,
+        self, discover: Callable[[], list[LocalCameraDevice]] | None = None,
+        query_modes: Callable[[LocalCameraModeQuery], LocalCameraDevice] | None = None,
     ) -> None:
-        self._discover = discover
-        self._query_modes = query_modes
+        self._discover = discover or self._discover_native
+        self._query_modes = query_modes or self._query_native
         self._lock = Lock()
+        self._native: CameraDiscoveryProcess | None = None
+        self._discovery_cancelled = False
         self._epoch = 0
         self._devices: tuple[LocalCameraDevice, ...] | None = None
         self._pending: Future[tuple[LocalCameraDevice, ...]] | None = None
         self._queries: dict[LocalCameraModeQuery, Future[LocalCameraDevice]] = {}
+
+    def _native_process(self) -> CameraDiscoveryProcess:
+        from .camera_discovery_process import CameraDiscoveryProcess
+
+        with self._lock:
+            if self._discovery_cancelled:
+                raise RuntimeError("Camera discovery has been cancelled")
+            if self._native is None:
+                self._native = CameraDiscoveryProcess()
+            return self._native
+
+    def _discover_native(self) -> list[LocalCameraDevice]:
+        return self._native_process().discover()
+
+    def _query_native(self, query: LocalCameraModeQuery) -> LocalCameraDevice:
+        return self._native_process().modes(query)
+
+    def cancel_discovery(self) -> None:
+        """Terminate the owned helper before joining its dispatch worker."""
+        with self._lock:
+            self._discovery_cancelled = True
+            native, self._native = self._native, None
+        if native is not None:
+            native.close()
 
     def devices(self, *, refresh: bool = False) -> tuple[LocalCameraDevice, ...]:
         with self._lock:
@@ -111,26 +129,30 @@ class CameraCatalog:
         """Drop metadata when its owning native runtime is stopped."""
         with self._lock:
             self._epoch += 1
+            self._discovery_cancelled = False
             self._devices = None
             self._pending = None
             self._queries.clear()
 
     def modes(self, query: LocalCameraModeQuery) -> LocalCameraDevice:
         """Query a size's own intervals and cache them until inventory invalidation."""
-        devices = self.devices()
-        device = next((item for item in devices if local_camera_device_key(item.device_id) == local_camera_device_key(query.device_id)), None)
-        if device is None or not any(item.supports(query.width, query.height)
-                                     for item in device.resolution_ranges):
-            raise ValueError("Camera resolution is outside its reported capabilities")
-        # Query with the inventory's original native selector, even when an old
-        # saved selector differs only in its friendly DirectShow name.
-        query = replace(query, device_id=device.device_id)
         with self._lock:
+            epoch = self._epoch
+        devices = self.devices()
+        with self._lock:
+            if self._epoch != epoch:
+                raise RuntimeError("Camera inventory changed during capability query")
+            device = next((item for item in devices if local_camera_device_key(item.device_id) == local_camera_device_key(query.device_id)), None)
+            if device is None or not any(item.supports(query.width, query.height)
+                                         for item in device.resolution_ranges):
+                raise ValueError("Camera resolution is outside its reported capabilities")
+            # Query with the inventory's original native selector, even when an old
+            # saved selector differs only in its friendly DirectShow name.
+            query = replace(query, device_id=device.device_id)
             pending = self._queries.get(query)
             owner = pending is None
             if owner:
                 pending = self._queries[query] = Future()
-            epoch = self._epoch
         assert pending is not None
         if not owner:
             return pending.result()
@@ -158,7 +180,10 @@ class CameraCatalog:
     def automatic_mode(
         self, device_id: str, *, canvas_width: int = 1920, canvas_height: int = 1080,
     ) -> LocalVideoFormat | None:
-        device = next((device for device in self.devices() if local_camera_device_key(device.device_id) == local_camera_device_key(device_id)), None)
+        """Select from completed metadata without starting or waiting on native work."""
+        with self._lock:
+            devices = self._devices or ()
+        device = next((device for device in devices if local_camera_device_key(device.device_id) == local_camera_device_key(device_id)), None)
         if device is None:
             return None
         return select_automatic_mode(device.formats, canvas_width=canvas_width,

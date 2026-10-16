@@ -2,17 +2,28 @@ from __future__ import annotations
 
 from copy import deepcopy
 from concurrent.futures import Future
+from dataclasses import replace
 import json
 from pathlib import Path
 import time
+from unittest.mock import Mock
 
 import pytest
 
-from solin.core.scenes.engine import LocalCameraModeQuery, LocalCameraProbeStatus
+from solin.core.scenes.engine import (
+    EngineHealthEvent,
+    LocalCameraModeQuery,
+    LocalCameraProbeStatus,
+    SceneEngineStatus,
+)
+from solin.core.scenes import process_engine
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, SceneIpcMessageError
 from solin.core.scenes.process_engine import (
+    SceneEngineCommandRejectedError,
     SceneEngineProcessConfig,
+    SceneEngineProcessError,
     SceneEngineProtocolError,
+    SceneEngineRequestTimeoutError,
     SubprocessSceneEngine,
     _PendingRequest,
     _local_camera_discovery_from_envelope,
@@ -318,3 +329,300 @@ def test_subprocess_exact_size_query_uses_typed_request_and_strict_converter(mon
         engine.query_local_camera_modes(_mode_query().device_id, True, 1080,
                                         request_id="invalid", deadline_ms=5000)
     assert len(requests) == 1
+
+
+@pytest.fixture(params=["list_local_cameras", "query_local_camera_modes"])
+def metadata_type(request):
+    return request.param
+
+
+@pytest.fixture
+def ready_process_engine(monkeypatch):
+    clock = [10.0]
+    engine = SubprocessSceneEngine(
+        SceneEngineProcessConfig(executable=Path("unused"), maximum_restarts=0),
+        monotonic=lambda: clock[0],
+    )
+    engine._started = engine._ready = True
+    engine._session_id = "session-1"
+    engine._process_generation = "generation-1"
+    engine._last_received_monotonic = clock[0]
+    engine._publish_health(SceneEngineStatus.READY, "")
+    sent = []
+    monkeypatch.setattr(engine, "_write", sent.append)
+    yield engine, sent, clock
+    engine._fail_all(SceneEngineProcessError("Test finished"))
+
+
+def _request_metadata(engine, metadata_type, *, request_id="metadata", deadline_ms=20_000):
+    if metadata_type == "list_local_cameras":
+        return engine.list_local_cameras(request_id=request_id, deadline_ms=deadline_ms)
+    query = _mode_query()
+    return engine.query_local_camera_modes(
+        query.device_id, query.width, query.height,
+        request_id=request_id, deadline_ms=deadline_ms,
+    )
+
+
+def _metadata_response(request):
+    modes = request.message_type == "query_local_camera_modes"
+    return replace(
+        request,
+        message_type="local_camera_modes" if modes else "local_camera_list",
+        payload=_mode_query_payload() if modes else _camera_payload(),
+    )
+
+
+def _request_foreground(engine, *, request_id="foreground", deadline_ms=30_000):
+    return engine.set_window_targets(
+        (), request_id=request_id, sequence=1, deadline_ms=deadline_ms,
+    )
+
+
+def test_camera_metadata_does_not_supply_command_liveness(ready_process_engine, metadata_type):
+    engine, _sent, _clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+
+    assert not future.done()
+    assert engine._command_liveness_deadline() is None
+    assert not engine._pending["metadata"].is_liveness_probe
+
+
+def test_camera_metadata_expiry_preserves_foreground_liveness(ready_process_engine, metadata_type):
+    engine, sent, clock = ready_process_engine
+    metadata = _request_metadata(engine, metadata_type)
+    clock[0] += 1
+    foreground = _request_foreground(engine)
+    deadline = sent[-1].deadline_monotonic_ms / 1000
+    clock[0] += 20
+
+    engine._expire_requests(clock[0])
+
+    with pytest.raises(SceneEngineRequestTimeoutError):
+        metadata.result()
+    assert not foreground.done()
+    assert engine.metrics.timeout_count == 1
+    assert engine._last_command_timeout_monotonic is None
+    assert engine._command_liveness_deadline() == deadline
+    assert not engine._generation_failed.is_set()
+    assert engine.health.status is SceneEngineStatus.READY
+
+
+@pytest.mark.parametrize("foreground_first", [True, False])
+def test_camera_metadata_does_not_extend_foreground_deadline(
+    ready_process_engine, metadata_type, foreground_first,
+):
+    engine, sent, clock = ready_process_engine
+    if not foreground_first:
+        _request_metadata(engine, metadata_type)
+        clock[0] += 1
+    foreground = _request_foreground(engine, deadline_ms=5000)
+    deadline = sent[-1].deadline_monotonic_ms / 1000
+    if foreground_first:
+        clock[0] += 1
+        _request_metadata(engine, metadata_type)
+
+    assert engine._command_liveness_deadline() == deadline
+    clock[0] = deadline + 1
+    engine._expire_requests(clock[0])
+    with pytest.raises(SceneEngineRequestTimeoutError):
+        foreground.result()
+    assert engine._command_liveness_deadline() is None
+    assert engine._last_command_timeout_monotonic == clock[0]
+
+    # Expiring metadata later must preserve the original foreground timeout barrier.
+    foreground_timeout = clock[0]
+    clock[0] += 20
+    engine._expire_requests(clock[0])
+    assert engine._last_command_timeout_monotonic == foreground_timeout
+
+
+def test_heartbeat_expiry_detects_engine_failure_with_metadata_pending(
+    ready_process_engine, metadata_type,
+):
+    engine, _sent, clock = ready_process_engine
+    metadata = _request_metadata(engine, metadata_type)
+    engine._send_heartbeat()
+    clock[0] += 3
+
+    engine._expire_requests(clock[0])
+
+    assert not metadata.done()
+    assert engine._generation_failed.is_set()
+    assert engine._heartbeat_request_id is None
+    assert engine._last_command_timeout_monotonic is None
+
+
+@pytest.mark.parametrize("responsive", [True, False])
+def test_supervisor_checks_engine_health_while_camera_metadata_hangs(
+    ready_process_engine, metadata_type, responsive, monkeypatch,
+):
+    engine, sent, clock = ready_process_engine
+    events = []
+    engine.subscribe(events.append)
+    metadata = []
+    started = clock[0]
+
+    def write(request):
+        sent.append(request)
+        if request.message_type == "hello":
+            response = replace(request, message_type="hello_ack", payload={
+                "local_cameras": True, "rtsp_cameras": False,
+                "hardware_compositing": False, "virtual_camera": False,
+                "program_recording": False, "audio_input_capture": False,
+                "system_audio_capture": False,
+            })
+        elif request.message_type == "ping" and responsive:
+            response = replace(request, message_type="heartbeat", payload={"monotonic_ms": 1})
+        else:
+            return
+        engine._receive(response, response.process_generation)
+
+    def tick(_timeout):
+        clock[0] += 0.5
+        if clock[0] >= started + 6:
+            engine._stop_event.set()
+            return True
+        if not metadata:
+            metadata.append(_request_metadata(engine, metadata_type))
+        return False
+
+    # Drive the real supervisor loop synchronously; there are no pipe readers in this unit test.
+    monkeypatch.setattr(process_engine.threading, "Thread", Mock())
+    monkeypatch.setattr(engine, "_launch_process", lambda _generation: Mock(poll=lambda: None))
+    monkeypatch.setattr(engine, "_terminate_process", Mock())
+    monkeypatch.setattr(engine, "_stop_process_gracefully", Mock())
+    monkeypatch.setattr(engine, "_write", write)
+    monkeypatch.setattr(engine._stop_event, "wait", tick)
+
+    engine._supervise(engine._config.hello_timeout_ms)
+
+    statuses = [event.health.status for event in events if isinstance(event, EngineHealthEvent)]
+    assert any(request.message_type == "ping" for request in sent)
+    assert engine.metrics.timeout_count == 0
+    assert engine.health.restart_count == 0
+    if responsive:
+        assert sum(request.message_type == "ping" for request in sent) >= 5
+        assert SceneEngineStatus.FAILED not in statuses
+        assert not metadata[0].done()
+    else:
+        assert engine.health.status is SceneEngineStatus.FAILED
+        assert clock[0] - started <= engine._config.heartbeat_timeout_ms / 1000 + 0.5
+        with pytest.raises(SceneEngineProcessError, match="generation ended"):
+            metadata[0].result()
+
+
+def test_foreground_commands_keep_oldest_deadline_and_timeout_barrier(ready_process_engine):
+    engine, sent, clock = ready_process_engine
+    first = _request_foreground(engine, request_id="first", deadline_ms=5000)
+    oldest_deadline = sent[-1].deadline_monotonic_ms / 1000
+    clock[0] += 1
+    second = _request_foreground(engine, request_id="second", deadline_ms=30_000)
+    engine._send_heartbeat()
+    clock[0] += 3
+    engine._expire_requests(clock[0])
+    assert engine._command_liveness_deadline() == oldest_deadline
+    assert not engine._generation_failed.is_set()
+
+    clock[0] += 2
+    engine._expire_requests(clock[0])
+    with pytest.raises(SceneEngineRequestTimeoutError):
+        first.result()
+    assert not second.done()
+    assert engine._last_command_timeout_monotonic == clock[0]
+    assert engine._command_liveness_deadline() is None
+
+
+def test_camera_metadata_response_still_completes_typed_request(ready_process_engine, metadata_type):
+    engine, sent, _clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+    response = _metadata_response(sent[-1])
+
+    engine._receive(response, response.process_generation)
+
+    assert future.result().devices[0].device_id == response.payload["devices"][0]["device_id"]
+    assert engine.metrics.latency_sample_count == 1
+    assert not engine._pending
+    assert not engine._generation_failed.is_set()
+
+
+def test_camera_metadata_rejection_does_not_fail_engine(ready_process_engine, metadata_type):
+    engine, sent, _clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+    response = replace(sent[-1], message_type="error", payload={
+        "error_code": "capability_query_failed", "error_message": "Camera query failed",
+    })
+
+    engine._receive(response, response.process_generation)
+
+    with pytest.raises(SceneEngineCommandRejectedError) as failure:
+        future.result()
+    assert failure.value.error_code == "capability_query_failed"
+    assert engine.metrics.rejected_count == 1
+    assert engine.health.status is SceneEngineStatus.READY
+    assert not engine._generation_failed.is_set()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("session_id", "stale-session"), ("process_generation", "stale-generation"),
+    ("request_id", "unrelated-request"),
+])
+def test_camera_metadata_ignores_unrelated_responses(
+    ready_process_engine, metadata_type, field, value,
+):
+    engine, sent, _clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+    response = _metadata_response(sent[-1])
+    engine._receive(replace(response, **{field: value}), response.process_generation)
+    engine._receive(response, "stale-reader-generation")
+    assert not future.done()
+    assert "metadata" in engine._pending
+    assert engine.metrics.protocol_error_count == 0
+
+    engine._receive(response, response.process_generation)
+    assert future.result().ready
+
+
+@pytest.mark.parametrize("field,value", [
+    ("message_type", "ack"), ("sequence", 1), ("document_revision", 1),
+    ("deadline_monotonic_ms", 1), ("payload", {}),
+])
+def test_camera_metadata_rejects_mismatching_responses(
+    ready_process_engine, metadata_type, field, value,
+):
+    engine, sent, _clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+    response = replace(_metadata_response(sent[-1]), **{field: value})
+
+    engine._receive(response, response.process_generation)
+
+    with pytest.raises(SceneEngineProtocolError):
+        future.result()
+    assert engine.metrics.protocol_error_count == 1
+    assert engine._generation_failed.is_set()
+
+
+@pytest.mark.parametrize("cancelled", [True, False])
+def test_camera_metadata_late_response_does_not_revive_request(
+    ready_process_engine, metadata_type, cancelled,
+):
+    engine, sent, clock = ready_process_engine
+    future = _request_metadata(engine, metadata_type)
+    response = _metadata_response(sent[-1])
+    if cancelled:
+        assert future.cancel()
+    else:
+        clock[0] += 21
+        engine._expire_requests(clock[0])
+
+    engine._receive(response, response.process_generation)
+
+    if cancelled:
+        assert future.cancelled()
+    else:
+        with pytest.raises(SceneEngineRequestTimeoutError):
+            future.result()
+    assert not engine._pending
+    assert engine.metrics.latency_sample_count == 0
+    assert engine.metrics.protocol_error_count == 0
+    assert not engine._generation_failed.is_set()

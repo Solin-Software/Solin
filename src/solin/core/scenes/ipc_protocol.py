@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import struct
+import sys
 from dataclasses import dataclass
 from typing import BinaryIO, Final, cast
 
@@ -24,6 +26,22 @@ _ENVELOPE_FIELDS = frozenset(
         "payload",
     }
 )
+
+
+def reserve_protocol_stream() -> BinaryIO:
+    """Reserve stdout for frames and send native fd-1 diagnostics to stderr.
+
+    Child process entrypoints own and close the returned binary stream. This
+    must run before loading native plugins that may print through the C runtime.
+    """
+    stdout_fd = sys.stdout.fileno()
+    protocol_fd = os.dup(stdout_fd)
+    try:
+        os.dup2(sys.stderr.fileno(), stdout_fd)
+        return os.fdopen(protocol_fd, "wb", buffering=0)
+    except BaseException:  # noqa: BLE001 - release the duplicated descriptor before propagating
+        os.close(protocol_fd)
+        raise
 
 
 class SceneIpcError(ValueError):

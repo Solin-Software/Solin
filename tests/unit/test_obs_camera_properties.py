@@ -11,10 +11,23 @@ from solin.core.media.pylibobs_compat import complete_frame_rate_type_compat
 from solin.core.scenes.engine import LocalCameraModeQuery
 
 
+@pytest.fixture(autouse=True)
+def metadata_does_not_start_capture_runtime(monkeypatch):
+    from solin.core.media import obs_runtime
+
+    def unexpected_runtime():
+        pytest.fail("Metadata queries require the caller's initialized OBS context")
+
+    monkeypatch.setattr(obs_runtime, "obs_runtime", unexpected_runtime)
+
+
 class DShowProperties:
     def __init__(self):
         self.settings = {}
         self.modified = []
+
+    def reset(self):
+        self.settings.clear()
 
     def set(self, name, value):
         self.settings[name] = value
@@ -170,10 +183,7 @@ def test_capability_overflow_is_not_silent(monkeypatch):
 
 
 def test_discovery_retains_device_failure_but_propagates_inventory_failure(monkeypatch):
-    from solin.core.media import obs_runtime
-
     monkeypatch.setattr(metadata.sys, "platform", "win32")
-    monkeypatch.setattr(obs_runtime, "obs_runtime", lambda: SimpleNamespace(ensure_started=lambda: None))
     class Session:
         def __init__(self, _source_id):
             pass
@@ -187,6 +197,8 @@ def test_discovery_retains_device_failure_but_propagates_inventory_failure(monke
             raise RuntimeError("broken inventory")
         def set(self, *_args):
             raise RuntimeError("device busy")
+        def reset(self):
+            pass
     monkeypatch.setattr(metadata, "_NativeProperties", Session)
     devices = metadata.discover_obs_cameras()
     assert devices[0].probe.error_code == "capability_query_failed"
@@ -198,9 +210,7 @@ def test_discovery_retains_device_failure_but_propagates_inventory_failure(monke
         metadata.discover_obs_cameras()
 
 
-def test_native_exact_size_adapter_uses_fresh_properties_and_releases_both_sessions(monkeypatch):
-    from solin.core.media import obs_runtime
-
+def test_native_exact_size_adapter_reuses_inventory_properties_and_releases_session(monkeypatch):
     sessions = []
     closed = []
     class Session(DShowProperties):
@@ -217,16 +227,208 @@ def test_native_exact_size_adapter_uses_fresh_properties_and_releases_both_sessi
                 return (("Camera", "Camera:path"),)
             return super().choices(name)
     monkeypatch.setattr(metadata.sys, "platform", "win32")
-    monkeypatch.setattr(obs_runtime, "obs_runtime", lambda: SimpleNamespace(ensure_started=lambda: None))
     monkeypatch.setattr(metadata, "_NativeProperties", Session)
     result = metadata.query_obs_camera_modes(LocalCameraModeQuery("Camera:path", 1920, 1080))
     assert result.device_id == "Camera:path"
     assert result.resolution_ranges == ()
     assert result.formats and all(mode.width == 1920 for mode in result.formats)
-    assert len(sessions) == 2
+    assert len(sessions) == 1
     assert closed == sessions
-    assert sessions[1].modified.count("resolution") == 1
+    assert sessions[0].modified.count("resolution") == 1
     with pytest.raises(OSError, match="inventory"):
         metadata.query_obs_camera_modes(LocalCameraModeQuery("missing", 1920, 1080))
-    assert len(sessions) == 3  # A missing device never gets a per-device query.
+    assert len(sessions) == 2  # A missing device never gets a per-device query.
     assert closed == sessions
+
+
+@pytest.mark.parametrize("device_count", [0, 1, metadata.MAXIMUM_LOCAL_CAMERA_DEVICES])
+def test_discovery_does_not_reenumerate_inventory_for_each_device(monkeypatch, device_count):
+    sessions, closed = [], []
+
+    class Session(DShowProperties):
+        def __init__(self, _source_id):
+            super().__init__()
+            sessions.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            closed.append(self)
+
+        def choices(self, name):
+            if name == "video_device_id":
+                return tuple((f"Camera {index}", f"Camera:{index}") for index in range(device_count))
+            return super().choices(name)
+
+    def probe(properties, device_id, *, requested_size=None):
+        properties.settings["selected"] = device_id
+        return (), ()
+
+    monkeypatch.setattr(metadata, "_backend", lambda: ("dshow_input", "video_device_id", "dshow", probe))
+    monkeypatch.setattr(metadata, "_NativeProperties", Session)
+    devices = metadata.discover_obs_cameras()
+    assert [device.device_id for device in devices] == [f"Camera:{index}" for index in range(device_count)]
+    assert len(sessions) == 1
+    assert closed == sessions
+
+
+@pytest.fixture
+def native_properties_library(monkeypatch):
+    """Keep native ownership, settings and callback dispatch in the real adapter."""
+    import pylibobs._ffi as binding
+
+    ffi = FFI()
+    ffi.cdef("typedef unsigned int uint32_t; struct media_frames_per_second;")
+    state = SimpleNamespace(queries=[], allocated=[], released=[], destroyed=[], selected=[])
+    properties = object()
+
+    def get_properties(source_id):
+        state.queries.append(source_id)
+        return properties
+
+    def get_defaults(_source_id):
+        settings = {}
+        state.allocated.append(settings)
+        return settings
+
+    def set_value(settings, key, value):
+        settings[key.decode()] = value
+
+    def set_fps(settings, key, value, _option):
+        set_value(settings, key, Fraction(value.numerator, value.denominator))
+
+    def modified(prop, settings):
+        if prop in ("device", "video_device_id"):
+            # Native callbacks retain history/autoselect values in obs_data_t.
+            # Selecting the next camera must start with a fresh settings object.
+            assert set(settings) == {prop}
+            state.selected.append(settings[prop].decode())
+            settings["last_device"] = settings[prop]
+        if prop == "resolution" and settings["last_device"] == b"broken":
+            raise metadata.CameraPropertiesError("driver_unavailable")
+
+    lib = SimpleNamespace(
+        obs_get_source_properties=get_properties,
+        obs_get_source_defaults=get_defaults,
+        obs_properties_apply_settings=lambda *_args: None,
+        obs_properties_destroy=state.destroyed.append,
+        obs_data_release=state.released.append,
+        obs_properties_get=lambda _props, key: key.decode(),
+        obs_data_set_string=set_value,
+        obs_data_set_int=set_value,
+        obs_data_set_bool=set_value,
+        obs_data_set_frames_per_second=set_fps,
+        obs_property_modified=modified,
+    )
+    monkeypatch.setattr(binding, "ffi", ffi)
+    monkeypatch.setattr(binding, "get_lib", lambda: lib)
+    return state, lib
+
+
+@pytest.mark.parametrize("platform", ["win32", "darwin"])
+def test_native_session_isolates_devices_and_recovers_after_callback_failure(
+    monkeypatch, native_properties_library, platform,
+):
+    state, _lib = native_properties_library
+    device_key = "video_device_id" if platform == "win32" else "device"
+    sizes = {b"first": (640, 480), b"broken": (1280, 720), b"last": (1920, 1080)}
+    inventory = (("First", "first"), ("Broken", "broken"), ("Last", "last"))
+
+    def choices(props, name):
+        if name == device_key:
+            return inventory
+        device_id = props.settings[device_key]
+        width, height = sizes[device_id]
+        if name == "resolution":
+            resolution = (f"{width}x{height}" if platform == "win32"
+                          else f'{{"width":{width},"height":{height}}}')
+            return (("size", resolution),)
+        if name == "frame_interval":
+            assert props.settings["video_format"] == props.settings["frame_interval"] == 0
+            return (("fps", 333333 if device_id == b"first" else 2000000),)
+        if name == "video_format":
+            return (("format", 301 if device_id == b"first" else 400),)
+        if name == "input_format":
+            return (("format", int.from_bytes(b"420v" if device_id == b"first" else b"jpeg", "big")),)
+        raise AssertionError(name)
+
+    def fps_ranges(props):
+        fps = Fraction(30 if props.settings[device_key] == b"first" else 5)
+        return ((fps, fps),)
+
+    monkeypatch.setattr(metadata.sys, "platform", platform)
+    monkeypatch.setattr(metadata._NativeProperties, "choices", choices)
+    monkeypatch.setattr(metadata._NativeProperties, "fps_ranges", fps_ranges)
+    # Each device fits this budget; a shared cumulative budget would break the
+    # final camera after the first camera's successful query and the driver error.
+    monkeypatch.setattr(metadata, "_CALLBACK_LIMIT", 7)
+    devices = metadata.discover_obs_cameras()
+
+    assert [device.device_id for device in devices] == ["first", "broken", "last"]
+    assert [device.probe.error_code for device in devices] == ["", "driver_unavailable", ""]
+    assert devices[1].formats == devices[1].frame_rate_ranges == ()
+    for device, size, fps in ((devices[0], (640, 480), 30), (devices[2], (1920, 1080), 5)):
+        assert device.formats
+        assert {(mode.width, mode.height) for mode in device.formats} == {size}
+        assert {mode.frames_per_second for mode in device.formats} == {fps}
+    assert state.selected == ["first", "broken", "last"]
+    assert len(state.queries) == len(state.destroyed) == 1
+    assert len(state.allocated) == 4  # Inventory defaults, then fresh defaults per camera.
+    assert len(state.released) == len(state.allocated)
+    assert {id(settings) for settings in state.released} == {id(settings) for settings in state.allocated}
+
+
+def test_native_settings_allocation_failure_can_recover_without_double_release(
+    monkeypatch, native_properties_library,
+):
+    state, lib = native_properties_library
+    defaults = lib.obs_get_source_defaults
+    with metadata._NativeProperties("dshow_input") as props:
+        monkeypatch.setattr(metadata, "_CALLBACK_LIMIT", 1)
+        props.set("video_format", 0)
+        with pytest.raises(metadata.CameraPropertiesError, match="capability_overflow"):
+            props.set("video_format", 0)
+
+        monkeypatch.setattr(lib, "obs_get_source_defaults", lambda _source_id: props.ffi.NULL)
+        monkeypatch.setattr(lib, "obs_data_create", lambda: props.ffi.NULL, raising=False)
+        with pytest.raises(RuntimeError, match="allocate"):
+            props.reset()
+        assert props.settings == props.ffi.NULL
+        assert state.released == state.allocated
+
+        monkeypatch.setattr(lib, "obs_get_source_defaults", defaults)
+        props.reset()
+        props.set("video_format", 0)  # Recovery also resets the exhausted callback budget.
+
+    assert len(state.queries) == len(state.destroyed) == 1
+    assert len(state.released) == 2
+    assert [id(settings) for settings in state.released] == [id(settings) for settings in state.allocated]
+
+
+@pytest.mark.parametrize("failure", ["list", "overflow"])
+def test_inventory_failure_releases_native_session_and_is_not_a_device_failure(
+    monkeypatch, native_properties_library, failure,
+):
+    state, _lib = native_properties_library
+
+    def choices(_props, _key):
+        if failure == "list":
+            raise metadata.CameraPropertiesError("capability_property_missing")
+        return tuple(("Camera", str(index)) for index in range(metadata.MAXIMUM_LOCAL_CAMERA_DEVICES + 1))
+
+    monkeypatch.setattr(metadata.sys, "platform", "win32")
+    monkeypatch.setattr(metadata._NativeProperties, "choices", choices)
+    error = "capability_property_missing" if failure == "list" else "inventory_overflow"
+    with pytest.raises(metadata.CameraPropertiesError, match=error):
+        metadata.discover_obs_cameras()
+    assert len(state.queries) == len(state.destroyed) == len(state.released) == 1
+    assert state.selected == []
+
+
+def test_inventory_is_snapshotted_and_deduplicated_before_callbacks(monkeypatch):
+    choices = [("", "device"), ("Duplicate", "device"), ("Empty", ""), ("Wrong type", 1)]
+    properties = SimpleNamespace(choices=lambda _key: tuple(choices))
+    inventory = metadata._inventory(properties, "video_device_id")
+    choices.clear()
+    assert inventory == (("device", "device"),)

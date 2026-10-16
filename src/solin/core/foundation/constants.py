@@ -20,6 +20,7 @@ from solin.version import VERSION
 
 IS_DEV: bool = "__compiled__" not in globals()
 LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
+CAMERA_DISCOVERY_ARGUMENT: str = "--camera-discovery"
 
 # Qt / QSettings identity
 # Use a separate development namespace to keep registry entries and data

@@ -29,6 +29,7 @@ from solin.core.scenes.ipc_protocol import (
     SceneIpcEnvelope,
     SceneIpcError,
     read_envelope,
+    reserve_protocol_stream,
     require_payload_fields,
     require_text,
     write_envelope,
@@ -216,9 +217,11 @@ class _CameraDiscoveryRequests:
         emit: Callable[[SceneIpcEnvelope], None],
         *,
         query_modes: Callable[[LocalCameraModeQuery], Mapping[str, object]] | None = None,
+        cancel: Callable[[], None] | None = None,
     ) -> None:
         self._discover = discover
         self._query_modes = query_modes
+        self._cancel = cancel
         self._emit = emit
         self._condition = threading.Condition()
         self._requests: list[SceneIpcEnvelope] = []
@@ -234,10 +237,10 @@ class _CameraDiscoveryRequests:
             try:
                 self._query(request)
             except (ValueError, TypeError):
-                self._emit(self._error(request, "invalid_request"))
+                self._emit_response(self._error(request, "invalid_request"))
                 return
             if time.monotonic() * 1000 >= request.deadline_monotonic_ms:
-                self._emit(self._error(request, "deadline_exceeded"))
+                self._emit_response(self._error(request, "deadline_exceeded"))
                 return
             self._authority = request.session_id, request.process_generation
             self._requests.append(request)
@@ -256,6 +259,8 @@ class _CameraDiscoveryRequests:
             self._closed = True
             self._requests.clear()
             self._condition.notify_all()
+        if self._cancel is not None:
+            self._cancel()
         self._worker.join()
 
     @staticmethod
@@ -265,12 +270,27 @@ class _CameraDiscoveryRequests:
             "error_message": "The camera discovery request could not be completed",
         })
 
+    def _emit_response(self, response: SceneIpcEnvelope) -> None:
+        try:
+            self._emit(response)
+        except Exception:  # noqa: BLE001 - a broken reply cannot strand the worker or shutdown
+            log.exception("Could not emit camera discovery response")
+
     def _run(self) -> None:
         while True:
             with self._condition:
                 self._condition.wait_for(lambda: self._closed or bool(self._requests))
                 if self._closed:
                     return
+                admitted = []
+                for request in self._requests:
+                    if time.monotonic() * 1000 >= request.deadline_monotonic_ms:
+                        self._emit_response(self._error(request, "deadline_exceeded"))
+                    else:
+                        admitted.append(request)
+                self._requests = admitted
+                if not admitted:
+                    continue
                 query = self._query(self._requests[0])
             try:
                 if query is None:
@@ -297,10 +317,7 @@ class _CameraDiscoveryRequests:
                         self._error(request, code) if code
                         else _reply(request, "local_camera_list" if query is None else "local_camera_modes", payload)
                     )
-                    try:
-                        self._emit(response)
-                    except Exception:  # noqa: BLE001 - a broken sink cannot strand shutdown
-                        log.exception("Could not emit camera discovery response")
+                    self._emit_response(response)
 
 
 @dataclass(frozen=True, slots=True)
@@ -2258,6 +2275,7 @@ def serve(
     both before releasing the engine's native owners.
     """
     from solin.core.scenes.libobs_idle_updates import IdleScreenUpdates
+    from solin.core.scenes.camera_catalog import camera_catalog
 
     active = engine if engine is not None else LibobsSidecarEngine()
     write_lock = threading.Lock()
@@ -2271,6 +2289,7 @@ def serve(
     )
     camera_discovery = _CameraDiscoveryRequests(
         active._local_camera_list, emit, query_modes=active._local_camera_modes,
+        cancel=camera_catalog().cancel_discovery,
     )
     active.set_event_sink(idle_updates.emit_event)
     try:
@@ -2308,31 +2327,16 @@ def serve(
             active.shutdown()
 
 
-def _reserve_protocol_stream() -> BinaryIO:
-    """Move the control channel off fd 1 and repoint fd 1 at stderr.
-
-    libobs (and the OBS plugins it loads) write diagnostics to stdout at the C
-    level; on the raw fd that would corrupt the length-prefixed frame protocol,
-    which owns stdout. We dup the real stdout to a private fd for frames, then
-    redirect fd 1 → stderr so any native/print output is drained harmlessly by
-    the client's stderr reader instead of breaking the channel.
-    """
-    stdout_fd = sys.stdout.fileno()
-    protocol_fd = os.dup(stdout_fd)
-    os.dup2(sys.stderr.fileno(), stdout_fd)
-    return os.fdopen(protocol_fd, "wb", buffering=0)
-
-
 def main() -> int:
-    protocol_out = _reserve_protocol_stream()
     runtime_factory: RuntimeFactory | None = (
         None if os.environ.get(_NO_RUNTIME_ENV) else _default_runtime_factory
     )
-    serve(
-        sys.stdin.buffer,
-        protocol_out,
-        engine=LibobsSidecarEngine(runtime_factory),
-    )
+    with reserve_protocol_stream() as protocol_out:
+        serve(
+            sys.stdin.buffer,
+            protocol_out,
+            engine=LibobsSidecarEngine(runtime_factory),
+        )
     return 0
 
 

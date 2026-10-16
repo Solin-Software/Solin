@@ -299,9 +299,9 @@ class ObsRuntime:
         """Return the runtime-owned capture shared by every device consumer.
 
         The complete requested mode identifies the cache entry. Automatic is
-        resolved through the catalog only when entering that mode or creating a
-        source. Discovery runs outside the runtime lock: a catalog scan may need
-        this same runtime to start before it can finish. Updating a rejected mode
+        selected from completed metadata when entering that mode or creating a
+        source. An absent snapshot uses the plugin's native preference; scene
+        preparation never starts or waits on driver enumeration. Updating a rejected mode
         raises and invalidates the cached request so a subsequent selection is
         explicitly reapplied, including a return to the previous working mode.
         """
@@ -344,9 +344,11 @@ class ObsRuntime:
                     fps_numerator=selected.fps_numerator, fps_denominator=selected.fps_denominator,
                     media_type=selected.media_type,
                 )
+            else:
+                log.info("No cached automatic camera mode; using the native preference")
 
         with self._lock:
-            # Another consumer may have created the device while discovery ran.
+            # Another consumer may have created the device while preparing settings.
             existing = self._camera_sources.get(device_key)
             if existing is not None:
                 source, cached_signature = existing

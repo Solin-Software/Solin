@@ -8,9 +8,46 @@ from pathlib import Path
 import pytest
 
 from solin.bootstrap import entrypoint
-from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
+from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, encode_envelope, read_envelope
 from tests._paths import REPO_ROOT
+
+
+def test_camera_discovery_role_exits_before_application_import(monkeypatch):
+    from solin.core.scenes import camera_discovery_process
+
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", CAMERA_DISCOVERY_ARGUMENT])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    monkeypatch.setattr(camera_discovery_process, "main", lambda: 7)
+    with pytest.raises(SystemExit) as error:
+        entrypoint.run()
+    assert error.value.code == 7
+
+
+@pytest.mark.parametrize("extra", ["--create-profile", LIBOBS_SIDECAR_ARGUMENT])
+def test_camera_discovery_role_rejects_extra_arguments(monkeypatch, extra):
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", CAMERA_DISCOVERY_ARGUMENT, extra])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    with pytest.raises(SystemExit, match="accepts no application arguments"):
+        entrypoint.run()
+
+
+def test_launcher_camera_discovery_dispatch_without_loading_qt(tmp_path):
+    code = (
+        "import runpy,sys; sys.modules['PySide6']=None; "
+        "sys.modules['solin.bootstrap.application']=None; "
+        "from solin.core.scenes import camera_discovery_process as d; "
+        "d._native_metadata=lambda query: []; "
+        f"sys.argv=[{str(REPO_ROOT / 'main.py')!r},{CAMERA_DISCOVERY_ARGUMENT!r}]; "
+        f"runpy.run_path({str(REPO_ROOT / 'main.py')!r},run_name='__main__')"
+    )
+    request = SceneIpcEnvelope("list_local_cameras", "r", "s", "p", 1, 0, 2**63 - 1, {})
+    result = subprocess.run([sys.executable, "-c", code], input=encode_envelope(request),
+                            capture_output=True, timeout=10, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    response = read_envelope(io.BytesIO(result.stdout))
+    assert response is not None and response.message_type == "local_camera_list"
+    assert response.request_id == request.request_id
 
 
 def test_sidecar_role_exits_with_engine_status_before_application_import(monkeypatch):

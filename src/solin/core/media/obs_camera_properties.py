@@ -3,6 +3,9 @@
 Property lists are rebuilt by native modified callbacks. Never use pylibobs's
 cached property snapshots for dependent modes. Native values are persisted
 independently of translated labels and OBS's pixel enum.
+
+The caller owns an initialized OBS metadata context and loaded camera plugin.
+On Windows, COM must be initialized on the thread running these queries.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ import json
 import logging
 import sys
 from fractions import Fraction
+from time import perf_counter
 from typing import Any
 
 from solin.core.scenes.engine import (
@@ -38,7 +42,7 @@ for _fps in (4, 3, 2):
 
 
 class CameraPropertiesError(RuntimeError):
-    """A capability failure for an enumerated device, not an inventory failure."""
+    """A typed native camera inventory or capability failure."""
 
     def __init__(self, error_code: str) -> None:
         super().__init__(error_code)
@@ -58,17 +62,19 @@ class _NativeProperties:
         self.lib: Any = get_lib()
         self.properties: Any = self.ffi.NULL
         self.settings: Any = self.ffi.NULL
+        self._source_id = source_id.encode()
         self._callbacks = 0
         try:
-            self.properties = self.lib.obs_get_source_properties(source_id.encode())
+            started = perf_counter()
+            log.info("OBS camera inventory query started (%s)", source_id)
+            try:
+                self.properties = self.lib.obs_get_source_properties(self._source_id)
+            finally:
+                log.info("OBS camera inventory query finished (%s, elapsed_ms=%.1f)",
+                         source_id, (perf_counter() - started) * 1000)
             if self.properties == self.ffi.NULL:
                 raise RuntimeError(f"Capture plugin properties unavailable: {source_id}")
-            self.settings = self.lib.obs_get_source_defaults(source_id.encode())
-            if self.settings == self.ffi.NULL:
-                self.settings = self.lib.obs_data_create()
-            if self.settings == self.ffi.NULL:
-                raise RuntimeError("Unable to allocate camera metadata settings")
-            self.lib.obs_properties_apply_settings(self.properties, self.settings)
+            self.reset()
         except BaseException:  # noqa: BLE001 - native allocation cleanup before propagating
             self.close()
             raise
@@ -86,6 +92,23 @@ class _NativeProperties:
         if self.settings != self.ffi.NULL:
             self.lib.obs_data_release(self.settings)
             self.settings = self.ffi.NULL
+
+    def reset(self) -> None:
+        """Reset callback settings and budget for one device, keeping inventory.
+
+        Fresh defaults discard native callback history and autoselected values,
+        including DirectShow's last device/resolution and AVCapture's FPS.
+        """
+        if self.settings != self.ffi.NULL:
+            self.lib.obs_data_release(self.settings)
+            self.settings = self.ffi.NULL
+        self._callbacks = 0
+        self.settings = self.lib.obs_get_source_defaults(self._source_id)
+        if self.settings == self.ffi.NULL:
+            self.settings = self.lib.obs_data_create()
+        if self.settings == self.ffi.NULL:
+            raise RuntimeError("Unable to allocate camera metadata settings")
+        self.lib.obs_properties_apply_settings(self.properties, self.settings)
 
     def _property(self, name: str):
         prop = self.lib.obs_properties_get(self.properties, name.encode())
@@ -296,12 +319,8 @@ def _backend():
         raise RuntimeError("No OBS camera metadata backend for this platform")
 
 
-def _inventory(source_id: str, device_key: str) -> tuple[tuple[str, str], ...]:
-    from .obs_runtime import obs_runtime
-
-    obs_runtime().ensure_started()
-    with _NativeProperties(source_id) as inventory:
-        choices = inventory.choices(device_key)
+def _inventory(properties: _NativeProperties, device_key: str) -> tuple[tuple[str, str], ...]:
+    choices = properties.choices(device_key)
     seen = set()
     devices = []
     for name, device_id in choices:
@@ -314,11 +333,11 @@ def _inventory(source_id: str, device_key: str) -> tuple[tuple[str, str], ...]:
     return tuple(devices)
 
 
-def _device_modes(source_id, backend, probe, name, device_id, *, requested_size=None) -> LocalCameraDevice:
+def _device_modes(properties, backend, probe, name, device_id, *, requested_size=None) -> LocalCameraDevice:
     formats, ranges, error_code = (), (), ""
     try:
-        with _NativeProperties(source_id) as properties:
-            formats, ranges = probe(properties, device_id, requested_size=requested_size)
+        properties.reset()
+        formats, ranges = probe(properties, device_id, requested_size=requested_size)
         if not formats and not ranges:
             error_code = "no_formats"
     except Exception as error:  # noqa: BLE001 - one driver must not hide inventory
@@ -332,17 +351,19 @@ def _device_modes(source_id, backend, probe, name, device_id, *, requested_size=
 
 
 def discover_obs_cameras() -> list[LocalCameraDevice]:
-    """Raise inventory failures; retain individual devices with capability errors."""
+    """Query caller-initialized OBS; raise inventory errors and retain device errors."""
     source_id, device_key, backend, probe = _backend()
-    return [_device_modes(source_id, backend, probe, name, device_id)
-            for name, device_id in _inventory(source_id, device_key)]
+    with _NativeProperties(source_id) as properties:
+        return [_device_modes(properties, backend, probe, name, device_id)
+                for name, device_id in _inventory(properties, device_key)]
 
 
 def query_obs_camera_modes(query: LocalCameraModeQuery) -> LocalCameraDevice:
-    """Run native callbacks only for an inventoried device's exact size."""
+    """Query caller-initialized OBS for an inventoried device's exact size."""
     source_id, device_key, backend, probe = _backend()
-    for name, device_id in _inventory(source_id, device_key):
-        if device_id == query.device_id:
-            return _device_modes(source_id, backend, probe, name, device_id,
-                                 requested_size=(query.width, query.height))
+    with _NativeProperties(source_id) as properties:
+        for name, device_id in _inventory(properties, device_key):
+            if device_id == query.device_id:
+                return _device_modes(properties, backend, probe, name, device_id,
+                                     requested_size=(query.width, query.height))
     raise OSError("Camera is no longer in the device inventory")

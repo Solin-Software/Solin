@@ -615,8 +615,9 @@ def _create_native_transition_engine(
         import struct
         from solin.core.media.obs_runtime import ObsRuntime
         from solin.core.scenes.libobs_sidecar import (
-            LibobsSidecarEngine, _reserve_protocol_stream, serve,
+            LibobsSidecarEngine, serve,
         )
+        from solin.core.scenes.ipc_protocol import reserve_protocol_stream
 
         trace = None
         if {trace_name!r} is not None:
@@ -649,10 +650,11 @@ def _create_native_transition_engine(
             return runtime
 
         try:
-            serve(
-                sys.stdin.buffer, _reserve_protocol_stream(),
-                engine=LibobsSidecarEngine(runtime_factory),
-            )
+            with reserve_protocol_stream() as protocol_out:
+                serve(
+                    sys.stdin.buffer, protocol_out,
+                    engine=LibobsSidecarEngine(runtime_factory),
+                )
         finally:
             if trace is not None:
                 trace.close()
