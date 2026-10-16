@@ -1,5 +1,6 @@
 name: Bug report
 description: Report unexpected behavior or a crash in Solin.
+labels: [bug]
 body:
   - type: markdown
     attributes:

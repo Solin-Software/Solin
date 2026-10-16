@@ -20,7 +20,11 @@ marker.
 The English **Related pull requests and issues** block is generated separately
 in the GitHub Release body during publication. It includes every merged PR in
 the verified release interval, including documentation, build, and release
-preparation, without categories or a Conventional Commit title requirement.
+preparation, grouped by current PR labels without a Conventional Commit title
+requirement. Each entry appears once, and unclassified PRs and direct commits use
+**Other changes**.
+Empty categories are omitted; the label catalog and priority are documented in
+[contributor credits](../releases.md#contributor-credits).
 Prefixes are removed only for presentation. PR entries credit the PR author and
 Git coauthors, excluding bots; direct commits use linked titles and their authors
 and coauthors as a fallback. Related issues come from the included PR's closing

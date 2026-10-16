@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import html
 import json
 from pathlib import Path
@@ -452,6 +452,7 @@ class ScriptedAPI:
                         "merged": node["merged"],
                         "mergeCommit": node["mergeCommit"],
                         "closingIssuesReferences": connection([]),
+                        "labels": connection([]),
                     }
                 }
             )
@@ -939,7 +940,14 @@ def issue_node(
     }
 
 
-def pull_detail(issues: list[dict], *, cursor: str | None = None, body: str = "") -> dict:
+def pull_detail(
+    issues: list[dict],
+    *,
+    cursor: str | None = None,
+    body: str = "",
+    labels: tuple[str, ...] = (),
+    label_cursor: str | None = None,
+) -> dict:
     return response(
         {
             "pullRequest": {
@@ -948,6 +956,7 @@ def pull_detail(issues: list[dict], *, cursor: str | None = None, body: str = ""
                 "merged": True,
                 "mergeCommit": {"oid": COMMIT},
                 "closingIssuesReferences": connection(issues, cursor=cursor),
+                "labels": connection([{"name": label} for label in labels], cursor=label_cursor),
             }
         }
     )
@@ -965,6 +974,292 @@ def issue_api(
 
 def collect_single(api: ScriptedAPI) -> Credits:
     return collect_credits(ContributionRange(BASE, COMMIT, (COMMIT,)), REPOSITORY, api)
+
+
+def test_pr_labels_group_changes_and_preserve_authors_and_related_issues() -> None:
+    api = issue_api(
+        [],
+        detail_replies=[pull_detail([issue_node()], labels=("enhancement", "bug"))],
+    )
+    result = collect_single(api)
+    rendered = result.markdown()
+
+    assert "#### Bug fixes\n\n" in rendered
+    assert "#### Features and improvements" not in rendered
+    assert rendered.count("[PR #7]") == 1
+    assert ", by @pr-author and @direct-author." in rendered
+    assert f"Related issue: [#3](https://github.com/{REPOSITORY}/issues/3)." in rendered
+    assert "labels(first: 100) { nodes { name }" in api.queries[1]
+    assert "labels(" not in api.queries[0]
+    assert len(api.queries) == 2
+
+
+@pytest.mark.parametrize(
+    "labels,heading",
+    [
+        (
+            (
+                "bug",
+                "enhancement",
+                "github_actions",
+                "dependencies",
+                "translations",
+                "documentation",
+            ),
+            "Bug fixes",
+        ),
+        (
+            ("enhancement", "github_actions", "dependencies", "translations", "documentation"),
+            "Features and improvements",
+        ),
+        (("github_actions", "dependencies", "translations", "documentation"), "CI/CD"),
+        (("dependencies", "translations", "documentation"), "Dependencies"),
+        (("translations", "documentation"), "Translations"),
+        (("documentation",), "Documentation"),
+        (("unrecognized",), "Other changes"),
+        ((), "Other changes"),
+    ],
+)
+def test_release_label_priority_is_independent_of_github_label_order(
+    labels: tuple[str, ...], heading: str
+) -> None:
+    for ordered in (labels, tuple(reversed(labels))):
+        api = issue_api([], detail_replies=[pull_detail([], labels=ordered)])
+        result = collect_single(api)
+        assert re.findall(r"^#### (.+)$", result.markdown(), re.MULTILINE) == [heading]
+        assert result.markdown().count("[PR #7]") == 1
+
+
+def test_group_order_and_rows_are_stable_with_direct_commits_last() -> None:
+    labels = (
+        "documentation",
+        "translations",
+        "dependencies",
+        "github_actions",
+        "enhancement",
+        "bug",
+    )
+    changes = tuple(
+        replace(pr_change((f"author-{number}",), number=number), labels=(label,))
+        for number, label in enumerate(labels, start=1)
+    )
+    second_bug = replace(pr_change(("another-author",), number=8), labels=("bug", "enhancement"))
+    unlabelled = pr_change(("unlabelled-author",), number=9)
+    direct = direct_change(HEAD)
+    credits = Credits(INTERVAL, (direct, *changes, second_bug, unlabelled), ())
+
+    rendered = credits.markdown()
+
+    assert re.findall(r"^#### (.+)$", rendered, re.MULTILINE) == [
+        "Bug fixes",
+        "Features and improvements",
+        "CI/CD",
+        "Dependencies",
+        "Translations",
+        "Documentation",
+        "Other changes",
+    ]
+    assert re.findall(r"\[(PR #[0-9]+|Commit [0-9a-f]+)\]", rendered) == [
+        "PR #6",
+        "PR #8",
+        "PR #5",
+        "PR #4",
+        "PR #3",
+        "PR #2",
+        "PR #1",
+        f"Commit {HEAD[:7]}",
+        "PR #9",
+    ]
+    assert rendered.count(f"<!-- contribution-range: {INTERVAL.base}..{INTERVAL.head} -->") == 1
+    assert credits.changes == (direct, *changes, second_bug, unlabelled)
+    assert set(credits.logins) == {
+        "direct-author",
+        "another-author",
+        "unlabelled-author",
+        *(f"author-{number}" for number in range(1, 7)),
+    }
+
+
+def test_labels_are_case_insensitive_and_deduplicated() -> None:
+    api = issue_api([], detail_replies=[pull_detail([], labels=("BUG", "bug", "Enhancement"))])
+    result = collect_single(api)
+    assert result.changes[0].labels == ("bug", "enhancement")
+    assert re.findall(r"^#### (.+)$", result.markdown(), re.MULTILINE) == ["Bug fixes"]
+
+
+def test_label_and_issue_connections_paginate_independently_without_nested_commit_queries() -> None:
+    cursor = 'next-"page\\cursor'
+    ignored = tuple(f"unrecognized-{number}" for number in range(100))
+    api = issue_api(
+        [],
+        detail_replies=[
+            pull_detail([issue_node(9)], cursor=cursor, labels=ignored, label_cursor=cursor),
+            pull_detail([issue_node(3)]),
+            pull_detail([], labels=("enhancement",), label_cursor="last-labels"),
+            pull_detail([], labels=("bug", "enhancement")),
+        ],
+    )
+
+    result = collect_single(api)
+
+    assert result.changes[0].issues == (
+        RelatedIssue("#3", f"https://github.com/{REPOSITORY}/issues/3"),
+        RelatedIssue("#9", f"https://github.com/{REPOSITORY}/issues/9"),
+    )
+    assert set(result.changes[0].labels) == {"bug", "enhancement", *ignored}
+    assert re.findall(r"^#### (.+)$", result.markdown(), re.MULTILINE) == ["Bug fixes"]
+    assert len(api.queries) == 5
+    assert "labels(" not in api.queries[0]
+    assert f"closingIssuesReferences(first: 100, after: {json.dumps(cursor)})" in api.queries[2]
+    assert "labels(" not in api.queries[2]
+    for query, after in zip(api.queries[3:], (cursor, "last-labels"), strict=True):
+        assert f"labels(first: 100, after: {json.dumps(after)})" in query
+        assert "closingIssuesReferences(" not in query
+    assert api.replies == [] and api.detail_replies == []
+
+
+@pytest.mark.parametrize("cursors", [("same", "same"), ("first", "second", "first")])
+def test_label_pagination_rejects_repeated_or_cycling_cursors(cursors: tuple[str, ...]) -> None:
+    api = issue_api([], detail_replies=[pull_detail([], label_cursor=cursor) for cursor in cursors])
+    with pytest.raises(ValueError, match="pagination did not advance"):
+        collect_single(api)
+    assert len(api.queries) == 1 + len(cursors)
+    assert api.detail_replies == []
+
+
+@pytest.mark.parametrize("stage", ["initial", "page"])
+@pytest.mark.parametrize(
+    "bad_connection,message",
+    [
+        (None, "connection"),
+        ({}, "connection"),
+        ({"nodes": None}, "connection"),
+        ({"nodes": [None]}, "node"),
+        ({"nodes": []}, "pagination"),
+        ({"nodes": [], "pageInfo": {"hasNextPage": 1}}, "pagination"),
+        ({"nodes": [], "pageInfo": {"hasNextPage": True, "endCursor": None}}, "did not advance"),
+        ({"nodes": [], "pageInfo": {"hasNextPage": True, "endCursor": ""}}, "did not advance"),
+    ],
+)
+def test_malformed_label_connections_abort_instead_of_silently_using_fallback(
+    stage: str, bad_connection: object, message: str
+) -> None:
+    detail = pull_detail([])
+    detail["data"]["repository"]["pullRequest"]["labels"] = bad_connection
+    replies = [detail] if stage == "initial" else [pull_detail([], label_cursor="next"), detail]
+    api = issue_api([], detail_replies=replies)
+    with pytest.raises(ValueError, match=message):
+        collect_single(api)
+    assert api.detail_replies == []
+
+
+@pytest.mark.parametrize("stage", ["initial", "page"])
+@pytest.mark.parametrize(
+    "label", [{}, {"name": None}, {"name": 1}, {"name": []}, {"name": ""}, {"name": " \t\n"}]
+)
+def test_invalid_label_names_abort_on_every_page(stage: str, label: dict) -> None:
+    detail = pull_detail([])
+    detail["data"]["repository"]["pullRequest"]["labels"] = connection([label])
+    replies = [detail] if stage == "initial" else [pull_detail([], label_cursor="next"), detail]
+    with pytest.raises(ValueError, match="pull request label name"):
+        collect_single(issue_api([], detail_replies=replies))
+
+
+def test_catalog_defines_headings_priority_and_order_without_automation_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    catalog = tmp_path / "labels.json"
+    catalog.write_text(
+        json.dumps(
+            [
+                {"name": "custom", "release_heading": "Custom heading"},
+                {"name": "enhancement", "release_heading": "Renamed improvements"},
+                {"name": "bug", "release_heading": "Renamed repairs"},
+                {"name": "internal", "release_heading": None},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(contributors, "_LABELS_PATH", catalog)
+    changes = (
+        replace(pr_change((), number=1), labels=("bug",)),
+        replace(pr_change((), number=2), labels=("bug", "enhancement")),
+        replace(pr_change((), number=3), labels=("custom", "bug")),
+        replace(pr_change((), number=4), labels=("internal",)),
+    )
+
+    rendered = Credits(INTERVAL, changes, ()).markdown()
+
+    assert re.findall(r"^#### (.+)$", rendered, re.MULTILINE) == [
+        "Custom heading",
+        "Renamed improvements",
+        "Renamed repairs",
+        "Other changes",
+    ]
+    assert re.findall(r"\[PR #(\d+)\]", rendered) == ["3", "2", "1", "4"]
+
+
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        None,
+        {},
+        [None],
+        [{"release_heading": "Repairs"}],
+        [{"name": "", "release_heading": "Repairs"}],
+        [{"name": "bug", "release_heading": ""}],
+        [{"name": "bug", "release_heading": []}],
+        [{"name": "bug", "release_heading": "Repairs\nInjected heading"}],
+        [
+            {"name": "bug", "release_heading": "Repairs"},
+            {"name": "BUG", "release_heading": "Other repairs"},
+        ],
+    ],
+)
+def test_invalid_catalog_aborts_rendering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog: object
+) -> None:
+    path = tmp_path / "labels.json"
+    path.write_text(json.dumps(catalog), encoding="utf-8")
+    monkeypatch.setattr(contributors, "_LABELS_PATH", path)
+    with pytest.raises(ValueError, match="release label"):
+        Credits(INTERVAL, (pr_change(()),), ()).markdown()
+
+
+@pytest.mark.parametrize("contents", [None, "not json"])
+def test_missing_or_unreadable_catalog_does_not_silently_reclassify_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contents: str | None
+) -> None:
+    path = tmp_path / "labels.json"
+    if contents is not None:
+        path.write_text(contents, encoding="utf-8")
+    monkeypatch.setattr(contributors, "_LABELS_PATH", path)
+    with pytest.raises(FileNotFoundError if contents is None else json.JSONDecodeError):
+        Credits(INTERVAL, (pr_change(()),), ()).markdown()
+
+
+def test_catalog_path_is_independent_of_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    change = replace(pr_change(()), labels=("bug",))
+    assert "#### Bug fixes\n\n" in Credits(INTERVAL, (change,), ()).markdown()
+
+
+def test_grouping_update_preserves_range_surrounding_notes_and_idempotency() -> None:
+    prefix = f"# Reviewed notes\r\n<!-- source-commit: {HEAD} -->\r\n"
+    suffix = "\r\nReviewed footer  \r\n"
+    changes = (pr_change(("alice",)), direct_change(HEAD, ("bob",)))
+    previous = Credits(INTERVAL, changes, ())
+    credits = Credits(INTERVAL, (replace(changes[0], labels=("bug",)), changes[1]), ())
+
+    updated = update_body(prefix + previous.markdown() + suffix, credits)
+
+    assert updated == prefix + credits.markdown() + suffix
+    assert re.findall(r"^#### (.+)$", updated, re.MULTILINE) == ["Bug fixes", "Other changes"]
+    assert recorded_base(updated, HEAD) == BASE
+    assert update_body(updated, credits) == updated
+    assert credits.logins == previous.logins == ("alice", "bob")
 
 
 def test_open_related_issue_is_included_without_closure_lookup() -> None:
@@ -1212,7 +1507,7 @@ def test_cross_repository_link_keeps_qualified_reference() -> None:
     assert api.query_repositories == [REPOSITORY, REPOSITORY]
 
 
-@pytest.mark.parametrize("stage", ["initial", "page"])
+@pytest.mark.parametrize("stage", ["initial", "page", "labels-page"])
 @pytest.mark.parametrize(
     "field_name,value",
     [
@@ -1228,7 +1523,16 @@ def test_related_pr_identity_is_revalidated_on_each_page(
 ) -> None:
     detail = pull_detail([])
     detail["data"]["repository"]["pullRequest"][field_name] = value
-    replies = [detail] if stage == "initial" else [pull_detail([], cursor="next"), detail]
+    replies = (
+        [detail]
+        if stage == "initial"
+        else [
+            pull_detail([], cursor="next")
+            if stage == "page"
+            else pull_detail([], label_cursor="next"),
+            detail,
+        ]
+    )
     api = issue_api([], detail_replies=replies)
     with pytest.raises(ValueError, match="pull request identity mismatch"):
         collect_single(api)
@@ -1245,7 +1549,7 @@ def test_related_pr_detail_rejects_malformed_numbers(number: object) -> None:
     assert api.detail_replies == []
 
 
-@pytest.mark.parametrize("stage", ["related", "related-page"])
+@pytest.mark.parametrize("stage", ["related", "related-page", "labels-page"])
 @pytest.mark.parametrize(
     "bad_reply",
     [
@@ -1257,16 +1561,27 @@ def test_related_pr_detail_rejects_malformed_numbers(number: object) -> None:
     ],
 )
 def test_related_query_failures_never_return_partial_credits(stage: str, bad_reply: object) -> None:
-    details = [bad_reply] if stage == "related" else [pull_detail([], cursor="next"), bad_reply]
+    details = (
+        [bad_reply]
+        if stage == "related"
+        else [
+            pull_detail([], cursor="next")
+            if stage == "related-page"
+            else pull_detail([], label_cursor="next"),
+            bad_reply,
+        ]
+    )
     api = issue_api([], detail_replies=details)
     with pytest.raises(ValueError, match="query failed|Missing GitHub contributor repository"):
         collect_single(api)
     assert api.replies == [] and api.detail_replies == []
 
 
-def test_related_query_transport_failures_propagate() -> None:
+@pytest.mark.parametrize("stage", ["initial", "labels-page"])
+def test_related_query_transport_failures_propagate(stage: str) -> None:
     failure = subprocess.CalledProcessError(1, ["gh", "api", "graphql"])
-    api = issue_api([], detail_replies=[failure])
+    details = [failure] if stage == "initial" else [pull_detail([], label_cursor="next"), failure]
+    api = issue_api([], detail_replies=details)
     with pytest.raises(subprocess.CalledProcessError) as caught:
         collect_single(api)
     assert caught.value is failure
@@ -1640,6 +1955,14 @@ def test_title_handle_code_cannot_be_broken_by_html_markdown_or_line_injection(
     assert update_body(body, credits) == body
 
 
+@pytest.mark.parametrize("prefix", ["i18n:", "l10n(catalogs)!:"])
+def test_translation_title_prefix_is_removed_for_presentation(prefix: str) -> None:
+    change = Change(
+        f"{prefix} Update translations", "PR #7", f"https://github.com/{REPOSITORY}/pull/7", (),
+    )
+    assert change.markdown().startswith("- Update translations: [PR #7]")
+
+
 def test_title_preencoded_handle_entity_is_preserved_as_literal_text() -> None:
     change = Change(
         "fix: Review &#64;pretender",
@@ -1715,6 +2038,7 @@ def test_managed_block_append_preserves_original_bytes_and_is_idempotent(body: s
     credits = Credits(INTERVAL, (pr_change(("alice", "Bob")),), ())
     block = (
         f"{START}\n### Related pull requests and issues\n\n"
+        "#### Other changes\n\n"
         f"- Improve playback: [PR #7](https://github.com/{REPOSITORY}/pull/7), by @alice and @Bob.\n\n"
         f"<!-- contribution-range: {BASE}..{HEAD} -->\n{END}"
     )

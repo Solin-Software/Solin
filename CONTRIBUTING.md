@@ -52,6 +52,10 @@ Use English [Conventional Commit](https://www.conventionalcommits.org/)
 messages, for example `fix: preserve playlist order during import`. Pull
 requests are normally squash-merged into one coherent commit on `main`.
 
+Issue forms apply `bug` or `enhancement` according to the selected form.
+Questions and general conversations belong in
+[Discussions](https://github.com/Solin-Software/Solin/discussions).
+
 ## Validation
 
 The complete local validation is:
@@ -138,3 +142,40 @@ Explain:
 
 Keep unrelated cleanup in separate pull requests. Refactors should preserve
 behavior unless the pull request explicitly documents a contract change.
+
+### Automatic labels
+
+PR titles may use a Conventional Commit prefix to suggest a label. Titles
+without a recognized prefix are also accepted. File rules supplement title
+rules, so a PR can receive multiple labels:
+
+| Label | Title prefixes | Changed files |
+| --- | --- | --- |
+| `bug` | `fix:`, `bug:` | None |
+| `enhancement` | `feat:`, `enhancement:`, `refactor:`, `perf:` | None |
+| `documentation` | `docs:`, `documentation:` | Markdown files |
+| `dependencies` | `deps:`, or a `deps` / `deps-dev` scope | Root `requirements*.txt` and `pyproject.toml` manifests |
+| `github_actions` | `ci:` | `.github/workflows/` YAML and `.github/actions/` files |
+| `translations` | `i18n:`, `l10n:` | Qt `.ts` / `.qm` catalogs and locale JSON under `src/solin/resources/translations/` |
+
+Scopes and breaking-change markers are supported, for example
+`fix(player)!: preserve playback`. Matching rules and release category priority
+live in [`.github/labels.json`](.github/labels.json). File labels indicate an
+affected area: touching `pyproject.toml` suggests `dependencies` even when the
+edit concerns other project metadata. The `enhancement` label covers new features,
+architectural improvements, refactoring, and performance improvements.
+
+Labels are recalculated when a PR opens, reopens, changes its title or description,
+or receives commits. Only obsolete labels previously applied by this automation
+are removed. Maintainers can add or remove any label in GitHub. Once a label is
+explicitly changed by a person or an integration using another identity, this automation leaves
+that label under manual control for the rest of that PR, including future title
+and file changes. Other labels are unaffected. Missing catalog labels are
+created when first needed; existing label colors and descriptions are preserved.
+
+The labeling workflow reads titles, file paths, and label history through the
+GitHub API and runs only the trusted base revision, including for PRs from forks.
+
+The generated release appendix groups PRs by their current labels. Each PR is
+listed once; see [contributor credits](docs/releases.md#contributor-credits) for
+category priority and the fallback for unclassified changes.

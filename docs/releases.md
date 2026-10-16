@@ -96,10 +96,20 @@ that recorded interval even if an older release is published later.
 
 Every merged pull request whose merge commit belongs to the interval is included,
 including documentation, build, and release-preparation PRs. Entries use linked
-PR titles without categories or filtering by labels, Conventional Commit type,
-or title format. A Conventional Commit prefix, when present, is removed only for
-presentation; the original title remains unchanged on GitHub. Titles without
-that format are also included.
+PR titles grouped by their current labels, without filtering by Conventional
+Commit type or title format. A Conventional Commit prefix, when present, is
+removed only for presentation; the original title remains unchanged on GitHub.
+Titles without that format are also included.
+
+Each PR appears in exactly one category. The ordered label catalog in
+[`.github/labels.json`](../.github/labels.json) defines category names and priority:
+**Bug fixes**, **Features and improvements**, **CI/CD**, **Dependencies**,
+**Translations**, then **Documentation**. When several labels match, the first
+category wins; a bug fix that also changes Markdown remains under **Bug fixes**.
+PRs with no recognized label and direct commits appear under **Other changes**.
+Empty categories are omitted. Labels on related issues do not classify their PR.
+Manual PR label changes are reflected the next time the appendix is generated;
+already published releases change only through the explicit contributor update.
 
 PR entries credit the PR author, authors of included associated Git commits, and
 Git coauthors recognized through `Co-authored-by` identities. Bots are excluded
