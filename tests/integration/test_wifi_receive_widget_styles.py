@@ -7,11 +7,12 @@ import sys
 from tests._paths import REPO_ROOT
 
 
-def test_wifi_receive_button_styles_parse_without_qt_warnings():
+def test_wifi_receive_button_styles_parse_without_qt_warnings(compiled_translation_catalogs):
     script = """
 from PySide6.QtCore import qInstallMessageHandler
 from PySide6.QtWidgets import QApplication
 from pathlib import Path
+import sys
 
 messages = []
 qInstallMessageHandler(lambda _mode, _context, message: messages.append(message))
@@ -51,6 +52,7 @@ profile_paths = ProfilePaths.from_roots(
 )
 widget = WifiReceiveWidget(
     LanguageManager(
+        catalog_directory=Path(sys.argv[1]),
         global_settings=GlobalSettingsStore.create(),
         jw_languages_cache_file=Path("jw_languages.json"),
         jw_language_settings_store_factory=(
@@ -100,7 +102,7 @@ if stylesheet_errors:
     env["PYTHONPATH"] = str(REPO_ROOT / "src")
 
     result = subprocess.run(
-        [sys.executable, "-c", script],
+        [sys.executable, "-c", script, str(compiled_translation_catalogs)],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,

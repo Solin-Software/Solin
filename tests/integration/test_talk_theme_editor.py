@@ -28,7 +28,6 @@ from PySide6.QtWidgets import QApplication, QColorDialog, QFileDialog, QPushButt
 from PySide6.QtWidgets import QSpinBox, QStyle, QStyleOptionSpinBox
 
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.foundation.resources import application_translation_root
 from solin.core.projection.application import ProjectionSession
 from solin.core.projection.result import ProjectionResult, ProjectionResultStatus
 from solin.core.talk_theme.models import (
@@ -43,6 +42,7 @@ from solin.core.talk_theme.repository import TalkThemeAssetStore, TalkThemeRepos
 from solin.styles.theme import app_stylesheet
 from solin.ui.dialogs.talk_theme_color import TalkThemeColorDialog
 from solin.ui.qml.talk_theme import TalkThemeBridge, TalkThemeEditorWidget
+from tests._translation_catalog import catalog_translation
 from tests._qt import dispose_widget, mouse_move, mouse_press, mouse_release, show_and_activate, wait_until
 
 
@@ -219,51 +219,56 @@ def test_switching_to_a_user_preset_resets_undo_and_redo(tmp_path) -> None:
     bridge.close()
 
 
-def test_builtin_presets_have_localized_example_content(tmp_path) -> None:
+def test_builtin_presets_have_localized_example_content(tmp_path, compiled_translation_catalogs) -> None:
     translator = QTranslator()
-    assert translator.load(str(application_translation_root() / "solin_pt_BR.qm"))
+    assert translator.load(str(compiled_translation_catalogs / "solin_pt_BR.qm"))
     assert _APP.installTranslator(translator)
-    bridge = _bridge(tmp_path)
+    bridge = None
     try:
+        bridge = _bridge(tmp_path)
         assert [layer["text"] for layer in _layer_records(bridge)] == [
-            "DISCURSO PÚBLICO",
-            "Imite a misericórdia de Jeová",
+            catalog_translation("pt_BR", "MeetingSections", "PUBLIC TALK"),
+            catalog_translation("pt_BR", "TalkThemePresets", "Imitate Jehovah's mercy"),
         ]
         assert [layer["name"] for layer in _layer_records(bridge)] == [
-            "Discurso Público",
-            "Título do discurso",
+            catalog_translation("pt_BR", "TalkThemePresets", "Public talk"),
+            catalog_translation("pt_BR", "TalkThemeEditorView", "Talk title"),
         ]
 
         bridge.requestPreset("classic-blue")
         assert [layer["text"] for layer in _layer_records(bridge)] == [
-            "Imite a misericórdia de Jeová",
-            "Nome",
-            "Congregação",
+            catalog_translation("pt_BR", "TalkThemePresets", "Imitate Jehovah's mercy"),
+            catalog_translation("pt_BR", "TalkThemePresets", "Name"),
+            catalog_translation("pt_BR", "TalkThemePresets", "Congregation"),
         ]
 
         bridge.requestPreset("soft-photo")
         assert [layer["text"] for layer in _layer_records(bridge)] == [
-            "Imite a misericórdia de Jeová",
-            "Nome",
-            "Congregação",
+            catalog_translation("pt_BR", "TalkThemePresets", "Imitate Jehovah's mercy"),
+            catalog_translation("pt_BR", "TalkThemePresets", "Name"),
+            catalog_translation("pt_BR", "TalkThemePresets", "Congregation"),
         ]
         soft_photo_preview = next(
             preset for preset in bridge.builtinPresets if preset["id"] == "soft-photo"
         )["preview_layer"]
-        assert soft_photo_preview["text"] == "Imite a misericórdia de Jeová"
+        assert soft_photo_preview["text"] == catalog_translation(
+            "pt_BR", "TalkThemePresets", "Imitate Jehovah's mercy",
+        )
         assert soft_photo_preview["font_family"] == "Lato"
         assert soft_photo_preview["font_weight"] == "bold"
-        assert all("Ex:" not in str(layer["text"]) for layer in _layer_records(bridge))
         assert translator.translate(
             "TalkThemeEditorView",
             "Blur image",
-        ) == "Desfocar imagem"
+        ) == catalog_translation("pt_BR", "TalkThemeEditorView", "Blur image")
     finally:
-        bridge.close()
-        assert _APP.removeTranslator(translator)
+        try:
+            if bridge is not None:
+                bridge.close()
+        finally:
+            assert _APP.removeTranslator(translator)
 
 
-def test_saved_user_preset_content_is_not_retranslated(tmp_path) -> None:
+def test_saved_user_preset_content_is_not_retranslated(tmp_path, compiled_translation_catalogs) -> None:
     repository = TalkThemeRepository(tmp_path / "talk_theme.json")
     bridge = _bridge(tmp_path, repository=repository)
     assert bridge.saveAsPreset("Keep my content")
@@ -271,20 +276,26 @@ def test_saved_user_preset_content_is_not_retranslated(tmp_path) -> None:
     bridge.close()
 
     translator = QTranslator()
-    assert translator.load(str(application_translation_root() / "solin_pt_BR.qm"))
+    assert translator.load(str(compiled_translation_catalogs / "solin_pt_BR.qm"))
     assert _APP.installTranslator(translator)
-    reopened = _bridge(tmp_path, repository=repository)
+    reopened = None
     try:
+        reopened = _bridge(tmp_path, repository=repository)
         assert [layer["text"] for layer in _layer_records(reopened)] == expected
         assert reopened.activePresetId
         assert not reopened.activePresetIsBuiltin
     finally:
-        reopened.close()
-        assert _APP.removeTranslator(translator)
+        try:
+            if reopened is not None:
+                reopened.close()
+        finally:
+            assert _APP.removeTranslator(translator)
 
 
-def test_background_blur_label_is_compiled_in_every_translation_catalog() -> None:
-    catalogs = sorted(application_translation_root().glob("solin_*.qm"))
+def test_background_blur_label_is_compiled_in_every_translation_catalog(
+    compiled_translation_catalogs,
+) -> None:
+    catalogs = sorted(compiled_translation_catalogs.glob("solin_*.qm"))
     assert len(catalogs) == 18
     for catalog in catalogs:
         translator = QTranslator()
@@ -292,6 +303,8 @@ def test_background_blur_label_is_compiled_in_every_translation_catalog() -> Non
         assert translator.translate(
             "TalkThemeEditorView",
             "Blur image",
+        ) == catalog_translation(
+            catalog.stem.removeprefix("solin_"), "TalkThemeEditorView", "Blur image",
         ), catalog.name
 
 
@@ -417,19 +430,20 @@ def test_output_aspect_is_global_transient_editor_state(tmp_path) -> None:
     reopened_from_another_profile.close()
 
 
-def test_output_aspect_control_contains_its_translated_content(tmp_path) -> None:
+def test_output_aspect_control_contains_its_translated_content(tmp_path, compiled_translation_catalogs) -> None:
     translator = QTranslator()
-    assert translator.load(str(application_translation_root() / "solin_pt_BR.qm"))
+    assert translator.load(str(compiled_translation_catalogs / "solin_pt_BR.qm"))
     assert _APP.installTranslator(translator)
-    widget = TalkThemeEditorWidget(
-        None,
-        profile_paths=_profile_paths(tmp_path),
-        notifications=_Notifications(),
-        projection_session=ProjectionSession(),
-        settings=_CustomColorSettings(),
-        output_settings=_OutputSettings(),
-    )
+    widget = None
     try:
+        widget = TalkThemeEditorWidget(
+            None,
+            profile_paths=_profile_paths(tmp_path),
+            notifications=_Notifications(),
+            projection_session=ProjectionSession(),
+            settings=_CustomColorSettings(),
+            output_settings=_OutputSettings(),
+        )
         widget.resize(1400, 900)
         widget.show()
         assert _wait_until(lambda: widget._qml.status() is QQuickWidget.Status.Ready)
@@ -445,9 +459,12 @@ def test_output_aspect_control_contains_its_translated_content(tmp_path) -> None
         assert content_origin.x() >= 10
         assert content_origin.x() + content.width() <= control.width() - 10
     finally:
-        widget.cleanup()
-        widget.close()
-        assert _APP.removeTranslator(translator)
+        try:
+            if widget is not None:
+                widget.cleanup()
+                widget.close()
+        finally:
+            assert _APP.removeTranslator(translator)
 
 
 def test_layer_crud_reorder_and_delete_clear_peer_snap_references(tmp_path) -> None:

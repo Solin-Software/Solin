@@ -1,0 +1,5 @@
+include setup.py
+include scripts/__init__.py scripts/setuptools_commands.py
+include scripts/compile_translations.py
+recursive-include src/solin/resources/translations *.ts
+recursive-exclude src/solin/resources/translations *.qm .solin-translations*

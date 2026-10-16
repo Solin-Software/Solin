@@ -17,8 +17,22 @@ from __future__ import annotations
 import sys
 
 from solin.version import VERSION
+from solin.core.foundation.resources import package_root
 
-IS_DEV: bool = "__compiled__" not in globals()
+
+def _is_development_checkout() -> bool:
+    package = package_root()
+    repository = package.parents[1]
+    return (
+        package == repository / "src" / "solin"
+        and (repository / "pyproject.toml").is_file()
+    )
+
+
+# Compilation controls process launching; package origin controls runtime policy.
+# Editable installs resolve to the source checkout; installed wheels do not.
+IS_COMPILED: bool = "__compiled__" in globals()
+IS_DEV: bool = not IS_COMPILED and _is_development_checkout()
 LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
 CAMERA_DISCOVERY_ARGUMENT: str = "--camera-discovery"
 

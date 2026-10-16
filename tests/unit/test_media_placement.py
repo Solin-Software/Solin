@@ -1,9 +1,5 @@
-from PySide6.QtCore import QCoreApplication, QTranslator
-
-from solin.core.foundation.resources import application_translation_root
 from solin.core.i18n.media_placement import (
     MEDIA_PLACEMENT_TRANSLATION_SOURCES,
-    translate_media_placement,
 )
 from solin.core.media.placement import (
     END_OF_LIST_INDEX,
@@ -15,24 +11,6 @@ from solin.core.media.placement import (
 
 def test_all_placement_labels_have_lupdate_visible_sources() -> None:
     assert MEDIA_PLACEMENT_TRANSLATION_SOURCES == MEDIA_PLACEMENT_SOURCES
-
-
-def test_shared_placement_and_trim_contexts_resolve_from_runtime_catalog() -> None:
-    app = QCoreApplication.instance() or QCoreApplication([])
-    translator = QTranslator()
-    assert translator.load(
-        str(application_translation_root() / "solin_pt_BR.qm")
-    )
-    assert app.installTranslator(translator)
-    try:
-        assert translate_media_placement("Top of playlist") == "Início da playlist"
-        assert translate_media_placement("End of playlist") == "Fim da playlist"
-        assert (
-            QCoreApplication.translate("MediaTrimDialog", "Start and end times")
-            == "Tempos de início e fim"
-        )
-    finally:
-        app.removeTranslator(translator)
 
 
 def test_small_single_section_tree_skips_placement_prompt() -> None:

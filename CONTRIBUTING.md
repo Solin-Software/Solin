@@ -24,6 +24,16 @@ Start the application with the installed `solin` command or the local launcher:
 python main.py
 ```
 
+GUI startup automatically compiles translation sources into `build/translations/`
+when needed. Restart after changing catalogs. Commit only `.ts` sources and
+locale metadata; see [Translations](docs/translations.md) for the editor,
+validation, and packaging lifecycle.
+
+Runtime mode is defined in [constants.py](src/solin/core/foundation/constants.py):
+`IS_DEV` identifies source checkouts and editable installations, which use separate settings and
+local services. Wheels and standalone executables use production settings.
+`IS_COMPILED` identifies Nuitka executables for process launching.
+
 Build the metadata and thumbnail helper after installing Python and native
 dependencies, using the same interpreter as the application:
 
@@ -110,6 +120,7 @@ Do not commit:
 - passwords, tokens, private keys, certificates, or local environment files;
 - real publication archives or user data;
 - generated `build/`, `dist/`, cache, or virtual-environment content;
+- generated translation `.qm` catalogs;
 - locally compiled copies of dependencies already distributed as packages.
 
 Tests that need an archive or user state must construct deterministic synthetic
@@ -160,7 +171,7 @@ rules, so a PR can receive multiple labels:
 | `dependencies` | `deps:`, or a `deps` / `deps-dev` scope | Root `requirements*.txt` and `pyproject.toml` manifests |
 | `github_actions` | `ci:` | `.github/workflows/` YAML and `.github/actions/` files |
 | `skip-changelog` | `chore(release):` | None |
-| `translations` | `i18n:`, `l10n:` | Qt `.ts` / `.qm` catalogs and locale JSON under `src/solin/resources/translations/` |
+| `translations` | `i18n:`, `l10n:` | Qt `.ts` catalogs and locale JSON under `src/solin/resources/translations/` |
 
 Scopes and breaking-change markers are supported, for example
 `fix(player)!: preserve playback`. Matching rules and release category priority

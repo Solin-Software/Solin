@@ -30,7 +30,6 @@ from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from solin.controllers.timer_engine import TimerEngine
-from solin.core.foundation.resources import application_translation_root
 from solin.core.i18n.meeting_schedule import (
     meeting_kind_label,
     meeting_weekday_names,
@@ -54,6 +53,7 @@ from solin.ui.helpers import (
     set_qml_pointer_cursor,
 )
 from tests._paths import REPO_ROOT
+from tests._translation_catalog import catalog_translation
 from tests._qt import (
     dispose_widget, mouse_click, mouse_move, show_and_activate, wait_for_geometry, wait_until,
 )
@@ -365,14 +365,16 @@ class _PlaybackProtectionProbe(QObject):
 
 
 @pytest.fixture
-def pt_br_translator():
+def pt_br_translator(compiled_translation_catalogs):
     translator = QTranslator()
     assert translator.load(
-        str(application_translation_root() / "solin_pt_BR.qm")
+        str(compiled_translation_catalogs / "solin_pt_BR.qm")
     )
     assert _APP.installTranslator(translator)
-    yield translator
-    assert _APP.removeTranslator(translator)
+    try:
+        yield translator
+    finally:
+        assert _APP.removeTranslator(translator)
 
 
 class _PlaylistTreeControllerProbe(QObject):
@@ -1535,10 +1537,15 @@ def test_advanced_timer_settings_reuse_existing_portuguese_catalog(
 
     content_item = settings.property("contentItem")
     visible_text = _visible_texts(content_item)
-    assert "Cronômetro · Configurações" in visible_text
-    assert "Mostrador do relógio" in visible_text
-    assert "Telas" in visible_text
-    assert close_button.property("tip") == "Fechar"
+    title = (
+        catalog_translation("pt_BR", "AdvancedTimerPage", "Timer")
+        + " · "
+        + catalog_translation("pt_BR", "SettingsWidget", "Settings")
+    )
+    assert title in visible_text
+    assert catalog_translation("pt_BR", "AdvancedTimerPage", "Clock face") in visible_text
+    assert catalog_translation("pt_BR", "AdvancedTimerPage", "Monitors") in visible_text
+    assert close_button.property("tip") == catalog_translation("pt_BR", "SettingsWidget", "Close")
     assert widget.errors() == []
     assert QMetaObject.invokeMethod(settings, "close")
     _wait_until(lambda: settings.property("visible") is False)
@@ -1565,45 +1572,39 @@ def test_media_countdown_portuguese_catalog_covers_ui_and_runtime_feedback(
     QTest.qWait(40)
 
     visible_text = _visible_texts(root)
-    assert "Aparência da projeção" in visible_text
-    assert "Horário da reunião" not in visible_text
-    assert "Antes das reuniões" in visible_text
+    assert catalog_translation("pt_BR", "MediaCountdownPage", "Projection appearance") in visible_text
+    assert catalog_translation("pt_BR", "MediaCountdownPage", "Before meetings") in visible_text
+    lead_time_prompt = catalog_translation(
+        "pt_BR", "MediaCountdownPage", "How long before the meeting should the countdown start?",
+    )
+    assert lead_time_prompt not in visible_text
     root.setProperty("automationExpanded", True)
     QTest.qWait(20)
     visible_text = _visible_texts(root)
-    assert "Quanto tempo antes da reunião a contagem regressiva deve começar?" in visible_text
-    assert meeting_weekday_names()[0] == "Segunda-feira"
-    assert meeting_kind_label("midweek") == "Reunião do meio de semana"
-    assert QCoreApplication.translate(
-        "MediaCountdownPage",
+    assert lead_time_prompt in visible_text
+    assert meeting_weekday_names()[0] == catalog_translation("pt_BR", "_MeetingSchedule", "Monday")
+    assert meeting_kind_label("midweek") == catalog_translation(
+        "pt_BR", "_MeetingSchedule", "Midweek meeting",
+    )
+    for context, source in (
         (
+            "MediaCountdownPage",
             "Automatic projection is temporarily unavailable. Solin will keep "
-            "trying until the meeting starts."
+            "trying until the meeting starts.",
         ),
-    ) == (
-        "A projeção automática está temporariamente indisponível. O Solin "
-        "continuará tentando até o início da reunião."
-    )
-    assert QCoreApplication.translate(
-        "MediaCountdownAutomation",
-        "Countdown started automatically for {time}.",
-    ) == (
-        "Contagem regressiva iniciada automaticamente. Chegará a zero às {time}."
-    )
-    assert QCoreApplication.translate(
-        "MediaCountdownAutomation",
-        "The countdown did not start because no media window was available.",
-    ) == (
-        "A contagem regressiva não foi iniciada porque nenhuma janela de mídia "
-        "estava disponível."
-    )
-    assert QCoreApplication.translate(
-        "MediaCountdownAutomation",
-        "The countdown did not start because automatic projection remained unavailable.",
-    ) == (
-        "A contagem regressiva não foi iniciada porque a projeção automática "
-        "permaneceu indisponível."
-    )
+        ("MediaCountdownAutomation", "Countdown started automatically for {time}."),
+        (
+            "MediaCountdownAutomation",
+            "The countdown did not start because no media window was available.",
+        ),
+        (
+            "MediaCountdownAutomation",
+            "The countdown did not start because automatic projection remained unavailable.",
+        ),
+    ):
+        assert QCoreApplication.translate(context, source) == catalog_translation(
+            "pt_BR", context, source,
+        )
     widget.deleteLater()
 
 

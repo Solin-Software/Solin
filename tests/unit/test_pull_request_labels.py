@@ -57,7 +57,7 @@ def test_titles_classify_only_an_explicit_conventional_prefix(title, expected):
     (".github/workflows/test.yaml", {"github_actions"}),
     (".github/actions/build/action.yml", {"github_actions"}),
     ("src/solin/resources/translations/solin_pt_BR.ts", {"translations"}),
-    ("src/solin/resources/translations/solin_pt_BR.qm", {"translations"}),
+    ("src/solin/resources/translations/solin_pt_BR.qm", set()),
     ("src/solin/resources/translations/locales/pt_BR.json", {"translations"}),
     ("src/solin/resources/remote_control/scripts/client.ts", set()),
     ("src/solin/version.py", set()),

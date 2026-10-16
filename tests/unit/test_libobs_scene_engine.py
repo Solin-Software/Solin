@@ -5572,22 +5572,19 @@ def test_prepare_requires_ready_content_but_not_ingress_for_decoded_media():
 # ── factory ──────────────────────────────────────────────────────
 
 
-def test_factory_targets_the_sidecar_module():
-    engine = create_libobs_scene_engine()
-    config = engine._config
-    assert config.executable == Path(sys.executable)
-    assert config.arguments == ("-m", _SIDECAR_MODULE)
-
-
-def test_compiled_factory_launches_the_application_sidecar_role(monkeypatch):
+@pytest.mark.parametrize("compiled", [False, True])
+def test_factory_selects_sidecar_arguments_by_compilation_mode(monkeypatch, compiled):
     from solin.core.scenes import libobs_engine
     from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
 
-    monkeypatch.setattr(libobs_engine, "IS_DEV", False)
-    monkeypatch.setattr(sys, "executable", str(Path("build/main.dist/Solin.exe").resolve()))
+    monkeypatch.setattr(libobs_engine, "IS_COMPILED", compiled)
+    executable = "Solin.exe" if compiled else "python.exe"
+    monkeypatch.setattr(sys, "executable", str(Path("build") / executable))
     config = create_libobs_scene_engine()._config
     assert config.executable == Path(sys.executable)
-    assert config.arguments == (LIBOBS_SIDECAR_ARGUMENT,)
+    assert config.arguments == (
+        (LIBOBS_SIDECAR_ARGUMENT,) if compiled else ("-m", _SIDECAR_MODULE)
+    )
 
 
 def test_factory_is_resilient_to_transient_engine_stalls():
