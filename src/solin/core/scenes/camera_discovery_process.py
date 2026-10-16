@@ -47,6 +47,8 @@ _JOB_NAME_ENV = "SOLIN_CAMERA_DISCOVERY_JOB_NAME"
 
 
 def _windows_kernel() -> Any:
+    if sys.platform != "win32":
+        raise RuntimeError("Windows job objects require Windows")
     import ctypes
     from ctypes import wintypes
 
