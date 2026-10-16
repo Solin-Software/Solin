@@ -166,6 +166,100 @@ def test_invalid_discovery_request_does_not_enter_native_query():
         worker.close()
 
 
+def test_discovery_close_cancels_query_before_joining_and_discards_result():
+    started, cancelled = threading.Event(), threading.Event()
+    replies = _Replies()
+
+    def discover():
+        started.set()
+        assert cancelled.wait(3)
+        return {"devices": []}
+
+    worker = _CameraDiscoveryRequests(discover, replies.emit, cancel=cancelled.set)
+    try:
+        worker.submit(_request())
+        assert started.wait(3)
+        worker.close()
+        assert cancelled.is_set()
+        assert not worker._worker.is_alive()
+        assert replies.items == []
+        worker.close()
+    finally:
+        cancelled.set()
+        worker.close()
+
+
+def test_queued_expired_query_does_not_enter_native_driver(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr("solin.core.scenes.libobs_sidecar.time", SimpleNamespace(
+        monotonic=lambda: clock[0],
+    ))
+    started, release = threading.Event(), threading.Event()
+    calls, replies = [], _Replies()
+
+    def discover():
+        started.set()
+        assert release.wait(3)
+        return {"devices": []}
+
+    worker = _CameraDiscoveryRequests(discover, replies.emit, query_modes=lambda query: (
+        calls.append(query) or {}
+    ))
+    try:
+        worker.submit(_request())
+        assert started.wait(3)
+        worker.submit(_request("query_local_camera_modes", "queued", deadline_monotonic_ms=10100,
+                               payload={"device_id": "camera", "width": 800, "height": 600}))
+        clock[0] = 11.0
+        release.set()
+        results = {item.request_id: item for item in replies.wait(2)}
+        assert results["queued"].payload["error_code"] == "deadline_exceeded"
+        assert calls == []
+    finally:
+        release.set()
+        worker.close()
+
+
+def test_failed_expiration_reply_does_not_strand_following_query(monkeypatch):
+    clock = [10.0]
+    monkeypatch.setattr("solin.core.scenes.libobs_sidecar.time", SimpleNamespace(
+        monotonic=lambda: clock[0],
+    ))
+    started, release = threading.Event(), threading.Event()
+    replies = _Replies()
+    calls = []
+
+    def discover():
+        started.set()
+        assert release.wait(3)
+        return {"devices": []}
+
+    def emit(response):
+        if response.request_id == "expired":
+            raise OSError("expiration reply failed")
+        replies.emit(response)
+
+    worker = _CameraDiscoveryRequests(discover, emit, query_modes=lambda query: (
+        calls.append(query) or {"devices": []}
+    ))
+    try:
+        worker.submit(_request())
+        assert started.wait(3)
+        values = {"device_id": "camera", "width": 800, "height": 600}
+        worker.submit(_request("query_local_camera_modes", "expired", payload=values,
+                               deadline_monotonic_ms=10100))
+        worker.submit(_request("query_local_camera_modes", "valid", payload=values))
+        clock[0] = 11.0
+        release.set()
+        results = {item.request_id: item for item in replies.wait(2)}
+        assert results["valid"].message_type == "local_camera_modes"
+        assert len(calls) == 1
+        assert worker._worker.is_alive()
+    finally:
+        release.set()
+        worker.close()
+
+
 def test_size_queries_are_coalesced_without_mixing_inventory_or_other_sizes():
     started, release = threading.Event(), threading.Event()
     replies, calls = _Replies(), []

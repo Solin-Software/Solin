@@ -740,11 +740,11 @@ class ScenesBridge(QObject):
     @Property(str, notify=changed)
     def localCameraStatus(self) -> str:
         discovery = self._controller.local_cameras
-        if not discovery.ready:
+        if self._controller.local_cameras_pending or not discovery.ready:
             return self.tr("Looking for cameras…")
-        if not discovery.supported:
+        if not discovery.supported and not self._controller.engine_ready:
             return self.tr("Camera discovery is available when the scene engine is ready.")
-        if discovery.error_code:
+        if discovery.error_code or not discovery.supported:
             return self.tr("Camera discovery could not be completed.")
         if not discovery.devices:
             return self.tr("No cameras found.")

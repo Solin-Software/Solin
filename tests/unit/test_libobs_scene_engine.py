@@ -2567,11 +2567,11 @@ def test_engine_list_local_cameras_returns_discovered_devices(monkeypatch):
                 status=LocalCameraProbeStatus.UNVERIFIED, backend="v4l2",
                 failure_stage="format_probe", error_code="no_formats")),
     ]
-    # The handler discovers cameras out of band (real V4L2 scan); patch it so the
-    # test is deterministic and does not depend on the host's cameras.
+    # Native enumeration belongs to a disposable helper. Exercise the handler's
+    # catalog boundary without depending on this host's cameras or drivers.
     monkeypatch.setattr(
-        "solin.core.scenes.v4l2_camera_discovery.discover_local_cameras",
-        lambda: fake_devices,
+        "solin.core.scenes.camera_catalog.camera_catalog",
+        lambda: types.SimpleNamespace(devices=lambda **_kwargs: fake_devices),
     )
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)

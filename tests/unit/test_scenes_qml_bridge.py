@@ -66,6 +66,7 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzRecallStatus
+from solin.core.scenes.process_engine import SceneEngineRequestTimeoutError
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
 from solin.ui.qml.scenes_bridge import ScenesBridge
@@ -1586,6 +1587,118 @@ def test_bridge_exposes_camera_with_unavailable_capabilities_for_automatic_captu
     assert configuration.device_id == "camera://c920"
     assert configuration.media_type is None
     assert configuration.width == 0
+
+
+def test_camera_discovery_without_ready_engine_keeps_readiness_guidance(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
+
+    assert not controller.engine_ready
+    assert bridge.localCameraStatus == "Camera discovery is available when the scene engine is ready."
+
+
+@pytest.mark.parametrize("failure", ["request-timeout", "helper-failure"])
+@pytest.mark.parametrize("manual_mode", [False, True])
+@pytest.mark.parametrize("previous_failure", [False, True])
+def test_camera_discovery_failure_is_contextual_and_preserves_configured_device(
+    scene_bridge_factory, monkeypatch, failure, manual_mode, previous_failure,
+) -> None:
+    workspace, controller, bridge, _preview = scene_bridge_factory()
+    configuration = LocalCameraConfig(device_id="camera://configured-but-unlisted")
+    if manual_mode:
+        configuration = replace(
+            configuration, width=1280, height=720, fps_numerator=30,
+            media_type=CameraMediaType.JPEG, pixel_format="MJPG",
+        )
+    camera = replace(workspace.configured_cameras[0], configuration=configuration)
+    workspace.upsert_camera(camera)
+    bridge.selectScene(CAMERA_SCENE_ID)
+    bridge.selectLayer(controller.document.scene(CAMERA_SCENE_ID).layers[0].id)
+    before_document, before_resources = controller.document, workspace.resources
+    before_draft = bridge.selectedCameraDraft()
+    pending = Future()
+    monkeypatch.setattr(controller, "_engine", SimpleNamespace(
+        list_local_cameras=lambda **_kwargs: pending,
+    ))
+    controller._set_engine_ready(True)
+    if previous_failure:
+        controller._set_local_cameras(LocalCameraDiscovery(
+            supported=failure == "request-timeout", ready=True, generation=0, devices=(),
+            error_code="discovery_timed_out" if failure == "request-timeout" else "discovery_request_failed",
+        ))
+    last_completed = controller.local_cameras
+    statuses = []
+    bridge.changed.connect(lambda: statuses.append(bridge.localCameraStatus))
+    assert controller.refresh_local_cameras() is pending
+    assert controller.local_cameras_pending
+    assert controller.local_cameras == last_completed
+    assert bridge.localCameraStatus == "Looking for cameras…"
+    assert bridge.engineStatus == ""
+
+    if failure == "request-timeout":
+        pending.set_exception(SceneEngineRequestTimeoutError("metadata deadline exceeded"))
+    else:
+        pending.set_result(LocalCameraDiscovery(
+            supported=False, ready=True, generation=0, devices=(),
+            error_code="discovery_request_failed",
+        ))
+
+    assert controller.engine_ready
+    assert not controller.local_cameras_pending
+    assert controller.local_cameras.ready
+    assert controller.local_cameras.error_code
+    assert bridge.engineStatus == ""
+    assert bridge.localCameraStatus == "Camera discovery could not be completed."
+    assert statuses[-1] == bridge.localCameraStatus
+    missing = next(item for item in bridge.localCameraDevices if item["id"] == configuration.device_id)
+    assert missing["available"] is False
+    assert bridge.selectedCameraDraft()["deviceId"] == before_draft["deviceId"]
+    assert bridge.selectedCameraDraft()["formatId"] == before_draft["formatId"]
+
+    _publish_camera_modes(controller, (LocalVideoFormat(
+        CameraMediaType.RAW, "NV12", 640, 480, 30, 1,
+    ),), generation=2)
+
+    assert bridge.selectedCameraDraft()["deviceId"] == configuration.device_id
+    assert bridge.selectedCameraDraft()["formatId"] == before_draft["formatId"]
+    assert controller.document == before_document
+    assert workspace.resources == before_resources
+
+
+def test_camera_refresh_shows_loading_with_cached_devices_then_ready_cache(
+    scene_bridge_factory, monkeypatch,
+) -> None:
+    _workspace, controller, bridge, _preview = scene_bridge_factory()
+    _publish_camera_modes(controller, (LocalVideoFormat(
+        CameraMediaType.RAW, "NV12", 640, 480, 30, 1,
+    ),))
+    before = bridge.localCameraDevices
+    result = controller.local_cameras
+    pending, calls = Future(), []
+
+    def discover(**kwargs):
+        calls.append(kwargs["request_id"])
+        return pending
+
+    monkeypatch.setattr(controller, "_engine", SimpleNamespace(list_local_cameras=discover))
+    controller._set_engine_ready(True)
+    statuses = []
+    bridge.changed.connect(lambda: statuses.append(bridge.localCameraStatus))
+
+    assert controller.refresh_local_cameras() is pending
+    assert bridge.localCameraStatus == "Looking for cameras…"
+    assert bridge.localCameraDevices == before
+    bridge.ensureLocalCameras()
+    assert len(calls) == 1
+
+    pending.set_result(result)
+
+    assert controller.local_cameras.ready
+    assert not controller.local_cameras_pending
+    assert bridge.localCameraStatus == ""
+    assert statuses[-1] == ""
+    assert bridge.localCameraDevices == before
+    bridge.ensureLocalCameras()
+    assert len(calls) == 1
 
 
 def test_camera_list_refreshes_from_pending_to_two_then_three_devices(scene_bridge_factory) -> None:

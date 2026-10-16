@@ -67,8 +67,19 @@ reported separately. Device labels do not claim that capture has been verified.
 The dialog loads capabilities asynchronously when opened and reuses successful
 results. Explicit refresh, inventory replacement, and process restart invalidate
 the cache. Concurrent requests share native work. Custom-size queries are cached
-with the inventory and discard stale completions. Native metadata work runs on a
-worker outside foreground IPC handling and the Qt UI thread.
+with the inventory and discard stale completions. A dispatch worker runs outside
+foreground IPC handling and the Qt UI thread; native enumeration runs in a
+disposable helper process with no capture sources or graphics/audio outputs.
+Windows initializes COM on the helper's querying thread. Each OBS inventory scan
+reuses one properties session, with fresh settings for each device.
+
+The helper has a 15-second budget covering startup, queries, and teardown, with
+bounded forced cleanup. The caller's 20-second deadline also allows routing and
+cleanup. Expiry or shutdown kills and reaps the helper; a later request starts a
+fresh process. Requests that expire while queued do not enter native code.
+Stage timings and bounded diagnostic tails identify unfinished native operations.
+Discovery failures remain contextual camera errors. Camera requests neither
+suppress compositor heartbeats nor determine the engine's availability.
 
 ## Mode selection
 
@@ -77,11 +88,14 @@ resolution, and rational FPS. Dependent dialog controls offer valid combinations
 custom values must satisfy the reported range and steps. Missing devices and
 saved modes remain identified instead of selecting a replacement device.
 
-Automatic considers advertised modes up to 1920×1080 and 30 FPS. It prioritizes
+Automatic reads completed cached capabilities without starting or waiting for
+discovery during scene preparation. It considers advertised modes up to
+1920×1080 and 30 FPS. It prioritizes
 fluid video, grouping 30 and 30000/1001 FPS in the target tier, then image area,
 canvas aspect ratio, and the backend's ordering. If metadata offers no eligible
-mode, Automatic makes an explicit attempt using the plugin's native preference;
-that attempt does not promise Full HD.
+mode, including a cold cache at startup, Automatic makes an explicit attempt
+using the plugin's native preference; that attempt does not promise Full HD.
+Completing or refreshing discovery does not reconfigure an existing capture.
 
 Resolution, native format, and rational FPS all participate in change detection.
 Returning to Automatic explicitly resets all application-controlled native mode

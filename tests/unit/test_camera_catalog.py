@@ -63,6 +63,7 @@ def test_catalog_reuses_capabilities_and_refresh_replaces_inventory():
         return [_device(_mode())] if len(calls) == 1 else []
 
     catalog = CameraCatalog(discover)
+    catalog.devices()
     assert catalog.automatic_mode("camera") == _mode()
     assert catalog.devices() == (_device(_mode()),)
     assert len(calls) == 1
@@ -114,6 +115,106 @@ def test_catalog_does_not_turn_failure_into_empty_inventory_or_cache_failure():
     assert catalog.devices() == ()
 
 
+def test_cached_automatic_selection_never_starts_native_discovery():
+    calls = []
+    catalog = CameraCatalog(lambda: calls.append(True) or [_device(_mode())])
+    assert catalog.automatic_mode("camera") is None
+    assert calls == []
+    catalog.devices()
+    assert catalog.automatic_mode("camera") == _mode()
+    assert calls == [True]
+
+
+@pytest.mark.parametrize("warm", [False, True])
+def test_cached_automatic_does_not_wait_for_pending_discovery(warm):
+    started, release = Event(), Event()
+    calls = []
+
+    def discover():
+        calls.append(True)
+        if not warm or len(calls) > 1:
+            started.set()
+            assert release.wait(5)
+        return [_device(_mode())]
+
+    catalog = CameraCatalog(discover)
+    if warm:
+        catalog.devices()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pending = pool.submit(catalog.devices, refresh=True)
+        try:
+            assert started.wait(5)
+            selected = pool.submit(catalog.automatic_mode, "camera")
+            assert selected.result(1) == (_mode() if warm else None)
+        finally:
+            release.set()
+        assert pending.result(5) == (_device(_mode()),)
+
+
+def test_cached_automatic_cannot_use_invalidated_inventory():
+    catalog = CameraCatalog(lambda: [_device(_mode())])
+    catalog.devices()
+    catalog.invalidate()
+    assert catalog.automatic_mode("camera") is None
+
+
+def test_cancelled_dispatch_cannot_start_a_late_helper_until_runtime_reset(monkeypatch):
+    created = []
+
+    class Helper:
+        def __init__(self):
+            created.append(True)
+
+        def discover(self):
+            return []
+
+    monkeypatch.setattr("solin.core.scenes.camera_discovery_process.CameraDiscoveryProcess", Helper)
+    catalog = CameraCatalog()
+    catalog.cancel_discovery()
+    with pytest.raises(RuntimeError, match="cancelled"):
+        catalog.devices()
+    assert created == []
+    catalog.invalidate()
+    assert catalog.devices() == ()
+    assert created == [True]
+
+
+def test_cancelling_native_helper_releases_all_catalog_waiters(monkeypatch):
+    started, cancelled, waiting = Event(), Event(), Event()
+
+    class ObservedFuture(Future):
+        def result(self, timeout=None):
+            waiting.set()
+            return super().result(timeout)
+
+    class Helper:
+        def discover(self):
+            started.set()
+            assert cancelled.wait(3)
+            raise RuntimeError("cancelled native query")
+
+        def close(self):
+            cancelled.set()
+
+    monkeypatch.setattr("solin.core.scenes.camera_catalog.Future", ObservedFuture)
+    monkeypatch.setattr("solin.core.scenes.camera_discovery_process.CameraDiscoveryProcess", Helper)
+    catalog = CameraCatalog()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(catalog.devices)
+        try:
+            assert started.wait(3)
+            second = pool.submit(catalog.devices)
+            assert waiting.wait(3)
+            catalog.cancel_discovery()
+            for future in (first, second):
+                with pytest.raises(RuntimeError, match="cancelled native query"):
+                    future.result(3)
+        finally:
+            cancelled.set()
+            catalog.cancel_discovery()
+    assert catalog.automatic_mode("camera") is None
+
+
 def test_custom_size_queries_own_rates_and_caches_until_refresh():
     device = replace(_device(_mode()), resolution_ranges=(LocalVideoResolutionRange(
         CameraMediaType.JPEG, "MJPG", 640, 1920, 16, 480, 1080, 8,
@@ -131,6 +232,62 @@ def test_custom_size_queries_own_rates_and_caches_until_refresh():
     catalog.devices(refresh=True)
     assert catalog.modes(query) == queried
     assert calls == [query, query]
+
+
+@pytest.mark.parametrize("change", ["invalidate", "refresh", "refresh_pending"])
+def test_mode_query_rejects_inventory_changed_after_read(monkeypatch, change):
+    read, resume, refreshing, finish_refresh = (Event() for _ in range(4))
+    original = replace(_device(_mode(640, 480, numerator=5)), resolution_ranges=(
+        LocalVideoResolutionRange(CameraMediaType.JPEG, "MJPG", 640, 1920, 16, 480, 1080, 8),
+    ))
+    replacement = replace(original, display_name="Replacement camera", resolution_ranges=())
+    queried = _device(_mode(800, 600, numerator=15))
+    inventories = iter(([original], [replacement]))
+    queries = []
+
+    def discover():
+        devices = next(inventories)
+        if change == "refresh_pending" and devices == [replacement]:
+            refreshing.set()
+            assert finish_refresh.wait(3)
+        return devices
+
+    catalog = CameraCatalog(discover, lambda query: queries.append(query) or queried)
+    catalog.devices()
+    devices = catalog.devices
+
+    def paused_read():
+        snapshot = devices()
+        read.set()
+        assert resume.wait(3)
+        return snapshot
+
+    monkeypatch.setattr(catalog, "devices", paused_read)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pending = pool.submit(catalog.modes, LocalCameraModeQuery("camera", 800, 600))
+        refresh = None
+        try:
+            assert read.wait(3)
+            if change == "invalidate":
+                catalog.invalidate()
+                assert devices() == (replacement,)
+            elif change == "refresh":
+                assert devices(refresh=True) == (replacement,)
+            else:
+                refresh = pool.submit(devices, refresh=True)
+                assert refreshing.wait(3)
+            resume.set()
+            with pytest.raises(RuntimeError, match="inventory changed"):
+                pending.result(3)
+        finally:
+            resume.set()
+            finish_refresh.set()
+        if refresh is not None:
+            assert refresh.result(3) == (replacement,)
+
+    assert queries == []
+    assert devices() == (replacement,)
+    assert catalog.automatic_mode("camera") == replacement.formats[0]
 
 
 def test_invalidation_during_native_query_cannot_restore_stale_inventory():
@@ -154,6 +311,42 @@ def test_invalidation_during_native_query_cannot_restore_stale_inventory():
         release.set()
         assert old.result(5) == (_device(_mode()),)
     assert catalog.devices() == ()
+
+
+def test_mode_query_rejects_inventory_invalidated_during_discovery():
+    started, release = Event(), Event()
+    original = replace(_device(_mode()), resolution_ranges=(
+        LocalVideoResolutionRange(CameraMediaType.JPEG, "MJPG", 640, 1920, 16, 480, 1080, 8),
+    ))
+    replacement = _device(_mode(1280, 720))
+    discoveries, queries = [], []
+
+    def discover():
+        discoveries.append(True)
+        if len(discoveries) == 1:
+            started.set()
+            assert release.wait(3)
+            return [original]
+        return [replacement]
+
+    catalog = CameraCatalog(
+        discover, lambda query: queries.append(query) or _device(_mode(800, 600)),
+    )
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(catalog.modes, LocalCameraModeQuery("camera", 800, 600))
+        try:
+            assert started.wait(3)
+            catalog.invalidate()
+            assert catalog.devices() == (replacement,)
+        finally:
+            release.set()
+        with pytest.raises(RuntimeError, match="inventory changed"):
+            pending.result(3)
+
+    assert discoveries == [True, True]
+    assert queries == []
+    assert catalog.devices() == (replacement,)
+    assert catalog.automatic_mode("camera") == replacement.formats[0]
 
 
 def test_failed_custom_size_query_can_retry_and_does_not_merge_other_sizes():
@@ -181,6 +374,7 @@ def test_automatic_mode_resolves_physical_identity_without_changing_native_id(mo
     native_id = "Current label:USB-DEVICE" if platform == "win32" else "Camera"
     device = replace(_device(_mode()), device_id=native_id)
     catalog = CameraCatalog(lambda: [device])
+    catalog.devices()
     assert catalog.automatic_mode(alias) == (_mode() if matched else None)
     assert catalog.devices()[0].device_id == native_id
 

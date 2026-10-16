@@ -349,6 +349,7 @@ class _PendingRequest:
     is_liveness_probe: bool
     converter: Callable[[SceneIpcEnvelope], object]
     future: Future[object]
+    is_camera_metadata: bool = False
 
 
 class SubprocessSceneEngine:
@@ -1433,6 +1434,9 @@ class SubprocessSceneEngine:
                 is_liveness_probe=is_liveness_probe,
                 converter=cast(Callable[[SceneIpcEnvelope], object], converter),
                 future=result,
+                is_camera_metadata=message_type in {
+                    "list_local_cameras", "query_local_camera_modes",
+                },
             )
             self._request_count += 1
         try:
@@ -1512,7 +1516,10 @@ class SubprocessSceneEngine:
                 if now_ms > pending.deadline_monotonic_ms
             ]
             pending_requests = [self._pending.pop(request_id) for request_id in expired]
-            if any(not pending.is_liveness_probe for pending in pending_requests):
+            if any(
+                not pending.is_liveness_probe and not pending.is_camera_metadata
+                for pending in pending_requests
+            ):
                 self._last_command_timeout_monotonic = now
         for pending in pending_requests:
             if not pending.future.done():
@@ -1541,6 +1548,7 @@ class SubprocessSceneEngine:
                 if (
                     pending.process_generation == self._process_generation
                     and not pending.is_liveness_probe
+                    and not pending.is_camera_metadata
                 )
             )
             oldest = min(
