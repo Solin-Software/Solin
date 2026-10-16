@@ -46,5 +46,15 @@
     "title_types": ["docs", "documentation"],
     "files": ["*.md"],
     "release_heading": "Documentation"
+  },
+  {
+    "name": "skip-changelog",
+    "color": "ededed",
+    "description": "Exclude this pull request from the release changelog",
+    "title_types": [],
+    "title_prefixes": ["chore(release)"],
+    "files": [],
+    "release_heading": null,
+    "release_exclude": true
   }
 ]

@@ -24,6 +24,14 @@ ROOT = "repos/Solin-Software/Solin"
     ("ci: cache builds", {"github_actions"}),
     ("deps: update runtime", {"dependencies"}),
     ("chore(deps-dev): update pytest", {"dependencies"}),
+    ("chore(release): prepare 26.32.0", {"skip-changelog"}),
+    ("chore(release)!: prepare 26.32.0", {"skip-changelog"}),
+    ("chore: maintain packaging", set()),
+    ("chore(releases): prepare packaging", set()),
+    ("fix(release): restore publication", {"bug"}),
+    ("feat(release): add validation", {"enhancement"}),
+    ("chore(release):", set()),
+    ("prefix chore(release): prepare version", set()),
     ("fix(deps): update runtime", {"bug", "dependencies"}),
     ("i18n: update Portuguese", {"translations"}),
     ("l10n: update Portuguese", {"translations"}),
@@ -159,6 +167,47 @@ def test_full_reconciliation_adds_without_replacing_manual_labels_and_removes_on
         (f"{ROOT}/issues/12/labels", "POST", {"labels": ["documentation", "enhancement"]}),
         (f"{ROOT}/issues/12/labels/bug", "DELETE", None),
     ]
+
+
+def test_selectorless_label_is_never_suggested_or_removed_even_if_added_by_the_bot():
+    rules = [{**rule, "title_prefixes": []} for rule in RULES]
+    assert "skip-changelog" not in labels.suggested_labels("skip-changelog: hide entry", [], RULES)
+    api = GitHub()
+    api.pull.update(title="Free title", labels=[{"name": "skip-changelog"}])
+    api.files = [{"filename": "src/main.py"}]
+    api.events = [event("skip-changelog")]
+
+    assert labels.apply_labels("Solin-Software/Solin", 12, rules, api) == labels.LabelUpdate((), ())
+    assert api.pull["labels"] == [{"name": "skip-changelog"}]
+    assert api.writes == []
+
+
+@pytest.mark.parametrize(("title", "current", "history", "expected"), [
+    ("chore(release): prepare version", set(), [], labels.LabelUpdate(("skip-changelog",), ())),
+    ("fix(release): restore publication", {"skip-changelog"}, [event("skip-changelog")],
+     labels.LabelUpdate(("bug",), ("skip-changelog",))),
+    ("chore(release): prepare version", set(),
+     [event("skip-changelog"), event("skip-changelog", "unlabeled", "maintainer")],
+     labels.LabelUpdate((), ())),
+    ("chore: maintain packaging", {"skip-changelog"},
+     [event("skip-changelog", actor="maintainer")], labels.LabelUpdate((), ())),
+])
+def test_release_exclusion_follows_title_changes_and_manual_overrides(title, current, history, expected):
+    api = GitHub()
+    api.pull.update(title=title, labels=[{"name": name} for name in current])
+    api.files = [{"filename": "src/main.py"}]
+    api.events = history
+    assert labels.apply_labels("Solin-Software/Solin", 12, RULES, api) == expected
+    assert {label["name"] for label in api.pull["labels"]} == (current | set(expected.add)) - set(expected.remove)
+
+
+def test_scoped_title_rules_are_driven_by_the_catalog_and_combine_with_files():
+    rules = [{"name": "maintenance", "title_types": [], "title_prefixes": ["chore(build)"],
+              "files": []}, *RULES]
+    assert labels.suggested_labels("chore(build)!: refresh packaging", [], rules) == {"maintenance"}
+    assert labels.suggested_labels("chore(release): prepare version", [{"filename": "README.md"}], rules) == {
+        "skip-changelog", "documentation",
+    }
 
 
 def test_manual_remove_and_readd_during_delete_restores_the_selected_label():

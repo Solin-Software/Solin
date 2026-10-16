@@ -1087,6 +1087,63 @@ def test_labels_are_case_insensitive_and_deduplicated() -> None:
     assert re.findall(r"^#### (.+)$", result.markdown(), re.MULTILINE) == ["Bug fixes"]
 
 
+@pytest.mark.parametrize("labels", [
+    ("skip-changelog",),
+    ("bug", "enhancement", "github_actions", "documentation", "SKIP-CHANGELOG"),
+])
+def test_excluded_pr_hides_its_issues_without_commit_fallback_or_changing_the_range(labels) -> None:
+    api = issue_api([], detail_replies=[pull_detail([issue_node()], labels=labels)])
+    credits = collect_single(api)
+
+    assert len(credits.changes) == 1
+    assert credits.changes[0].reference == "PR #7"
+    assert credits.changes[0].issues
+    assert credits.interval == ContributionRange(BASE, COMMIT, (COMMIT,))
+    assert credits.markdown() == (
+        f"{START}\n<!-- contribution-range: {BASE}..{COMMIT} -->\n{END}"
+    )
+
+
+def test_exclusion_preserves_visible_prs_direct_commits_and_shared_issue_links() -> None:
+    issue = RelatedIssue("#3", f"https://github.com/{REPOSITORY}/issues/3")
+    skipped = replace(
+        pr_change(("skipped-author",)), labels=("bug", "skip-changelog"), issues=(issue,)
+    )
+    visible = replace(
+        pr_change(("visible-author",), number=8), labels=("enhancement",), issues=(issue,)
+    )
+    direct = direct_change(HEAD)
+    credits = Credits(INTERVAL, (skipped, visible, direct), ())
+
+    rendered = credits.markdown()
+
+    assert "PR #7" not in rendered
+    assert "skipped-author" not in rendered
+    assert "Bug fixes" not in rendered
+    assert re.findall(r"^#### (.+)$", rendered, re.MULTILINE) == [
+        "Features and improvements", "Other changes",
+    ]
+    assert "[PR #8]" in rendered
+    assert f"[Commit {HEAD[:7]}]" in rendered
+    assert f"Related issue: [#3]({issue.url})." in rendered
+    assert credits.changes == (skipped, visible, direct)
+
+
+def test_adding_and_removing_exclusion_updates_only_the_managed_block() -> None:
+    credits = Credits(INTERVAL, (pr_change(("alice",)),), ())
+    prefix = f"Reviewed notes\r\n<!-- source-commit: {HEAD} -->\r\n"
+    suffix = "\r\nReviewed footer  \r\n"
+    original = prefix + credits.markdown() + suffix
+    excluded = replace(credits, changes=(replace(credits.changes[0], labels=("skip-changelog",)),))
+
+    hidden = update_body(original, excluded)
+
+    assert hidden == prefix + excluded.markdown() + suffix
+    assert recorded_base(hidden, HEAD) == BASE
+    assert update_body(hidden, excluded) == hidden
+    assert update_body(hidden, credits) == original
+
+
 def test_label_and_issue_connections_paginate_independently_without_nested_commit_queries() -> None:
     cursor = 'next-"page\\cursor'
     ignored = tuple(f"unrecognized-{number}" for number in range(100))
@@ -1176,6 +1233,7 @@ def test_catalog_defines_headings_priority_and_order_without_automation_imports(
                 {"name": "enhancement", "release_heading": "Renamed improvements"},
                 {"name": "bug", "release_heading": "Renamed repairs"},
                 {"name": "internal", "release_heading": None},
+                {"name": "hidden", "release_heading": None, "release_exclude": True},
             ]
         ),
         encoding="utf-8",
@@ -1186,6 +1244,7 @@ def test_catalog_defines_headings_priority_and_order_without_automation_imports(
         replace(pr_change((), number=2), labels=("bug", "enhancement")),
         replace(pr_change((), number=3), labels=("custom", "bug")),
         replace(pr_change((), number=4), labels=("internal",)),
+        replace(pr_change((), number=5), labels=("hidden", "bug")),
     )
 
     rendered = Credits(INTERVAL, changes, ()).markdown()
@@ -1209,6 +1268,9 @@ def test_catalog_defines_headings_priority_and_order_without_automation_imports(
         [{"name": "", "release_heading": "Repairs"}],
         [{"name": "bug", "release_heading": ""}],
         [{"name": "bug", "release_heading": []}],
+        [{"name": "skip", "release_exclude": "true"}],
+        [{"name": "skip", "release_exclude": 1}],
+        [{"name": "skip", "release_exclude": True, "release_heading": "Hidden"}],
         [{"name": "bug", "release_heading": "Repairs\nInjected heading"}],
         [
             {"name": "bug", "release_heading": "Repairs"},

@@ -46,8 +46,8 @@ _PULL_FIELDS = {
 }
 
 
-def _release_groups() -> tuple[tuple[str, str], ...]:
-    """Read headings in catalog order; the first matching label wins.
+def _release_rules() -> tuple[dict[str, str], frozenset[str]]:
+    """Read category priority and unconditional exclusions from the shared catalog.
 
     The shared catalog defines priority (bug > enhancement > github_actions >
     dependencies > translations > documentation) and section order. Unmatched
@@ -56,7 +56,8 @@ def _release_groups() -> tuple[tuple[str, str], ...]:
     catalog = json.loads(_LABELS_PATH.read_text(encoding="utf-8"))
     if not isinstance(catalog, list):
         raise ValueError("Invalid release label catalog")
-    groups: list[tuple[str, str]] = []
+    groups: dict[str, str] = {}
+    excluded: set[str] = set()
     names: set[str] = set()
     for entry in catalog:
         if not isinstance(entry, dict):
@@ -66,12 +67,18 @@ def _release_groups() -> tuple[tuple[str, str], ...]:
         if not isinstance(name, str) or not name.strip() or name.casefold() in names:
             raise ValueError("Invalid or duplicate release label name")
         names.add(name.casefold())
+        exclude = entry.get("release_exclude", False)
+        if not isinstance(exclude, bool) or (exclude and heading is not None):
+            raise ValueError("Invalid release label exclusion")
+        if exclude:
+            excluded.add(name.casefold())
+            continue
         if heading is None:
             continue
         if not isinstance(heading, str) or not heading.strip() or len(heading.splitlines()) != 1:
             raise ValueError("Invalid release label heading")
-        groups.append((name.casefold(), heading))
-    return tuple(groups)
+        groups[name.casefold()] = heading
+    return groups, frozenset(excluded)
 
 
 class GitHubAPI(Protocol):
@@ -146,20 +153,23 @@ class Credits:
     def markdown(self) -> str:
         text = ""
         if self.changes:
-            groups = _release_groups()
-            sections: dict[str, list[str]] = {heading: [] for _, heading in groups}
+            groups, excluded = _release_rules()
+            sections: dict[str, list[str]] = {heading: [] for heading in groups.values()}
             sections.setdefault("Other changes", [])
             for change in self.changes:
                 labels = {label.casefold() for label in change.labels}
+                if labels & excluded:
+                    continue
                 heading = next(
-                    (heading for label, heading in groups if label in labels), "Other changes"
+                    (heading for label, heading in groups.items() if label in labels), "Other changes"
                 )
                 sections[heading].append(change.markdown())
-            text = "### Related pull requests and issues\n\n" + "".join(
-                f"#### {heading}\n\n" + "\n".join(rows) + "\n\n"
-                for heading, rows in sections.items()
-                if rows
-            )
+            if any(sections.values()):
+                text = "### Related pull requests and issues\n\n" + "".join(
+                    f"#### {heading}\n\n" + "\n".join(rows) + "\n\n"
+                    for heading, rows in sections.items()
+                    if rows
+                )
         return (
             f"{START}\n{text}"
             f"<!-- contribution-range: {self.interval.base}..{self.interval.head} -->\n{END}"

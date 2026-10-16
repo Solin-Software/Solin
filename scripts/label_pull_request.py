@@ -22,6 +22,7 @@ def suggested_labels(title: str, files: list[dict], rules: list[dict]) -> set[st
     prefix = _TITLE.match(title)
     kind = prefix["type"] if prefix else None
     scope = prefix["scope"] if prefix else None
+    title_prefix = f"{kind}({scope})" if scope is not None else kind
     paths = {
         path
         for entry in files
@@ -32,6 +33,7 @@ def suggested_labels(title: str, files: list[dict], rules: list[dict]) -> set[st
         rule["name"]
         for rule in rules
         if kind in rule["title_types"]
+        or title_prefix in rule.get("title_prefixes", [])
         or (rule["name"] == "dependencies" and scope in {"deps", "deps-dev"})
         or any(fnmatchcase(path, pattern) for path in paths for pattern in rule["files"])
     }
@@ -139,7 +141,8 @@ def apply_labels(repository: str, number: int, rules: list[dict], api: Callable 
         raise ValueError("Incomplete pull request file listing; labels were not changed")
     events = list(pages(api, f"{root}/issues/{number}/events"))
     suggested = suggested_labels(pull["title"], files, rules)
-    managed = {rule["name"] for rule in rules}
+    managed = {rule["name"] for rule in rules
+               if rule["title_types"] or rule.get("title_prefixes") or rule["files"]}
     update = label_update(
         suggested, {label["name"] for label in pull["labels"]}, events, managed,
     )

@@ -94,8 +94,9 @@ silently crediting all repository history.
 The managed block records both commit boundaries. Subsequent updates preserve
 that recorded interval even if an older release is published later.
 
-Every merged pull request whose merge commit belongs to the interval is included,
-including documentation, build, and release-preparation PRs. Entries use linked
+Every merged pull request whose merge commit belongs to the interval is included
+unless it carries the `skip-changelog` label. Documentation,
+build, and release-preparation PRs are otherwise included. Entries use linked
 PR titles grouped by their current labels, without filtering by Conventional
 Commit type or title format. A Conventional Commit prefix, when present, is
 removed only for presentation; the original title remains unchanged on GitHub.
@@ -108,6 +109,14 @@ Each PR appears in exactly one category. The ordered label catalog in
 category wins; a bug fix that also changes Markdown remains under **Bug fixes**.
 PRs with no recognized label and direct commits appear under **Other changes**.
 Empty categories are omitted. Labels on related issues do not classify their PR.
+`skip-changelog` overrides every category and hides only that PR's entry and its
+related issue links. The labeling workflow assigns it to `chore(release):` PRs
+automatically and removes its own assignment if the title no longer matches.
+Manual additions and removals override automation for that PR.
+Removing the label restores the entry on the next generation. Exclusions do not
+change the verified commit interval, produce fallback commit entries, edit reviewed
+notes, or skip any release build, validation, or publication step. If all entries
+are excluded, only the managed interval markers remain, without empty headings.
 Manual PR label changes are reflected the next time the appendix is generated;
 already published releases change only through the explicit contributor update.
 

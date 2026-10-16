@@ -23,6 +23,12 @@ the verified release interval, including documentation, build, and release
 preparation, grouped by current PR labels without a Conventional Commit title
 requirement. Each entry appears once, and unclassified PRs and direct commits use
 **Other changes**.
+The `skip-changelog` label excludes a PR and its related issue links from this
+block regardless of its category. It is assigned automatically to `chore(release):`
+PRs and can also be applied manually; manual additions and removals override
+automation for that PR. It does not affect reviewed
+notes, the commit interval, builds, or publication. Removing it restores the
+entry on the next generation.
 Empty categories are omitted; the label catalog and priority are documented in
 [contributor credits](../releases.md#contributor-credits).
 Prefixes are removed only for presentation. PR entries credit the PR author and

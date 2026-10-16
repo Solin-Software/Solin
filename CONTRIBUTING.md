@@ -156,6 +156,7 @@ rules, so a PR can receive multiple labels:
 | `documentation` | `docs:`, `documentation:` | Markdown files |
 | `dependencies` | `deps:`, or a `deps` / `deps-dev` scope | Root `requirements*.txt` and `pyproject.toml` manifests |
 | `github_actions` | `ci:` | `.github/workflows/` YAML and `.github/actions/` files |
+| `skip-changelog` | `chore(release):` | None |
 | `translations` | `i18n:`, `l10n:` | Qt `.ts` / `.qm` catalogs and locale JSON under `src/solin/resources/translations/` |
 
 Scopes and breaking-change markers are supported, for example
@@ -179,3 +180,12 @@ GitHub API and runs only the trusted base revision, including for PRs from forks
 The generated release appendix groups PRs by their current labels. Each PR is
 listed once; see [contributor credits](docs/releases.md#contributor-credits) for
 category priority and the fallback for unclassified changes.
+
+The workflow assigns `skip-changelog` to `chore(release):` PRs automatically.
+Other `chore:` titles and other types with a `release` scope do not trigger it.
+You can also apply it manually to administrative PRs that would add noise to
+the changelog. Manual additions and removals take precedence, as with other labels.
+The label omits a PR and its related issue links from this appendix, regardless
+of its other labels. Removing it restores the entry on the next generation.
+It does not skip builds, validation, version preparation, or publication,
+and does not edit the reviewed release notes.
