@@ -38,15 +38,26 @@ python scripts/release.py prepare promote
 ```
 
 The command calculates the next version, rejects existing local or remote tags,
-updates the canonical version, and creates the English release-note draft. It
+updates the canonical version, and creates the English release-note file. A beta
+starts with an empty `en.md`, selecting automatic notes without an editorial step.
+Stable preparations start with a draft that requires review. The command
 does not create a tag or publish anything. The generated notes and version
 change are reviewed together in a focused pull request, which also receives the
 normal quality checks.
 
 Release notes live under `docs/release-notes/<tag>/<locale>.md`. `en.md` is
-required before tagging. Other files use an existing application locale such as
+required before tagging. An empty file is allowed only for a beta; a missing
+file or a pending review marker still fails validation. During publication, a beta
+with empty English notes uses the same grouped PR and issue entries as the GitHub
+appendix for the manifest and in-app update dialog. Filled notes take precedence;
+empty optional translations fall back to English. If no entries remain after
+exclusions, the fallback is a link to the verified commit comparison.
+Other files use an existing application locale such as
 `pt_BR.md`; the updater falls back to English when a translation is absent.
 Stable notes consolidate the user-visible changes that were exercised in beta.
+Promotion carries forward only written beta notes into the stable review draft;
+automatic beta notes are not copied. The stable draft must still be completed
+and reviewed, including changes from betas without written notes.
 
 Conventional Commits and pull-request labels can organize the draft, but they do
 not choose a CalVer increment. The release intent remains an explicit reviewed
@@ -74,8 +85,10 @@ A beta is marked as a prerelease and never becomes `latest`.
 ### Contributor credits
 
 Publication appends a managed English **Related pull requests and issues** block
-to the GitHub Release body. The reviewed English and translated changelogs,
-manifest, and in-app notes stay unchanged.
+to the GitHub Release body. Written English and translated changelogs stay
+unchanged. When a beta has empty English notes, the manifest and in-app notes
+use the visible content from that same contribution snapshot, without duplicating
+the block in the GitHub body. Generation never writes back to source note files.
 GitHub account mentions on contribution entries provide the release's contributor
 avatars.
 
@@ -94,12 +107,33 @@ silently crediting all repository history.
 The managed block records both commit boundaries. Subsequent updates preserve
 that recorded interval even if an older release is published later.
 
-Every merged pull request whose merge commit belongs to the interval is included,
-including documentation, build, and release-preparation PRs. Entries use linked
-PR titles without categories or filtering by labels, Conventional Commit type,
-or title format. A Conventional Commit prefix, when present, is removed only for
-presentation; the original title remains unchanged on GitHub. Titles without
-that format are also included.
+Every merged pull request whose merge commit belongs to the interval is included
+unless it carries the `skip-changelog` label. Documentation,
+build, and release-preparation PRs are otherwise included. Entries use linked
+PR titles grouped by their current labels, without filtering by Conventional
+Commit type or title format. A Conventional Commit prefix, when present, is
+removed only for presentation; the original title remains unchanged on GitHub.
+Titles without that format are also included.
+
+Each PR appears in exactly one category. The ordered label catalog in
+[`.github/labels.json`](../.github/labels.json) defines category names and priority:
+**Bug fixes**, **Features and improvements**, **CI/CD**, **Dependencies**,
+**Translations**, then **Documentation**. When several labels match, the first
+category wins; a bug fix that also changes Markdown remains under **Bug fixes**.
+PRs with no recognized label and direct commits appear under **Other changes**.
+Empty categories are omitted. Labels on related issues do not classify their PR.
+`skip-changelog` overrides every category and hides only that PR's entry and its
+related issue links. The labeling workflow assigns it to `chore(release):` PRs
+automatically and removes its own assignment if the title no longer matches.
+Manual additions and removals override automation for that PR.
+Removing the label restores the entry on the next generation. Exclusions do not
+change the verified commit interval, produce fallback commit entries, edit reviewed
+notes, or skip any release build, validation, or publication step. If all entries
+are excluded, only the managed interval markers remain, without empty headings.
+Manual PR label changes are reflected the next time the appendix is generated;
+already published releases change only through the explicit contributor update.
+That update changes only the GitHub body; automatic notes already embedded in
+a published manifest remain the snapshot taken during publication.
 
 PR entries credit the PR author, authors of included associated Git commits, and
 Git coauthors recognized through `Co-authored-by` identities. Bots are excluded
@@ -110,11 +144,14 @@ linked commit title with its human author and Git coauthors, using the same
 prefix removal for presentation. Unlinked commit authors produce a warning so
 their GitHub email association can be corrected.
 
-An issue is linked only when GitHub records its actual closure by an included
-merged PR and its state is `CLOSED` with state reason `COMPLETED`. A mention,
-a closing keyword, or a suggested closing link alone is insufficient. Open,
-reopened, and not-planned issues are excluded, as are issues closed by a PR
-outside the interval. Issue entries do not credit issue authors.
+Related issues come from an included merged PR's closing links and explicit
+references in its title or description: `#123`, `owner/repository#123`, or a
+GitHub issue URL. References are verified as issues; pull request numbers and
+missing issues are skipped. Comments are not scanned. Issue state, closure
+reason, and which PR closed it do not affect inclusion. These links provide
+context, without asserting that the release fixes every related issue or
+crediting issue authors. An issue already referenced in the PR title is not
+appended again to that entry.
 
 For an already published release, run **Release contributors** from Actions.
 Supply the existing tag and select `apply` to update it; the default is a preview.
@@ -141,7 +178,7 @@ update is a no-op. It does not rebuild packages, upload assets, move tags, chang
 the release channel, or change `latest`.
 
 Publication and the manual workflow require **Pull requests: read** and
-**Issues: read** to resolve merged PRs, their authors, and actual issue closures,
+**Issues: read** to resolve merged PRs, their authors, and related issues,
 alongside **Contents: write** to update the release body.
 
 The manual workflow normally uses `GITHUB_TOKEN`. GitHub can require additional

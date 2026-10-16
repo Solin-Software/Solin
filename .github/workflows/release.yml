@@ -82,5 +82,4 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/release.py manifest --artifacts dist --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"
           python scripts/release.py publish --artifacts dist --tag "$RELEASE_TAG" --sha "$RELEASE_SHA"

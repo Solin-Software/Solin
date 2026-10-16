@@ -195,8 +195,8 @@ def test_quality_gate_requires_an_explicit_valid_classification(
     assert (result.returncode == 0) is accepted, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("notes", ["reviewed", "missing", "outdated", "placeholder"])
-def test_reduced_preparation_requires_reviewed_notes_for_the_checked_out_version(
+@pytest.mark.parametrize("notes", ["reviewed", "empty", "missing", "outdated", "placeholder"])
+def test_reduced_preparation_accepts_empty_beta_notes_but_requires_matching_files(
     notes, tmp_path, monkeypatch,
 ):
     from scripts import release
@@ -212,7 +212,7 @@ def test_reduced_preparation_requires_reviewed_notes_for_the_checked_out_version
         tag = "26.32.0-beta.3" if notes == "outdated" else "26.32.0-beta.4"
         directory = note_root / tag
         directory.mkdir(parents=True)
-        content = "<!-- TODO: Review notes. -->" if notes == "placeholder" else "Reviewed changes"
+        content = {"placeholder": "<!-- TODO: Review notes. -->", "empty": ""}.get(notes, "Reviewed changes")
         (directory / "en.md").write_text(content, encoding="utf-8")
     monkeypatch.setattr(release, "ROOT", tmp_path)
     monkeypatch.setattr(release, "NOTES", note_root)
@@ -221,7 +221,7 @@ def test_reduced_preparation_requires_reviewed_notes_for_the_checked_out_version
         if step.get("name") == "Validate release preparation"
     )
     script = preparation["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    if notes == "reviewed":
+    if notes in {"reviewed", "empty"}:
         exec(compile(script, "release-preparation-notes", "exec"), {})
     else:
         with pytest.raises(ValueError):

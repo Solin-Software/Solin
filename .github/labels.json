@@ -1,0 +1,60 @@
+[
+  {
+    "name": "bug",
+    "color": "d73a4a",
+    "description": "Something isn't working",
+    "title_types": ["fix", "bug"],
+    "files": [],
+    "release_heading": "Bug fixes"
+  },
+  {
+    "name": "enhancement",
+    "color": "a2eeef",
+    "description": "New features and improvements",
+    "title_types": ["feat", "enhancement", "refactor", "perf"],
+    "files": [],
+    "release_heading": "Features and improvements"
+  },
+  {
+    "name": "github_actions",
+    "color": "000000",
+    "description": "Changes to CI/CD workflows",
+    "title_types": ["ci"],
+    "files": [".github/workflows/*.yml", ".github/workflows/*.yaml", ".github/actions/*"],
+    "release_heading": "CI/CD"
+  },
+  {
+    "name": "dependencies",
+    "color": "0366d6",
+    "description": "Changes to dependency manifests and locks",
+    "title_types": ["deps"],
+    "files": ["requirements*.txt", "pyproject.toml"],
+    "release_heading": "Dependencies"
+  },
+  {
+    "name": "translations",
+    "color": "fbca04",
+    "description": "Changes to translation catalogs and locale metadata",
+    "title_types": ["i18n", "l10n"],
+    "files": ["src/solin/resources/translations/*.ts", "src/solin/resources/translations/*.qm", "src/solin/resources/translations/locales/*.json"],
+    "release_heading": "Translations"
+  },
+  {
+    "name": "documentation",
+    "color": "0075ca",
+    "description": "Improvements or additions to documentation",
+    "title_types": ["docs", "documentation"],
+    "files": ["*.md"],
+    "release_heading": "Documentation"
+  },
+  {
+    "name": "skip-changelog",
+    "color": "ededed",
+    "description": "Exclude this pull request from the release changelog",
+    "title_types": [],
+    "title_prefixes": ["chore(release)"],
+    "files": [],
+    "release_heading": null,
+    "release_exclude": true
+  }
+]

@@ -1,5 +1,6 @@
 name: Improvement suggestion
 description: Suggest a feature or an improvement to Solin or its documentation.
+labels: [enhancement]
 body:
   - type: markdown
     attributes:

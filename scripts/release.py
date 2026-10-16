@@ -1,4 +1,4 @@
-"""Prepare, validate and publish an explicitly reviewed Solin release."""
+"""Prepare, validate and publish Solin releases with channel-specific notes."""
 from __future__ import annotations
 
 import argparse
@@ -93,12 +93,16 @@ def load_note_directory(directory: Path) -> LocalizedReleaseNotes:
     translations = {
         path.stem: path.read_text(encoding="utf-8").strip() for path in directory.glob("*.md")
     }
-    if not translations.get("en") or "<!-- TODO" in translations["en"]:
+    if ("en" not in translations or "<!-- TODO" in translations["en"]
+            or (not version.is_beta and not translations["en"])):
         raise ValueError(f"Reviewed English notes required for {directory.name}")
     locales = ROOT / "src/solin/resources/translations/locales"
     if any(not (locales / f"{locale}.json").exists() for locale in translations):
         raise ValueError(f"Unknown note locale in {directory.name}")
-    return LocalizedReleaseNotes(version, translations)
+    # Empty optional translations fall back to English, including generated beta notes.
+    return LocalizedReleaseNotes(version, {
+        locale: markdown for locale, markdown in translations.items() if markdown or locale == "en"
+    })
 
 
 def load_notes(target: ReleaseVersion) -> tuple[LocalizedReleaseNotes, ...]:
@@ -134,7 +138,7 @@ def calculate_next(current: ReleaseVersion, intent: str, year: int) -> ReleaseVe
         suffix = ""
     elif intent == "beta":
         if current.is_beta:
-            suffix = f"b{current.value.pre[1] + 1}"
+            suffix = f"b{current.build + 1}"
         else:
             yy, line, patch = (year, line + 1, 0) if yy == year else (year, 1, 0)
             suffix = "b1"
@@ -168,7 +172,7 @@ def prepare(intent: str) -> None:
     if destination.exists():
         raise ValueError("Release notes already exist; refusing to overwrite them")
     review_marker = "<!-- TODO: Review user-facing release notes before tagging. -->\n\n"
-    english = review_marker + "### Changes\n\n"
+    english = "" if version.is_beta else review_marker + "### Changes\n\n"
     if intent == "promote":
         beta_notes = [
             load_note_directory(path)
@@ -179,10 +183,12 @@ def prepare(intent: str) -> None:
             and candidate.base == current.base
         ]
         beta_notes.sort(key=lambda note: note.version)
-        english = review_marker + "\n\n".join(
+        consolidated = "\n\n".join(
             f"### Changes tested in {note.version.display_version}\n\n{note.translations['en']}"
             for note in beta_notes
+            if note.translations["en"]
         )
+        english = review_marker + (consolidated or "### Changes\n\n")
     version_path = ROOT / "src/solin/version.py"
     version_temporary = version_path.with_suffix(".py.tmp")
     try:
@@ -201,7 +207,8 @@ def prepare(intent: str) -> None:
         except OSError:
             pass
         raise
-    print(f"Prepared {version.tag}. Review notes and open a release preparation PR; no tag was created.")
+    instruction = "Empty English notes use automatic changes." if version.is_beta else "Review notes."
+    print(f"Prepared {version.tag}. {instruction} Open a release preparation PR; no tag was created.")
 
 
 def verify_identity(tag: str, sha: str) -> ReleaseVersion:
@@ -314,7 +321,9 @@ def contributors(tag: str, *, apply: bool = False) -> None:
             stream.write(summary)
 
 
-def create_manifest(directory: Path, tag: str, sha: str) -> ReleaseManifest:
+def create_manifest(
+    directory: Path, tag: str, sha: str, *, credits: Credits | None = None,
+) -> ReleaseManifest:
     version = verify_identity(tag, sha)
     assets = []
     for (platform, architecture, kind), (_, minimum_os) in REQUIRED_ASSETS.items():
@@ -324,7 +333,20 @@ def create_manifest(directory: Path, tag: str, sha: str) -> ReleaseManifest:
             raise ValueError(f"Missing distribution asset: {filename}")
         assets.append(ReleaseAsset(platform, architecture, kind, filename,
                                    path.stat().st_size, digest_file(path), minimum_os))
-    manifest = ReleaseManifest(version, tag, version.channel, sha, tuple(assets), load_notes(version))
+    source_notes = load_notes(version)
+    note = source_notes[0]
+    if not note.translations["en"]:
+        if credits is None:
+            credits = release_credits(version, sha, published_releases())
+        generated = credits.content_markdown().strip()
+        if not generated:
+            # No visible entries (for example, every PR has skip-changelog).
+            generated = (
+                f"[Full changelog](https://github.com/{RELEASE_REPOSITORY}/compare/"
+                f"{credits.interval.base}...{credits.interval.head})"
+            )
+        note = LocalizedReleaseNotes(version, {**note.translations, "en": generated})
+    manifest = ReleaseManifest(version, tag, version.channel, sha, tuple(assets), (note,))
     if ReleaseManifest.parse(manifest.to_dict()) is None:
         raise ValueError("Generated manifest does not satisfy the distribution contract")
     manifest_path = directory / MANIFEST_FILENAME
@@ -335,22 +357,26 @@ def create_manifest(directory: Path, tag: str, sha: str) -> ReleaseManifest:
     sums = [f"{asset.sha256}  {asset.filename}" for asset in assets]
     sums.append(f"{digest_file(manifest_path)}  {MANIFEST_FILENAME}")
     (directory / "SHA256SUMS").write_text("\n".join(sums) + "\n", encoding="utf-8")
-    (directory / "release-notes.md").write_text(notes_markdown((manifest.notes[0],)), encoding="utf-8")
+    # GitHub gets the managed block separately; do not duplicate the fallback there.
+    (directory / "release-notes.md").write_text(notes_markdown(source_notes), encoding="utf-8")
     return manifest
 
 
 def publish(directory: Path, tag: str, sha: str) -> None:
-    manifest = create_manifest(directory, tag, sha)
     releases = published_releases()
     existing = next((r for r in releases if r.get("tag_name") == tag), None)
     if existing is not None and not existing.get("draft"):
         raise ValueError("Published releases are immutable; create a new version")
-    body = (directory / "release-notes.md").read_text(encoding="utf-8")
     marker = f"<!-- source-commit: {sha} -->"
     if existing is not None and marker not in str(existing.get("body", "")):
         raise ValueError("Existing draft was not created for this source SHA")
-    body = update_body(body + "\n" + marker, release_credits(
-        manifest.version, sha, releases, body=str(existing.get("body", "")) if existing else ""))
+    version = verify_identity(tag, sha)
+    credits = release_credits(
+        version, sha, releases, body=str(existing.get("body", "")) if existing else "",
+    )
+    manifest = create_manifest(directory, tag, sha, credits=credits)
+    body = (directory / "release-notes.md").read_text(encoding="utf-8")
+    body = update_body(body + "\n" + marker, credits)
     if existing is None:
         existing = gh_api(f"repos/{RELEASE_REPOSITORY}/releases", method="POST", payload={
             "tag_name": tag, "target_commitish": sha, "name": tag,

@@ -6,7 +6,9 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 import html
 import json
+from pathlib import Path
 import re
+import subprocess
 from typing import Protocol
 
 from solin.core.releases.version import ReleaseVersion
@@ -18,8 +20,19 @@ END = "<!-- solin-contributors:end -->"
 _SHA = re.compile(r"[0-9a-f]{40}")
 _LOGIN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}")
 _REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]+")
-_PREFIX = re.compile(r"^[a-z]+(?:\([^()\r\n]*\))?!?:\s*")
+_PREFIX = re.compile(r"^[a-z][a-z0-9]*(?:\([^()\r\n]*\))?!?:\s*")
+_REFERENCE = re.compile(
+    rf"https?://[^\s<>()\"'`\[\]]+|(?<![\w/&#])(?:(?P<repo>{_REPOSITORY.pattern}))?"
+    r"#(?P<number>[1-9][0-9]{0,9})(?![\w/])",
+    re.IGNORECASE,
+)
+_ISSUE_URL = re.compile(
+    rf"https://github\.com/(?P<repo>{_REPOSITORY.pattern})/issues/"
+    r"(?P<number>[1-9][0-9]{0,9})(?:[?#].*)?",
+    re.IGNORECASE,
+)
 _PAGE = "pageInfo { hasNextPage endCursor }"
+_LABELS_PATH = Path(__file__).resolve().parents[1] / ".github" / "labels.json"
 _FIELDS = {
     "authors": "nodes { user { login __typename } }",
     "associatedPullRequests": (
@@ -27,6 +40,45 @@ _FIELDS = {
         "repository { nameWithOwner } }"
     ),
 }
+_PULL_FIELDS = {
+    "closingIssuesReferences": "nodes { number repository { nameWithOwner } }",
+    "labels": "nodes { name }",
+}
+
+
+def _release_rules() -> tuple[dict[str, str], frozenset[str]]:
+    """Read category priority and unconditional exclusions from the shared catalog.
+
+    The shared catalog defines priority (bug > enhancement > github_actions >
+    dependencies > translations > documentation) and section order. Unmatched
+    PRs and direct commits belong to Other changes.
+    """
+    catalog = json.loads(_LABELS_PATH.read_text(encoding="utf-8"))
+    if not isinstance(catalog, list):
+        raise ValueError("Invalid release label catalog")
+    groups: dict[str, str] = {}
+    excluded: set[str] = set()
+    names: set[str] = set()
+    for entry in catalog:
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid release label catalog entry")
+        name = entry.get("name")
+        heading = entry.get("release_heading")
+        if not isinstance(name, str) or not name.strip() or name.casefold() in names:
+            raise ValueError("Invalid or duplicate release label name")
+        names.add(name.casefold())
+        exclude = entry.get("release_exclude", False)
+        if not isinstance(exclude, bool) or (exclude and heading is not None):
+            raise ValueError("Invalid release label exclusion")
+        if exclude:
+            excluded.add(name.casefold())
+            continue
+        if heading is None:
+            continue
+        if not isinstance(heading, str) or not heading.strip() or len(heading.splitlines()) != 1:
+            raise ValueError("Invalid release label heading")
+        groups[name.casefold()] = heading
+    return groups, frozenset(excluded)
 
 
 class GitHubAPI(Protocol):
@@ -55,11 +107,14 @@ class Change:
     url: str
     logins: tuple[str, ...]
     issues: tuple[RelatedIssue, ...] = ()
+    labels: tuple[str, ...] = ()
 
     def markdown(self) -> str:
         title = _PREFIX.sub("", self.title).strip() or self.title.strip()
         title = " ".join(title.split())
         title = title[:1].upper() + title[1:]
+        repository = "/".join(self.url.split("/")[3:5])
+        mentioned = _references(title, repository)
         # Titles are untrusted prose, not Markdown or an account attribution source.
         title = html.escape(title, quote=False)
         title = re.sub(r"([\\`*_\[\]~])", r"\\\1", title)
@@ -70,9 +125,14 @@ class Change:
         if self.logins:
             text += ", by " + " and ".join(f"@{login}" for login in self.logins)
         text += "."
-        if self.issues:
-            text += " Related " + ("issue: " if len(self.issues) == 1 else "issues: ")
-            text += ", ".join(f"[{issue.reference}]({issue.url})" for issue in self.issues) + "."
+        issues = tuple(
+            issue
+            for issue in self.issues
+            if not mentioned.keys() & _references(issue.url, repository).keys()
+        )
+        if issues:
+            text += " Related " + ("issue: " if len(issues) == 1 else "issues: ")
+            text += ", ".join(f"[{issue.reference}]({issue.url})" for issue in issues) + "."
         return text
 
 
@@ -90,16 +150,32 @@ class Credits:
                 accounts.setdefault(login.lower(), login)
         return tuple(accounts[key] for key in sorted(accounts))
 
+    def content_markdown(self) -> str:
+        """Render visible changes for both release bodies and updater notes."""
+        text = ""
+        if self.changes:
+            groups, excluded = _release_rules()
+            sections: dict[str, list[str]] = {heading: [] for heading in groups.values()}
+            sections.setdefault("Other changes", [])
+            for change in self.changes:
+                labels = {label.casefold() for label in change.labels}
+                if labels & excluded:
+                    continue
+                heading = next(
+                    (heading for label, heading in groups.items() if label in labels), "Other changes"
+                )
+                sections[heading].append(change.markdown())
+            if any(sections.values()):
+                text = "### Related pull requests and issues\n\n" + "".join(
+                    f"#### {heading}\n\n" + "\n".join(rows) + "\n\n"
+                    for heading, rows in sections.items()
+                    if rows
+                )
+        return text
+
     def markdown(self) -> str:
-        text = (
-            "### Related pull requests and issues\n\n"
-            + "\n".join(change.markdown() for change in self.changes)
-            + "\n\n"
-            if self.changes
-            else ""
-        )
         return (
-            f"{START}\n{text}"
+            f"{START}\n{self.content_markdown()}"
             f"<!-- contribution-range: {self.interval.base}..{self.interval.head} -->\n{END}"
         )
 
@@ -246,15 +322,48 @@ def _title(value: object) -> str:
     return value
 
 
-def _completed_issue(issue: dict) -> bool:
-    if issue.get("state") not in ("OPEN", "CLOSED"):
-        raise ValueError("Invalid GitHub issue state")
-    reason = issue.get("stateReason")
-    if "stateReason" not in issue or (
-        reason is not None and (not isinstance(reason, str) or not reason)
-    ):
-        raise ValueError("Invalid GitHub issue state reason")
-    return issue["state"] == "CLOSED" and reason == "COMPLETED"
+def _references(text: str, repository: str) -> dict[tuple[str, int], str]:
+    references: dict[tuple[str, int], str] = {}
+    for match in _REFERENCE.finditer(text):
+        if match["number"] is None:
+            match = _ISSUE_URL.fullmatch(match[0].rstrip(".,;:!?"))
+            if match is None:
+                continue
+        repo = match["repo"] or repository
+        if repo.split("/", 1)[1] not in {".", ".."}:
+            references.setdefault((repo.lower(), int(match["number"])), repo)
+    return references
+
+
+def _referenced_issue(api: GitHubAPI, repository: str, number: int) -> RelatedIssue | None:
+    try:
+        issue = api(f"repos/{repository}/issues/{number}")
+    except subprocess.CalledProcessError as error:
+        # A stale reference is harmless; authentication and transport failures are not.
+        try:
+            response = json.loads(error.stdout or "null")
+        except (ValueError, TypeError):
+            raise error from None
+        if isinstance(response, dict) and str(response.get("status")) == "404":
+            return None
+        raise
+    if not isinstance(issue, dict):
+        raise ValueError("GitHub referenced issue identity mismatch")
+    number = _number(issue.get("number"))
+    # GitHub issues and pull requests share the same number namespace and REST endpoint.
+    if "pull_request" in issue:
+        return None
+    url = issue.get("html_url")
+    if not isinstance(url, str):
+        raise ValueError("GitHub referenced issue URL mismatch")
+    canonical = _ISSUE_URL.fullmatch(url)
+    if canonical is None or canonical["number"] != str(number):
+        raise ValueError("GitHub referenced issue URL mismatch")
+    repository = _repository_name({"nameWithOwner": canonical["repo"]})
+    if url.lower() != f"https://github.com/{repository}/issues/{number}".lower():
+        raise ValueError("GitHub referenced issue URL mismatch")
+    # The issue endpoint follows transfers; use GitHub's canonical repository and number.
+    return RelatedIssue(f"{repository}#{number}", url)
 
 
 @dataclass(frozen=True)
@@ -265,65 +374,23 @@ class _Pull:
     login: str | None
 
 
-def _latest_closer(api: GitHubAPI, repository: str, number: int) -> tuple[int, str] | None:
-    """Use the latest closure event; an earlier PR may have been undone by reopening."""
-    cursor: str | None = None
-    cursors: set[str] = set()
-    while True:
-        before = f", before: {json.dumps(cursor)}" if cursor is not None else ""
-        fields = (
-            f"issue(number: {number}) {{ number state stateReason "
-            f"timelineItems(last: 100, itemTypes: [CLOSED_EVENT]{before}) {{ "
-            "nodes { ... on ClosedEvent { closer { __typename "
-            "... on PullRequest { number repository { nameWithOwner } } } } } "
-            "pageInfo { hasPreviousPage startCursor } } }"
-        )
-        issue = _repository_data(api, repository, fields).get("issue")
-        if not isinstance(issue, dict) or _number(issue.get("number")) != number:
-            raise ValueError("GitHub issue identity mismatch")
-        if not _completed_issue(issue):
-            return None
-        connection = issue.get("timelineItems")
-        if not isinstance(connection, dict) or not isinstance(connection.get("nodes"), list):
-            raise ValueError("Invalid GitHub issue timeline")
-        nodes = connection["nodes"]
-        page = connection.get("pageInfo")
-        if not isinstance(page, dict) or type(page.get("hasPreviousPage")) is not bool:
-            raise ValueError("Invalid GitHub issue pagination")
-        if nodes:
-            event = nodes[-1]
-            if not isinstance(event, dict) or "closer" not in event:
-                raise ValueError("Invalid GitHub issue closure")
-            closer = event["closer"]
-            if closer is None:
-                return None
-            if not isinstance(closer, dict) or closer.get("__typename") not in (
-                "Commit",
-                "PullRequest",
-                "ProjectV2",
-            ):
-                raise ValueError("Invalid GitHub issue closer")
-            if closer["__typename"] != "PullRequest":
-                return None
-            return _number(closer.get("number")), _repository_name(closer.get("repository"))
-        if not page["hasPreviousPage"]:
-            return None
-        cursor = page.get("startCursor")
-        if not isinstance(cursor, str) or not cursor or cursor in cursors:
-            raise ValueError("GitHub issue pagination did not advance")
-        cursors.add(cursor)
-
-
-def _related_issues(api: GitHubAPI, repository: str, pull: _Pull) -> tuple[RelatedIssue, ...]:
+def _pull_details(
+    api: GitHubAPI, repository: str, pull: _Pull
+) -> tuple[tuple[RelatedIssue, ...], tuple[str, ...]]:
     # Separate connections keep worst-case GraphQL node counts bounded. Nested
-    # commit -> PR -> issue -> timeline pagination exceeds GitHub's node limit.
-    def fetch_page(cursor: str | None = None) -> object:
+    # commit -> PR -> issue pagination exceeds GitHub's node limit.
+    references = _references(pull.title, repository)
+
+    def fetch_page(field: str | None = None, cursor: str | None = None) -> dict:
         after = f", after: {json.dumps(cursor)}" if cursor is not None else ""
+        connections = " ".join(
+            f"{name}(first: 100{after}) {{ {nodes} {_PAGE} }}"
+            for name, nodes in _PULL_FIELDS.items()
+            if field is None or field == name
+        )
         fields = (
-            f"pullRequest(number: {pull.number}) {{ number merged mergeCommit {{ oid }} "
-            f"closingIssuesReferences(first: 100{after}) {{ "
-            "nodes { number state stateReason repository { nameWithOwner } } "
-            f"{_PAGE} }} }}"
+            f"pullRequest(number: {pull.number}) {{ number body merged mergeCommit {{ oid }} "
+            f"{connections} }}"
         )
         node = _repository_data(api, repository, fields).get("pullRequest")
         merge = node.get("mergeCommit") if isinstance(node, dict) else None
@@ -335,25 +402,49 @@ def _related_issues(api: GitHubAPI, repository: str, pull: _Pull) -> tuple[Relat
             or merge.get("oid") != pull.sha
         ):
             raise ValueError("GitHub related pull request identity mismatch")
-        return node.get("closingIssuesReferences")
+        body = node.get("body")
+        if not isinstance(body, str):
+            raise ValueError("Invalid GitHub pull request body")
+        references.update(_references(body, repository))
+        return node
+
+    initial = fetch_page()
+
+    def nodes(field: str) -> Iterator[dict]:
+        return _connection_nodes(
+            initial.get(field), lambda cursor: fetch_page(field, cursor).get(field)
+        )
 
     result: dict[tuple[str, int], RelatedIssue] = {}
-    for issue in _connection_nodes(fetch_page(), fetch_page):
+    for issue in nodes("closingIssuesReferences"):
         number = _number(issue.get("number"))
         issue_repo = _repository_name(issue.get("repository"))
-        if not _completed_issue(issue):
-            continue
         key = (issue_repo.lower(), number)
         if key in result:
-            continue
-        closer = _latest_closer(api, issue_repo, number)
-        if closer is None or closer[0] != pull.number or closer[1].lower() != repository.lower():
             continue
         reference = (
             f"#{number}" if issue_repo.lower() == repository.lower() else f"{issue_repo}#{number}"
         )
         result[key] = RelatedIssue(reference, f"https://github.com/{issue_repo}/issues/{number}")
-    return tuple(result[key] for key in sorted(result))
+    labels: set[str] = set()
+    for label in nodes("labels"):
+        name = label.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Invalid GitHub pull request label name")
+        labels.add(name.casefold())
+    for key, issue_repo in references.items():
+        if key in result:
+            continue
+        issue = _referenced_issue(api, issue_repo, key[1])
+        if issue is not None:
+            canonical_key = next(iter(_references(issue.url, repository)))
+            reference = (
+                f"#{canonical_key[1]}"
+                if canonical_key[0] == repository.lower()
+                else issue.reference
+            )
+            result.setdefault(canonical_key, RelatedIssue(reference, issue.url))
+    return tuple(result[key] for key in sorted(result)), tuple(sorted(labels))
 
 
 def collect_credits(interval: ContributionRange, repository: str, api: GitHubAPI) -> Credits:
@@ -438,13 +529,15 @@ def collect_credits(interval: ContributionRange, repository: str, api: GitHubAPI
                 if commit_sha in associations[pull.number] or commit_sha == pull.sha:
                     for key, login in commits[commit_sha][1].items():
                         authors.setdefault(key, login)
+            issues, labels = _pull_details(api, repository, pull)
             changes.append(
                 Change(
                     pull.title,
                     f"PR #{pull.number}",
                     f"https://github.com/{repository}/pull/{pull.number}",
                     tuple(authors.values()),
-                    _related_issues(api, repository, pull),
+                    issues,
+                    labels,
                 )
             )
         if sha not in associated and not any(pull.sha == sha for pull in pulls.values()):
