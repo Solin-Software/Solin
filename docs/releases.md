@@ -38,15 +38,26 @@ python scripts/release.py prepare promote
 ```
 
 The command calculates the next version, rejects existing local or remote tags,
-updates the canonical version, and creates the English release-note draft. It
+updates the canonical version, and creates the English release-note file. A beta
+starts with an empty `en.md`, selecting automatic notes without an editorial step.
+Stable preparations start with a draft that requires review. The command
 does not create a tag or publish anything. The generated notes and version
 change are reviewed together in a focused pull request, which also receives the
 normal quality checks.
 
 Release notes live under `docs/release-notes/<tag>/<locale>.md`. `en.md` is
-required before tagging. Other files use an existing application locale such as
+required before tagging. An empty file is allowed only for a beta; a missing
+file or a pending review marker still fails validation. During publication, a beta
+with empty English notes uses the same grouped PR and issue entries as the GitHub
+appendix for the manifest and in-app update dialog. Filled notes take precedence;
+empty optional translations fall back to English. If no entries remain after
+exclusions, the fallback is a link to the verified commit comparison.
+Other files use an existing application locale such as
 `pt_BR.md`; the updater falls back to English when a translation is absent.
 Stable notes consolidate the user-visible changes that were exercised in beta.
+Promotion carries forward only written beta notes into the stable review draft;
+automatic beta notes are not copied. The stable draft must still be completed
+and reviewed, including changes from betas without written notes.
 
 Conventional Commits and pull-request labels can organize the draft, but they do
 not choose a CalVer increment. The release intent remains an explicit reviewed
@@ -74,8 +85,10 @@ A beta is marked as a prerelease and never becomes `latest`.
 ### Contributor credits
 
 Publication appends a managed English **Related pull requests and issues** block
-to the GitHub Release body. The reviewed English and translated changelogs,
-manifest, and in-app notes stay unchanged.
+to the GitHub Release body. Written English and translated changelogs stay
+unchanged. When a beta has empty English notes, the manifest and in-app notes
+use the visible content from that same contribution snapshot, without duplicating
+the block in the GitHub body. Generation never writes back to source note files.
 GitHub account mentions on contribution entries provide the release's contributor
 avatars.
 
@@ -119,6 +132,8 @@ notes, or skip any release build, validation, or publication step. If all entrie
 are excluded, only the managed interval markers remain, without empty headings.
 Manual PR label changes are reflected the next time the appendix is generated;
 already published releases change only through the explicit contributor update.
+That update changes only the GitHub body; automatic notes already embedded in
+a published manifest remain the snapshot taken during publication.
 
 PR entries credit the PR author, authors of included associated Git commits, and
 Git coauthors recognized through `Co-authored-by` identities. Bots are excluded

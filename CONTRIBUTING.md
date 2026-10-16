@@ -99,6 +99,9 @@ release-note validation, and workflow validation run once. Branch protection sho
 Release preparation is a separate pull request. Use an explicit
 `python scripts/release.py prepare <intent>` command and review its version and
 English notes; do not create or move a release tag from an unreviewed commit.
+For betas, leave the generated `en.md` empty to use automatic PR and issue notes
+in GitHub and the application. Stable releases still require written, reviewed
+notes. See [release preparation](docs/releases.md#preparing-a-release-pull-request).
 
 ## Repository hygiene
 

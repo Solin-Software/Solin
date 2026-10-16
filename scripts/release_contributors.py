@@ -150,7 +150,8 @@ class Credits:
                 accounts.setdefault(login.lower(), login)
         return tuple(accounts[key] for key in sorted(accounts))
 
-    def markdown(self) -> str:
+    def content_markdown(self) -> str:
+        """Render visible changes for both release bodies and updater notes."""
         text = ""
         if self.changes:
             groups, excluded = _release_rules()
@@ -170,8 +171,11 @@ class Credits:
                     for heading, rows in sections.items()
                     if rows
                 )
+        return text
+
+    def markdown(self) -> str:
         return (
-            f"{START}\n{text}"
+            f"{START}\n{self.content_markdown()}"
             f"<!-- contribution-range: {self.interval.base}..{self.interval.head} -->\n{END}"
         )
 

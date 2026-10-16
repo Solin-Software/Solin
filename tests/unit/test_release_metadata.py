@@ -146,13 +146,14 @@ def publication_credits(monkeypatch):
     )
     credits = Credits(ContributionRange(HISTORICAL_BASE, "a" * 40, ("a" * 40,)), (change,), ())
     monkeypatch.setattr(release_script, "release_credits", lambda *_args, **_kwargs: credits)
+    monkeypatch.setattr(release_script, "verify_identity", lambda tag, sha: ReleaseVersion.from_tag(tag))
     return credits
 
 
 def test_publisher_refuses_to_modify_an_already_published_release(monkeypatch, tmp_path) -> None:
     manifest = publish_manifest()
     (tmp_path / "release-notes.md").write_text("Changes", encoding="utf-8")
-    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args, **_kwargs: manifest)
     monkeypatch.setattr(
         release_script,
         "published_releases",
@@ -169,7 +170,7 @@ def test_publisher_keeps_partial_draft_unpublished(
     manifest = publish_manifest()
     marker = f"<!-- source-commit: {manifest.commit_sha} -->"
     (tmp_path / "release-notes.md").write_text("Changes", encoding="utf-8")
-    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args, **_kwargs: manifest)
     monkeypatch.setattr(
         release_script,
         "published_releases",
@@ -210,7 +211,7 @@ def test_publisher_rejects_uploaded_checksum_divergence(
             for name in expected
         ],
     }
-    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args, **_kwargs: manifest)
     monkeypatch.setattr(release_script, "published_releases", lambda: [draft])
     monkeypatch.setattr(release_script.subprocess, "run", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(release_script, "gh_api", lambda *_args, **_kwargs: uploaded)
@@ -250,7 +251,7 @@ def test_publisher_preserves_credits_between_draft_and_final_publication(
             mutations.append((method, payload))
         return uploaded
 
-    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args, **_kwargs: manifest)
     monkeypatch.setattr(release_script, "published_releases", lambda: [])
     monkeypatch.setattr(release_script.subprocess, "run", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(release_script, "gh_api", api)
@@ -278,7 +279,8 @@ def test_publisher_does_not_create_a_draft_when_related_metadata_collection_fail
 ) -> None:
     manifest = publish_manifest()
     (tmp_path / "release-notes.md").write_text("Reviewed changes\n", encoding="utf-8")
-    monkeypatch.setattr(release_script, "create_manifest", lambda *_args: manifest)
+    monkeypatch.setattr(release_script, "create_manifest", lambda *_args, **_kwargs: manifest)
+    monkeypatch.setattr(release_script, "verify_identity", lambda *_args: manifest.version)
     monkeypatch.setattr(release_script, "published_releases", lambda: [])
     calls = []
 
