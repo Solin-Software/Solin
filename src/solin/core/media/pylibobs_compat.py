@@ -63,7 +63,7 @@ class ObsTaskBridgeCompat:
             self._handles[key] = handle
         try:
             self._lib.obs_queue_task(3, self._task_pointer, handle, wait)
-        except BaseException:
+        except BaseException:  # noqa: BLE001 - release the retained handle before propagating enqueue failure
             with self._lock:
                 self._handles.pop(key, None)
             raise

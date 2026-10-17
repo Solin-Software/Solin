@@ -71,7 +71,7 @@ class ObsTaskDispatcher:
             self._bridge.install()
             # Registration queues OBS' thread-local UI marker on this same lane.
             self.run(lambda: None)
-        except BaseException:
+        except BaseException:  # noqa: BLE001 - quiesce partial registration before propagating failure
             self.quiesce()
             raise
 
@@ -137,7 +137,7 @@ class ObsTaskDispatcher:
 
         try:
             bridge.queue(execute, wait=wait)
-        except BaseException:
+        except BaseException:  # noqa: BLE001 - balance pending work when native enqueue fails
             self._finished()
             raise
         return result
