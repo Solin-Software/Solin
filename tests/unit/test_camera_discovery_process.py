@@ -8,6 +8,7 @@ import threading
 import time
 from dataclasses import replace
 from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -40,6 +41,23 @@ def _publish_pid_code(marker) -> str:
         f"(Path({str(staging)!r}).write_text(str(os.getpid())), "
         f"Path({str(staging)!r}).replace(Path({str(marker)!r})))"
     )
+
+
+def _posix_process_has_exited(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    if sys.platform != "linux":
+        return False
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text()
+    except (FileNotFoundError, ProcessLookupError):
+        # The process can disappear after kill(pid, 0), including during read.
+        return True
+    # A zombie has exited even when PID 1 has not reaped it. The parenthesized
+    # process name can contain spaces and closing parentheses.
+    return stat.rpartition(")")[2].split()[0] == "Z"
 
 
 @pytest.fixture
@@ -410,6 +428,68 @@ def test_invalid_reply_is_reaped_without_fallback(launch, change):
     assert all(handle.closed for handle in handles)
 
 
+@pytest.mark.parametrize("error", [FileNotFoundError, ProcessLookupError])
+def test_process_exit_during_proc_stat_read_is_observed(monkeypatch, error):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(os, "kill", lambda _pid, _signal: None)
+
+    def read_text():
+        raise error("The process exited after the PID probe")
+
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: SimpleNamespace(
+        exists=lambda: True, read_text=read_text,
+    ))
+
+    assert _posix_process_has_exited(12345)
+
+
+def test_process_exit_before_pid_probe_does_not_read_proc_stat(monkeypatch):
+    def probe(_pid, _signal):
+        raise ProcessLookupError("The process has already exited")
+
+    monkeypatch.setattr(os, "kill", probe)
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: pytest.fail(
+        "An exited process must not require procfs access",
+    ))
+
+    assert _posix_process_has_exited(12345)
+
+
+@pytest.mark.parametrize("state", ["R", "S", "Z"])
+def test_process_exit_observation_distinguishes_live_processes_and_zombies(monkeypatch, state):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(os, "kill", lambda _pid, _signal: None)
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: SimpleNamespace(
+        read_text=lambda: f"12345 (camera (metadata) helper) {state} 1 2 3",
+    ))
+
+    assert _posix_process_has_exited(12345) is (state == "Z")
+
+
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
+def test_live_process_outside_linux_does_not_require_procfs(monkeypatch, platform):
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(os, "kill", lambda _pid, _signal: None)
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: pytest.fail(
+        "The Linux procfs probe must not run on other platforms",
+    ))
+
+    assert not _posix_process_has_exited(12345)
+
+
+@pytest.mark.parametrize("stage", ["probe", "stat"])
+def test_process_exit_observation_propagates_permission_errors(monkeypatch, stage):
+    def denied(*_args):
+        raise PermissionError("Process inspection denied")
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(os, "kill", denied if stage == "probe" else lambda _pid, _signal: None)
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: SimpleNamespace(read_text=denied))
+
+    with pytest.raises(PermissionError, match="inspection denied"):
+        _posix_process_has_exited(12345)
+
+
 @pytest.mark.parametrize("before_guard", [False, True])
 @pytest.mark.parametrize("death", ["crash", "kill"])
 def test_parent_death_does_not_leave_hung_metadata_orphan(tmp_path, before_guard, death):
@@ -476,14 +556,7 @@ def test_parent_death_does_not_leave_hung_metadata_orphan(tmp_path, before_guard
         else:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                try:
-                    os.kill(child_pid, 0)
-                except ProcessLookupError:
-                    break
-                # Container PID 1 may retain a zombie after its original parent
-                # died; a zombie has exited and cannot own cameras or run code.
-                stat = __import__("pathlib").Path(f"/proc/{child_pid}/stat")
-                if stat.exists() and stat.read_text().split()[2] == "Z":
+                if _posix_process_has_exited(child_pid):
                     break
                 time.sleep(0.01)
             else:
