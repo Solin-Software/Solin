@@ -2668,6 +2668,14 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
         <source>Start</source>
         <translation>Anza</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

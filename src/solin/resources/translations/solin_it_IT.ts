@@ -2668,6 +2668,14 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
         <source>Start</source>
         <translation>Avvia</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

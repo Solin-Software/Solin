@@ -2668,6 +2668,14 @@ Se conservarán el contenido añadido manualmente, los recortes, el encuadre y e
         <source>Start</source>
         <translation>Iniciar</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

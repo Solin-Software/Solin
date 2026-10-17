@@ -5,9 +5,9 @@ It supplies refresh scheduling, delayed frozen-result reversion, translated
 display titles, and signals for the presentation layer.
 
 Design notes:
-    • Elapsed time is derived from ``started_at`` epoch each tick, never
-      accumulated by adding deltas — so it cannot drift and it survives the
-      machine sleeping or the app restarting.
+    • Elapsed time is derived from the epoch anchor each tick, rather than
+      accumulated by the scheduler. Manual adjustments rebase the anchor and
+      banked elapsed time, preserving progress across sleep and app restarts.
     • Exactly one part runs at a time. Starting a part freezes whatever was
       running. Lifecycle per part: idle → (Start) → running → (Stop) → stopped
       → (Reset) → idle.
@@ -37,7 +37,7 @@ class TimerEngine(QObject):
 
     # Fine-grained refresh (every _TICK_MS) — payload is TimerSnapshot.to_dict().
     tick = Signal(dict)
-    # Emitted only on discrete transitions (start/stop/reset/schedule swap).
+    # Emitted only on discrete changes (lifecycle, elapsed adjustment, configuration).
     state_changed = Signal(dict)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -114,6 +114,10 @@ class TimerEngine(QObject):
         if self._pending_revert_id == part_id:
             self._cancel_revert()
         if self._state.reset_part(part_id):
+            self._emit_state()
+
+    def adjust_elapsed(self, part_id: str, delta_seconds: int) -> None:
+        if self._state.adjust_elapsed(part_id, delta_seconds):
             self._emit_state()
 
     # ── Snapshot ──────────────────────────────────────────────────────────────

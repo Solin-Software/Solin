@@ -95,6 +95,27 @@ class TimerStateMachine:
             self._active_part_id = None
         return True
 
+    def adjust_elapsed(
+        self,
+        part_id: str,
+        delta_seconds: int,
+        *,
+        now: float | None = None,
+    ) -> bool:
+        """Correct elapsed time and its start timestamp without changing the plan."""
+        part = self._part(part_id)
+        if part is None or part.state is not PartState.RUNNING or delta_seconds == 0:
+            return False
+        adjustment_time = _now() if now is None else now
+        elapsed = part.elapsed(adjustment_time)
+        adjusted = max(0.0, elapsed + delta_seconds)
+        if adjusted == elapsed:
+            return False
+        part.accumulated_seconds = adjusted
+        part.started_at_epoch = adjustment_time
+        part.first_started_epoch = adjustment_time - adjusted
+        return True
+
     def clear_stopped_part(self, part_id: str) -> bool:
         """Stop presenting ``part_id`` while preserving its frozen result."""
         part = self._part(part_id)

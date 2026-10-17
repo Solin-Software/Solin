@@ -2668,6 +2668,14 @@ Mananatili ang manual na idinagdag na nilalaman, mga trim, framing, at nakabukan
         <source>Start</source>
         <translation>Simulan</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

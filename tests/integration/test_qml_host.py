@@ -225,6 +225,11 @@ class _AdvancedTimerProbe(QObject):
             "overrun": False,
             "display_seconds": 96,
         }
+        self.adjustments: list[tuple[str, int]] = []
+
+    @Slot(str, int)
+    def adjustPart(self, part_id: str, seconds: int) -> None:  # noqa: N802 - QML API
+        self.adjustments.append((part_id, seconds))
 
     @Property("QVariant", notify=clockConfigChanged)
     def clockConfig(self):  # noqa: N802 - QML API
@@ -1429,6 +1434,129 @@ def test_advanced_timer_part_actions_remain_visible_in_live_states(
     assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
     assert widget.errors() == []
     widget.deleteLater()
+
+
+@pytest.mark.parametrize("width", [320, 900])
+@pytest.mark.parametrize("direction", ["up", "down"])
+def test_advanced_timer_running_part_keeps_elapsed_controls(
+    request, width: int, direction: str,
+) -> None:
+    timer = _AdvancedTimerProbe()
+    widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
+    timer.setParent(widget)
+    widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+    widget.resize(width, 520)
+    configure_qml_host(
+        widget,
+        type_name="AdvancedTimerPage",
+        clear_color="#000000",
+        context_properties={"timer": timer},
+        image_providers={"timericons": TimerIconProvider()},
+    )
+    root = widget.rootObject()
+    assert root is not None
+    show_and_activate(widget)
+
+    def part_row():
+        row = _find_visual(root, "timerMeetingPartRow")
+        assert row is not None
+        return row
+
+    def visible_items():
+        return [item for item in _find_visuals(part_row(), "") if item.isVisible()]
+
+    def step_buttons():
+        return {
+            item.property("glyph"): item
+            for item in visible_items()
+            if item.property("glyph") in ("−", "+")
+        }
+
+    def stepper():
+        matches = [item for item in visible_items() if item.property("editable") is not None]
+        assert len(matches) == 1
+        return matches[0]
+
+    def click(item):
+        wait_until(lambda: item.width() > 0, description="timer control layout")
+        mouse_click(
+            widget,
+            Qt.MouseButton.LeftButton,
+            pos=item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint(),
+        )
+
+    def action():
+        return next(
+            item for item in _find_visuals(part_row(), "timerPartActionButton")
+            if item.isVisible()
+        )
+
+    assert stepper().property("editable") is True
+    assert set(step_buttons()) == {"−", "+"}
+    click(action())
+    wait_until(lambda: part_row().property("state") == "running", description="running part")
+    assert set(step_buttons()) == {"−", "+"}, "Elapsed +/- must remain visible after Start"
+    assert stepper().property("editable") is False
+
+    # Publish bridge snapshots separately from input assertions: this probe only
+    # records UI requests, leaving elapsed arithmetic to the backend tests.
+    timer._live_state.update({"direction": direction, "elapsed_seconds": 84,
+                              "remaining_seconds": 96})
+    for glyph, delta, seconds, label in (
+        ("+", 1, 85 if direction == "up" else 95, "01:25" if direction == "up" else "01:35"),
+        ("−", -1, 84 if direction == "up" else 96, "01:24" if direction == "up" else "01:36"),
+    ):
+        click(step_buttons()[glyph])
+        assert timer.adjustments[-1] == ("part-1", delta)
+        timer._live_state["display_seconds"] = seconds
+        timer.liveStateChanged.emit()
+        wait_until(lambda label=label: label in _visible_texts(part_row()), description="live readout")
+    assert timer.adjustments == [("part-1", 1), ("part-1", -1)]
+
+    for seconds, label in ((3600, "1:00:00"), (-1, "-00:01")):
+        timer._live_state.update({"display_seconds": seconds, "overrun": seconds < 0})
+        timer.liveStateChanged.emit()
+        wait_until(lambda label=label: label in _visible_texts(part_row()), description="long live readout")
+        readout = next(
+            item for item in visible_items()
+            if item.property("text") == label and item.property("resolvedDigitFamily")
+        )
+        assert readout.property("resolvedDigitFamily")
+        assert readout.property("font").pixelSize() == 23
+        assert readout.property("font").kerning() is False
+        wait_until(
+            lambda readout=readout: readout.property("paintedWidth") <= readout.width() + 0.5,
+            description=lambda readout=readout: (
+                f"live digits fitted: text={readout.property('text')}, "
+                f"width={readout.width()}, painted={readout.property('paintedWidth')}, "
+                f"height={readout.height()}, minimum={readout.property('minimumPixelSize')}, "
+                f"family={readout.property('font').family()}"
+            ),
+        )
+        expected_color = part_row().property("pal_danger" if seconds < 0 else "accent")
+        assert readout.property("color") == expected_color
+        buttons = step_buttons()
+        left = buttons["−"].mapToItem(part_row(), QPointF()).x()
+        right = buttons["+"].mapToItem(part_row(), QPointF()).x() + buttons["+"].width()
+        text_left = readout.mapToItem(part_row(), QPointF()).x()
+        assert left >= 0
+        assert text_left >= left + buttons["−"].width()
+        assert text_left + readout.width() <= right - buttons["+"].width()
+        assert right <= action().mapToItem(part_row(), QPointF()).x()
+
+    click(action())
+    wait_until(lambda: part_row().property("state") == "stopped", description="stopped part")
+    # A stopped timer can remain active while its frozen elapsed value is shown.
+    timer._live_state.update({"active": True, "active_part_id": "part-1",
+                              "display_seconds": 174, "overrun": False})
+    timer.liveStateChanged.emit()
+    wait_until(lambda: "02:54" in _visible_texts(part_row()), description="frozen readout")
+    assert step_buttons() == {}
+    assert stepper().property("editable") is False
+    assert action().property("text") == "Reset"
+    assert timer.parts[0]["plannedLabel"] == "03:00"
+    assert widget.errors() == []
 
 
 @pytest.mark.parametrize("width", [320, 900])

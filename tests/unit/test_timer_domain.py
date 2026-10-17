@@ -505,6 +505,105 @@ def test_state_machine_restores_running_part_and_canonical_title():
     assert snapshot.elapsed_seconds == 60.0
 
 
+def test_elapsed_adjustments_correct_start_and_preserve_plan_across_overrun():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+    part = schedule.parts_in(Section.MINISTRY)[0]
+    planned = [candidate.planned_seconds for candidate in schedule.parts]
+    state.set_schedule(schedule)
+    state.start_part(part.id, now=100.0)
+
+    assert state.adjust_elapsed(part.id, part.planned_seconds, now=110.25)
+    assert state.snapshot(now=110.25).overrun
+    assert state.snapshot(now=110.25).remaining_seconds == -10.25
+    assert state.adjust_elapsed(part.id, -60, now=120.5)
+    assert state.snapshot(now=120.5).remaining_seconds == 39.5
+    assert not state.snapshot(now=120.5).overrun
+    assert part.first_started_epoch == 100.0 - part.planned_seconds + 60
+    assert [candidate.planned_seconds for candidate in schedule.parts] == planned
+
+    # Stopping or switching parts freezes the adjusted result exactly once.
+    other = schedule.parts[0]
+    state.start_part(other.id, now=130.75)
+    assert part.state is PartState.STOPPED
+    assert part.accumulated_seconds == part.planned_seconds - 29.25
+    state.start_part(part.id, now=140.0)
+    assert state.snapshot(now=140.0).elapsed_seconds == 0.0
+
+
+@pytest.mark.parametrize("delta", [-60, 60])
+def test_elapsed_adjustment_ignores_non_running_parts_and_missing_schedule(delta):
+    state = TimerStateMachine()
+    assert not state.adjust_elapsed("missing", delta, now=100.0)
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    part = schedule.parts[0]
+    state.set_schedule(schedule)
+    before = schedule.to_dict()
+    assert not state.adjust_elapsed(part.id, delta, now=100.0)
+    assert not state.adjust_elapsed("missing", delta, now=100.0)
+    assert schedule.to_dict() == before
+    state.start_part(part.id, now=100.0)
+    state.stop_part(part.id, now=120.0)
+    before = schedule.to_dict()
+    assert not state.adjust_elapsed(part.id, delta, now=130.0)
+    assert schedule.to_dict() == before
+
+
+def test_elapsed_adjustment_noops_and_floor_do_not_delay_the_next_tick():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    part = schedule.parts[0]
+    state.set_schedule(schedule)
+    state.start_part(part.id, now=100.0)
+    before = schedule.to_dict()
+    assert not state.adjust_elapsed(part.id, 0, now=110.0)
+    assert not state.adjust_elapsed(part.id, -60, now=100.0)
+    assert schedule.to_dict() == before
+    assert state.adjust_elapsed(part.id, -60, now=110.5)
+    assert state.snapshot(now=110.5).elapsed_seconds == 0.0
+    assert part.first_started_epoch == 110.5
+    assert state.snapshot(now=111.75).elapsed_seconds == 1.25
+
+
+@pytest.mark.parametrize("delta", [-1, 1])
+def test_adjusted_duration_preserves_actual_finish_time_in_saved_reports(delta):
+    from solin.core.i18n.date import format_time_with_seconds
+    from solin.core.rendering.timer_report_pdf import build_timer_pdf_rows
+
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    part = schedule.parts[0]
+    state.set_schedule(schedule)
+    state.start_part(part.id, now=100.0)
+    assert state.adjust_elapsed(part.id, delta, now=160.0)
+    state.stop_part(part.id, now=280.0)
+
+    restored = MeetingSchedule.from_dict(schedule.to_dict())
+    rows = build_timer_pdf_rows(restored, now_epoch=300.0)
+    assert rows[0].started_label == format_time_with_seconds(100.0 - delta)
+    assert rows[0].finished_label == format_time_with_seconds(280.0)
+    assert restored.parts[0].elapsed(300.0) == 180.0 + delta
+
+
+def test_corrected_start_continues_to_match_elapsed_after_restoring_and_readjusting():
+    state = TimerStateMachine()
+    schedule = build_default_schedule(_WEEK, MeetingType.WEEKEND)
+    part = schedule.parts[0]
+    state.set_schedule(schedule)
+    state.start_part(part.id, now=100.0)
+    assert state.adjust_elapsed(part.id, 1, now=160.25)
+
+    restored_schedule = MeetingSchedule.from_dict(schedule.to_dict())
+    restored_part = restored_schedule.parts[0]
+    restored = TimerStateMachine()
+    restored.set_schedule(restored_schedule)
+    assert restored_part.first_started_epoch == 99.0
+    assert restored.snapshot(now=170.5).elapsed_seconds == 71.5
+    assert restored.adjust_elapsed(part.id, -1, now=170.5)
+    assert restored_part.first_started_epoch == 100.0
+    assert restored.snapshot(now=170.5).elapsed_seconds == 70.5
+
+
 def test_engine_countdown_and_overrun():
     _app()
     engine = TimerEngine()
