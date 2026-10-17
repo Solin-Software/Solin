@@ -506,6 +506,8 @@ def validate_runtime(
         _require_file(root / name)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
         _require_file(root / "obs-plugins" / f"{name}{suffix}")
+    if target_platform == "windows":
+        _require_file(root / "obs-plugins" / "win-wasapi.dll")
     _require_file(root / "data" / "libobs" / "default.effect")
     _require_file(root / "data" / "obs-plugins" / "obs-ffmpeg" / "locale" / "en-US.ini")
 

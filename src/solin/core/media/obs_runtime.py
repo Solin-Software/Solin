@@ -37,6 +37,8 @@ from .camera_identity import local_camera_device_key
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from collections.abc import Sequence
 
+    from .obs_tasks import ObsTaskDispatcher
+
 log = logging.getLogger(__name__)
 
 # libobs monitoring types (obs_monitoring_type enum).
@@ -243,6 +245,7 @@ class ObsRuntime:
         self._lock = threading.RLock()
         self._context: Any | None = None
         self._graphics_module_owner: Any | None = None
+        self._native_tasks: ObsTaskDispatcher | None = None
         self._pylibobs: Any | None = None
         self._video = ObsVideoConfig()
         self._used_channels: set[int] = set()
@@ -614,6 +617,11 @@ class ObsRuntime:
                 # connection when there is no Qt display to share.
                 nix_display_configured = self._configure_nix_platform()
                 context.startup()
+                if sys.platform == "win32":
+                    from .obs_tasks import ObsTaskDispatcher
+
+                    self._native_tasks = ObsTaskDispatcher()
+                    self._native_tasks.install()
                 graphics_module = _graphics_module_path()
 
                 def _init_video(ctx=context, gm=graphics_module):
@@ -634,15 +642,20 @@ class ObsRuntime:
                     _run_with_gl_context_released(_init_video)
                 context.set_audio()
                 context.load_modules()
+                if sys.platform == "win32" and "wasapi_output_capture" not in ob.enum_source_types():
+                    raise ObsRuntimeError("The Windows audio device notification module is unavailable")
             except Exception as exc:  # noqa: BLE001 - startup boundary, re-raised typed
                 # Best-effort teardown so a half-initialised context does not linger.
                 try:
+                    if self._native_tasks is not None:
+                        self._native_tasks.quiesce()
                     ctx = locals().get("context")
                     if ctx is not None:
                         ctx.shutdown()
                 except Exception:  # noqa: BLE001 - teardown must not mask the root cause
                     log.warning("libobs teardown after failed startup errored", exc_info=True)
                 self._graphics_module_owner = None
+                self._close_native_tasks()
                 self._release_owned_x11_display()
                 raise ObsRuntimeError(f"Failed to start libobs runtime: {exc}") from exc
 
@@ -656,6 +669,8 @@ class ObsRuntime:
         with self._lock:
             if self._context is None:
                 return
+            if self._native_tasks is not None:
+                self._native_tasks.quiesce()
             # Under the libobs-sidecar architecture the sidecar owns and tears
             # down its own program graph, recorder, media, window output, and
             # virtual camera before it calls this — so this only releases the
@@ -678,7 +693,13 @@ class ObsRuntime:
                 self._context = None
                 self._video_observers = None
                 self._graphics_module_owner = None
+                self._close_native_tasks()
                 self._release_owned_x11_display()
+
+    def _close_native_tasks(self) -> None:
+        if self._native_tasks is not None:
+            self._native_tasks.close()
+            self._native_tasks = None
 
     def active_source_tree_contains(self, source: Any, target: Any) -> bool:
         """Inspect active children using borrowed pointers, without owning them.
@@ -785,103 +806,35 @@ class ObsRuntime:
     # ── Audio monitoring (speakers) ───────────────────────────────────────
 
     def _configure_monitoring(self) -> None:
-        """Select an OS monitoring device so source audio can reach the speakers."""
-        ob = self.ob
+        """Select libobs' logical system-default output instead of a fixed endpoint."""
         try:
-            if not ob.audio_monitoring_available():
+            if not self.ob.audio_monitoring_available():
                 log.info("Audio monitoring not available on this platform")
                 return
-            devices = ob.enum_audio_monitoring_devices()
-        except Exception:  # noqa: BLE001 - enumeration boundary
-            log.warning("Could not enumerate audio monitoring devices", exc_info=True)
+        except Exception:  # noqa: BLE001 - native availability boundary
+            log.warning("Could not query audio monitoring support", exc_info=True)
             return
-        if not devices:
-            return
-        device = self._preferred_monitoring_device(devices)
         try:
-            if ob.set_audio_monitoring_device(device.name, device.id):
-                self._monitoring_device = (device.name, device.id)
-                log.info("libobs audio monitoring device: %s", device.name)
+            # "default" is a logical output, even when no physical device is
+            # currently present. Resolving it to an endpoint pins playback there
+            # and disables Windows' native default-device change handling.
+            if self.set_monitoring_device("Default", "default"):
+                log.info("libobs audio monitoring uses the system default output")
+            else:
+                log.warning("Could not select the system default audio monitoring device")
         except Exception:  # noqa: BLE001 - device selection boundary
             log.warning("Could not select audio monitoring device", exc_info=True)
-
-    def _preferred_monitoring_device(self, devices):
-        """Pick the OS default output device; fall back to the first enumerated.
-
-        Selecting ``devices[0]`` blindly can route audio to the wrong output (e.g.
-        headphones when the speakers are the system default). Prefer an explicit
-        "default" entry if the platform exposes one, else match the OS default
-        output by name, else fall back to the first device.
-        """
-        for device in devices:  # explicit platform "default" entry
-            ident = str(getattr(device, "id", "")).strip().lower()
-            name = str(getattr(device, "name", "")).strip().lower()
-            if ident == "default" or name in ("default", "default device"):
-                return device
-        default_name = self._os_default_output_name().strip().lower()
-        if default_name:
-            for device in devices:  # exact name match
-                if str(device.name).strip().lower() == default_name:
-                    return device
-            for device in devices:  # looser substring match either way
-                name = str(device.name).strip().lower()
-                if name and (name in default_name or default_name in name):
-                    return device
-        return devices[0]
-
-    @staticmethod
-    def _os_default_output_name() -> str:
-        """The OS default audio-output device name ("" if it cannot be determined).
-
-        Asked of the OS directly rather than through Qt: this module is
-        deliberately framework-free, and pulling in a Qt *multimedia* class just
-        to read a device name was the last reason it needed one.
-
-        Windows is the only platform where the answer is not already in libobs'
-        own device list — Linux (PulseAudio/PipeWire) and macOS both surface an
-        explicit default entry, which the caller matches before ever getting
-        here.
-        """
-        if sys.platform != "win32":
-            return ""
-        try:
-            import ctypes
-
-            # WinMM's waveOut device 0 is, by definition, the current default
-            # output endpoint — the same device the Core Audio "eConsole" role
-            # points at. Cheap and dependency-free.
-            #
-            # NB: szPname is 32 wchars, so long names come back TRUNCATED
-            # ("Alto-falantes (High Definition "). The caller matches as a
-            # substring in both directions precisely so a truncated name still
-            # finds its device.
-            class _WaveOutCaps(ctypes.Structure):
-                _fields_ = [
-                    ("wMid", ctypes.c_ushort),
-                    ("wPid", ctypes.c_ushort),
-                    ("vDriverVersion", ctypes.c_uint),
-                    ("szPname", ctypes.c_wchar * 32),
-                    ("dwFormats", ctypes.c_uint),
-                    ("wChannels", ctypes.c_ushort),
-                    ("wReserved1", ctypes.c_ushort),
-                    ("dwSupport", ctypes.c_uint),
-                ]
-
-            caps = _WaveOutCaps()
-            winmm = ctypes.WinDLL("winmm")
-            if winmm.waveOutGetDevCapsW(0, ctypes.byref(caps), ctypes.sizeof(caps)) != 0:
-                return ""
-            return caps.szPname or ""
-        except Exception:  # noqa: BLE001 - Win32 boundary
-            log.debug("Could not read the OS default audio output", exc_info=True)
-            return ""
 
     @property
     def monitoring_device(self) -> tuple[str, str] | None:
         return self._monitoring_device
 
     def set_monitoring_device(self, name: str, dev_id: str) -> bool:
-        ok = bool(self.ob.set_audio_monitoring_device(name, dev_id))
+        def select() -> bool:
+            return bool(self.ob.set_audio_monitoring_device(name, dev_id))
+
+        tasks = self._native_tasks
+        ok = select() if tasks is None else tasks.run(select)
         if ok:
             self._monitoring_device = (name, dev_id)
         return ok
@@ -923,7 +876,18 @@ class ObsRuntime:
         from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
         lib: Any = get_lib()
-        lib.obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
+
+        def apply() -> None:
+            lib.obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
+
+        # Windows resets must share the native destruction queue with monitor
+        # creation and teardown; its monitoring mutex alone does not protect
+        # audio_monitor_create/init_final or audio_monitor_destroy/free.
+        tasks = self._native_tasks
+        if tasks is None:
+            apply()
+        else:
+            tasks.run(apply)
 
 
 _runtime: ObsRuntime | None = None

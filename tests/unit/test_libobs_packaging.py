@@ -140,6 +140,8 @@ def _runtime(package: Path, target: str) -> Path:
         _framework(root)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
         _touch(root / "obs-plugins" / f"{name}{suffix}")
+    if target == "windows":
+        _touch(root / "obs-plugins" / "win-wasapi.dll")
     _touch(root / "data/libobs/default.effect")
     _touch(root / "data/obs-plugins/obs-ffmpeg/locale/en-US.ini")
     return root
@@ -564,6 +566,7 @@ def test_runtime_publish_retries_transient_windows_sharing_violation(tmp_path, m
         "solin-media-extract.exe",
         "obs-ffmpeg-mux.exe",
         "obs-plugins/obs-ffmpeg.dll",
+        "obs-plugins/win-wasapi.dll",
         "data/libobs/default.effect",
         "data/obs-plugins/obs-ffmpeg/locale/en-US.ini",
     ],

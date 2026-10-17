@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import platform
+import logging
+import threading
+from collections.abc import Callable
 from typing import Any
 
 _GRAPHICS_OWNER_BUG_VERSION = "0.1.2"
@@ -13,6 +16,57 @@ _VIDEO_INIT_ERRORS = {
     -4: "graphics module not found",
     -5: "general failure",
 }
+
+
+class ObsTaskBridgeCompat:
+    """Own concrete task callbacks and async handles hidden by opaque typedefs."""
+
+    def __init__(self, dispatch: Callable[[Callable[[], None], bool], None]) -> None:
+        from pylibobs._ffi import ffi, get_lib
+
+        self._lib: Any = get_lib()
+        self._ffi: Any = ffi
+        self._handles: dict[int, Any] = {}
+        self._lock = threading.Lock()
+
+        @ffi.callback("void(void (*)(void *), void *, bool)")
+        def handler(task: Any, param: Any, wait: bool) -> None:
+            dispatch(lambda: task(param), wait)
+
+        self._callback: Any = handler
+        self._pointer = ffi.cast("obs_task_handler_t", self._callback)
+
+        @ffi.callback("void(void *)")
+        def execute(param: Any) -> None:
+            try:
+                ffi.from_handle(param)()
+            except BaseException:  # noqa: BLE001 - native queue must signal its waiter
+                logging.getLogger(__name__).exception("OBS task trampoline failed")
+            finally:
+                with self._lock:
+                    self._handles.pop(int(ffi.cast("uintptr_t", param)), None)
+
+        self._task_callback: Any = execute
+        self._task_pointer = ffi.cast("obs_task_t", self._task_callback)
+
+    def install(self) -> None:
+        """Register after startup; retain this owner until native shutdown ends."""
+        self._lib.obs_set_ui_task_handler(self._pointer)
+
+    def inside(self) -> bool:
+        return bool(self._lib.obs_in_task_thread(3))  # OBS_TASK_DESTROY
+
+    def queue(self, callback: Callable[[], None], *, wait: bool) -> None:
+        handle = self._ffi.new_handle(callback)
+        key = int(self._ffi.cast("uintptr_t", handle))
+        with self._lock:
+            self._handles[key] = handle
+        try:
+            self._lib.obs_queue_task(3, self._task_pointer, handle, wait)
+        except BaseException:  # noqa: BLE001 - release the retained handle before propagating enqueue failure
+            with self._lock:
+                self._handles.pop(key, None)
+            raise
 
 
 def complete_frame_rate_type_compat(ffi: Any) -> None:

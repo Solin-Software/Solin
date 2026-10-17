@@ -9,6 +9,99 @@ import pytest
 from solin.core.media import obs_runtime
 
 
+@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
+@pytest.mark.parametrize("devices", [
+    [],
+    [SimpleNamespace(name="Notebook speakers", id="speakers")],
+    [SimpleNamespace(name="Default", id="physical-device-named-default")],
+])
+def test_monitoring_follows_system_default_without_pinning_an_endpoint(
+    monkeypatch, platform, devices,
+):
+    monkeypatch.setattr(obs_runtime.sys, "platform", platform)
+    selected = []
+    runtime = obs_runtime.ObsRuntime()
+    runtime._pylibobs = SimpleNamespace(
+        audio_monitoring_available=lambda: True,
+        enum_audio_monitoring_devices=lambda: devices,
+        set_audio_monitoring_device=lambda name, ident: selected.append((name, ident)) or True,
+    )
+
+    runtime._configure_monitoring()
+
+    # Keep the logical default even with an empty catalog. Resolving it to an
+    # endpoint disables the Windows backend's default-device notifications.
+    assert len(selected) == 1
+    assert selected[0][1] == "default"
+    assert runtime.monitoring_device == selected[0]
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "probe", "rejected", "selection"])
+def test_monitoring_configuration_failure_is_nonfatal_and_does_not_cache_success(failure, caplog):
+    selected = []
+
+    def available():
+        if failure == "probe":
+            raise RuntimeError("audio backend unavailable")
+        return failure != "unavailable"
+
+    def select(name, ident):
+        selected.append((name, ident))
+        if failure == "selection":
+            raise RuntimeError("device selection failed")
+        return False
+
+    runtime = obs_runtime.ObsRuntime()
+    runtime._pylibobs = SimpleNamespace(
+        audio_monitoring_available=available,
+        enum_audio_monitoring_devices=lambda: [],
+        set_audio_monitoring_device=select,
+    )
+
+    runtime._configure_monitoring()
+
+    assert runtime.monitoring_device is None
+    assert len(selected) == (0 if failure in {"unavailable", "probe"} else 1)
+    if failure != "unavailable":
+        assert any(record.levelname == "WARNING" for record in caplog.records)
+
+
+def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
+    executing = False
+    changes = []
+
+    def run(operation):
+        nonlocal executing
+        executing = True
+        try:
+            return operation()
+        finally:
+            executing = False
+
+    def change_source(pointer, mode):
+        assert executing
+        changes.append((pointer, mode))
+
+    def select(name, ident):
+        assert executing
+        changes.append((name, ident))
+        return True
+
+    runtime = obs_runtime.ObsRuntime()
+    runtime._native_tasks = SimpleNamespace(run=run)
+    runtime._pylibobs = SimpleNamespace(set_audio_monitoring_device=select)
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(obs_source_set_monitoring_type=change_source),
+    ))
+    source = SimpleNamespace(_ptr=object())
+
+    runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_ONLY)
+    assert runtime.set_monitoring_device("Default", "default")
+
+    assert changes == [(source._ptr, obs_runtime.MONITORING_MONITOR_ONLY), ("Default", "default")]
+    assert runtime.monitoring_device == ("Default", "default")
+
+
 @pytest.mark.parametrize("matching", [False, True])
 def test_active_tree_inspection_borrows_children_without_removing_sources(monkeypatch, matching):
     root, wanted, other = object(), object(), object()
@@ -328,6 +421,56 @@ def _runtime_with_fake_libobs(
     monkeypatch.setattr(obs_runtime, "_graphics_module_path", lambda: "libobs-opengl.so")
     monkeypatch.setattr(runtime, "_configure_monitoring", lambda: None)
     return runtime
+
+
+@pytest.mark.parametrize("failure", [None, "install", "video", "audio", "modules", "notifications"])
+def test_windows_native_tasks_are_drained_before_shutdown_and_retained_through_module_unload(
+    monkeypatch, request, failure,
+):
+    events = []
+    runtime = _runtime_with_fake_libobs(monkeypatch, events)
+    request.addfinalizer(runtime.shutdown)
+    monkeypatch.setattr(obs_runtime.sys, "platform", "win32")
+    context = runtime.ob.OBSContext()
+
+    def step(name):
+        events.append(name)
+        if failure == name:
+            raise RuntimeError(f"{name} failed")
+
+    tasks = SimpleNamespace(
+        install=lambda: step("install"),
+        quiesce=lambda: step("quiesce"),
+        close=lambda: step("close"),
+    )
+    monkeypatch.setitem(sys.modules, "solin.core.media.obs_tasks", SimpleNamespace(
+        ObsTaskDispatcher=lambda: tasks,
+    ))
+    monkeypatch.setattr(context, "set_video", lambda *_args, **_kwargs: step("video"))
+    monkeypatch.setattr(context, "set_audio", lambda: step("audio"))
+    monkeypatch.setattr(context, "load_modules", lambda: step("modules"))
+
+    def source_types():
+        events.append("notifications")
+        return [] if failure == "notifications" else ["wasapi_output_capture"]
+
+    runtime.ob.enum_source_types = source_types
+    if failure is None:
+        runtime.ensure_started()
+        runtime.ensure_started()
+        assert runtime._native_tasks is tasks
+        runtime.shutdown()
+    else:
+        with pytest.raises(obs_runtime.ObsRuntimeError):
+            runtime.ensure_started()
+
+    assert events.index("startup") < events.index("install")
+    if "modules" in events:
+        assert events.index("install") < events.index("modules")
+    assert events[-3:] == ["quiesce", "shutdown", "close"]
+    assert events.count("install") == 1
+    assert runtime._native_tasks is None
+    assert not runtime.started
 
 
 def test_sidecar_x11_display_is_configured_before_obs_startup_and_closed_after_shutdown(

@@ -405,6 +405,158 @@ def _run_native(scenario: str) -> None:
     assert result.returncode == 0, f"Native scenario {scenario!r} exited {result.returncode}:\n{diagnostics}"
 
 
+def _assert_system_default_audio_monitoring() -> None:
+    from pylibobs._ffi import ffi, get_lib
+    from solin.core.scenes.libobs_media_source import STATE_PAUSED
+
+    with _native_media() as (runtime, media, path):
+        assert runtime.ob.audio_monitoring_available()
+        assert runtime.ob.get_audio_monitoring_device()[1] == "default"
+        if sys.platform == "win32":
+            # This module subscribes to OS default-output changes, including in
+            # the headless sidecar. Without it, the sentinel alone is insufficient.
+            assert "wasapi_output_capture" in runtime.ob.enum_source_types()
+        audio = Path(__file__).resolve().parents[1] / "fixtures" / "media_extract" / "audio.mp3"
+        for media_path in (path, audio):
+            assert media.open(str(media_path), autoplay=False, volume_percent=0)
+
+            def paused():
+                media.apply_pending_resume()
+                return (
+                    media.source.media_state == STATE_PAUSED
+                    and media._startup is None
+                )
+
+            assert _wait_for(paused), _observation(media)
+            source = media.source
+            reset_done = Event()
+
+            @ffi.callback("void(void *)")
+            def reset_monitoring(_parameter, completed=reset_done):
+                runtime._context.reset_audio_monitoring()
+                completed.set()
+
+            # Native device-change handlers reset monitoring, not the decoder.
+            # Exercise that boundary without changing the operator's OS settings.
+            if sys.platform == "win32":
+                # win-wasapi dispatches through OBS_TASK_UI while IPC can be idle.
+                get_lib().obs_queue_task(
+                    0, ffi.cast("obs_task_t", reset_monitoring), ffi.NULL, False,
+                )
+                assert reset_done.wait(4), "Native default-output reset was not dispatched"
+            else:
+                reset_monitoring(ffi.NULL)
+
+            assert media.source is source
+            assert source.media_state == STATE_PAUSED
+            assert runtime.ob.get_audio_monitoring_device()[1] == "default"
+
+        if sys.platform == "win32":
+            import ctypes
+
+            ole32 = ctypes.WinDLL("ole32")
+            ole32.CoGetApartmentType.argtypes = (
+                ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+            )
+            ole32.CoGetApartmentType.restype = ctypes.c_int32
+            apartments = []
+
+            @ffi.callback("void(void *)")
+            def inspect_apartment(_parameter):
+                apartment, qualifier = ctypes.c_int(), ctypes.c_int()
+                result = ole32.CoGetApartmentType(
+                    ctypes.byref(apartment), ctypes.byref(qualifier),
+                )
+                apartments.append((result, apartment.value))
+
+            # Monitoring resources still exist here. Their native destruction
+            # must retain MTA support after new UI tasks have been rejected.
+            runtime._native_tasks.quiesce()
+            get_lib().obs_queue_task(
+                3, ffi.cast("obs_task_t", inspect_apartment), ffi.NULL, True,
+            )
+            assert apartments == [(0, 1)], apartments  # S_OK, APTTYPE_MTA
+
+
+def test_native_monitoring_uses_system_default_and_reset_preserves_playback() -> None:
+    _run_native("audio-monitoring")
+
+
+def _assert_audio_monitoring_reset_overlaps_media_replacement() -> None:
+    from pylibobs._ffi import ffi, get_lib
+    from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
+
+    with _native_media() as (runtime, media, path):
+        assert runtime.ob.audio_monitoring_available()
+        assert runtime.ob.get_audio_monitoring_device()[1] == "default"
+        audio = Path(__file__).resolve().parents[1] / "fixtures" / "media_extract" / "audio.mp3"
+        stop = Event()
+        first_reset = Event()
+        reset_completed = Event()
+        resets = []
+        errors = []
+
+        @ffi.callback("void(void *)")
+        def reset_monitoring(_parameter):
+            try:
+                runtime._context.reset_audio_monitoring()
+                resets.append(True)
+            except Exception as error:  # noqa: BLE001 - surface native callback failures
+                errors.append(error)
+            finally:
+                first_reset.set()
+                reset_completed.set()
+
+        def submit_resets():
+            try:
+                while not stop.is_set():
+                    # Match win-wasapi's asynchronous default-device notification.
+                    reset_completed.clear()
+                    get_lib().obs_queue_task(
+                        0, ffi.cast("obs_task_t", reset_monitoring), ffi.NULL, False,
+                    )
+                    # Keep one notification in flight so slow device initialization
+                    # cannot turn this overlap check into an unbounded queue flood.
+                    if not reset_completed.wait(4):
+                        raise TimeoutError("Native default-output reset did not complete")
+                    stop.wait(0.01)
+            except Exception as error:  # noqa: BLE001 - report producer failures to the owner
+                errors.append(error)
+                first_reset.set()
+
+        producer = Thread(target=submit_resets)
+        producer.start()
+        try:
+            assert first_reset.wait(4), "Native default-output reset was not dispatched"
+            for index in range(80):
+                media_path = audio if index % 2 else path
+                assert media.open(str(media_path), autoplay=False, volume_percent=0)
+                assert get_lib().obs_source_get_monitoring_type(
+                    media.source._ptr,
+                ) == MONITORING_MONITOR_ONLY, "Media monitoring was not enabled"
+                # Allow resets to overlap monitor creation and deferred destruction.
+                time.sleep(0.005)
+                media.close()
+        finally:
+            stop.set()
+            producer.join(timeout=3)
+            assert not producer.is_alive(), "Audio reset producer did not terminate"
+
+        # Finish accepted callbacks before inspecting their results. No destruction
+        # drain or per-media exclusion may hide the lifetime race during replacement.
+        get_lib().obs_queue_task(
+            0, ffi.cast("obs_task_t", reset_monitoring), ffi.NULL, True,
+        )
+        assert not errors, errors
+        assert len(resets) > 2, "Resets did not continue during media replacement"
+        assert runtime.ob.get_audio_monitoring_device()[1] == "default"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native default-output notifications")
+def test_native_audio_monitoring_reset_overlaps_media_replacement() -> None:
+    _run_native("audio-monitoring-overlap")
+
+
 def test_native_stop_before_first_input_update_is_acknowledged() -> None:
     _run_native("stop")
 
@@ -440,6 +592,8 @@ if __name__ == "__main__":
         _assert_startup_forwards_the_requested_seek(sys.argv[1].removeprefix("seek-"))
         raise SystemExit(0)
     {
+        "audio-monitoring": _assert_system_default_audio_monitoring,
+        "audio-monitoring-overlap": _assert_audio_monitoring_reset_overlaps_media_replacement,
         "stop": _assert_stop_before_first_input_update,
         "speed": _assert_speed_before_initial_pause_acknowledgement,
         "audio-before-video": _assert_visual_wait_does_not_pause_before_the_first_video,
