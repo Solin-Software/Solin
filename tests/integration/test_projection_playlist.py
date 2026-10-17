@@ -1,3 +1,20 @@
+import sys
+from types import SimpleNamespace
+from unittest.mock import Mock
+import uuid
+
+import pytest
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QPixmap
+
+from solin.controllers.playback_protection_controller import PlaybackProtectionController
+from solin.core.foundation.runtime_paths import ProfilePaths
+from solin.core.foundation.settings_store import SettingsStore
+from solin.core.media.playback_state import SolinPlaybackState
+from solin.core.media.profile_store import ProfileMediaStore
+from solin.core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
+from solin.core.rendering.fonts import FontManager
+from solin.ui.incremental_load import IncrementalLoadState
 import solin.widgets.projection.bar as projection_bar
 from solin.widgets.projection.playlist import ProjectionPlaylistMixin
 
@@ -20,7 +37,9 @@ class _Timer:
         pass
 
 
-class _ThumbnailQueue:
+class _ThumbnailQueue(QObject):
+    info_ready = Signal(int, QPixmap, str)
+
     def clear(self):
         pass
 
@@ -28,6 +47,136 @@ class _ThumbnailQueue:
 class _PlaybackSettings:
     def playback_order(self):
         return "off"
+
+
+class _Media(QObject):
+    state_changed = Signal(object)
+    duration_changed = Signal(int)
+    position_changed = Signal(int)
+    media_ended = Signal()
+    playback_source_changed = Signal(bool)
+    buffer_progress = Signal(int, int)
+    playback_recovery_changed = Signal(bool)
+
+    is_playing = False
+
+    def set_volume(self, _volume):
+        pass
+
+    def set_playing(self, playing):
+        self.is_playing = playing
+        self.state_changed.emit(
+            SolinPlaybackState.PLAYING if playing else SolinPlaybackState.PAUSED
+        )
+
+
+@pytest.fixture
+def projection_controls(tmp_path, monkeypatch):
+    settings = SettingsStore.for_namespace(f"projection-lifecycle-{uuid.uuid4().hex}", "test")
+    media = _Media()
+    protection = PlaybackProtectionController(MediaSettingsStore(settings), media)
+    errors = []
+    monkeypatch.setattr(sys, "excepthook", lambda *error: errors.append(error))
+    bar = None
+    try:
+        bar = projection_bar.ProjectionBar(
+            media,
+            playback_settings=ProjectionPlaybackSettingsStore(settings),
+            playback_protection=protection,
+            profile_paths=Mock(spec=ProfilePaths),
+            profile_media_store=Mock(spec=ProfileMediaStore),
+            media_cache_dir=tmp_path,
+            media_info_queue_factory=_ThumbnailQueue,
+            font_manager=Mock(spec=FontManager),
+            yearly_text_provider=lambda: ("", "", ""),
+        )
+        yield SimpleNamespace(bar=bar, media=media, protection=protection, errors=errors)
+    finally:
+        if bar is not None:
+            bar.overlay_preparation_handle.cancel()
+            # The final construction unit attaches these staged widgets to the overlay.
+            for name in ("overlay_stack", "_overlay_body"):
+                staged = getattr(bar, name, None)
+                if staged is not None and staged.parent() is None:
+                    staged.deleteLater()
+            bar.close()
+            bar.deleteLater()
+        protection.deleteLater()
+        media.deleteLater()
+        settings.clear()
+
+
+@pytest.mark.parametrize("initial_enabled", [False, True])
+@pytest.mark.parametrize("item_count", [0, 3])
+@pytest.mark.parametrize("completed_units", range(4))
+def test_protection_changes_preserve_deferred_overlay(
+    projection_controls, initial_enabled, item_count, completed_units,
+):
+    controls = projection_controls
+    bar = controls.bar
+    handle = bar.overlay_preparation_handle
+    if completed_units:
+        handle.start()
+        for _ in range(completed_units):
+            handle._run_next_unit()
+    overlay = bar.overlay
+    state = handle.state
+    bar._playlist = [{"title": str(index)} for index in range(item_count)]
+    bar._playlist_index = max(0, item_count - 2)
+
+    controls.protection.set_enabled(initial_enabled)
+    controls.protection.set_enabled(not initial_enabled)
+    controls.media.set_playing(True)
+    assert bar.seek_slider.isEnabled() is initial_enabled
+    if item_count > 1:
+        assert not bar.prev_btn.isHidden()
+        assert not bar.next_btn.isHidden()
+        assert bar.prev_btn.isEnabled() is initial_enabled
+        assert bar.next_btn.isEnabled() is initial_enabled
+    controls.protection.set_enabled(initial_enabled)
+    assert bar.seek_slider.isEnabled() is not initial_enabled
+    if item_count > 1:
+        assert bar.prev_btn.isEnabled() is not initial_enabled
+        assert bar.next_btn.isEnabled() is not initial_enabled
+    controls.media.set_playing(False)
+
+    assert controls.errors == []
+    assert bar.seek_slider.isEnabled()
+    assert bar.overlay is overlay
+    assert not bar._overlay_ready
+    assert handle.state is state
+
+
+@pytest.mark.parametrize("item_count", [0, 1, 3])
+@pytest.mark.parametrize("from_saved_playlist", [False, True])
+@pytest.mark.parametrize("locked", [False, True])
+def test_overlay_completion_and_protection_changes_sync_current_navigation(
+    projection_controls, item_count, from_saved_playlist, locked,
+):
+    controls = projection_controls
+    bar = controls.bar
+    controls.protection.set_enabled(True)
+    controls.media.set_playing(locked)
+    bar._playlist = [{"title": str(index)} for index in range(item_count)]
+    bar._playlist_index = max(0, item_count - 2)
+    bar._is_from_saved_playlist = from_saved_playlist
+
+    bar._ensure_overlay_ready()
+
+    assert bar.overlay_preparation_handle.state is IncrementalLoadState.READY
+    assert bar._overlay_ready
+    show = item_count > 1
+    assert bar.prev_btn.isHidden() is not show
+    assert bar.next_btn.isHidden() is not show
+    assert bar.ov_panel_btn.isHidden() is not show
+    assert bar.ov_send_temp_btn.isHidden() is not (show and not from_saved_playlist)
+    if show:
+        assert bar.prev_btn.isEnabled() is not locked
+        assert bar.next_btn.isEnabled() is not locked
+        controls.media.set_playing(not locked)
+        assert bar.prev_btn.isEnabled() is locked
+        assert bar.next_btn.isEnabled() is locked
+    assert controls.errors == []
 
 
 def test_projection_bar_uses_playlist_mixin():
@@ -100,12 +249,6 @@ def test_preview_idle_path_accepts_only_existing_local_visual_media(tmp_path):
     host._playlist = [{"url": str(video)}]
     host._is_audio = True
     assert ProjectionPlaylistMixin._resolve_idle_path(host) == ""
-
-
-from types import SimpleNamespace
-
-import pytest
-from PySide6.QtGui import QPixmap
 
 
 class _CaptureQueue:

@@ -761,6 +761,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
         self._overlay_layout.addWidget(self._overlay_body, stretch=1)
         self._overlay_ready = True
+        self._update_nav_buttons()
         startup_timeline().mark("projection_bar_overlay_constructed")
 
     def _ensure_overlay_ready(self) -> None:

@@ -83,6 +83,7 @@ def _make_bar(*, muted=False, volume=0.8):
     bar.seek_slider = _Control()
     bar.toggle_requested = _Signal()
     bar._playback_protection = _Protection()
+    bar._overlay_ready = True
     bar._playlist = []
     bar._playlist_index = 0
     bar.prev_btn = _Control()
