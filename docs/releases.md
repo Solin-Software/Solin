@@ -120,7 +120,9 @@ Each PR appears in exactly one category. The ordered label catalog in
 **Bug fixes**, **Features and improvements**, **CI/CD**, **Dependencies**,
 **Translations**, then **Documentation**. When several labels match, the first
 category wins; a bug fix that also changes Markdown remains under **Bug fixes**.
-PRs with no recognized label and direct commits appear under **Other changes**.
+PRs without a category label and direct commits appear under **Other changes**.
+The workflow assigns `testing` to `test:` and `test(scope):` PR titles. That label
+leaves entries under **Other changes** unless another category label applies.
 Empty categories are omitted. Labels on related issues do not classify their PR.
 `skip-changelog` overrides every category and hides only that PR's entry and its
 related issue links. The labeling workflow assigns it to `chore(release):` PRs

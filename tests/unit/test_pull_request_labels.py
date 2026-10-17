@@ -22,6 +22,9 @@ ROOT = "repos/Solin-Software/Solin"
     ("perf(media)!: accelerate extraction", {"enhancement"}),
     ("docs: explain setup", {"documentation"}),
     ("ci: cache builds", {"github_actions"}),
+    ("test: stabilize native transitions", {"testing"}),
+    ("test(qt): isolate reparenting input", {"testing"}),
+    ("test(qt)!: replace input fixtures", {"testing"}),
     ("deps: update runtime", {"dependencies"}),
     ("chore(deps-dev): update pytest", {"dependencies"}),
     ("chore(release): prepare 26.32.0", {"skip-changelog"}),
@@ -40,6 +43,8 @@ ROOT = "repos/Solin-Software/Solin"
     ("fix playback", set()),
     ("fix:", set()),
     ("feat:   ", set()),
+    ("test:", set()),
+    ("prefix test: stabilize transitions", set()),
     ("feat\nfix: playback", set()),
 ])
 def test_titles_classify_only_an_explicit_conventional_prefix(title, expected):
@@ -61,6 +66,7 @@ def test_titles_classify_only_an_explicit_conventional_prefix(title, expected):
     ("src/solin/resources/translations/locales/pt_BR.json", {"translations"}),
     ("src/solin/resources/remote_control/scripts/client.ts", set()),
     ("src/solin/version.py", set()),
+    ("tests/unit/test_example.py", set()),
     ("docs/requirements.md", {"documentation"}),
 ])
 def test_file_rules_target_the_repository_layout(path, expected):

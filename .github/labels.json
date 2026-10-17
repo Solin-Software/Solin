@@ -48,6 +48,14 @@
     "release_heading": "Documentation"
   },
   {
+    "name": "testing",
+    "color": "5319e7",
+    "description": "Changes to automated tests and test infrastructure",
+    "title_types": ["test"],
+    "files": [],
+    "release_heading": null
+  },
+  {
     "name": "skip-changelog",
     "color": "ededed",
     "description": "Exclude this pull request from the release changelog",
