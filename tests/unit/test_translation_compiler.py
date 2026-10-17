@@ -3,6 +3,8 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -128,6 +130,10 @@ def test_failed_compile_preserves_all_previous_outputs_and_reports_error(toolcha
     assert not list(output.glob(".solin-translations-*/"))
     assert len(calls) == 3
 
+    monkeypatch.setattr(compiler.subprocess, "run", normal_run)
+    assert len(compiler.compile_catalogs(source, output)) == 2
+    assert len(calls) == 5
+
 
 def test_source_snapshot_matches_manifest_when_source_is_edited_during_compilation(toolchain, monkeypatch):
     source, output, _, calls = toolchain
@@ -152,6 +158,42 @@ def test_concurrent_preparation_serializes_writers_and_compiles_once(toolchain):
     assert all(result == [output / "solin_en.qm"] for result in results)
     assert len(calls) == 1
     assert json.loads((output / compiler._MANIFEST).read_text())["catalogs"]["solin_en.ts"]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows byte-range locking")
+@pytest.mark.parametrize("initial_content", [b"", b"\0"], ids=["empty", "initialized"])
+def test_preparation_waits_for_locked_file_before_writing(toolchain, monkeypatch, initial_content):
+    import msvcrt
+
+    source, output, _, calls = toolchain
+    output.mkdir()
+    lock_path = output / ".solin-translations.lock"
+    lock_path.write_bytes(initial_content)
+    attempted = Event()
+    locking = msvcrt.locking
+
+    def observe_locking(fd, mode, size):
+        try:
+            return locking(fd, mode, size)
+        finally:
+            if mode == msvcrt.LK_NBLCK:
+                attempted.set()
+
+    monkeypatch.setattr(msvcrt, "locking", observe_locking)
+    with ThreadPoolExecutor(max_workers=1) as pool, lock_path.open("r+b") as owner:
+        locking(owner.fileno(), msvcrt.LK_NBLCK, 1)
+        try:
+            pending = pool.submit(compiler.compile_catalogs, source, output)
+            pending.add_done_callback(lambda _: attempted.set())
+            assert attempted.wait(timeout=5), "Preparation never attempted to acquire the lock"
+            if pending.done():
+                pending.result()
+                pytest.fail("Preparation bypassed the held lock")
+            assert calls == []
+        finally:
+            locking(owner.fileno(), msvcrt.LK_UNLCK, 1)
+        assert pending.result(timeout=5) == [output / "solin_en.qm"]
+    assert len(calls) == 1
 
 
 def test_metadata_inventory_missing_sources_and_shared_source_output_are_rejected(toolchain):

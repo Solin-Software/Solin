@@ -64,12 +64,9 @@ def _output_lock(output_dir: Path) -> Iterator[None]:
         if sys.platform == "win32":
             import msvcrt
 
-            if lock.seek(0, os.SEEK_END) == 0:
-                lock.write(b"\0")
-                lock.flush()
-
             def acquire() -> None:
                 lock.seek(0)
+                # Windows permits locking beyond EOF; initialization writes would race.
                 msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
 
             def release() -> None:
