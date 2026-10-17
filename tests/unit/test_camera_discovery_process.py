@@ -53,8 +53,13 @@ def _posix_process_has_exited(pid: int) -> bool:
     try:
         stat = Path(f"/proc/{pid}/stat").read_text()
     except (FileNotFoundError, ProcessLookupError):
-        # The process can disappear after kill(pid, 0), including during read.
-        return True
+        # Recheck disappearance after the read; unavailable procfs alone does
+        # not establish that a still-visible process has exited.
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        return False
     # A zombie has exited even when PID 1 has not reaped it. The parenthesized
     # process name can contain spaces and closing parentheses.
     return stat.rpartition(")")[2].split()[0] == "Z"
@@ -431,16 +436,35 @@ def test_invalid_reply_is_reaped_without_fallback(launch, change):
 @pytest.mark.parametrize("error", [FileNotFoundError, ProcessLookupError])
 def test_process_exit_during_proc_stat_read_is_observed(monkeypatch, error):
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(os, "kill", lambda _pid, _signal: None)
+    probes = []
+
+    def probe(_pid, _signal):
+        probes.append(True)
+        if len(probes) > 1:
+            raise ProcessLookupError("The process has now exited")
+
+    monkeypatch.setattr(os, "kill", probe)
 
     def read_text():
         raise error("The process exited after the PID probe")
 
     monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: SimpleNamespace(
-        exists=lambda: True, read_text=read_text,
+        read_text=read_text,
     ))
 
     assert _posix_process_has_exited(12345)
+
+
+def test_missing_procfs_does_not_establish_process_exit(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(os, "kill", lambda _pid, _signal: None)
+
+    def read_text():
+        raise FileNotFoundError("procfs is unavailable")
+
+    monkeypatch.setattr(sys.modules[__name__], "Path", lambda _path: SimpleNamespace(read_text=read_text))
+
+    assert not _posix_process_has_exited(12345)
 
 
 def test_process_exit_before_pid_probe_does_not_read_proc_stat(monkeypatch):

@@ -182,7 +182,8 @@ def test_cursor_move_ignores_other_receivers_and_coordinates(input_surface, monk
 
 
 @pytest.mark.parametrize("input_surface", ["window"], indirect=True)
-def test_cursor_move_accepts_target_widget_entry(input_surface, monkeypatch):
+@pytest.mark.parametrize("unrelated_entry", [False, True], ids=["isolated", "unrelated-entry"])
+def test_cursor_move_accepts_target_widget_entry(input_surface, monkeypatch, unrelated_entry):
     host, widget = input_surface
     point = QPoint(80, 50)
     window, position = _qt._window_position(widget, point)
@@ -206,6 +207,12 @@ def test_cursor_move_accepts_target_widget_entry(input_surface, monkeypatch):
     app.installEventFilter(recorder)
 
     def post():
+        if unrelated_entry:
+            global_point = expected + QPoint(1, 1)
+            QCoreApplication.sendEvent(widget, QEnterEvent(
+                QPointF(widget.mapFromGlobal(global_point)),
+                QPointF(host.mapFromGlobal(global_point)), QPointF(global_point),
+            ))
         # QWidgetWindow selects the receiver, then dispatchEnterLeave rebuilds
         # its local position from global coordinates. The QWidget scene position
         # still belongs to the host window, which differs from the Quick scene.
