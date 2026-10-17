@@ -96,8 +96,6 @@ class ProjectionPlaylistMixin:
 
         self.prev_btn.setVisible(show)
         self.next_btn.setVisible(show)
-        self.ov_panel_btn.setVisible(show)
-        self.ov_send_temp_btn.setVisible(show and not self._is_from_saved_playlist)
 
         if show:
             can_prev = self._playlist_index > 0
@@ -112,7 +110,11 @@ class ProjectionPlaylistMixin:
             self.prev_btn.setIcon(make_icon(ICON_SKIP_PREV, 15, prev_col))
             self.next_btn.setIcon(make_icon(ICON_SKIP_NEXT, 15, next_col))
 
-            if self._panel_populated:
+        if self._overlay_ready:
+            self.ov_panel_btn.setVisible(show)
+            self.ov_send_temp_btn.setVisible(show and not self._is_from_saved_playlist)
+
+            if show and self._panel_populated:
                 self.playlist_panel.set_active(self._playlist_index)
                 if (
                     self.playlist_panel.is_open()
