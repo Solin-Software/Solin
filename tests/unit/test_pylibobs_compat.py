@@ -6,7 +6,7 @@ import weakref
 import pylibobs._ffi as pylibobs_ffi
 import pytest
 
-from solin.core.media.pylibobs_compat import set_video_compat
+from solin.core.media.pylibobs_compat import ObsTaskBridgeCompat, set_video_compat
 
 
 def test_pylibobs_012_video_init_keeps_graphics_buffer_alive(monkeypatch) -> None:
@@ -131,3 +131,100 @@ def test_pinned_binding_returns_owner_for_the_real_cffi_graphics_buffer(
         assert owner is not None
         del owner
         assert graphics_owner is not None and graphics_owner() is None
+
+
+@pytest.mark.parametrize("opaque", [True, False])
+def test_ui_task_bridge_uses_concrete_callback_abi_and_retains_its_owner(monkeypatch, opaque):
+    import gc
+
+    from cffi import FFI
+
+    ffi = FFI()
+    if opaque:
+        ffi.cdef("""
+            typedef struct obs_task_handler_s *obs_task_handler_t;
+            typedef struct obs_task_s *obs_task_t;
+        """)
+    else:
+        ffi.cdef("""
+            typedef void (*obs_task_t)(void *);
+            typedef void (*obs_task_handler_t)(obs_task_t, void *, _Bool);
+        """)
+    registered = []
+    monkeypatch.setattr(pylibobs_ffi, "ffi", ffi)
+    monkeypatch.setattr(
+        pylibobs_ffi,
+        "get_lib",
+        lambda: SimpleNamespace(obs_set_ui_task_handler=registered.append),
+    )
+    queued = []
+    owner = ObsTaskBridgeCompat(lambda task, wait: queued.append((task, wait)))
+    callback = weakref.ref(owner._callback)
+    owner.install()
+    assert ffi.typeof(registered[0]) == ffi.typeof("obs_task_handler_t")
+    invoke = ffi.cast("void (*)(void (*)(void *), void *, _Bool)", registered[0])
+    executed = []
+
+    @ffi.callback("void(void *)")
+    def task(param):
+        executed.append(ffi.cast("int *", param)[0])
+
+    param = ffi.new("int *", 37)
+    invoke(task, param, False)
+    invoke(task, param, True)
+    gc.collect()
+    assert callback() is not None
+    assert [wait for _task, wait in queued] == [False, True]
+    assert executed == []
+    for work, _wait in queued:
+        work()
+    assert executed == [37, 37]
+    del owner
+    gc.collect()
+    assert callback() is None
+
+
+def test_async_task_bridge_retains_handle_until_trampoline_finishes(monkeypatch):
+    import gc
+
+    from cffi import FFI
+
+    ffi = FFI()
+    ffi.cdef("""
+        typedef struct obs_task_handler_s *obs_task_handler_t;
+        typedef struct obs_task_s *obs_task_t;
+    """)
+    queued = []
+
+    def queue(kind, task, handle, wait):
+        # Native OBS retains only an address, never the Python handle owner.
+        borrowed = ffi.cast("void *", int(ffi.cast("uintptr_t", handle)))
+        queued.append((kind, task, borrowed, wait))
+
+    monkeypatch.setattr(pylibobs_ffi, "ffi", ffi)
+    monkeypatch.setattr(
+        pylibobs_ffi,
+        "get_lib",
+        lambda: SimpleNamespace(obs_queue_task=queue),
+    )
+    bridge = ObsTaskBridgeCompat(lambda _task, _wait: None)
+    executed = []
+
+    class Payload:
+        def __call__(self):
+            executed.append("executed")
+
+    payload = Payload()
+    reference = weakref.ref(payload)
+    bridge.queue(payload, wait=False)
+    del payload
+    gc.collect()
+    assert reference() is not None
+    assert len(bridge._handles) == 1
+    kind, pointer, param, wait = queued.pop()
+    assert kind == 3 and wait is False
+    ffi.cast("void (*)(void *)", pointer)(param)
+    gc.collect()
+    assert executed == ["executed"]
+    assert not bridge._handles
+    assert reference() is None
