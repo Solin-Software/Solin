@@ -8,12 +8,13 @@ from typing import Any
 from PySide6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
+    QEvent,
     QObject,
     Property,
     QPropertyAnimation,
     Signal,
 )
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QWidget
 
 from .profile_avatar_button import ProfileAvatarButton
 from .sidebar_button import SidebarButton
@@ -21,6 +22,7 @@ from .sidebar_button import SidebarButton
 SIDEBAR_EXPANDED_WIDTH = 220
 SIDEBAR_COLLAPSED_WIDTH = 64
 SIDEBAR_ANIMATION_MS = 180
+SIDEBAR_EXPANSION_MIN_WIDTH = 560
 
 
 class CollapsibleSidebarFrame(QFrame):
@@ -36,7 +38,7 @@ class CollapsibleSidebarFrame(QFrame):
 
 
 class SidebarChromeController(QObject):
-    """Keeps sidebar chrome state synchronized without rebuilding pages."""
+    """Applies user preference within window-width constraints without rebuilding pages."""
 
     collapsed_changed = Signal(bool)
 
@@ -44,6 +46,7 @@ class SidebarChromeController(QObject):
         self,
         *,
         frame: CollapsibleSidebarFrame,
+        width_source: QWidget,
         title_label: QLabel,
         subtitle_label: QLabel,
         profile_avatar_button: ProfileAvatarButton,
@@ -56,6 +59,7 @@ class SidebarChromeController(QObject):
     ) -> None:
         super().__init__(parent)
         self._frame = frame
+        self._width_source = width_source
         self._title_label = title_label
         self._subtitle_label = subtitle_label
         self._profile_avatar_button = profile_avatar_button
@@ -64,7 +68,9 @@ class SidebarChromeController(QObject):
         self._settings = settings
         self._collapse_tooltip = collapse_tooltip
         self._expand_tooltip = expand_tooltip
-        self._collapsed = bool(settings.sidebar_collapsed(False))
+        self._preferred_collapsed = bool(settings.sidebar_collapsed(False))
+        self._expansion_allowed = width_source.width() >= SIDEBAR_EXPANSION_MIN_WIDTH
+        self._collapsed = self._preferred_collapsed or not self._expansion_allowed
 
         self._animation = QPropertyAnimation(self._frame, b"sidebarWidth", self)
         self._animation.setDuration(SIDEBAR_ANIMATION_MS)
@@ -72,14 +78,17 @@ class SidebarChromeController(QObject):
         self._animation.finished.connect(self._on_animation_finished)
 
         self._toggle_button.clicked.connect(self.toggle)
+        self._toggle_button.setEnabled(self._expansion_allowed)
         self._apply_width(self._target_width(self._collapsed))
         self._apply_compact(self._collapsed)
+        self._width_source.installEventFilter(self)
 
     def is_collapsed(self) -> bool:
         return self._collapsed
 
     def toggle(self) -> None:
-        self.set_collapsed(not self._collapsed, animate=True, persist=True)
+        if self._expansion_allowed:
+            self.set_collapsed(not self._preferred_collapsed, animate=True, persist=True)
 
     def set_collapsed(
         self,
@@ -89,6 +98,28 @@ class SidebarChromeController(QObject):
         persist: bool = False,
     ) -> None:
         collapsed = bool(collapsed)
+        preference_changed = collapsed != self._preferred_collapsed
+        self._preferred_collapsed = collapsed
+        if persist and preference_changed:
+            self._settings.save_sidebar_collapsed(collapsed)
+        self._set_effective_collapsed(
+            collapsed or not self._expansion_allowed,
+            animate=animate,
+        )
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self._width_source and event.type() == QEvent.Type.Resize:
+            expansion_allowed = self._width_source.width() >= SIDEBAR_EXPANSION_MIN_WIDTH
+            if expansion_allowed != self._expansion_allowed:
+                self._expansion_allowed = expansion_allowed
+                self._toggle_button.setEnabled(expansion_allowed)
+                self._set_effective_collapsed(
+                    self._preferred_collapsed or not expansion_allowed,
+                    animate=False,
+                )
+        return super().eventFilter(watched, event)
+
+    def _set_effective_collapsed(self, collapsed: bool, *, animate: bool) -> None:
         if (
             collapsed == self._collapsed
             and self._animation.state() == QAbstractAnimation.State.Stopped
@@ -101,15 +132,10 @@ class SidebarChromeController(QObject):
 
         self._collapsed = collapsed
         self._toggle_button.setToolTip(self._current_toggle_tooltip())
-        if persist:
-            self._settings.save_sidebar_collapsed(collapsed)
         if state_changed:
             self.collapsed_changed.emit(collapsed)
 
-        if collapsed:
-            self._apply_compact(True)
-        else:
-            self._apply_compact(False)
+        self._apply_compact(collapsed)
 
         end_width = self._target_width(collapsed)
         if not animate:

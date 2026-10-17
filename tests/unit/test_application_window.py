@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
 from PySide6.QtCore import QByteArray, Signal
 from PySide6.QtGui import QCloseEvent, QSurface
 from PySide6.QtQuick import QSGRendererInterface
@@ -181,6 +182,25 @@ def test_application_window_starts_with_loading_canvas() -> None:
     if surface_type != QSurface.SurfaceType.RasterSurface:
         assert window.windowHandle() is not None
         assert window.windowHandle().surfaceType() == surface_type
+
+
+@pytest.mark.parametrize("width,height", [(-1, -1), (0, 0), (1, 1), (460, 600), (700, 700)])
+def test_application_window_clamps_initial_size_and_resize_to_minimum(width, height) -> None:
+    window = ApplicationWindow(
+        width=width,
+        height=height,
+        geometry=QByteArray(),
+        save_geometry=_ignore_geometry,
+        pending_files=[],
+    )
+    try:
+        assert (window.width(), window.height()) == (max(460, width), max(600, height))
+        window.resize(700, 700)
+        window.resize(1, 1)
+        assert (window.width(), window.height()) == (460, 600)
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_application_window_restores_maximized_state_and_normal_geometry() -> None:
