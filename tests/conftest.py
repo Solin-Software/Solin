@@ -25,6 +25,18 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 _QT_APPLICATION = QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(scope="session")
+def compiled_translation_catalogs(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Compile current sources into this test session's isolated catalog directory."""
+    from solin.core.i18n.compiler import compile_catalogs
+    from tests._paths import REPO_ROOT
+
+    source_directory = REPO_ROOT / "src" / "solin" / "resources" / "translations"
+    output_directory = tmp_path_factory.mktemp("translation-catalogs")
+    compile_catalogs(source_directory, output_directory)
+    return output_directory
+
+
 def _record_test_progress(nodeid: str, phase: str) -> None:
     destination = os.environ.get("SOLIN_TEST_PROGRESS_LOG")
     if destination is None:

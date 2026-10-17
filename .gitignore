@@ -17,6 +17,9 @@ dist/
 *.egg-info/
 *.zip
 
+src/solin/resources/translations/*.qm
+src/solin/resources/translations/.solin-translations*
+
 cache/
 data/
 icon.ico

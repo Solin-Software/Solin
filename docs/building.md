@@ -4,8 +4,15 @@ The repository supports Windows x86-64, macOS 13+ on Intel and Apple Silicon,
 and Linux x86-64 with glibc 2.38 or newer. Generated files are written under
 `build/` or `dist/` and must not be committed.
 
-Playback and scenes use the supervised libobs sidecar. Source runs launch its
-Python module; standalone builds launch the Solin executable with
+Build recipes generate Qt `.qm` catalogs from versioned `.ts` sources before
+packaging; no precompiled catalog is required in the checkout. Wheels use the
+same compiler through setuptools, with a pinned PySide6 build dependency for
+isolated builds. See [Translations](translations.md#development-and-builds) for
+development preparation and the source/distribution resource contract.
+
+Playback and scenes use the supervised libobs sidecar. Source runs and wheel
+installations launch its Python module; standalone builds launch the Solin
+executable with
 `--scene-engine-sidecar`, before importing the GUI or opening a profile.
 Each build includes the `pylibobs` Python modules and stages the installed native
 runtime under `pylibobs/_libs/<platform>/<architecture>`, including its plugins,

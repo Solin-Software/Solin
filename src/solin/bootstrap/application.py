@@ -32,6 +32,7 @@ from solin.bootstrap.single_instance import (
 from solin.core.foundation.constants import IPC_SERVER_NAME
 from solin.core.profiles.application import ProfileRegistryLoadError
 from solin.bootstrap.startup_timeline import startup_timeline
+from solin.bootstrap.translations import prepare_application_catalogs
 
 
 def _bind_source_credential_resolver(scene_engine, credentials) -> None:
@@ -724,6 +725,8 @@ def _launch_profile_window(
 
 
 def main():
+    catalog_directory = prepare_application_catalogs()
+
     # High-DPI support
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
@@ -774,6 +777,7 @@ def main():
 
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager(
+        catalog_directory=catalog_directory,
         global_settings=container.global_settings,
         jw_languages_cache_file=container.runtime_paths.cache_dir / "jw_languages.json",
         jw_language_settings_store_factory=(container.jw_language_settings_store_factory),

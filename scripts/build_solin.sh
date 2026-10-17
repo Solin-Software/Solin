@@ -15,6 +15,7 @@ QML_CACHE_ROOT="${WORK_ROOT}/qmlcache"
 QML_APP_DIR="${QML_CACHE_ROOT}/solin/qml/Solin"
 QML_QT_DIR="${QML_CACHE_ROOT}/PySide6/qml"
 QT_LIBRARY_DIR="${QML_CACHE_ROOT}/qt-libs"
+TRANSLATIONS_DIR="${WORK_ROOT}/translations/linux"
 DIST_DIR="${WORK_ROOT}/main.dist"
 FINAL_DIST_DIR="${OUTPUT_ROOT}/main.dist"
 
@@ -220,6 +221,10 @@ if find "${QML_QT_DIR}" -name '*.so' -print -quit | grep -q .; then
     )
 fi
 
+"${PYTHON}" scripts/compile_translations.py \
+    --source-dir src/solin/resources/translations \
+    --output-dir "${TRANSLATIONS_DIR}"
+
 "${PYTHON}" -m nuitka \
     --standalone \
     --output-dir="${WORK_ROOT}" \
@@ -250,7 +255,7 @@ fi
     --include-data-dir="${QML_APP_DIR}=solin/qml/Solin" \
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
-    --include-data-files="src/solin/resources/translations/*.qm=solin/resources/translations/" \
+    --include-data-files="${TRANSLATIONS_DIR}/*.qm=solin/resources/translations/" \
     --enable-plugin=pyside6 \
     --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py

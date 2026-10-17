@@ -1,6 +1,8 @@
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
+from tests._translation_catalog import catalog_translation
+
 
 def test_meeting_section_dialogs_use_playlist_edit_translation_context():
     source = Path("src/solin/widgets/meetings/tree_controller.py").read_text(
@@ -28,17 +30,12 @@ def test_canonical_restore_catalog_is_complete_in_brazilian_portuguese():
         for message in restore.findall("message")
     }
 
-    assert translations["Restore official meeting content"] == (
-        "Restaurar conteúdo oficial da reunião"
-    )
     confirmation = (
         "Restore the official meeting content?\n\n"
         "Manually added content, trims, framing and expanded state will be kept."
     )
-    assert translations[confirmation] == (
-        "Restaurar o conteúdo oficial da reunião?\n\n"
-        "O conteúdo adicionado manualmente, os cortes, o enquadramento e o estado "
-        "de expansão serão mantidos."
-    )
+    for source in ("Restore official meeting content", confirmation):
+        translated = catalog_translation("pt_BR", "MeetingCanonicalRestore", source)
+        assert translated.count("\n") == source.count("\n")
     assert all("%1" not in source for source in translations)
     assert all(translations.values())

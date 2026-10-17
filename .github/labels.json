@@ -36,7 +36,7 @@
     "color": "fbca04",
     "description": "Changes to translation catalogs and locale metadata",
     "title_types": ["i18n", "l10n"],
-    "files": ["src/solin/resources/translations/*.ts", "src/solin/resources/translations/*.qm", "src/solin/resources/translations/locales/*.json"],
+    "files": ["src/solin/resources/translations/*.ts", "src/solin/resources/translations/locales/*.json"],
     "release_heading": "Translations"
   },
   {

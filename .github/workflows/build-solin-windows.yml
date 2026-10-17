@@ -126,6 +126,12 @@ jobs:
             --qt-qml-module "QtQuick/Controls/impl" `
             --qt-qml-module "QtQuick/Controls/Basic/impl"
 
+      - name: Compile translation catalogs
+        shell: pwsh
+        run: |
+          python scripts/compile_translations.py --output-dir "$env:BUILD_DIR/translations/windows"
+          if ($LASTEXITCODE -ne 0) { throw "Translation compilation failed." }
+
       - name: Build standalone app with Nuitka
         shell: pwsh
         run: |
@@ -175,7 +181,7 @@ jobs:
             --include-data-dir="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml" `
             --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
-            --include-data-files="src\solin\resources\translations\*.qm=solin/resources/translations/" `
+            --include-data-files="$env:BUILD_DIR/translations/windows/*.qm=solin/resources/translations/" `
             --include-data-files="$sideviewDll=sideview/sideview_native.dll" `
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,position `
