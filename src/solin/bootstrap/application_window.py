@@ -24,6 +24,9 @@ from solin.styles.theme import PALETTE
 
 log = logging.getLogger(__name__)
 
+_MINIMUM_WIDTH = 460
+_MINIMUM_HEIGHT = 600
+
 
 _GRAPHICS_API_SURFACE_TYPES = {
     QSGRendererInterface.GraphicsApi.Software: QSurface.SurfaceType.RasterSurface,
@@ -137,8 +140,8 @@ class ApplicationWindow(QMainWindow):
         self._pending_files = pending_files
 
         self.setWindowTitle("Solin")
-        self.setMinimumSize(635, 600)
-        self.resize(max(635, width), max(600, height))
+        self.setMinimumSize(_MINIMUM_WIDTH, _MINIMUM_HEIGHT)
+        self.resize(width, height)
 
         self._content_host = QWidget(self)
         self._content_stack = QStackedLayout(self._content_host)

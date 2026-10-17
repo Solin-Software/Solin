@@ -631,6 +631,7 @@ class MainWindowUiController:
 
         sidebar_chrome = SidebarChromeController(
             frame=sidebar,
+            width_source=context.parent.window(),
             title_label=title_label,
             subtitle_label=subtitle_label,
             profile_avatar_button=profile_avatar_button,
