@@ -2231,6 +2231,14 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <source>Start</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingSections</name>

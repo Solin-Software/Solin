@@ -13,6 +13,9 @@ Row {
     property int valueFontSize: 16
     property bool editable: false
     property bool buttonsVisible: true
+    property Component valueComponent: null
+    readonly property real buttonAreaWidth: buttonsVisible
+        ? decrementButton.width + incrementButton.width + 2 * spacing : 0
     property string decTip: ""
     property string incTip: ""
     signal decremented()
@@ -20,6 +23,7 @@ Row {
     signal edited(string value)
 
     property bool editing: false
+    onEditableChanged: if (!editable) editing = false
     spacing: 6
 
     component StepBtn: Rectangle {
@@ -69,6 +73,7 @@ Row {
     }
 
     StepBtn {
+        id: decrementButton
         visible: ctl.buttonsVisible
         anchors.verticalCenter: parent.verticalCenter
         glyph: "−"
@@ -106,13 +111,22 @@ Row {
             border.color: ctl.accent
         }
 
-        Text {
+        Component {
+            id: defaultValue
+            Text {
+                text: ctl.text
+                color: appTheme.textPrimary
+                font.pixelSize: ctl.valueFontSize
+                font.weight: Font.Bold
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        Loader {
             visible: !ctl.editing
-            anchors.centerIn: parent
-            text: ctl.text
-            color: appTheme.textPrimary
-            font.pixelSize: ctl.valueFontSize
-            font.weight: Font.Bold
+            anchors.fill: parent
+            sourceComponent: ctl.valueComponent || defaultValue
 
             TimerPointerArea {
                 id: valueMa
@@ -162,6 +176,7 @@ Row {
     }
 
     StepBtn {
+        id: incrementButton
         visible: ctl.buttonsVisible
         anchors.verticalCenter: parent.verticalCenter
         glyph: "+"

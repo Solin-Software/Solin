@@ -2685,6 +2685,14 @@ Ręcznie dodana treść, przycięcia, kadrowanie i stan rozwinięcia zostaną za
         <source>Start</source>
         <translation>Start</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

@@ -2668,6 +2668,14 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
         <source>Start</source>
         <translation>Starta</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

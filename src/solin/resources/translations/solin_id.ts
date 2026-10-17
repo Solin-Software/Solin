@@ -2651,6 +2651,14 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
         <source>Start</source>
         <translation>Mulai</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

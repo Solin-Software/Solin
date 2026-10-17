@@ -2668,6 +2668,14 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
         <source>Start</source>
         <translation>Aloita</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

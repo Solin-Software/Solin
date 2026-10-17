@@ -2668,6 +2668,14 @@ Manuell hinzugefügte Inhalte, Zuschnitte, Bildausschnitte und der ausgeklappte 
         <source>Start</source>
         <translation>Starten</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

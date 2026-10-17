@@ -192,9 +192,10 @@ class MeetingPart:
     """A single timed segment of a meeting.
 
     ``planned_seconds`` is the scheduled duration. The live progress is captured
-    by ``started_at_epoch`` (wall-clock time the operator pressed Start) plus
-    ``accumulated_seconds`` (time banked before the current run, e.g. after a
-    stop). ``elapsed()`` combines both so the value survives an app restart.
+    by ``started_at_epoch`` (the current wall-clock anchor) plus
+    ``accumulated_seconds`` (elapsed time banked at that anchor). A manual
+    adjustment rebases both and corrects ``first_started_epoch`` to match.
+    ``elapsed()`` combines the anchor and banked time across app restarts.
     """
 
     id: str
@@ -205,8 +206,7 @@ class MeetingPart:
     state: PartState = PartState.IDLE
     # Anchor for the *current* run; cleared whenever the part is frozen/stopped.
     started_at_epoch: float | None = None
-    # Wall-clock time the part was first started; kept across stops for display
-    # ("when did this part begin?") and only cleared on reset.
+    # Corrected wall-clock start; retained across stops and cleared on reset.
     first_started_epoch: float | None = None
     accumulated_seconds: float = 0.0
 

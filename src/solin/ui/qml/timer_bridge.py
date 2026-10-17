@@ -357,7 +357,10 @@ class TimerBridge(QObject):
 
     @Slot(str, int)
     def adjustPart(self, part_id: str, delta_seconds: int) -> None:
-        if self._session.adjust_part(part_id, int(delta_seconds)):
+        part = self._schedule.part_by_id(part_id)
+        if part is not None and part.state is PartState.RUNNING:
+            self._engine.adjust_elapsed(part_id, int(delta_seconds))
+        elif self._session.adjust_part(part_id, int(delta_seconds)):
             self.scheduleChanged.emit()
 
     @Slot(str, int)

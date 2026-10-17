@@ -2668,6 +2668,14 @@ Le contenu ajouté manuellement, les découpes, le cadrage et l’état déplié
         <source>Start</source>
         <translation>Démarrer</translation>
     </message>
+    <message>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
 </context>
 <context>
     <name>MeetingScheduleSectionMixin</name>

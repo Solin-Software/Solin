@@ -25,7 +25,7 @@ Rectangle {
     readonly property bool isActive: !!live && live.active === true && live.active_part_id === pid
     readonly property bool overrun: isActive && !!live && live.overrun === true
     property bool compactLayout: width < 620
-    readonly property int plannedColumnWidth: 138
+    readonly property int plannedColumnWidth: 180
     readonly property int durationColumnWidth: 74
     readonly property int actionColumnWidth: 88
 
@@ -213,29 +213,34 @@ Rectangle {
         implicitHeight: 36
 
         TimerStepper {
-            visible: !row.isActive
+            id: durationStepper
             anchors.centerIn: parent
-            text: row.partData ? row.partData.plannedLabel : "00:00"
+            text: row.isActive ? row.fmt(row.liveSeconds())
+                              : row.partData ? row.partData.plannedLabel : "00:00"
             accent: row.accent
-            fieldWidth: 70
+            fieldWidth: row.isActive ? Math.max(0, parent.width - buttonAreaWidth) : 70
+            valueComponent: row.isActive ? liveValue : null
             editable: row.state === "idle"
-            buttonsVisible: row.state === "idle"
-            decTip: qsTr("−1 min")
-            incTip: qsTr("+1 min")
-            onDecremented: timer.adjustPart(row.pid, -60)
-            onIncremented: timer.adjustPart(row.pid, +60)
+            buttonsVisible: row.state !== "stopped"
+            decTip: row.state === "running" ? qsTr("−1 s") : qsTr("−1 min")
+            incTip: row.state === "running" ? qsTr("+1 s") : qsTr("+1 min")
+            onDecremented: timer.adjustPart(row.pid, row.state === "running" ? -1 : -60)
+            onIncremented: timer.adjustPart(row.pid, row.state === "running" ? +1 : +60)
             onEdited: function(value) { timer.setPartSeconds(row.pid, row.parseToSeconds(value)) }
-        }
-
-        TimerDigits {
-            visible: row.isActive
-            anchors.fill: parent
-            text: row.fmt(row.liveSeconds())
-            color: row.overrun ? row.pal_danger : row.accent
-            font.pixelSize: 23
-            font.weight: Font.Bold
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
+            Component {
+                id: liveValue
+                TimerDigits {
+                    anchors.fill: parent
+                    text: durationStepper.text
+                    color: row.overrun ? row.pal_danger : row.accent
+                    font.pixelSize: 23
+                    minimumPixelSize: 12
+                    fontSizeMode: Text.HorizontalFit
+                    font.weight: Font.Bold
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
         }
     }
 
