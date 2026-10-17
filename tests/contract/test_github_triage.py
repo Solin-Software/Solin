@@ -54,11 +54,14 @@ def test_catalog_has_unique_labels_and_explicit_order_for_release_grouping():
     names = [rule["name"] for rule in catalog]
     assert len(names) == len(set(names))
     assert names == ["bug", "enhancement", "github_actions", "dependencies",
-                     "translations", "documentation", "skip-changelog"]
-    assert all(rule["release_heading"] and len(rule["color"]) == 6 for rule in catalog[:-1])
+                     "translations", "documentation", "testing", "skip-changelog"]
+    assert all(len(rule["color"]) == 6 for rule in catalog)
+    assert all(rule["release_heading"] for rule in catalog[:-2])
+    testing = catalog[-2]
+    assert testing["release_heading"] is None
+    assert not testing.get("release_exclude", False)
     exclusion = catalog[-1]
     assert exclusion["title_types"] == exclusion["files"] == []
     assert exclusion["title_prefixes"] == ["chore(release)"]
     assert exclusion["release_heading"] is None
     assert exclusion["release_exclude"] is True
-    assert len(exclusion["color"]) == 6

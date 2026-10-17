@@ -1016,6 +1016,8 @@ def test_pr_labels_group_changes_and_preserve_authors_and_related_issues() -> No
         (("dependencies", "translations", "documentation"), "Dependencies"),
         (("translations", "documentation"), "Translations"),
         (("documentation",), "Documentation"),
+        (("testing",), "Other changes"),
+        (("testing", "bug"), "Bug fixes"),
         (("unrecognized",), "Other changes"),
         ((), "Other changes"),
     ],
