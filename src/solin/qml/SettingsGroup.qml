@@ -73,25 +73,14 @@ Item {
             sourceComponent: root.spec.collapsible ? collapsibleHeading : staticHeading
         }
 
-        Item {
+        SettingsDisclosureBody {
             id: bodyClip
             objectName: "groupBody_" + root.spec.id
-            property real targetHeight: root.expanded ? bodyColumn.implicitHeight : 0
-            property real animatedHeight: targetHeight
+            expanded: root.expanded
+            contentHeight: bodyColumn.implicitHeight
+            animated: root.spec.collapsible
             Layout.fillWidth: true
             Layout.preferredHeight: animatedHeight
-            visible: animatedHeight > 0
-            opacity: root.expanded ? 1 : 0
-            clip: true
-
-            Behavior on animatedHeight {
-                enabled: root.spec.collapsible
-                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-            }
-            Behavior on opacity {
-                enabled: root.spec.collapsible
-                NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
-            }
 
             Rectangle {
                 objectName: "groupBodySurface_" + root.spec.id

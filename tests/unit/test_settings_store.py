@@ -1,6 +1,8 @@
 import tempfile
 from types import SimpleNamespace
 
+import pytest
+
 from solin.core.foundation.constants import (
     QSETTINGS_APP_APP,
     QSETTINGS_GLOBAL_APP,
@@ -95,6 +97,43 @@ def test_installation_update_channel_is_typed_and_invalid_values_fall_back(monke
         SettingsKey.UPDATE_CHANNEL
     ] = "preview"
     assert store.update_channel() is UpdateChannel.STABLE
+
+
+@pytest.mark.parametrize("installed, expected", [
+    ("26.32.0", UpdateChannel.STABLE),
+    ("26.33.0b2", UpdateChannel.BETA),
+    ("invalid", UpdateChannel.STABLE),
+])
+def test_initial_channel_follows_installed_version_once(monkeypatch, installed, expected):
+    _install_fake_settings(monkeypatch)
+    store = settings_store.InstallationSettingsStore.create()
+    store.initialize_update_channel(installed)
+    assert store.update_channel() is expected
+    store.initialize_update_channel("26.34.0b1" if expected is UpdateChannel.STABLE else "26.34.0")
+    assert store.update_channel() is expected
+
+
+def test_explicit_and_invalid_channel_preferences_are_not_reinitialized(monkeypatch):
+    _install_fake_settings(monkeypatch)
+    store = settings_store.InstallationSettingsStore.create()
+    store.set_update_channel(UpdateChannel.STABLE)
+    store.initialize_update_channel("26.33.0b1")
+    assert store.update_channel() is UpdateChannel.STABLE
+    store.settings.set_value(SettingsKey.UPDATE_CHANNEL, "invalid")
+    store.initialize_update_channel("26.33.0b1")
+    assert store.update_channel() is UpdateChannel.STABLE
+
+
+def test_history_filter_is_independent_from_update_channel(monkeypatch):
+    _install_fake_settings(monkeypatch)
+    store = settings_store.InstallationSettingsStore.create()
+    assert store.release_history_include_beta() is False
+    store.set_release_history_include_beta(True)
+    assert store.release_history_include_beta() is True
+    assert store.update_channel() is UpdateChannel.STABLE
+    store.set_update_channel(UpdateChannel.BETA)
+    store.set_release_history_include_beta(False)
+    assert store.update_channel() is UpdateChannel.BETA
 
 
 def test_legacy_patch_cleanup_only_removes_recognized_temporary_file(

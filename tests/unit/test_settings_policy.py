@@ -27,6 +27,7 @@ EXPECTED_SETTINGS_KEYS = {
     "LEGACY_PENDING_PATCH_CLEANUP": "pending_patch_cleanup",
     "PENDING_UPDATE_CLEANUP": "updates/pending_cleanup",
     "UPDATE_CHANNEL": "updates/channel",
+    "RELEASE_HISTORY_INCLUDE_BETA": "updates/history_include_beta",
     "LAST_ACTIVE_PROFILE": "last_active_profile",
     "BOOTSTRAP_LANGUAGE": "bootstrap_language",
     "APP_LANGUAGE": "language",

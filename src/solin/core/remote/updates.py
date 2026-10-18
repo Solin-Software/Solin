@@ -16,10 +16,9 @@ from solin.core.remote.github_updates import GitHubReleases
 from solin.core.remote.update_policy import UpdateInfo, evaluate_update
 
 
-class UpdateWorker(QObject):
-    update_available = Signal(object)
+class UpdateWorker(QThread):
+    update_available = Signal(int, object)
     fetch_failed = Signal(str)
-    finished = Signal()
 
     def __init__(
         self,
@@ -29,14 +28,18 @@ class UpdateWorker(QObject):
         installed_windows: bool,
         cancelled: Event,
         automatic_windows: bool = True,
+        *,
+        generation: int = 0,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(parent)
         self.language = language
         self.channel = channel
         self.cache_directory = cache_directory
         self.installed_windows = installed_windows
         self.cancelled = cancelled
         self.automatic_windows = automatic_windows
+        self.generation = generation
 
     @Slot()
     def run(self) -> None:
@@ -69,11 +72,9 @@ class UpdateWorker(QObject):
                 language=self.language,
             )
             if info and not self.cancelled.is_set():
-                self.update_available.emit(info)
+                self.update_available.emit(self.generation, info)
         except Exception as exc:  # noqa: BLE001 - Worker boundary must always finish the thread.
             self.fetch_failed.emit(str(exc))
-        finally:
-            self.finished.emit()
 
 
 class UpdateService(QObject):
@@ -96,42 +97,55 @@ class UpdateService(QObject):
         self._directory = cache_directory
         self._installed = installed_windows_provider
         self._automatic = automatic_windows_provider
-        self._thread: QThread | None = None
-        self._worker: UpdateWorker | None = None
+        self._thread: UpdateWorker | None = None
         self._cancelled = Event()
+        self._generation = 0
+        self._pending_check = False
         self._stopping = False
         self._delete_when_stopped = False
 
     def check(self) -> None:
-        if self._stopping or self._thread is not None:
+        """Replace any active check, coalescing requests until its thread exits."""
+        if self._stopping:
             return
-        self._cancelled.clear()
-        self._worker = UpdateWorker(
+        self._generation += 1
+        if self._thread is not None:
+            self._pending_check = True
+            self._cancelled.set()
+            return
+        self._start_check()
+
+    def _start_check(self) -> None:
+        # Each worker owns its cancellation token permanently. Clearing a token
+        # for a replacement could revive a superseded request.
+        self._cancelled = Event()
+        # The check owns no event-driven Qt resources. Running it directly in a
+        # QThread keeps native completion after run() returns and avoids moving
+        # and deleting a separate QObject while its Python slot is unwinding.
+        self._thread = UpdateWorker(
             self._language(),
             self._channel(),
             self._directory,
             self._installed(),
             self._cancelled,
             self._automatic(),
+            generation=self._generation,
+            parent=self,
         )
-        self._thread = QThread(self)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.update_available.connect(self._on_result)
-        self._worker.finished.connect(self._worker.deleteLater)
-        # Queue deletion in the worker event loop before asking that loop to
-        # stop. Reversing these connections can leave a live Python wrapper for
-        # an object whose thread has already disappeared after a fast failure.
-        self._worker.finished.connect(self._thread.quit)
+        self._thread.update_available.connect(self._on_result)
         self._thread.finished.connect(self._cleanup)
         self._thread.start()
 
-    def _on_result(self, info: UpdateInfo) -> None:
-        if not self._stopping:
+    @Slot(int, object)
+    def _on_result(self, generation: int, info: UpdateInfo) -> None:
+        # Cancellation cannot retract a signal already queued on the GUI thread.
+        # Compare request identity, not channel: beta -> stable -> beta is new work.
+        if not self._stopping and generation == self._generation:
             self.update_available.emit(info)
 
     def stop(self, wait_ms: int = 0, delete_when_stopped: bool = False) -> None:
         self._stopping = True
+        self._pending_check = False
         self._cancelled.set()
         self._delete_when_stopped |= delete_when_stopped
         if self._thread is not None:
@@ -150,7 +164,10 @@ class UpdateService(QObject):
         if self._thread is not None:
             self._thread.deleteLater()
         self._thread = None
-        self._worker = None
+        if self._pending_check and not self._stopping:
+            self._pending_check = False
+            self._start_check()
+            return
         self.finished.emit()
         if self._delete_when_stopped:
             self.deleteLater()

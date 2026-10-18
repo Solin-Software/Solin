@@ -25,6 +25,37 @@ These projections keep successive betas ordered before their stable release
 without exposing a fourth public component. The GitHub updater accepts only
 this canonical three-component public version and its optional beta suffix.
 
+## In-app updates and release history
+
+**Settings → About → Receive beta versions** controls the installation's update
+channel. Stable selects the highest compatible stable version; beta selects the
+highest compatible stable or beta version, ordered by version rather than
+publication date. The initial channel follows the installed version and is
+persisted once, independently of profiles. Changing it runs the startup update
+check again; downloading and installing remain explicit. Beta badges and a
+production-use warning identify prerelease builds without changing package icons.
+
+Updates normally increase the installed version. The sole exception is an
+installed beta using the stable channel: it can offer an older stable release.
+The dialog shows both versions, the destination's notes, and a data compatibility
+warning. Installation does not convert or restore profile data; a newer beta's
+data may be unreadable by the selected stable release.
+
+Discovery uses the GitHub release listing, since `latest` excludes betas. Channel
+changes invalidate obsolete checks and pending download offers while preserving
+an installation already started. Package and platform compatibility checks still
+apply.
+
+About loads release history only when opened, reusing the GitHub transport and
+manifest cache with rate-limit backoff. It lists each manifest's own release notes
+in descending version order, independently of installed-version and package
+compatibility, with locale fallback to English. Five entries load initially;
+each **Load 5 more** preserves existing expansions. The separate, persisted
+**Show beta release notes** filter defaults to off and applies before pagination.
+History renders notes without fetching embedded images or external resources;
+links open only after URL validation. The complete history remains available on
+GitHub.
+
 ## Preparing a release pull request
 
 Release preparation runs from a clean checkout of `main` with one explicit

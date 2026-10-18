@@ -7,7 +7,6 @@ import unicodedata
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 
-from solin.core.foundation.constants import APP_VERSION
 from .catalogue import translated_catalogue
 from .domain import SettingsDomain
 
@@ -55,10 +54,6 @@ class SettingsNavigation(QObject):
     @Property(str, notify=changed)
     def targetKey(self):  # noqa: N802
         return self._target
-
-    @Property(str, constant=True)
-    def version(self):
-        return APP_VERSION
 
     @Property("QVariantList", notify=changed)
     def results(self):
@@ -133,7 +128,7 @@ class SettingsNavigation(QObject):
     @Slot(str)
     def openLink(self, destination):  # noqa: N802
         urls = {"website": "https://solinav.vercel.app/",
-                "changelog": "https://solinav.vercel.app/changelog"}
+                "github": "https://github.com/Solin-Software/Solin"}
         if destination in urls:
             QDesktopServices.openUrl(QUrl(urls[destination]))
 

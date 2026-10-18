@@ -402,6 +402,7 @@ class MainWindow(QWidget):
         self._monitor_popup = None
         self._ipc_controller = None
         self._remote_services = None
+        self._update_check_pending = False
         self._remote_control = None
         self._remote_media_thumbnail_extractor = None
         self._media_info_queue_factory = media_info_queue_factory
@@ -625,6 +626,7 @@ class MainWindow(QWidget):
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
                 app_settings=self._app_settings,
+                about_settings_factory=service_factories.about_settings,
                 obs_settings=self._obs_settings,
                 zoom_settings=self._zoom_settings,
                 auto_share_settings=self._auto_share_settings,
@@ -1389,6 +1391,9 @@ class MainWindow(QWidget):
         self._deferred_startup_started = True
         resources = self._bootstrap_controller.start_after_first_frame()
         self._remote_services = resources.remote_services
+        if self._update_check_pending:
+            self._update_check_pending = False
+            self._remote_services.check_updates()
         self._application_maintenance()
         self.settings_widget.general.start_deferred_services()
         self._ui_preparation.start()
@@ -1400,6 +1405,14 @@ class MainWindow(QWidget):
         from .bootstrap.startup_timeline import startup_timeline
 
         startup_timeline().mark("deferred_startup_started")
+
+    def _request_update_check(self) -> None:
+        if getattr(self, "_closing", False):
+            return
+        if self._remote_services is None:
+            self._update_check_pending = True
+        else:
+            self._remote_services.check_updates()
 
     def complete_startup_handoff(self) -> None:
         """Release deferred services only after the visible window handoff."""
@@ -1635,6 +1648,7 @@ class MainWindow(QWidget):
         self._reconcile_native_scene_surfaces()
         self.library_widget = resources.library_widget
         self.settings_widget = resources.settings_widget
+        self.settings_widget.about.update_channel_changed.connect(self._request_update_check)
         self.timer_widget = resources.timer_widget
         self.talk_theme_widget = resources.talk_theme_widget
         self.playlist_widget = resources.playlist_widget

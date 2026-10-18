@@ -167,7 +167,15 @@ SECTIONS = (
         )),
     )),
     Section("about", QT_TRANSLATE_NOOP("SettingsWidget", "About"),
-            QT_TRANSLATE_NOOP("SettingsWidget", "Version and information"), "about", ()),
+            QT_TRANSLATE_NOOP("SettingsWidget", "Version and information"), "about", (
+        Group("updates", QT_TRANSLATE_NOOP("SettingsWidget", "Updates"), "about", (
+            Setting("betaUpdatesEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Receive beta versions"),
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Beta versions may be unstable and are not recommended for production use.")),
+        )),
+        Group("releaseHistory", QT_TRANSLATE_NOOP("SettingsWidget", "Release notes"), "about", (
+            Setting("includeBetaNotes", QT_TRANSLATE_NOOP("SettingsWidget", "Show beta release notes")),
+        )),
+    )),
 )
 
 

@@ -93,6 +93,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     global_settings = GlobalSettingsStore.create()
     talk_theme_output_settings = TalkThemeOutputSettingsStore(global_settings.settings)
     installation_settings = InstallationSettingsStore.create()
+    installation_settings.initialize_update_channel(config.version)
     profile_runtime = ProfileRuntimeContextFactory(
         runtime_paths.data_dir,
         runtime_paths.cache_dir,

@@ -96,6 +96,7 @@ class MainWindowUiContext:
     ndi_service: Any
     zoom_service: Any
     app_settings: Any
+    about_settings_factory: Callable[[QObject], Any]
     obs_settings: Any
     zoom_settings: Any
     auto_share_settings: Any
@@ -447,6 +448,7 @@ class MainWindowUiController:
             obs_service=context.obs_service,
             ndi_service=context.ndi_service,
             app_settings=context.app_settings,
+            about_settings_factory=context.about_settings_factory,
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,

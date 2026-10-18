@@ -12,6 +12,7 @@ from solin.core.foundation.constants import (
 )
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.releases.channel import UpdateChannel
+from solin.core.releases.version import ReleaseVersion
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +118,20 @@ class InstallationSettingsStore:
 
     def set_update_channel(self, channel: UpdateChannel) -> None:
         self.settings.set_value(SettingsKey.UPDATE_CHANNEL, UpdateChannel(channel).value)
+
+    def initialize_update_channel(self, installed_version: str) -> None:
+        """Choose the initial channel once, without replacing an existing preference."""
+        if SettingsKey.UPDATE_CHANNEL not in self.settings.all_keys():
+            version = ReleaseVersion.parse(installed_version)
+            self.set_update_channel(
+                UpdateChannel.BETA if version is not None and version.is_beta else UpdateChannel.STABLE
+            )
+
+    def release_history_include_beta(self) -> bool:
+        return bool(self.settings.value(SettingsKey.RELEASE_HISTORY_INCLUDE_BETA, False, bool))
+
+    def set_release_history_include_beta(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.RELEASE_HISTORY_INCLUDE_BETA, bool(enabled))
 
     def pending_update_cleanup_path(self) -> str:
         return self.settings.string(SettingsKey.PENDING_UPDATE_CLEANUP)

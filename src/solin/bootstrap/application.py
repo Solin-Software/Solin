@@ -244,6 +244,21 @@ def _build_main_window_service_factories(
 
     install_id_provider = lambda: get_install_id(installation_settings)
 
+    def create_about_settings(parent):
+        from solin.core.foundation.constants import APP_VERSION
+        from solin.core.remote.github_updates import GitHubReleases
+        from solin.ui.qml.settings.about import AboutSettings
+
+        return AboutSettings(
+            installation_settings=installation_settings,
+            history_client_factory=lambda cancelled: GitHubReleases(
+                runtime_paths.cache_dir / "update-check", cancelled,
+            ),
+            language_code_provider=lambda: lang_manager.current_code,
+            installed_version=APP_VERSION,
+            parent=parent,
+        )
+
     def create_remote_services(parent):
         from typing import cast
 
@@ -253,6 +268,7 @@ def _build_main_window_service_factories(
             RemoteNotificationService,
             RemoteServicesController,
             RemoteUpdateService,
+            UpdateDialogPresenter,
         )
         from solin.core.remote.notifications import NotificationService
         from solin.core.remote.update_download import UpdateDownloadWorker
@@ -299,7 +315,7 @@ def _build_main_window_service_factories(
                     dialog.installation_failed("Application close was cancelled.")
 
             installer.ready.connect(close_for_update)
-            return dialog
+            return cast(UpdateDialogPresenter, dialog)
 
         return RemoteServicesController(
             cast(QWidget, parent),
@@ -352,6 +368,7 @@ def _build_main_window_service_factories(
             parent,
         ),
         remote_services=create_remote_services,
+        about_settings=create_about_settings,
         auto_share_workers=ThreadedWorkerPool,
         application_maintenance=application_maintenance,
     )

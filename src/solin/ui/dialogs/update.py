@@ -15,6 +15,7 @@ from PySide6.QtCore import (
     QByteArray,
     QPoint,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import QDesktopServices, QMouseEvent, QTextDocument
 from PySide6.QtWidgets import (
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 from solin.core.remote.urls import is_safe_remote_url
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.dialogs.positioning import center_dialog_on_parent
+from solin.ui.release_notes import release_notes_html
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +153,8 @@ QProgressBar::chunk {{
 class UpdateDialog(QDialog):
     """Non-modal presentation with cancellable download and explicit installation."""
 
+    installation_stopped = Signal()
+
     def __init__(
         self,
         info: "UpdateInfo",
@@ -165,6 +169,8 @@ class UpdateDialog(QDialog):
         self._launch_installer = launch_installer
         self._downloader: UpdateDownloadWorker | None = None
         self._package_path = ""
+        self._installation_started = False
+        self._invalidated = False
 
         # Drag state
         self._drag_active = False
@@ -204,7 +210,9 @@ class UpdateDialog(QDialog):
         ico.setStyleSheet(f"font-size:22px; color:{_C['accent']}; background:transparent;")
         hdr.addWidget(ico)
 
-        title = QLabel(self.tr("Update available"))
+        heading = self.tr("Return to stable version") if self._info.is_downgrade else self.tr("Update available")
+        self.setWindowTitle(heading)
+        title = QLabel(heading)
         title.setObjectName("title")
         hdr.addWidget(title)
         hdr.addStretch()
@@ -212,6 +220,14 @@ class UpdateDialog(QDialog):
         badge = QLabel(f"v{self._info.version.display_version}")
         badge.setObjectName("version_badge")
         hdr.addWidget(badge)
+        if self._info.version.is_beta:
+            beta_badge = QLabel(self.tr("Beta"))
+            beta_badge.setObjectName("beta_badge")
+            beta_badge.setStyleSheet(
+                f"color:{PALETTE.text_primary}; background:{qss_rgba(PALETTE.warning, 0.16)};"
+                f"border:1px solid {qss_rgba(PALETTE.warning, 0.45)}; border-radius:4px; padding:2px 8px;"
+            )
+            hdr.addWidget(beta_badge)
         lay.addLayout(hdr)
 
         # ── Separator ──────────────────────────────────────────────────────────
@@ -223,11 +239,29 @@ class UpdateDialog(QDialog):
 
         # ── Body ───────────────────────────────────────────────────────────────
         body_text = self.tr("A new version of Solin is available. Download it to continue.")
+        if self._info.is_downgrade:
+            current = self._info.current_version
+            body_text = self.tr("Return from {current} to the stable version {target}.").format(
+                current=current.display_version if current is not None else "",
+                target=self._info.version.display_version,
+            )
 
         body = QLabel(body_text)
         body.setObjectName("body")
         body.setWordWrap(True)
         lay.addWidget(body)
+        warning_text = (
+            self.tr("Data saved by a newer version may be incompatible with this stable version. Data will not be converted or restored.")
+            if self._info.is_downgrade else
+            self.tr("Beta versions may be unstable and are not recommended for production use.")
+            if self._info.version.is_beta else ""
+        )
+        if warning_text:
+            warning = QLabel(warning_text)
+            warning.setObjectName("release_warning")
+            warning.setWordWrap(True)
+            warning.setStyleSheet(f"color:{PALETTE.text_primary}; background:transparent;")
+            lay.addWidget(warning)
 
         self._changelog_browser: QTextBrowser | None = None
         if self._info.changelog:
@@ -248,7 +282,7 @@ class UpdateDialog(QDialog):
                 f"code {{ color: {_C['yellow']}; background: {_C['bg2']}; }}"
                 f"hr {{ color: {_C['border']}; }}"
             )
-            browser.setMarkdown(self._changelog_markdown())
+            browser.setHtml(release_notes_html(self._changelog_markdown()))
             browser.anchorClicked.connect(self._open_changelog_link)
             lay.addWidget(browser)
             self._changelog_browser = browser
@@ -303,6 +337,8 @@ class UpdateDialog(QDialog):
         self.close()
 
     def _on_action(self) -> None:
+        if self._invalidated or self._installation_started:
+            return
         if self._package_path:
             self._open_package()
         else:
@@ -324,10 +360,14 @@ class UpdateDialog(QDialog):
         self._downloader.start()
 
     def _on_progress(self, pct: int) -> None:
+        if self._invalidated:
+            return
         self._progress_bar.setValue(pct)
         self._status_label.setText(self.tr("Downloading… %1%").replace("%1", str(pct)))
 
     def _on_download_done(self, path: str) -> None:
+        if self._invalidated:
+            return
         from solin.core.remote.update_policy import UpdateAction
 
         self._downloader = None
@@ -345,6 +385,8 @@ class UpdateDialog(QDialog):
         )
 
     def _on_download_failed(self, msg: str) -> None:
+        if self._invalidated:
+            return
         log.warning("[Update] download failed: %s", msg)
         self._progress_bar.setVisible(False)
         self._status_label.setVisible(True)
@@ -361,6 +403,7 @@ class UpdateDialog(QDialog):
 
         try:
             if self._info.action == UpdateAction.INSTALL:
+                self._installation_started = True
                 self._launch_installer(self._package_path)
                 self._btn_action.setEnabled(False)
             else:
@@ -373,11 +416,23 @@ class UpdateDialog(QDialog):
             self.installation_failed(str(exc))
 
     def installation_failed(self, message: str) -> None:
+        self._installation_started = False
         log.warning("[Update] installer failed: %s", message)
         self._status_label.setVisible(True)
         self._status_label.setText(self.tr("Failed to launch installer."))
         self._btn_cancel.setEnabled(True)
         self._btn_action.setEnabled(True)
+
+        self.installation_stopped.emit()
+
+    def invalidate(self) -> bool:
+        """Discard an obsolete offer unless its installer has already started."""
+        if self._installation_started:
+            return False
+        self._invalidated = True
+        self._btn_action.setEnabled(False)
+        self.reject()
+        return True
 
     def reject(self) -> None:
         if self._downloader:
