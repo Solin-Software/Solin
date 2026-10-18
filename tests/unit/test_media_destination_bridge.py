@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import QPoint, QRect, QSize
 
 from solin.core.media.destinations import (
     create_media_destination_request,
@@ -13,10 +12,7 @@ from solin.core.media.destinations import (
 )
 from solin.core.media.placement import END_OF_LIST_INDEX
 from solin.core.meetings.meeting_weeks import current_monday
-from solin.ui.qml.media_destination import (
-    MediaDestinationBridge,
-    centered_dialog_position,
-)
+from solin.ui.qml.media_destination import MediaDestinationBridge
 
 
 def _bridge(*, can_play: bool = False) -> MediaDestinationBridge:
@@ -61,26 +57,6 @@ def test_single_item_request_owns_an_independent_payload() -> None:
 
 def test_single_item_request_rejects_an_empty_media_url() -> None:
     assert create_media_destination_request({"title": "Missing"}) is None
-
-
-def test_dialog_position_is_centered_on_its_owner() -> None:
-    position = centered_dialog_position(
-        QRect(100, 100, 1000, 700),
-        QSize(470, 500),
-        QRect(0, 0, 1920, 1080),
-    )
-
-    assert position == QPoint(364, 199)
-
-
-def test_dialog_position_is_clamped_to_the_owners_screen() -> None:
-    position = centered_dialog_position(
-        QRect(3000, 800, 400, 300),
-        QSize(470, 500),
-        QRect(1920, 0, 1280, 1024),
-    )
-
-    assert position == QPoint(2730, 524)
 
 
 def test_play_finishes_without_selecting_a_destination() -> None:

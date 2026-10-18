@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from solin.core.remote.notification_policy import Notification
 
 from solin.styles.theme import PALETTE
+from solin.ui.dialogs.positioning import center_dialog_on_parent
 
 _C = {
     "bg0": PALETTE.bg0,
@@ -348,23 +349,7 @@ class NotificationDialog(QDialog):
         """Center over the parent window (or screen) and show."""
         self.show()
         self.adjustSize()
-
-        parent = self.parent()
-        if parent and hasattr(parent, "frameGeometry"):
-            pg = parent.frameGeometry()
-            cx = pg.left() + (pg.width() - self.width()) // 2
-            cy = pg.top() + (pg.height() - self.height()) // 2
-            self.move(cx, cy)
-        else:
-            from PySide6.QtGui import QGuiApplication
-
-            screen = QGuiApplication.primaryScreen()
-            if screen:
-                sg = screen.availableGeometry()
-                self.move(
-                    sg.left() + (sg.width() - self.width()) // 2,
-                    sg.top() + (sg.height() - self.height()) // 2,
-                )
+        center_dialog_on_parent(self)
 
 
 # ── Gerenciador de fila ────────────────────────────────────────────────────────
