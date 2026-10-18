@@ -55,6 +55,8 @@ exclusions, the fallback is a link to the verified commit comparison.
 Other files use an existing application locale such as
 `pt_BR.md`; the updater falls back to English when a translation is absent.
 Stable notes consolidate the user-visible changes that were exercised in beta.
+Follow the [release-note editorial format](release-notes/README.md#editorial-format)
+for summaries, upgrade guidance, change categories, and translations.
 Promotion carries forward only written beta notes into the stable review draft;
 automatic beta notes are not copied. The stable draft must still be completed
 and reviewed, including changes from betas without written notes.
