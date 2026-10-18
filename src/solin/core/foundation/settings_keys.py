@@ -10,6 +10,7 @@ class SettingsKey:
     LEGACY_PENDING_PATCH_CLEANUP: Final = "pending_patch_cleanup"
     PENDING_UPDATE_CLEANUP: Final = "updates/pending_cleanup"
     UPDATE_CHANNEL: Final = "updates/channel"
+    RELEASE_HISTORY_INCLUDE_BETA: Final = "updates/history_include_beta"
     LAST_ACTIVE_PROFILE: Final = "last_active_profile"
     BOOTSTRAP_LANGUAGE: Final = "bootstrap_language"
     APP_LANGUAGE: Final = "language"

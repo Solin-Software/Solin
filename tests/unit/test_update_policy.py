@@ -7,7 +7,9 @@ from solin.core.releases.manifest import (
     REQUIRED_ASSETS, LocalizedReleaseNotes, ReleaseAsset, ReleaseManifest,
 )
 from solin.core.releases.version import ReleaseVersion
-from solin.core.remote.update_policy import UpdateAction, evaluate_update
+from solin.core.remote.update_policy import (
+    ReleaseNote, UpdateAction, UpdateInfo, evaluate_update, is_update_candidate,
+)
 
 
 def manifest(value="26.32.0", platform="windows", architecture="x86_64", kind="installer"):
@@ -36,9 +38,130 @@ def select(releases, **kwargs):
     return evaluate_update(releases, **defaults)
 
 
-def test_stable_ignores_beta_and_never_downgrades():
+@pytest.mark.parametrize("current,candidate,stable,beta", [
+    ("26.32.0", "26.31.0", False, False),
+    ("26.32.0", "26.32.0", False, False),
+    ("26.32.0", "26.33.0", True, True),
+    ("26.32.0", "26.32.0b10", False, False),
+    ("26.32.0", "26.33.0b1", False, True),
+    ("26.32.0b2", "26.31.0", True, False),
+    ("26.32.0b2", "26.32.0", True, True),
+    ("26.32.0b2", "26.33.0", True, True),
+    ("26.32.0b2", "26.31.0b1", False, False),
+    ("26.32.0b2", "26.32.0b1", False, False),
+    ("26.32.0b2", "26.32.0b2", False, False),
+    ("26.32.0b2", "26.32.0b10", False, True),
+    ("26.32.0b2", "26.33.0b1", False, True),
+])
+@pytest.mark.parametrize("channel", [UpdateChannel.STABLE, UpdateChannel.BETA])
+def test_candidate_eligibility_matrix(current, candidate, stable, beta, channel):
+    installed = ReleaseVersion.parse(current)
+    target = ReleaseVersion.parse(candidate)
+    assert installed is not None and target is not None
+    expected = beta if channel == UpdateChannel.BETA else stable
+    assert is_update_candidate(target, current_version=installed, channel=channel) is expected
+    result = select([manifest(candidate)], current_version=installed, channel=channel)
+    assert (result is not None) is expected
+
+
+@pytest.mark.parametrize("current,target,channel,downgrade", [
+    ("26.31.0", "26.32.0", UpdateChannel.STABLE, False),
+    ("26.31.0", "26.32.0b1", UpdateChannel.BETA, False),
+    ("26.32.0b1", "26.32.0b2", UpdateChannel.BETA, False),
+    ("26.32.0b1", "26.32.0", UpdateChannel.STABLE, False),
+    ("26.32.0b1", "26.32.0", UpdateChannel.BETA, False),
+    ("26.33.0b1", "26.32.0", UpdateChannel.STABLE, True),
+])
+def test_selection_populates_source_version_and_downgrade_metadata(current, target, channel, downgrade):
+    release = manifest(target)
+    result = select([release], current_version=current, channel=channel)
+    assert result is not None
+    assert result.current_version == ReleaseVersion.parse(current)
+    assert result.version == release.version
+    assert result.is_downgrade is downgrade
+    assert result.asset == release.assets[0]
+    assert result.url == release.assets[0].download_url(release.tag)
+
+
+def test_update_info_preserves_existing_positional_construction():
+    release = manifest()
+    notes = (ReleaseNote(release.version, "Sample notes", "en"),)
+    info = UpdateInfo(
+        UpdateAction.INSTALL, release.version, release.assets[0], "https://example.test", notes,
+    )
+    assert info.changelog == notes
+    assert info.current_version is None
+    assert info.is_downgrade is False
+
+
+def test_stable_ignores_beta_and_never_downgrades_stable_installations():
     assert select([manifest("26.32.0b1")]) is None
-    assert select([manifest()], current_version="26.33.0b1") is None
+    assert select([manifest()], current_version="26.33.0") is None
+
+
+def test_stable_channel_returns_from_beta_to_older_stable():
+    stable = manifest()
+    result = select([stable], current_version="26.33.0b1")
+    assert result is not None
+    assert result.version == stable.version
+
+
+@pytest.mark.parametrize("language,selected_language", [("pt_BR", "pt_BR"), ("es", "en")])
+def test_downgrade_uses_only_target_manifests_own_notes(language, selected_language):
+    older, target, newer = manifest("26.31.0"), manifest(), manifest("26.34.0")
+    target = replace(target, notes=(*older.notes, *target.notes))
+    newer = replace(
+        newer,
+        assets=(replace(newer.assets[0], architecture="arm64"),),
+        notes=(
+            LocalizedReleaseNotes(target.version, {"en": "Summary from a different release"}),
+            *newer.notes,
+        ),
+    )
+    result = select([newer, older, target], current_version="26.33.0b1", language=language)
+    assert result is not None
+    assert result.is_downgrade
+    assert result.changelog == (
+        ReleaseNote(target.version, target.notes[-1].translations[selected_language], selected_language),
+    )
+
+
+@pytest.mark.parametrize("incompatibility", [
+    {"architecture": "arm64"},
+    {"platform": "macos"},
+    {"kind": "portable"},
+    {"minimum_os": "11"},
+    {"minimum_os": "invalid"},
+])
+def test_return_to_stable_chooses_highest_compatible_release(incompatibility):
+    older, target, newer = manifest("26.30.0"), manifest(), manifest("26.34.0")
+    newer = replace(newer, assets=(replace(newer.assets[0], **incompatibility),))
+    releases = [older, manifest("26.35.0b1"), target, newer]
+    result = select(releases, current_version="26.33.0b1")
+    assert result is not None
+    assert result.version == target.version
+    assert result.is_downgrade
+    assert select([newer], current_version="26.33.0b1") is None
+
+
+def test_stable_channel_prefers_newer_stable_over_return_to_older_stable():
+    newer = manifest("26.34.0")
+    result = select([manifest(), newer], current_version="26.33.0b1")
+    assert result is not None
+    assert result.version == newer.version
+    assert result.is_downgrade is False
+    assert [note.version for note in result.changelog] == [newer.version]
+
+
+def test_regular_update_keeps_incremental_localized_notes_from_consolidated_manifest():
+    older, intermediate, newest = manifest("26.30.0"), manifest(), manifest("26.33.0")
+    newest = replace(newest, notes=(*older.notes, *intermediate.notes, *newest.notes))
+    result = select([newest], language="pt_BR")
+    assert result is not None
+    assert result.changelog == tuple(
+        ReleaseNote(release.version, release.notes[0].translations["pt_BR"], "pt_BR")
+        for release in (manifest("26.33.0"), intermediate)
+    )
 
 
 def test_beta_orders_numerically_and_accepts_final():

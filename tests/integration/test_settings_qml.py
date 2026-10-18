@@ -19,7 +19,7 @@ from PySide6.QtCore import (
     QTranslator,
     Slot,
 )
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QColor, QKeySequence, QTextDocument
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtQml import QQmlExpression
 from PySide6.QtTest import QTest
@@ -32,6 +32,7 @@ from solin.ui.qml.settings.catalogue import SECTIONS
 from solin.ui.qml.settings.domain import SettingsDomain
 from solin.ui.qml.settings.navigation import SettingsNavigation
 from solin.ui.qml.svg_icons import SvgIconProvider
+from solin.ui.release_notes import release_notes_html
 from tests._qt import (
     dispose_qobject,
     dispose_widget,
@@ -66,6 +67,29 @@ class RecordingDomain(SettingsDomain):
     def invoke(self, action):
         self.calls.append((action,))
 
+    @Slot()
+    def activate(self):
+        self.calls.append(("activate",))
+
+    @Slot()
+    def loadMore(self):  # noqa: N802 - QML slot
+        self.calls.append(("loadMore",))
+
+    @Slot()
+    def retry(self):
+        self.calls.append(("retry",))
+
+    @Slot(str, bool)
+    def setReleaseExpanded(self, version, expanded):  # noqa: N802 - QML slot
+        self.publish(historyEntries=[
+            {**entry, "expanded": expanded} if entry["version"] == version else entry
+            for entry in self.state["historyEntries"]
+        ])
+
+    @Slot(str)
+    def openLink(self, link):  # noqa: N802 - QML slot
+        self.calls.append(("openLink", link))
+
     @Property(int, constant=True)
     def searchDebounceMs(self):  # noqa: N802 - QML API
         return 900
@@ -80,7 +104,7 @@ class RecordingDomain(SettingsDomain):
 
 
 def _domain_states():
-    states = {name: {} for name in ("general", "integrations", "remote")}
+    states = {name: {} for name in ("general", "integrations", "remote", "about")}
     for section in SECTIONS:
         for group in _catalogue_groups(section.groups):
             state = states[group.domain]
@@ -118,6 +142,11 @@ def _domain_states():
         setupVisible=False, setupUrl="", fingerprint="", fingerprintVisible=False,
         qrBusy=False, qrError="", qrImage="", verificationCode="",
         endpoint="https://192.168.1.2:8443", username="", password="", passwordConfirmation="",
+    )
+    states["about"].update(
+        installedVersion="26.33.0-beta.2", installedIsBeta=True,
+        historyEntries=[], historyBusy=False, historyLoaded=False,
+        historyHasMore=False, historyError="",
     )
     return states
 
@@ -217,6 +246,7 @@ def create_view(request):
             context_properties={"settingsGeneral": domains["general"],
                                 "settingsIntegrations": domains["integrations"],
                                 "settingsRemote": domains["remote"],
+                                "settingsAbout": domains["about"],
                                 "settingsNavigation": navigation},
             image_providers={"settingsicons": SvgIconProvider(icons, default_icon="settings")},
             mouse_tracking=True,
@@ -1040,4 +1070,198 @@ def test_meeting_time_picker_applies_clock_selection(create_view):
     assert view.domains["general"].state["midweekTime"] == "21:25"
     assert not any(obj.property("modal") is True and obj.property("visible") is True
                    for obj in view.root.findChildren(QObject))
+    assert view.warnings == []
+
+
+def _release_entry(version, *, expanded=False, beta=False, installed=False):
+    return dict(version=version, isBeta=beta, isInstalled=installed,
+                html="<h2>Changes</h2>" + "<p>Readable release notes with wrapping and selection.</p>" * 24,
+                language="en", expanded=expanded)
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+@pytest.mark.parametrize("width", [360, 1000])
+def test_about_history_badges_expansion_and_append_preserve_scroll(create_view, theme, width):
+    view = create_view(width=width, theme=theme)
+    domain = view.domains["about"]
+    assert domain.calls == []
+    entries = [_release_entry("26.33.0-beta.2", beta=True, installed=True, expanded=True),
+               _release_entry("26.32.0")]
+    domain.publish(historyEntries=entries, historyLoaded=True, historyHasMore=True)
+    view.navigation.openSection("about", "", "")
+    _settle(view)
+    assert ("activate",) in domain.calls
+    assert _find(view.root, "aboutInstalledBeta").isVisible()
+    assert _find(view.root, "releaseBadge_beta_26.33.0-beta.2").isVisible()
+    assert _find(view.root, "releaseBadge_installed_26.33.0-beta.2").isVisible()
+    assert _find(view.root, "releaseNotes_26.32.0") is None
+    notes = _find(view.root, "releaseNotes_26.33.0-beta.2")
+    assert notes is not None
+    assert notes.property("readOnly") and notes.property("selectByMouse")
+    assert QMetaObject.invokeMethod(notes, "selectAll")
+    assert notes.property("selectedText")
+    viewport = _find(view.root, "settingsPageViewport")
+    viewport.setProperty("contentY", 100.0)
+    _settle(view)
+    position = viewport.property("contentY")
+    assert position == pytest.approx(100, abs=1)
+    domain.publish(historyEntries=entries + [_release_entry("26.31.0")])
+    _settle(view)
+    assert _find(view.root, "releaseNotes_26.33.0-beta.2") is notes
+    assert notes.property("selectedText")
+    assert viewport.property("contentY") == pytest.approx(position, abs=1)
+    for item in _items(_find(view.root, "settingsReleaseHistory")):
+        if item.objectName().startswith(("releaseHeading_", "releaseNotes_", "releaseBadge_")):
+            left = item.mapToItem(view.root, QPointF(0, 0)).x()
+            assert left >= -1, item.objectName()
+            assert left + item.width() <= width + 1, item.objectName()
+
+    heading = _find(view.root, "releaseHeading_26.32.0")
+    heading.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Right)
+    _settle(view)
+    assert _find(view.root, "releaseNotes_26.32.0") is not None
+    assert _find(view.root, "releaseNotes_26.33.0-beta.2") is notes
+    heading.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Left)
+    _wait_until(lambda: _find(view.root, "releaseNotes_26.32.0") is None)
+    _settle(view)
+    assert _find(view.root, "releaseNotes_26.32.0") is None
+    assert view.warnings == []
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+@pytest.mark.parametrize("width", [360, 1000])
+def test_about_history_has_unified_animated_cards_before_the_final_disclaimer(create_view, theme, width):
+    view = create_view(width=width, theme=theme)
+    domain = view.domains["about"]
+    domain.publish(historyLoaded=True, historyEntries=[_release_entry("26.32.0")])
+    view.navigation.openSection("about", "", "")
+    _settle(view)
+    history = _find(view.root, "settingsReleaseHistory")
+    disclaimer = _find(view.root, "aboutDisclaimer")
+    filter_group = _find(view.root, "group_releaseHistory")
+    assert filter_group.mapToItem(view.root, QPointF(0, filter_group.height())).y() <= (
+        history.mapToItem(view.root, QPointF(0, 0)).y()
+    )
+    assert disclaimer.mapToItem(view.root, QPointF(0, 0)).y() >= (
+        history.mapToItem(view.root, QPointF(0, history.height())).y()
+    )
+
+    heading = _find(view.root, "releaseHeading_26.32.0")
+    surface = _find(view.root, "releaseSurface_26.32.0")
+    body = _find(view.root, "releaseBody_26.32.0")
+    assert surface is not None and body is not None
+    assert body.clip() and body.height() == 0
+    samples = []
+
+    def sample():
+        samples.append((body.property("animatedHeight"), body.property("targetHeight"), body.opacity()))
+
+    body.animatedHeightChanged.connect(sample)
+    try:
+        heading.forceActiveFocus()
+        key_click(view.widget, Qt.Key.Key_Right)
+        _wait_until(lambda: _expanded_body_settled(body))
+    finally:
+        body.animatedHeightChanged.disconnect(sample)
+    assert any(0 < height < target and 0 < opacity < 1
+               for height, target, opacity in samples), samples
+    _settle(view)
+    notes = _find(view.root, "releaseNotes_26.32.0")
+    for item in (heading, notes):
+        top_left = item.mapToItem(surface, QPointF(0, 0))
+        assert top_left.x() >= 0 and top_left.y() >= 0
+        assert top_left.x() + item.width() <= surface.width() + 1
+        assert top_left.y() + item.height() <= surface.height() + 1
+    expanded_height = body.height()
+    heading.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Left)
+    _wait_until(lambda: 0 < body.property("animatedHeight") < expanded_height)
+    assert _find(view.root, "releaseNotes_26.32.0") is notes
+    assert not notes.property("activeFocusOnTab")
+    # Reversing a closing transition must reuse the live notes and their selection.
+    key_click(view.widget, Qt.Key.Key_Right)
+    _wait_until(lambda: _expanded_body_settled(body))
+    assert _find(view.root, "releaseNotes_26.32.0") is notes
+    key_click(view.widget, Qt.Key.Key_Left)
+    _wait_until(lambda: body.property("animatedHeight") == 0 and not body.isVisible())
+    _settle(view)
+    assert _find(view.root, "releaseNotes_26.32.0") is None
+    assert view.warnings == []
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_about_notes_links_follow_theme_and_keep_readable_font(create_view, theme):
+    view = create_view(theme=theme)
+    entry = _release_entry("26.32.0", expanded=True)
+    entry["html"] = release_notes_html("Read the [release](https://example.com/release).")
+    view.domains["about"].publish(historyLoaded=True, historyEntries=[entry])
+    view.navigation.openSection("about", "", "")
+    _settle(view)
+    notes = _find(view.root, "releaseNotes_26.32.0")
+    document = QTextDocument()
+    document.setHtml(notes.property("text"))
+    block = document.begin()
+    anchors = []
+    while block.isValid():
+        iterator = block.begin()
+        while not iterator.atEnd():
+            fragment = iterator.fragment()
+            if fragment.isValid() and fragment.charFormat().isAnchor():
+                anchors.append(fragment.charFormat())
+            iterator += 1
+        block = block.next()
+    assert len(anchors) == 1
+    assert anchors[0].foreground().color() == QColor(PALETTE.accent)
+    assert anchors[0].font().pixelSize() == 14
+    assert view.warnings == []
+
+
+def test_about_toggles_are_searchable_independent_and_keep_beta_warning(create_view):
+    view = create_view()
+    for query, key in [("Receive beta", "betaUpdatesEnabled"),
+                       ("Show beta", "includeBetaNotes")]:
+        view.navigation.search(query)
+        result = next(item for item in view.navigation.results if item["key"] == key)
+        view.navigation.openSection(result["section"], result["group"], result["key"])
+        _settle(view)
+        row = _find(view.root, "setting_" + key)
+        control = _control(row, "Switch")
+        control.forceActiveFocus()
+        key_click(view.widget, Qt.Key.Key_Space)
+        assert (key, True) in view.domains["about"].calls
+    domain = view.domains["about"]
+    assert domain.state["betaUpdatesEnabled"] and domain.state["includeBetaNotes"]
+    warning = _find(view.root, "setting_betaUpdatesEnabled")
+    assert warning.isVisible() and warning.property("help")
+    assert view.warnings == []
+
+
+def test_about_history_loading_empty_error_retry_and_more_actions(create_view):
+    view = create_view()
+    domain = view.domains["about"]
+    view.navigation.openSection("about", "", "")
+    _settle(view)
+    domain.publish(historyBusy=True)
+    _settle(view)
+    assert _find(view.root, "releaseHistoryLoading").isVisible()
+    domain.publish(historyBusy=False, historyLoaded=True)
+    _settle(view)
+    assert _find(view.root, "releaseHistoryEmpty").isVisible()
+    domain.publish(historyError="Offline")
+    _settle(view)
+    assert _find(view.root, "releaseHistoryError").isVisible()
+    assert not _find(view.root, "releaseHistoryEmpty").isVisible()
+    button = _find(view.root, "releaseHistoryRetry")
+    button.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Space)
+    assert ("retry",) in domain.calls
+    domain.publish(historyError="", historyHasMore=True,
+                   historyEntries=[_release_entry("26.32.0")])
+    _settle(view)
+    button = _find(view.root, "releaseHistoryLoadMore")
+    button.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Space)
+    assert ("loadMore",) in domain.calls
     assert view.warnings == []

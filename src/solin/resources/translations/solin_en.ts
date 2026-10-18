@@ -7147,6 +7147,80 @@ Add content, a camera, or another scene.</source>
         <source>Copied</source>
         <translation>Copied</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="201"/>
+        <source>Could not load release notes.</source>
+        <translation>Could not load release notes.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Updates</source>
+        <translation>Updates</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>Receive beta versions</source>
+        <translation>Receive beta versions</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="173"/>
+        <source>Beta versions may be unstable and are not recommended for production use.</source>
+        <translation>Beta versions may be unstable and are not recommended for production use.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <source>Release notes</source>
+        <translation>Release notes</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="176"/>
+        <source>Show beta release notes</source>
+        <translation>Show beta release notes</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <source>Installed</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <source>Collapse</source>
+        <translation>Collapse</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <source>Expand</source>
+        <translation>Expand</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <source>Loading release notes…</source>
+        <translation>Loading release notes…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <source>No release notes available.</source>
+        <translation>No release notes available.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <source>Load 5 more</source>
+        <translation>Load 5 more</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>
@@ -8180,7 +8254,7 @@ Add one when you are ready.</translation>
     <message>
         <location filename="../../ui/dialogs/update.py" line="+227"/>
         <source>Update available</source>
-        <translation type="unfinished"></translation>
+        <translation>Update available</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -8198,7 +8272,7 @@ Click &apos;Download&apos; to open the download page.</translation>
     <message>
         <location line="+51"/>
         <source>Not now</source>
-        <translation type="unfinished"></translation>
+        <translation>Not now</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -8208,27 +8282,27 @@ Click &apos;Download&apos; to open the download page.</translation>
     <message>
         <location line="+2"/>
         <source>Download</source>
-        <translation type="unfinished"></translation>
+        <translation>Download</translation>
     </message>
     <message>
         <location line="+37"/>
         <source>Downloading…</source>
-        <translation type="unfinished">Downloading…</translation>
+        <translation>Downloading…</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Starting download…</source>
-        <translation type="unfinished"></translation>
+        <translation>Starting download…</translation>
     </message>
     <message>
         <location line="+10"/>
         <source>Downloading… %1%</source>
-        <translation type="unfinished"></translation>
+        <translation>Downloading… %1%</translation>
     </message>
     <message>
         <location line="+19"/>
         <source>Download failed. Check your connection.</source>
-        <translation type="unfinished"></translation>
+        <translation>Download failed. Check your connection.</translation>
     </message>
     <message>
         <location line="-14"/>
@@ -8238,17 +8312,67 @@ Click &apos;Download&apos; to open the download page.</translation>
     <message>
         <location line="+16"/>
         <source>Try again</source>
-        <translation type="unfinished"></translation>
+        <translation>Try again</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>Failed to launch installer.</source>
-        <translation type="unfinished"></translation>
+        <translation>Failed to launch installer.</translation>
     </message>
     <message>
         <location line="-135"/>
         <source>Changelog</source>
-        <translation type="unfinished"></translation>
+        <translation>Changelog</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="210"/>
+        <source>Return to stable version</source>
+        <translation>Return to stable version</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="221"/>
+        <source>Beta</source>
+        <translation>Beta</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="238"/>
+        <source>A new version of Solin is available. Download it to continue.</source>
+        <translation>A new version of Solin is available. Download it to continue.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="241"/>
+        <source>Return from {current} to the stable version {target}.</source>
+        <translation>Return from {current} to the stable version {target}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="251"/>
+        <source>Data saved by a newer version may be incompatible with this stable version. Data will not be converted or restored.</source>
+        <translation>Data saved by a newer version may be incompatible with this stable version. Data will not be converted or restored.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="253"/>
+        <source>Beta versions may be unstable and are not recommended for production use.</source>
+        <translation>Beta versions may be unstable and are not recommended for production use.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="373"/>
+        <source>Download verified. Ready to install.</source>
+        <translation>Download verified. Ready to install.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="377"/>
+        <source>Install and restart</source>
+        <translation>Install and restart</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="379"/>
+        <source>Open installer</source>
+        <translation>Open installer</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="381"/>
+        <source>Show in folder</source>
+        <translation>Show in folder</translation>
     </message>
 </context>
 <context>

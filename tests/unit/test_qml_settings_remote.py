@@ -180,6 +180,7 @@ def test_credentials_group_owns_expansion_and_preserves_drafts_until_save_or_can
     domain = remote_settings[0]
     navigation = SettingsNavigation({
         "general": SettingsDomain(), "integrations": SettingsDomain(), "remote": domain,
+        "about": SettingsDomain(),
     })
     section = next(item for item in navigation.sections if item["id"] == "remote")
     group = next(item for item in section["groups"] if item["id"] == "credentials")

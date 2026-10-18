@@ -31,6 +31,22 @@ class UpdateInfo:
     asset: ReleaseAsset
     url: str
     changelog: tuple[ReleaseNote, ...] = ()
+    current_version: ReleaseVersion | None = None
+    is_downgrade: bool = False
+
+
+def is_update_candidate(
+    version: ReleaseVersion,
+    *,
+    current_version: ReleaseVersion,
+    channel: UpdateChannel,
+) -> bool:
+    """Allow newer releases or a beta's return to an older stable release."""
+    if version == current_version or (version.is_beta and channel != UpdateChannel.BETA):
+        return False
+    return version > current_version or (
+        current_version.is_beta and channel == UpdateChannel.STABLE
+    )
 
 
 def evaluate_update(
@@ -60,7 +76,7 @@ def evaluate_update(
     eligible = [
         m
         for m in manifests
-        if m.version > current and (channel == UpdateChannel.BETA or not m.version.is_beta)
+        if is_update_candidate(m.version, current_version=current, channel=channel)
     ]
     for manifest in sorted(eligible, key=lambda m: m.version, reverse=True):
         for asset in manifest.assets:
@@ -71,10 +87,14 @@ def evaluate_update(
                     continue
             except InvalidVersion:
                 continue
+            is_downgrade = manifest.version < current
             notes: dict[ReleaseVersion, ReleaseNote] = {}
-            for release in eligible:
+            for release in (manifest,) if is_downgrade else eligible:
                 for note in release.notes:
-                    if not current < note.version <= manifest.version:
+                    if is_downgrade:
+                        if note.version != manifest.version:
+                            continue
+                    elif not current < note.version <= manifest.version:
                         continue
                     if note.version.is_beta:
                         # A final release's consolidated notes supersede its betas.
@@ -104,5 +124,7 @@ def evaluate_update(
                 asset,
                 asset.download_url(manifest.tag),
                 tuple(notes[v] for v in sorted(notes, reverse=True)),
+                current_version=current,
+                is_downgrade=is_downgrade,
             )
     return None

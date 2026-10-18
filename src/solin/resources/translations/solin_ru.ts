@@ -8374,6 +8374,80 @@ Add content, a camera, or another scene.</source>
         <source>Copied</source>
         <translation>Скопировано</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="201"/>
+        <source>Could not load release notes.</source>
+        <translation>Не удалось загрузить примечания к выпуску.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Updates</source>
+        <translation>Обновления</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>Receive beta versions</source>
+        <translation>Получать бета-версии</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="173"/>
+        <source>Beta versions may be unstable and are not recommended for production use.</source>
+        <translation>Бета-версии могут работать нестабильно и не рекомендуются для использования в рабочей среде.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <source>Release notes</source>
+        <translation>Примечания к выпуску</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="176"/>
+        <source>Show beta release notes</source>
+        <translation>Показывать примечания к бета-версиям</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <source>Beta</source>
+        <translation>Бета</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <source>Installed</source>
+        <translation>Установлена</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <source>Collapse</source>
+        <translation>Свернуть</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <source>Expand</source>
+        <translation>Развернуть</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <source>Loading release notes…</source>
+        <translation>Загрузка примечаний к выпуску…</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <source>No release notes available.</source>
+        <translation>Примечания к выпуску отсутствуют.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <source>Try again</source>
+        <translation>Попытка еще раз</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <source>Load 5 more</source>
+        <translation>Загрузить ещё 5</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>
@@ -9479,6 +9553,56 @@ Click &apos;Download&apos; to open the download page.</source>
         <location line="-135"/>
         <source>Changelog</source>
         <translation>Журнал изменений</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="210"/>
+        <source>Return to stable version</source>
+        <translation>Вернуться к стабильной версии</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="221"/>
+        <source>Beta</source>
+        <translation>Бета</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="238"/>
+        <source>A new version of Solin is available. Download it to continue.</source>
+        <translation>Доступна новая версия Solin. Скачайте её, чтобы продолжить.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="241"/>
+        <source>Return from {current} to the stable version {target}.</source>
+        <translation>Вернуться с {current} к стабильной версии {target}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="251"/>
+        <source>Data saved by a newer version may be incompatible with this stable version. Data will not be converted or restored.</source>
+        <translation>Данные, сохранённые более новой версией, могут быть несовместимы с этой стабильной версией. Данные не будут преобразованы или восстановлены.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="253"/>
+        <source>Beta versions may be unstable and are not recommended for production use.</source>
+        <translation>Бета-версии могут работать нестабильно и не рекомендуются для использования в рабочей среде.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="373"/>
+        <source>Download verified. Ready to install.</source>
+        <translation>Загрузка проверена. Всё готово к установке.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="377"/>
+        <source>Install and restart</source>
+        <translation>Установить и перезапустить</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="379"/>
+        <source>Open installer</source>
+        <translation>Открыть установщик</translation>
+    </message>
+    <message>
+        <location filename="../../ui/dialogs/update.py" line="381"/>
+        <source>Show in folder</source>
+        <translation>Показать в папке</translation>
     </message>
 </context>
 <context>

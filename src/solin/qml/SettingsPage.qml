@@ -11,7 +11,8 @@ Item {
     readonly property var domains: ({
         general: settingsGeneral,
         integrations: settingsIntegrations,
-        remote: settingsRemote
+        remote: settingsRemote,
+        about: settingsAbout
     })
     property bool restoring: true
     signal choose(var row, var owner)
@@ -32,18 +33,20 @@ Item {
     }
 
     function reveal(key) {
-        for (let i = 0; i < groups.count; i++) {
-            const group = groups.itemAt(i)
-            const row = group.reveal(key)
-            if (row) {
-                Qt.callLater(function() {
-                    const pos = row.mapToItem(body, 0, 0)
-                    viewport.contentY = Math.max(0, Math.min(
-                        pos.y - 20, viewport.contentHeight - viewport.height
-                    ))
-                    row.focusControl()
-                })
-                return
+        for (const repeater of [groups, historyGroups]) {
+            for (let i = 0; i < repeater.count; i++) {
+                const group = repeater.itemAt(i)
+                const row = group.reveal(key)
+                if (row) {
+                    Qt.callLater(function() {
+                        const pos = row.mapToItem(body, 0, 0)
+                        viewport.contentY = Math.max(0, Math.min(
+                            pos.y - 20, viewport.contentHeight - viewport.height
+                        ))
+                        row.focusControl()
+                    })
+                    return
+                }
             }
         }
     }
@@ -137,9 +140,40 @@ Item {
                     }
                 }
 
+                RowLayout {
+                    visible: root.section.id === "about"
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        objectName: "aboutInstalledVersion"
+                        Layout.fillWidth: true
+                        text: "Solin · " + settingsAbout.state.installedVersion
+                        color: appTheme.textPrimary
+                        font.pixelSize: 20
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.Wrap
+                    }
+                    Rectangle {
+                        objectName: "aboutInstalledBeta"
+                        visible: settingsAbout.state.installedIsBeta
+                        implicitWidth: betaLabel.implicitWidth + 18
+                        implicitHeight: betaLabel.implicitHeight + 10
+                        color: appTheme.accentTint
+                        radius: 6
+                        Text {
+                            id: betaLabel
+                            anchors.centerIn: parent
+                            text: qsTr("Beta")
+                            color: appTheme.textPrimary
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
+
                 Repeater {
                     id: groups
-                    model: root.section.groups
+                    model: root.section.groups.filter(group => group.id !== "releaseHistory")
                     delegate: SettingsGroup {
                         required property var modelData
                         Layout.fillWidth: true
@@ -174,12 +208,6 @@ Item {
                     visible: root.section.id === "about"
                     spacing: 20
                     Text {
-                        text: "Solin · " + settingsNavigation.version
-                        color: appTheme.textPrimary
-                        font.pixelSize: 20
-                        font.weight: Font.DemiBold
-                    }
-                    Text {
                         Layout.fillWidth: true
                         text: qsTr("Audio & Video app for Kingdom Hall meetings.")
                         color: appTheme.textSecondary
@@ -194,17 +222,41 @@ Item {
                             onClicked: settingsNavigation.openLink("website")
                         }
                         SettingsButton {
-                            text: qsTr("Changelog")
-                            onClicked: settingsNavigation.openLink("changelog")
+                            objectName: "aboutGitHub"
+                            text: "GitHub"
+                            onClicked: settingsNavigation.openLink("github")
                         }
                     }
-                    Text {
+                }
+
+                Repeater {
+                    id: historyGroups
+                    model: root.section.groups.filter(group => group.id === "releaseHistory")
+                    delegate: SettingsGroup {
+                        required property var modelData
                         Layout.fillWidth: true
-                        text: qsTr("This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.")
-                        color: appTheme.textMuted
-                        font.pixelSize: 13
-                        wrapMode: Text.Wrap
+                        spec: modelData
+                        domain: root.domains[spec.domain]
+                        onChoose: (row, owner) => root.choose(row, owner)
                     }
+                }
+
+                Loader {
+                    Layout.fillWidth: true
+                    active: root.section.id === "about"
+                    visible: active
+                    Layout.preferredHeight: item ? item.implicitHeight : 0
+                    sourceComponent: SettingsReleaseHistory { domain: settingsAbout }
+                }
+
+                Text {
+                    objectName: "aboutDisclaimer"
+                    Layout.fillWidth: true
+                    visible: root.section.id === "about"
+                    text: qsTr("This app is independent and is not affiliated with or endorsed by the Watch Tower Bible and Tract Society of Pennsylvania or any of its associated organizations.")
+                    color: appTheme.textMuted
+                    font.pixelSize: 13
+                    wrapMode: Text.Wrap
                 }
             }
         }

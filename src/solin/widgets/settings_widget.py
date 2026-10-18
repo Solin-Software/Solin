@@ -1,13 +1,16 @@
 """Qt Quick settings host; service work lives in presentation domains."""
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QUrl
+from collections.abc import Callable
+
+from PySide6.QtCore import QEvent, QObject, QUrl
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from solin.styles import icons
 from solin.styles.theme import PALETTE
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
+from solin.ui.qml.settings.about import AboutSettings
 from solin.ui.qml.settings.general import GeneralSettings
 from solin.ui.qml.settings.integrations import IntegrationSettings
 from solin.ui.qml.settings.navigation import SettingsNavigation
@@ -27,10 +30,12 @@ class SettingsWidget(QWidget):
         remote_control_credentials, qr_generation_session_factory,
         yeartext_service_factory, congregation_lookup_factory,
         auto_share_accessibility_trusted,
+        about_settings_factory: Callable[[QObject], AboutSettings],
         defer_build=False, parent=None,
     ):
         super().__init__(parent)
         self._closed = False
+        self.about = about_settings_factory(self)
         self.general = GeneralSettings(
             lang_manager=lang_manager, screen_manager=screen_manager,
             app_settings=app_settings,
@@ -55,6 +60,7 @@ class SettingsWidget(QWidget):
         )
         self.navigation = SettingsNavigation({
             "general": self.general, "integrations": self.integrations, "remote": self.remote,
+            "about": self.about,
         }, self)
         self._qml = QQuickWidget(self)
         self.qml_load_handle = configure_qml_host(
@@ -62,6 +68,7 @@ class SettingsWidget(QWidget):
             context_properties={"settingsGeneral": self.general,
                                 "settingsIntegrations": self.integrations,
                                 "settingsRemote": self.remote,
+                                "settingsAbout": self.about,
                                 "settingsNavigation": self.navigation},
             image_providers={"settingsicons": SvgIconProvider({
                 "settings": icons.ICON_NAV_SETTINGS, "appearance": icons.ICON_PALETTE,
@@ -96,7 +103,7 @@ class SettingsWidget(QWidget):
     def retranslateUi(self):  # noqa: N802 - application language host contract
         if self._closed:
             return
-        for domain in (self.general, self.integrations, self.remote):
+        for domain in (self.general, self.integrations, self.remote, self.about):
             domain.refresh_language()
         self.navigation.refresh_language()
         self._qml.engine().retranslate()
@@ -112,5 +119,5 @@ class SettingsWidget(QWidget):
         self._closed = True
         self.qml_load_handle.cancel()
         self._qml.setSource(QUrl())
-        for domain in (self.general, self.integrations, self.remote):
+        for domain in (self.general, self.integrations, self.remote, self.about):
             domain.cleanup()

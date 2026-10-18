@@ -1,5 +1,7 @@
 from PySide6.QtGui import QTextDocument
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QObject, Signal
+from dataclasses import replace
 from scripts.release_contributors import Change, ContributionRange, Credits, RelatedIssue
 from solin.core.releases.channel import UpdateChannel
 from solin.core.releases.manifest import (
@@ -81,10 +83,14 @@ def test_installer_failure_allows_retry():
         raise RuntimeError("scope unavailable")
 
     instance = dialog(launch=fail)
+    stopped = []
+    instance.installation_stopped.connect(lambda: stopped.append(True))
     instance._on_download_done("Solin.exe")
     instance._on_action()
     assert instance._btn_action.isEnabled()
     assert instance._status_label.text() == "Failed to launch installer."
+    assert stopped == [True]
+    assert instance.invalidate()
 
 
 def test_failed_download_allows_retry():
@@ -92,3 +98,65 @@ def test_failed_download_allows_retry():
     instance._on_download_failed("disk full")
     assert instance._btn_action.isEnabled()
     assert instance._btn_action.text() == "Try again"
+
+
+def test_beta_and_return_offers_identify_the_actual_destination(request):
+    from PySide6.QtWidgets import QLabel
+
+    template = dialog()
+    request.addfinalizer(template.deleteLater)
+    beta = UpdateDialog(
+        replace(template._info, version=ReleaseVersion.parse("26.33.0b1")),
+        downloader_factory=lambda *args: None, launch_installer=lambda path: None,
+    )
+    request.addfinalizer(beta.deleteLater)
+    assert beta.findChild(QLabel, "beta_badge") is not None
+    assert beta.findChild(QLabel, "release_warning") is not None
+
+    stable = UpdateDialog(
+        replace(template._info, is_downgrade=True, current_version=ReleaseVersion.parse("26.33.0b1")),
+        downloader_factory=lambda *args: None, launch_installer=lambda path: None,
+    )
+    request.addfinalizer(stable.deleteLater)
+    assert stable.findChild(QLabel, "beta_badge") is None
+    assert stable.findChild(QLabel, "release_warning") is not None
+    text = " ".join(label.text() for label in stable.findChildren(QLabel))
+    assert "26.33.0-beta.1" in text
+    assert "26.32.0" in text
+
+
+def test_invalidating_offer_aborts_download_and_rejects_late_completion(request):
+    class Download(QObject):
+        progress = Signal(int)
+        finished = Signal(str)
+        failed = Signal(str)
+
+        def start(self):
+            self.aborted = False
+
+        def abort(self):
+            self.aborted = True
+
+    launches = []
+    instance = dialog(launch=launches.append)
+    request.addfinalizer(instance.deleteLater)
+    download = Download(instance)
+    instance._downloader_factory = lambda *args: download
+    instance._on_action()
+    assert instance.invalidate()
+    assert download.aborted
+    download.finished.emit("Solin.exe")
+    instance._on_action()
+    assert instance.downloaded_path == ""
+    assert launches == []
+
+
+def test_confirmed_installation_is_not_invalidated_or_launched_twice(request):
+    launches = []
+    instance = dialog(launch=launches.append)
+    request.addfinalizer(instance.deleteLater)
+    instance._on_download_done("Solin.exe")
+    instance._on_action()
+    assert not instance.invalidate()
+    instance._on_action()
+    assert launches == ["Solin.exe"]
