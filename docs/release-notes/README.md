@@ -13,6 +13,64 @@ Write user-visible behavior rather than commit messages. The GitHub Release,
 release manifest, and in-app update dialog all consume these files. Missing
 translations fall back to English.
 
+## Editorial format
+
+Use this format for manually written notes. The change categories follow
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers still
+follow Solin's [CalVer contract](../releases.md#calver-contract).
+
+An optional opening paragraph is reserved for stable releases with several
+notable changes. Summarize the main benefits or a useful new workflow in two or
+three sentences. Omit it when the entries already explain a small release.
+
+Use level-three headings in the following order, without trailing colons or
+emojis. Omit every section that has no relevant entries.
+
+| English heading | Portuguese heading | Content |
+| --- | --- | --- |
+| `Upgrade notes` | `Notas de atualização` | Required migration steps, compatibility changes, or precautions before updating. Include the affected users and the action they must take. |
+| `Added` | `Adicionado` | New capabilities available to users. |
+| `Changed` | `Alterado` | Improvements or changes to existing behavior. |
+| `Fixed` | `Corrigido` | Corrections to problems users could encounter. |
+| `Removed` | `Removido` | Removed capabilities and any replacement or migration path. |
+| `Security` | `Segurança` | Security fixes or protections, with advisory links when available. |
+
+- Write concise bullets beginning with a bold product-area label, such as
+  `- **Meetings:** ...`. Keep a single concise change on that line. When an area
+  has several distinct changes within the same category, use its label as a
+  parent bullet and give each change its own sub-bullet, as shown below. Use only
+  one nesting level; do not split one change merely because its description is
+  long. Use the application's terminology consistently and describe each change
+  once, under its most relevant category.
+- Describe the visible outcome and any useful context. Include technical details
+  only when they help users understand compatibility or decide what to do.
+  Omit implementation logs and routine dependency, CI, or test changes with no
+  user impact.
+- Stable notes compare the final behavior with the previous stable release,
+  consolidating all betas. For the first GitHub-hosted stable release, use the
+  verified historical stable reference documented in the
+  [contribution range rules](../releases.md#contributor-credits). Fold refinements
+  of new features into their descriptions; omit fixes for regressions introduced
+  and resolved only during that beta cycle. Written beta notes describe changes
+  since the preceding published version; they need no opening summary.
+- Keep translations equivalent in meaning, section order, and upgrade guidance.
+  Translate headings and product labels using the application's vocabulary.
+- Start source files with the summary or first applicable section. Publication
+  supplies the version heading and the generated contribution appendix. Keep PR
+  inventories and contributor lists in that appendix rather than duplicating
+  them in the manual notes.
+
+Example within `Added`:
+
+```markdown
+- **Meetings:**
+  - Save a meeting as a template to reuse its structure when preparing future meetings.
+  - Preview a meeting's media in sequence before presenting it to the audience.
+- **Playlists:** Export the playlist as a PDF checklist for use during the meeting.
+```
+
+## Preparation
+
 `prepare beta` creates an empty `en.md`. Leave it empty to use the automatically
 grouped PRs and related issues as the English notes in the published manifest
 and in-app updater. This needs no manual writing or review marker removal.
@@ -28,6 +86,8 @@ user-visible changes from the whole release line before tagging.
 Create the next directory through `python scripts/release.py prepare <intent>`.
 Do not create a tag while the generated English file still contains its review
 marker.
+
+## Generated contributions
 
 The English **Related pull requests and issues** block is generated separately
 in the GitHub Release body during publication. It includes every merged PR in
