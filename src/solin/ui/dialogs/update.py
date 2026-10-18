@@ -14,11 +14,11 @@ from PySide6.QtCore import (
     QEasingCurve,
     QByteArray,
     QPoint,
+    QTimer,
 )
 from PySide6.QtGui import QDesktopServices, QMouseEvent, QTextDocument
 from PySide6.QtWidgets import (
     QDialog,
-    QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 from solin.core.remote.urls import is_safe_remote_url
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.ui.dialogs.positioning import center_dialog_on_parent
 
 log = logging.getLogger(__name__)
 
@@ -429,9 +430,7 @@ class UpdateDialog(QDialog):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        p = self.parent()
-        if isinstance(p, QWidget):
-            geo = p.geometry()
-            x = geo.x() + (geo.width() - self.width()) // 2
-            y = geo.y() + (geo.height() - self.height()) // 2
-            self.move(x, y)
+        QTimer.singleShot(0, self, self._center_on_parent)
+
+    def _center_on_parent(self) -> None:
+        center_dialog_on_parent(self)
