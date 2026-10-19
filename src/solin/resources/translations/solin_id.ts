@@ -6182,6 +6182,58 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <source>A source with this name already exists in this scene.</source>
         <translation>Sumber dengan nama ini sudah ada di adegan ini.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Masukkan alamat seperti 192.168.0.100, rentang seperti 192.168.0.1-254, atau jaringan seperti 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Cari paling banyak 1024 alamat sekaligus, misalnya jaringan berakhiran /22 atau lebih kecil.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Tidak ada kamera ONVIF yang merespons di alamat itu.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Mencari di jaringan…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Kamera ditemukan: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Jaringan tidak dapat dicari.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Tidak ada kamera yang merespons. Kamera di jaringan lain tidak akan merespons; tambahkan dengan alamatnya.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Kamera tidak menerima nama pengguna dan kata sandi ini.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Kamera tidak merespons. Pastikan kamera menyala dan dapat dijangkau dari komputer ini.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Koneksi aman kamera tidak dapat diverifikasi.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera tidak mencantumkan stream video apa pun.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Ini bukan alamat kamera yang valid.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Balasan kamera tidak dapat dibaca.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7366,6 +7418,94 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Adegan ini akan menggunakan kembali pengaturan bersama kamera.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Alamat atau rentang kamera, seperti 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Alamat atau rentang kamera</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Cari</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Alamat kamera ini</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Sudah ditambahkan sebagai “%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Ditemukan di jaringan</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Kamera ini memerlukan login. Masukkan nama pengguna dan kata sandi di atas, lalu pilih Hubungkan.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera tidak mencantumkan stream video apa pun.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Terhubung. Kamera ini dapat pan, tilt, dan zoom; kendali PTZ sudah diatur di Lanjutan.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Terhubung.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Kamera ini memerlukan login. Masukkan nama pengguna dan kata sandi di atas, lalu pilih kamera lagi.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Kamera ini tidak menyediakan kendali PTZ melalui ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Pengaturan PTZ diisi dari kamera.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Stream</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Meminta daftar stream dari kamera…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Hubungkan</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Cari pengaturan PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Profil PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Pilih kamera yang pengaturan PTZ-nya akan dibaca.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Cari kamera…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Meminta pengaturan PTZ dari kamera…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Temukan kamera…</translation>
     </message>
 </context>
 <context>

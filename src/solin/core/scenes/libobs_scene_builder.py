@@ -67,6 +67,21 @@ def _parse_color(hex_color: str) -> int:
     return _PLACEHOLDER_COLOR
 
 
+def _rtsp_ffmpeg_options(config: dict) -> str:
+    """The camera's transport and network buffer, as ffmpeg_source options.
+
+    Without ``rtsp_transport`` FFmpeg tries UDP first, and over Wi-Fi a
+    high-resolution stream loses enough RTP packets that no frame ever decodes.
+    The network buffer is the RTP reorder window, which FFmpeg takes in µs.
+    """
+    transport = "udp" if str(config.get("transport", "tcp")) == "udp" else "tcp"
+    try:
+        latency_ms = max(0, int(config.get("latency_ms", 200)))
+    except (TypeError, ValueError):
+        latency_ms = 200
+    return f"rtsp_transport={transport} max_delay={latency_ms * 1000}"
+
+
 # libobs centres bounded content when no edge flag is set; there is no CENTER member.
 _CENTER_ALIGNMENT = 0
 
@@ -557,7 +572,14 @@ class LibobsSceneGraph:
                     {
                         "is_local_file": False,
                         "input": uri,
+                        "ffmpeg_options": _rtsp_ffmpeg_options(config),
                         "reconnect_delay_sec": 2,
+                        # ffmpeg_source otherwise starts only from `activate`, which
+                        # fires for sources on an output channel. The editor preview,
+                        # the projection route, and thumbnails only *show* the camera,
+                        # so it would connect and never read a frame. Media sources
+                        # opt out the same way (libobs_media_source).
+                        "restart_on_activate": False,
                         # ffmpeg_source dumps its settings — the full URL included —
                         # at LOG_INFO on every update, and that stream reaches the
                         # log users attach to bug reports. An RTSP address routinely

@@ -6214,6 +6214,58 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>A source with this name already exists in this scene.</source>
         <translation>May source na ganito ang pangalan sa eksenang ito.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Maglagay ng address gaya ng 192.168.0.100, range gaya ng 192.168.0.1-254, o network gaya ng 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Maghanap ng hanggang 1024 address nang sabay-sabay, gaya ng network na /22 o mas maliit.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Walang ONVIF camera na sumagot sa address na iyon.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Naghahanap sa network…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Mga camera na nakita: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Hindi mahanap sa network.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Walang camera na sumagot. Hindi sasagot ang camera na nasa ibang network; idagdag na lang ito gamit ang address nito.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Hindi tinanggap ng camera ang user name at password na ito.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Hindi sumagot ang camera. Tiyaking naka-on ito at naaabot mula sa computer na ito.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Hindi ma-verify ang secure na koneksyon ng camera.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Walang inilistang video stream ang camera.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Hindi ito wastong address ng camera.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Hindi mabasa ang sagot ng camera.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7398,6 +7450,94 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Gagamitin muli ng eksenang ito ang mga nakabahaging setting ng camera.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Address o range ng camera, gaya ng 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Address o range ng camera</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Maghanap</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Address ng camera na ito</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Naidagdag na bilang “%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Nakita sa network</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Kailangan ng camera na ito ang login nito. Ilagay ang user name at password sa itaas, pagkatapos ay piliin ang Kumonekta.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Walang inilistang video stream ang camera.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Nakakonekta. Kaya ng camera na ito ang pan, tilt, at zoom; naka-set up na ang kontrol ng PTZ sa Advanced.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Nakakonekta.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Kailangan ng camera na ito ang login nito. Ilagay ang user name at password sa itaas, pagkatapos ay piliin muli ang camera.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Walang kontrol ng PTZ sa pamamagitan ng ONVIF ang camera na ito.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Napunan ang mga setting ng PTZ mula sa camera.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Stream</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Hinihingi sa camera ang mga stream nito…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Kumonekta</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Hanapin ang mga setting ng PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Profile ng PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Piliin ang camera na pagbabasahan ng mga setting ng PTZ.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Maghanap ng mga camera…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Hinihingi sa camera ang mga setting ng PTZ nito…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Humanap ng mga camera…</translation>
     </message>
 </context>
 <context>

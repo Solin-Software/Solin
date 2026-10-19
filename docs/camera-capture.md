@@ -30,6 +30,32 @@ the saved settings; changing those settings is an explicit configuration flow.
 Saved devices remain identifiable when disconnected. An empty inventory does
 not offer a substitute automatic device: Automatic selects a mode for a device.
 
+**Find cameras…** in the network camera's connection list searches the local
+networks for ONVIF cameras with a WS-Discovery probe sent from every IPv4
+interface that can multicast. Cameras that answer join the list beside the
+saved connections, marked when a saved connection already uses their address.
+Choosing one asks the camera, through its ONVIF device service, for the RTSP
+address of each media profile and for its PTZ service; the first stream fills
+the RTSP address, and a camera with a movable profile also gets ONVIF PTZ
+control. Many cameras answer anonymously; one that refuses asks for its login,
+which is then sent with **Connect**. In the ONVIF PTZ settings, **Find PTZ
+settings…** reads the PTZ service and profile token from a found camera or from
+the host of the current RTSP address.
+
+The multicast probe only reaches the local network segment, so a camera on
+another subnet, or behind a switch that drops multicast, does not answer it.
+The address field below **Find cameras…** sends the probe directly to an
+address (`192.168.0.100`), a range (`192.168.0.1-254`), or a network of up to
+1024 addresses (`192.168.0.0/24`), which crosses routers; its finds join the
+list. A single address that ignores the probe is still found when an ONVIF
+device service answers on port 80, 8899, 2020, 8000, or 8080. A sweep spreads
+its probes over several sockets because probes to absent hosts hold send-buffer
+space while ARP waits. Replies are corrected for common firmware
+quirks: an advertised address the camera did not answer from is replaced by the
+address it did, and unescaped `&` characters in stream addresses are accepted.
+A login a camera embeds in a stream address is removed; logins are stored in
+the system keyring like any other camera credential.
+
 Scene references have their own searchable chooser and layer name. The chooser
 excludes the current scene and explains when another scene would introduce a
 circular reference. The document graph validates the proposed layer before it

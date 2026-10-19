@@ -19,6 +19,12 @@ from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import LocalCameraDevice, LocalCameraDiscovery, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat, LocalVideoFrameInterval, LocalVideoFrameRateRange, LocalVideoResolutionRange, SceneSourcePreview, SourceHealthEvent, SourceHealthStatus
 from solin.core.scenes.model import BusId, CameraMediaType, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
+from solin.core.scenes.onvif_discovery import (
+    OnvifDeviceDetails,
+    OnvifDiscoveredCamera,
+    OnvifDiscoveryError,
+    OnvifMediaProfile,
+)
 from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
 from solin.core.scenes.workspace import LocalCameraConflictError
 from solin.core.scenes.recording import (
@@ -1482,3 +1488,212 @@ def test_source_names_validate_live_and_block_duplicate_submissions(
     assert QMetaObject.invokeMethod(dialog, "save")
     assert not dialog.property("visible")
     assert any(layer.name == "Camera" for layer in controller.document.scene(scene_id).layers)
+
+
+class _Onvif:
+    def __init__(self, *, cameras=(), details=None, error=None) -> None:
+        self.cameras = tuple(cameras)
+        self.details = details
+        self.error = error
+        self.queries: list[str] = []
+
+    def discover(self, cancellation=None):
+        return self.cameras
+
+    def query(self, device_service, credentials, cancellation=None):
+        self.queries.append(device_service)
+        if self.error is not None:
+            raise self.error
+        return self.details
+
+
+_ONVIF_CAMERA = OnvifDiscoveredCamera(
+    key="urn:uuid:acme",
+    device_service="http://192.0.2.40/onvif/device_service",
+    host="192.0.2.40",
+    port=80,
+    name="Acme",
+    hardware="PTZ-200",
+    location="Hall",
+)
+_ONVIF_DETAILS = OnvifDeviceDetails(
+    device_service="http://192.0.2.40/onvif/device_service",
+    ptz_endpoint="http://192.0.2.40/onvif/ptz_service",
+    profiles=(
+        OnvifMediaProfile("main", "MainStream", "rtsp://192.0.2.40/main", True),
+        OnvifMediaProfile("sub", "SubStream", "rtsp://192.0.2.40/sub", False),
+    ),
+)
+
+
+def _open_network_camera_dialog(widget, onvif: _Onvif):
+    widget.bridge._onvif = onvif
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    return dialog
+
+
+def _find_cameras_on_the_network(dialog) -> None:
+    dialog.findChild(QObject, "cameraFindNetworkButton").clicked.emit()
+    assert _wait_until(
+        lambda: any(choice.get("discovered") for choice in _qml_value(dialog.property("networkChoices"))),
+        timeout_ms=5000,
+    )
+
+
+def _choose_network_option(widget, dialog, search_text: str) -> None:
+    selector = dialog.findChild(QObject, "cameraNetworkSelector")
+    search = selector.findChild(QObject, "cameraNetworkSelectorSearch")
+    search.setProperty("text", search_text)
+    QCoreApplication.processEvents()
+    search.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_Return)
+    QCoreApplication.processEvents()
+
+
+def test_found_network_camera_fills_its_stream_and_ptz_settings(
+    scene_editor_factory, tmp_path,
+) -> None:
+    workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    onvif = _Onvif(cameras=[_ONVIF_CAMERA], details=_ONVIF_DETAILS)
+    dialog = _open_network_camera_dialog(widget, onvif)
+
+    _find_cameras_on_the_network(dialog)
+    assert dialog.findChild(QObject, "cameraFindNetworkStatus").property("text") == "Cameras found: 1"
+    discovered = next(
+        choice for choice in _qml_value(dialog.property("networkChoices")) if choice.get("discovered")
+    )
+    assert discovered["name"] == "Acme PTZ-200"
+    assert discovered["reason"] == "192.0.2.40 · Hall · Found on the network"
+
+    _choose_network_option(widget, dialog, "Acme")
+    uri = dialog.findChild(QObject, "cameraUriField")
+    assert _wait_until(lambda: uri.property("text") == "rtsp://192.0.2.40/main", timeout_ms=5000)
+    assert onvif.queries == ["http://192.0.2.40/onvif/device_service"]
+    assert dialog.findChild(QObject, "cameraConnectionNameField").property("text") == "Acme PTZ-200"
+    assert dialog.findChild(QObject, "cameraLayerNameField").property("text") == "Acme PTZ-200"
+    assert dialog.findChild(QObject, "cameraStreamCombo").property("visible")
+    assert dialog.property("ptzProtocol") == "onvif"
+    assert dialog.findChild(QObject, "cameraDiscoveredStatus").property("text").startswith("Connected.")
+    assert dialog.findChild(QObject, "cameraNetworkSelector").property("selectedId") == "onvif:urn:uuid:acme"
+
+    assert QMetaObject.invokeMethod(dialog, "selectStream", Q_ARG("QVariant", 1))
+    assert uri.property("text") == "rtsp://192.0.2.40/sub"
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+
+    camera = next(camera for camera in workspace.configured_cameras if camera.name == "Acme PTZ-200")
+    assert camera.configuration.uri == "rtsp://192.0.2.40/sub"
+    # The sub stream cannot move, so PTZ keeps the profile that can.
+    assert camera.configuration.ptz_binding.endpoint == "http://192.0.2.40/onvif/ptz_service"
+    assert camera.configuration.ptz_binding.profile_token == "main"
+
+
+def test_found_network_camera_asks_for_its_login_when_refused(
+    scene_editor_factory, tmp_path,
+) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    onvif = _Onvif(cameras=[_ONVIF_CAMERA], error=OnvifDiscoveryError("onvif_authentication_failed"))
+    dialog = _open_network_camera_dialog(widget, onvif)
+    _find_cameras_on_the_network(dialog)
+
+    _choose_network_option(widget, dialog, "Acme")
+
+    status = dialog.findChild(QObject, "cameraDiscoveredStatus")
+    assert _wait_until(lambda: "needs its login" in status.property("text"), timeout_ms=5000)
+    assert dialog.findChild(QObject, "cameraDiscoveredConnectRow").property("visible")
+    assert dialog.findChild(QObject, "cameraUriField").property("text") == ""
+    assert dialog.property("ptzProtocol") == ""
+
+    onvif.error = None
+    onvif.details = _ONVIF_DETAILS
+    dialog.findChild(QObject, "cameraDiscoveredConnectButton").clicked.emit()
+    assert _wait_until(
+        lambda: dialog.findChild(QObject, "cameraUriField").property("text") == "rtsp://192.0.2.40/main",
+        timeout_ms=5000,
+    )
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_ptz_finder_reads_onvif_settings_from_the_camera_address(
+    scene_editor_factory, tmp_path,
+) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    onvif = _Onvif(details=_ONVIF_DETAILS)
+    dialog = _open_network_camera_dialog(widget, onvif)
+    _choose_network_option(widget, dialog, "New")
+    dialog.findChild(QObject, "cameraUriField").setProperty("text", "rtsp://192.0.2.40:554/live")
+    QCoreApplication.processEvents()
+
+    dialog.findChild(QObject, "cameraPtzFindButton").clicked.emit()
+    QCoreApplication.processEvents()
+    choices = _qml_value(dialog.property("ptzFinderChoices"))
+    assert choices[0]["id"] == "__address__"
+    assert choices[0]["deviceService"] == "http://192.0.2.40/onvif/device_service"
+    assert QMetaObject.invokeMethod(dialog, "queryPtz", Q_ARG("QVariant", choices[0]))
+
+    status = dialog.findChild(QObject, "cameraPtzFinderStatus")
+    assert _wait_until(
+        lambda: status.property("text") == "PTZ settings filled in from the camera.", timeout_ms=5000,
+    )
+    assert not dialog.property("ptzFinderOpen")
+    assert _qml_value(dialog.property("ptzProfiles")) == [
+        {"token": "main", "name": "MainStream", "uri": "rtsp://192.0.2.40/main", "ptz": True},
+    ]
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_address_search_finds_a_camera_behind_a_router(scene_editor_factory, tmp_path) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+
+    class _AddressOnvif(_Onvif):
+        def search(self, target, cancellation=None):
+            self.queries.append(f"search:{target}")
+            return self.cameras
+
+    onvif = _AddressOnvif(cameras=[_ONVIF_CAMERA], details=_ONVIF_DETAILS)
+    dialog = _open_network_camera_dialog(widget, onvif)
+    field = dialog.findChild(QObject, "cameraSearchAddressField")
+    button = dialog.findChild(QObject, "cameraSearchAddressButton")
+    assert not button.property("enabled")
+
+    field.setProperty("text", "192.0.2.0/24")
+    QCoreApplication.processEvents()
+    assert button.property("enabled")
+    button.clicked.emit()
+
+    assert _wait_until(
+        lambda: any(choice.get("discovered") for choice in _qml_value(dialog.property("networkChoices"))),
+        timeout_ms=5000,
+    )
+    assert onvif.queries == ["search:192.0.2.0/24"]
+    assert dialog.findChild(QObject, "cameraFindNetworkStatus").property("text") == "Cameras found: 1"
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_choosing_a_found_camera_that_is_saved_reuses_its_connection(
+    scene_editor_factory, tmp_path,
+) -> None:
+    workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    saved_id = widget.bridge.addCamera({
+        "kind": "rtsp_camera", "name": "Hall", "layerName": "Hall",
+        "uri": "rtsp://192.0.2.40:554/live",
+    }, widget.bridge.sourceEditContext())
+    assert saved_id
+    source_id = next(camera.id for camera in workspace.configured_cameras if camera.name == "Hall")
+    onvif = _Onvif(cameras=[_ONVIF_CAMERA], details=_ONVIF_DETAILS)
+    dialog = _open_network_camera_dialog(widget, onvif)
+    _find_cameras_on_the_network(dialog)
+
+    _choose_network_option(widget, dialog, "Acme")
+
+    assert dialog.property("cameraId") == source_id
+    assert dialog.property("reusingCamera")
+    assert onvif.queries == []  # nothing to ask: the saved connection is reused
+    count = len(workspace.configured_cameras)
+    _set_edited_text(dialog.findChild(QObject, "cameraLayerNameField"), "Hall again")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert len(workspace.configured_cameras) == count

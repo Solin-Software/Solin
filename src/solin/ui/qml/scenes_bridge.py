@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from fractions import Fraction
 import json
@@ -84,7 +84,16 @@ from solin.core.scenes.recording import (
     AudioSelectionMode,
     ProgramRecordingStatus,
 )
+from solin.core.scenes.onvif_discovery import (
+    OnvifDeviceDetails,
+    OnvifDiscoveredCamera,
+    OnvifDiscoveryError,
+    OnvifDiscoveryService,
+    device_service_url,
+)
 from solin.core.scenes.ptz import (
+    PtzCancellation,
+    PtzCancelledError,
     PtzControlResult,
     PtzCredentialVault,
     PtzCredentials,
@@ -172,6 +181,10 @@ class ScenesBridge(QObject):
     ptzResult = Signal(str, bool, str)
     localCameraModesReady = Signal(str, int, int, bool)
     _camera_modes_result = Signal(object)
+    onvifDiscoveryChanged = Signal()
+    onvifCameraQueried = Signal(int, dict)
+    _onvif_discovery_result = Signal(object)
+    _onvif_query_result = Signal(object)
     # (x, y, width, height) of the preview canvas frame in the QQuickWidget's
     # logical coordinates — reported by QML so a native GPU preview surface can be
     # pinned exactly over it. (0,0,0,0) means "no canvas" (hide the surface).
@@ -187,6 +200,7 @@ class ScenesBridge(QObject):
         notifications: Any | None = None,
         recording_directory_picker: Callable[[str], str] | None = None,
         recording_directory_opener: Callable[[str], bool] | None = None,
+        onvif: OnvifDiscoveryService | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -218,6 +232,19 @@ class ScenesBridge(QObject):
         self._camera_modes_future: Future[LocalCameraDiscovery] | None = None
         self._camera_modes_result.connect(
             self._consume_camera_modes_result, Qt.ConnectionType.QueuedConnection,
+        )
+        self._onvif = onvif or OnvifDiscoveryService()
+        self._onvif_executor: ThreadPoolExecutor | None = None
+        self._onvif_cancellation = PtzCancellation()
+        self._onvif_cameras: tuple[OnvifDiscoveredCamera, ...] = ()
+        self._onvif_discovery: Future[tuple[OnvifDiscoveredCamera, ...]] | None = None
+        self._onvif_discovery_state = ""
+        self._onvif_query_id = 0
+        self._onvif_discovery_result.connect(
+            self._consume_onvif_discovery, Qt.ConnectionType.QueuedConnection,
+        )
+        self._onvif_query_result.connect(
+            self._consume_onvif_query, Qt.ConnectionType.QueuedConnection,
         )
         self._controller_connections: tuple[tuple[Any, Any], ...] = ()
         self._recording_connections: tuple[tuple[Any, Any], ...] = ()
@@ -1840,6 +1867,231 @@ class ScenesBridge(QObject):
             log.debug("Camera resolution query did not complete", exc_info=True)
         self.localCameraModesReady.emit(device_id, width, height, success)
 
+    @Property("QVariantList", notify=onvifDiscoveryChanged)  # type: ignore[arg-type]
+    def onvifCameras(self) -> list[dict[str, object]]:
+        """Cameras that answered the last network search, with any saved twin."""
+        saved: dict[str, SourceDefinition] = {}
+        for camera in self._controller.workspace.configured_cameras:
+            if isinstance(camera.configuration, RtspCameraConfig):
+                try:
+                    host = urlsplit(camera.configuration.uri).hostname or ""
+                except ValueError:
+                    continue
+                if host:
+                    saved.setdefault(host, camera)
+        return [
+            {
+                "id": f"onvif:{camera.key}",
+                "name": camera.display_name,
+                "host": camera.host,
+                "port": camera.port,
+                "location": camera.location,
+                "deviceService": camera.device_service,
+                "savedId": saved[camera.host].id if camera.host in saved else "",
+                "savedName": saved[camera.host].name if camera.host in saved else "",
+            }
+            for camera in self._onvif_cameras
+        ]
+
+    @Property(bool, notify=onvifDiscoveryChanged)
+    def onvifDiscoveryRunning(self) -> bool:
+        return self._onvif_discovery is not None
+
+    @Property(str, notify=onvifDiscoveryChanged)
+    def onvifDiscoveryStatus(self) -> str:
+        if self._onvif_discovery is not None:
+            return self.tr("Searching the network…")
+        if self._onvif_discovery_state == "failed":
+            return self.tr("The network could not be searched.")
+        if self._onvif_discovery_state == "onvif_search_target_invalid":
+            return self.tr("Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.")
+        if self._onvif_discovery_state == "onvif_search_target_too_large":
+            return self.tr("Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.")
+        if self._onvif_discovery_state == "address_empty":
+            return self.tr("No ONVIF camera answered at that address.")
+        if self._onvif_discovery_state not in {"done", "address_done"}:
+            return ""
+        if not self._onvif_cameras:
+            return self.tr(
+                "No cameras answered. A camera on another network will not answer; "
+                "add it with its address instead."
+            )
+        return self.tr("Cameras found: %1").replace("%1", str(len(self._onvif_cameras)))
+
+    @Slot()
+    def discoverOnvifCameras(self) -> None:
+        """Multicast to the local networks; the answers replace earlier ones."""
+        self._start_onvif_search(self._onvif.discover, by_address=False)
+
+    @Slot(str)
+    def searchOnvifAddress(self, target: str) -> None:
+        """Probe an address, range, or network directly, reaching across routers.
+
+        Cameras found this way join the list instead of replacing it.
+        """
+        target = target.strip()
+        self._start_onvif_search(
+            lambda cancellation: self._onvif.search(target, cancellation), by_address=True,
+        )
+
+    def _start_onvif_search(
+        self,
+        search: Callable[[PtzCancellation], tuple[OnvifDiscoveredCamera, ...]],
+        *,
+        by_address: bool,
+    ) -> None:
+        if self._closed or self._onvif_discovery is not None:
+            return
+        try:
+            future = self._onvif_worker().submit(search, self._onvif_cancellation)
+        except RuntimeError:
+            log.warning("Could not start the ONVIF camera search", exc_info=True)
+            return
+        self._onvif_discovery = future
+        self.onvifDiscoveryChanged.emit()
+
+        def completed(done: Future[tuple[OnvifDiscoveredCamera, ...]]) -> None:
+            if not self._closed:
+                self._onvif_discovery_result.emit((done, by_address))
+
+        future.add_done_callback(completed)
+
+    @Slot(object)
+    def _consume_onvif_discovery(self, result: object) -> None:
+        if self._closed or not isinstance(result, tuple) or len(result) != 2:
+            return
+        future, by_address = result
+        if future is not self._onvif_discovery:
+            return
+        self._onvif_discovery = None
+        assert isinstance(future, Future)
+        try:
+            found = future.result()
+        except OnvifDiscoveryError as error:
+            if error.error_code.startswith("onvif_search_target"):
+                self._onvif_discovery_state = error.error_code
+            else:
+                log.warning("ONVIF camera search failed", exc_info=True)
+                self._onvif_discovery_state = "failed"
+        except Exception:  # noqa: BLE001 - asynchronous discovery boundary
+            log.warning("ONVIF camera search failed", exc_info=True)
+            self._onvif_discovery_state = "failed"
+        else:
+            if by_address:
+                merged = {camera.key: camera for camera in self._onvif_cameras}
+                merged.update((camera.key, camera) for camera in found)
+                self._onvif_cameras = tuple(merged.values())
+                self._onvif_discovery_state = "address_done" if found else "address_empty"
+            else:
+                self._onvif_cameras = found
+                self._onvif_discovery_state = "done"
+        self.onvifDiscoveryChanged.emit()
+
+    @Slot(str, str, str, result=int)
+    def queryOnvifCamera(self, device_service: str, username: str, password: str) -> int:
+        """Ask a camera for its streams and PTZ service; 0 when it cannot start.
+
+        The answer arrives as ``onvifCameraQueried`` with the returned id. A
+        blank login asks anonymously, which many cameras allow for this.
+        """
+        if self._closed:
+            return 0
+        username = username.strip()
+        try:
+            credentials = PtzCredentials(username, password) if username and password else None
+        except ValueError:
+            credentials = None
+        self._onvif_query_id += 1
+        request_id = self._onvif_query_id
+        try:
+            future = self._onvif_worker().submit(
+                self._onvif.query, device_service.strip(), credentials, self._onvif_cancellation,
+            )
+        except RuntimeError:
+            log.warning("Could not start the ONVIF camera query", exc_info=True)
+            return 0
+
+        def completed(done: Future[OnvifDeviceDetails]) -> None:
+            if not self._closed:
+                self._onvif_query_result.emit((request_id, done))
+
+        future.add_done_callback(completed)
+        return request_id
+
+    @Slot(object)
+    def _consume_onvif_query(self, result: object) -> None:
+        if self._closed or not isinstance(result, tuple) or len(result) != 2:
+            return
+        request_id, future = result
+        assert isinstance(future, Future)
+        try:
+            details = future.result()
+        except PtzCancelledError:
+            return
+        except OnvifDiscoveryError as error:
+            self.onvifCameraQueried.emit(request_id, {
+                "ok": False,
+                "errorCode": error.error_code,
+                "message": self._onvif_error_message(error.error_code),
+            })
+            return
+        except Exception:  # noqa: BLE001 - asynchronous query boundary
+            log.warning("ONVIF camera query failed", exc_info=True)
+            self.onvifCameraQueried.emit(request_id, {
+                "ok": False,
+                "errorCode": "onvif_query_failed",
+                "message": self._onvif_error_message("onvif_query_failed"),
+            })
+            return
+        self.onvifCameraQueried.emit(request_id, {
+            "ok": True,
+            "errorCode": "",
+            "message": "",
+            "deviceService": details.device_service,
+            "ptzEndpoint": details.ptz_endpoint,
+            "profiles": [
+                {
+                    "token": profile.token,
+                    "name": profile.name,
+                    "uri": profile.stream_uri,
+                    "ptz": profile.ptz,
+                }
+                for profile in details.profiles
+            ],
+        })
+
+    @Slot(str, result=str)
+    def onvifDeviceServiceForAddress(self, address: str) -> str:
+        """The device service of a camera known by an RTSP address or a host."""
+        address = address.strip()
+        if not address:
+            return ""
+        try:
+            host = urlsplit(address if "://" in address else f"//{address}").hostname or ""
+            return device_service_url(host)
+        except (ValueError, OnvifDiscoveryError):
+            return ""
+
+    def _onvif_worker(self) -> ThreadPoolExecutor:
+        if self._onvif_executor is None:
+            self._onvif_executor = ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="solin-onvif",
+            )
+        return self._onvif_executor
+
+    def _onvif_error_message(self, error_code: str) -> str:
+        if error_code == "onvif_authentication_failed":
+            return self.tr("The camera did not accept this user name and password.")
+        if error_code == "onvif_unreachable":
+            return self.tr("The camera did not answer. Check that it is on and reachable from this computer.")
+        if error_code == "onvif_tls_failed":
+            return self.tr("The camera's secure connection could not be verified.")
+        if error_code in {"onvif_profiles_missing", "onvif_media_service_missing"}:
+            return self.tr("The camera did not list any video streams.")
+        if error_code == "onvif_address_invalid":
+            return self.tr("This is not a valid camera address.")
+        return self.tr("The camera's reply could not be read.")
+
     @Slot(str, str, str, result="QVariantMap")
     def localCameraCustomFrameRate(
         self, device_id: str, format_id: str, frame_rate: str,
@@ -2154,6 +2406,10 @@ class ScenesBridge(QObject):
         if self._closed:
             return
         self._closed = True
+        self._onvif_cancellation.cancel()
+        if self._onvif_executor is not None:
+            self._onvif_executor.shutdown(wait=False, cancel_futures=True)
+            self._onvif_executor = None
         self._source_edit_contexts.clear()
         self._source_edit_connections.clear()
         self._clear_framing_session()

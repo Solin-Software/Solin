@@ -55,7 +55,35 @@ Dialog {
     readonly property bool editingSettings: !reusingCamera && !deviceConflict && !connectionChoicePending
     readonly property var networkChoices: [{ id: "__new__", name: qsTr("New connection…") }].concat(
         bridge ? bridge.configuredCameras.filter(function(camera) { return camera.kind === "rtsp_camera" })
-            .map(function(camera) { return Object.assign({}, camera, { selectable: true }) }) : [])
+            .map(function(camera) { return Object.assign({}, camera, { selectable: true }) }) : []).concat(
+        bridge ? bridge.onvifCameras.map(function(camera) {
+            return Object.assign({}, camera, { discovered: true, selectable: true, reason: discoveredReason(camera) })
+        }) : [])
+    // A camera picked from the network search, and what asking it returned.
+    property var discoveredCamera: ({})
+    property var onvifStreams: []
+    property int streamIndex: 0
+    property int streamQueryId: 0
+    property bool streamQueryRunning: false
+    property bool streamQueryFailed: false
+    property string streamQueryMessage: ""
+    // The ONVIF PTZ finder: which camera to ask, and the PTZ profiles it has.
+    property bool ptzFinderOpen: false
+    property var ptzProfiles: []
+    property int ptzQueryId: 0
+    property bool ptzQueryRunning: false
+    property bool ptzQueryFailed: false
+    property string ptzQueryMessage: ""
+    readonly property var ptzFinderChoices: {
+        var items = []
+        var own = bridge && cameraKind === "rtsp_camera" ? bridge.onvifDeviceServiceForAddress(uriField.text) : ""
+        if (own.length)
+            items.push({ id: "__address__", name: qsTr("This camera's address"), reason: own, deviceService: own })
+        return items.concat(bridge ? bridge.onvifCameras.map(function(camera) {
+            return { id: camera.id, name: camera.name, deviceService: camera.deviceService,
+                reason: camera.host + (camera.location ? " · " + camera.location : "") }
+        }) : [])
+    }
 
     readonly property color surface: theme ? theme.surface : "#172131"
     readonly property color surfaceSoft: theme ? theme.bg : "#111927"
@@ -194,6 +222,12 @@ Dialog {
     Connections {
         target: root.bridge
         function onChanged() { root.validateLayerName() }
+        function onOnvifCameraQueried(requestId, result) {
+            if (requestId === root.streamQueryId && root.streamQueryRunning)
+                root.applyStreamQuery(result)
+            else if (requestId === root.ptzQueryId && root.ptzQueryRunning)
+                root.applyPtzQuery(result)
+        }
         function onLocalCameraModesReady(deviceId, width, height, success) {
             if (!root.customResolutionPending || deviceId !== root.deviceId
                     || deviceId !== root.customResolutionDeviceId
@@ -280,6 +314,139 @@ Dialog {
         return cameraDevice.capabilitiesStatus || ""
     }
 
+    function discoveredReason(camera) {
+        var place = camera.host + (camera.location ? " · " + camera.location : "")
+        return camera.savedName
+            ? qsTr("%1 · Already added as “%2”").arg(place).arg(camera.savedName)
+            : qsTr("%1 · Found on the network").arg(place)
+    }
+
+    function resetDiscovery() {
+        discoveredCamera = ({})
+        onvifStreams = []
+        streamIndex = 0
+        streamQueryId = 0
+        streamQueryRunning = false
+        streamQueryFailed = false
+        streamQueryMessage = ""
+        ptzFinderOpen = false
+        ptzProfiles = []
+        ptzQueryId = 0
+        ptzQueryRunning = false
+        ptzQueryFailed = false
+        ptzQueryMessage = ""
+    }
+
+    function selectDiscovered(choice) {
+        var previousName = layerNameField.text
+        var custom = layerNameCustom
+        loadDraft(bridge ? bridge.cameraDraft("") : ({}), "rtsp_camera")
+        discoveredCamera = choice
+        nameField.text = choice.name
+        layerNameField.text = custom ? previousName : nameField.text
+        layerNameCustom = custom
+        queryDiscoveredStreams()
+    }
+
+    function queryDiscoveredStreams() {
+        if (!bridge || !discoveredCamera.deviceService)
+            return
+        streamQueryFailed = false
+        streamQueryMessage = ""
+        streamQueryId = bridge.queryOnvifCamera(discoveredCamera.deviceService,
+            streamUsernameField.text, streamPasswordField.text)
+        streamQueryRunning = streamQueryId > 0
+    }
+
+    function applyStreamQuery(result) {
+        streamQueryRunning = false
+        if (!result.ok) {
+            streamQueryFailed = true
+            var anonymous = !streamUsernameField.text.trim().length || !streamPasswordField.text.length
+            streamQueryMessage = result.errorCode === "onvif_authentication_failed" && anonymous
+                ? qsTr("This camera needs its login. Enter the user name and password above, then select Connect.")
+                : result.message
+            return
+        }
+        onvifStreams = result.profiles.filter(function(profile) { return profile.uri.length > 0 })
+        if (!onvifStreams.length) {
+            streamQueryFailed = true
+            streamQueryMessage = qsTr("The camera did not list any video streams.")
+            return
+        }
+        var movable = result.profiles.filter(function(profile) { return profile.ptz })
+        var hasPtz = result.ptzEndpoint.length > 0 && movable.length > 0
+        if (hasPtz) {
+            ptzCombo.currentIndex = 1
+            ptzProtocol = "onvif"
+            onvifEndpoint.text = result.ptzEndpoint
+            ptzProfiles = movable
+            onvifProfileToken.text = movable[0].token
+            // One login usually covers both; the PTZ one stays editable.
+            if (!usernameField.text.trim().length && streamUsernameField.text.trim().length) {
+                usernameField.text = streamUsernameField.text.trim()
+                passwordField.text = streamPasswordField.text
+            }
+        }
+        selectStream(0)
+        streamQueryMessage = hasPtz
+            ? qsTr("Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.")
+            : qsTr("Connected.")
+    }
+
+    function selectStream(index) {
+        if (index < 0 || index >= onvifStreams.length)
+            return
+        streamIndex = index
+        uriField.text = onvifStreams[index].uri
+        if (ptzProtocol === "onvif" && onvifStreams[index].ptz)
+            onvifProfileToken.text = onvifStreams[index].token
+    }
+
+    function openPtzFinder() {
+        ptzFinderOpen = true
+        ptzQueryFailed = false
+        ptzQueryMessage = ""
+        if (bridge && !bridge.onvifCameras.length && !bridge.onvifDiscoveryRunning)
+            bridge.discoverOnvifCameras()
+    }
+
+    function queryPtz(choice) {
+        if (!bridge || !choice.deviceService)
+            return
+        // The PTZ login when typed, else the stream login: usually the same account.
+        var ownLogin = usernameField.text.trim().length > 0
+        ptzQueryFailed = false
+        ptzQueryMessage = ""
+        ptzQueryId = bridge.queryOnvifCamera(choice.deviceService,
+            ownLogin ? usernameField.text : streamUsernameField.text,
+            ownLogin ? passwordField.text : streamPasswordField.text)
+        ptzQueryRunning = ptzQueryId > 0
+    }
+
+    function applyPtzQuery(result) {
+        ptzQueryRunning = false
+        ptzQueryFailed = true
+        if (!result.ok) {
+            var anonymous = !usernameField.text.trim().length || !passwordField.text.length
+            ptzQueryMessage = result.errorCode === "onvif_authentication_failed" && anonymous
+                ? qsTr("This camera needs its login. Enter the user name and password above, then choose the camera again.")
+                : result.message
+            return
+        }
+        var movable = result.profiles.filter(function(profile) { return profile.ptz })
+        if (!result.ptzEndpoint.length || !movable.length) {
+            ptzQueryMessage = qsTr("This camera does not offer PTZ control over ONVIF.")
+            return
+        }
+        ptzQueryFailed = false
+        onvifEndpoint.text = result.ptzEndpoint
+        ptzProfiles = movable
+        onvifProfileToken.text = movable[0].token
+        ptzFinderOpen = false
+        ptzQueryMessage = qsTr("PTZ settings filled in from the camera.")
+    }
+
     function loadDraft(values, forcedKind) {
         draft = values || ({})
         cameraKind = forcedKind || draft.kind || "local_camera"
@@ -323,6 +490,7 @@ Dialog {
         saveAttempted = false
         deviceConflict = false
         connectionChoicePending = false
+        resetDiscovery()
     }
 
     function selectDevice(device) {
@@ -343,6 +511,17 @@ Dialog {
     }
 
     function selectNetwork(choice) {
+        // A found camera that is already saved reuses that connection: a second
+        // connection would ask the camera for another stream, and cameras serve
+        // only a few at once.
+        if (choice.discovered && choice.savedId) {
+            selectNetwork({ id: choice.savedId })
+            return
+        }
+        if (choice.discovered) {
+            selectDiscovered(choice)
+            return
+        }
         var previousName = layerNameField.text
         var custom = layerNameCustom
         loadDraft(bridge ? bridge.cameraDraft(choice.id === "__new__" ? "" : choice.id) : ({}), "rtsp_camera")
@@ -570,10 +749,11 @@ Dialog {
                     theme: root.theme
                     Layout.fillWidth: true
                     options: root.networkChoices
-                    selectedId: root.connectionChoicePending ? "" : root.cameraId || "__new__"
+                    selectedId: root.connectionChoicePending ? "" : root.discoveredCamera.id || root.cameraId || "__new__"
                     searchPlaceholder: qsTr("Search connections…")
                     onChosen: function(choice) { root.selectNetwork(choice) }
                 }
+                NetworkSearchRow { objectName: "cameraFindNetworkRow" }
             }
             FormSection {
                 visible: root.reusingCamera
@@ -676,6 +856,18 @@ Dialog {
                     FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("RTSP address") }
                     StyledField { id: uriField; objectName: "cameraUriField"; visible: root.cameraKind === "rtsp_camera" && root.editingSettings; Layout.fillWidth: true; placeholderText: "rtsp://camera.local/stream" }
 
+                    FieldLabel { visible: streamCombo.visible; text: qsTr("Stream") }
+                    ScenesComboBox {
+                        id: streamCombo
+                        objectName: "cameraStreamCombo"
+                        theme: root.theme
+                        visible: root.cameraKind === "rtsp_camera" && root.editingSettings && root.onvifStreams.length > 1
+                        Layout.fillWidth: true
+                        model: root.onvifStreams.map(function(stream) { return stream.name })
+                        currentIndex: root.streamIndex
+                        onActivated: root.selectStream(currentIndex)
+                    }
+
                     // The stream login. Kept out of the address, which is written to
                     // disk and printed by the engine; stored in the system keyring
                     // and put back only when connecting. Separate from the PTZ login
@@ -744,6 +936,28 @@ Dialog {
                     color: root.textSecondary
                     font.pixelSize: 11
                     wrapMode: Text.Wrap
+                }
+                RowLayout {
+                    objectName: "cameraDiscoveredConnectRow"
+                    Layout.fillWidth: true
+                    visible: root.cameraKind === "rtsp_camera" && root.editingSettings && !!root.discoveredCamera.id
+                    spacing: 10
+                    Text {
+                        objectName: "cameraDiscoveredStatus"
+                        Layout.fillWidth: true
+                        text: root.streamQueryRunning ? qsTr("Asking the camera for its streams…") : root.streamQueryMessage
+                        color: root.streamQueryFailed ? root.danger : root.textSecondary
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                        Accessible.role: root.streamQueryFailed ? Accessible.AlertMessage : Accessible.StaticText
+                    }
+                    ScenesDialogButton {
+                        objectName: "cameraDiscoveredConnectButton"
+                        theme: root.theme
+                        text: qsTr("Connect")
+                        enabled: !root.streamQueryRunning
+                        onClicked: root.queryDiscoveredStreams()
+                    }
                 }
                 Text {
                     Layout.fillWidth: true
@@ -861,8 +1075,28 @@ Dialog {
                     Layout.fillWidth: true
                     columns: width >= 470 ? 2 : 1
                     columnSpacing: 12; rowSpacing: 9
+                    FieldLabel { text: "" }
+                    ScenesDialogButton {
+                        objectName: "cameraPtzFindButton"
+                        theme: root.theme
+                        Layout.alignment: Qt.AlignLeft
+                        text: qsTr("Find PTZ settings…")
+                        enabled: !root.ptzQueryRunning
+                        onClicked: root.openPtzFinder()
+                    }
                     FieldLabel { text: qsTr("PTZ service") }
                     StyledField { id: onvifEndpoint; Layout.fillWidth: true; placeholderText: "https://camera.local/onvif/ptz_service" }
+                    FieldLabel { visible: ptzProfileCombo.visible; text: qsTr("PTZ profile") }
+                    ScenesComboBox {
+                        id: ptzProfileCombo
+                        objectName: "cameraPtzProfileCombo"
+                        theme: root.theme
+                        visible: root.ptzProfiles.length > 1
+                        Layout.fillWidth: true
+                        model: root.ptzProfiles.map(function(profile) { return profile.name })
+                        currentIndex: Math.max(0, root.findIndex(root.ptzProfiles, "token", onvifProfileToken.text))
+                        onActivated: onvifProfileToken.text = root.ptzProfiles[currentIndex].token
+                    }
                     FieldLabel { text: qsTr("Profile token") }
                     StyledField { id: onvifProfileToken; Layout.fillWidth: true; placeholderText: qsTr("Media profile token") }
                     FieldLabel { text: qsTr("Username") }
@@ -871,6 +1105,43 @@ Dialog {
                     StyledField { id: passwordField; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: root.hasCredentials ? qsTr("Leave blank to keep saved credentials") : "" }
                     FieldLabel { visible: root.hasCredentials; text: "" }
                     ScenesCheckBox { theme: root.theme; visible: root.hasCredentials; text: qsTr("Remove saved credentials"); checked: root.clearCredentials; onToggled: root.clearCredentials = checked }
+                }
+
+                ColumnLayout {
+                    objectName: "cameraPtzFinder"
+                    visible: ptzCombo.currentIndex === 1 && (root.ptzFinderOpen || root.ptzQueryMessage.length > 0 || root.ptzQueryRunning)
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        Layout.fillWidth: true
+                        visible: root.ptzFinderOpen
+                        text: qsTr("Choose the camera to read its PTZ settings from.")
+                        color: root.textSecondary
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+                    ScenesSourceSelector {
+                        id: ptzFinderSelector
+                        objectName: "cameraPtzFinderSelector"
+                        theme: root.theme
+                        Layout.fillWidth: true
+                        visible: root.ptzFinderOpen
+                        enabled: !root.ptzQueryRunning
+                        options: root.ptzFinderChoices
+                        searchPlaceholder: qsTr("Search cameras…")
+                        onChosen: function(choice) { root.queryPtz(choice) }
+                    }
+                    NetworkSearchRow { visible: root.ptzFinderOpen }
+                    Text {
+                        objectName: "cameraPtzFinderStatus"
+                        Layout.fillWidth: true
+                        visible: text.length > 0
+                        text: root.ptzQueryRunning ? qsTr("Asking the camera for its PTZ settings…") : root.ptzQueryMessage
+                        color: root.ptzQueryFailed ? root.danger : root.textSecondary
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                        Accessible.role: root.ptzQueryFailed ? Accessible.AlertMessage : Accessible.StaticText
+                    }
                 }
 
                 GridLayout {
@@ -959,6 +1230,58 @@ Dialog {
             anchors.margins: 14
             spacing: 10
             Text { text: section.titleText; color: root.textPrimary; font.pixelSize: 12; font.weight: Font.DemiBold }
+        }
+    }
+
+    // Multicast reaches this network only; the address search probes hosts
+    // directly, so it also finds cameras behind a router.
+    component NetworkSearchRow: ColumnLayout {
+        id: searchRow
+        Layout.fillWidth: true
+        spacing: 8
+        function searchAddress() {
+            if (root.bridge && addressField.text.trim().length && !root.bridge.onvifDiscoveryRunning)
+                root.bridge.searchOnvifAddress(addressField.text)
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            ScenesDialogButton {
+                objectName: "cameraFindNetworkButton"
+                theme: root.theme
+                text: qsTr("Find cameras…")
+                enabled: !!root.bridge && !root.bridge.onvifDiscoveryRunning
+                onClicked: root.bridge.discoverOnvifCameras()
+            }
+            Text {
+                objectName: "cameraFindNetworkStatus"
+                Layout.fillWidth: true
+                text: root.bridge ? root.bridge.onvifDiscoveryStatus : ""
+                color: root.textSecondary
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+            }
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            ScenesTextField {
+                id: addressField
+                objectName: "cameraSearchAddressField"
+                theme: root.theme
+                Layout.fillWidth: true
+                maximumLength: 64
+                placeholderText: qsTr("Camera address or range, such as 192.168.0.1-254")
+                Accessible.name: qsTr("Camera address or range")
+                onAccepted: searchRow.searchAddress()
+            }
+            ScenesDialogButton {
+                objectName: "cameraSearchAddressButton"
+                theme: root.theme
+                text: qsTr("Search")
+                enabled: !!root.bridge && !root.bridge.onvifDiscoveryRunning && addressField.text.trim().length > 0
+                onClicked: searchRow.searchAddress()
+            }
         }
     }
 

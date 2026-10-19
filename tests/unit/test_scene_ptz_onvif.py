@@ -257,3 +257,57 @@ def test_onvif_controls_continuous_move_stop_and_preset_storage() -> None:
     assert pan_tilt is not None
     assert pan_tilt.attrib == {"x": "-0.4", "y": "0.2"}
     assert _element_text(transport.calls[2].payload, "PresetToken") == "remote-one"
+
+
+def test_aiohttp_transport_reads_a_reply_split_across_segments() -> None:
+    """Budget cameras send replies in several TCP writes; all of them count."""
+    import socket
+    import threading
+    import time as _time
+
+    from solin.core.scenes.ptz_onvif import AiohttpOnvifTransport
+
+    body = _EMPTY_SOAP + b"<!--" + b"x" * 4096 + b"-->"
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+
+    def serve() -> None:
+        connection, _ = server.accept()
+        with connection:
+            request = b""
+            while b"\r\n\r\n" not in request:
+                request += connection.recv(65536)
+            headers, _, received = request.partition(b"\r\n\r\n")
+            length = int(next(
+                line.split(b":", 1)[1] for line in headers.split(b"\r\n")
+                if line.lower().startswith(b"content-length:")
+            ))
+            while len(received) < length:
+                received += connection.recv(65536)
+            connection.sendall(
+                b"HTTP/1.1 200 OK\r\nContent-Type: application/soap+xml\r\n"
+                + f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode()
+                + body[:1000]
+            )
+            _time.sleep(0.2)
+            connection.sendall(body[1000:])
+
+    worker = threading.Thread(target=serve)
+    worker.start()
+    try:
+        response = AiohttpOnvifTransport().call(
+            endpoint=f"http://127.0.0.1:{port}/onvif/device_service",
+            action="urn:test",
+            payload=b"<request/>",
+            credentials=None,
+            timeout_seconds=5,
+            cancellation=PtzCancellation(),
+        )
+    finally:
+        worker.join()
+        server.close()
+
+    assert response.status == 200
+    assert response.body == body

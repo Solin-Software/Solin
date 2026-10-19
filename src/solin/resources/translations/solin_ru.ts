@@ -6245,6 +6245,58 @@ The current organization and files will be preserved. Pending changes from the p
         <source>A source with this name already exists in this scene.</source>
         <translation>Источник с таким названием уже существует в этой сцене.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Введите адрес, например 192.168.0.100, диапазон, например 192.168.0.1-254, или сеть, например 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>За один раз можно искать не более 1024 адресов, например в сети /22 или меньше.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>По этому адресу не ответила ни одна камера ONVIF.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Поиск в сети…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Найдено камер: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Не удалось выполнить поиск в сети.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Ни одна камера не ответила. Камера в другой сети не ответит; добавьте её по адресу.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Камера не приняла это имя пользователя и пароль.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Камера не ответила. Убедитесь, что она включена и доступна с этого компьютера.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Не удалось проверить защищённое подключение к камере.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Камера не сообщила ни одного видеопотока.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Это недопустимый адрес камеры.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Не удалось прочитать ответ камеры.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7429,6 +7481,94 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Эта сцена будет использовать общие настройки камеры.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Адрес или диапазон камеры, например 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Адрес или диапазон камеры</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Найти</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Адрес этой камеры</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Уже добавлена как «%2»</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Найдена в сети</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Для этой камеры нужны учётные данные. Введите имя пользователя и пароль выше и выберите «Подключить».</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Камера не сообщила ни одного видеопотока.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Подключено. Эта камера поддерживает поворот, наклон и зум; управление PTZ настроено в разделе «Дополнительно».</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Подключено.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Для этой камеры нужны учётные данные. Введите имя пользователя и пароль выше и снова выберите камеру.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Эта камера не поддерживает управление PTZ по ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Настройки PTZ заполнены по данным камеры.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Поток</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Запрос потоков у камеры…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Подключить</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Найти настройки PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Профиль PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Выберите камеру, из которой нужно прочитать настройки PTZ.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Поиск камер…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Запрос настроек PTZ у камеры…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Найти камеры…</translation>
     </message>
 </context>
 <context>

@@ -6246,6 +6246,58 @@ The current organization and files will be preserved. Pending changes from the p
         <source>A source with this name already exists in this scene.</source>
         <translation>Джерело з такою назвою вже існує в цій сцені.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Введіть адресу, наприклад 192.168.0.100, діапазон, наприклад 192.168.0.1-254, або мережу, наприклад 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>За один раз можна шукати не більше 1024 адрес, наприклад у мережі /22 або меншій.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>За цією адресою не відповіла жодна камера ONVIF.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Пошук у мережі…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Знайдено камер: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Не вдалося виконати пошук у мережі.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Жодна камера не відповіла. Камера в іншій мережі не відповість; додайте її за адресою.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Камера не прийняла це ім’я користувача й пароль.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Камера не відповіла. Переконайтеся, що вона ввімкнена й доступна з цього комп’ютера.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Не вдалося перевірити захищене з’єднання з камерою.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Камера не повідомила жодного відеопотоку.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Це неприпустима адреса камери.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Не вдалося прочитати відповідь камери.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7430,6 +7482,94 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Ця сцена використовуватиме спільні налаштування камери.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Адреса або діапазон камери, наприклад 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Адреса або діапазон камери</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Шукати</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Адреса цієї камери</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Уже додано як «%2»</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Знайдено в мережі</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Для цієї камери потрібні облікові дані. Введіть ім’я користувача й пароль вище, а потім виберіть «Під’єднати».</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Камера не повідомила жодного відеопотоку.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Під’єднано. Ця камера підтримує поворот, нахил і масштабування; керування PTZ налаштовано в розділі «Додатково».</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Під’єднано.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Для цієї камери потрібні облікові дані. Введіть ім’я користувача й пароль вище, а потім знову виберіть камеру.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Ця камера не підтримує керування PTZ через ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Налаштування PTZ заповнено за даними камери.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Потік</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Запит потоків у камери…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Під’єднати</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Знайти налаштування PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Профіль PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Виберіть камеру, з якої потрібно прочитати налаштування PTZ.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Пошук камер…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Запит налаштувань PTZ у камери…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Знайти камери…</translation>
     </message>
 </context>
 <context>

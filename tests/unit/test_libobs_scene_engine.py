@@ -1256,6 +1256,40 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     assert source.kind == "ffmpeg_source"
     assert source.settings["is_local_file"] is False
     assert source.settings["input"] == "rtsp://host/stream"
+    # The model's defaults: TCP, 200 ms buffer.
+    assert source.settings["ffmpeg_options"] == "rtsp_transport=tcp max_delay=200000"
+    # Shown in the preview or a projection without being on an output channel,
+    # the camera must still play: activation never comes there.
+    assert source.settings["restart_on_activate"] is False
+
+
+@pytest.mark.parametrize(
+    ("configuration", "options"),
+    [
+        ({"transport": "tcp", "latency_ms": 500}, "rtsp_transport=tcp max_delay=500000"),
+        ({"transport": "udp", "latency_ms": 0}, "rtsp_transport=udp max_delay=0"),
+        ({"transport": "bogus", "latency_ms": "x"}, "rtsp_transport=tcp max_delay=200000"),
+    ],
+)
+def test_rtsp_layer_forwards_transport_and_network_buffer(configuration, options):
+    """An RTSP camera left on FFmpeg's UDP default shows nothing over Wi-Fi."""
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate({
+        "sources": [
+            {"id": "r1", "type": "rtsp_camera", "name": "Cam",
+             "configuration": {"uri": "rtsp://host/stream", **configuration}}
+        ],
+        "scenes": [
+            {"id": "s", "layers": [
+                {"id": "L", "source_id": "r1", "visible": True,
+                 "rect": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}}]}
+        ],
+    }, {"virtual_camera": "s"})
+
+    assert runtime.sources[-1].settings["ffmpeg_options"] == options
 
 
 # Shared idle source is borrowed, rather than recreated per layer/hydrate.

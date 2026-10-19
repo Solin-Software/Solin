@@ -6182,6 +6182,58 @@ The current organization and files will be preserved. Pending changes from the p
         <source>A source with this name already exists in this scene.</source>
         <translation>此场景中已存在同名来源。</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>请输入地址（如 192.168.0.100）、范围（如 192.168.0.1-254）或网络（如 192.168.0.0/24）。</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>一次最多搜索 1024 个地址，例如 /22 或更小的网络。</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>该地址上没有 ONVIF 摄像机响应。</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>正在搜索网络……</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>找到的摄像机：%1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>无法搜索网络。</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>没有摄像机响应。其他网络上的摄像机不会响应，请改用其地址添加。</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>摄像机不接受此用户名和密码。</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>摄像机没有响应。请检查它是否已开启，并且可从此计算机访问。</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>无法验证摄像机的安全连接。</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>摄像机未列出任何视频流。</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>这不是有效的摄像机地址。</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>无法读取摄像机的响应。</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7366,6 +7418,94 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>此场景将复用摄像机的共享设置。</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>摄像机地址或范围，例如 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>摄像机地址或范围</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>搜索</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>此摄像机的地址</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · 已添加为“%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · 在网络上找到</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>此摄像机需要登录。请在上方输入用户名和密码，然后选择“连接”。</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>摄像机未列出任何视频流。</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>已连接。此摄像机支持平移、俯仰和变焦；PTZ 控制已在“高级”中设置。</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>已连接。</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>此摄像机需要登录。请在上方输入用户名和密码，然后重新选择摄像机。</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>此摄像机不支持通过 ONVIF 进行 PTZ 控制。</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>已从摄像机填入 PTZ 设置。</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>视频流</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>正在向摄像机获取视频流……</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>连接</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>查找 PTZ 设置……</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ 配置文件</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>选择要读取 PTZ 设置的摄像机。</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>搜索摄像机……</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>正在向摄像机获取 PTZ 设置……</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>查找摄像机……</translation>
     </message>
 </context>
 <context>
