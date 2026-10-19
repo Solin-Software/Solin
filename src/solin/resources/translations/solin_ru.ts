@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Видео возобновлено</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: До встречи</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Начало встречи</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Конец встречи</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7824,11 +7839,6 @@ Add content, a camera, or another scene.</source>
         <translation>Автоматические сочетания клавиш</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Отправляет сочетания клавиш при изменении состояния визуальных медиафайлов.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Создайте одно или несколько сочетаний клавиш для событий запуска, завершения, паузы и возобновления.</translation>
     </message>
@@ -8447,6 +8457,16 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Загрузить ещё 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Доступно только в Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Отправляет сочетания клавиш при наступлении выбранных событий приложения.</translation>
     </message>
 </context>
 <context>
@@ -10029,6 +10049,16 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Конференция Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>До встречи</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Конец встречи</translation>
     </message>
 </context>
 <context>

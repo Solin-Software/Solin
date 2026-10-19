@@ -581,6 +581,7 @@ class MainWindow(QWidget):
             self.notifications,
             self,
         )
+        self._zoom_meetings.event_triggered.connect(self._auto_keys.dispatch)
 
         self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(

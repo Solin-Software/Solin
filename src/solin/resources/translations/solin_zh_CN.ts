@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>视频恢复</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom：聚会前</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom：聚会开始</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom：聚会结束</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7676,11 +7691,6 @@ Add content, a camera, or another scene.</source>
         <translation>自动快捷键</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>当视觉媒体状态改变时发送键盘快捷键。</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
@@ -8384,6 +8394,16 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>再加载 5 个版本</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>仅适用于 Windows。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>在所选应用事件发生时发送键盘快捷键。</translation>
     </message>
 </context>
 <context>
@@ -9956,6 +9976,16 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom会议</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>聚会前</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>聚会结束</translation>
     </message>
 </context>
 <context>

@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video återupptas</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Före mötet</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Mötets början</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Mötets slut</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7792,11 +7807,6 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Automatiska genvägar</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Skickar kortkommandon när visuella medier ändrar status.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Skapa ett eller flera kortkommandon för händelserna start, slut, paus och återuppta.</translation>
     </message>
@@ -8415,6 +8425,16 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Läs in 5 till</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Endast tillgängligt i Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Skickar kortkommandon när valda händelser i appen inträffar.</translation>
     </message>
 </context>
 <context>
@@ -9992,6 +10012,16 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-möte</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Före mötet</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Mötets slut</translation>
     </message>
 </context>
 <context>

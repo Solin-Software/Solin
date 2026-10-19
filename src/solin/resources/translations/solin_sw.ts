@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video inaendelea</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Kabla ya mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Mwanzo wa mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Mwisho wa mkutano</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7750,11 +7765,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Njia za Mkato za Kiotomatiki</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
     </message>
@@ -8416,6 +8426,16 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Pakia mengine 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Inapatikana kwenye Windows pekee.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Hutuma njia za mkato za kibodi matukio yaliyochaguliwa ya programu yanapotokea.</translation>
     </message>
 </context>
 <context>
@@ -9993,6 +10013,16 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Mkutano wa Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Kabla ya mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Mwisho wa mkutano</translation>
     </message>
 </context>
 <context>

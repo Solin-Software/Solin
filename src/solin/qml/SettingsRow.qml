@@ -315,12 +315,25 @@ FocusScope {
                     required property var modelData
                     Layout.fillWidth: true
                     spacing: 8
-                    Text {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        text: modelData.eventLabel + " · " + modelData.sequence
-                        color: appTheme.textSecondary
-                        font.pixelSize: 14
-                        wrapMode: Text.Wrap
+                        spacing: 3
+                        Text {
+                            Layout.fillWidth: true
+                            opacity: modelData.enabled && modelData.available ? 1 : 0.5
+                            text: modelData.eventLabel + " · " + modelData.sequence
+                            color: appTheme.textSecondary
+                            font.pixelSize: 14
+                            wrapMode: Text.Wrap
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: !modelData.available
+                            text: root.domain.state.shortcutUnavailableReason || ""
+                            color: appTheme.textMuted
+                            font.pixelSize: 12
+                            wrapMode: Text.Wrap
+                        }
                     }
                     SettingsButton { text: qsTr("Edit"); onClicked: root.domain.invoke("editShortcut:" + modelData.id) }
                     SettingsButton { text: qsTr("Delete"); destructive: true; onClicked: root.domain.invoke("deleteShortcut:" + modelData.id) }

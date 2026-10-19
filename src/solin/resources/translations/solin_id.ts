@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video dilanjutkan</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Sebelum perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Awal perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Akhir perhimpunan</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7718,11 +7733,6 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Pintasan Otomatis</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Mengirim pintasan papan tik saat status media visual berubah.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
     </message>
@@ -8384,6 +8394,16 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Muat 5 lagi</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Hanya tersedia di Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Mengirim pintasan papan tik saat peristiwa aplikasi yang dipilih terjadi.</translation>
     </message>
 </context>
 <context>
@@ -9956,6 +9976,16 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Pertemuan Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Sebelum perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Akhir perhimpunan</translation>
     </message>
 </context>
 <context>

@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video jatkuu</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Ennen kokousta</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Kokouksen alku</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Kokouksen loppu</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7750,11 +7765,6 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Automaattiset pikanäppäimet</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Lähettää pikanäppäinkomentoja, kun visuaalisen median tila muuttuu.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Luo yksi tai useampi pikanäppäin aloitus-, lopetus-, tauko- ja jatkamistapahtumia varten.</translation>
     </message>
@@ -8416,6 +8426,16 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Lataa 5 lisää</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Käytettävissä vain Windowsissa.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Lähettää pikanäppäinkomentoja sovelluksen valittujen tapahtumien yhteydessä.</translation>
     </message>
 </context>
 <context>
@@ -9993,6 +10013,16 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-kokous</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Ennen kokousta</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Kokouksen loppu</translation>
     </message>
 </context>
 <context>

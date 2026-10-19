@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Il video riprende</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Prima dell’adunanza</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Inizio dell’adunanza</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Fine dell’adunanza</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7793,11 +7808,6 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Scorciatoie automatiche</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Invia scorciatoie da tastiera quando cambia lo stato dei contenuti multimediali.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Creare una o più scorciatoie per gli eventi di avvio, fine, pausa e ripresa.</translation>
     </message>
@@ -8416,6 +8426,16 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Carica altre 5 versioni</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Disponibile solo su Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Invia scorciatoie da tastiera quando si verificano gli eventi selezionati dell’applicazione.</translation>
     </message>
 </context>
 <context>
@@ -9993,6 +10013,16 @@ Entrambi i dispositivi devono essere sulla stessa rete Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Riunione Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Prima dell’adunanza</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Fine dell’adunanza</translation>
     </message>
 </context>
 <context>

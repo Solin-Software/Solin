@@ -6,6 +6,13 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 
 from solin.controllers.zoom_meeting_controller import ZoomMeetingController
+from solin.core.integrations.automation.auto_key_actions import (
+    AutoKeyAction,
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
+)
+from solin.core.integrations.automation import shortcuts
 from solin.core.integrations.automation.zoom.state import SequenceResult, StepFailure
 from solin.widgets.zoom_panel import ZoomPanel
 
@@ -59,8 +66,11 @@ def integration():
     warnings = []
     notifications = SimpleNamespace(warning=lambda *args, **kwargs: warnings.append(args))
     controller = ZoomMeetingController(zoom, song, settings, notifications)
+    events = []
+    controller.event_triggered.connect(events.append)
     yield SimpleNamespace(
-        controller=controller, zoom=zoom, song=song, settings=settings, warnings=warnings
+        controller=controller, zoom=zoom, song=song, settings=settings, warnings=warnings,
+        events=events,
     )
     controller.deleteLater()
     zoom.deleteLater()
@@ -115,7 +125,7 @@ def test_manual_meeting_start_stops_song_only_for_an_accepted_linked_request(
     ctx.zoom.accept = accepted
     ctx.song.playback_requested = True
 
-    assert ctx.controller.request_pre_meeting() is accepted
+    assert ctx.controller.request_meeting_start() is accepted
 
     assert ctx.zoom.pre_requests == 1
     assert ctx.song.stops == ([True] if should_stop else [])
@@ -125,19 +135,19 @@ def test_manual_meeting_start_stops_song_only_for_an_accepted_linked_request(
 
 def test_song_can_be_started_again_before_or_after_a_manual_meeting_start(integration):
     ctx = integration
-    assert ctx.controller.request_pre_meeting()
+    assert ctx.controller.request_meeting_start()
     ctx.zoom.operation_finished.emit(SequenceResult("pre_meeting"))
     assert ctx.song.stops == [True]
     assert ctx.song.starts == 0
 
-    assert ctx.controller.request_post_meeting()
+    assert ctx.controller.request_after_meeting()
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 1
 
 
 def test_post_meeting_starts_song_only_after_successful_accepted_operation(integration):
     ctx = integration
-    assert ctx.controller.request_post_meeting()
+    assert ctx.controller.request_after_meeting()
     assert ctx.song.starts == 0
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 1
@@ -150,7 +160,7 @@ def test_manual_song_link_does_not_require_scheduled_days(integration):
     ctx.song.is_configured = False
     ctx.controller.set_linked(True)
     assert ctx.controller.link_available and ctx.controller.linked
-    assert ctx.controller.request_post_meeting()
+    assert ctx.controller.request_after_meeting()
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 1
     assert ctx.zoom.pre_requests == 0
@@ -165,7 +175,7 @@ def test_manual_song_link_does_not_require_scheduled_days(integration):
 )
 def test_uncertain_or_cancelled_post_meeting_does_not_start_playback(integration, result):
     ctx = integration
-    assert ctx.controller.request_post_meeting()
+    assert ctx.controller.request_after_meeting()
     ctx.zoom.operation_finished.emit(result)
     assert ctx.song.starts == 0
     assert len(ctx.warnings) == int(not result.cancelled)
@@ -174,7 +184,7 @@ def test_uncertain_or_cancelled_post_meeting_does_not_start_playback(integration
 def test_rejected_post_meeting_cannot_arm_a_future_song_start(integration):
     ctx = integration
     ctx.zoom.accept = False
-    assert not ctx.controller.request_post_meeting()
+    assert not ctx.controller.request_after_meeting()
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 0
 
@@ -183,14 +193,14 @@ def test_rejected_post_meeting_cannot_arm_a_future_song_start(integration):
 def test_post_meeting_does_not_restart_playing_or_loading_song(integration, playing, requested):
     ctx = integration
     ctx.song.is_playing, ctx.song.playback_requested = playing, requested
-    ctx.controller.request_post_meeting()
+    ctx.controller.request_after_meeting()
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 0
 
 
 def test_disabling_link_during_operation_prevents_song_start(integration):
     ctx = integration
-    ctx.controller.request_post_meeting()
+    ctx.controller.request_after_meeting()
     ctx.controller.set_linked(False)
     ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
     assert ctx.song.starts == 0
@@ -199,12 +209,12 @@ def test_disabling_link_during_operation_prevents_song_start(integration):
 def test_popup_disables_actions_without_meeting_and_during_operation():
     panel = ZoomPanel()
     try:
-        assert not panel._pre.isEnabled()
-        assert not panel._post.isEnabled()
+        buttons = (panel._before, panel._start, panel._after, panel._combined)
+        assert all(not button.isEnabled() for button in buttons)
         panel.set_connected(True)
-        assert panel._pre.isEnabled() and panel._post.isEnabled()
+        assert all(button.isEnabled() for button in buttons)
         panel.set_busy(True)
-        assert not panel._pre.isEnabled() and not panel._post.isEnabled()
+        assert all(not button.isEnabled() for button in buttons)
         assert not panel._cancel.isHidden()
         panel.set_busy(False)
         panel.set_background_song_link(True, True)
@@ -213,3 +223,129 @@ def test_popup_disables_actions_without_meeting_and_during_operation():
         assert panel._integration.isHidden()
     finally:
         panel.deleteLater()
+
+
+_MEETING_PHASES = [
+    ("request_before_meeting", "post_meeting", EVENT_ZOOM_BEFORE_MEETING),
+    ("request_meeting_start", "pre_meeting", EVENT_ZOOM_MEETING_STARTED),
+    ("request_after_meeting", "post_meeting", EVENT_ZOOM_AFTER_MEETING),
+]
+
+
+@pytest.mark.parametrize("method,sequence,event", _MEETING_PHASES)
+def test_each_intent_emits_only_its_own_event_after_success(integration, method, sequence, event):
+    ctx = integration
+    assert getattr(ctx.controller, method)()
+    assert ctx.events == []
+    assert not ctx.controller.request_after_meeting()
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == [event]
+    assert ctx.song.starts == int(sequence == "post_meeting")
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == [event]
+
+
+@pytest.mark.parametrize("method,sequence,event", _MEETING_PHASES)
+@pytest.mark.parametrize("cancelled", [True, False])
+def test_failed_or_cancelled_intent_does_not_emit_and_can_retry(
+    integration, method, sequence, event, cancelled,
+):
+    ctx = integration
+    assert getattr(ctx.controller, method)()
+    ctx.zoom.operation_finished.emit(SequenceResult(
+        sequence, () if cancelled else (StepFailure("worker", "worker_timeout"),), cancelled,
+    ))
+    assert ctx.events == []
+    assert ctx.song.starts == 0
+    assert getattr(ctx.controller, method)()
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == [event]
+
+
+@pytest.mark.parametrize("method,sequence,event", _MEETING_PHASES)
+def test_rejected_intent_cannot_trigger_shortcuts_later(integration, method, sequence, event):
+    ctx = integration
+    ctx.zoom.accept = False
+    assert not getattr(ctx.controller, method)()
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == []
+    ctx.zoom.accept = True
+    assert getattr(ctx.controller, method)()
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == [event]
+
+
+def test_unrelated_result_does_not_consume_pending_intent(integration):
+    ctx = integration
+    ctx.controller.request_before_meeting()
+    ctx.zoom.operation_finished.emit(SequenceResult("pre_meeting"))
+    assert ctx.events == []
+    ctx.zoom.operation_finished.emit(SequenceResult("post_meeting"))
+    assert ctx.events == [EVENT_ZOOM_BEFORE_MEETING]
+
+
+def test_scheduled_song_stop_emits_start_event_without_another_fade(integration):
+    ctx = integration
+    ctx.song.scheduled_stop_started.emit("occurrence")
+    ctx.zoom.operation_finished.emit(SequenceResult("pre_meeting"))
+    assert ctx.events == [EVENT_ZOOM_MEETING_STARTED]
+    assert ctx.song.stops == []
+
+
+@pytest.mark.parametrize("method,sequence,event", _MEETING_PHASES)
+def test_synchronous_worker_failure_clears_intent_without_song_side_effects(
+    integration, monkeypatch, method, sequence, event,
+):
+    ctx = integration
+
+    def fail_inline():
+        ctx.zoom.operation_finished.emit(SequenceResult(
+            sequence, (StepFailure("worker", "worker_failed"),),
+        ))
+        return True
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ctx.zoom, f"request_{sequence}", fail_inline)
+        assert getattr(ctx.controller, method)()
+    assert ctx.events == []
+    assert ctx.song.starts == 0
+    assert ctx.song.stops == []
+    assert getattr(ctx.controller, method)()
+    ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+    assert ctx.events == [event]
+
+
+def test_three_popup_buttons_dispatch_independent_configured_shortcuts(integration, monkeypatch):
+    from PySide6.QtCore import QCoreApplication
+
+    ctx = integration
+    actions = [AutoKeyAction(event, event, f"Ctrl+Alt+{i}")
+               for i, (_, _, event) in enumerate(_MEETING_PHASES, 1)]
+    dispatcher = shortcuts.AutoKeyDispatcher(SimpleNamespace(
+        is_enabled=lambda: True, actions=lambda: actions,
+    ))
+    sent = []
+    monkeypatch.setattr(shortcuts, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(dispatcher, "_send", sent.append)
+    ctx.controller.event_triggered.connect(dispatcher.dispatch)
+    panel = ZoomPanel()
+    panel.before_meeting_requested.connect(ctx.controller.request_before_meeting)
+    panel.meeting_start_requested.connect(ctx.controller.request_meeting_start)
+    panel.after_meeting_requested.connect(ctx.controller.request_after_meeting)
+    panel.set_connected(True)
+    panel.set_split_meeting_actions(True)
+    try:
+        for button, (_, sequence, _) in zip(
+            (panel._before, panel._start, panel._after), _MEETING_PHASES, strict=True,
+        ):
+            previous_count = len(sent)
+            button.click()
+            QCoreApplication.processEvents()
+            assert len(sent) == previous_count
+            ctx.zoom.operation_finished.emit(SequenceResult(sequence))
+            QCoreApplication.processEvents()
+        assert sent == [action.sequence for action in actions]
+    finally:
+        ctx.controller.event_triggered.disconnect(dispatcher.dispatch)
+        panel.deleteLater()
+        dispatcher.deleteLater()

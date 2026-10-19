@@ -1,4 +1,4 @@
-"""Automatic keyboard shortcut dispatch for media projection events."""
+"""Automatic keyboard shortcut dispatch for supported application events."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from PySide6.QtCore import (
 )
 
 from .auto_key_actions import (
-    AUTO_KEY_EVENTS,
     AutoKeyAction,
+    available_auto_key_events,
     first_shortcut_chord,
 )
 
@@ -52,7 +52,7 @@ class AutoKeyDispatcher(QObject):
         self._settings = settings
 
     def dispatch(self, event: str) -> None:
-        if event not in AUTO_KEY_EVENTS:
+        if event not in available_auto_key_events(sys.platform):
             return
         if not self._settings.is_enabled():
             return

@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Vídeo retoma</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Antes da reunião</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Início da reunião</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Fim da reunião</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7826,11 +7841,6 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <translation>Atalhos Automáticos</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Envia atalhos de teclado quando a mídia visual muda de estado.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Crie um ou mais atalhos para eventos de início, término, pausa e retomada.</translation>
     </message>
@@ -8449,6 +8459,16 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Carregar mais 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Disponível apenas no Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Envia atalhos de teclado nos eventos selecionados do aplicativo.</translation>
     </message>
 </context>
 <context>
@@ -10026,6 +10046,16 @@ Ambos precisam estar na mesma rede Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Reunião do Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Antes da reunião</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Fim da reunião</translation>
     </message>
 </context>
 <context>

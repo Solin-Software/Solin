@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video wordt hervat</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Voor de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Begin van de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Einde van de vergadering</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7750,11 +7765,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Automatische sneltoetsen</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Verstuurt sneltoetsen wanneer de status van visuele media verandert.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Maak een of meer sneltoetsen voor start-, eind-, pauze- en hervattingsgebeurtenissen.</translation>
     </message>
@@ -8416,6 +8426,16 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Nog 5 laden</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Alleen beschikbaar op Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Verstuurt sneltoetsen wanneer geselecteerde gebeurtenissen in de app plaatsvinden.</translation>
     </message>
 </context>
 <context>
@@ -9993,6 +10013,16 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Voor de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Einde van de vergadering</translation>
     </message>
 </context>
 <context>

@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>La vidéo reprend</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom : Avant la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom : Début de la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom : Fin de la réunion</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7793,11 +7808,6 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Raccourcis automatiques</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Envoie des raccourcis clavier lorsque l&apos;état d&apos;un support visuel change.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Créer un ou plusieurs raccourcis pour les événements de début, de fin, de pause et de reprise.</translation>
     </message>
@@ -8416,6 +8426,16 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Charger 5 versions supplémentaires</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Disponible uniquement sous Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Envoie des raccourcis clavier lorsque les événements sélectionnés de l’application se produisent.</translation>
     </message>
 </context>
 <context>
@@ -9993,6 +10013,16 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Réunion Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Avant la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Fin de la réunion</translation>
     </message>
 </context>
 <context>

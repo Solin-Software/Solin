@@ -701,6 +701,7 @@ class MainWindowUiController:
             context.zoom_service,
             right_col,
             obs_settings=context.obs_settings,
+            auto_key_settings=context.auto_key_settings,
             app_settings=context.app_settings,
             background_song_service=context.background_song_service,
             scene_runtime=context.scene_runtime,
@@ -710,8 +711,9 @@ class MainWindowUiController:
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)
         toolbar.obs_return_scene_change.connect(handlers.quick_obs_return_scene_change)
         toolbar.obs_stream_requested.connect(handlers.project_obs_stream)
-        toolbar.zoom_pre_meeting_requested.connect(context.zoom_meetings.request_pre_meeting)
-        toolbar.zoom_post_meeting_requested.connect(context.zoom_meetings.request_post_meeting)
+        toolbar.zoom_before_meeting_requested.connect(context.zoom_meetings.request_before_meeting)
+        toolbar.zoom_meeting_start_requested.connect(context.zoom_meetings.request_meeting_start)
+        toolbar.zoom_after_meeting_requested.connect(context.zoom_meetings.request_after_meeting)
         toolbar.zoom_background_song_link_toggled.connect(context.zoom_meetings.set_linked)
         context.zoom_meetings.link_changed.connect(toolbar.set_zoom_song_link)
         context.zoom_meetings.refresh_link()

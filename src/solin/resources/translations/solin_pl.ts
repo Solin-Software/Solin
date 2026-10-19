@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Wideo zostaje wznowione</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Przed zebraniem</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Początek zebrania</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Koniec zebrania</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7727,11 +7742,6 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Automatyczne skróty</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Wysyła skróty klawiszowe, gdy zmienia się stan multimediów.</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">Utwórz jeden lub więcej skrótów dla zdarzeń rozpoczęcia, zakończenia, wstrzymania i wznowienia.</translation>
     </message>
@@ -8448,6 +8458,16 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Wczytaj kolejne 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Dostępne tylko w systemie Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Wysyła skróty klawiszowe po wystąpieniu wybranych zdarzeń w aplikacji.</translation>
     </message>
 </context>
 <context>
@@ -10030,6 +10050,16 @@ Oba urządzenia muszą być w tej samej sieci Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Spotkanie Zoom</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Przed zebraniem</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Koniec zebrania</translation>
     </message>
 </context>
 <context>

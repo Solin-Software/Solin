@@ -22,7 +22,11 @@ from PySide6.QtGui import QBitmap, QColor, QPainter, QRegion
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QWidget
 
-from solin.core.integrations.automation.settings import OBSSettingsStore
+from solin.core.integrations.automation.auto_key_actions import (
+    EVENT_ZOOM_AFTER_MEETING,
+    EVENT_ZOOM_BEFORE_MEETING,
+)
+from solin.core.integrations.automation.settings import AutoKeySettingsStore, OBSSettingsStore
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.remote_control.security import RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
@@ -172,8 +176,9 @@ class QuickAccessToolbar(QQuickWidget):
     obs_stream_requested = Signal()
     remote_session_disconnect_requested = Signal(str)
     remote_sessions_disconnect_all_requested = Signal()
-    zoom_pre_meeting_requested = Signal()
-    zoom_post_meeting_requested = Signal()
+    zoom_before_meeting_requested = Signal()
+    zoom_meeting_start_requested = Signal()
+    zoom_after_meeting_requested = Signal()
     zoom_background_song_link_toggled = Signal(bool)
 
     def __init__(
@@ -183,6 +188,7 @@ class QuickAccessToolbar(QQuickWidget):
         parent=None,
         *,
         obs_settings: OBSSettingsStore,
+        auto_key_settings: AutoKeySettingsStore,
         app_settings: ProfileAppSettingsStore,
         background_song_service=None,
         scene_runtime: SceneRuntimeController | None = None,
@@ -192,6 +198,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._obs = obs_service
         self._zoom = zoom_service
         self._obs_settings = obs_settings
+        self._auto_key_settings = auto_key_settings
         self._background_song = background_song_service
         self._scene_runtime = scene_runtime
         self._program_recording = program_recording
@@ -444,8 +451,9 @@ class QuickAccessToolbar(QQuickWidget):
         if self._zoom:
             panel.cancel_requested.connect(self._zoom.cancel)
             panel.set_busy(self._zoom.is_busy)
-        panel.pre_meeting_requested.connect(self.zoom_pre_meeting_requested)
-        panel.post_meeting_requested.connect(self.zoom_post_meeting_requested)
+        panel.before_meeting_requested.connect(self.zoom_before_meeting_requested)
+        panel.meeting_start_requested.connect(self.zoom_meeting_start_requested)
+        panel.after_meeting_requested.connect(self.zoom_after_meeting_requested)
         panel.background_song_link_toggled.connect(self.zoom_background_song_link_toggled)
         panel.set_connected(self._zoom_connected)
         panel.set_background_song_link(*self._zoom_song_link)
@@ -866,7 +874,7 @@ class QuickAccessToolbar(QQuickWidget):
         if self._reposition_pending:
             return
         self._reposition_pending = True
-        QTimer.singleShot(0, self._run_scheduled_reposition)
+        QTimer.singleShot(0, self, self._run_scheduled_reposition)
 
     def _run_scheduled_reposition(self) -> None:
         self._reposition_pending = False
@@ -1143,7 +1151,16 @@ class QuickAccessToolbar(QQuickWidget):
         hide_themed_tooltip()
         if not self._zoom or not self._zoom_enabled:
             return
-        self._ensure_zoom_panel().show_above(self._active_surface())
+        panel = self._ensure_zoom_panel()
+        panel.set_split_meeting_actions(
+            self._auto_key_settings.is_enabled()
+            and any(
+                action.enabled
+                and action.event in (EVENT_ZOOM_BEFORE_MEETING, EVENT_ZOOM_AFTER_MEETING)
+                for action in self._auto_key_settings.actions()
+            )
+        )
+        panel.show_above(self._active_surface())
 
     def _on_remote_control_clicked(self) -> None:
         hide_themed_tooltip()
