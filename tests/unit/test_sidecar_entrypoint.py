@@ -25,6 +25,18 @@ def test_zoom_role_exits_before_application_import(monkeypatch):
     assert error.value.code == 7
 
 
+def test_zoom_parent_watch_rejects_unsupported_platform_before_loading_dlls(monkeypatch):
+    from types import SimpleNamespace
+
+    from solin.core.integrations.automation.zoom import worker
+    from solin.core.integrations.automation.zoom.state import ZoomAutomationError
+
+    monkeypatch.setattr(worker, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setenv("SOLIN_ZOOM_PARENT_PID", "1")
+    with pytest.raises(ZoomAutomationError, match="unsupported_platform"):
+        worker._watch_parent()
+
+
 def test_zoom_role_rejects_application_arguments(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["Solin.exe", ZOOM_AUTOMATION_ARGUMENT, "--create-profile"])
     monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)

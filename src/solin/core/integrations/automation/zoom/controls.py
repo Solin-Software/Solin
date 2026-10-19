@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from importlib import import_module
+from types import ModuleType
 from typing import Any
 
 from .i18n_labels import (
@@ -46,12 +49,20 @@ class Element:
 class Automation:
     """One COM apartment owns all interfaces, cache requests and elements."""
 
+    api: ModuleType
+    client: Any
+    cache: Any
+    errors: tuple[type[Exception], ...]
+    query_count: int
+
     def __init__(self):
+        if sys.platform != "win32":
+            raise ZoomAutomationError("unsupported_platform")
         import comtypes.client
 
         # Frozen builds contain these modules; source runs may generate them once.
         try:
-            from comtypes.gen import UIAutomationClient as api
+            api = import_module("comtypes.gen.UIAutomationClient")
         except ImportError:
             api = comtypes.client.GetModule("UIAutomationCore.dll")
         self.api = api

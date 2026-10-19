@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import sys
+from _ctypes import CFuncPtr
 from ctypes import wintypes as wt
 from dataclasses import dataclass
 
@@ -58,6 +59,10 @@ class Input(ctypes.Structure):
 
 class WindowsDesktop:
     """No UIA desktop walk: inspect native top-level windows by class and process."""
+
+    user: ctypes.CDLL
+    kernel: ctypes.CDLL
+    callback_type: type[CFuncPtr]
 
     def __init__(self):
         if sys.platform != "win32":
@@ -178,6 +183,8 @@ class WindowsDesktop:
             raise ZoomAutomationError("focus_failed")
 
     def cursor(self) -> tuple[int, int]:
+        if sys.platform != "win32":
+            raise ZoomAutomationError("unsupported_platform")
         point = Point()
         if not self.user.GetCursorPos(ctypes.byref(point)):
             raise ctypes.WinError(ctypes.get_last_error())

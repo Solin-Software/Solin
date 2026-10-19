@@ -25,6 +25,8 @@ def _write(message: dict) -> None:
 
 def _watch_parent() -> None:
     """A parent crash must not leave an automation process holding input/COM."""
+    if sys.platform != "win32":
+        raise ZoomAutomationError("unsupported_platform")
     from ctypes import wintypes as wt
 
     pid = int(os.environ.get("SOLIN_ZOOM_PARENT_PID", "0"))

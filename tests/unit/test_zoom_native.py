@@ -15,6 +15,13 @@ def test_desktop_rejects_unsupported_platform_before_loading_dlls(monkeypatch):
         native.WindowsDesktop()
 
 
+def test_cursor_rejects_unsupported_platform_before_calling_windows_api(monkeypatch):
+    monkeypatch.setattr(native, "sys", SimpleNamespace(platform="linux"))
+    desktop = native.WindowsDesktop.__new__(native.WindowsDesktop)
+    with pytest.raises(ZoomAutomationError, match="unsupported_platform"):
+        desktop.cursor()
+
+
 @pytest.mark.skipif(native.sys.platform != "win32", reason="Windows ABI")
 def test_input_union_preserves_native_pointer_alignment():
     assert ctypes.sizeof(native.Input) == (40 if ctypes.sizeof(ctypes.c_void_p) == 8 else 28)

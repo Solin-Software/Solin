@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from solin.core.integrations.automation.zoom import controls as controls_module
 from solin.core.integrations.automation.zoom.controls import Automation, Element, ZoomControls
 from solin.core.integrations.automation.zoom.native import Window
 from solin.core.integrations.automation.zoom.sequences import run_sequence
@@ -20,6 +21,56 @@ from solin.core.integrations.automation.zoom.text_match import (
     _audio_button_state_from_text,
     _video_button_state_from_text,
 )
+
+
+def test_automation_rejects_unsupported_platform_before_importing_com(monkeypatch):
+    import sys
+
+    monkeypatch.setattr(controls_module, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setitem(sys.modules, "comtypes", None)
+    with pytest.raises(ZoomAutomationError, match="unsupported_platform"):
+        Automation()
+
+
+@pytest.mark.parametrize("generated", [False, True])
+def test_automation_uses_packaged_bindings_or_generates_them_on_first_run(monkeypatch, generated):
+    import sys
+    from types import ModuleType
+    from unittest.mock import Mock
+
+    api = ModuleType("comtypes.gen.UIAutomationClient")
+    api.CUIAutomation8 = SimpleNamespace(_reg_clsid_="automation-clsid")
+    api.IUIAutomation2 = object()
+    cache = SimpleNamespace(AddProperty=Mock())
+    client = SimpleNamespace(CreateCacheRequest=lambda: cache)
+    comtypes = ModuleType("comtypes")
+    comtypes.__path__ = []
+    comtypes.COMError = type("COMError", (OSError,), {})
+    comtypes.CLSCTX_INPROC_SERVER = 1
+    comtypes.CoCreateInstance = Mock(return_value=client)
+    comtypes.client = ModuleType("comtypes.client")
+    comtypes.client.GetModule = Mock(return_value=api)
+    load = Mock(return_value=api, side_effect=None if generated else ImportError)
+    monkeypatch.setattr(controls_module, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(controls_module, "import_module", load)
+    monkeypatch.setitem(sys.modules, "comtypes", comtypes)
+    monkeypatch.setitem(sys.modules, "comtypes.client", comtypes.client)
+
+    automation = Automation()
+
+    assert automation.api is api
+    assert automation.client is client
+    assert automation.cache is cache
+    comtypes.CoCreateInstance.assert_called_once_with(
+        api.CUIAutomation8._reg_clsid_, interface=api.IUIAutomation2,
+        clsctx=comtypes.CLSCTX_INPROC_SERVER,
+    )
+    assert client.ConnectionTimeout == client.TransactionTimeout == 2000
+    assert cache.AddProperty.call_count > 0
+    if generated:
+        comtypes.client.GetModule.assert_not_called()
+    else:
+        comtypes.client.GetModule.assert_called_once_with("UIAutomationCore.dll")
 
 
 @pytest.mark.parametrize(
