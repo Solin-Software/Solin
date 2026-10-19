@@ -6178,16 +6178,16 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Solinin sisältö</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Kameran ominaisuudet eivät ole käytettävissä. Voit kokeilla automaattista tilaa tai päivittää kamerat.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Kameran ominaisuudet eivät ole käytettävissä. Voit kokeilla automaattista tilaa.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Odotetaan kameran kuvia…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Kamera lähettää eri resoluutiota kuin valittu. Valitse tuettu tila tai päivitä kamerat.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Kamera lähettää eri resoluutiota kuin valittu. Valitse tuettu tila.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Kamera ei voinut ottaa valittua tilaa käyttöön. Valitse toinen resoluutio, kuvataajuus tai muoto.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Kameran kuvankaappausta ei voitu tarkistaa. Päivitä kamerat tai yhdistä laite uudelleen.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Kameran kuvankaappausta ei voitu tarkistaa. Yhdistä laite uudelleen.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location line="+2"/>
         <source>Device</source>
         <translation>Laite</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Päivitä kamerat</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Ei käytettävissä</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Tallennettu kameratila ei ole käytettävissä. Päivitä kamerat tai valitse toinen tila.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Tallennettu kameratila ei ole käytettävissä. Valitse toinen tila.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation>Tämä resoluutio on kameran tukemien rajojen ulkopuolella tai ei vastaa tuettuja askelvälejä.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Tämän resoluution tuettuja tiloja ei voitu hakea. Päivitä kamerat tai valitse toinen resoluutio.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Tämän resoluution tuettuja tiloja ei voitu hakea. Valitse toinen resoluutio.</translation>
     </message>
     <message>
         <source>Add scene</source>

@@ -6146,16 +6146,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solin 内容</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>无法获取摄像机的能力信息。您可以尝试自动模式或刷新摄像机。</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>无法获取摄像机的能力信息。您可以尝试自动模式。</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>正在等待摄像机画面…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>摄像机正在发送与所选分辨率不同的画面。请选择支持的模式或刷新摄像机。</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>摄像机正在发送与所选分辨率不同的画面。请选择支持的模式。</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6166,8 +6166,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>摄像机无法应用所选模式。请选择其他分辨率、帧率或格式。</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>无法检查摄像机的采集状态。请刷新摄像机或重新连接设备。</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>无法检查摄像机的采集状态。请重新连接设备。</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6232,11 +6232,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>设备</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>刷新摄像机</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7239,8 +7234,8 @@ Add content, a camera, or another scene.</source>
         <translation>不可用</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>已保存的摄像机模式不可用。请刷新摄像机或选择其他模式。</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>已保存的摄像机模式不可用。请选择其他模式。</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7287,8 +7282,8 @@ Add content, a camera, or another scene.</source>
         <translation>此分辨率超出摄像机支持的范围或不符合支持的步长。</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>无法获取此分辨率支持的模式。请刷新摄像机或选择其他分辨率。</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>无法获取此分辨率支持的模式。请选择其他分辨率。</translation>
     </message>
     <message>
         <source>Add scene</source>

@@ -6178,16 +6178,16 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Solin-Inhalt</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Die Kamerafunktionen sind nicht verfügbar. Du kannst den automatischen Modus ausprobieren oder die Kameras aktualisieren.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Die Kamerafunktionen sind nicht verfügbar. Du kannst den automatischen Modus ausprobieren.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Warten auf Kamerabilder…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Die Kamera sendet eine andere als die ausgewählte Auflösung. Wähle einen unterstützten Modus oder aktualisiere die Kameras.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Die Kamera sendet eine andere als die ausgewählte Auflösung. Wähle einen unterstützten Modus.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Die Kamera konnte den ausgewählten Modus nicht anwenden. Wähle eine andere Auflösung, Bildrate oder ein anderes Format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Die Kameraaufnahme konnte nicht überprüft werden. Aktualisiere die Kameras oder verbinde das Gerät erneut.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Die Kameraaufnahme konnte nicht überprüft werden. Verbinde das Gerät erneut.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="+2"/>
         <source>Device</source>
         <translation>Gerät</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Kameras aktualisieren</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <translation>Nicht verfügbar</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Der gespeicherte Kameramodus ist nicht verfügbar. Aktualisiere die Kameras oder wähle einen anderen Modus.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Der gespeicherte Kameramodus ist nicht verfügbar. Wähle einen anderen Modus.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <translation>Diese Auflösung liegt außerhalb der von der Kamera unterstützten Grenzen oder entspricht nicht den unterstützten Schrittweiten.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Die unterstützten Modi für diese Auflösung konnten nicht abgerufen werden. Aktualisiere die Kameras oder wähle eine andere Auflösung.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Die unterstützten Modi für diese Auflösung konnten nicht abgerufen werden. Wähle eine andere Auflösung.</translation>
     </message>
     <message>
         <source>Add scene</source>

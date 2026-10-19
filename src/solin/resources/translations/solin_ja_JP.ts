@@ -6146,16 +6146,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solinのコンテンツ</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>カメラの機能情報を取得できません。自動モードを試すか、カメラを更新してください。</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>カメラの機能情報を取得できません。自動モードを試してください。</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>カメラのフレームを待機中…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>カメラは選択した解像度とは異なる解像度で送信しています。対応するモードを選択するか、カメラを更新してください。</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>カメラは選択した解像度とは異なる解像度で送信しています。対応するモードを選択してください。</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6166,8 +6166,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>カメラに選択したモードを適用できませんでした。別の解像度、フレームレート、または形式を選択してください。</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>カメラのキャプチャを確認できませんでした。カメラを更新するか、デバイスを接続し直してください。</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>カメラのキャプチャを確認できませんでした。デバイスを接続し直してください。</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6232,11 +6232,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>デバイス</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>カメラを更新</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7239,8 +7234,8 @@ Add content, a camera, or another scene.</source>
         <translation>利用不可</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>保存済みのカメラモードは利用できません。カメラを更新するか、別のモードを選択してください。</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>保存済みのカメラモードは利用できません。別のモードを選択してください。</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7287,8 +7282,8 @@ Add content, a camera, or another scene.</source>
         <translation>この解像度は、カメラが対応する範囲外か、対応する刻み幅に合っていません。</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>この解像度に対応するモードを取得できませんでした。カメラを更新するか、別の解像度を選択してください。</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>この解像度に対応するモードを取得できませんでした。別の解像度を選択してください。</translation>
     </message>
     <message>
         <source>Add scene</source>

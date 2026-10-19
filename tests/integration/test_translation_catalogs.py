@@ -52,7 +52,7 @@ def test_english_catalog_resolves_qt_plural_forms(
         ("ScenesBridge", "Waiting for camera frames…", None),
         (
             "ScenesBridge",
-            "Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.",
+            "Camera capabilities are unavailable. You can try automatic mode.",
             None,
         ),
         ("ScenesEditorView", "Resolution", None),

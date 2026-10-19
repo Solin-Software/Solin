@@ -6178,16 +6178,16 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Contenu Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Les capacités de la caméra sont indisponibles. Vous pouvez essayer le mode automatique ou actualiser les caméras.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Les capacités de la caméra sont indisponibles. Vous pouvez essayer le mode automatique.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>En attente d’images de la caméra…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>La caméra envoie une résolution différente de celle sélectionnée. Choisissez un mode pris en charge ou actualisez les caméras.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>La caméra envoie une résolution différente de celle sélectionnée. Choisissez un mode pris en charge.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>La caméra n’a pas pu appliquer le mode sélectionné. Choisissez une autre résolution, fréquence d’images ou un autre format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>La capture de la caméra n’a pas pu être vérifiée. Actualisez les caméras ou reconnectez le périphérique.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>La capture de la caméra n’a pas pu être vérifiée. Reconnectez le périphérique.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <location line="+2"/>
         <source>Device</source>
         <translation>Appareil</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Actualiser les caméras</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Indisponible</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Le mode de caméra enregistré est indisponible. Actualisez les caméras ou choisissez un autre mode.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Le mode de caméra enregistré est indisponible. Choisissez un autre mode.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Cette résolution dépasse les limites ou ne respecte pas les incréments pris en charge par la caméra.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Les modes pris en charge pour cette résolution n’ont pas pu être récupérés. Actualisez les caméras ou choisissez une autre résolution.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Les modes pris en charge pour cette résolution n’ont pas pu être récupérés. Choisissez une autre résolution.</translation>
     </message>
     <message>
         <source>Add scene</source>

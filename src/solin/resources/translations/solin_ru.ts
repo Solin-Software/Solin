@@ -6209,16 +6209,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Контент Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Информация о возможностях камеры недоступна. Можно попробовать автоматический режим или обновить список камер.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Информация о возможностях камеры недоступна. Можно попробовать автоматический режим.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Ожидание кадров с камеры…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Камера передаёт изображение с разрешением, отличным от выбранного. Выберите поддерживаемый режим или обновите список камер.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Камера передаёт изображение с разрешением, отличным от выбранного. Выберите поддерживаемый режим.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6229,8 +6229,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Камера не смогла применить выбранный режим. Выберите другое разрешение, частоту кадров или формат.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Не удалось проверить захват изображения с камеры. Обновите список камер или переподключите устройство.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Не удалось проверить захват изображения с камеры. Переподключите устройство.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6295,11 +6295,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>Устройство</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Обновить камеры</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7302,8 +7297,8 @@ Add content, a camera, or another scene.</source>
         <translation>Недоступно</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Сохранённый режим камеры недоступен. Обновите список камер или выберите другой режим.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Сохранённый режим камеры недоступен. Выберите другой режим.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7350,8 +7345,8 @@ Add content, a camera, or another scene.</source>
         <translation>Это разрешение выходит за пределы поддерживаемого камерой диапазона или не соответствует допустимому шагу изменения размеров.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Обновите список камер или выберите другое разрешение.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Выберите другое разрешение.</translation>
     </message>
     <message>
         <source>Add scene</source>

@@ -6146,16 +6146,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solin 콘텐츠</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>카메라 기능 정보를 사용할 수 없습니다. 자동 모드를 사용해 보거나 카메라를 새로 고치십시오.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>카메라 기능 정보를 사용할 수 없습니다. 자동 모드를 사용해 보십시오.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>카메라 프레임을 기다리는 중…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>카메라가 선택한 해상도와 다른 해상도로 전송하고 있습니다. 지원되는 모드를 선택하거나 카메라를 새로 고치십시오.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>카메라가 선택한 해상도와 다른 해상도로 전송하고 있습니다. 지원되는 모드를 선택하십시오.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6166,8 +6166,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>카메라에 선택한 모드를 적용할 수 없습니다. 다른 해상도, 프레임 속도 또는 형식을 선택하십시오.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>카메라 캡처를 확인할 수 없습니다. 카메라를 새로 고치거나 장치를 다시 연결하십시오.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>카메라 캡처를 확인할 수 없습니다. 장치를 다시 연결하십시오.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6232,11 +6232,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>장치</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>카메라 새로 고침</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7239,8 +7234,8 @@ Add content, a camera, or another scene.</source>
         <translation>사용 불가</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>저장된 카메라 모드를 사용할 수 없습니다. 카메라를 새로 고치거나 다른 모드를 선택하십시오.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>저장된 카메라 모드를 사용할 수 없습니다. 다른 모드를 선택하십시오.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7287,8 +7282,8 @@ Add content, a camera, or another scene.</source>
         <translation>이 해상도는 카메라가 지원하는 범위를 벗어나거나 지원되는 증분 간격에 맞지 않습니다.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>이 해상도에서 지원되는 모드를 가져올 수 없습니다. 카메라를 새로 고치거나 다른 해상도를 선택하십시오.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>이 해상도에서 지원되는 모드를 가져올 수 없습니다. 다른 해상도를 선택하십시오.</translation>
     </message>
     <message>
         <source>Add scene</source>

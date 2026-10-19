@@ -6178,16 +6178,16 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Maudhui ya Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Uwezo wa kamera haupatikani. Unaweza kujaribu hali ya otomatiki au kuonyesha upya kamera.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Uwezo wa kamera haupatikani. Unaweza kujaribu hali ya otomatiki.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Inasubiri fremu kutoka kwa kamera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Kamera inatuma ubainifu tofauti na uliochaguliwa. Chagua hali inayotumika au onyesha upya kamera.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Kamera inatuma ubainifu tofauti na uliochaguliwa. Chagua hali inayotumika.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Kamera haikuweza kutumia hali iliyochaguliwa. Chagua ubainifu, kasi ya fremu au umbizo jingine.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Upigaji picha wa kamera haukuweza kukaguliwa. Onyesha upya kamera au unganisha kifaa tena.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Upigaji picha wa kamera haukuweza kukaguliwa. Unganisha kifaa tena.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <location line="+2"/>
         <source>Device</source>
         <translation>Kifaa</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Onyesha upya kamera</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Haipatikani</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Hali ya kamera iliyohifadhiwa haipatikani. Onyesha upya kamera au chagua hali nyingine.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Hali ya kamera iliyohifadhiwa haipatikani. Chagua hali nyingine.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Ubainifu huu uko nje ya mipaka au haufuati hatua za ongezeko zinazotumika kwa kamera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Hali zinazotumika kwa ubainifu huu hazikuweza kupatikana. Onyesha upya kamera au chagua ubainifu mwingine.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Hali zinazotumika kwa ubainifu huu hazikuweza kupatikana. Chagua ubainifu mwingine.</translation>
     </message>
     <message>
         <source>Add scene</source>

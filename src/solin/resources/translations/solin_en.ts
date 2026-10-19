@@ -5058,16 +5058,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solin Content</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Camera capabilities are unavailable. You can try automatic mode.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Waiting for camera frames…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>The camera is sending a different resolution than selected. Choose a supported mode.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -5078,8 +5078,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>The camera could not apply the selected mode. Choose another resolution, frame rate or format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>The camera capture could not be checked. Refresh the cameras or reconnect the device.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>The camera capture could not be checked. Reconnect the device.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -5144,11 +5144,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>Device</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Refresh cameras</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -6150,8 +6145,8 @@ Add content, a camera, or another scene.</source>
         <translation>Unavailable</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Saved camera mode is unavailable. Choose another mode.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -6198,8 +6193,8 @@ Add content, a camera, or another scene.</source>
         <translation>This resolution is outside the camera's supported limits or steps.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Supported modes could not be retrieved for this resolution. Choose another resolution.</translation>
     </message>
     <message>
         <source>Add scene</source>

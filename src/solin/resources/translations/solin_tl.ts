@@ -6178,16 +6178,16 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Nilalaman ng Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Hindi available ang mga kakayahan ng camera. Maaari mong subukan ang awtomatikong mode o i-refresh ang mga camera.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Hindi available ang mga kakayahan ng camera. Maaari mong subukan ang awtomatikong mode.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Hinihintay ang mga frame mula sa camera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Nagpapadala ang camera ng resolusyong iba sa napili. Pumili ng suportadong mode o i-refresh ang mga camera.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Nagpapadala ang camera ng resolusyong iba sa napili. Pumili ng suportadong mode.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Hindi mailapat ng camera ang napiling mode. Pumili ng ibang resolusyon, frame rate o format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Hindi masuri ang pagkuha ng video ng camera. I-refresh ang mga camera o ikonektang muli ang device.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Hindi masuri ang pagkuha ng video ng camera. Ikonektang muli ang device.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+2"/>
         <source>Device</source>
         <translation>Device</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>I-refresh ang mga camera</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Hindi available</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Hindi available ang naka-save na camera mode. I-refresh ang mga camera o pumili ng ibang mode.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Hindi available ang naka-save na camera mode. Pumili ng ibang mode.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Ang resolusyong ito ay lampas sa mga limitasyon o hindi sumusunod sa mga suportadong dagdag sa sukat ng camera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. I-refresh ang mga camera o pumili ng ibang resolusyon.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. Pumili ng ibang resolusyon.</translation>
     </message>
     <message>
         <source>Add scene</source>
