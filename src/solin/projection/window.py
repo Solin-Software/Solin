@@ -721,6 +721,7 @@ class ProjectionWindow(BaseProjectionView):
         layout.setContentsMargins(0, 0, 0, 0)
         self._build_projection_stack(layout)
         self.setLayout(layout)
+        self._hide_pointer()
 
         # ── Fade-in on open ───────────────────────────────────────────────
         self.setWindowOpacity(0.0)
@@ -743,6 +744,17 @@ class ProjectionWindow(BaseProjectionView):
         # secondary monitor), making the projection screen go blank until the
         # user clicks or moves the mouse away from the thumbnail preview.
         exclude_from_aero_peek(int(self.winId()))
+
+    def _hide_pointer(self) -> None:
+        """Keep the mouse pointer off the projected picture.
+
+        Nobody operates this screen, so a pointer drifting onto it from the
+        operator's monitor is only a distraction for the audience. The native
+        video surface is a separate native window that libobs draws into, so it
+        is blanked as well rather than relying on inheritance.
+        """
+        self.setCursor(Qt.CursorShape.BlankCursor)
+        self.native_video_surface.set_interaction_cursor(Qt.CursorShape.BlankCursor)
 
     @Slot()
     def _on_screen_geometry_changed(self):
