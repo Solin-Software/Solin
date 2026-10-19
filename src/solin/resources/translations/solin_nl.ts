@@ -6178,16 +6178,16 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Solin-inhoud</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>De cameramogelijkheden zijn niet beschikbaar. Je kunt de automatische modus proberen of de camera’s vernieuwen.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>De cameramogelijkheden zijn niet beschikbaar. Je kunt de automatische modus proberen.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Wachten op camerabeelden…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>De camera verzendt een andere resolutie dan geselecteerd. Kies een ondersteunde modus of vernieuw de camera’s.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>De camera verzendt een andere resolutie dan geselecteerd. Kies een ondersteunde modus.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>De camera kon de geselecteerde modus niet toepassen. Kies een andere resolutie, beeldsnelheid of indeling.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>De camera-opname kon niet worden gecontroleerd. Vernieuw de camera’s of sluit het apparaat opnieuw aan.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>De camera-opname kon niet worden gecontroleerd. Sluit het apparaat opnieuw aan.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location line="+2"/>
         <source>Device</source>
         <translation>Apparaat</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Camera&apos;s vernieuwen</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Niet beschikbaar</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>De opgeslagen cameramodus is niet beschikbaar. Vernieuw de camera’s of kies een andere modus.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>De opgeslagen cameramodus is niet beschikbaar. Kies een andere modus.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation>Deze resolutie valt buiten de grenzen of voldoet niet aan de stapgroottes die de camera ondersteunt.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>De ondersteunde modi voor deze resolutie konden niet worden opgehaald. Vernieuw de camera’s of kies een andere resolutie.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>De ondersteunde modi voor deze resolutie konden niet worden opgehaald. Kies een andere resolutie.</translation>
     </message>
     <message>
         <source>Add scene</source>

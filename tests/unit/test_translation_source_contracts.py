@@ -120,21 +120,21 @@ def test_scene_source_workflow_messages_have_completed_translations(catalog: Pat
 def test_camera_mode_and_health_messages_have_completed_translations(catalog: Path) -> None:
     required = {
         "ScenesBridge": {
-            "Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.",
+            "Camera capabilities are unavailable. You can try automatic mode.",
             "Waiting for camera frames…",
-            "The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.",
+            "The camera is sending a different resolution than selected. Choose a supported mode.",
             "No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.",
             "The camera could not apply the selected mode. Choose another resolution, frame rate or format.",
-            "The camera capture could not be checked. Refresh the cameras or reconnect the device.",
+            "The camera capture could not be checked. Reconnect the device.",
         },
         "ScenesEditorView": {
             "Unavailable device", "Automatic", "Unavailable", "Resolution", "Frame rate",
             "Custom frame rate", "e.g. 29.97 or 30000/1001", "Advanced", "Show advanced settings",
-            "Saved camera mode is unavailable. Refresh the cameras or choose another mode.",
+            "Saved camera mode is unavailable. Choose another mode.",
             "This frame rate is not supported at the selected resolution and format.",
             "Custom resolution", "Width", "Height", "Check", "Checking supported camera modes…",
             "This resolution is outside the camera's supported limits or steps.",
-            "Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.",
+            "Supported modes could not be retrieved for this resolution. Choose another resolution.",
         },
     }
     contexts = {node.findtext("name"): node for node in ET.parse(catalog).findall("context")}

@@ -6210,16 +6210,16 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Treści Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Informacje o możliwościach kamery są niedostępne. Możesz wypróbować tryb automatyczny lub odświeżyć kamery.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Informacje o możliwościach kamery są niedostępne. Możesz wypróbować tryb automatyczny.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Oczekiwanie na klatki z kamery…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Kamera przesyła obraz w innej rozdzielczości niż wybrana. Wybierz obsługiwany tryb lub odśwież kamery.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Kamera przesyła obraz w innej rozdzielczości niż wybrana. Wybierz obsługiwany tryb.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6230,8 +6230,8 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Kamera nie mogła zastosować wybranego trybu. Wybierz inną rozdzielczość, liczbę klatek na sekundę lub format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Nie udało się sprawdzić przechwytywania obrazu z kamery. Odśwież kamery lub podłącz urządzenie ponownie.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Nie udało się sprawdzić przechwytywania obrazu z kamery. Podłącz urządzenie ponownie.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6296,11 +6296,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <location line="+2"/>
         <source>Device</source>
         <translation>Urządzenie</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Odśwież kamery</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7303,8 +7298,8 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Niedostępne</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Zapisany tryb kamery jest niedostępny. Odśwież kamery lub wybierz inny tryb.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Zapisany tryb kamery jest niedostępny. Wybierz inny tryb.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7351,8 +7346,8 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <translation>Ta rozdzielczość wykracza poza obsługiwane przez kamerę limity lub nie odpowiada obsługiwanym przyrostom wymiarów.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Nie udało się pobrać obsługiwanych trybów dla tej rozdzielczości. Odśwież kamery lub wybierz inną rozdzielczość.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Nie udało się pobrać obsługiwanych trybów dla tej rozdzielczości. Wybierz inną rozdzielczość.</translation>
     </message>
     <message>
         <source>Add scene</source>

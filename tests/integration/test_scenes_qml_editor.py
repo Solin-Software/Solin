@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from concurrent.futures import Future
 from pathlib import Path
+from types import SimpleNamespace
 import time
 from contextlib import ExitStack
 
@@ -146,7 +147,8 @@ def _seed_names() -> SceneSeedNames:
 
 @pytest.fixture
 def scene_editor_factory(request, scene_workspace_factory):
-    def create(paths: ProfilePaths, *, recording=None, engine_ready=False, source_preview=None):
+    def create(paths: ProfilePaths, *, recording=None, engine_ready=False, source_preview=None,
+               camera_device_notifications=None):
         cleanup = ExitStack()
         request.addfinalizer(cleanup.close)
         workspace = scene_workspace_factory(paths, seed_names=_seed_names())
@@ -159,7 +161,9 @@ def scene_editor_factory(request, scene_workspace_factory):
             workspace.documents.add_layer(CAMERA_SCENE_ID, SceneLayer(
                 id="configured-camera-layer", source_id=camera.id, name="Camera",
             ))
-        controller = SceneRuntimeController(workspace, _Projection())
+        controller = SceneRuntimeController(
+            workspace, _Projection(), camera_device_notifications=camera_device_notifications,
+        )
         controller.set_editor_source_preview = source_preview or EditorSourcePreview()
         cleanup.callback(controller.close)
         if engine_ready:
@@ -783,6 +787,98 @@ def test_scene_qml_attaches_ptz_keys_to_an_item() -> None:
     assert "Keys.onPressed" in ptz_popup
     assert ptz_popup.index("Keys.onPressed") > ptz_popup.index("contentItem: FocusScope")
 
+
+
+@pytest.mark.parametrize("configure", [False, True])
+@pytest.mark.parametrize("initially_empty", [False, True])
+def test_camera_dialog_updates_on_device_events_and_preserves_user_choices(
+    scene_editor_factory, tmp_path, monkeypatch, request, configure, initially_empty,
+) -> None:
+    callbacks = []
+
+    def subscribe(callback):
+        callbacks.append(callback)
+        return SimpleNamespace(close=lambda: None)
+
+    workspace, controller, widget, _close = scene_editor_factory(
+        _profile_paths(tmp_path), camera_device_notifications=subscribe,
+    )
+    request.addfinalizer(controller.stop_engine)
+    controller._camera_refresh_timer.setInterval(0)
+    mode = LocalVideoFormat(CameraMediaType.RAW, "NV12", 1280, 720, 30, 1)
+    usb = LocalCameraDevice(
+        "camera://usb", "USB camera", False, (mode,),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "libobs"),
+    )
+    integrated = replace(usb, device_id="camera://integrated", display_name="Integrated camera")
+    initial = LocalCameraDiscovery(True, True, 1, () if initially_empty else (integrated,))
+    scans = []
+
+    def discover(**_kwargs):
+        future = Future()
+        scans.append(future)
+        return future
+
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    if configure:
+        widget.bridge.selectScene(CAMERA_SCENE_ID)
+        widget.bridge.selectLayer("configured-camera-layer")
+    monkeypatch.setattr(controller, "_engine", SimpleNamespace(list_local_cameras=discover))
+    controller._set_engine_ready(True)
+
+    def open_dialog():
+        if configure:
+            assert QMetaObject.invokeMethod(dialog, "openForSelectedCamera")
+        else:
+            assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+        QCoreApplication.processEvents()
+
+    before_document, before_resources = controller.document, workspace.resources
+    open_dialog()
+    assert len(scans) == 1
+    scans[0].set_result(initial)
+    if not initially_empty:
+        _choose_local_device(dialog, integrated.device_id)
+        assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1280x720"))
+    dialog.setProperty("layerName", "Operator's camera layer")
+    selected_device, selected_mode = dialog.property("deviceId"), dialog.property("formatId")
+
+    callbacks[0]()  # Simulate the OS event, without touching a UI refresh control.
+    wait_until(lambda: len(scans) == 2, description="automatic camera refresh")
+    scans[1].set_result(replace(initial, generation=2, devices=(*initial.devices, usb)))
+    QCoreApplication.processEvents()
+    combo = dialog.findChild(QObject, "cameraDeviceCombo")
+    assert any(item["id"] == usb.device_id and item["available"] for item in _qml_value(combo.property("model")))
+    assert dialog.property("deviceId") == selected_device
+    assert dialog.property("formatId") == selected_mode
+    assert dialog.property("layerName") == "Operator's camera layer"
+
+    _choose_local_device(dialog, usb.device_id)
+    assert QMetaObject.invokeMethod(dialog, "selectResolution", Q_ARG("QVariant", "1280x720"))
+    selected_mode = dialog.property("formatId")
+    callbacks[0]()
+    wait_until(lambda: len(scans) == 3, description="camera removal refresh")
+    scans[2].set_result(replace(initial, generation=3))
+    QCoreApplication.processEvents()
+    missing = next(item for item in _qml_value(combo.property("model")) if item["id"] == usb.device_id)
+    assert missing["available"] is False
+    assert dialog.property("deviceId") == usb.device_id
+    assert dialog.property("formatId") == selected_mode
+
+    assert QMetaObject.invokeMethod(dialog, "close")
+    wait_until(lambda: not controller._camera_inventory_active, description="camera dialog closed")
+    callbacks[0]()
+    QCoreApplication.processEvents()
+    assert len(scans) == 3
+    open_dialog()
+    assert len(scans) == 4
+    scans[3].set_result(replace(initial, generation=4, devices=(usb,)))
+    assert controller.document == before_document
+    assert workspace.resources == before_resources
+    assert len(callbacks) == 1
+    assert QMetaObject.invokeMethod(dialog, "close")
 
 
 def test_camera_dialog_keeps_dependent_modes_and_selection_after_refresh(

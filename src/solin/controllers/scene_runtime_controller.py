@@ -4,9 +4,9 @@ import logging
 from collections.abc import Callable, Mapping
 from concurrent.futures import CancelledError, Future
 from dataclasses import dataclass, field, replace
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
 from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.projection.application import projection_presentation_type
@@ -81,6 +81,9 @@ from solin.core.scenes.workspace import (
     SceneWorkspaceChangeKind,
     SceneWorkspaceService,
 )
+
+if TYPE_CHECKING:
+    from solin.core.media.camera_device_notifications import CameraDeviceSubscription
 
 
 _START_DEADLINE_MS = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
@@ -226,6 +229,7 @@ class SceneRuntimeController(QObject):
     idle_media_failed = Signal(str)
     _async_result = Signal(object)
     _queued_async_result = Signal(object)
+    _camera_devices_changed = Signal()
     _async_engine_event = Signal(object)
 
     def __init__(
@@ -237,6 +241,7 @@ class SceneRuntimeController(QObject):
         ptz: PtzRecallExecutor | None = None,
         request_id_factory: Callable[[], str] = new_identity,
         session_id: str | None = None,
+        camera_device_notifications: Callable[[Callable[[], None]], CameraDeviceSubscription] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -245,6 +250,7 @@ class SceneRuntimeController(QObject):
         self._runtime = workspace.runtime
         self._projection = projection
         self._engine = engine
+        self._closed = False
         self._ptz = ptz
         self._request_id_factory = request_id_factory
         self._session_id = session_id or new_identity()
@@ -286,6 +292,20 @@ class SceneRuntimeController(QObject):
         self._camera_mode_inflight: dict[tuple[str, int, int], tuple[str, Future[LocalCameraDiscovery]]] = {}
         self._camera_mode_results: dict[tuple[str, int, int], LocalCameraDiscovery] = {}
         self._local_camera_future: Future[LocalCameraDiscovery] | None = None
+        self._camera_device_notifications = camera_device_notifications
+        self._camera_device_subscription: CameraDeviceSubscription | None = None
+        self._camera_device_notifications_attempted = False
+        self._camera_devices_revision = 0
+        self._camera_inventory_revision = 0
+        self._camera_inventory_dirty = True
+        self._camera_inventory_active = False
+        self._camera_refresh_timer = QTimer(self)
+        self._camera_refresh_timer.setSingleShot(True)
+        self._camera_refresh_timer.setInterval(250)
+        self._camera_refresh_timer.timeout.connect(self._refresh_changed_camera_inventory)
+        self._camera_devices_changed.connect(
+            self._on_camera_devices_changed, Qt.ConnectionType.QueuedConnection,
+        )
         self._automatic_media_scene_selections: dict[BusId, _AutomaticMediaSceneSelection] = {}
         self._last_projection_session_id = self._projection_session_id()
         self._pending_content_presentation_epoch: int | None = None
@@ -1114,14 +1134,19 @@ class SceneRuntimeController(QObject):
     def refresh_local_cameras(
         self, force: bool = True,
     ) -> Future[LocalCameraDiscovery] | None:
-        """Share pending discovery; reuse successful inventory when opening a dialog."""
+        """Share pending discovery; reuse successful inventory until invalidated."""
+        if self._closed:
+            return None
         if self._engine is None or not self._engine_ready:
             self._reset_local_camera_discovery()
             return None
+        self._ensure_camera_device_notifications()
         if self._local_camera_request_id and self._local_camera_future is not None:
             return self._local_camera_future
         if (
             not force
+            and not self._camera_inventory_dirty
+            and not (self._camera_device_notifications_attempted and self._camera_device_subscription is None)
             and self._local_cameras.supported
             and self._local_cameras.ready
             and not self._local_cameras.error_code
@@ -1130,6 +1155,9 @@ class SceneRuntimeController(QObject):
             cached.set_result(self._local_cameras)
             return cached
         request_id = self._request_id_factory()
+        revision = self._camera_devices_revision
+        self._camera_refresh_timer.stop()
+        self._camera_inventory_dirty = False
         self._invalidate_camera_mode_inflight()
         self._local_camera_request_id = request_id
         try:
@@ -1142,14 +1170,63 @@ class SceneRuntimeController(QObject):
             raise
         self._local_camera_future = future
         self._set_local_cameras(self._local_cameras, force=True)
-        self._track_future(future, "local_cameras", request_id)
+        self._track_future(future, "local_cameras", (request_id, revision))
         return future
+
+    def set_local_camera_inventory_active(self, active: bool) -> None:
+        """Refresh device changes only while a consumer needs live inventory."""
+        if self._closed or self._camera_inventory_active == active:
+            return
+        self._camera_inventory_active = active
+        if active:
+            self._schedule_camera_inventory_refresh()
+        else:
+            self._camera_refresh_timer.stop()
+
+    def _ensure_camera_device_notifications(self) -> None:
+        subscribe = self._camera_device_notifications
+        if subscribe is None or self._camera_device_notifications_attempted:
+            return
+        self._camera_device_notifications_attempted = True
+        try:
+            self._camera_device_subscription = subscribe(self._camera_devices_changed.emit)
+        except Exception:  # noqa: BLE001 - discovery remains available when reopening the dialog
+            log.warning("Camera device notifications are unavailable; discovery will refresh on demand", exc_info=True)
+
+    @Slot()
+    def _on_camera_devices_changed(self) -> None:
+        if self._closed:
+            return
+        self._camera_devices_revision += 1
+        self._camera_inventory_dirty = True
+        self._invalidate_camera_mode_inflight()
+        if self._camera_inventory_active:
+            self._camera_refresh_timer.start()
+
+    def _schedule_camera_inventory_refresh(self) -> None:
+        if (not self._closed and self._camera_inventory_active and self._engine_ready
+                and self._camera_inventory_dirty and not self._camera_refresh_timer.isActive()):
+            self._camera_refresh_timer.start()
+
+    @Slot()
+    def _refresh_changed_camera_inventory(self) -> None:
+        if (self._closed or not self._camera_inventory_active or not self._engine_ready
+                or not self._camera_inventory_dirty or self.local_cameras_pending):
+            return
+        try:
+            self.refresh_local_cameras()
+        except Exception:  # noqa: BLE001 - dispatch failure already updates contextual discovery state
+            log.warning("Could not refresh changed camera inventory", exc_info=True)
 
     def query_local_camera_modes(
         self, device_id: str, width: int, height: int,
     ) -> Future[LocalCameraDiscovery]:
         """Query rates at a custom size; never infer them from another resolution."""
         LocalCameraModeQuery(device_id, width, height)
+        if self._camera_inventory_revision != self._camera_devices_revision:
+            obsolete: Future[LocalCameraDiscovery] = Future()
+            obsolete.cancel()
+            return obsolete
         device = next((item for item in self._local_cameras.devices
                        if local_camera_device_key(item.device_id) == local_camera_device_key(device_id)), None)
         native_id = device.device_id if device is not None else device_id
@@ -1247,6 +1324,8 @@ class SceneRuntimeController(QObject):
         # An old native request still owns its future. Forget its identity so its
         # eventual completion cannot overwrite inventory from a new process.
         was_pending = self.local_cameras_pending
+        self._camera_refresh_timer.stop()
+        self._camera_inventory_dirty = True
         self._local_camera_request_id = ""
         self._local_camera_future = None
         self._invalidate_camera_mode_inflight()
@@ -1439,6 +1518,16 @@ class SceneRuntimeController(QObject):
             self.applied_scenes_changed.emit(())
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._camera_refresh_timer.stop()
+        subscription, self._camera_device_subscription = self._camera_device_subscription, None
+        if subscription is not None:
+            try:
+                subscription.close()
+            except Exception:  # noqa: BLE001 - notification teardown must not skip runtime cleanup
+                log.warning("Could not close camera device notifications", exc_info=True)
         self.stop_all_camera_movements()
         self.stop_engine()
         self._unsubscribe_document()
@@ -2219,13 +2308,20 @@ class SceneRuntimeController(QObject):
             self._finish_camera_modes(context, result, error)
             return
         if operation == "local_cameras":
-            if context != self._local_camera_request_id:
+            request_id, revision = _context_tuple(context, 2, "local camera inventory")
+            if request_id != self._local_camera_request_id:
+                return
+            if revision != self._camera_devices_revision:
+                self._local_camera_request_id = ""
+                self._local_camera_future = None
+                self._set_local_cameras(self._local_cameras, force=True)
+                self._schedule_camera_inventory_refresh()
                 return
             if error is not None:
                 self._fail_local_camera_discovery(error)
                 return
             try:
-                self._handle_local_cameras(context, result)
+                self._handle_local_cameras(request_id, result)
             except Exception as failure:  # noqa: BLE001 - metadata cannot change engine health
                 self._fail_local_camera_discovery(failure)
             return
@@ -2620,6 +2716,7 @@ class SceneRuntimeController(QObject):
             raise RuntimeError("Scene engine returned invalid local cameras")
         self._local_camera_request_id = ""
         self._local_camera_future = None
+        self._camera_inventory_revision = self._camera_devices_revision
         self._set_local_cameras(result, force=True)
 
     def _validated_ack(
@@ -3005,6 +3102,8 @@ class SceneRuntimeController(QObject):
             self.editor_source_preview_invalidated.emit()
         self.engine_ready_changed.emit(ready)
         self.operational_state_changed.emit()
+        if ready:
+            self._schedule_camera_inventory_refresh()
 
     def _reset_idle_update(self) -> None:
         self._idle_in_flight = None

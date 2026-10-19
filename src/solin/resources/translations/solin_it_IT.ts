@@ -6178,16 +6178,16 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Contenuto di Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Le funzionalità della videocamera non sono disponibili. Puoi provare la modalità automatica o aggiornare le videocamere.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Le funzionalità della videocamera non sono disponibili. Puoi provare la modalità automatica.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>In attesa di fotogrammi dalla videocamera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>La videocamera sta inviando una risoluzione diversa da quella selezionata. Scegli una modalità supportata o aggiorna le videocamere.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>La videocamera sta inviando una risoluzione diversa da quella selezionata. Scegli una modalità supportata.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6198,8 +6198,8 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>La videocamera non ha potuto applicare la modalità selezionata. Scegli un’altra risoluzione, frequenza fotogrammi o un altro formato.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Non è stato possibile verificare l’acquisizione della videocamera. Aggiorna le videocamere o ricollega il dispositivo.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Non è stato possibile verificare l’acquisizione della videocamera. Ricollega il dispositivo.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6264,11 +6264,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <location line="+2"/>
         <source>Device</source>
         <translation>Dispositivo</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Aggiorna videocamere</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7271,8 +7266,8 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Non disponibile</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>La modalità della videocamera salvata non è disponibile. Aggiorna le videocamere o scegli un’altra modalità.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>La modalità della videocamera salvata non è disponibile. Scegli un’altra modalità.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7319,8 +7314,8 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <translation>Questa risoluzione supera i limiti o non rispetta gli incrementi supportati dalla videocamera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Non è stato possibile recuperare le modalità supportate per questa risoluzione. Aggiorna le videocamere o scegli un’altra risoluzione.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Non è stato possibile recuperare le modalità supportate per questa risoluzione. Scegli un’altra risoluzione.</translation>
     </message>
     <message>
         <source>Add scene</source>

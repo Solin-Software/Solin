@@ -6146,16 +6146,16 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Konten Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Kapabilitas kamera tidak tersedia. Anda dapat mencoba mode otomatis atau menyegarkan kamera.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Kapabilitas kamera tidak tersedia. Anda dapat mencoba mode otomatis.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Menunggu bingkai dari kamera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Kamera mengirimkan resolusi yang berbeda dari yang dipilih. Pilih mode yang didukung atau segarkan kamera.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Kamera mengirimkan resolusi yang berbeda dari yang dipilih. Pilih mode yang didukung.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6166,8 +6166,8 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Kamera tidak dapat menerapkan mode yang dipilih. Pilih resolusi, laju bingkai, atau format lain.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Pengambilan gambar kamera tidak dapat diperiksa. Segarkan kamera atau sambungkan kembali perangkat.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Pengambilan gambar kamera tidak dapat diperiksa. Sambungkan kembali perangkat.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6232,11 +6232,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <location line="+2"/>
         <source>Device</source>
         <translation>Perangkat</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Segarkan kamera</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7239,8 +7234,8 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Tidak tersedia</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Mode kamera yang tersimpan tidak tersedia. Segarkan kamera atau pilih mode lain.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Mode kamera yang tersimpan tidak tersedia. Pilih mode lain.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7287,8 +7282,8 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Resolusi ini berada di luar batas atau tidak sesuai dengan kelipatan ukuran yang didukung kamera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Mode yang didukung untuk resolusi ini tidak dapat diperoleh. Segarkan kamera atau pilih resolusi lain.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Mode yang didukung untuk resolusi ini tidak dapat diperoleh. Pilih resolusi lain.</translation>
     </message>
     <message>
         <source>Add scene</source>

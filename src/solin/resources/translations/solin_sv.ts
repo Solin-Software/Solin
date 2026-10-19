@@ -6177,16 +6177,16 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Solin-innehåll</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Kamerans funktioner är inte tillgängliga. Du kan prova automatiskt läge eller uppdatera kamerorna.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Kamerans funktioner är inte tillgängliga. Du kan prova automatiskt läge.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Väntar på bildrutor från kameran…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Kameran skickar en annan upplösning än den valda. Välj ett läge som stöds eller uppdatera kamerorna.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Kameran skickar en annan upplösning än den valda. Välj ett läge som stöds.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6197,8 +6197,8 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Kameran kunde inte tillämpa det valda läget. Välj en annan upplösning, bildfrekvens eller ett annat format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Kamerans bildinsamling kunde inte kontrolleras. Uppdatera kamerorna eller anslut enheten igen.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Kamerans bildinsamling kunde inte kontrolleras. Anslut enheten igen.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6263,11 +6263,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+2"/>
         <source>Device</source>
         <translation>Enhet</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Uppdatera kameror</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7270,8 +7265,8 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Inte tillgänglig</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Det sparade kameraläget är inte tillgängligt. Uppdatera kamerorna eller välj ett annat läge.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Det sparade kameraläget är inte tillgängligt. Välj ett annat läge.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7318,8 +7313,8 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Den här upplösningen ligger utanför de gränser eller följer inte de stegstorlekar som kameran stöder.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Det gick inte att hämta lägen som stöds för den här upplösningen. Uppdatera kamerorna eller välj en annan upplösning.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Det gick inte att hämta lägen som stöds för den här upplösningen. Välj en annan upplösning.</translation>
     </message>
     <message>
         <source>Add scene</source>

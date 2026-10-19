@@ -1567,7 +1567,7 @@ def test_bridge_exposes_camera_with_unavailable_capabilities_for_automatic_captu
     assert camera["formats"] == [{"id": "", "label": "Automatic"}]
     assert camera["name"] == "HD Pro Webcam C920"
     assert camera["capabilitiesStatus"] == (
-        "Camera capabilities are unavailable. You can try automatic mode or refresh the cameras."
+        "Camera capabilities are unavailable. You can try automatic mode."
     )
     assert bridge.localCameraStatus == ""
     assert bridge.addCamera(
@@ -2030,15 +2030,14 @@ def test_camera_custom_resolution_ignores_replaced_query_completion(
     assert results == [(device.device_id, 1600, 960, True)]
 
 
-def test_camera_load_uses_cache_but_refresh_requests_fresh_capabilities(
+def test_camera_load_ensures_current_inventory(
     scene_bridge_factory, monkeypatch,
 ) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     calls = []
     monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: calls.append(force))
     bridge.ensureLocalCameras()
-    bridge.refreshLocalCameras()
-    assert calls == [False, True]
+    assert calls == [False]
 
 
 @pytest.mark.parametrize("token,label", [

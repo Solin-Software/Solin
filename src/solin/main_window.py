@@ -68,6 +68,7 @@ from .controllers.scene_runtime_controller import SceneRuntimeController
 from .controllers.content_frame_ingress_controller import ContentFrameIngressController
 from .controllers.program_content_controller import ProgramContentController
 from .controllers.shared_memory_preview_egress import SharedMemoryPreviewEgressController
+from .core.media.camera_device_notifications import start_camera_device_notifications
 from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
@@ -380,6 +381,7 @@ class MainWindow(QWidget):
             self.projection_session,
             engine=scene_engine,
             ptz=ptz_executor,
+            camera_device_notifications=start_camera_device_notifications,
             parent=self,
         )
         self._program_recording = ProgramRecordingController(

@@ -6210,16 +6210,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Вміст Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Інформація про можливості камери недоступна. Можна спробувати автоматичний режим або оновити список камер.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Інформація про можливості камери недоступна. Можна спробувати автоматичний режим.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Очікування кадрів з камери…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Камера передає зображення з роздільною здатністю, відмінною від вибраної. Виберіть підтримуваний режим або оновіть список камер.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Камера передає зображення з роздільною здатністю, відмінною від вибраної. Виберіть підтримуваний режим.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6230,8 +6230,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Камера не змогла застосувати вибраний режим. Виберіть іншу роздільну здатність, частоту кадрів або формат.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Не вдалося перевірити захоплення зображення з камери. Оновіть список камер або під’єднайте пристрій знову.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Не вдалося перевірити захоплення зображення з камери. Під’єднайте пристрій знову.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6296,11 +6296,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>Пристрій</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Оновити камери</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7303,8 +7298,8 @@ Add content, a camera, or another scene.</source>
         <translation>Недоступно</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Збережений режим камери недоступний. Оновіть список камер або виберіть інший режим.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Збережений режим камери недоступний. Виберіть інший режим.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7351,8 +7346,8 @@ Add content, a camera, or another scene.</source>
         <translation>Ця роздільна здатність виходить за межі підтримуваного камерою діапазону або не відповідає допустимому кроку зміни розмірів.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Не вдалося отримати підтримувані режими для цієї роздільної здатності. Оновіть список камер або виберіть іншу роздільну здатність.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Не вдалося отримати підтримувані режими для цієї роздільної здатності. Виберіть іншу роздільну здатність.</translation>
     </message>
     <message>
         <source>Add scene</source>

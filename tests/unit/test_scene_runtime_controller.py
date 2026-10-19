@@ -104,6 +104,7 @@ from solin.core.scenes.runtime import (
     SceneRuntimeService,
     create_initial_runtime_state,
 )
+from tests._qt import wait_until
 
 
 def _document() -> SceneDocument:
@@ -1228,6 +1229,7 @@ def _runtime_controller(
     document: SceneDocument | None = None,
     ptz=None,
     cleanup: ExitStack | None = None,
+    camera_device_notifications=None,
 ) -> tuple[SceneDocumentService, SceneRuntimeService, SceneRuntimeController]:
     documents = SceneDocumentService(document or _document())
     runtime = SceneRuntimeService(
@@ -1258,6 +1260,7 @@ def _runtime_controller(
         ptz=ptz,
         request_id_factory=lambda: next(ids),
         session_id="test-session",
+        camera_device_notifications=camera_device_notifications,
     )
     # Once constructed, the controller owns the runtime through its workspace.
     cleanup.pop_all()
@@ -2081,6 +2084,229 @@ def test_runtime_camera_dialog_open_reuses_successful_discovery(request) -> None
 
     assert cached is not None and cached.done()
     assert cached.result() is first.result()
+
+
+def test_runtime_device_event_invalidates_closed_dialog_cache_without_scanning(request):
+    callbacks, closed = [], []
+
+    def subscribe(callback):
+        callbacks.append(callback)
+        return SimpleNamespace(close=lambda: closed.append(True))
+
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+        camera_device_notifications=subscribe,
+    )
+    controller.start_engine()
+    discover = engine.list_local_cameras
+    camera = discover(request_id="fixture", deadline_ms=1000).result()
+    inventory = [replace(camera, devices=()), camera]
+    calls = []
+
+    def scan(**_kwargs):
+        calls.append(True)
+        assert callbacks  # Subscribe before the scan, so hotplug cannot fall in a gap.
+        return _completed(inventory.pop(0))
+
+    engine.list_local_cameras = scan
+    first = controller.refresh_local_cameras(force=False)
+    assert first.result().devices == ()
+    assert len(callbacks) == 1
+    thread = Thread(target=callbacks[0])
+    thread.start()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert len(calls) == 1
+    fresh = controller.refresh_local_cameras(force=False)
+    assert fresh.result().devices == camera.devices
+    assert len(calls) == 2
+    assert len(callbacks) == 1
+    controller.close()
+    assert closed == [True]
+
+
+@pytest.fixture
+def camera_hotplug_runtime(request):
+    notifications = SimpleNamespace(callback=None, starts=0, closes=0)
+
+    def subscribe(callback):
+        notifications.starts += 1
+        notifications.callback = callback
+
+        def close():
+            notifications.closes += 1
+
+        return SimpleNamespace(close=close)
+
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+        camera_device_notifications=subscribe,
+    )
+    controller._camera_refresh_timer.setInterval(0)
+    controller.start_engine()
+    return engine, controller, notifications
+
+
+def test_runtime_device_events_coalesce_and_keep_the_last_snapshot(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    assert notifications.starts == 0
+    first = controller.refresh_local_cameras().result()
+    controller.set_local_camera_inventory_active(True)
+    pending, calls = Future(), []
+
+    def discover(**_kwargs):
+        calls.append(True)
+        return pending
+
+    engine.list_local_cameras = discover
+    for _ in range(5):
+        notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert not calls  # Native callbacks only invalidate; enumeration is deferred.
+    wait_until(lambda: len(calls) == 1, description="debounced camera inventory refresh")
+    assert controller.local_cameras == first
+    assert controller.local_cameras_pending
+    assert controller.refresh_local_cameras() is pending
+    pending.set_result(replace(first, generation=first.generation + 1, devices=()))
+    assert controller.local_cameras.devices == ()
+    assert not controller.local_cameras_pending
+    assert len(calls) == 1
+    assert notifications.starts == 1
+
+
+def test_runtime_device_change_blocks_custom_queries_until_inventory_is_current(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    initial = controller.refresh_local_cameras().result()
+    device = replace(initial.devices[0], resolution_ranges=(LocalVideoResolutionRange(
+        CameraMediaType.RAW, "NV12", 640, 1920, 16, 480, 1080, 8,
+    ),))
+    initial = replace(initial, devices=(device,))
+    controller._set_local_cameras(initial)
+    calls = []
+    engine.query_local_camera_modes = lambda *args, **kwargs: calls.append(args) or Future()
+    old_query = controller.query_local_camera_modes(device.device_id, 800, 600)
+    assert len(calls) == 1
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert old_query.cancelled()
+    assert controller.query_local_camera_modes(device.device_id, 800, 600).cancelled()
+    pending = Future()
+    engine.list_local_cameras = lambda **kwargs: pending
+    controller.refresh_local_cameras()
+    assert controller.query_local_camera_modes(device.device_id, 800, 600).cancelled()
+    assert len(calls) == 1
+    pending.set_result(initial)
+    current_query = controller.query_local_camera_modes(device.device_id, 800, 600)
+    assert not current_query.done()
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_runtime_device_change_during_scan_discards_obsolete_outcome(camera_hotplug_runtime, failed):
+    engine, controller, notifications = camera_hotplug_runtime
+    initial = controller.refresh_local_cameras().result()
+    controller.set_local_camera_inventory_active(True)
+    scans = []
+
+    def discover(**_kwargs):
+        pending = Future()
+        scans.append(pending)
+        return pending
+
+    engine.list_local_cameras = discover
+    controller.refresh_local_cameras()
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    wait_until(lambda: not controller._camera_refresh_timer.isActive(), description="event debounce during pending scan")
+    assert len(scans) == 1
+    obsolete = replace(initial, generation=initial.generation + 1, devices=())
+    if failed:
+        scans[0].set_exception(RuntimeError("Device changed while enumerating"))
+    else:
+        scans[0].set_result(obsolete)
+    assert controller.local_cameras == initial
+    wait_until(lambda: len(scans) == 2, description="replacement scan after device change")
+    assert controller.local_cameras == initial
+    current = replace(initial, generation=initial.generation + 2)
+    scans[1].set_result(current)
+    assert controller.local_cameras == current
+    QCoreApplication.processEvents()
+    assert len(scans) == 2
+
+
+def test_runtime_device_refresh_failure_waits_for_manual_retry(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    initial = controller.refresh_local_cameras().result()
+    controller.set_local_camera_inventory_active(True)
+    pending = Future()
+    engine.list_local_cameras = lambda **_kwargs: pending
+    notifications.callback()
+    wait_until(lambda: controller.local_cameras_pending, description="camera refresh after hotplug")
+    pending.set_exception(SceneEngineRequestTimeoutError("Native discovery timed out"))
+    assert controller.local_cameras.error_code == "discovery_timed_out"
+    assert controller.engine_ready
+    assert not controller._camera_refresh_timer.isActive()
+    QCoreApplication.processEvents()
+    assert not controller.local_cameras_pending
+    engine.list_local_cameras = lambda **_kwargs: _completed(initial)
+    assert controller.refresh_local_cameras().result() == initial
+
+
+def test_runtime_hiding_camera_inventory_stops_scheduled_work(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    initial = controller.refresh_local_cameras().result()
+    controller.set_local_camera_inventory_active(True)
+    calls = []
+    engine.list_local_cameras = lambda **_kwargs: calls.append(True) or _completed(initial)
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert controller._camera_refresh_timer.isActive()
+    controller.set_local_camera_inventory_active(False)
+    QCoreApplication.processEvents()
+    assert not calls
+    assert controller.refresh_local_cameras(force=False).result() == initial
+    assert calls == [True]
+
+
+def test_runtime_close_stops_device_notifications_and_ignores_queued_events(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    controller.refresh_local_cameras()
+    controller.set_local_camera_inventory_active(True)
+    calls = []
+    engine.list_local_cameras = lambda **_kwargs: calls.append(True) or Future()
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    controller.close()
+    notifications.callback()  # A callback already queued before native teardown.
+    QCoreApplication.processEvents()
+    assert controller.refresh_local_cameras() is None
+    controller.close()
+    assert notifications.closes == 1
+    assert not calls
+
+
+def test_runtime_notification_setup_failure_rescans_on_dialog_reopen(request):
+    attempts = []
+
+    def subscribe(_callback):
+        attempts.append(True)
+        raise OSError("Device notifications unavailable")
+
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(), camera_device_notifications=subscribe,
+    )
+    controller.start_engine()
+    scan = engine.list_local_cameras
+    calls = []
+    engine.list_local_cameras = lambda **kwargs: calls.append(True) or scan(**kwargs)
+    assert controller.refresh_local_cameras(force=False).result().ready
+    assert controller.refresh_local_cameras(force=False).result().ready
+    assert attempts == [True]
+    assert calls == [True, True]
 
 
 def test_runtime_explicit_camera_refresh_replaces_cached_empty_inventory(request) -> None:

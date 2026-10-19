@@ -6207,16 +6207,16 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Mídia do Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Os recursos da câmera estão indisponíveis. Você pode tentar o modo automático ou atualizar as câmeras.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Os recursos da câmera estão indisponíveis. Você pode tentar o modo automático.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Aguardando quadros da câmera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>A câmera está enviando uma resolução diferente da selecionada. Escolha um modo compatível ou atualize as câmeras.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>A câmera está enviando uma resolução diferente da selecionada. Escolha um modo compatível.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6227,8 +6227,8 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>A câmera não conseguiu aplicar o modo selecionado. Escolha outra resolução, taxa de quadros ou formato.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Não foi possível verificar a captura da câmera. Atualize as câmeras ou reconecte o dispositivo.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Não foi possível verificar a captura da câmera. Reconecte o dispositivo.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6672,11 +6672,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+2"/>
         <source>Device</source>
         <translation>Dispositivo</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Atualizar câmeras</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7304,8 +7299,8 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <translation>Indisponível</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>O modo de câmera salvo está indisponível. Atualize as câmeras ou escolha outro modo.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>O modo de câmera salvo está indisponível. Escolha outro modo.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7352,8 +7347,8 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <translation>Esta resolução está fora dos limites ou não segue os incrementos compatíveis com a câmera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Não foi possível obter os modos compatíveis com esta resolução. Atualize as câmeras ou escolha outra resolução.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Não foi possível obter os modos compatíveis com esta resolução. Escolha outra resolução.</translation>
     </message>
     <message>
         <source>Add scene</source>
