@@ -494,7 +494,7 @@ def test_schema_twelve_removes_legacy_camera_flag_without_mutating_input(kind, f
 
     restored = SceneDocument.from_record(record)
 
-    assert restored.schema_version == 13
+    assert restored.schema_version == 14
     assert restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration == config
     assert (
         "keep_active" not in restored.source(DEFAULT_CAMERA_SOURCE_ID).to_record()["configuration"]
@@ -1196,3 +1196,51 @@ def test_engine_health_events_reject_invalid_process_boundary_values() -> None:
             source_id="camera-1",
             status=SourceHealthStatus.FAILED,
         )
+
+
+def test_scene_disabled_outputs_round_trip_and_default_to_every_output() -> None:
+    document = _document()
+    scene = document.scenes[0]
+    assert scene.disabled_outputs == frozenset()
+    assert "disabled_outputs" not in scene.to_record()
+    assert all(scene.allows_output(bus_id) for bus_id in DELIVERY_BUSES)
+
+    restricted = replace(scene, disabled_outputs=frozenset({BusId.VIRTUAL_CAMERA}))
+    record = restricted.to_record()
+
+    assert record["disabled_outputs"] == ["virtual_camera"]
+    restored = type(scene).from_record(record)
+    assert restored == restricted
+    assert not restored.allows_output(BusId.VIRTUAL_CAMERA)
+    assert restored.allows_output(BusId.MEDIA_WINDOWS)
+
+
+@pytest.mark.parametrize("value", [["editor"], ["unknown"], "virtual_camera"])
+def test_scene_disabled_outputs_accept_only_delivery_buses(value) -> None:
+    record = _document().to_record()
+    record["scenes"][0]["disabled_outputs"] = value
+
+    with pytest.raises(SceneValidationError):
+        SceneDocument.from_record(record)
+    with pytest.raises(SceneValidationError):
+        replace(_document().scenes[0], disabled_outputs=frozenset({BusId.EDITOR}))
+
+
+def test_schema_thirteen_scenes_migrate_allowing_every_output() -> None:
+    record = _document().to_record()
+    record["schema_version"] = 13
+    original = deepcopy(record)
+
+    restored = SceneDocument.from_record(record)
+
+    assert record == original
+    assert restored.schema_version == SCHEMA_VERSION == 14
+    assert all(scene.disabled_outputs == frozenset() for scene in restored.scenes)
+
+
+def test_scene_disabled_outputs_do_not_invalidate_the_engine_graph() -> None:
+    document = _document()
+    scene = replace(document.scenes[0], disabled_outputs=frozenset(DELIVERY_BUSES))
+    restricted = replace(document, scenes=(scene, *document.scenes[1:]))
+
+    assert scene_engine_graph_signature(restricted) == scene_engine_graph_signature(document)

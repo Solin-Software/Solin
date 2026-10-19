@@ -1586,3 +1586,37 @@ def test_media_card_can_be_return_target_without_a_live_take(controller_factory,
     finally:
         popup.deleteLater()
         QCoreApplication.processEvents()
+
+
+def test_card_hides_the_routing_button_of_each_disabled_output(controller_factory) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.documents.create_scene("Stage only", scene_id="stage-only")
+    popup = SceneControlPopup(controller)
+    popup.show()
+    QCoreApplication.processEvents()
+    card = popup._scene_cards["stage-only"]
+    assert card._projection.isVisibleTo(card)
+    assert card._program.isVisibleTo(card)
+
+    controller.documents.set_scene_output_enabled("stage-only", BusId.VIRTUAL_CAMERA, False)
+    QCoreApplication.processEvents()
+    assert card._projection.isVisibleTo(card)
+    assert not card._program.isVisibleTo(card)
+
+    controller.documents.set_scene_output_enabled("stage-only", BusId.MEDIA_WINDOWS, False)
+    QCoreApplication.processEvents()
+    assert not card._projection.isVisibleTo(card)
+    assert not card._program.isVisibleTo(card)
+    # the card itself stays, so the scene is still visible in the strip
+    assert card.isVisibleTo(popup)
+
+    controller.documents.set_scene_output_enabled("stage-only", BusId.VIRTUAL_CAMERA, True)
+    controller.documents.set_scene_output_enabled("stage-only", BusId.MEDIA_WINDOWS, True)
+    QCoreApplication.processEvents()
+    assert card._projection.isVisibleTo(card)
+    assert card._program.isVisibleTo(card)
+
+    popup.close()
+    popup.deleteLater()
+    QCoreApplication.processEvents()

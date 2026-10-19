@@ -315,7 +315,7 @@ def test_collection_normalizes_legacy_primary_and_backup_without_losing_enabled_
 
     for path in (repository.path, repository.backup_path):
         saved = json.loads(path.read_text(encoding="utf-8"))
-        assert saved["schema_version"] == 13
+        assert saved["schema_version"] == 14
         assert next(item for item in saved["sources"] if item["id"] == camera.id) == {
             "id": camera.id,
             "type": "camera_ref",

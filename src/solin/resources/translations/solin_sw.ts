@@ -7399,6 +7399,18 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Mandhari hii itatumia tena mipangilio ya pamoja ya kamera.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Inapatikana kwenye</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Madirisha ya media</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera pepe</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

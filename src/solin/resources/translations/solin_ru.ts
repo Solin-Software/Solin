@@ -7430,6 +7430,18 @@ Add content, a camera, or another scene.</source>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Эта сцена будет использовать общие настройки камеры.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Доступна в</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Окна медиа</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Виртуальная камера</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

@@ -20,6 +20,8 @@ Rectangle {
         bool hasTransitionOverride,
         string transitionKind,
         int transitionDurationMs,
+        bool projectionEnabled,
+        bool programEnabled,
         int sceneCount,
         var anchor,
         real x,
@@ -234,6 +236,8 @@ Rectangle {
                 required property bool hasTransitionOverride
                 required property string transitionOverrideKind
                 required property int transitionOverrideDurationMs
+                required property bool projectionEnabled
+                required property bool programEnabled
                 readonly property bool selected: root.bridge && root.bridge.selectedSceneId === sceneId
                 property real previewOffsetY: root.previewOffset(index, sceneId)
 
@@ -296,6 +300,8 @@ Rectangle {
                                     sceneRow.hasTransitionOverride,
                                     sceneRow.transitionOverrideKind,
                                     sceneRow.transitionOverrideDurationMs,
+                                    sceneRow.projectionEnabled,
+                                    sceneRow.programEnabled,
                                     sceneList.count,
                                     menuMouse,
                                     0,
@@ -375,6 +381,8 @@ Rectangle {
                                 sceneRow.hasTransitionOverride,
                                 sceneRow.transitionOverrideKind,
                                 sceneRow.transitionOverrideDurationMs,
+                                sceneRow.projectionEnabled,
+                                sceneRow.programEnabled,
                                 sceneList.count,
                                 rowMouse,
                                 mouse.x,

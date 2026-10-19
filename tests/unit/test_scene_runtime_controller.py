@@ -5723,3 +5723,91 @@ def test_windows_custom_size_alias_queries_current_selector_once(request, monkey
     assert queried.formats[0] in controller.local_cameras.devices[0].formats
     assert controller.query_local_camera_modes("USB-DEVICE", 800, 600).result() == first.result()
     assert len(engine.mode_calls) == 1
+
+
+def test_auto_media_keeps_the_last_scene_on_an_output_the_media_scene_is_disabled_for(
+    request,
+) -> None:
+    projection = _Projection()
+    documents, runtime, controller = _runtime_controller(
+        request,
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    documents.set_scene_output_enabled(CONTENT_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    projection.set_type("video")
+
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
+
+    projection.set_type("idle")
+
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
+
+
+@pytest.mark.parametrize("media", [False, True])
+def test_take_live_leaves_outputs_the_scene_is_disabled_for_on_their_last_scene(
+    request, media: bool,
+) -> None:
+    projection = _Projection()
+    documents, _runtime, controller = _runtime_controller(
+        request,
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    if media:
+        projection.set_type("image")
+    camera_before = controller.desired_scene(BusId.VIRTUAL_CAMERA)
+    documents.set_scene_output_enabled(NO_SIGNAL_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
+
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == NO_SIGNAL_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == camera_before
+
+
+def test_take_live_does_nothing_for_a_scene_disabled_everywhere(request) -> None:
+    projection = _Projection()
+    documents, runtime, controller = _runtime_controller(
+        request,
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    for bus_id in DELIVERY_BUSES:
+        documents.set_scene_output_enabled(NO_SIGNAL_SCENE_ID, bus_id, False)
+    before = runtime.state
+
+    assert controller.take_program_scene(NO_SIGNAL_SCENE_ID) == before
+    assert runtime.state == before
+
+
+@pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
+@pytest.mark.parametrize("media", [False, True])
+def test_selecting_a_scene_on_a_disabled_output_is_rejected_without_changes(
+    request, bus_id: BusId, media: bool,
+) -> None:
+    projection = _Projection()
+    documents, runtime, controller = _runtime_controller(
+        request,
+        _Engine(),
+        projection,
+        request_ids=(),
+    )
+    if media:
+        projection.set_type("video")
+    documents.set_scene_output_enabled(NO_SIGNAL_SCENE_ID, bus_id, False)
+    before = runtime.state
+    selections = dict(controller._automatic_media_scene_selections)
+    desired = controller.desired_scene(bus_id)
+
+    with pytest.raises(SceneValidationError):
+        controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
+
+    assert runtime.state == before
+    assert controller._automatic_media_scene_selections == selections
+    assert controller.desired_scene(bus_id) == desired

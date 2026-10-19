@@ -1482,3 +1482,41 @@ def test_source_names_validate_live_and_block_duplicate_submissions(
     assert QMetaObject.invokeMethod(dialog, "save")
     assert not dialog.property("visible")
     assert any(layer.name == "Camera" for layer in controller.document.scene(scene_id).layers)
+
+
+def test_scene_menu_toggles_the_outputs_a_scene_is_available_on(
+    scene_editor_factory, tmp_path,
+) -> None:
+    _workspace, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1280, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    workspace = root.findChild(QObject, "scenesWorkspace")
+    projection_item = root.findChild(QObject, "scenesSceneProjectionOutput")
+    program_item = root.findChild(QObject, "scenesSceneProgramOutput")
+    assert projection_item.property("text") == "Media windows"
+    assert program_item.property("text") == "Virtual camera"
+    assert projection_item.property("checkable") and program_item.property("checkable")
+
+    workspace.setProperty("contextSceneId", CAMERA_SCENE_ID)
+    assert program_item.property("checked") is True
+    QMetaObject.invokeMethod(program_item, "click")
+    QCoreApplication.processEvents()
+
+    assert controller.document.scene(CAMERA_SCENE_ID).disabled_outputs == frozenset(
+        {BusId.VIRTUAL_CAMERA}
+    )
+    record = next(
+        widget.bridge.scenesModel.get(row)
+        for row in range(widget.bridge.scenesModel.rowCount())
+        if widget.bridge.scenesModel.get(row)["id"] == CAMERA_SCENE_ID
+    )
+    assert record["projection_enabled"] is True
+    assert record["program_enabled"] is False
+
+    workspace.setProperty("contextSceneProgramEnabled", False)
+    assert program_item.property("checked") is False
+    QMetaObject.invokeMethod(program_item, "click")
+    QCoreApplication.processEvents()
+    assert controller.document.scene(CAMERA_SCENE_ID).disabled_outputs == frozenset()

@@ -13,7 +13,7 @@ from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 from solin.core.media.camera_identity import local_camera_device_key
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -1595,6 +1595,9 @@ class SceneDefinition:
     entry_actions: tuple[RecallPtzPresetAction, ...] = ()
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
+    # Delivery outputs this scene may never be routed to, e.g. a stage-only
+    # composition that must stay off the virtual camera.
+    disabled_outputs: frozenset[BusId] = frozenset()
 
     def __post_init__(self) -> None:
         _validate_identity(self.id, field_name="scene id")
@@ -1616,9 +1619,16 @@ class SceneDefinition:
         )
         _validate_timestamp(self.created_at, field_name="scene.created_at")
         _validate_timestamp(self.updated_at, field_name="scene.updated_at")
+        if not isinstance(self.disabled_outputs, frozenset) or not all(
+            bus_id in DELIVERY_BUSES for bus_id in self.disabled_outputs
+        ):
+            raise SceneValidationError("Scene disabled outputs must be delivery buses")
+
+    def allows_output(self, bus_id: BusId) -> bool:
+        return bus_id not in self.disabled_outputs
 
     def to_record(self) -> dict[str, object]:
-        return {
+        record: dict[str, object] = {
             "id": self.id,
             "name": self.name,
             "layers": [layer.to_record() for layer in self.layers],
@@ -1626,6 +1636,11 @@ class SceneDefinition:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+        if self.disabled_outputs:
+            record["disabled_outputs"] = [
+                bus_id.value for bus_id in DELIVERY_BUSES if bus_id in self.disabled_outputs
+            ]
+        return record
 
     @classmethod
     def from_record(cls, raw: object) -> SceneDefinition:
@@ -1639,7 +1654,15 @@ class SceneDefinition:
                 "entry_actions",
                 "created_at",
                 "updated_at",
+                "disabled_outputs",
             },
+        )
+        disabled_outputs = frozenset(
+            _enum(BusId, item, field_name="scene.disabled_outputs")
+            for item in _sequence(
+                data.get("disabled_outputs", []),
+                field_name="scene.disabled_outputs",
+            )
         )
         return cls(
             id=_string(data.get("id"), field_name="scene.id", maximum=128),
@@ -1665,6 +1688,7 @@ class SceneDefinition:
                 field_name="scene.updated_at",
                 maximum=64,
             ),
+            disabled_outputs=disabled_outputs,
         )
 
 
@@ -2451,6 +2475,14 @@ def _migrate_scene_document_record(
                 for source in sources
             ]
             current_version = 13
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 13:
+            # Scenes may now be kept off individual outputs. A v13 scene allows
+            # every output, which is a valid v14 scene; the bump exists so an
+            # older build rejects the new field instead of treating the profile
+            # as corrupt and silently restoring its backup.
+            current_version = 14
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

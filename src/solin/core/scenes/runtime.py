@@ -234,9 +234,13 @@ class SceneRuntimeService:
 
         return unsubscribe
 
+    def scene_allowed(self, bus_id: BusId, scene_id: str) -> bool:
+        """Return whether ``scene_id`` may be routed to ``bus_id``."""
+        return self._documents.document.scene(scene_id).allows_output(bus_id)
+
     def take_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Route ONE output to ``scene_id``, leaving the others where they are."""
-        self._documents.document.scene(scene_id)
+        self._require_allowed(bus_id, scene_id)
         current = self._state.output(bus_id)
         return self._commit(
             self._with_output(
@@ -258,7 +262,7 @@ class SceneRuntimeService:
         for bus_id, scene_id in selections.items():
             if bus_id not in DELIVERY_BUSES:
                 raise SceneValidationError("Invalid runtime output bus")
-            self._documents.document.scene(scene_id)
+            self._require_allowed(bus_id, scene_id)
         return self._commit(
             replace(
                 self._state,
@@ -274,7 +278,7 @@ class SceneRuntimeService:
         )
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Pin every delivery output to ``scene_id`` in manual mode."""
+        """Pin every output the scene may use to ``scene_id`` in manual mode."""
         self._documents.document.scene(scene_id)
         return self._commit(
             replace(
@@ -285,15 +289,24 @@ class SceneRuntimeService:
                         mode=OutputMode.MANUAL,
                         base_scene_id=scene_id,
                     )
+                    if self.scene_allowed(output.bus_id, scene_id)
+                    else output
                     for output in self._state.outputs
                 ),
             )
         )
 
     def select_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Select every output base without changing auto-switch."""
+        """Select every allowed output base without changing auto-switch.
 
-        return self.select_base_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
+        An output the scene is disabled for keeps its last scene.
+        """
+
+        return self.select_base_scenes({
+            bus_id: scene_id
+            for bus_id in DELIVERY_BUSES
+            if self.scene_allowed(bus_id, scene_id)
+        })
 
     def resume_program_automation(self) -> SceneRuntimeState:
         return self.set_program_automatic(
@@ -343,7 +356,11 @@ class SceneRuntimeService:
             return base_scene_id
         if category not in AUTOMATIC_MEDIA_CATEGORIES:
             return base_scene_id
-        return document.automation_for(bus_id).scene_for(category) or base_scene_id
+        automatic_scene_id = document.automation_for(bus_id).scene_for(category)
+        # A media scene disabled for this output leaves it on its last scene.
+        if automatic_scene_id is None or not document.scene(automatic_scene_id).allows_output(bus_id):
+            return base_scene_id
+        return automatic_scene_id
 
     def close(self) -> None:
         self._unsubscribe_document()
@@ -356,6 +373,12 @@ class SceneRuntimeService:
             self._commit(replace(self._state, outputs=outputs))
         except Exception:  # noqa: BLE001 - persistence observer boundary
             log.warning("Could not reconcile scene runtime state", exc_info=True)
+
+    def _require_allowed(self, bus_id: BusId, scene_id: str) -> None:
+        if not self.scene_allowed(bus_id, scene_id):
+            raise SceneValidationError(
+                f"Scene is disabled for the {bus_id.value} output"
+            )
 
     def _with_output(self, updated: OutputRuntimeState) -> SceneRuntimeState:
         return replace(

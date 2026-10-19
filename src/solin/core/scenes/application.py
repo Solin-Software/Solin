@@ -8,6 +8,7 @@ from typing import Protocol
 
 from solin.core.scenes.model import (
     AUTOMATIC_MEDIA_CATEGORIES,
+    DELIVERY_BUSES,
     MAX_LAYERS_PER_SCENE,
     NO_SIGNAL_SOURCE_ID,
     BusId,
@@ -17,6 +18,7 @@ from solin.core.scenes.model import (
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
+    SceneValidationError,
     TransitionSpec,
     SourceDefinition,
     SourceKind,
@@ -224,6 +226,28 @@ class SceneDocumentService:
     def rename_scene(self, scene_id: str, name: str) -> SceneDocument:
         scene = self._scene(scene_id)
         return self.update_scene(scene_id, replace(scene, name=name))
+
+    def set_scene_output_enabled(
+        self, scene_id: str, bus_id: BusId, enabled: bool,
+    ) -> SceneDocument:
+        """Allow or forbid routing a scene to one delivery output.
+
+        Forbidding only stops future routing: an output already showing the scene
+        keeps it until its next switch.
+        """
+        if bus_id not in DELIVERY_BUSES:
+            raise SceneValidationError("Invalid scene output")
+        if not isinstance(enabled, bool):
+            raise SceneValidationError("Scene output state must be a boolean")
+        scene = self._scene(scene_id)
+        disabled = (
+            scene.disabled_outputs - {bus_id}
+            if enabled
+            else scene.disabled_outputs | {bus_id}
+        )
+        if disabled == scene.disabled_outputs:
+            return self._document
+        return self.update_scene(scene_id, replace(scene, disabled_outputs=disabled))
 
     def reorder_scene(self, scene_id: str, index: int) -> SceneDocument:
         scene = self._scene(scene_id)

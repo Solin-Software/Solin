@@ -21,6 +21,8 @@ Item {
     property string contextSceneTransitionKind: ""
     property int contextSceneTransitionDurationMs: 0
     property int contextSceneCount: 0
+    property bool contextSceneProjectionEnabled: true
+    property bool contextSceneProgramEnabled: true
     readonly property bool fullWorkspace: width >= 1180
     readonly property bool sceneRailVisible: width >= 1180
     readonly property bool sourceRailVisible: width >= 760
@@ -76,7 +78,8 @@ Item {
     function popupSceneMenu(
             sceneId, sceneName, isMediaScene,
             isLiveScene, hasTransitionOverride, transitionKind,
-            transitionDurationMs, sceneCount, anchor, x, y) {
+            transitionDurationMs, projectionEnabled, programEnabled,
+            sceneCount, anchor, x, y) {
         contextSceneId = sceneId
         contextSceneName = sceneName
         contextSceneMedia = isMediaScene
@@ -84,6 +87,8 @@ Item {
         contextSceneTransitionOverride = hasTransitionOverride
         contextSceneTransitionKind = transitionKind
         contextSceneTransitionDurationMs = transitionDurationMs
+        contextSceneProjectionEnabled = projectionEnabled
+        contextSceneProgramEnabled = programEnabled
         contextSceneCount = sceneCount
         if (bridge)
             bridge.selectScene(sceneId)
@@ -245,11 +250,13 @@ Item {
                 onRequestSceneMenu: function(
                         sceneId, sceneName, isMediaScene,
                         isLiveScene, hasTransitionOverride, transitionKind,
-                        transitionDurationMs, sceneCount, anchor, x, y) {
+                        transitionDurationMs, projectionEnabled, programEnabled,
+                        sceneCount, anchor, x, y) {
                     root.popupSceneMenu(
                         sceneId, sceneName, isMediaScene,
                         isLiveScene, hasTransitionOverride, transitionKind,
-                        transitionDurationMs, sceneCount, anchor, x, y)
+                        transitionDurationMs, projectionEnabled, programEnabled,
+                        sceneCount, anchor, x, y)
                 }
             }
 
@@ -510,11 +517,13 @@ Item {
                         onRequestSceneMenu: function(
                                 sceneId, sceneName, isMediaScene,
                                 isLiveScene, hasTransitionOverride, transitionKind,
-                                transitionDurationMs, sceneCount, anchor, x, y) {
+                                transitionDurationMs, projectionEnabled, programEnabled,
+                                sceneCount, anchor, x, y) {
                             root.popupSceneMenu(
                                 sceneId, sceneName, isMediaScene,
                                 isLiveScene, hasTransitionOverride, transitionKind,
-                                transitionDurationMs, sceneCount, anchor, x, y)
+                                transitionDurationMs, projectionEnabled, programEnabled,
+                                sceneCount, anchor, x, y)
                         }
                     }
                     StackLayout {
@@ -777,6 +786,7 @@ Item {
             theme: root.theme
             text: root.contextSceneLive ? qsTr("On air") : qsTr("Take live")
             enabled: !root.contextSceneLive
+                && (root.contextSceneProjectionEnabled || root.contextSceneProgramEnabled)
             onTriggered: root.bridge.takeLive()
         }
         ScenesMenuSeparator { theme: root.theme }
@@ -857,6 +867,31 @@ Item {
                     root.contextSceneTransitionKind,
                     root.contextSceneTransitionDurationMs)
             }
+        }
+        ScenesMenuSeparator { theme: root.theme }
+        ScenesMenuItem {
+            theme: root.theme
+            section: true
+            enabled: false
+            text: qsTr("Available on")
+        }
+        ScenesMenuItem {
+            objectName: "scenesSceneProjectionOutput"
+            theme: root.theme
+            text: qsTr("Media windows")
+            checkable: true
+            checked: root.contextSceneProjectionEnabled
+            onTriggered: root.bridge.setSceneOutputEnabled(
+                root.contextSceneId, "projection", checked)
+        }
+        ScenesMenuItem {
+            objectName: "scenesSceneProgramOutput"
+            theme: root.theme
+            text: qsTr("Virtual camera")
+            checkable: true
+            checked: root.contextSceneProgramEnabled
+            onTriggered: root.bridge.setSceneOutputEnabled(
+                root.contextSceneId, "program", checked)
         }
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {

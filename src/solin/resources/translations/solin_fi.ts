@@ -7399,6 +7399,18 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Tämä näkymä käyttää kameran yhteisiä asetuksia.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Käytettävissä</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Mediaikkunat</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuaalikamera</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

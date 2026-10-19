@@ -430,7 +430,8 @@ class SceneRuntimeController(QObject):
 
     def select_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Take one output now; only content scenes return after the media session."""
-        self._documents.document.scene(scene_id)
+        if not self._runtime.scene_allowed(bus_id, scene_id):
+            raise SceneValidationError(f"Scene is disabled for the {bus_id.value} output")
         previous_selections = self._automatic_media_scene_selections.copy()
         category = content_category_for_projection(self._projection.state)
         try:
@@ -460,7 +461,12 @@ class SceneRuntimeController(QObject):
         return state
 
     def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        self._documents.document.scene(scene_id)
+        """Take every output the scene is enabled for; the rest keep their scene."""
+        allowed_buses = tuple(
+            bus_id for bus_id in DELIVERY_BUSES if self._runtime.scene_allowed(bus_id, scene_id)
+        )
+        if not allowed_buses:
+            return self._runtime.state
         runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
         category = content_category_for_projection(self._projection.state)
         automatic_media_session = (
@@ -473,16 +479,19 @@ class SceneRuntimeController(QObject):
             previous_suspension = self.program_automation_suspended
             previous_selection = self._automatic_media_scene_selections.copy()
             self._automatic_media_scene_selections = {
-                bus_id: self._media_session_selection(scene_id, bus_id)
-                for bus_id in DELIVERY_BUSES
+                **previous_selection,
+                **{
+                    bus_id: self._media_session_selection(scene_id, bus_id)
+                    for bus_id in allowed_buses
+                },
             }
             try:
                 if safe_media_scene:
                     state = self._runtime.state
                     if previous_suspension:
                         state = self._runtime.select_base_scenes({
-                            bus_id: item.return_scene_id
-                            for bus_id, item in self._automatic_media_scene_selections.items()
+                            bus_id: self._automatic_media_scene_selections[bus_id].return_scene_id
+                            for bus_id in allowed_buses
                         })
                 else:
                     state = self._runtime.select_program_scene(scene_id)
@@ -491,7 +500,7 @@ class SceneRuntimeController(QObject):
                 raise
             self._reconcile_desired(prepare=True)
             return state
-        if scene_id == self.desired_scene(BusId.VIRTUAL_CAMERA):
+        if all(scene_id == self.desired_scene(bus_id) for bus_id in allowed_buses):
             return self._runtime.state
         state = self._runtime.select_program_scene(scene_id)
         self._reconcile_desired(prepare=True)
@@ -538,7 +547,11 @@ class SceneRuntimeController(QObject):
             raise SceneValidationError(
                 "Program return can only change while the automatic media scene is live"
             )
-        return self._set_return_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
+        return self._set_return_scenes({
+            bus_id: scene_id
+            for bus_id in DELIVERY_BUSES
+            if self._runtime.scene_allowed(bus_id, scene_id)
+        })
 
     def return_scene_override_available(self, bus_id: BusId) -> bool:
         """Return whether this output is showing an automatic media composition."""
@@ -551,7 +564,8 @@ class SceneRuntimeController(QObject):
 
     def set_return_scene(self, bus_id: BusId, scene_id: str) -> SceneRuntimeState:
         """Change only this output's return target, without taking it on air."""
-        self._documents.document.scene(scene_id)
+        if not self._runtime.scene_allowed(bus_id, scene_id):
+            raise SceneValidationError(f"Scene is disabled for the {bus_id.value} output")
         if not self.return_scene_override_available(bus_id):
             raise SceneValidationError("Return can only change during automatic media")
         return self._set_return_scenes({bus_id: scene_id})
@@ -646,7 +660,9 @@ class SceneRuntimeController(QObject):
                 raise SceneValidationError("Live replacement scene must be different")
             self._documents.document.scene(live_replacement_scene_id)
             for bus_id in DELIVERY_BUSES:
-                if scene_id in {self.desired_scene(bus_id), self.applied_scene(bus_id)}:
+                if scene_id in {
+                    self.desired_scene(bus_id), self.applied_scene(bus_id),
+                } and self._runtime.scene_allowed(bus_id, live_replacement_scene_id):
                     self.select_scene(bus_id, live_replacement_scene_id)
         previous_selections = self._automatic_media_scene_selections.copy()
         self._automatic_media_scene_selections = {

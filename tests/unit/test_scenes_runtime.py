@@ -717,3 +717,58 @@ def test_runtime_deletion_preserves_other_states_and_revisions(tmp_path, monkeyp
     repository.delete(other.document_id)
     assert repository.path.read_bytes() == deleted
     assert repository.load_or_create(other).revision == 0
+
+
+def test_scene_disabled_for_an_output_cannot_be_routed_to_it() -> None:
+    documents, runtime = _services()
+    documents.set_scene_output_enabled(CONTENT_CAMERA_PIP_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+    before = runtime.state
+
+    with pytest.raises(SceneValidationError):
+        runtime.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+    with pytest.raises(SceneValidationError):
+        runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert runtime.state == before
+    runtime.select_scene(BusId.MEDIA_WINDOWS, CONTENT_CAMERA_PIP_SCENE_ID)
+    assert runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+
+
+@pytest.mark.parametrize("take", [True, False])
+def test_routing_every_output_skips_the_ones_a_scene_is_disabled_for(take) -> None:
+    documents, runtime = _services()
+    documents.set_scene_output_enabled(CONTENT_CAMERA_PIP_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    if take:
+        runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    else:
+        runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+
+    assert runtime.state.output(BusId.MEDIA_WINDOWS).base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+    camera = runtime.state.output(BusId.VIRTUAL_CAMERA)
+    assert camera.base_scene_id == CAMERA_SCENE_ID
+    assert camera.mode is OutputMode.AUTO
+
+
+def test_automatic_media_scene_disabled_for_an_output_keeps_its_last_scene() -> None:
+    documents, runtime = _services()
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+
+    documents.set_scene_output_enabled(CONTENT_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CAMERA_SCENE_ID
+    assert runtime.resolve_scene(BusId.MEDIA_WINDOWS, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+
+
+def test_disabling_a_live_scene_keeps_it_until_the_next_switch() -> None:
+    documents, runtime = _services()
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+
+    documents.set_scene_output_enabled(CONTENT_CAMERA_PIP_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    assert (
+        runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.CAMERA)
+        == CONTENT_CAMERA_PIP_SCENE_ID
+    )
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID

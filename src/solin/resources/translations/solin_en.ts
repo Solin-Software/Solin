@@ -6278,6 +6278,18 @@ Add content, a camera, or another scene.</source>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>This scene will reuse the camera's shared settings.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Available on</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Media windows</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual camera</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

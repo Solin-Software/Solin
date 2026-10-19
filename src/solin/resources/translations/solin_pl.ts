@@ -7431,6 +7431,18 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Ta scena użyje wspólnych ustawień kamery.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Dostępna w</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Okna multimediów</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera wirtualna</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

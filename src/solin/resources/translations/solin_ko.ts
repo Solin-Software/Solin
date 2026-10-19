@@ -7367,6 +7367,18 @@ Add content, a camera, or another scene.</source>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>이 장면은 카메라의 공유 설정을 재사용합니다.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>사용 가능한 출력</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>미디어 창</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>가상 카메라</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

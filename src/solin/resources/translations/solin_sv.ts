@@ -7398,6 +7398,18 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Den här scenen återanvänder kamerans gemensamma inställningar.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Tillgänglig i</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Mediafönster</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

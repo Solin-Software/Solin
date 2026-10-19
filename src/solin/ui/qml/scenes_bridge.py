@@ -102,6 +102,12 @@ from solin.ui.scene_recording_status import (
 
 log = logging.getLogger(__name__)
 
+# QML names for the delivery outputs a scene can be enabled or disabled for.
+_SCENE_OUTPUT_BUSES = {
+    "projection": BusId.MEDIA_WINDOWS,
+    "program": BusId.VIRTUAL_CAMERA,
+}
+
 _SOURCE_COLORS = {
     SourceKind.SOLIN_CONTENT: "#3B82F6",
     SourceKind.LOCAL_CAMERA: "#10B981",
@@ -1029,6 +1035,18 @@ class ScenesBridge(QObject):
 
         if self._run_edit(delete):
             self._preview_selected_scene()
+
+    @Slot(str, str, bool)
+    def setSceneOutputEnabled(self, scene_id: str, output: str, enabled: bool) -> None:
+        """Allow or forbid a scene on the projection or the virtual camera."""
+        bus_id = _SCENE_OUTPUT_BUSES.get(output)
+        if bus_id is None:
+            return
+        self._run_edit(
+            lambda: self._controller.documents.set_scene_output_enabled(
+                scene_id, bus_id, bool(enabled)
+            )
+        )
 
     @Slot(str, bool)
     def setMediaScene(self, scene_id: str, enabled: bool) -> None:
@@ -2247,6 +2265,8 @@ class ScenesBridge(QObject):
                     "transition_label": ""
                     if override is None
                     else self._transition_label(override, include_duration=True),
+                    "projection_enabled": scene.allows_output(BusId.MEDIA_WINDOWS),
+                    "program_enabled": scene.allows_output(BusId.VIRTUAL_CAMERA),
                 }
             )
         self._scenes.replace_items(scene_records)

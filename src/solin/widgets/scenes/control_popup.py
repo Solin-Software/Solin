@@ -228,7 +228,15 @@ class _SceneCard(QFrame):
         border = self._BORDER_WIDTH * 2
         self.setFixedSize(width + border, preview_height + self._FOOTER_HEIGHT + border)
 
-    def set_routing(self, *, on_projection: bool, on_program: bool, program_available: bool) -> None:
+    def set_routing(
+        self,
+        *,
+        on_projection: bool,
+        on_program: bool,
+        program_available: bool,
+        projection_allowed: bool = True,
+        program_allowed: bool = True,
+    ) -> None:
         for button, active in (
             (self._projection, on_projection),
             (self._program, on_program),
@@ -243,8 +251,10 @@ class _SceneCard(QFrame):
                     PALETTE.accent_text if active else PALETTE.text_muted,
                 )
             )
-        # The virtual-camera button only means anything while that output runs.
-        self._program.setVisible(program_available)
+        # A scene disabled for an output (Scenes tab menu) offers no button for it.
+        # The virtual-camera button also only means anything while that output runs.
+        self._projection.setVisible(projection_allowed)
+        self._program.setVisible(program_available and program_allowed)
 
 
 class SceneControlPopup(QWidget):
@@ -503,6 +513,8 @@ class SceneControlPopup(QWidget):
                 on_projection=scene.id == projection_scene,
                 on_program=scene.id == program_scene,
                 program_available=program_available,
+                projection_allowed=scene.allows_output(BusId.MEDIA_WINDOWS),
+                program_allowed=scene.allows_output(BusId.VIRTUAL_CAMERA),
             )
         self._sync_thumbnail_feed()
 

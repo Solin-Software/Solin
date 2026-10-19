@@ -19,6 +19,8 @@ class _SceneRole(IntEnum):
     TRANSITION_KIND = TRANSITION_OVERRIDE + 1
     TRANSITION_DURATION = TRANSITION_KIND + 1
     TRANSITION_LABEL = TRANSITION_DURATION + 1
+    PROJECTION_ENABLED = TRANSITION_LABEL + 1
+    PROGRAM_ENABLED = PROJECTION_ENABLED + 1
 
 
 class _LayerRole(IntEnum):
@@ -55,6 +57,8 @@ _SCENE_ROLES = {
     _SceneRole.TRANSITION_KIND: QByteArray(b"transitionOverrideKind"),
     _SceneRole.TRANSITION_DURATION: QByteArray(b"transitionOverrideDurationMs"),
     _SceneRole.TRANSITION_LABEL: QByteArray(b"transitionOverrideLabel"),
+    _SceneRole.PROJECTION_ENABLED: QByteArray(b"projectionEnabled"),
+    _SceneRole.PROGRAM_ENABLED: QByteArray(b"programEnabled"),
 }
 
 _LAYER_ROLES = {
@@ -217,6 +221,8 @@ class SceneListModel(_MappingListModel[_SceneRole]):
                 _SceneRole.TRANSITION_KIND: "transition_kind",
                 _SceneRole.TRANSITION_DURATION: "transition_duration_ms",
                 _SceneRole.TRANSITION_LABEL: "transition_label",
+                _SceneRole.PROJECTION_ENABLED: "projection_enabled",
+                _SceneRole.PROGRAM_ENABLED: "program_enabled",
             },
             parent,
         )

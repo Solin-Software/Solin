@@ -85,6 +85,9 @@ def scene_engine_graph_signature(document: SceneDocument) -> dict[str, object]:
             continue
         scene.pop("created_at", None)
         scene.pop("updated_at", None)
+        # Which outputs may show a scene is routing policy, enforced before a
+        # scene is selected; the rendered graph is identical either way.
+        scene.pop("disabled_outputs", None)
         layers = scene.get("layers")
         if not isinstance(layers, list):
             continue

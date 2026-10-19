@@ -7367,6 +7367,18 @@ Add content, a camera, or another scene.</source>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>此场景将复用摄像机的共享设置。</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>可用于</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>媒体窗口</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

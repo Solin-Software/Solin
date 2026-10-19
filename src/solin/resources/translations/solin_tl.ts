@@ -7399,6 +7399,18 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Gagamitin muli ng eksenang ito ang mga nakabahaging setting ng camera.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Available sa</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Mga window ng media</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual na camera</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

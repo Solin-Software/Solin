@@ -7367,6 +7367,18 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Adegan ini akan menggunakan kembali pengaturan bersama kamera.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Tersedia di</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Jendela media</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera virtual</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>

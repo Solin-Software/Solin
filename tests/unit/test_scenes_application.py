@@ -13,6 +13,7 @@ from solin.core.scenes.application import (
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
+    BusId,
     CameraPreset,
     ColorSourceConfig,
     ContentCategory,
@@ -602,3 +603,36 @@ def test_historical_duplicate_names_allow_other_edits_and_can_be_renamed_away() 
     assert [layer.name for layer in service.document.scene(scene.id).layers] == [original.name, "Other content"]
     service.undo()
     assert service.document.scene(scene.id).layers[1].name == original.name
+
+
+def test_scene_output_can_be_disabled_and_reenabled_with_undo() -> None:
+    service = _service()
+
+    service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    scene = service.document.scene(CAMERA_SCENE_ID)
+    assert scene.disabled_outputs == frozenset({BusId.VIRTUAL_CAMERA})
+    assert service.document.scene(CONTENT_SCENE_ID).disabled_outputs == frozenset()
+    unchanged = service.document
+    assert service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.VIRTUAL_CAMERA, False) is unchanged
+
+    service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.MEDIA_WINDOWS, False)
+    service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.VIRTUAL_CAMERA, True)
+    assert service.document.scene(CAMERA_SCENE_ID).disabled_outputs == frozenset({BusId.MEDIA_WINDOWS})
+
+    service.undo()
+    assert service.document.scene(CAMERA_SCENE_ID).disabled_outputs == frozenset(
+        {BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA}
+    )
+
+    with pytest.raises(SceneValidationError):
+        service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.EDITOR, False)
+
+
+def test_duplicated_scene_keeps_its_disabled_outputs() -> None:
+    service = _service(identities=["copy", "layer-a", "layer-b", "layer-c"])
+    service.set_scene_output_enabled(CAMERA_SCENE_ID, BusId.VIRTUAL_CAMERA, False)
+
+    service.duplicate_scene(CAMERA_SCENE_ID, new_scene_id="camera-copy")
+
+    assert service.document.scene("camera-copy").disabled_outputs == frozenset({BusId.VIRTUAL_CAMERA})

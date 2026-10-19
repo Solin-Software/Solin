@@ -7399,6 +7399,18 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Deze scène gebruikt de gedeelde instellingen van de camera opnieuw.</translation>
     </message>
+    <message>
+        <source>Available on</source>
+        <translation>Beschikbaar op</translation>
+    </message>
+    <message>
+        <source>Media windows</source>
+        <translation>Mediavensters</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorWidget</name>
