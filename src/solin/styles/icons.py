@@ -241,6 +241,8 @@ _ICON_NAMES = frozenset(
         "ICON_SHIELD",
         "ICON_REMOTE_CONTROL",
         "ICON_SHARE_SCREEN",
+        "ICON_OUTPUT_CAMERA",
+        "ICON_OUTPUT_SCREEN",
         "ICON_ASPECT_MATCH",
         "ICON_BOUNDS",
         "ICON_CURSOR_HOVER",
@@ -1228,6 +1230,25 @@ def _build_icon_svg(name: str) -> str:
             '<path d="M12 17v4"/>'
             '<path d="M12 13V8"/>'
             '<path d="m9 11 3-3 3 3"/>'
+            "</svg>"
+        )
+    elif name == "ICON_OUTPUT_CAMERA":
+        # The virtual-camera output: a video camera with one soft corner.
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M7 6h6a2 2 0 0 1 2 2v6a4 4 0 0 1-4 4H4a2 2 0 0 1-2-2v-5a5 5 0 0 1 5-5z"/>'
+            '<path d="M15 10.8l4.8-3.2c.5-.4 1.2 0 1.2.7v7.4c0 .7-.7 1.1-1.2.7L15 13.2"/>'
+            "</svg>"
+        )
+    elif name == "ICON_OUTPUT_SCREEN":
+        # The projection output: content sent in through the screen's corner.
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M2 13V7a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H8"/>'
+            '<path d="M3 18l10.5-9"/>'
+            '<path d="M9.5 9h4v4"/>'
             "</svg>"
         )
     elif name == "ICON_ASPECT_MATCH":

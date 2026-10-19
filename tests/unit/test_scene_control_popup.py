@@ -8,7 +8,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, QVariantAnimation, Signal
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QWidget
@@ -523,7 +523,7 @@ def test_scene_cards_follow_the_document_with_canvas_proportions(controller_fact
     video = document.output(BusId.VIRTUAL_CAMERA).video_format
     card = popup._scene_cards[document.scenes[0].id]
     assert card.height() == SceneControlPopup._SCENE_CARD_HEIGHT
-    # the preview rectangle carries the canvas proportions; the footer adds a row
+    # the preview rectangle carries the canvas proportions and is the whole card
     preview = card._preview
     assert preview.height() == SceneControlPopup._SCENE_CARD_PREVIEW_HEIGHT
     assert preview.width() == round(preview.height() * video.width / video.height)
@@ -1585,4 +1585,341 @@ def test_media_card_can_be_return_target_without_a_live_take(controller_factory,
         assert controller.desired_scene(bus_id) == media_id
     finally:
         popup.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def _hover(card: _SceneCard, inside: bool) -> None:
+    from PySide6.QtCore import QPointF
+    from PySide6.QtGui import QEnterEvent
+
+    if inside:
+        point = QPointF(card.width() / 2, card.height() / 2)
+        QCoreApplication.sendEvent(card, QEnterEvent(point, point, point))
+    else:
+        QCoreApplication.sendEvent(card, QEvent(QEvent.Type.Leave))
+    QCoreApplication.processEvents()
+
+
+def _card(**routing) -> _SceneCard:
+    card = _SceneCard("scene", "Scene")
+    card.set_canvas_aspect(SceneControlPopup._SCENE_CARD_PREVIEW_HEIGHT, 16 / 9)
+    card.set_routing(**{"on_projection": False, "on_program": False, "program_available": True, **routing})
+    return card
+
+
+def test_card_is_all_preview_and_shows_its_name_and_halves_only_on_hover() -> None:
+    card = _card()
+    try:
+        assert card.height() == SceneControlPopup._SCENE_CARD_HEIGHT
+        assert card._preview.height() == SceneControlPopup._SCENE_CARD_PREVIEW_HEIGHT
+        assert not card._name.isVisibleTo(card)
+        assert card._program.icon().isNull() and card._projection.icon().isNull()
+
+        _hover(card, True)
+        assert card._name.isVisibleTo(card)
+        assert card._name.text() == "Scene"
+        assert not card._program.icon().isNull() and not card._projection.icon().isNull()
+        assert card._program.property("revealed") is True
+        assert card._preview._revealed
+
+        _hover(card, False)
+        assert not card._name.isVisibleTo(card)
+        assert card._program.icon().isNull()
+        assert card._projection.property("revealed") is False
+        assert not card._preview._revealed
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_long_scene_names_are_elided_in_the_hover_title() -> None:
+    card = _card()
+    try:
+        long_name = "A scene name far too long to fit across a single thumbnail"
+        card.set_name(long_name)
+        assert card._name.text() != long_name
+        assert card._name.text().endswith("…")
+        assert card._name.toolTip() == long_name
+        assert card.accessibleName() == long_name
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("routing", "program", "projection"),
+    [
+        ({}, "left", "right"),
+        ({"program_allowed": False}, None, "full"),
+        ({"program_available": False}, None, "full"),
+        ({"projection_allowed": False}, "full", None),
+        ({"program_allowed": False, "projection_allowed": False}, None, None),
+    ],
+)
+def test_card_offers_one_half_per_usable_output_camera_left_projection_right(
+    routing: dict, program: str | None, projection: str | None,
+) -> None:
+    card = _card(**routing)
+    try:
+        for button, side in ((card._program, program), (card._projection, projection)):
+            assert button.isVisibleTo(card) is (side is not None)
+            if side is not None:
+                assert button.property("side") == side
+        halves = card._preview.layout()
+        assert halves.indexOf(card._program) < halves.indexOf(card._projection)
+        # Even a scene no output may use still names itself on hover.
+        _hover(card, True)
+        assert card._name.isVisibleTo(card)
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_halves_name_their_output_for_tooltips_and_screen_readers() -> None:
+    card = _card()
+    try:
+        assert card._program.toolTip() == "Virtual camera"
+        assert card._program.accessibleName() == "Virtual camera"
+        assert card._projection.toolTip() == "Media windows"
+        assert card._projection.accessibleName() == "Media windows"
+        assert card._projection.accessibleDescription() == "Scene"
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_mouse_clicks_never_leave_focus_that_would_pin_the_controls_open() -> None:
+    card = _card()
+    try:
+        card.show()
+        _hover(card, True)
+        QTest.mouseClick(card._projection, Qt.MouseButton.LeftButton)
+        assert card._projection.focusPolicy() == Qt.FocusPolicy.TabFocus
+        assert not card._projection.hasFocus()
+        # with no keyboard focus held, the pointer alone decides
+        card._hovered = False
+        card._sync_revealed()
+        assert not card._preview._revealed
+    finally:
+        card.close()
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("reason", "reveals"),
+    [
+        (Qt.FocusReason.TabFocusReason, True),
+        (Qt.FocusReason.BacktabFocusReason, True),
+        # Qt focuses the first focusable widget when a window activates
+        (Qt.FocusReason.ActiveWindowFocusReason, False),
+        (Qt.FocusReason.OtherFocusReason, False),
+    ],
+)
+def test_only_tab_navigation_focus_reveals_the_controls(reason, reveals: bool) -> None:
+    from PySide6.QtGui import QFocusEvent
+
+    card = _card()
+    try:
+        QCoreApplication.sendEvent(card._program, QFocusEvent(QEvent.Type.FocusIn, reason))
+        assert card._preview._revealed is reveals
+        assert card._name.isVisibleTo(card) is reveals
+        QCoreApplication.sendEvent(
+            card._program, QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason)
+        )
+        assert not card._preview._revealed
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("routing", "live"),
+    [
+        ({}, ()),
+        ({"on_projection": True}, ("projection",)),
+        ({"on_program": True}, ("program",)),
+        ({"on_program": True, "on_projection": True}, ("program", "projection")),
+        # the virtual camera is off: it carries nothing, whatever it is set to
+        ({"on_program": True, "program_available": False}, ()),
+    ],
+)
+def test_badges_show_on_air_outputs_in_the_halves_order(routing: dict, live: tuple) -> None:
+    card = _card(**routing)
+    try:
+        assert card._preview._live == live
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_idle_tally_paints_an_accent_border_and_centred_badges_hidden_on_hover(
+    controller_factory,
+) -> None:
+    from PySide6.QtGui import QColor
+
+    accent = QColor(PALETTE.accent)
+
+    def is_accent(colour: QColor) -> bool:
+        return all(
+            abs(a - b) <= 24
+            for a, b in zip(colour.getRgb()[:3], accent.getRgb()[:3], strict=True)
+        )
+
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    controller.documents.create_scene("Idle", scene_id="idle")
+    popup = SceneControlPopup(controller)  # the cards need the panel's stylesheet
+    card, idle_card = popup._scene_cards["lectern"], popup._scene_cards["idle"]
+    try:
+        card._projection.click()
+        card._program.click()
+        preview = card._preview
+        painted = preview.grab().toImage()
+        middle_y = painted.height() // 2
+        assert is_accent(painted.pixelColor(0, middle_y))  # tally border
+        badge_y = painted.height() - preview._BADGE_MARGIN - preview._BADGE_HEIGHT // 2
+        # two badges side by side, centred: the centre falls in the gap between them
+        centre = painted.width() // 2
+        assert not is_accent(painted.pixelColor(centre, badge_y))
+        assert is_accent(painted.pixelColor(centre - preview._BADGE_GAP - 2, badge_y))
+        assert is_accent(painted.pixelColor(centre + preview._BADGE_GAP + 2, badge_y))
+
+        idle = idle_card._preview.grab().toImage()
+        assert not is_accent(idle.pixelColor(0, middle_y))
+
+        _hover(card, True)
+        revealed = preview.grab().toImage()
+        assert not is_accent(revealed.pixelColor(0, middle_y))
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_badge_pulses_only_when_an_output_arrives_then_settles() -> None:
+    card = _card(on_projection=True)
+    preview = card._preview
+    try:
+        # A card that is already live when it appears is not news.
+        assert preview._pulsing == frozenset()
+        assert preview._pulse.duration() * preview._pulse.loopCount() == 5000
+
+        preview._pulse.setDuration(20)
+        preview._pulse.setLoopCount(1)
+        card.set_routing(on_projection=True, on_program=True, program_available=True)
+        assert preview._pulsing == {"program"}
+        assert preview._pulse.state() is QVariantAnimation.State.Running
+
+        # Re-rendering the same routing neither restarts nor extends the pulse.
+        started = preview._pulse.currentTime()
+        card.set_routing(on_projection=True, on_program=True, program_available=True)
+        assert preview._pulsing == {"program"}
+        assert preview._pulse.currentTime() >= started
+
+        wait_until(lambda: not preview._pulsing, description="pulse settles")
+        assert preview._dot_opacity == 1.0
+        assert preview._live == ("program", "projection")
+
+        # An output leaving the card mid-pulse stops pulsing with it.
+        card.set_routing(on_projection=False, on_program=False, program_available=True)
+        card.set_routing(on_projection=True, on_program=False, program_available=True)
+        assert preview._pulsing == {"projection"}
+        card.set_routing(on_projection=False, on_program=False, program_available=True)
+        assert preview._pulsing == frozenset()
+        assert preview._pulse.state() is not QVariantAnimation.State.Running
+    finally:
+        card.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_badges_follow_the_media_scene_while_media_is_on_air(controller_factory) -> None:
+    projection = _Projection()
+    controller = controller_factory(projection=projection)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    camera_scene = next(scene.id for scene in controller.document.scenes if scene.name == "Camera")
+    media_scene = controller.documents.program_media_scene_id
+    popup = SceneControlPopup(controller)
+    try:
+        popup._scene_cards[camera_scene]._projection.click()
+        popup._scene_cards[camera_scene]._program.click()
+        assert popup._scene_cards[camera_scene]._preview._live == ("program", "projection")
+
+        projection.set_type("video")
+        QCoreApplication.processEvents()
+        assert popup._scene_cards[media_scene]._preview._live == ("program", "projection")
+        assert popup._scene_cards[camera_scene]._preview._live == ()
+        assert popup._scene_cards[media_scene]._preview._pulsing == {"program", "projection"}
+
+        projection.set_type("idle")
+        QCoreApplication.processEvents()
+        assert popup._scene_cards[camera_scene]._preview._live == ("program", "projection")
+        assert popup._scene_cards[media_scene]._preview._live == ()
+    finally:
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_a_focused_but_hidden_half_paints_no_focus_ring(controller_factory) -> None:
+    # Regression: window activation focuses the first card's camera half; the
+    # ring then drew a stray line down the middle of an idle card.
+    from PySide6.QtGui import QColor
+
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.documents.create_scene("Lectern", scene_id="lectern")
+    popup = SceneControlPopup(controller)
+    card = popup._scene_cards["lectern"]
+    try:
+        popup.show()
+        popup.activateWindow()
+        card._program.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
+        QCoreApplication.processEvents()
+        if not card._program.hasFocus():
+            pytest.skip("the platform did not grant focus")
+        assert not card._preview._revealed
+        painted = card._preview.grab().toImage()
+        divider_x = card._program.geometry().right()
+        colour = painted.pixelColor(divider_x, painted.height() // 2)
+        background = painted.pixelColor(divider_x - 10, painted.height() // 2)
+        assert colour == background
+        assert colour != QColor(PALETTE.accent)
+    finally:
+        popup.close()
+        popup.deleteLater()
+        QCoreApplication.processEvents()
+
+
+def test_halves_and_badges_use_the_output_icons() -> None:
+    from solin.styles.icons import ICON_OUTPUT_CAMERA, ICON_OUTPUT_SCREEN, make_icon
+
+    def image(icon, size: int):
+        return icon.pixmap(size, size).toImage()
+
+    size = _SceneCard._HALF_ICON_SIZE
+    camera = image(make_icon(ICON_OUTPUT_CAMERA, size, PALETTE.text_on_accent), size)
+    screen = image(make_icon(ICON_OUTPUT_SCREEN, size, PALETTE.text_on_accent), size)
+    # both glyphs actually draw something, and they differ
+    for glyph in (camera, screen):
+        assert any(
+            glyph.pixelColor(x, y).alpha() > 0
+            for x in range(glyph.width())
+            for y in range(glyph.height())
+        )
+    assert camera != screen
+
+    card = _card()
+    try:
+        _hover(card, True)
+        assert image(card._program.icon(), size) == camera
+        assert image(card._projection.icon(), size) == screen
+        badge = card._preview._BADGE_ICON
+        assert image(card._preview._badge_icon("program"), badge) == image(
+            make_icon(ICON_OUTPUT_CAMERA, badge, PALETTE.text_on_accent), badge
+        )
+        assert image(card._preview._badge_icon("projection"), badge) == image(
+            make_icon(ICON_OUTPUT_SCREEN, badge, PALETTE.text_on_accent), badge
+        )
+    finally:
+        card.deleteLater()
         QCoreApplication.processEvents()
