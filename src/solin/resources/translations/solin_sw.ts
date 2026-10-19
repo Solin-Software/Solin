@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video inaendelea</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Kabla ya mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Mwanzo wa mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Mwisho wa mkutano</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7678,9 +7693,9 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">Mandhari yanayokamata kifuatiliaji cha makadirio. Huwashwa wakati maudhui yanapoonyeshwa.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Vidhibiti vya sauti na idadi ya waliohudhuria wakati wa mikutano.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Vidhibiti vya sauti na video vya mkutano.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7748,11 +7763,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Njia za Mkato za Kiotomatiki</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Hutuma njia za mkato za kibodi wakati hali ya midia ya kuona inapobadilika.</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8416,6 +8426,16 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Pakia mengine 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Inapatikana kwenye Windows pekee.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Hutuma njia za mkato za kibodi matukio yaliyochaguliwa ya programu yanapotokea.</translation>
     </message>
 </context>
 <context>
@@ -9950,54 +9970,59 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Ghairi</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Unganisha sauti na video yako na unyamazishe wote.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Tenganisha sauti na video yako na uruhusu wote kuwasha sauti.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Unganisha wimbo wa mandharinyuma</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Hakuna mkutano uliopatikana. Fungua mkutano wa Zoom ili kutumia vidhibiti hivi.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Kabla/baada ya mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Mwanzo wa mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Simamisha wimbo mkutano unapoanza; ucheze kabla/baada ya mkutano. Kusimama kwa wimbo kulikoratibiwa pia huandaa Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Mkutano wa Zoom</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Imeondolewa muunganisho</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n mhudhuriaji</numerusform>
-            <numerusform>%n wahudhuriaji</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Kabla ya mkutano</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Kushiriki skrini kumewashwa</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Fungua sauti kwa wote</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Imeunganishwa kwenye mkutano</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Mahudhurio yanaweza kuhesabiwa kwa njia mbili:
-tumia &amp;, |, au + kati ya majina, kama &apos;Felipe &amp; Julia&apos; = 2;
-au weka namba mwishoni, kama &apos;Familia ya Alves 7&apos; = 7.
-Namba iliyo mwishoni ina kipaumbele.</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Mwisho wa mkutano</translation>
     </message>
 </context>
 <context>
@@ -11857,6 +11882,14 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
     <message>
         <source>Camera</source>
         <translation>Kamera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Baadhi ya vitendo vya Zoom havikuweza kukamilishwa. Kagua Zoom na ujaribu tena.</translation>
     </message>
 </context>
 </TS>

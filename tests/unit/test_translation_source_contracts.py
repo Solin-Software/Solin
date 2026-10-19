@@ -23,6 +23,32 @@ _SCENE_WORKFLOW_QML = (
 
 
 @pytest.mark.parametrize(
+    "catalog", sorted((_SOURCE_ROOT / "resources" / "translations").glob("solin_*.ts")),
+    ids=lambda path: path.stem,
+)
+def test_zoom_meeting_workflow_messages_have_completed_translations(catalog: Path) -> None:
+    contexts = {node.findtext("name"): node for node in ET.parse(catalog).findall("context")}
+    for context, filename in {
+        "ZoomPanel": "widgets/zoom_panel.py",
+        "ZoomMeetingController": "controllers/zoom_meeting_controller.py",
+    }.items():
+        source_tree = ast.parse((_SOURCE_ROOT / filename).read_text(encoding="utf-8"))
+        sources = {
+            node.args[0].value for node in ast.walk(source_tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "tr" and node.args and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        }
+        messages = {node.findtext("source"): node.find("translation")
+                    for node in contexts[context].findall("message")}
+        for source in sources:
+            translation = messages.get(source)
+            assert translation is not None, (catalog.name, context, source)
+            assert translation.get("type") not in {"unfinished", "vanished", "obsolete"}
+            assert "".join(translation.itertext()).strip(), (catalog.name, context, source)
+
+
+@pytest.mark.parametrize(
     "catalog",
     sorted((_SOURCE_ROOT / "resources" / "translations").glob("solin_*.ts")),
     ids=lambda path: path.stem,

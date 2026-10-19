@@ -107,6 +107,7 @@ from .controllers.wifi_media_controller import (
     WifiMediaHandlers,
 )
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
+from .controllers.zoom_meeting_controller import ZoomMeetingController
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
 from .core.projection.application import (
     ObsSceneSession,
@@ -563,7 +564,7 @@ class MainWindow(QWidget):
 
 
         # Zoom Meetings integration
-        self._zoom_service = service_factories.zoom(self._zoom_settings, self)
+        self._zoom_service = service_factories.zoom(self)
 
         self._background_song_service = service_factories.background_song(
             self.lang,
@@ -573,6 +574,14 @@ class MainWindow(QWidget):
             background_media_controller,
             self,
         )
+        self._zoom_meetings = ZoomMeetingController(
+            self._zoom_service,
+            self._background_song_service,
+            self._zoom_settings,
+            self.notifications,
+            self,
+        )
+        self._zoom_meetings.event_triggered.connect(self._auto_keys.dispatch)
 
         self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
@@ -625,6 +634,7 @@ class MainWindow(QWidget):
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
+                zoom_meetings=self._zoom_meetings,
                 app_settings=self._app_settings,
                 about_settings_factory=service_factories.about_settings,
                 obs_settings=self._obs_settings,

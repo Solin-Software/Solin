@@ -10,7 +10,11 @@ from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, QUrl, Signal, 
 from PySide6.QtGui import QDesktopServices, QKeySequence
 
 from solin.core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
-from solin.core.integrations.automation.auto_key_actions import AUTO_KEY_EVENTS, AutoKeyAction
+from solin.core.integrations.automation.auto_key_actions import (
+    AUTO_KEY_EVENTS,
+    AutoKeyAction,
+    available_auto_key_events,
+)
 from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.settings import (
     AutoKeySettingsStore,
@@ -32,7 +36,6 @@ class IntegrationSettings(SettingsDomain):
     """Services are wired eagerly; no QML page must exist to receive their state."""
 
     zoom_enabled_toggled = Signal(bool)
-    zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
 
     def __init__(
@@ -76,10 +79,6 @@ class IntegrationSettings(SettingsDomain):
         self._permission_timer.setInterval(1000)
         self._permission_timer.timeout.connect(self.refresh_runtime)
 
-        # Zoom attendance is always part of this integration. Initialize once,
-        # independently of lazy page creation, theme changes or retranslations.
-        if sys.platform == "win32":
-            self._zoom_settings.set_show_participants(True)
         self.publish(
             obsEnabled=obs_settings.is_enabled(),
             obsPort=obs_settings.raw_websocket_port(), obsPassword="",
@@ -89,7 +88,6 @@ class IntegrationSettings(SettingsDomain):
             ndiEnabled=obs_settings.ndi_enabled(), ndiSource=obs_settings.ndi_source(),
             ndiBusy=False, ndiStatus="", ndiStatusKind="",
             zoomAvailable=sys.platform == "win32", zoomEnabled=zoom_settings.is_enabled(),
-            zoomParticipants=zoom_settings.show_participants(),
             autoShareEnabled=auto_share_settings.is_enabled(),
             shareHotkey=auto_share_settings.ensure_hotkey(), shareTargetBusy=False,
             autoKeysEnabled=auto_key_settings.is_enabled(),
@@ -130,7 +128,7 @@ class IntegrationSettings(SettingsDomain):
         if key in {"shortcutEvent", "shortcutSequence", "shortcutEnabled"}:
             if not self._state["shortcutEditorOpen"]:
                 return
-            if key == "shortcutEvent" and value not in AUTO_KEY_EVENTS:
+            if key == "shortcutEvent" and value not in available_auto_key_events(sys.platform):
                 return
             if key == "shortcutSequence":
                 value = self._canonical_sequence(str(value))
@@ -160,9 +158,6 @@ class IntegrationSettings(SettingsDomain):
         elif key == "zoomEnabled" and self._state["zoomAvailable"]:
             self._zoom_settings.set_enabled(bool(value))
             self.zoom_enabled_toggled.emit(bool(value))
-        elif key == "zoomParticipants" and self._state["zoomAvailable"]:
-            self._zoom_settings.set_show_participants(bool(value))
-            self.zoom_participants_toggled.emit(bool(value))
         elif key == "autoShareEnabled":
             self._auto_share_settings.set_enabled(bool(value))
         elif key == "autoKeysEnabled":
@@ -354,6 +349,7 @@ class IntegrationSettings(SettingsDomain):
         self.publish(
             shortcutEditorOpen=True, shortcutShareMode=share, shortcutId=action_id,
             shortcutEvent=action.event if action else AUTO_KEY_EVENTS[0],
+            shortcutEventLabel=auto_key_event_label(action.event) if action else "",
             shortcutSequence=(self._auto_share_settings.hotkey() if share
                               else action.sequence if action else ""),
             shortcutEnabled=action.enabled if action else True, shortcutError="",
@@ -382,8 +378,15 @@ class IntegrationSettings(SettingsDomain):
                     self._cancel_shortcut()
                     self._refresh_shortcuts()
                     return
+                event = self._state["shortcutEvent"]
+                # Unsupported saved actions remain editable without enabling new ones.
+                existing = next((item for item in actions if item.id == action_id), None)
+                if event not in available_auto_key_events(sys.platform) and (
+                    existing is None or existing.event != event
+                ):
+                    return
                 action = AutoKeyAction(action_id or uuid.uuid4().hex,
-                                       self._state["shortcutEvent"], sequence,
+                                       event, sequence,
                                        self._state["shortcutEnabled"])
                 updated = [action if item.id == action_id else item for item in actions]
                 if not action_id:
@@ -396,10 +399,20 @@ class IntegrationSettings(SettingsDomain):
         self._refresh_shortcuts()
 
     def _refresh_shortcuts(self) -> None:
-        self.publish(shortcuts=[dict(item.to_dict(), eventLabel=auto_key_event_label(item.event))
-                                for item in self._auto_key_settings.actions()],
-                     shortcutEvents=[{"value": event, "label": auto_key_event_label(event)}
-                                     for event in AUTO_KEY_EVENTS])
+        available = available_auto_key_events(sys.platform)
+        self.publish(
+            shortcuts=[
+                dict(item.to_dict(), eventLabel=auto_key_event_label(item.event),
+                     available=item.event in available)
+                for item in self._auto_key_settings.actions()
+            ],
+            shortcutEvents=[{"value": event, "label": auto_key_event_label(event)}
+                            for event in available],
+            shortcutUnavailableReason=QCoreApplication.translate(
+                "SettingsWidget", "Available only on Windows."
+            ),
+            shortcutEventLabel=auto_key_event_label(self._state["shortcutEvent"]),
+        )
 
     def _configure_share_target(self) -> None:
         if self._overlay is not None:

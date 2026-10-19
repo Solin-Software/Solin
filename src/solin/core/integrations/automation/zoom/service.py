@@ -1,510 +1,295 @@
-"""
-ZoomService — integration with Zoom Meetings via pywinauto (Windows only).
-
-All pywinauto / UIA operations run in background threads to avoid blocking
-the Qt event loop.  Communication back to the main thread is via Qt Signals.
-
-Cross-platform safety
-─────────────────────
-  The module is safe to import on any OS.  ``ZoomService`` creates a no-op
-  instance when ``sys.platform != "win32"`` or ``pywinauto`` is unavailable.
-"""
+"""Asynchronous Qt facade supervising one serialized Windows automation process."""
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import sys
-import threading
-import time
-from collections.abc import Callable
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
 
-from solin.core.integrations.automation.settings import ZoomParticipantSettings
-from solin.core.integrations.automation.zoom.native import (
-    initialize_com_for_current_thread,
-    share_selection_dialog_open,
-)
+from solin.core.foundation.constants import IS_COMPILED, ZOOM_AUTOMATION_ARGUMENT
 
-if TYPE_CHECKING:
-    from .controls import ZoomSession
+from .sequences import SEQUENCES
+from .state import SequenceResult, StepFailure
+from .protocol import MAX_MESSAGE_BYTES, PROTOCOL_VERSION
 
 log = logging.getLogger(__name__)
 
-# ── Conditional import ────────────────────────────────────────────────────────
 
-import importlib.util
+@dataclass(frozen=True, slots=True)
+class _Request:
+    id: int
+    command: str
 
-_HAS_ZOOM = False
-if sys.platform == "win32":
-    # Check whether the library exists without importing it on the main thread.
-    _HAS_ZOOM = importlib.util.find_spec("pywinauto") is not None
-
-
-# ── ZoomService ───────────────────────────────────────────────────────────────
 
 class ZoomService(QObject):
-    """
-    High-level service that manages the connection to a running Zoom meeting,
-    caches window/button handles, tracks participants, and automates screen
-    sharing during media playback.
+    enabled_changed = Signal(bool)
+    connection_changed = Signal(bool)
+    busy_changed = Signal(bool)
+    operation_finished = Signal(object)
+    sequence_progress = Signal(str)
+    error = Signal(str)
 
-    All signals are emitted on the main thread (via QueuedConnection).
-    """
-
-    # ── Public signals ────────────────────────────────────────────────────
-    connection_changed    = Signal(bool)         # True = connected to meeting
-    participants_updated  = Signal(int, list)    # (people_count, name_list)
-    sharing_state_changed = Signal(bool)         # True = currently sharing
-    share_error           = Signal(str)          # non-modal error message
-
-    # ── Internal bridge signals (worker thread → main thread) ─────────────
-    _sig_connected = Signal(int, bool)
-    _sig_participants = Signal(int, int, list)
-    _sig_sharing = Signal(int, bool)
-    _sig_share_error = Signal(int, str)
-    _sig_worker_done = Signal(str, int)
-
-    def __init__(
-        self,
-        settings: ZoomParticipantSettings,
-        parent: QObject | None = None,
-    ):
+    def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
-        self._settings = settings
-
-        self._connected: bool = False
-        self._sharing:   bool = False
-        self._participant_count: int = 0
-        self._participant_names: list[str] = []
-
-        self._stop_evt = threading.Event()
-        self._operation_lock = threading.Lock()
-        self._session_lock = threading.Lock()
-        self._generation = 0
-        self._session_generation = 0
-        self._session: ZoomSession | None = None
         self._active = False
-        self._inflight: set[str] = set()
-        self._threads_lock = threading.Lock()
-        self._threads: set[threading.Thread] = set()
-
-        # ── Timers ────────────────────────────────────────────────────────
-        # Connection poller: 5s until connected, then 20s keep-alive
-        self._conn_timer = QTimer(self)
-        self._conn_timer.timeout.connect(self._poll_connection)
-
-        # Participant poller: 5s (only when enabled + connected)
-        self._part_timer = QTimer(self)
-        self._part_timer.timeout.connect(self._poll_participants)
-
-        # Share-state poller: 3s (while sharing, checks if user stopped manually)
-        self._share_timer = QTimer(self)
-        self._share_timer.timeout.connect(self._poll_share_state)
-
-        # Wire bridge signals → main-thread slots
-        self._sig_connected.connect(self._on_connected_main)
-        self._sig_participants.connect(self._on_participants_main)
-        self._sig_sharing.connect(self._on_sharing_main)
-        self._sig_share_error.connect(self._on_share_error_main)
-        self._sig_worker_done.connect(self._on_worker_done)
-
-    # ── Properties ────────────────────────────────────────────────────────
+        self._connected = False
+        self._process: QProcess | None = None
+        self._ready = False
+        self._buffer = bytearray()
+        self._pending: _Request | None = None
+        self._next_id = 0
+        self._queued_sequence: str | None = None
+        self._restart_delay_ms = 1000
+        self._poll = QTimer(self)
+        self._poll.setInterval(1000)
+        self._poll.timeout.connect(self.refresh)
+        self._deadline = QTimer(self)
+        self._deadline.setSingleShot(True)
+        self._deadline.timeout.connect(self._timed_out)
 
     @property
     def is_available(self) -> bool:
-        """True when pywinauto is available and we're on Windows."""
-        return _HAS_ZOOM
+        return sys.platform == "win32"
+
+    @property
+    def is_enabled(self) -> bool:
+        return self._active
 
     @property
     def is_connected(self) -> bool:
         return self._connected
 
     @property
-    def is_sharing(self) -> bool:
-        return self._sharing
-
-    @property
-    def participant_count(self) -> int:
-        return self._participant_count
-
-    @property
-    def participant_names(self) -> list[str]:
-        return list(self._participant_names)
-
-    # ── Lifecycle ─────────────────────────────────────────────────────────
-
-    def start(self):
-        """Start connection polling.  Safe to call on any platform."""
-        if not _HAS_ZOOM:
-            return
-        if self._active:
-            return
-        with self._session_lock:
-            self._generation += 1
-            self._active = True
-            self._stop_evt.clear()
-        self._conn_timer.start(5000)
-        self._poll_connection()  # immediate first attempt
-
-    def stop(self, *, wait: bool = False, timeout: float = 8.0):
-        """Stop all polling and disconnect."""
-        with self._session_lock:
-            self._active = False
-            self._generation += 1
-            self._stop_evt.set()
-            session = self._session
-            self._session = None
-            self._session_generation = 0
-        if session is not None:
-            session.cancel()
-        self._conn_timer.stop()
-        self._part_timer.stop()
-        self._share_timer.stop()
-        if self._connected:
-            self._connected = False
-            self.connection_changed.emit(False)
-        if self._sharing:
-            self._sharing = False
-            self.sharing_state_changed.emit(False)
-        if wait:
-            deadline = time.monotonic() + max(0.0, timeout)
-            with self._threads_lock:
-                threads = list(self._threads)
-            for thread in threads:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    break
-                if thread is not threading.current_thread():
-                    thread.join(timeout=remaining)
-            alive = [thread.name for thread in threads if thread.is_alive()]
-            if alive:
-                log.warning("Zoom workers still running during shutdown: %s", alive)
-
-    def start_participant_polling(self):
-        """Enable participant count updates (every 5s)."""
-        if self._connected and not self._sharing:
-            self._part_timer.start(5000)
-            self._poll_participants()
-
-    def stop_participant_polling(self):
-        """Disable participant count updates."""
-        self._part_timer.stop()
-
-    # ── Actions (called from main thread, run in workers) ─────────────────
-
-    def request_open_audio_for_all(self):
-        """
-        Leave computer audio + unmute all.
-        Runs entirely in a background thread.
-        """
-        if not _HAS_ZOOM or not self._connected:
-            return
-        self._launch_worker("open-audio", self._worker_open_audio)
-
-    def request_stop_share(self):
-        """Click Zoom's Stop Share button. Works even if we don't know we're sharing."""
-        if not _HAS_ZOOM or not self._connected:
-            return
-        self._launch_worker("stop-share", self._worker_stop_share)
-
-    def _launch_worker(
-        self,
-        kind: str,
-        worker: Callable[[int, ZoomSession], None],
-    ) -> None:
-        if not self._active or self._stop_evt.is_set() or kind in self._inflight:
-            return
-        generation = self._generation
-        self._inflight.add(kind)
-
-        def _run() -> None:
-            try:
-                with self._operation_lock:
-                    session = self._session_for_generation(generation)
-                    if session is not None:
-                        worker(generation, session)
-            finally:
-                with self._threads_lock:
-                    self._threads.discard(threading.current_thread())
-                try:
-                    self._sig_worker_done.emit(kind, generation)
-                except RuntimeError:
-                    return
-
-        thread = threading.Thread(
-            target=_run,
-            daemon=True,
-            name=f"zoom-{kind}",
-        )
-        with self._threads_lock:
-            self._threads.add(thread)
-        thread.start()
-
-    def _session_for_generation(
-        self,
-        generation: int,
-    ) -> ZoomSession | None:
-        with self._session_lock:
-            if (
-                not self._active
-                or self._stop_evt.is_set()
-                or generation != self._generation
-            ):
-                return None
-            if (
-                self._session is None
-                or self._session_generation != generation
-            ):
-                from .controls import ZoomSession
-
-                self._session = ZoomSession()
-                self._session_generation = generation
-            return self._session
-
-    def _is_current_generation(self, generation: int) -> bool:
-        return (
-            self._active
-            and not self._stop_evt.is_set()
-            and generation == self._generation
+    def is_busy(self) -> bool:
+        return self._queued_sequence is not None or bool(
+            self._pending and self._pending.command in SEQUENCES
         )
 
-    def _on_worker_done(self, kind: str, generation: int) -> None:
-        self._inflight.discard(kind)
-        if kind == "connection" and self._active and generation != self._generation:
-            QTimer.singleShot(0, self._poll_connection)
-
-    # ── Connection polling ────────────────────────────────────────────────
-
-    def _poll_connection(self):
-        if self._stop_evt.is_set() or not _HAS_ZOOM:
+    def start(self) -> None:
+        if not self.is_available or self._active:
             return
-        self._launch_worker("connection", self._worker_check_connection)
+        self._active = True
+        self.enabled_changed.emit(True)
+        self._poll.start()
+        self.refresh()
 
-    def _worker_check_connection(
-        self,
-        generation: int,
-        session: ZoomSession,
-    ) -> None:
-        from . import controls
-        initialize_com_for_current_thread()
-        try:
-            windows, pids = controls._find_zoom_windows_fast(session)
-            main, _ = controls._find_main_window(session, windows)
-            connected = main is not None
-        except Exception:  # noqa: BLE001 - Zoom UIA connection boundary
-            connected = False
-            windows = []
-        self._sig_connected.emit(generation, connected)
+    def stop(self, *, wait: bool = False, timeout: float = 2.0) -> None:
+        was_active = self._active
+        self._active = False
+        self._poll.stop()
+        process = self._process
+        self._retire(cancelled=True)
+        if wait and process is not None:
+            process.waitForFinished(max(0, min(2000, int(timeout * 1000))))
+        if was_active:
+            self.enabled_changed.emit(False)
 
-        # Also detect sharing state (check for ZPFloatToolbarClass)
-        if connected:
-            try:
-                is_sharing = any(
-                    w["class_name"] == "ZPFloatToolbarClass" for w in windows
-                )
-                self._sig_sharing.emit(generation, is_sharing)
-            except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary
-                log.debug("Failed to detect Zoom sharing state", exc_info=True)
+    def cancel(self) -> None:
+        if self.is_busy:
+            self._retire(cancelled=True)
 
-    def _on_connected_main(self, generation: int, connected: bool) -> None:
-        if not self._is_current_generation(generation):
+    def refresh(self) -> None:
+        if not self._active or self._pending is not None or self.is_busy:
             return
-        if connected == self._connected:
+        if self._process is None:
+            self._launch()
+        elif self._ready:
+            self._send("meeting")
+
+    def request_pre_meeting(self) -> bool:
+        return self._request_sequence("pre_meeting")
+
+    def request_post_meeting(self) -> bool:
+        return self._request_sequence("post_meeting")
+
+    def _request_sequence(self, sequence: str) -> bool:
+        if not self._active or not self._connected or self.is_busy:
+            return False
+        self._queued_sequence = sequence
+        self.busy_changed.emit(True)
+        if self._pending is None:
+            self._dispatch()
+        return True
+
+    def _launch(self) -> None:
+        process = QProcess(self)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+        environment = QProcessEnvironment.systemEnvironment()
+        environment.insert("SOLIN_ZOOM_PARENT_PID", str(os.getpid()))
+        environment.insert("PYTHONIOENCODING", "utf-8")
+        process.setProcessEnvironment(environment)
+        process.readyReadStandardOutput.connect(lambda: self._read(process))
+        process.readyReadStandardError.connect(lambda: self._log_stderr(process))
+        process.finished.connect(lambda *_: self._exited(process))
+        process.errorOccurred.connect(lambda _: self._process_error(process))
+        arguments = (
+            [ZOOM_AUTOMATION_ARGUMENT]
+            if IS_COMPILED
+            else ["-m", "solin.core.integrations.automation.zoom.worker"]
+        )
+        self._process = process
+        self._ready = False
+        self._buffer.clear()
+        self._deadline.start(10000)
+        process.start(sys.executable, arguments)
+
+    def _send(self, command: str) -> None:
+        if self._process is None or not self._ready:
             return
-        self._connected = connected
-        self.connection_changed.emit(connected)
-        if connected:
-            # Slow down connection checks
-            self._conn_timer.setInterval(20000)
-            # Start participant polling if enabled
-            show_parts = self._settings.show_participants()
-            if show_parts:
-                self.start_participant_polling()
+        self._next_id += 1
+        self._pending = _Request(self._next_id, command)
+        payload = json.dumps({"id": self._next_id, "command": command}).encode() + b"\n"
+        self._deadline.start(35000 if command in SEQUENCES else 3000)
+        if self._process.write(payload) != len(payload):
+            self._retire(code="worker_failed")
+
+    def _dispatch(self) -> None:
+        if self._pending is not None or not self._active:
+            return
+        if self._queued_sequence:
+            sequence = self._queued_sequence
+            self._queued_sequence = None
+            self._send(sequence)
         else:
-            # Speed up reconnection attempts
-            self._conn_timer.setInterval(5000)
-            self._part_timer.stop()
-            self._share_timer.stop()
-            if self._sharing:
-                self._sharing = False
-                self.sharing_state_changed.emit(False)
+            self.refresh()
 
-    # ── Participant polling ───────────────────────────────────────────────
-
-    def _poll_participants(self):
-        if self._stop_evt.is_set() or not _HAS_ZOOM or not self._connected:
+    def _read(self, process: QProcess) -> None:
+        if process is not self._process:
             return
-        if self._sharing:
-            return  # pause during sharing
-        self._launch_worker("participants", self._worker_get_participants)
-
-    def _worker_get_participants(
-        self,
-        generation: int,
-        session: ZoomSession,
-    ) -> None:
-        """
-        Get participant names from Zoom.
-        Open the participant panel if closed and KEEP IT OPEN
-        to avoid open-close flicker every 5 seconds.
-
-        Optimized flow:
-          1. _open_participants_panel() uses reliable detection (cache + structural)
-             to avoid accidentally closing an already open panel.
-          2. get_participant_names() detects the open panel and leaves it open.
-          3. warm_toolbar_cache() with include_participants=True caches the toolbar,
-             mute_all_btn, and more_btn in a single scan.
-        """
-        from . import controls
-        initialize_com_for_current_thread()
+        self._buffer.extend(process.readAllStandardOutput().data())
         try:
-            # Open the panel if necessary (reliable detection prevents accidental toggling).
-            controls._open_participants_panel(session)
-            time.sleep(0.1)
+            while b"\n" in self._buffer:
+                line, _, rest = self._buffer.partition(b"\n")
+                self._buffer = bytearray(rest)
+                if len(line) > MAX_MESSAGE_BYTES:
+                    raise ValueError("Oversized worker message")
+                message = json.loads(line)
+                if not isinstance(message, dict):
+                    raise ValueError("Invalid worker message")
+                self._receive(message)
+            if len(self._buffer) > MAX_MESSAGE_BYTES:
+                raise ValueError("Oversized worker message")
+        except (ValueError, TypeError, KeyError):
+            log.warning("Invalid Zoom worker response", exc_info=True)
+            self._retire(code="worker_failed")
 
-            # get_participant_names() detects the open panel and leaves it open.
-            names = controls.get_participant_names(session)
-            count = controls.count_people(names, exclude_host=True) if names else 0
-
-            # Proactively cache the toolbar and participant panel buttons.
-            try:
-                controls.warm_toolbar_cache(
-                    session,
-                    {"btn_paticipants", "btn_muteAudio", "btn_audioMenu"},
-                    reveal=True,
-                    include_participants=True,
+    def _receive(self, message: dict) -> None:
+        if not self._ready:
+            if message != {"ready": PROTOCOL_VERSION}:
+                raise ValueError("Unexpected worker handshake")
+            self._ready = True
+            self._deadline.stop()
+            self._dispatch()
+            return
+        pending = self._pending
+        if pending is None or type(message.get("id")) is not int or message["id"] != pending.id:
+            raise ValueError("Unexpected response identifier")
+        if "step" in message:
+            if pending.command not in SEQUENCES or not isinstance(message["step"], str):
+                raise ValueError("Unexpected progress")
+            self.sequence_progress.emit(message["step"])
+            return
+        if pending.command == "meeting":
+            if "error" in message:
+                self._set_connected(False)
+            else:
+                if type(message.get("connected")) is not bool:
+                    raise ValueError("Invalid connection state")
+                self._set_connected(message["connected"])
+                self._restart_delay_ms = 1000
+        else:
+            if "error" in message:
+                outcome = SequenceResult(
+                    pending.command, (StepFailure("meeting", str(message["error"])),)
                 )
-            except Exception:  # noqa: BLE001 - Zoom UIA cache-warm boundary
-                log.debug("Failed to warm Zoom toolbar cache during participant poll", exc_info=True)
-
-            self._sig_participants.emit(generation, count, names)
-        except Exception as exc:  # noqa: BLE001 - Zoom UIA polling boundary
-            log.debug("Zoom participant poll failed: %s", exc)
-
-    def _on_participants_main(self, generation: int, count: int, names: list) -> None:
-        if not self._is_current_generation(generation):
-            return
-        self._participant_count = count
-        self._participant_names = names
-        self.participants_updated.emit(count, names)
-
-    # ── Share state ─────────────────────────────────────────────────────────
-
-    def _worker_stop_share(
-        self,
-        generation: int,
-        session: ZoomSession,
-    ) -> None:
-        """
-        Click Zoom's Stop Share button using the public API.
-        Uses the fast Win32 FindWindowW check (~0ms) instead of full UIA scan.
-        Cache-first strategy: if poller kept the cache warm, invoke is ~0.5ms.
-        """
-        from . import controls
-        import time
-        t_start = time.perf_counter()
-        initialize_com_for_current_thread()
-        try:
-            t0 = time.perf_counter()
-            is_sharing_fast = controls._find_float_toolbar_hwnd()
-            log.info(
-                "[ZStop] Floating-toolbar check took: %.1fms",
-                (time.perf_counter() - t0) * 1000,
+            else:
+                result = message["result"]
+                if result["sequence"] != pending.command or type(result["cancelled"]) is not bool:
+                    raise ValueError("Invalid operation result")
+                failures = result["failed_steps"]
+                if not isinstance(failures, list) or len(failures) > 4:
+                    raise ValueError("Invalid operation failures")
+                if any(
+                    not isinstance(f, dict)
+                    or not isinstance(f.get("step"), str)
+                    or not isinstance(f.get("code"), str)
+                    for f in failures
+                ):
+                    raise ValueError("Invalid operation failure")
+                outcome = SequenceResult(
+                    pending.command,
+                    tuple(StepFailure(f["step"], f["code"]) for f in failures),
+                    result["cancelled"],
+                )
+        self._deadline.stop()
+        self._pending = None
+        if pending.command in SEQUENCES:
+            if any(f.code == "meeting_not_found" for f in outcome.failed_steps):
+                self._set_connected(False)
+            log.debug(
+                "Zoom %s completed in %s ms: %s",
+                pending.command,
+                message.get("elapsed_ms"),
+                outcome,
             )
-            
-            if not is_sharing_fast:
-                self._sig_sharing.emit(generation, False)
-                return
+            self.busy_changed.emit(False)
+            self.operation_finished.emit(outcome)
+        # Avoid an immediate endless chain of connection queries.
+        if self._queued_sequence is not None:
+            self._dispatch()
 
-            # OPTIMISTIC: emit the stop signal NOW so the UI reacts immediately (as with start_share).
-            self._sig_sharing.emit(generation, False)
-            
-            log.info("[ZStop] Calling stop_screen_share()...")
-            t0 = time.perf_counter()
-            controls.stop_screen_share(session)
-            log.info(f"[ZStop] stop_screen_share() returned in {(time.perf_counter()-t0)*1000:.1f}ms")
-            log.info(f"[ZStop] Total worker time: {(time.perf_counter()-t_start)*1000:.1f}ms")
-            
-        except RuntimeError as exc:
-            log.warning("Zoom stop share failed: %s", exc)
-            if not controls._find_float_toolbar_hwnd():
-                return
-            self._sig_share_error.emit(generation, str(exc))
-            self._sig_sharing.emit(generation, False)
-        except Exception as exc:  # noqa: BLE001 - Zoom UIA operation boundary
-            log.warning("Zoom stop share failed: %s", exc)
-            self._sig_share_error.emit(generation, str(exc))
+    def _set_connected(self, connected: bool) -> None:
+        self._poll.setInterval(5000 if connected else 1000)
+        if self._connected != connected:
+            self._connected = connected
+            self.connection_changed.emit(connected)
 
-    def _poll_share_state(self):
-        """While sharing, check if user manually stopped or sharing ended."""
-        if self._stop_evt.is_set() or not _HAS_ZOOM:
-            return
-        if not self._sharing:
-            self._share_timer.stop()
-            return
-        self._launch_worker("share-state", self._worker_check_share)
+    def _timed_out(self) -> None:
+        self._retire(code="worker_timeout")
 
-    def _worker_check_share(
-        self,
-        generation: int,
-        session: ZoomSession,
-    ) -> None:
-        """Check if sharing is still active. Uses a fast native probe + cache refresh."""
-        from . import controls
-        initialize_com_for_current_thread()
-        try:
-            # _is_sharing() uses a fast floating-toolbar probe and validates cache.
-            still_sharing = controls._is_sharing(session)
-            if not still_sharing:
-                # The user may have just started sharing and still have the
-                # share selection dialog (ZPShareEntranceClass) open.
-                # Keep the poller armed while the user is choosing a screen.
-                if not share_selection_dialog_open():
-                    self._sig_sharing.emit(generation, False)
-        except Exception:  # noqa: BLE001 - Zoom UIA state-probe boundary
-            log.debug("Failed to poll Zoom sharing state", exc_info=True)
+    def _process_error(self, process: QProcess) -> None:
+        if process is self._process:
+            self._retire(code="worker_failed")
 
-    def _on_sharing_main(self, generation: int, sharing: bool) -> None:
-        if not self._is_current_generation(generation):
-            return
-        was_sharing = self._sharing
-        self._sharing = sharing
-        self.sharing_state_changed.emit(sharing)
-        if sharing and not was_sharing:
-            # Pause participant polling, start share-state polling
-            self._part_timer.stop()
-            self._share_timer.start(3000)
-        elif not sharing and was_sharing:
-            # Resume participant polling
-            self._share_timer.stop()
-            show_parts = self._settings.show_participants()
-            if show_parts and self._connected:
-                self._part_timer.start(5000)
+    def _exited(self, process: QProcess) -> None:
+        if process is self._process:
+            self._retire(code="worker_failed")
+        process.deleteLater()
 
-    def _on_share_error_main(self, generation: int, message: str) -> None:
-        if not self._is_current_generation(generation):
-            return
-        self.share_error.emit(message)
+    @staticmethod
+    def _log_stderr(process: QProcess) -> None:
+        data = bytes(process.readAllStandardError().data()).decode("utf-8", errors="replace")
+        if data:
+            log.warning("Zoom worker: %s", data[-8192:].strip())
 
-    # ── Open Audio for All ────────────────────────────────────────────────
-
-    def _worker_open_audio(
-        self,
-        _generation: int,
-        session: ZoomSession,
-    ) -> None:
-        """Leave computer audio + unmute all."""
-        from . import controls
-        initialize_com_for_current_thread()
-        try:
-            controls.leave_computer_audio(session)
-            time.sleep(0.3)
-        except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
-            log.warning("Zoom leave_computer_audio failed: %s", e)
-
-        try:
-            controls.unmute_all(session)
-        except Exception as e:  # noqa: BLE001 - Zoom UIA operation boundary
-            log.warning("Zoom unmute_all failed: %s", e)
+    def _retire(self, *, code: str | None = None, cancelled: bool = False) -> None:
+        process, self._process = self._process, None
+        sequence = self._queued_sequence
+        if self._pending and self._pending.command in SEQUENCES:
+            sequence = self._pending.command
+        self._queued_sequence = None
+        self._pending = None
+        self._ready = False
+        self._buffer.clear()
+        self._deadline.stop()
+        if process is not None:
+            if process.state() == QProcess.ProcessState.NotRunning:
+                process.deleteLater()
+            else:
+                process.kill()
+        self._set_connected(False)
+        if code:
+            log.warning("Zoom automation worker retired: %s", code)
+            self._poll.setInterval(self._restart_delay_ms)
+            self._restart_delay_ms = min(30000, self._restart_delay_ms * 2)
+        if sequence:
+            self.busy_changed.emit(False)
+            self.operation_finished.emit(
+                SequenceResult(sequence, (StepFailure("worker", code),) if code else (), cancelled)
+            )
+        elif code:
+            self.error.emit(code)

@@ -74,8 +74,6 @@ class _QuickToolbarStub:
         self.obs_connected = None
         self.obs_current_scene = None
         self.obs_scenes = None
-        self.zoom_participants = None
-        self.zoom_sharing = None
 
     def set_obs_stream_available(self, available):
         self.obs_stream_available = available
@@ -91,12 +89,6 @@ class _QuickToolbarStub:
 
     def set_obs_scenes(self, scenes):
         self.obs_scenes = scenes
-
-    def set_zoom_participants(self, count, names):
-        self.zoom_participants = (count, names)
-
-    def set_zoom_sharing(self, sharing):
-        self.zoom_sharing = sharing
 
 
 class _NotificationsStub:
@@ -276,32 +268,8 @@ def test_obs_scene_toggle_moves_between_media_and_return_scene():
     assert window.proj_bar.obs_scene_states == [True, False]
 
 
-def test_zoom_share_error_uses_central_notifications():
-    window = _WindowStub()
-    controller = _controller(window)
-
-    controller.on_zoom_share_error("Zoom window not found")
-
-    assert window.notifications.errors == [
-        (
-            "Zoom window not found",
-            {
-                "title": "Zoom sharing failed",
-                "dedupe_key": "zoom-share:Zoom window not found",
-            },
-        )
-    ]
 
 
-def test_zoom_updates_use_quick_toolbar_public_api():
-    window = _WindowStub()
-    controller = _controller(window)
-
-    controller.on_zoom_participants_updated(3, ["A", "B", "C"])
-    controller.on_zoom_sharing_state_changed(True)
-
-    assert window._quick_toolbar.zoom_participants == (3, ["A", "B", "C"])
-    assert window._quick_toolbar.zoom_sharing is True
 
 
 def test_live_integration_controller_uses_explicit_dependencies():

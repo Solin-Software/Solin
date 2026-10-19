@@ -25,37 +25,33 @@ class VideoState(StrEnum):
     UNKNOWN = "unknown"
 
 
-class ShareState(StrEnum):
-    SHARING = "sharing"
-    NOT_SHARING = "not_sharing"
-    UNKNOWN = "unknown"
-
-    @classmethod
-    def from_active(cls, active: bool) -> ShareState:
-        return cls.SHARING if active else cls.NOT_SHARING
-
-    @property
-    def is_active(self) -> bool | None:
-        if self is ShareState.UNKNOWN:
-            return None
-        return self is ShareState.SHARING
-
-
 @dataclass(frozen=True, slots=True)
 class MeetingState:
     audio: AudioState = AudioState.UNKNOWN
     video: VideoState = VideoState.UNKNOWN
-    sharing: ShareState = ShareState.UNKNOWN
-    audio_title: str = ""
-    video_title: str = ""
-    participant_count: int = 0
-    participant_names: tuple[str, ...] = ()
     in_meeting: bool = False
 
-    def __post_init__(self) -> None:
-        if self.participant_count < 0:
-            raise ValueError("participant_count cannot be negative")
+
+@dataclass(frozen=True, slots=True)
+class StepFailure:
+    step: str
+    code: str
+
+
+@dataclass(frozen=True, slots=True)
+class SequenceResult:
+    sequence: str
+    failed_steps: tuple[StepFailure, ...] = ()
+    cancelled: bool = False
 
     @property
-    def is_sharing(self) -> bool | None:
-        return self.sharing.is_active
+    def ok(self) -> bool:
+        return not self.cancelled and not self.failed_steps
+
+
+class ZoomAutomationError(RuntimeError):
+    """Stable error code from the native automation boundary."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)

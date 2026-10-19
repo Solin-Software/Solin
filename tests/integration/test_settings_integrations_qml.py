@@ -11,7 +11,14 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from solin.core.foundation.settings_store import SettingsStore
-from solin.core.integrations.automation.auto_key_actions import AUTO_KEY_EVENTS, AutoKeyAction
+from solin.core.integrations.automation.auto_key_actions import (
+    AUTO_KEY_EVENTS,
+    AutoKeyAction,
+    EVENT_MEDIA_STARTED,
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
+)
 from solin.core.integrations.automation.obs import OBSConnectionState
 from solin.core.integrations.automation.settings import (
     AutoKeySettingsStore,
@@ -61,7 +68,7 @@ def setup_domain():
     obs.set_scenes("Offline idle", "Offline media")
     obs.set_enabled(True)
     zoom = ZoomSettingsStore(settings)
-    zoom.set_show_participants(False)
+    zoom.set_background_song_linked(True)
     share = AutoShareSettingsStore(settings)
     keys = AutoKeySettingsStore(settings)
     obs_service, ndi = _Obs(), _Ndi()
@@ -294,7 +301,7 @@ def test_cleanup_cancels_pending_saves_and_ignores_late_service_results(setup_do
 def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeypatch, platform):
     ctx = setup_domain
     ctx.domain.cleanup()
-    ctx.zoom.set_show_participants(False)
+    ctx.zoom.set_background_song_linked(True)
     monkeypatch.setattr(integrations.sys, "platform", platform)
     domain = IntegrationSettings(
         obs_service=None, ndi_service=None, obs_settings=ctx.obs,
@@ -308,11 +315,11 @@ def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeyp
         assert "cameraEnabled" not in domain.state
         assert domain.state["accessibilityRequired"] is (platform == "darwin")
         assert domain.state["accessibilityTrusted"] is (platform != "darwin")
-        assert ctx.zoom.show_participants() is (platform == "win32")
-        ctx.zoom.set_show_participants(False)
+        assert ctx.zoom.background_song_linked() is True
+        ctx.zoom.set_background_song_linked(True)
         domain.refresh_language()
         domain.refresh_runtime()
-        assert ctx.zoom.show_participants() is False
+        assert ctx.zoom.background_song_linked() is True
         domain.invoke("findNdiSources")
         assert domain.state["ndiStatusKind"] == "error"
     finally:
@@ -391,3 +398,60 @@ def test_qml_shortcut_dialog_can_cancel_and_reopen_in_share_mode(setup_domain, d
     QTest.qWait(30)
     assert dialog.property("visible") is False
     assert ctx.share.hotkey() == ""
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+def test_meeting_choices_follow_platform_and_saved_actions_remain_editable(
+    setup_domain, monkeypatch, platform,
+):
+    ctx = setup_domain
+    meeting_events = (EVENT_ZOOM_BEFORE_MEETING, EVENT_ZOOM_MEETING_STARTED, EVENT_ZOOM_AFTER_MEETING)
+    actions = [AutoKeyAction(event, event, "Ctrl+1") for event in meeting_events]
+    ctx.keys.save_actions(actions)
+    monkeypatch.setattr(integrations, "sys", SimpleNamespace(platform=platform))
+    ctx.domain.refresh_language()
+    choices = {item["value"] for item in ctx.domain.state["shortcutEvents"]}
+    assert all((event in choices) == (platform == "win32") for event in meeting_events)
+    assert EVENT_MEDIA_STARTED in choices
+    assert [row["available"] for row in ctx.domain.state["shortcuts"]] == [platform == "win32"] * 3
+    assert ctx.keys.actions() == actions
+    ctx.domain.invoke(f"editShortcut:{actions[0].id}")
+    assert ctx.domain.state["shortcutEvent"] == EVENT_ZOOM_BEFORE_MEETING
+    assert ctx.domain.state["shortcutEventLabel"]
+    ctx.domain.setValue("shortcutSequence", "Ctrl+2")
+    ctx.domain.invoke("saveShortcut")
+    updated = ctx.keys.actions()
+    assert updated[0].event == actions[0].event
+    assert updated[0].sequence == "Ctrl+2"
+    assert updated[1:] == actions[1:]
+
+
+def test_new_shortcut_cannot_select_windows_event_on_another_platform(setup_domain, monkeypatch):
+    ctx = setup_domain
+    monkeypatch.setattr(integrations, "sys", SimpleNamespace(platform="linux"))
+    ctx.domain.invoke("addShortcut")
+    ctx.domain.setValue("shortcutEvent", EVENT_ZOOM_MEETING_STARTED)
+    assert ctx.domain.state["shortcutEvent"] == EVENT_MEDIA_STARTED
+    ctx.domain.setValue("shortcutSequence", "Ctrl+1")
+    ctx.domain.invoke("saveShortcut")
+    assert ctx.keys.actions()[0].event == EVENT_MEDIA_STARTED
+
+
+def test_qml_editor_shows_unavailable_saved_event_without_replacing_it(
+    setup_domain, dialog_window, monkeypatch,
+):
+    ctx = setup_domain
+    action = AutoKeyAction("meeting", EVENT_ZOOM_AFTER_MEETING, "Ctrl+1")
+    ctx.keys.save_actions([action])
+    monkeypatch.setattr(integrations, "sys", SimpleNamespace(platform="linux"))
+    ctx.domain.refresh_language()
+    ctx.domain.invoke("editShortcut:meeting")
+    QApplication.processEvents()
+    choices = dialog_window.findChild(QObject, "settingsShortcutEvent")
+    reason = dialog_window.findChild(QObject, "settingsShortcutUnavailable")
+    assert choices.property("currentIndex") == -1
+    assert choices.property("displayText") == ctx.domain.state["shortcutEventLabel"]
+    assert reason.property("visible")
+    assert reason.property("text")
+    ctx.domain.invoke("saveShortcut")
+    assert ctx.keys.actions() == [action]

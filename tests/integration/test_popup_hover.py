@@ -16,7 +16,14 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 from solin.core.foundation.settings_store import ProfileAppSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.runtime_paths import ProfilePaths
-from solin.core.integrations.automation.settings import OBSSettingsStore
+from solin.core.integrations.automation.auto_key_actions import (
+    AutoKeyAction,
+    EVENT_MEDIA_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+)
+from solin.core.integrations.automation.settings import AutoKeySettingsStore, OBSSettingsStore
 from solin.core.scenes.presets import SceneSeedNames
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.ui.popup_hover import PopupHoverController
@@ -370,6 +377,7 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory):
         None,
         parent,
         obs_settings=OBSSettingsStore(settings.settings),
+        auto_key_settings=AutoKeySettingsStore(settings.settings),
         app_settings=settings,
         scene_runtime=scene_runtime,
     )
@@ -380,6 +388,19 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory):
 
     request.addfinalizer(unload_toolbar)
     return parent, toolbar
+
+
+def test_toolbar_destruction_cancels_queued_reposition(toolbar_host, monkeypatch):
+    _parent, toolbar = toolbar_host
+    QApplication.processEvents()
+    callbacks = []
+    monkeypatch.setattr(toolbar, "_reposition", lambda: callbacks.append(True))
+    toolbar._schedule_reposition()
+    toolbar.deleteLater()
+    QCoreApplication.sendPostedEvents(toolbar, QEvent.Type.DeferredDelete)
+    assert not shiboken6.isValid(toolbar)
+    QApplication.processEvents()
+    assert callbacks == []
 
 
 def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):
@@ -394,6 +415,162 @@ def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):
         scene for scene in toolbar._scene_runtime.document.scenes if scene.name == "Camera"
     )
     assert camera_scene.id in toolbar._solin_scene_popup._scene_cards
+
+
+def test_zoom_remains_available_without_an_open_meeting(toolbar_host):
+    from solin.core.integrations.automation.zoom.service import ZoomService
+
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = ZoomService(toolbar)
+    toolbar.set_zoom_enabled(True)
+    toolbar.set_zoom_connected(False)
+    assert toolbar._bridge._zoom_visible
+    toolbar._on_zoom_clicked()
+    assert toolbar._zoom_panel is not None
+    assert not toolbar._zoom_panel._start.isEnabled()
+    assert not toolbar._zoom_panel._combined.isEnabled()
+    toolbar.set_zoom_enabled(False)
+    assert not toolbar._bridge._zoom_visible
+    assert not toolbar._zoom_panel.isVisible()
+
+
+def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host):
+    from unittest.mock import Mock
+
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = SimpleNamespace(
+        request_pre_meeting=Mock(), cancel=Mock(), is_busy=False,
+    )
+    before = QSignalSpy(toolbar.zoom_before_meeting_requested)
+    start = QSignalSpy(toolbar.zoom_meeting_start_requested)
+    finish = QSignalSpy(toolbar.zoom_after_meeting_requested)
+    panel = toolbar._ensure_zoom_panel()
+    panel.set_connected(True)
+
+    panel._combined.click()
+    panel._start.click()
+    assert before.count() == start.count() == 1
+    assert finish.count() == 0
+
+    panel.set_split_meeting_actions(True)
+    panel._before.click()
+    panel._after.click()
+    assert before.count() == 2
+    assert finish.count() == 1
+    toolbar._zoom.request_pre_meeting.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "global_enabled,configured_actions,split",
+    [
+        (False, [AutoKeyAction("before", EVENT_ZOOM_BEFORE_MEETING, "Ctrl+1")], False),
+        (True, [], False),
+        (True, [AutoKeyAction("media", EVENT_MEDIA_STARTED, "Ctrl+1")], False),
+        (True, [AutoKeyAction("start", EVENT_ZOOM_MEETING_STARTED, "Ctrl+1")], False),
+        (True, [AutoKeyAction("before", EVENT_ZOOM_BEFORE_MEETING, "Ctrl+1", False)], False),
+        (True, [AutoKeyAction("before", EVENT_ZOOM_BEFORE_MEETING, "Ctrl+1")], True),
+        (True, [AutoKeyAction("after", EVENT_ZOOM_AFTER_MEETING, "Ctrl+1")], True),
+    ],
+)
+def test_zoom_popup_adapts_to_enabled_automatic_shortcuts(
+    toolbar_host, global_enabled, configured_actions, split,
+):
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = SimpleNamespace(is_busy=False, cancel=lambda: None)
+    toolbar.set_zoom_enabled(True)
+    toolbar._auto_key_settings.set_enabled(global_enabled)
+    toolbar._auto_key_settings.save_actions(configured_actions)
+
+    toolbar._on_zoom_clicked()
+    panel = toolbar._zoom_panel
+    assert panel is not None
+    assert not panel._start.isHidden()
+    assert panel._before.isHidden() is (not split)
+    assert panel._after.isHidden() is (not split)
+    assert panel._combined.isHidden() is split
+    panel.hide()
+
+
+def test_zoom_popup_rechecks_actions_and_global_switch_on_each_open(toolbar_host):
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = SimpleNamespace(is_busy=False, cancel=lambda: None)
+    toolbar.set_zoom_enabled(True)
+    store = toolbar._auto_key_settings
+
+    def open_split_state() -> bool:
+        toolbar._on_zoom_clicked()
+        panel = toolbar._zoom_panel
+        assert panel is not None
+        split = not panel._before.isHidden()
+        panel.hide()
+        return split
+
+    store.set_enabled(True)
+    assert not open_split_state()
+    store.save_actions([AutoKeyAction("after", EVENT_ZOOM_AFTER_MEETING, "Ctrl+1")])
+    assert open_split_state()
+    store.set_enabled(False)
+    assert not open_split_state()
+    store.set_enabled(True)
+    assert open_split_state()
+    store.save_actions([AutoKeyAction("after", EVENT_ZOOM_AFTER_MEETING, "Ctrl+1", False)])
+    assert not open_split_state()
+
+
+@pytest.mark.parametrize("initial_split", [False, True])
+@pytest.mark.parametrize("song_available", [False, True])
+@pytest.mark.parametrize("above", [False, True])
+def test_zoom_popup_stays_clear_of_toolbar_after_layout_changes(
+    request, initial_split, song_available, above,
+):
+    from solin.widgets.zoom_panel import ZoomPanel
+
+    anchor = QWidget(None, Qt.WindowType.FramelessWindowHint)
+    request.addfinalizer(anchor.deleteLater)
+    screen = anchor.screen().availableGeometry()
+    anchor.resize(400, 44)
+    anchor.move(screen.center().x() - 200, screen.bottom() - 70 if above else screen.top() + 30)
+    anchor.show()
+    QApplication.processEvents()
+    panel = ZoomPanel(anchor)
+    panel.set_connected(True)
+    panel.set_background_song_link(song_available, False)
+
+    def assert_placement():
+        toolbar_top = anchor.mapToGlobal(QPoint(0, 0)).y()
+        if above:
+            assert panel.frameGeometry().bottom() + 11 == toolbar_top
+        else:
+            assert panel.frameGeometry().top() == toolbar_top + anchor.height() + 10
+        assert screen.contains(panel.frameGeometry())
+
+    for split in (initial_split, not initial_split, initial_split):
+        panel.hide()
+        panel.set_split_meeting_actions(split)
+        panel.show_above(anchor)
+        assert_placement()
+        opening_size = panel.size()
+        QApplication.processEvents()
+        assert_placement()
+        assert panel.size() == opening_size
+        panel.set_split_meeting_actions(not split)
+        assert_placement()
+        QApplication.processEvents()
+        assert_placement()
+        assert (panel.height() > opening_size.height()) is (not split)
+        panel.set_split_meeting_actions(split)
+        QApplication.processEvents()
+        assert_placement()
+        assert panel.size() == opening_size
+        for available in (not song_available, song_available):
+            panel.set_background_song_link(available, False)
+            QApplication.processEvents()
+            assert_placement()
+        panel.set_busy(True)
+        QApplication.processEvents()
+        assert_placement()
+        panel.set_busy(False)
+    panel.hide()
 
 
 def test_toolbar_preserves_obs_selection_return_and_ndi_signals(toolbar_host):

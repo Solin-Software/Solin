@@ -1,167 +1,192 @@
+"""Zoom desktop action prefixes from the Windows client's language resources.
+
+To refresh, locate the Zoom installation's bin directory. English strings are
+RT_STRING resources in zWinRes.dll; translations are UTF-8 LANGXML resources in
+language/zLang_*.dll, with ID<number> elements and text attributes. Resource IDs
+appear beside each list below.
+
+Read DLLs as resource data with LoadLibraryExW, enumerate names/languages with
+EnumResourceNamesW/EnumResourceLanguagesW, and retrieve bytes with FindResourceExW,
+LoadResource and LockResource. Decode English's UTF-16 string-table entries or
+parse the localized XML, then retain each unique action prefix. State descriptions
+and shortcuts appended by Zoom are handled by the matcher, not stored as variants.
+Button labels describe the action, which is the opposite of the current state.
+"""
+
 from __future__ import annotations
 
-# ─────────────────────────────────────────────────────────────────
-#  Language configuration (PT-BR)
-# Adjust these labels if Zoom uses a different language or version.
-#
-# LOGIC: button text describes the ACTION performed on click,
-# which is the OPPOSITE of the current state.
-#  Example: button "Desativar som" means audio IS active (unmuted).
-#           Button "Ativar som" means audio IS muted.
-# ─────────────────────────────────────────────────────────────────
 
-# Button text when audio IS ALREADY MUTED (click to unmute)
+# Microphone muted: click to unmute. Resource ID: 23121.
 AUDIO_MUTED_TEXT: list[str] = [
-    "ativar som",
-    "ativar áudio",
-    "ativar audio",
-    "unmute",
-    "解除静音，当前已静音",
-    "解除靜音，目前已靜音",
-    "ミュート解除、現在ミュート中",
-    "reactivar audio",
-    "rétablir le son",
-    "ton ein",
-    "включить звук",
+    "Unmute",
+    "Ton ein",
+    "Reactivar audio",
+    "Rétablir le son",
+    "Bunyikan",
+    "Attiva audio",
+    "ミュート解除",
     "음소거 해제",
-    "attiva audio",
-    "bỏ tắt tiếng",
-    "sesi aç",
-    "wyłącz wyciszenie",
-    "bunyikan",
-    "dempen opheffen",
-    "aktivera mikrofonen – mikrofonen är för närvarande inaktiverad",
+    "Dempen opheffen",
+    "Wyłącz wyciszenie",
+    "Ativar som",
+    "Включить звук",
+    "Aktivera mikrofonen",
+    "Sesi aç",
+    "Bỏ tắt tiếng",
+    "解除静音",
+    "解除靜音",
 ]
 
-# Button text when audio IS ACTIVE (click to mute)
+
+# Microphone active: click to mute. Resource ID: 23120.
 AUDIO_UNMUTED_TEXT: list[str] = [
-    "desativar som",
-    "desativar áudio",
-    "desativar audio",
-    "mute",
-    "静音，当前已解除静音",
-    "靜音，目前已解除靜音",
-    "ミュート、現在ミュート解除中",
-    "silenciar",
-    "couper le son",
-    "ton aus",
-    "выключить звук",
+    "Mute",
+    "Ton aus",
+    "Silenciar",
+    "Couper le son",
+    "Bisukan",
+    "Disattiva audio",
+    "ミュート",
     "음소거",
-    "disattiva audio",
-    "tắt tiếng",
-    "sesi kapat",
-    "wycisz",
-    "bisukan",
-    "dempen",
-    "inaktivera mikrofonen – mikrofonen är för närvarande aktiverad",
+    "Dempen",
+    "Wycisz",
+    "Desativar som",
+    "Выключить звук",
+    "Inaktivera mikrofonen",
+    "Sesi kapat",
+    "Tắt tiếng",
+    "静音",
+    "靜音",
 ]
 
-# Button text when video IS ALREADY STOPPED (click to start)
+
+# Camera stopped: click to start. Resource ID: 23122.
 VIDEO_STOPPED_TEXT: list[str] = [
-    "iniciar vídeo",
-    "iniciar video",
-    "iniciar meu vídeo",
-    "iniciar meu video",
-    "câmera desativada",
-    "camera desativada",
-    "start video",
-    "start my video",
+    "Start my video",
+    "Mein Video starten",
+    "Iniciar mi vídeo",
+    "Démarrer ma vidéo",
+    "Mulai video saya",
+    "avvia il mio video",
+    "マイビデオを開始",
+    "내 비디오 시작",
+    "Mijn video starten",
+    "Rozpocznij moje wideo",
+    "Iniciar meu vídeo",
+    "Включить мое видео",
+    "Starta min video",
+    "Videomu başlat",
+    "Bắt đầu video của tôi",
     "开启视频",
     "開啟視訊",
-    "マイビデオを開始",
-    "iniciar mi vídeo",
-    "démarrer ma vidéo",
-    "mein video starten",
-    "включить мое видео",
-    "내 비디오 시작",
-    "avvia il mio video",
-    "bắt đầu video của tôi",
-    "videomu başlat",
-    "rozpocznij moje wideo",
-    "mulai video saya",
-    "mijn video starten",
-    "starta min video",
 ]
 
-# Button text when video IS ALREADY ACTIVE (click to stop)
+
+# Camera active: click to stop. Resource ID: 23123.
 VIDEO_STARTED_TEXT: list[str] = [
-    "interromper vídeo",
-    "interromper video",
-    "interromper meu vídeo",
-    "interromper meu video",
-    "parar vídeo",
-    "parar video",
-    "stop video",
-    "stop my video",
+    "Stop my video",
+    "Mein Video beenden",
+    "Detener mi vídeo",
+    "Arrêter ma vidéo",
+    "Hentikan video saya",
+    "Interrompi il mio video",
+    "マイビデオを停止",
+    "내 비디오 중지",
+    "Mijn video stoppen",
+    "Zatrzymaj moje wideo",
+    "Interromper meu vídeo",
+    "Остановить мое видео",
+    "Stoppa min video",
+    "Videomu durdur",
+    "Dừng video của tôi",
     "停止视频",
     "停止視訊",
-    "マイビデオを停止",
-    "detener mi vídeo",
-    "arrêter ma vidéo",
-    "mein video beenden",
-    "остановить мое видео",
-    "내 비디오 중지",
-    "interrompi il mio video",
-    "dừng video của tôi",
-    "videomu durdur",
-    "zatrzymaj moje wideo",
-    "hentikan video saya",
-    "mijn video stoppen",
-    "stoppa min video",
 ]
 
+
+# Participants toolbar action. Resource ID: 23013.
 PARTICIPANTS_TEXT: list[str] = [
-    "participantes",
-    "participants",
+    "Participants",
+    "Teilnehmer",
+    "Panel de participantes abierto",
+    "participant·es",
+    "Peserta",
+    "Partecipanti",
+    "参加者",
+    "참가자",
+    "Deelnemers",
+    "Uczestnicy",
+    "Participantes",
+    "Участники",
+    "Deltagare",
+    "Katılımcılar",
+    "Người tham gia",
     "参会者",
     "與會者",
-    "参加者",
-    "participant·es",
-    "teilnehmer",
-    "участники",
-    "참가자",
-    "partecipanti",
-    "người tham gia",
-    "katılımcılar",
-    "uczestnicy",
-    "peserta",
-    "deelnemers",
-    "deltagare",
 ]
 
-# btn_muteAudio text when audio is DISCONNECTED (no audio at all)
+
+# Audio disconnected: click to join. Resource ID: 22277.
 CONNECT_AUDIO_TEXT: list[str] = [
-    "conectar áudio",
-    "conectar audio",
-    "entrar com o áudio",
-    "entrar com o audio",
-    "connect audio",    # fallback EN
-    "join audio",
+    "Join audio",
+    "An Audio teilnehmen",
+    "Conectar audio",
+    "Participer à l’audio",
+    "Bergabung ke Audio",
+    "Connettiti all’audio",
+    "オーディオに接続",
+    "오디오 연결",
+    "Deelnemen aan audio",
+    "Dołącz do poł. głos.",
+    "Conectar áudio",
+    "Присоединиться по аудио",
+    "Delta via ljud",
+    "Sese Katıl",
+    "Kết nối âm thanh",
+    "连接语音",
+    "加入音訊",
 ]
 
-# Button text inside the "Join Audio" popup (zJoinAudioWndClass)
-_JOIN_AUDIO_BTN_PATTERNS: list[str] = [
-    "junte-se com o áudio do computador",
-    "junte-se com o audio do computador",
-    "junte-se com o áudio",
-    "junte-se com o audio",
-    "entrar com áudio do computador",
-    "entrar com audio do computador",
-    "join with computer audio",
-    "join computer audio",
+
+# Computer-audio confirmation in zJoinAudioWndClass. Resource ID: 22294.
+JOIN_AUDIO_TEXT: list[str] = [
+    "Join with computer audio",
+    "Mit Computeraudio teilnehmen",
+    "Unirse con el audio compartido",
+    "Participer par l’audio de l’ordinateur",
+    "Bergabung dengan Audio Komputer",
+    "Entra con l'audio del computer",
+    "コンピュータオーディオで参加",
+    "컴퓨터 오디오로 참가",
+    "Deelnemen met computeraudio",
+    "Dołącz z dźwiękiem z komputera",
+    "Junte-se com o áudio do computador",
+    "Войти с использованием звука компьютера",
+    "Gå med via datorljud",
+    "Bilgisayar Sesi ile Katıl",
+    "Tham gia với âm thanh máy tính",
+    "使用电脑音频加入",
+    "使用電腦音訊加入",
 ]
 
-# Menu items WITHOUT controlID (generic Windows MenuItems)
-# Text is the only alternative for identifying them.
-_LEAVE_AUDIO_PATTERNS: list[str] = [
-    "sair do áudio",
-    "sair do audio",
-    "sair com o áudio",
-    "leave computer audio",
-    "leave audio",
-]
 
-# Separators for counting people in participant names
-# Priority order: use the FIRST separator found in the name.
-# Use " & " in Zoom names (e.g. "Felipe & Júlia").
-PEOPLE_SEPARATORS: list[str] = [" & ", " | ", " + "]
+# Leave computer audio from its menu. Resource ID: 22276.
+LEAVE_AUDIO_TEXT: list[str] = [
+    "Leave computer audio",
+    "Das Computeraudio verlassen",
+    "Dejar el audio de la computadora",
+    "Quitter l’audio de l’ordinateur",
+    "Putuskan audio komputer",
+    "Esci da audio computer",
+    "コンピュータオーディオを切断する",
+    "컴퓨터 오디오 나가기",
+    "Computeraudio verlaten",
+    "Rozłącz dźwięk z komputera",
+    "Sair com o áudio do computador",
+    "Выключить звук компьютера",
+    "Lämna datorljud",
+    "Bilgisayar sesini bırak",
+    "Rời khỏi âm thanh máy tính",
+    "退出电脑音频",
+    "停用電腦音訊",
+]

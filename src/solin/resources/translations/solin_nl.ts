@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Video wordt hervat</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Voor de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Begin van de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Einde van de vergadering</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -7678,9 +7693,9 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <translation type="vanished">Scène die de projectiemonitor vastlegt. Wordt geactiveerd wanneer er inhoud wordt weergegeven.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Audiobediening en aantal aanwezigen tijdens vergaderingen.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Audio- en videobediening voor de vergadering.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7748,11 +7763,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Automatische sneltoetsen</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Verstuurt sneltoetsen wanneer de status van visuele media verandert.</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8416,6 +8426,16 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Nog 5 laden</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Alleen beschikbaar op Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Verstuurt sneltoetsen wanneer geselecteerde gebeurtenissen in de app plaatsvinden.</translation>
     </message>
 </context>
 <context>
@@ -9950,54 +9970,59 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Annuleren</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Verbind je audio en video en demp iedereen.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Verbreek je audio en video en sta iedereen toe het dempen op te heffen.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Achtergrondlied koppelen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Geen vergadering gevonden. Open een Zoom-vergadering om deze bediening te gebruiken.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Voor/na de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Begin van de vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Stop het lied bij het begin van de vergadering; speel het ervoor/erna af. Het gepland stoppen van het lied bereidt ook Zoom voor.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-vergadering</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Verbinding verbroken</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n aanwezige</numerusform>
-            <numerusform>%n aanwezigen</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Voor de vergadering</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Scherm delen actief</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Audio voor iedereen inschakelen</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Verbonden met vergadering</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Aanwezigheid kan op twee manieren worden geteld:
-gebruik &amp;, |, of + tussen namen, zoals &apos;Felipe &amp; Julia&apos; = 2;
-of zet een getal aan het einde, zoals &apos;Familie Alves 7&apos; = 7.
-Een getal aan het einde heeft voorrang.</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Einde van de vergadering</translation>
     </message>
 </context>
 <context>
@@ -11857,6 +11882,14 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
     <message>
         <source>Camera</source>
         <translation>Camera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Sommige Zoom-acties konden niet worden voltooid. Controleer Zoom en probeer opnieuw.</translation>
     </message>
 </context>
 </TS>

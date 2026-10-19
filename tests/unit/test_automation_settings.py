@@ -147,11 +147,11 @@ def test_zoom_settings_read_defaults_and_saved_values():
     settings.clear()
     try:
         assert zoom.is_enabled() is False
-        assert zoom.show_participants() is True
+        assert zoom.background_song_linked() is False
         zoom.set_enabled(True)
-        zoom.set_show_participants(False)
+        zoom.set_background_song_linked(True)
 
         assert zoom.is_enabled() is True
-        assert zoom.show_participants() is False
+        assert zoom.background_song_linked() is True
     finally:
         settings.clear()

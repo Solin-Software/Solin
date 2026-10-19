@@ -6,15 +6,11 @@ import unicodedata
 from .i18n_labels import (
     AUDIO_MUTED_TEXT,
     AUDIO_UNMUTED_TEXT,
+    CONNECT_AUDIO_TEXT,
     VIDEO_STARTED_TEXT,
     VIDEO_STOPPED_TEXT,
 )
 from .state import AudioState, VideoState
-
-
-def _matches_any(text: str, patterns: list[str]) -> bool:
-    t = text.lower()
-    return any(p in t for p in patterns)
 
 
 def _normalize_toolbar_text(text: str) -> str:
@@ -22,14 +18,6 @@ def _normalize_toolbar_text(text: str) -> str:
     text = text.replace("\u00a0", " ")
     text = re.sub(r"\s+", " ", text)
     return text.strip().casefold()
-
-
-def _matches_toolbar_action(text: str, patterns: list[str]) -> bool:
-    """
-    Match Zoom toolbar action labels without depending on the variable suffix.
-    Examples: "Share, Alt+S", "Mute, currently unmuted, Alt+A".
-    """
-    return _toolbar_action_match_score(text, patterns) > 0
 
 
 def _toolbar_action_match_score(text: str, patterns: list[str]) -> int:
@@ -59,7 +47,7 @@ def _audio_button_state_from_text(text: str) -> AudioState:
         return AudioState.MUTED
     if unmuted_score > 0:
         return AudioState.UNMUTED
-    if _normalize_toolbar_text(text):
+    if _toolbar_action_match_score(text, CONNECT_AUDIO_TEXT):
         return AudioState.DISCONNECTED
     return AudioState.UNKNOWN
 
