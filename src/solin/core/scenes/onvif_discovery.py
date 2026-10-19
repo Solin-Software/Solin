@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import ipaddress
 import re
@@ -124,6 +124,10 @@ class OnvifMediaProfile:
     name: str
     stream_uri: str
     ptz: bool
+    # A login the camera put in the stream address, kept apart from the address
+    # so it is stored like any other credential instead of being saved in it.
+    stream_username: str = ""
+    stream_password: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -586,13 +590,18 @@ def query_onvif_device(
             # not hide the others; a camera that stopped answering does.
             if error.error_code in {"onvif_unreachable", "onvif_authentication_failed"}:
                 raise
-            stream_uri = ""
+            stream_uri, username, password = "", "", ""
         else:
             uri = stream_root.find(".//{*}MediaUri/{*}Uri")
             if uri is None:
                 uri = stream_root.find(".//{*}Uri")
-            stream_uri = _without_userinfo((uri.text or "").strip() if uri is not None else "")
-        profiles.append(OnvifMediaProfile(token, name or token, stream_uri, ptz))
+            stream_uri, username, password = _split_userinfo(
+                (uri.text or "").strip() if uri is not None else ""
+            )
+        profiles.append(OnvifMediaProfile(
+            token, name or token, stream_uri, ptz,
+            stream_username=username, stream_password=password,
+        ))
     return OnvifDeviceDetails(
         device_service=device_service,
         ptz_endpoint=ptz_endpoint,
@@ -792,21 +801,22 @@ def _camera_utc_time(root: ElementTree.Element) -> datetime | None:
         return None
 
 
-def _without_userinfo(uri: str) -> str:
-    """Drop a login a camera embedded in a stream address; Solin stores it apart."""
+def _split_userinfo(uri: str) -> tuple[str, str, str]:
+    """Separate a login a camera embedded in a stream address from the address.
+
+    Returns the address without it, plus the user name and password, decoded the
+    way libavformat decodes them (``p%40ss`` is ``p@ss``).
+    """
     try:
         parsed = urlsplit(uri)
     except ValueError:
-        return uri
+        return uri, "", ""
     if "@" not in parsed.netloc:
-        return uri
-    return urlunsplit((
-        parsed.scheme,
-        parsed.netloc.rpartition("@")[2],
-        parsed.path,
-        parsed.query,
-        parsed.fragment,
-    ))
+        return uri, "", ""
+    userinfo, _, host = parsed.netloc.rpartition("@")
+    username, _, password = userinfo.partition(":")
+    stripped = urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+    return stripped, unquote(username), unquote(password)
 
 
 def _device_operation(name: str) -> ElementTree.Element:

@@ -1641,7 +1641,8 @@ def test_ptz_finder_reads_onvif_settings_from_the_camera_address(
     )
     assert not dialog.property("ptzFinderOpen")
     assert _qml_value(dialog.property("ptzProfiles")) == [
-        {"token": "main", "name": "MainStream", "uri": "rtsp://192.0.2.40/main", "ptz": True},
+        {"token": "main", "name": "MainStream", "uri": "rtsp://192.0.2.40/main", "ptz": True,
+         "username": "", "password": ""},
     ]
     assert QMetaObject.invokeMethod(dialog, "close")
 
@@ -1697,3 +1698,50 @@ def test_choosing_a_found_camera_that_is_saved_reuses_its_connection(
     _set_edited_text(dialog.findChild(QObject, "cameraLayerNameField"), "Hall again")
     assert QMetaObject.invokeMethod(dialog, "save")
     assert len(workspace.configured_cameras) == count
+
+
+
+def test_ptz_finder_keeps_the_stream_login_it_succeeded_with(scene_editor_factory, tmp_path) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    onvif = _Onvif(details=_ONVIF_DETAILS)
+    dialog = _open_network_camera_dialog(widget, onvif)
+    _choose_network_option(widget, dialog, "New")
+    dialog.findChild(QObject, "cameraUriField").setProperty("text", "rtsp://192.0.2.40:554/live")
+    dialog.findChild(QObject, "cameraStreamUsernameField").setProperty("text", "operator")
+    dialog.findChild(QObject, "cameraStreamPasswordField").setProperty("text", "stream-secret")
+    QCoreApplication.processEvents()
+    choices = _qml_value(dialog.property("ptzFinderChoices"))
+
+    assert QMetaObject.invokeMethod(dialog, "queryPtz", Q_ARG("QVariant", choices[0]))
+    status = dialog.findChild(QObject, "cameraPtzFinderStatus")
+    assert _wait_until(
+        lambda: status.property("text") == "PTZ settings filled in from the camera.", timeout_ms=5000,
+    )
+
+    # Saving must not drop the login the camera just accepted.
+    assert dialog.findChild(QObject, "cameraPtzUsernameField").property("text") == "operator"
+    assert dialog.findChild(QObject, "cameraPtzPasswordField").property("text") == "stream-secret"
+    assert QMetaObject.invokeMethod(dialog, "close")
+
+
+def test_found_camera_login_in_the_stream_address_is_kept_apart(scene_editor_factory, tmp_path) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    details = OnvifDeviceDetails(
+        device_service=_ONVIF_DETAILS.device_service,
+        ptz_endpoint="",
+        profiles=(OnvifMediaProfile(
+            "main", "MainStream", "rtsp://192.0.2.40/main", False,
+            stream_username="viewer", stream_password="stream-secret",
+        ),),
+    )
+    onvif = _Onvif(cameras=[_ONVIF_CAMERA], details=details)
+    dialog = _open_network_camera_dialog(widget, onvif)
+    _find_cameras_on_the_network(dialog)
+
+    _choose_network_option(widget, dialog, "Acme")
+
+    uri = dialog.findChild(QObject, "cameraUriField")
+    assert _wait_until(lambda: uri.property("text") == "rtsp://192.0.2.40/main", timeout_ms=5000)
+    assert dialog.findChild(QObject, "cameraStreamUsernameField").property("text") == "viewer"
+    assert dialog.findChild(QObject, "cameraStreamPasswordField").property("text") == "stream-secret"
+    assert QMetaObject.invokeMethod(dialog, "close")

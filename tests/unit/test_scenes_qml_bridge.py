@@ -2802,7 +2802,10 @@ def test_onvif_query_reports_streams_and_ptz(scene_bridge_factory) -> None:
         device_service="http://192.168.1.20/onvif/device_service",
         ptz_endpoint="http://192.168.1.20/onvif/ptz_service",
         profiles=(
-            OnvifMediaProfile("main", "MainStream", "rtsp://192.168.1.20/main", True),
+            OnvifMediaProfile(
+                "main", "MainStream", "rtsp://192.168.1.20/main", True,
+                stream_username="viewer", stream_password="stream-secret",
+            ),
             OnvifMediaProfile("sub", "SubStream", "rtsp://192.168.1.20/sub", False),
         ),
     ))
@@ -2819,8 +2822,10 @@ def test_onvif_query_reports_streams_and_ptz(scene_bridge_factory) -> None:
         "deviceService": "http://192.168.1.20/onvif/device_service",
         "ptzEndpoint": "http://192.168.1.20/onvif/ptz_service",
         "profiles": [
-            {"token": "main", "name": "MainStream", "uri": "rtsp://192.168.1.20/main", "ptz": True},
-            {"token": "sub", "name": "SubStream", "uri": "rtsp://192.168.1.20/sub", "ptz": False},
+            {"token": "main", "name": "MainStream", "uri": "rtsp://192.168.1.20/main", "ptz": True,
+             "username": "viewer", "password": "stream-secret"},
+            {"token": "sub", "name": "SubStream", "uri": "rtsp://192.168.1.20/sub", "ptz": False,
+             "username": "", "password": ""},
         ],
     }
     assert onvif.queries == [

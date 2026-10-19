@@ -275,6 +275,10 @@ def test_query_returns_streams_and_the_ptz_service() -> None:
         ("sub", "SubStream", False),
     ]
     assert details.profiles[0].stream_uri == "rtsp://192.168.1.20:554/user=admin&channel=1&stream=0"
+    # The login is kept apart from the address, for the credential store.
+    assert (details.profiles[0].stream_username, details.profiles[0].stream_password) == ("admin", "secret")
+    assert "secret" not in repr(details.profiles[0])
+    assert (details.profiles[1].stream_username, details.profiles[1].stream_password) == ("", "")
     assert details.profiles[1].stream_uri == "rtsp://192.168.1.20:554/sub"
     assert [call.endpoint.rsplit("/", 1)[1] for call in transport.calls] == [
         "device_service", "device_service", "media_service", "media_service", "media_service",
@@ -545,3 +549,15 @@ def test_udp_sweep_sends_to_each_host_and_collects_replies(monkeypatch: pytest.M
 
     assert seen == [b"probe", b"probe"]
     assert replies == [(b"reply", "127.0.0.1"), (b"reply", "127.0.0.1")]
+
+
+def test_stream_login_is_decoded_like_libavformat_does() -> None:
+    transport = _OnvifTransport([
+        _ok(_CLOCK), _ok(_capabilities()), _ok(_PROFILES),
+        _ok(_stream("rtsp://op%40site:p%3Ass@cam/main")), _ok(_stream("rtsp://cam/sub")),
+    ])
+
+    main = _query(transport).profiles[0]
+
+    assert main.stream_uri == "rtsp://cam/main"
+    assert (main.stream_username, main.stream_password) == ("op@site", "p:ss")

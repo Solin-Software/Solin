@@ -424,8 +424,9 @@ class ObsRuntime:
         and render black. libobs happily shows one source in several scenes at once
         and opens the connection once while it is active in any of them.
 
-        Editing the address updates the existing source in place, so the connection
-        follows the new URI without the operator rebuilding their scenes. The runtime
+        Editing the address, transport, or network buffer updates the existing source
+        in place, so the connection follows the new settings without the operator
+        rebuilding their scenes or restarting. The runtime
         owns these and frees them on shutdown; callers add them ``owned=False``.
         """
         if not camera_id or not uri:
@@ -433,13 +434,13 @@ class ObsRuntime:
         with self._lock:
             existing = self._rtsp_sources.get(camera_id)
             if existing is not None:
-                source, cached_uri = existing
-                if cached_uri != uri:
+                source, cached_settings = existing
+                if cached_settings != settings:
                     try:
-                        source.update(settings)  # follow the edited address live
-                        self._rtsp_sources[camera_id] = (source, uri)
+                        source.update(settings)  # follow the edited connection live
+                        self._rtsp_sources[camera_id] = (source, dict(settings))
                     except Exception:  # noqa: BLE001 - update/plugin boundary
-                        log.warning("Could not update the IP camera address", exc_info=True)
+                        log.warning("Could not update the IP camera settings", exc_info=True)
                 return source
             self.ensure_started()
             self._rtsp_source_seq += 1
@@ -452,11 +453,11 @@ class ObsRuntime:
                 return None
             if source is None:
                 return None
-            self._rtsp_sources[camera_id] = (source, uri)
+            self._rtsp_sources[camera_id] = (source, dict(settings))
             return source
 
     def _release_rtsp_sources(self) -> None:
-        for source, _uri in self._rtsp_sources.values():
+        for source, _settings in self._rtsp_sources.values():
             try:
                 source.release()
             except Exception:  # noqa: BLE001 - shutdown must be total

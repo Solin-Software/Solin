@@ -74,6 +74,8 @@ Dialog {
     property bool ptzQueryRunning: false
     property bool ptzQueryFailed: false
     property string ptzQueryMessage: ""
+    // The stream login a PTZ query borrowed, kept for the PTZ fields on success.
+    property var ptzQueryLogin: null
     readonly property var ptzFinderChoices: {
         var items = []
         var own = bridge && cameraKind === "rtsp_camera" ? bridge.onvifDeviceServiceForAddress(uriField.text) : ""
@@ -335,6 +337,7 @@ Dialog {
         ptzQueryRunning = false
         ptzQueryFailed = false
         ptzQueryMessage = ""
+        ptzQueryLogin = null
     }
 
     function selectDiscovered(choice) {
@@ -376,19 +379,21 @@ Dialog {
         }
         var movable = result.profiles.filter(function(profile) { return profile.ptz })
         var hasPtz = result.ptzEndpoint.length > 0 && movable.length > 0
+        // First, so a login the camera returned in the stream address is in the
+        // stream fields before the PTZ fields borrow it.
+        selectStream(0)
         if (hasPtz) {
             ptzCombo.currentIndex = 1
             ptzProtocol = "onvif"
             onvifEndpoint.text = result.ptzEndpoint
             ptzProfiles = movable
-            onvifProfileToken.text = movable[0].token
+            onvifProfileToken.text = onvifStreams[0].ptz ? onvifStreams[0].token : movable[0].token
             // One login usually covers both; the PTZ one stays editable.
             if (!usernameField.text.trim().length && streamUsernameField.text.trim().length) {
                 usernameField.text = streamUsernameField.text.trim()
                 passwordField.text = streamPasswordField.text
             }
         }
-        selectStream(0)
         streamQueryMessage = hasPtz
             ? qsTr("Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.")
             : qsTr("Connected.")
@@ -399,6 +404,11 @@ Dialog {
             return
         streamIndex = index
         uriField.text = onvifStreams[index].uri
+        // A login the camera put in the address: stored apart, like a typed one.
+        if (onvifStreams[index].username && !streamUsernameField.text.trim().length) {
+            streamUsernameField.text = onvifStreams[index].username
+            streamPasswordField.text = onvifStreams[index].password
+        }
         if (ptzProtocol === "onvif" && onvifStreams[index].ptz)
             onvifProfileToken.text = onvifStreams[index].token
     }
@@ -418,6 +428,8 @@ Dialog {
         var ownLogin = usernameField.text.trim().length > 0
         ptzQueryFailed = false
         ptzQueryMessage = ""
+        ptzQueryLogin = ownLogin ? null
+            : { username: streamUsernameField.text.trim(), password: streamPasswordField.text }
         ptzQueryId = bridge.queryOnvifCamera(choice.deviceService,
             ownLogin ? usernameField.text : streamUsernameField.text,
             ownLogin ? passwordField.text : streamPasswordField.text)
@@ -440,6 +452,12 @@ Dialog {
             return
         }
         ptzQueryFailed = false
+        // Saving without the login the query just succeeded with would leave
+        // every later PTZ command unauthenticated.
+        if (ptzQueryLogin && ptzQueryLogin.username.length && !usernameField.text.trim().length) {
+            usernameField.text = ptzQueryLogin.username
+            passwordField.text = ptzQueryLogin.password
+        }
         onvifEndpoint.text = result.ptzEndpoint
         ptzProfiles = movable
         onvifProfileToken.text = movable[0].token
@@ -875,6 +893,7 @@ Dialog {
                     FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("Stream user name") }
                     StyledField {
                         id: streamUsernameField
+                        objectName: "cameraStreamUsernameField"
                         visible: root.cameraKind === "rtsp_camera" && root.editingSettings
                         Layout.fillWidth: true
                         placeholderText: root.hasStreamCredentials
@@ -885,6 +904,7 @@ Dialog {
                     FieldLabel { visible: root.cameraKind === "rtsp_camera" && root.editingSettings; text: qsTr("Stream password") }
                     StyledField {
                         id: streamPasswordField
+                        objectName: "cameraStreamPasswordField"
                         visible: root.cameraKind === "rtsp_camera" && root.editingSettings
                         Layout.fillWidth: true
                         echoMode: TextInput.Password
@@ -1100,9 +1120,9 @@ Dialog {
                     FieldLabel { text: qsTr("Profile token") }
                     StyledField { id: onvifProfileToken; Layout.fillWidth: true; placeholderText: qsTr("Media profile token") }
                     FieldLabel { text: qsTr("Username") }
-                    StyledField { id: usernameField; Layout.fillWidth: true; placeholderText: root.hasCredentials ? qsTr("Leave blank to keep saved credentials") : "" }
+                    StyledField { id: usernameField; objectName: "cameraPtzUsernameField"; Layout.fillWidth: true; placeholderText: root.hasCredentials ? qsTr("Leave blank to keep saved credentials") : "" }
                     FieldLabel { text: qsTr("Password") }
-                    StyledField { id: passwordField; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: root.hasCredentials ? qsTr("Leave blank to keep saved credentials") : "" }
+                    StyledField { id: passwordField; objectName: "cameraPtzPasswordField"; Layout.fillWidth: true; echoMode: TextInput.Password; placeholderText: root.hasCredentials ? qsTr("Leave blank to keep saved credentials") : "" }
                     FieldLabel { visible: root.hasCredentials; text: "" }
                     ScenesCheckBox { theme: root.theme; visible: root.hasCredentials; text: qsTr("Remove saved credentials"); checked: root.clearCredentials; onToggled: root.clearCredentials = checked }
                 }

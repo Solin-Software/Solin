@@ -2055,6 +2055,10 @@ class ScenesBridge(QObject):
                     "name": profile.name,
                     "uri": profile.stream_uri,
                     "ptz": profile.ptz,
+                    # Goes only to the dialog's (masked) login fields, which
+                    # store it in the keyring; never into the saved address.
+                    "username": profile.stream_username,
+                    "password": profile.stream_password,
                 }
                 for profile in details.profiles
             ],
