@@ -198,6 +198,8 @@ class UdpWsDiscoveryTransport:
         cancellation: PtzCancellation,
         hosts: Sequence[str] = (),
     ) -> Sequence[tuple[bytes, str]]:
+        if cancellation.cancelled:
+            raise PtzCancelledError
         addresses: tuple[str, ...] = ()
         if not hosts:
             try:

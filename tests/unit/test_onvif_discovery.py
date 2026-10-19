@@ -159,13 +159,20 @@ def test_udp_transport_collects_replies_sent_to_its_port(monkeypatch: pytest.Mon
     assert replies == [(b"reply", "127.0.0.1")]
 
 
-def test_udp_transport_stops_when_cancelled() -> None:
+def test_udp_transport_stops_when_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Tests never multicast for real: on macOS the first multicast from a
+    # process raises a Local Network permission prompt over the desktop.
+    sent: list[object] = []
+    monkeypatch.setattr(onvif_discovery, "WSD_MULTICAST_GROUP", ("127.0.0.1", 9))
+    monkeypatch.setattr(UdpWsDiscoveryTransport, "_send", staticmethod(lambda *args, **kwargs: sent.append(args)))
     cancellation = PtzCancellation()
     cancellation.cancel()
     transport = UdpWsDiscoveryTransport(interface_addresses=lambda: ("127.0.0.1",))
 
     with pytest.raises(PtzCancelledError):
         transport.probe(b"probe", timeout_seconds=5, cancellation=cancellation)
+
+    assert sent == []  # cancelled before anything left the socket
 
 
 def _soap(body: str) -> bytes:
