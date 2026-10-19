@@ -7678,9 +7678,9 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <translation type="vanished">Kohtaus, joka sieppaa heijastusnäytön. Aktivoituu, kun sisältöä näytetään.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Ääniohjaimet ja läsnäolomäärä kokousten aikana.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Kokouksen äänen ja videon hallinta.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9950,54 +9950,49 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Peruuta</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Yhdistä oma ääni ja video ja mykistä kaikki.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Katkaise oma ääni ja video ja salli kaikkien poistaa mykistys.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Yhdistä taustalauluun</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Kokousta ei löytynyt. Avaa Zoom-kokous käyttääksesi näitä toimintoja.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Ennen kokousta / kokouksen jälkeen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Kokouksen alku</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Pysäytä laulu kokouksen alussa; toista se ennen kokousta tai sen jälkeen. Laulun ajastettu pysäytys valmistelee myös Zoomin.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-kokous</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Yhteys katkaistu</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n läsnäolija</numerusform>
-            <numerusform>%n läsnäolijaa</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Näytön jakaminen on päällä</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Avaa ääni kaikille</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Yhdistetty kokoukseen</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Läsnäolijoiden määrä voidaan laskea kahdella tavalla:
-käytä nimien välissä merkkejä &amp;, | tai +, esimerkiksi &apos;Felipe &amp; Julia&apos; = 2;
-tai lisää loppuun numero, esimerkiksi &apos;Perhe Alves 7&apos; = 7.
-Lopussa oleva numero on ensisijainen.</translation>
     </message>
 </context>
 <context>
@@ -11857,6 +11852,14 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     <message>
         <source>Camera</source>
         <translation>Kamera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Joitakin Zoom-toimintoja ei voitu suorittaa. Tarkista Zoom ja yritä uudelleen.</translation>
     </message>
 </context>
 </TS>

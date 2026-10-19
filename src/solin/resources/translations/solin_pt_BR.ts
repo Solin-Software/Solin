@@ -7582,9 +7582,9 @@ Adicione conteúdo, uma câmera ou outra cena.</translation>
         <translation>Telas</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Controles de áudio e contagem de assistência durante as reuniões.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Controles de áudio e vídeo da reunião.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9983,54 +9983,49 @@ Ambos precisam estar na mesma rede Wi-Fi.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Cancelar</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Conectar seu áudio e vídeo e silenciar todos.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Desconectar seu áudio e vídeo e permitir que todos ativem o som.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Integrar cântico de fundo</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Nenhuma reunião encontrada. Abra uma reunião do Zoom para usar estes controles.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Antes/depois da reunião</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Início da reunião</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Parar o cântico no início da reunião; reproduzi-lo antes/depois da reunião. A parada programada do cântico também prepara o Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Reunião do Zoom</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Desconectado</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n pessoa presente</numerusform>
-            <numerusform>%n pessoas presentes</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Compartilhamento de tela ativo</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Abrir áudio para todos</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Conectado à reunião</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>A assistência pode ser contada de duas maneiras:
-use &amp;, |, ou + entre os nomes, como &apos;Felipe &amp; Julia&apos; = 2;
-ou coloque um número no final, como &apos;Família Alves 7&apos; = 7.
-O número no final tem prioridade.</translation>
     </message>
 </context>
 <context>
@@ -11898,6 +11893,14 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
     <message>
         <source>Camera</source>
         <translation>Câmera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Algumas ações do Zoom não puderam ser concluídas. Verifique o Zoom e tente novamente.</translation>
     </message>
 </context>
 </TS>

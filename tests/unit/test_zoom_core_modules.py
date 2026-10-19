@@ -1,183 +1,391 @@
+from __future__ import annotations
+
 from dataclasses import FrozenInstanceError
-import os
-from pathlib import Path
-import subprocess
-import sys
-import textwrap
+from types import SimpleNamespace
 
 import pytest
 
-from solin.core.integrations.automation.zoom.controls import ZoomSession
-from solin.core.integrations.automation.zoom.i18n_labels import (
-    AUDIO_MUTED_TEXT,
-    AUDIO_UNMUTED_TEXT,
-    CONNECT_AUDIO_TEXT,
-    PARTICIPANTS_TEXT,
-    PEOPLE_SEPARATORS,
-    VIDEO_STARTED_TEXT,
-    VIDEO_STOPPED_TEXT,
-)
-from solin.core.integrations.automation.zoom.toolbar_cache import (
-    PARTICIPANTS_PANEL_CONTROL_IDS,
-    TOOLBAR_CORE_CONTROL_IDS,
-    ToolbarCache,
-)
-from solin.core.integrations.automation.zoom.text_match import (
-    _audio_button_state_from_text,
-    _matches_toolbar_action,
-    _normalize_toolbar_text,
-    _toolbar_action_match_score,
-    _video_button_state_from_text,
-)
+from solin.core.integrations.automation.zoom.controls import Automation, Element, ZoomControls
+from solin.core.integrations.automation.zoom.native import Window
+from solin.core.integrations.automation.zoom.sequences import run_sequence
 from solin.core.integrations.automation.zoom.state import (
     AudioState,
     MeetingState,
-    ShareState,
+    SequenceResult,
+    StepFailure,
     VideoState,
+    ZoomAutomationError,
+)
+from solin.core.integrations.automation.zoom.text_match import (
+    _audio_button_state_from_text,
+    _video_button_state_from_text,
 )
 
 
-def test_zoom_state_types_are_importable_without_pywinauto():
-    state = MeetingState()
-
-    assert state.audio is AudioState.UNKNOWN
-    assert state.video is VideoState.UNKNOWN
-    assert state.sharing is ShareState.UNKNOWN
-    assert state.participant_names == ()
-
-
-def test_zoom_controls_import_without_pywinauto():
-    code = textwrap.dedent(
-        """
-        import importlib.abc
-        import sys
-
-        class BlockPywinauto(importlib.abc.MetaPathFinder):
-            def find_spec(self, fullname, path=None, target=None):
-                if fullname == "pywinauto" or fullname.startswith("pywinauto."):
-                    raise ImportError("blocked pywinauto")
-                return None
-
-        sys.meta_path.insert(0, BlockPywinauto())
-
-        from solin.core.integrations.automation.zoom.controls import ZoomSession
-
-        session = ZoomSession()
-        try:
-            session.desktop()
-        except RuntimeError as exc:
-            assert "pywinauto" in str(exc)
-        else:
-            raise AssertionError("ZoomSession.desktop() should require pywinauto")
-        """
-    )
-    env = {**os.environ, "PYTHONPATH": str(Path("src").resolve())}
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=Path.cwd(),
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
+@pytest.mark.parametrize(
+    ("label", "state"),
+    [
+        ("Mute, currently unmuted, Alt+A", AudioState.UNMUTED),
+        ("Unmute, currently muted, Alt+A", AudioState.MUTED),
+        ("Conectar áudio", AudioState.DISCONNECTED),
+        ("Unknown action", AudioState.UNKNOWN),
+        ("", AudioState.UNKNOWN),
+    ],
+)
+def test_audio_recognition_does_not_guess_disconnected(label, state):
+    assert _audio_button_state_from_text(label) is state
 
 
-def test_zoom_state_value_objects_are_immutable_and_validated():
-    state = MeetingState(
-        sharing=ShareState.SHARING,
-        participant_count=2,
-        participant_names=("Alex", "Sam"),
-        in_meeting=True,
-    )
-
-    assert state.is_sharing is True
-    assert ShareState.from_active(False) is ShareState.NOT_SHARING
-    assert ShareState.UNKNOWN.is_active is None
-    assert AudioState.DISCONNECTED.is_connected is False
-    assert AudioState.UNKNOWN.is_connected is None
-
+def test_video_recognition_and_immutable_state():
+    assert _video_button_state_from_text("Start my video, Alt+V") is VideoState.STOPPED
+    assert _video_button_state_from_text("Stop my video, Alt+V") is VideoState.STARTED
     with pytest.raises(FrozenInstanceError):
-        state.participant_count = 3  # type: ignore[misc]
-    with pytest.raises(ValueError, match="cannot be negative"):
-        MeetingState(participant_count=-1)
+        MeetingState().in_meeting = True
+    assert not SequenceResult("pre_meeting", cancelled=True).ok
+    assert not SequenceResult("pre_meeting", (StepFailure("video", "unavailable"),)).ok
 
 
-def test_zoom_i18n_labels_keep_core_actions_and_fallbacks():
-    assert "unmute" in AUDIO_MUTED_TEXT
-    assert "mute" in AUDIO_UNMUTED_TEXT
-    assert "connect audio" in CONNECT_AUDIO_TEXT
-    assert "participants" in PARTICIPANTS_TEXT
-    assert "start video" in VIDEO_STOPPED_TEXT
-    assert "stop video" in VIDEO_STARTED_TEXT
-    assert PEOPLE_SEPARATORS[0] == " & "
+class Controls:
+    def __init__(self, failures=None):
+        self.calls = []
+        self.failures = failures or {}
+
+    def begin_step(self):
+        pass
+
+    def check_meeting(self):
+        if self.failures.get("meeting"):
+            raise ZoomAutomationError("meeting_not_found")
+
+    def _call(self, name, *args):
+        self.calls.append((name, *args))
+        if name in self.failures:
+            raise ZoomAutomationError(self.failures[name])
+
+    def join_audio(self):
+        self._call("join")
+
+    def leave_audio(self):
+        self._call("leave")
+
+    def set_microphone(self, enabled):
+        self._call("microphone", enabled)
+
+    def set_video(self, enabled):
+        self._call("video", enabled)
+
+    def mute_all(self, allow_unmute):
+        self._call("mute_all", allow_unmute)
+
+    def ask_all_to_unmute(self):
+        self._call("ask_all")
 
 
-def test_zoom_toolbar_cache_tracks_live_elements_by_handle():
-    class _Rect:
-        def width(self):
-            return 10
-
-        def height(self):
-            return 8
-
-    class _Element:
-        def window_text(self):
-            return "Mute"
-
-        def rectangle(self):
-            return _Rect()
-
-    cache = ToolbarCache()
-    element = _Element()
-
-    cache.put(10, "btn_muteAudio", element)
-
-    assert cache.get(None, 10, "btn_muteAudio") is element
-    assert cache.get_multi(10, {"btn_muteAudio"}) == {"btn_muteAudio": element}
-    assert cache.get_multi(11, {"btn_muteAudio"}) == {}
-
-    cache.invalidate()
-    assert cache.get_multi(10, {"btn_muteAudio"}) == {}
-    assert "btn_muteAudio" in TOOLBAR_CORE_CONTROL_IDS
-    assert "mute_all_btn" in PARTICIPANTS_PANEL_CONTROL_IDS
+@pytest.mark.parametrize(
+    ("sequence", "calls"),
+    [
+        ("pre_meeting", [("join",), ("microphone", True), ("video", True), ("mute_all", False)]),
+        ("post_meeting", [("leave",), ("video", False), ("mute_all", True), ("ask_all",)]),
+    ],
+)
+def test_sequences_preserve_order_and_permission_semantics(sequence, calls):
+    controls = Controls()
+    progress = []
+    result = run_sequence(controls, sequence, progress.append)
+    assert result.ok
+    assert controls.calls == calls
+    assert len(progress) == 4
 
 
-def test_zoom_text_match_handles_toolbar_suffixes_and_states():
-    assert _normalize_toolbar_text("  Mute,\u00a0currently unmuted, Alt+A  ") == (
-        "mute, currently unmuted, alt+a"
+def test_failure_does_not_skip_independent_safety_steps():
+    controls = Controls({"video": "camera_unavailable"})
+    result = run_sequence(controls, "pre_meeting")
+    assert result.failed_steps == (StepFailure("video_on", "camera_unavailable"),)
+    assert controls.calls[-1] == ("mute_all", False)
+
+
+def test_meeting_loss_stops_the_sequence():
+    controls = Controls({"meeting": True})
+    result = run_sequence(controls, "pre_meeting")
+    assert result.failed_steps[0].code == "meeting_not_found"
+    assert controls.calls == []
+
+
+def test_invalid_sequence_does_not_touch_controls():
+    controls = Controls()
+    with pytest.raises(ValueError):
+        run_sequence(controls, "start_share")
+    assert controls.calls == []
+
+
+def test_queries_fetch_only_cached_properties_in_one_filtered_request():
+    automation = Automation.__new__(Automation)
+    automation.query_count = 0
+    automation.cache = object()
+    conditions = []
+    automation.client = SimpleNamespace(
+        CreateTrueCondition=lambda: "all",
+        CreatePropertyCondition=lambda prop, kind: (prop, kind),
+        CreateOrCondition=lambda first, second: (first, second),
     )
-    assert _matches_toolbar_action("Mute, currently unmuted, Alt+A", ["mute"])
-    assert _toolbar_action_match_score("Mute, currently unmuted, Alt+A", ["mute"]) == 4
-    assert _audio_button_state_from_text("Mute, currently unmuted, Alt+A") is (
-        AudioState.UNMUTED
+    raw = SimpleNamespace(
+        CachedName="Mute",
+        CachedControlType=50000,
+        CachedClassName="",
+        CachedBoundingRectangle=SimpleNamespace(left=1, top=2, right=9, bottom=10),
     )
-    assert _audio_button_state_from_text("Unmute, currently muted, Alt+A") is (
-        AudioState.MUTED
+    found = SimpleNamespace(Length=1, GetElement=lambda index: raw)
+
+    def find(scope, condition, cache):
+        conditions.append((scope, condition, cache))
+        return found
+
+    root = Element(SimpleNamespace(FindAllBuildCache=find), "", 0, "", (0, 0, 10, 10))
+    elements = automation.elements(root, 50000, 50011)
+    assert len(conditions) == automation.query_count == 1
+    assert conditions[0][1] == ((30003, 50000), (30003, 50011))
+    assert elements[0].name == "Mute"
+
+
+def test_inspect_does_not_reveal_or_move_focus():
+    window = Window(1, 2, "meeting", 20)
+    desktop = SimpleNamespace(meeting=lambda: window, valid=lambda _: True)
+    automation = SimpleNamespace(root=lambda _: object(), find_class=lambda *_: None)
+    controls = ZoomControls(desktop, automation)
+    assert controls.inspect() == MeetingState(in_meeting=True)
+
+
+@pytest.mark.parametrize(
+    ("operation", "name"),
+    [
+        (lambda controls: controls.join_audio(), "Mute, Alt+A"),
+        (lambda controls: controls.leave_audio(), "Join audio"),
+        (lambda controls: controls.set_microphone(True), "Mute, Alt+A"),
+        (lambda controls: controls.set_video(True), "Stop my video, Alt+V"),
+    ],
+)
+def test_already_matching_state_never_invokes_or_focuses(operation, name):
+    window = Window(1, 2, "meeting", 20)
+    desktop = SimpleNamespace(meeting=lambda: window, valid=lambda _: True)
+    controls = ZoomControls(desktop, SimpleNamespace())
+    element = Element(None, name, 50000, "", (0, 0, 10, 10))
+    controls._audio = lambda: element
+    controls._video = lambda: element
+    operation(controls)
+
+
+@pytest.mark.parametrize("video", [True, False])
+def test_media_state_reconciles_a_successful_dispatch_ignored_by_busy_provider(video):
+    controls, element, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    state = [VideoState.STOPPED if video else AudioState.MUTED]
+    wanted = VideoState.STARTED if video else AudioState.UNMUTED
+    presses = []
+    def find():
+        label = (
+            "Stop my video" if state[0] == VideoState.STARTED else "Start my video"
+        ) if video else (
+            "Mute" if state[0] == AudioState.UNMUTED else "Unmute"
+        )
+        return Element(None, label, 50000, "", element.rect)
+
+    controls._video = controls._audio = find
+
+    def press(_):
+        presses.append(True)
+        if len(presses) == 2:
+            state[0] = wanted
+        return True
+
+    def wait(read, **kwargs):
+        if not read():
+            raise ZoomAutomationError(kwargs["code"])
+
+    controls._press, controls._wait = press, wait
+    if video:
+        controls.set_video(True)
+    else:
+        controls.set_microphone(True)
+    assert state[0] == wanted
+    assert len(presses) == 2
+
+
+def test_media_reconciliation_observes_late_completion_before_dispatching_again():
+    controls, element, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    reads = []
+    presses = []
+
+    def find():
+        reads.append(True)
+        label = "Stop my video" if len(reads) >= 3 else "Start my video"
+        return Element(None, label, 50000, "", element.rect)
+
+    def wait(read, **kwargs):
+        raise ZoomAutomationError(kwargs["code"])
+
+    controls._press = lambda _: presses.append(True)
+    controls._wait = wait
+    controls._video = find
+    controls.set_video(True)
+    assert len(presses) == 1
+
+
+def test_media_reconciliation_is_bounded_when_camera_never_changes():
+    controls, element, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    presses = []
+    controls._press = lambda _: presses.append(True)
+
+    def wait(read, **kwargs):
+        raise ZoomAutomationError(kwargs["code"])
+
+    controls._wait = wait
+    controls._video = lambda: Element(None, "Start my video", 50000, "", element.rect)
+    with pytest.raises(ZoomAutomationError, match="video_not_changed"):
+        controls.set_video(True)
+    assert len(presses) == 3
+
+
+def test_media_reconciliation_never_replays_an_uncertain_com_dispatch():
+    controls, element, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    controls._video = lambda: Element(None, "Start my video", 50000, "", element.rect)
+    presses = []
+
+    def press(_):
+        presses.append(True)
+        raise ZoomAutomationError("invoke_failed")
+
+    controls._press = press
+    with pytest.raises(ZoomAutomationError, match="invoke_failed"):
+        controls.set_video(True)
+    assert len(presses) == 1
+
+
+@pytest.mark.parametrize("label", ["Join audio", "Unknown action"])
+def test_microphone_rechecks_recognized_state_after_focus(label):
+    controls, element, clicks = _action_controls()
+    controls.desktop.focus = lambda _: None
+    labels = iter(["Unmute", label])
+    controls._audio = lambda: Element(None, next(labels), 50000, "", element.rect)
+    with pytest.raises(ZoomAutomationError, match="audio_state_unknown"):
+        controls.set_microphone(True)
+    assert not clicks
+
+
+def _action_controls(*, old_name="Unmute", new_name="Unmute", pattern=None):
+    window = Window(1, 2, "meeting", 20)
+    clicks = []
+    desktop = SimpleNamespace(
+        meeting=lambda: window, valid=lambda _: True, click=lambda *args: clicks.append(args)
     )
-    assert _video_button_state_from_text("Stop Video, Alt+V") is VideoState.STARTED
-    assert _video_button_state_from_text("Start Video, Alt+V") is VideoState.STOPPED
-
-
-def test_zoom_controls_uses_package_local_zoom_modules():
-    source = Path("src/solin/core/integrations/automation/zoom/controls.py").read_text(
-        encoding="utf-8"
+    updated = Element(SimpleNamespace(CachedIsEnabled=True), new_name, 50000, "", (20, 30, 40, 50))
+    updated.raw.BuildUpdatedCache = lambda _: updated
+    original = Element(
+        SimpleNamespace(BuildUpdatedCache=lambda _: updated), old_name, 50000, "", (0, 0, 10, 10)
     )
+    automation = SimpleNamespace(
+        errors=(OSError,),
+        cache=object(),
+        query_count=0,
+        _element=lambda raw: raw,
+        pattern=lambda *_: pattern,
+    )
+    return ZoomControls(desktop, automation), original, clicks
 
-    assert "sys.exit" not in source
-    assert "from .i18n_labels import" in source
-    assert "from .toolbar_cache import" in source
-    assert "from .text_match import" in source
-    assert "from .state import AudioState, MeetingState, ShareState, VideoState" in source
+
+def test_changed_action_is_rejected_before_invoke_or_input():
+    controls, element, clicks = _action_controls(new_name="Mute")
+    with pytest.raises(ZoomAutomationError, match="control_changed"):
+        controls._press(element)
+    assert clicks == []
 
 
-def test_cancelled_zoom_session_rejects_ui_actions():
-    session = ZoomSession()
+def test_failed_invoke_never_repeats_a_toggle_with_native_input():
+    invoked = []
+
+    def uncertain_invoke():
+        invoked.append(True)
+        raise OSError("provider disconnected after dispatch")
+
+    controls, element, clicks = _action_controls(pattern=SimpleNamespace(Invoke=uncertain_invoke))
+    with pytest.raises(ZoomAutomationError, match="invoke_failed"):
+        controls._press(element)
+    assert invoked == [True]
+    assert clicks == []
+
+
+def test_explicitly_unsupported_invoke_can_use_verified_native_input():
+    def unsupported():
+        error = OSError("UIA_E_NOTSUPPORTED")
+        error.hresult = -2147220992
+        raise error
+
+    controls, element, clicks = _action_controls(pattern=SimpleNamespace(Invoke=unsupported))
+    assert not controls._press(element)
+    assert len(clicks) == 1
+
+
+def test_native_fallback_uses_fresh_control_geometry():
+    controls, element, clicks = _action_controls()
+    assert not controls._press(element)
+    assert clicks == [(controls.window, (20, 30, 40, 50))]
+
+
+def test_floating_meeting_toolbar_can_be_read_without_a_desktop_tree_walk():
+    from solin.core.integrations.automation.zoom.native import FLOATING_CLASS
+
+    window = Window(1, 2, FLOATING_CLASS, 20)
+    desktop = SimpleNamespace(meeting=lambda: window, valid=lambda _: True)
+    root = object()
+    elements = [
+        Element(None, "Unmute, Alt+A", 50000, "", (0, 0, 10, 10)),
+        Element(None, "Start my video, Alt+V", 50000, "", (0, 0, 10, 10)),
+    ]
+    automation = SimpleNamespace(root=lambda _: root, elements=lambda *_: elements)
+    controls = ZoomControls(desktop, automation)
+    assert controls.inspect() == MeetingState(AudioState.MUTED, VideoState.STOPPED, True)
+
+
+@pytest.mark.parametrize("invoked", [True, False])
+def test_menu_fallback_does_not_repeat_an_existing_native_click(invoked):
+    controls, element, clicks = _action_controls()
+    controls.desktop.focus = lambda _: None
+    controls._press = lambda *_: invoked
     calls = []
-    session.cancel()
 
-    with pytest.raises(RuntimeError, match="no longer active"):
-        session.perform_action(lambda: calls.append("invoked"))
+    def popup(*args, **kwargs):
+        calls.append(True)
+        if len(calls) == 1:
+            raise ZoomAutomationError("dialog_not_found")
+        return "menu"
 
-    assert calls == []
+    controls._popup = popup
+    assert controls._open_menu(element) == "menu"
+    assert len(clicks) == int(invoked)
+
+
+def test_mute_all_does_not_confirm_an_unverified_self_unmute_permission():
+    controls, element, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    controls._participants = lambda: [element]
+    controls._mute_button = lambda _: element
+    controls._popup = lambda *_: (controls.window, element)
+    pressed = []
+    controls._press = lambda *args: pressed.append(args)
+    toggled = []
+    controls.automation.elements = lambda *_: [element]
+    controls.automation.pattern = lambda *_: SimpleNamespace(
+        CurrentToggleState=1, Toggle=lambda: toggled.append(True)
+    )
+
+    def verified(read, **kwargs):
+        if not read():
+            raise ZoomAutomationError(kwargs["code"])
+
+    controls._wait = verified
+    with pytest.raises(ZoomAutomationError, match="allow_unmute_not_changed"):
+        controls.mute_all(False)
+    assert toggled == [True]
+    assert len(pressed) == 1  # Only opens the dialog; no confirmation is sent.

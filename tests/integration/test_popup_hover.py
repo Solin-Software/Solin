@@ -396,6 +396,42 @@ def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):
     assert camera_scene.id in toolbar._solin_scene_popup._scene_cards
 
 
+def test_zoom_remains_available_without_an_open_meeting(toolbar_host):
+    from solin.core.integrations.automation.zoom.service import ZoomService
+
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = ZoomService(toolbar)
+    toolbar.set_zoom_enabled(True)
+    toolbar.set_zoom_connected(False)
+    assert toolbar._bridge._zoom_visible
+    toolbar._on_zoom_clicked()
+    assert toolbar._zoom_panel is not None
+    assert not toolbar._zoom_panel._pre.isEnabled()
+    assert not toolbar._zoom_panel._post.isEnabled()
+    toolbar.set_zoom_enabled(False)
+    assert not toolbar._bridge._zoom_visible
+    assert not toolbar._zoom_panel.isVisible()
+
+
+def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host):
+    from unittest.mock import Mock
+
+    _parent, toolbar = toolbar_host
+    toolbar._zoom = SimpleNamespace(
+        request_pre_meeting=Mock(), cancel=Mock(), is_busy=False,
+    )
+    start = QSignalSpy(toolbar.zoom_pre_meeting_requested)
+    finish = QSignalSpy(toolbar.zoom_post_meeting_requested)
+    panel = toolbar._ensure_zoom_panel()
+    panel.set_connected(True)
+
+    panel._pre.click()
+    panel._post.click()
+
+    assert start.count() == finish.count() == 1
+    toolbar._zoom.request_pre_meeting.assert_not_called()
+
+
 def test_toolbar_preserves_obs_selection_return_and_ndi_signals(toolbar_host):
     _parent, toolbar = toolbar_host
     selections = []

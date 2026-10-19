@@ -61,7 +61,7 @@ def setup_domain():
     obs.set_scenes("Offline idle", "Offline media")
     obs.set_enabled(True)
     zoom = ZoomSettingsStore(settings)
-    zoom.set_show_participants(False)
+    zoom.set_background_song_linked(True)
     share = AutoShareSettingsStore(settings)
     keys = AutoKeySettingsStore(settings)
     obs_service, ndi = _Obs(), _Ndi()
@@ -294,7 +294,7 @@ def test_cleanup_cancels_pending_saves_and_ignores_late_service_results(setup_do
 def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeypatch, platform):
     ctx = setup_domain
     ctx.domain.cleanup()
-    ctx.zoom.set_show_participants(False)
+    ctx.zoom.set_background_song_linked(True)
     monkeypatch.setattr(integrations.sys, "platform", platform)
     domain = IntegrationSettings(
         obs_service=None, ndi_service=None, obs_settings=ctx.obs,
@@ -308,11 +308,11 @@ def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeyp
         assert "cameraEnabled" not in domain.state
         assert domain.state["accessibilityRequired"] is (platform == "darwin")
         assert domain.state["accessibilityTrusted"] is (platform != "darwin")
-        assert ctx.zoom.show_participants() is (platform == "win32")
-        ctx.zoom.set_show_participants(False)
+        assert ctx.zoom.background_song_linked() is True
+        ctx.zoom.set_background_song_linked(True)
         domain.refresh_language()
         domain.refresh_runtime()
-        assert ctx.zoom.show_participants() is False
+        assert ctx.zoom.background_song_linked() is True
         domain.invoke("findNdiSources")
         assert domain.state["ndiStatusKind"] == "error"
     finally:

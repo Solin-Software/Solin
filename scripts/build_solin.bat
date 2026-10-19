@@ -54,7 +54,6 @@ if not exist "%SIDEVIEW_NATIVE_DLL%" (
 
 rmdir /s /q "%PROJECT_ROOT%.venv\Lib\site-packages\win32com\gen_py" 2>nul
 rmdir /s /q "%LOCALAPPDATA%\Temp\gen_py" 2>nul
-rmdir /s /q "%LOCALAPPDATA%\comtypes\Cache" 2>nul
 
 :: "%PYTHON%" -m nuitka --clean-cache=all
 
@@ -114,6 +113,9 @@ if %ERRORLEVEL% NEQ 0 (
     --output-dir "%TRANSLATIONS_DIR%"
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
+"%PYTHON%" "%PROJECT_ROOT%scripts\prepare_zoom_bindings.py"
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+
 "%PYTHON%" -m nuitka ^
     --standalone ^
     --output-dir="%OUTPUT_DIR%" ^
@@ -133,7 +135,6 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --follow-import-to=solin.widgets ^
     --nofollow-import-to=PySide6.QtTranslations ^
 	--nofollow-import-to=win32com.gen_py ^
-	--nofollow-import-to=comtypes.gen ^
 	--noinclude-setuptools-mode=nofollow ^
     --include-package=solin ^
     --include-package=solin.core ^
@@ -146,8 +147,9 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 	--include-module=websocket._app ^
 	--include-package=ephem ^
     --include-package=keyring ^
-    --include-package=pywinauto ^
     --include-package=comtypes ^
+    --include-package=comtypes.gen ^
+    --nofollow-import-to=comtypes.test ^
     --include-package-data=pyqttoast ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\assets=solin/resources/assets" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\remote_control=solin/resources/remote_control" ^

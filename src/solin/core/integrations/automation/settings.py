@@ -102,10 +102,6 @@ class OBSSettingsStore(_ProfilePrefsSettings):
         return self.ndi_enabled() and bool(self.ndi_source())
 
 
-class ZoomParticipantSettings(Protocol):
-    def show_participants(self) -> bool: ...
-
-
 @dataclass(frozen=True, slots=True)
 class ZoomSettingsStore(_ProfilePrefsSettings):
     def is_enabled(self) -> bool:
@@ -114,13 +110,11 @@ class ZoomSettingsStore(_ProfilePrefsSettings):
     def set_enabled(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.ZOOM_ENABLED, bool(enabled))
 
-    def show_participants(self) -> bool:
-        return bool(
-            self.settings.value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, True, bool)
-        )
+    def background_song_linked(self) -> bool:
+        return bool(self.settings.value(SettingsKey.ZOOM_BACKGROUND_SONG_LINK, False, bool))
 
-    def set_show_participants(self, show: bool) -> None:
-        self.settings.set_value(SettingsKey.ZOOM_SHOW_PARTICIPANTS, bool(show))
+    def set_background_song_linked(self, linked: bool) -> None:
+        self.settings.set_value(SettingsKey.ZOOM_BACKGROUND_SONG_LINK, bool(linked))
 
 
 @dataclass(frozen=True, slots=True)

@@ -79,7 +79,7 @@ class SettingsKey:
     SHARE_CLICK_Y: Final = "share/click_y"
 
     ZOOM_ENABLED: Final = "zoom/enabled"
-    ZOOM_SHOW_PARTICIPANTS: Final = "zoom/show_participants"
+    ZOOM_BACKGROUND_SONG_LINK: Final = "zoom/background_song_link"
 
     AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"
     AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"

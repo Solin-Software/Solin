@@ -7517,9 +7517,9 @@ Add content, a camera, or another scene.</source>
         <translation>スクリーン</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>集会中の音声操作と出席者数。</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>集会の音声と映像の操作。</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9913,53 +9913,49 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>自分の音声と映像を接続し、全員をミュートします。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>自分の音声と映像を切断し、全員がミュートを解除できるようにします。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>バックグラウンド音楽と連携</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>ミーティングが見つかりません。これらの操作を行うにはZoomミーティングを開いてください。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>集会の前後</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>集会の開始</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>集会の開始時に歌を停止し、集会の前後に再生します。歌の予定された停止時にもZoomを準備します。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoomミーティング</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>未接続</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n人の出席者</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>画面共有中</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>全員の音声をオンにする</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>ミーティングに接続されました</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>出席者数は次の2つの方法でカウントできます。
-名前の間に「&amp;」、「|」、「+」を使用する（例：「Felipe &amp; Julia」＝2）；
-または末尾に数字を置く（例：「Family Alves 7」＝7）。
-末尾の数字が優先されます。</translation>
     </message>
 </context>
 <context>
@@ -11814,6 +11810,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Camera</source>
         <translation>カメラ</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Zoomの一部の操作を完了できませんでした。Zoomを確認して再試行してください。</translation>
     </message>
 </context>
 </TS>

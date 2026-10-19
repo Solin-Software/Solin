@@ -7646,9 +7646,9 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">Adegan yang menangkap monitor proyeksi. Diaktifkan saat konten ditampilkan.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Kontrol audio dan jumlah kehadiran selama pertemuan.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Kontrol audio dan video perhimpunan.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9913,53 +9913,49 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Batal</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Hubungkan audio dan video Anda dan bisukan semua peserta.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Putuskan audio dan video Anda dan izinkan semua peserta membuka suara.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Hubungkan lagu latar</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Tidak ada pertemuan yang ditemukan. Buka pertemuan Zoom untuk menggunakan kontrol ini.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Sebelum/sesudah perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Awal perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Hentikan lagu saat perhimpunan dimulai; putar sebelum/sesudah perhimpunan. Penghentian lagu terjadwal juga menyiapkan Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Pertemuan Zoom</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Terputus</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n hadirin</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Berbagi layar aktif</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Buka audio untuk semua</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Terhubung ke pertemuan</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Kehadiran dapat dihitung dengan dua cara:
-gunakan &amp;, |, atau + di antara nama, contoh &apos;Felipe &amp; Julia&apos; = 2;
-atau cantumkan angka di akhir, contoh &apos;Keluarga Alves 7&apos; = 7.
-Angka di akhir memiliki prioritas.</translation>
     </message>
 </context>
 <context>
@@ -11814,6 +11810,14 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
     <message>
         <source>Camera</source>
         <translation>Kamera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Beberapa tindakan Zoom tidak dapat diselesaikan. Periksa Zoom dan coba lagi.</translation>
     </message>
 </context>
 </TS>

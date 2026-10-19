@@ -7548,9 +7548,9 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <translation>Skärmar</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Ljudkontroller och närvaroantal under möten.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Ljud- och videokontroller för mötet.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9949,54 +9949,49 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Avbryt</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Anslut ditt ljud och din video och stäng av allas mikrofoner.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Koppla från ditt ljud och din video och låt alla aktivera sina mikrofoner.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Koppla bakgrundssång</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Inget möte hittades. Öppna ett Zoom-möte för att använda kontrollerna.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Före/efter mötet</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Mötets början</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Stoppa sången när mötet börjar; spela den före/efter mötet. Schemalagda sångstopp förbereder också Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom-möte</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Frånkopplad</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n deltagare</numerusform>
-            <numerusform>%n deltagare</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Skärmdelning aktiv</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Öppna ljud för alla</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Ansluten till mötet</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Närvaron kan räknas på två sätt:
-använd &amp;, |, eller + mellan namn, till exempel &apos;Felipe &amp; Julia&apos; = 2;
-eller ange ett nummer i slutet, till exempel &apos;Familjen Alves 7&apos; = 7.
-Ett nummer i slutet har prioritet.</translation>
     </message>
 </context>
 <context>
@@ -11856,6 +11851,14 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     <message>
         <source>Camera</source>
         <translation>Kamera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Vissa Zoom-åtgärder kunde inte slutföras. Kontrollera Zoom och försök igen.</translation>
     </message>
 </context>
 </TS>

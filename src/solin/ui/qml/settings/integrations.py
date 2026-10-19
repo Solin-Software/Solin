@@ -32,7 +32,6 @@ class IntegrationSettings(SettingsDomain):
     """Services are wired eagerly; no QML page must exist to receive their state."""
 
     zoom_enabled_toggled = Signal(bool)
-    zoom_participants_toggled = Signal(bool)
     obs_stream_config_changed = Signal()
 
     def __init__(
@@ -76,10 +75,6 @@ class IntegrationSettings(SettingsDomain):
         self._permission_timer.setInterval(1000)
         self._permission_timer.timeout.connect(self.refresh_runtime)
 
-        # Zoom attendance is always part of this integration. Initialize once,
-        # independently of lazy page creation, theme changes or retranslations.
-        if sys.platform == "win32":
-            self._zoom_settings.set_show_participants(True)
         self.publish(
             obsEnabled=obs_settings.is_enabled(),
             obsPort=obs_settings.raw_websocket_port(), obsPassword="",
@@ -89,7 +84,6 @@ class IntegrationSettings(SettingsDomain):
             ndiEnabled=obs_settings.ndi_enabled(), ndiSource=obs_settings.ndi_source(),
             ndiBusy=False, ndiStatus="", ndiStatusKind="",
             zoomAvailable=sys.platform == "win32", zoomEnabled=zoom_settings.is_enabled(),
-            zoomParticipants=zoom_settings.show_participants(),
             autoShareEnabled=auto_share_settings.is_enabled(),
             shareHotkey=auto_share_settings.ensure_hotkey(), shareTargetBusy=False,
             autoKeysEnabled=auto_key_settings.is_enabled(),
@@ -160,9 +154,6 @@ class IntegrationSettings(SettingsDomain):
         elif key == "zoomEnabled" and self._state["zoomAvailable"]:
             self._zoom_settings.set_enabled(bool(value))
             self.zoom_enabled_toggled.emit(bool(value))
-        elif key == "zoomParticipants" and self._state["zoomAvailable"]:
-            self._zoom_settings.set_show_participants(bool(value))
-            self.zoom_participants_toggled.emit(bool(value))
         elif key == "autoShareEnabled":
             self._auto_share_settings.set_enabled(bool(value))
         elif key == "autoKeysEnabled":

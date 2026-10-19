@@ -7710,9 +7710,9 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">Сцена, що захоплює монітор проекції. Активується під час відображення вмісту.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Керування звуком і кількість присутніх під час зібрань.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Керування звуком і відео зібрання.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -9987,55 +9987,49 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Підключити свої звук і відео та вимкнути звук усім.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Відключити свої звук і відео та дозволити всім вмикати звук.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Пов’язати з фоновою піснею</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Зібрання не знайдено. Відкрийте зібрання Zoom, щоб скористатися цими функціями.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>До/після зібрання</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Початок зібрання</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Зупинити пісню на початку зібрання; відтворювати до/після зібрання. Зупинка пісні за розкладом також готує Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Зустріч у Zoom</translation>
-    </message>
-    <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Відключено</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n присутній</numerusform>
-            <numerusform>%n присутніх</numerusform>
-            <numerusform>%n присутніх</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Демонстрація екрана активна</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Увімкнути звук для всіх</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Під’єднано до зустрічі</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Присутність можна підраховувати двома способами:
-використовуйте &amp;, |, або + між іменами, наприклад «Феліпе &amp; Юлія» = 2;
-або вкажіть число в кінці, наприклад «Сім&apos;я Алвес 7» = 7.
-Число в кінці має пріоритет.</translation>
     </message>
 </context>
 <context>
@@ -11900,6 +11894,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Camera</source>
         <translation>Камера</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Не вдалося виконати деякі дії Zoom. Перевірте Zoom і спробуйте знову.</translation>
     </message>
 </context>
 </TS>

@@ -109,7 +109,7 @@ EXPECTED_SETTINGS_KEYS = {
     "SHARE_CLICK_X": "share/click_x",
     "SHARE_CLICK_Y": "share/click_y",
     "ZOOM_ENABLED": "zoom/enabled",
-    "ZOOM_SHOW_PARTICIPANTS": "zoom/show_participants",
+    "ZOOM_BACKGROUND_SONG_LINK": "zoom/background_song_link",
     "AUTO_KEYS_ENABLED": "auto_keys/enabled",
     "AUTO_KEYS_ACTIONS": "auto_keys/actions",
     "TIMER_CLOCK_CONFIG": "clock_config",

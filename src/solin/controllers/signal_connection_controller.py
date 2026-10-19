@@ -146,7 +146,6 @@ class SignalConnectionController:
         settings.general.watched_folder_changed.connect(sources.playlist_widget.set_watched_folder)
         settings.general.watched_folder_changed.connect(sources.meetings_widget.set_watched_folder)
         settings.integrations.zoom_enabled_toggled.connect(live_integrations.on_zoom_settings_enabled_toggled)
-        settings.integrations.zoom_participants_toggled.connect(live_integrations.on_zoom_settings_parts_toggled)
         settings.integrations.obs_stream_config_changed.connect(
             live_integrations.refresh_obs_stream_availability
         )

@@ -53,23 +53,11 @@ class _LiveIntegrations:
     def on_zoom_connection_changed(self):
         pass
 
-    def on_zoom_participants_updated(self):
-        pass
-
-    def on_zoom_sharing_state_changed(self):
-        pass
-
-    def on_zoom_share_error(self):
-        pass
-
 
 class _ZoomService(_Startable):
     def __init__(self, window):
         super().__init__(window, "zoom")
         self.connection_changed = _Signal("zoom.connection_changed", window.events)
-        self.participants_updated = _Signal("zoom.participants_updated", window.events)
-        self.sharing_state_changed = _Signal("zoom.sharing_state_changed", window.events)
-        self.share_error = _Signal("zoom.share_error", window.events)
 
 
 class _ProjectionTargets:
@@ -185,9 +173,6 @@ def test_startup_phases_preserve_order_and_initialize_state():
     assert window.events == [
         "projection",
         "connect:zoom.connection_changed",
-        "connect:zoom.participants_updated",
-        "connect:zoom.sharing_state_changed",
-        "connect:zoom.share_error",
         "monitor",
     ]
 
@@ -196,9 +181,6 @@ def test_startup_phases_preserve_order_and_initialize_state():
     assert window.events == [
         "projection",
         "connect:zoom.connection_changed",
-        "connect:zoom.participants_updated",
-        "connect:zoom.sharing_state_changed",
-        "connect:zoom.share_error",
         "monitor",
         "obs",
         "obs-btn",
@@ -247,13 +229,6 @@ def test_prepare_before_show_wires_zoom_and_monitor_signals():
     assert window._zoom_service.connection_changed.connected_names == [
         "on_zoom_connection_changed"
     ]
-    assert window._zoom_service.participants_updated.connected_names == [
-        "on_zoom_participants_updated"
-    ]
-    assert window._zoom_service.sharing_state_changed.connected_names == [
-        "on_zoom_sharing_state_changed"
-    ]
-    assert window._zoom_service.share_error.connected_names == ["on_zoom_share_error"]
     assert resources.monitor_popup.projection_toggle_requested.connected_names == [
         "on_monitor_toggle"
     ]

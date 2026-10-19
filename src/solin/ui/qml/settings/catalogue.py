@@ -133,7 +133,7 @@ SECTIONS = (
             ), True, "ndiStatus"),
         ), feedback_key="obsConnectionFeedback", error_key="obsConnectionError"),
         Group("zoom", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), "integrations", (
-            Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Audio controls and attendance count during meetings.")),
+            Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Meeting audio and video controls.")),
         ), True, visible_when="zoomAvailable"),
     )),
     Section("automations", QT_TRANSLATE_NOOP("SettingsWidget", "Automations"),

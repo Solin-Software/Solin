@@ -172,6 +172,9 @@ class QuickAccessToolbar(QQuickWidget):
     obs_stream_requested = Signal()
     remote_session_disconnect_requested = Signal(str)
     remote_sessions_disconnect_all_requested = Signal()
+    zoom_pre_meeting_requested = Signal()
+    zoom_post_meeting_requested = Signal()
+    zoom_background_song_link_toggled = Signal(bool)
 
     def __init__(
         self,
@@ -195,14 +198,13 @@ class QuickAccessToolbar(QQuickWidget):
         self._minimized = False
         self._obs_connected = False
         self._screen_count = 0
-        self._zoom_connected = False
+        self._zoom_connected = bool(zoom_service and zoom_service.is_connected)
+        self._zoom_enabled = bool(zoom_service and zoom_service.is_enabled)
         self._remote_enabled = False
         self._remote_running = False
         self._remote_runtime_message = ""
         self._remote_sessions: tuple[RemoteSessionInfo, ...] = ()
-        self._zoom_participant_count = 0
-        self._zoom_participant_names: list[str] = []
-        self._zoom_sharing = False
+        self._zoom_song_link = (False, False)
         self._obs_current_scene = ""
         self._obs_scenes: list[str] = []
         self._obs_stream_available = False
@@ -323,6 +325,10 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── Zoom Panel (native QWidget popup) ─────────────────────────────
         self._zoom_panel = None
+        self._bridge.set_zoom_visible(self._zoom_enabled)
+        if self._zoom is not None:
+            self._zoom.enabled_changed.connect(self.set_zoom_enabled)
+            self._zoom.busy_changed.connect(self._on_zoom_busy)
 
         # ── OBS Scene Popup ───────────────────────────────────────────────
         self._scene_popup = None
@@ -436,13 +442,13 @@ class QuickAccessToolbar(QQuickWidget):
 
         panel = ZoomPanel(self)
         if self._zoom:
-            panel.open_audio_requested.connect(self._zoom.request_open_audio_for_all)
+            panel.cancel_requested.connect(self._zoom.cancel)
+            panel.set_busy(self._zoom.is_busy)
+        panel.pre_meeting_requested.connect(self.zoom_pre_meeting_requested)
+        panel.post_meeting_requested.connect(self.zoom_post_meeting_requested)
+        panel.background_song_link_toggled.connect(self.zoom_background_song_link_toggled)
         panel.set_connected(self._zoom_connected)
-        panel.set_participants(
-            self._zoom_participant_count,
-            self._zoom_participant_names,
-        )
-        panel.set_sharing(self._zoom_sharing)
+        panel.set_background_song_link(*self._zoom_song_link)
         self._zoom_panel = panel
         return panel
 
@@ -536,21 +542,26 @@ class QuickAccessToolbar(QQuickWidget):
         self._zoom_connected = connected
         if self._zoom_panel is not None:
             self._zoom_panel.set_connected(connected)
-        self._bridge.set_zoom_visible(connected)
-        self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.text_muted))
+        self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.accent if connected else PALETTE.text_muted))
         self._update_separator()
         self._reposition()
 
-    def set_zoom_participants(self, count: int, names: list[str]) -> None:
-        self._zoom_participant_count = int(count)
-        self._zoom_participant_names = list(names)
-        if self._zoom_panel is not None:
-            self._zoom_panel.set_participants(count, names)
+    def set_zoom_enabled(self, enabled: bool) -> None:
+        self._zoom_enabled = enabled
+        self._bridge.set_zoom_visible(enabled)
+        if not enabled and self._zoom_panel is not None:
+            self._zoom_panel.close()
+        self._update_separator()
+        self.reposition()
 
-    def set_zoom_sharing(self, sharing: bool) -> None:
-        self._zoom_sharing = bool(sharing)
+    def set_zoom_song_link(self, available: bool, linked: bool) -> None:
+        self._zoom_song_link = (available, linked)
         if self._zoom_panel is not None:
-            self._zoom_panel.set_sharing(sharing)
+            self._zoom_panel.set_background_song_link(available, linked)
+
+    def _on_zoom_busy(self, busy: bool) -> None:
+        if self._zoom_panel is not None:
+            self._zoom_panel.set_busy(busy)
 
     def set_remote_control_status(
         self,
@@ -720,8 +731,7 @@ class QuickAccessToolbar(QQuickWidget):
         self.set_screen_count(self._screen_count)
         if self._obs_connected:
             self.set_obs_connected(True)
-        if self._zoom_connected:
-            self.set_zoom_connected(True)
+        self.set_zoom_connected(self._zoom_connected)
         if self._background_song_panel is not None:
             self._background_song_panel.apply_theme()
         if self._zoom_panel is not None:
@@ -1131,7 +1141,7 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _on_zoom_clicked(self):
         hide_themed_tooltip()
-        if not self._zoom or not self._zoom.is_connected:
+        if not self._zoom or not self._zoom_enabled:
             return
         self._ensure_zoom_panel().show_above(self._active_surface())
 
