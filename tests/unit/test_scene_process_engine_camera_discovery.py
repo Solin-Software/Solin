@@ -364,6 +364,25 @@ def _request_metadata(engine, metadata_type, *, request_id="metadata", deadline_
     )
 
 
+def test_reconnection_dispatch_only_acknowledges_policy_admission(ready_process_engine):
+    engine, sent, _clock = ready_process_engine
+    future = engine.reconcile_local_cameras(7, request_id="topology", deadline_ms=5000)
+    assert sent[-1].message_type == "reconcile_local_cameras"
+    assert sent[-1].payload == {"topology_revision": 7}
+    engine._receive(replace(sent[-1], message_type="ack", payload={
+        "applied": True, "error_code": "", "error_message": "",
+    }), sent[-1].process_generation)
+    assert future.result().applied
+
+
+@pytest.mark.parametrize("revision", [-1, True, "1", None])
+def test_reconnection_dispatch_rejects_invalid_topology_revision(ready_process_engine, revision):
+    engine, sent, _clock = ready_process_engine
+    with pytest.raises(SceneIpcMessageError):
+        engine.reconcile_local_cameras(revision, request_id="topology", deadline_ms=5000)
+    assert not sent
+
+
 def _metadata_response(request):
     modes = request.message_type == "query_local_camera_modes"
     return replace(

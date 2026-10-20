@@ -100,7 +100,7 @@ graphics/audio outputs. Windows initializes COM on the helper's querying thread.
 Each OBS inventory scan reuses one properties session, with fresh settings for
 each device.
 
-Native device notifications start before the first inventory query and remain
+Native device notifications start when the scene engine becomes ready and remain
 owned by the application controller until it closes. Platform adapters report
 changes without running inventory queries or opening capture sources. The
 controller marshals callbacks to its Qt thread, invalidates metadata, and groups
@@ -109,6 +109,10 @@ enumeration until their next request. A change during discovery makes that scan
 obsolete; its result is discarded and one subsequent scan obtains the current
 inventory. Custom-size queries wait for current metadata. Existing device
 selections, modes, and scene settings remain unchanged.
+
+Notifications independently request capture reconciliation even when no dialog
+has been opened. The controller sends a topology revision to the scene process;
+it does not restart capture or change scene settings itself.
 
 Windows uses device-interface notifications, macOS uses native camera
 notifications, and Linux uses libudev events for video devices. If notifications
@@ -166,6 +170,27 @@ a restarted process creates them again on demand. There is no per-connection
 keep-active preference. Native plugin activity and capture-health observation
 remain distinct from the lifetime of the retained source.
 
+Physical device changes start a bounded recovery cycle for instantiated local
+cameras. Inventory work shares the isolated metadata catalog and never blocks
+foreground IPC or waits for frames. Enumeration errors do not imply absence;
+late enumeration can be retried. Obsolete topology results are discarded.
+
+Windows recovery reapplies the source's last effective settings to the existing
+DirectShow input, including a previously resolved Automatic mode. The runtime
+checks the capture generation atomically before updating it. AVFoundation and
+V4L2 handle physical reconnection natively; Solin does not issue competing
+restarts on those platforms. A healthy source producing fresh frames is left
+untouched. Mode rejection and observation failures are not connectivity retries.
+
+Each physical-change cycle permits at most three metadata attempts and three
+capture attempts, with 1- and 3-second backoff after failures and a 30-second
+overall budget. Capture retries wait for the normal frame-health failure; hidden
+sources keep their existing active-time observation semantics. Changed source
+configurations and shutdown cancel affected recovery. There is no permanent
+retry loop or recovery policy for stalls without a physical device notification.
+The persisted native identifier must still identify the reconnected device;
+recovery never selects another device by display name.
+
 ## Capture confirmation
 
 Creating or updating a source starts an observation generation. A passive async
@@ -173,6 +198,9 @@ video filter observes frame dimensions and timestamps while returning the same
 frame to the pipeline. It never consumes frames from the renderer. Deferred
 updates wait for the native update signal and discard the pre-update frame.
 Only subsequent fresh frames with the requested dimensions confirm readiness.
+An internal frame sequence distinguishes continuing capture from a retained
+ready state during a rapid unplug/replug. A recovery attempt retains the source
+warning until fresh frames confirm readiness, including across scene hydration.
 
 No frames, persistent dimension mismatch, failed updates, and observation
 failures produce contextual health events. The timeout counts active capture
@@ -186,7 +214,7 @@ the current configuration. A rejected manual mode is not silently substituted.
 | --- | --- |
 | Scene document schema | 13 |
 | Shared scene resource schema | 2 |
-| Scene IPC protocol | 10 |
+| Scene IPC protocol | 11 |
 
 Scene schema 12 and resource schema 1 accept a missing or boolean `keep_active`
 field in legacy camera configurations and remove it during migration. Other
@@ -212,6 +240,8 @@ current-field rejection, resource normalization, and primary/backup recovery.
 `tests/integration/test_native_camera_capture.py` runs synthetic native sources
 in isolated processes to check passive observation, rendered pixels, and
 deferred updates without requiring camera hardware.
+The Windows synthetic recovery scenario also exercises an initially silent
+source, same-source reactivation, native update acknowledgement, and new frames.
 
 Device-notification tests cover platform filtering and teardown, event bursts,
 changes during discovery, deferred refresh while hidden, and recovery on reopening
