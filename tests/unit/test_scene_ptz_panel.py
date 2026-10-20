@@ -378,7 +378,12 @@ def test_presets_can_be_renamed_and_deleted(setup) -> None:
 
     assert panel.rename_preset("wide", "  Whole stage ")
     assert panel.presets()[0].name == "Whole stage"
-    assert panel._preset_rows["wide"].label.text() == "1  Whole stage"
+    row = panel._preset_rows["wide"]
+    # The visible label may be shortened to the tile's width (font metrics differ
+    # per platform); the full name stays on the tile.
+    assert row.accessibleName() == "1  Whole stage"
+    assert row.label.toolTip() == "1  Whole stage"
+    assert row.label.text().startswith("1  Wh")
     assert panel.delete_preset("wide")
     assert panel.presets() == ()
 
