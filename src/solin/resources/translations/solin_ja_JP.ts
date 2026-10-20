@@ -6197,6 +6197,58 @@ The current organization and files will be preserved. Pending changes from the p
         <source>A source with this name already exists in this scene.</source>
         <translation>このシーンには同じ名前のソースがすでにあります。</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>192.168.0.100 のようなアドレス、192.168.0.1-254 のような範囲、または 192.168.0.0/24 のようなネットワークを入力してください。</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>一度に検索できるのは 1024 アドレスまでです。/22 以下のネットワークなどを指定してください。</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>そのアドレスで応答した ONVIF カメラはありません。</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>ネットワークを検索しています…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>見つかったカメラ: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>ネットワークを検索できませんでした。</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>応答したカメラはありません。別のネットワーク上のカメラは応答しないため、アドレスを指定して追加してください。</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>カメラがこのユーザー名とパスワードを受け付けませんでした。</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>カメラが応答しませんでした。電源が入っていて、このコンピューターから接続できることを確認してください。</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>カメラの安全な接続を検証できませんでした。</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>カメラからビデオストリームが返されませんでした。</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>有効なカメラのアドレスではありません。</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>カメラの応答を読み取れませんでした。</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7376,6 +7428,94 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>このシーンでは、カメラの共有設定を再利用します。</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>カメラのアドレスまたは範囲（例: 192.168.0.1-254）</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>カメラのアドレスまたは範囲</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>検索</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>このカメラのアドレス</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · 「%2」として追加済み</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · ネットワーク上で検出</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>このカメラにはログインが必要です。上でユーザー名とパスワードを入力してから「接続」を選択してください。</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>カメラからビデオストリームが返されませんでした。</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>接続しました。このカメラはパン・チルト・ズームに対応しています。PTZ 制御は「詳細設定」で設定済みです。</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>接続しました。</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>このカメラにはログインが必要です。上でユーザー名とパスワードを入力してから、もう一度カメラを選択してください。</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>このカメラは ONVIF による PTZ 制御に対応していません。</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>カメラから PTZ 設定を入力しました。</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>ストリーム</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>カメラにストリームを問い合わせています…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>接続</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>PTZ 設定を検索…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ プロファイル</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>PTZ 設定を読み取るカメラを選択してください。</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>カメラを検索…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>カメラに PTZ 設定を問い合わせています…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>カメラを探す…</translation>
     </message>
 </context>
 <context>

@@ -6229,6 +6229,58 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>A source with this name already exists in this scene.</source>
         <translation>Samanniminen lähde on jo olemassa tässä näkymässä.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Anna osoite, kuten 192.168.0.100, osoitealue, kuten 192.168.0.1-254, tai verkko, kuten 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Hae enintään 1024 osoitetta kerrallaan, esimerkiksi verkko, jonka pääte on /22 tai pienempi.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Yksikään ONVIF-kamera ei vastannut tästä osoitteesta.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Etsitään verkosta…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Löydetyt kamerat: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Verkosta ei voitu etsiä.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Yksikään kamera ei vastannut. Toisessa verkossa oleva kamera ei vastaa; lisää se sen sijaan osoitteella.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Kamera ei hyväksynyt tätä käyttäjänimeä ja salasanaa.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Kamera ei vastannut. Tarkista, että se on päällä ja tavoitettavissa tältä tietokoneelta.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Kameran suojattua yhteyttä ei voitu vahvistaa.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera ei ilmoittanut yhtään videovirtaa.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Tämä ei ole kelvollinen kameran osoite.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Kameran vastausta ei voitu lukea.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7408,6 +7460,94 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Tämä näkymä käyttää kameran yhteisiä asetuksia.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Kameran osoite tai alue, esim. 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Kameran osoite tai alue</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Hae</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Tämän kameran osoite</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Lisätty jo nimellä ”%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Löytyi verkosta</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Tämä kamera vaatii kirjautumistiedot. Anna käyttäjänimi ja salasana yllä ja valitse sitten Yhdistä.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera ei ilmoittanut yhtään videovirtaa.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Yhdistetty. Tämä kamera voi kääntyä, kallistua ja zoomata; PTZ-ohjaus on määritetty kohdassa Lisäasetukset.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Yhdistetty.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Tämä kamera vaatii kirjautumistiedot. Anna käyttäjänimi ja salasana yllä ja valitse kamera sitten uudelleen.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Tämä kamera ei tarjoa PTZ-ohjausta ONVIFin kautta.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>PTZ-asetukset täytettiin kamerasta.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Videovirta</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Kysytään kameralta sen videovirtoja…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Yhdistä</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Hae PTZ-asetukset…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ-profiili</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Valitse kamera, jonka PTZ-asetukset luetaan.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Hae kameroita…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Kysytään kameralta sen PTZ-asetuksia…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Etsi kameroita…</translation>
     </message>
 </context>
 <context>

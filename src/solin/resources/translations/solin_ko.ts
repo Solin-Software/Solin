@@ -6197,6 +6197,58 @@ The current organization and files will be preserved. Pending changes from the p
         <source>A source with this name already exists in this scene.</source>
         <translation>이 장면에 같은 이름의 소스가 이미 있습니다.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>192.168.0.100 같은 주소, 192.168.0.1-254 같은 범위 또는 192.168.0.0/24 같은 네트워크를 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>한 번에 최대 1024개 주소까지 검색할 수 있습니다. /22 이하의 네트워크를 지정하세요.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>해당 주소에서 응답한 ONVIF 카메라가 없습니다.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>네트워크 검색 중…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>찾은 카메라: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>네트워크를 검색할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>응답한 카메라가 없습니다. 다른 네트워크의 카메라는 응답하지 않으므로 주소로 추가하세요.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>카메라가 이 사용자 이름과 비밀번호를 허용하지 않았습니다.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>카메라가 응답하지 않았습니다. 카메라가 켜져 있고 이 컴퓨터에서 연결할 수 있는지 확인하세요.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>카메라의 보안 연결을 확인할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>카메라가 비디오 스트림을 알려 주지 않았습니다.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>올바른 카메라 주소가 아닙니다.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>카메라의 응답을 읽을 수 없습니다.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7376,6 +7428,94 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>이 장면은 카메라의 공유 설정을 재사용합니다.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>카메라 주소 또는 범위(예: 192.168.0.1-254)</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>카메라 주소 또는 범위</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>검색</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>이 카메라의 주소</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · “%2”(으)로 이미 추가됨</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · 네트워크에서 찾음</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>이 카메라는 로그인이 필요합니다. 위에 사용자 이름과 비밀번호를 입력한 다음 연결을 선택하세요.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>카메라가 비디오 스트림을 알려 주지 않았습니다.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>연결되었습니다. 이 카메라는 팬, 틸트, 줌을 지원하며 PTZ 제어는 고급에서 설정되었습니다.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>연결되었습니다.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>이 카메라는 로그인이 필요합니다. 위에 사용자 이름과 비밀번호를 입력한 다음 카메라를 다시 선택하세요.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>이 카메라는 ONVIF를 통한 PTZ 제어를 지원하지 않습니다.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>카메라에서 PTZ 설정을 가져왔습니다.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>스트림</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>카메라에 스트림을 요청하는 중…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>연결</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>PTZ 설정 찾기…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ 프로필</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>PTZ 설정을 읽어 올 카메라를 선택하세요.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>카메라 검색…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>카메라에 PTZ 설정을 요청하는 중…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>카메라 찾기…</translation>
     </message>
 </context>
 <context>

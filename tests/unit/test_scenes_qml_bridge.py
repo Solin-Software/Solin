@@ -29,6 +29,12 @@ from solin.core.scenes.engine import (
     SourceHealthStatus,
     SceneSourcePreview,
 )
+from solin.core.scenes.onvif_discovery import (
+    OnvifDeviceDetails,
+    OnvifDiscoveredCamera,
+    OnvifDiscoveryError,
+    OnvifMediaProfile,
+)
 from solin.core.scenes.model import (
     BusId,
     DEFAULT_CAMERA_SOURCE_ID,
@@ -65,7 +71,7 @@ from solin.core.scenes.recording import (
     ProgramRecordingStatus,
     SceneRecordingConfig,
 )
-from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzRecallStatus
+from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzCredentials, PtzRecallStatus
 from solin.core.scenes.process_engine import SceneEngineRequestTimeoutError
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
@@ -266,6 +272,7 @@ def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
         recording_directory_picker=None,
         recording_directory_opener=None,
         source_preview=None,
+        onvif=None,
     ) -> tuple[SceneWorkspaceService, SceneRuntimeController, ScenesBridge, _PreviewStore]:
         cleanup = ExitStack()
         request.addfinalizer(cleanup.close)
@@ -297,6 +304,7 @@ def scene_bridge_factory(request, scene_workspace_factory, tmp_path):
             credentials=credentials,
             recording_directory_picker=recording_directory_picker,
             recording_directory_opener=recording_directory_opener,
+            onvif=onvif,
         )
 
         def close_bridge() -> None:
@@ -2682,3 +2690,225 @@ def test_updating_one_network_connection_preserves_secret_owned_by_another(scene
         assert bridge.updateCamera(draft, bridge.sourceEditContext())
         assert credentials.deleted == ([] if index == 0 else ['legacy-shared-secret'])
     assert not workspace.resources.credential_references
+
+
+class _Onvif:
+    """Answers at once, from a worker thread, like the real service."""
+
+    def __init__(self, *, cameras=(), details=None, error=None) -> None:
+        self.cameras = tuple(cameras)
+        self.details = details
+        self.error = error
+        self.queries: list[tuple[str, PtzCredentials | None]] = []
+        self.searches: list[str] = []
+        self.found_by_address: tuple[OnvifDiscoveredCamera, ...] = ()
+
+    def discover(self, cancellation=None):
+        return self.cameras
+
+    def search(self, target, cancellation=None):
+        self.searches.append(target)
+        if target == "bad":
+            raise OnvifDiscoveryError("onvif_search_target_invalid")
+        if target == "huge":
+            raise OnvifDiscoveryError("onvif_search_target_too_large")
+        return self.found_by_address
+
+    def query(self, device_service, credentials, cancellation=None):
+        self.queries.append((device_service, credentials))
+        if self.error is not None:
+            raise self.error
+        return self.details
+
+
+def _wait_for(condition, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, "timed out waiting for the bridge"
+        QCoreApplication.processEvents()
+        time.sleep(0.005)
+
+
+def _onvif_camera(host: str = "192.168.1.20", **values) -> OnvifDiscoveredCamera:
+    return OnvifDiscoveredCamera(
+        key=values.pop("key", f"urn:uuid:{host}"),
+        device_service=f"http://{host}/onvif/device_service",
+        host=host,
+        port=80,
+        **values,
+    )
+
+
+def test_onvif_search_lists_cameras_and_names_a_saved_twin(scene_bridge_factory) -> None:
+    onvif = _Onvif(cameras=[
+        _onvif_camera("192.168.1.20", name="Acme", hardware="PTZ-200", location="Hall"),
+        _onvif_camera("192.168.1.30"),
+    ])
+    workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=onvif)
+    workspace.upsert_camera(SourceDefinition(
+        id="rtsp-hall", kind=SourceKind.RTSP_CAMERA, name="Hall camera",
+        configuration=RtspCameraConfig(uri="rtsp://192.168.1.20:554/stream"),
+    ))
+    assert bridge.onvifDiscoveryStatus == ""
+
+    bridge.discoverOnvifCameras()
+
+    assert bridge.onvifDiscoveryRunning
+    assert bridge.onvifDiscoveryStatus == "Searching the network…"
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+    assert bridge.onvifDiscoveryStatus == "Cameras found: 2"
+    assert bridge.onvifCameras == [
+        {
+            "id": "onvif:urn:uuid:192.168.1.20", "name": "Acme PTZ-200", "host": "192.168.1.20",
+            "port": 80, "location": "Hall",
+            "deviceService": "http://192.168.1.20/onvif/device_service",
+            "savedId": "rtsp-hall", "savedName": "Hall camera",
+        },
+        {
+            "id": "onvif:urn:uuid:192.168.1.30", "name": "192.168.1.30", "host": "192.168.1.30",
+            "port": 80, "location": "",
+            "deviceService": "http://192.168.1.30/onvif/device_service",
+            "savedId": "", "savedName": "",
+        },
+    ]
+
+
+def test_onvif_search_without_answers_explains_the_manual_path(scene_bridge_factory) -> None:
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=_Onvif())
+
+    bridge.discoverOnvifCameras()
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    assert bridge.onvifCameras == []
+    assert "No cameras answered" in bridge.onvifDiscoveryStatus
+
+
+def test_onvif_search_failure_is_reported(scene_bridge_factory) -> None:
+    class _Broken(_Onvif):
+        def discover(self, cancellation=None):
+            raise OnvifDiscoveryError("onvif_discovery_unavailable")
+
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=_Broken())
+
+    bridge.discoverOnvifCameras()
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    assert bridge.onvifDiscoveryStatus == "The network could not be searched."
+
+
+def test_onvif_query_reports_streams_and_ptz(scene_bridge_factory) -> None:
+    onvif = _Onvif(details=OnvifDeviceDetails(
+        device_service="http://192.168.1.20/onvif/device_service",
+        ptz_endpoint="http://192.168.1.20/onvif/ptz_service",
+        profiles=(
+            OnvifMediaProfile(
+                "main", "MainStream", "rtsp://192.168.1.20/main", True,
+                stream_username="viewer", stream_password="stream-secret",
+            ),
+            OnvifMediaProfile("sub", "SubStream", "rtsp://192.168.1.20/sub", False),
+        ),
+    ))
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=onvif)
+    spy = QSignalSpy(bridge.onvifCameraQueried)
+
+    request_id = bridge.queryOnvifCamera(" http://192.168.1.20/onvif/device_service ", "admin", "secret")
+
+    assert request_id > 0
+    _wait_for(lambda: spy.count() == 1)
+    assert spy.at(0)[0] == request_id
+    assert spy.at(0)[1] == {
+        "ok": True, "errorCode": "", "message": "",
+        "deviceService": "http://192.168.1.20/onvif/device_service",
+        "ptzEndpoint": "http://192.168.1.20/onvif/ptz_service",
+        "profiles": [
+            {"token": "main", "name": "MainStream", "uri": "rtsp://192.168.1.20/main", "ptz": True,
+             "username": "viewer", "password": "stream-secret"},
+            {"token": "sub", "name": "SubStream", "uri": "rtsp://192.168.1.20/sub", "ptz": False,
+             "username": "", "password": ""},
+        ],
+    }
+    assert onvif.queries == [
+        ("http://192.168.1.20/onvif/device_service", PtzCredentials("admin", "secret")),
+    ]
+
+
+def test_onvif_query_without_a_full_login_asks_anonymously(scene_bridge_factory) -> None:
+    onvif = _Onvif(error=OnvifDiscoveryError("onvif_authentication_failed"))
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=onvif)
+    spy = QSignalSpy(bridge.onvifCameraQueried)
+
+    bridge.queryOnvifCamera("http://192.168.1.20/onvif/device_service", "admin", "")
+    _wait_for(lambda: spy.count() == 1)
+
+    assert onvif.queries[0][1] is None
+    assert spy.at(0)[1]["ok"] is False
+    assert spy.at(0)[1]["errorCode"] == "onvif_authentication_failed"
+    assert spy.at(0)[1]["message"] == "The camera did not accept this user name and password."
+
+
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        ("rtsp://admin@192.168.1.20:554/stream", "http://192.168.1.20/onvif/device_service"),
+        ("192.168.1.20", "http://192.168.1.20/onvif/device_service"),
+        ("camera.local", "http://camera.local/onvif/device_service"),
+        ("", ""),
+        ("rtsp:///no-host", ""),
+    ],
+)
+def test_onvif_device_service_for_an_address(scene_bridge_factory, address: str, expected: str) -> None:
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=_Onvif())
+
+    assert bridge.onvifDeviceServiceForAddress(address) == expected
+
+
+def test_closed_bridge_starts_no_onvif_work(scene_bridge_factory) -> None:
+    onvif = _Onvif()
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=onvif)
+    bridge.close()
+
+    bridge.discoverOnvifCameras()
+
+    assert not bridge.onvifDiscoveryRunning
+    assert bridge.queryOnvifCamera("http://192.168.1.20/onvif/device_service", "", "") == 0
+    assert onvif.queries == []
+
+
+def test_onvif_address_search_adds_to_the_found_cameras(scene_bridge_factory) -> None:
+    onvif = _Onvif(cameras=[_onvif_camera("192.168.1.20")])
+    onvif.found_by_address = (_onvif_camera("192.168.0.100"), _onvif_camera("192.168.1.20"))
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=onvif)
+    bridge.discoverOnvifCameras()
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    bridge.searchOnvifAddress(" 192.168.0.0/24 ")
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    assert onvif.searches == ["192.168.0.0/24"]
+    assert [camera["host"] for camera in bridge.onvifCameras] == ["192.168.1.20", "192.168.0.100"]
+    assert bridge.onvifDiscoveryStatus == "Cameras found: 2"
+
+
+def test_onvif_address_search_without_answers_says_so(scene_bridge_factory) -> None:
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=_Onvif())
+
+    bridge.searchOnvifAddress("192.168.0.100")
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    assert bridge.onvifDiscoveryStatus == "No ONVIF camera answered at that address."
+
+
+@pytest.mark.parametrize(
+    ("target", "status"),
+    [
+        ("bad", "Enter an address such as 192.168.0.100"),
+        ("huge", "Search at most 1024 addresses at a time"),
+    ],
+)
+def test_onvif_address_search_explains_an_unusable_target(scene_bridge_factory, target, status) -> None:
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(onvif=_Onvif())
+
+    bridge.searchOnvifAddress(target)
+    _wait_for(lambda: not bridge.onvifDiscoveryRunning)
+
+    assert bridge.onvifDiscoveryStatus.startswith(status)

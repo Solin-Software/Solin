@@ -6229,6 +6229,58 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <source>A source with this name already exists in this scene.</source>
         <translation>Une source portant ce nom existe déjà dans cette scène.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Saisissez une adresse comme 192.168.0.100, une plage comme 192.168.0.1-254 ou un réseau comme 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Recherchez au plus 1024 adresses à la fois, par exemple un réseau en /22 ou plus petit.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Aucune caméra ONVIF n’a répondu à cette adresse.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Recherche sur le réseau…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Caméras trouvées : %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Impossible de rechercher sur le réseau.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Aucune caméra n’a répondu. Une caméra sur un autre réseau ne répondra pas ; ajoutez-la plutôt avec son adresse.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>La caméra n’a pas accepté ce nom d’utilisateur et ce mot de passe.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>La caméra n’a pas répondu. Vérifiez qu’elle est allumée et accessible depuis cet ordinateur.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>La connexion sécurisée de la caméra n’a pas pu être vérifiée.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>La caméra n’a indiqué aucun flux vidéo.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Cette adresse de caméra n’est pas valide.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>La réponse de la caméra n’a pas pu être lue.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7408,6 +7460,94 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Cette scène réutilisera les paramètres partagés de la caméra.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Adresse ou plage de la caméra, comme 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Adresse ou plage de la caméra</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Rechercher</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Adresse de cette caméra</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Déjà ajoutée sous « %2 »</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Trouvée sur le réseau</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Cette caméra demande ses identifiants. Saisissez le nom d’utilisateur et le mot de passe ci-dessus, puis sélectionnez Se connecter.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>La caméra n’a indiqué aucun flux vidéo.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Connectée. Cette caméra peut pivoter, s’incliner et zoomer ; la commande PTZ est configurée dans Avancé.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Connectée.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Cette caméra demande ses identifiants. Saisissez le nom d’utilisateur et le mot de passe ci-dessus, puis choisissez à nouveau la caméra.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Cette caméra ne propose pas de commande PTZ via ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Paramètres PTZ renseignés depuis la caméra.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Flux</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Interrogation de la caméra sur ses flux…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Se connecter</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Trouver les paramètres PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Profil PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Choisissez la caméra dont lire les paramètres PTZ.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Rechercher des caméras…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Interrogation de la caméra sur ses paramètres PTZ…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Trouver des caméras…</translation>
     </message>
 </context>
 <context>

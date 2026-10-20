@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import hashlib
 import secrets
 import time
@@ -149,10 +149,14 @@ class AiohttpOnvifTransport:
                     allow_redirects=False,
                     ssl=True,
                 ) as response:
-                    body = await response.content.read(_MAXIMUM_RESPONSE_BYTES + 1)
-                    if len(body) > _MAXIMUM_RESPONSE_BYTES:
-                        raise PtzExecutionError("ptz_onvif_response_too_large")
-                    return OnvifHttpResponse(response.status, body)
+                    # read(n) returns whatever has arrived, not n bytes: a
+                    # reply split across TCP segments must be read to the end.
+                    body = bytearray()
+                    async for chunk in response.content.iter_any():
+                        body += chunk
+                        if len(body) > _MAXIMUM_RESPONSE_BYTES:
+                            raise PtzExecutionError("ptz_onvif_response_too_large")
+                    return OnvifHttpResponse(response.status, bytes(body))
 
         task = asyncio.create_task(perform())
         try:
@@ -429,6 +433,8 @@ def _set_preset_operation(
 def _soap_envelope(
     operation: ElementTree.Element,
     credentials: PtzCredentials | None,
+    *,
+    clock_offset_seconds: float = 0.0,
 ) -> bytes:
     envelope = ElementTree.Element(_tag(_SOAP_NAMESPACE, "Envelope"))
     header = ElementTree.SubElement(
@@ -436,7 +442,7 @@ def _soap_envelope(
         _tag(_SOAP_NAMESPACE, "Header"),
     )
     if credentials is not None:
-        _add_username_token(header, credentials)
+        _add_username_token(header, credentials, clock_offset_seconds=clock_offset_seconds)
     body = ElementTree.SubElement(
         envelope,
         _tag(_SOAP_NAMESPACE, "Body"),
@@ -448,9 +454,14 @@ def _soap_envelope(
 def _add_username_token(
     header: ElementTree.Element,
     credentials: PtzCredentials,
+    *,
+    clock_offset_seconds: float = 0.0,
 ) -> None:
+    # Cameras reject a UsernameToken whose Created time is far from their own
+    # clock, so callers that know the camera's offset pass it in.
     nonce = secrets.token_bytes(20)
-    created = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    now = datetime.now(UTC) + timedelta(seconds=clock_offset_seconds)
+    created = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
     digest = hashlib.sha1(  # noqa: S324 - mandated by WS-Security UsernameToken 1.0
         nonce + created.encode("utf-8") + credentials.password.encode("utf-8")
     ).digest()

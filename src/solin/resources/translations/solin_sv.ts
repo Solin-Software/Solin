@@ -6228,6 +6228,58 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>A source with this name already exists in this scene.</source>
         <translation>Det finns redan en källa med det namnet i den här scenen.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Ange en adress som 192.168.0.100, ett intervall som 192.168.0.1-254 eller ett nätverk som 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Sök högst 1024 adresser åt gången, till exempel ett nätverk med /22 eller mindre.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Ingen ONVIF-kamera svarade på den adressen.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Söker i nätverket…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Hittade kameror: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Det gick inte att söka i nätverket.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Ingen kamera svarade. En kamera i ett annat nätverk svarar inte; lägg till den med dess adress i stället.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Kameran godkände inte det här användarnamnet och lösenordet.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Kameran svarade inte. Kontrollera att den är på och kan nås från den här datorn.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Kamerans säkra anslutning kunde inte verifieras.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kameran angav inga videoströmmar.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Det här är inte en giltig kameraadress.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Kamerans svar kunde inte läsas.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7407,6 +7459,94 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Den här scenen återanvänder kamerans gemensamma inställningar.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Kamerans adress eller intervall, t.ex. 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Kamerans adress eller intervall</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Sök</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Den här kamerans adress</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Redan tillagd som ”%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Hittades i nätverket</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Den här kameran kräver inloggning. Ange användarnamn och lösenord ovan och välj sedan Anslut.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kameran angav inga videoströmmar.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Ansluten. Den här kameran kan panorera, luta och zooma; PTZ-styrning har ställts in under Avancerat.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Ansluten.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Den här kameran kräver inloggning. Ange användarnamn och lösenord ovan och välj sedan kameran igen.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Den här kameran erbjuder inte PTZ-styrning via ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>PTZ-inställningarna fylldes i från kameran.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Ström</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Frågar kameran efter dess strömmar…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Anslut</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Hitta PTZ-inställningar…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ-profil</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Välj kameran vars PTZ-inställningar ska läsas.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Sök kameror…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Frågar kameran efter dess PTZ-inställningar…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Hitta kameror…</translation>
     </message>
 </context>
 <context>

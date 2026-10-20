@@ -698,3 +698,52 @@ def test_camera_empty_device_does_not_start_runtime(camera_runtime):
     runtime, created, events, _modes = camera_runtime
     assert runtime.camera_source("") is None
     assert not created and not events
+
+
+class _RtspSource:
+    def __init__(self, settings: dict) -> None:
+        self.settings = dict(settings)
+        self.updates: list[dict] = []
+
+    def update(self, settings: dict) -> None:
+        self.updates.append(dict(settings))
+        self.settings.update(settings)
+
+
+def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource]]:
+    created: list[_RtspSource] = []
+    runtime = obs_runtime.ObsRuntime()
+    monkeypatch.setattr(runtime, "ensure_started", lambda *args, **kwargs: None)
+    runtime._pylibobs = SimpleNamespace(Source=SimpleNamespace(
+        create=lambda kind, name, settings: created.append(_RtspSource(settings)) or created[-1],
+    ))
+    return runtime, created
+
+
+def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000"):
+    return {"is_local_file": False, "input": uri, "ffmpeg_options": options}
+
+
+def test_shared_rtsp_source_follows_transport_and_buffer_edits(monkeypatch) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+
+    # Same address, new transport and buffer: the live source must follow.
+    edited = _rtsp_settings(options="rtsp_transport=udp max_delay=500000")
+    assert runtime.rtsp_source("cam", "rtsp://camera/live", edited) is source
+
+    assert len(created) == 1
+    assert source.updates == [edited]
+    assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000"
+
+
+def test_shared_rtsp_source_is_not_rebuilt_for_unchanged_settings(monkeypatch) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+
+    # Every hydrate asks again; an unchanged camera must keep its connection.
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+    runtime.rtsp_source("cam", "rtsp://camera/other", _rtsp_settings("rtsp://camera/other"))
+
+    assert len(created) == 1
+    assert [update["input"] for update in source.updates] == ["rtsp://camera/other"]

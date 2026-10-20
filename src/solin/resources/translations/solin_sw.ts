@@ -6229,6 +6229,58 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <source>A source with this name already exists in this scene.</source>
         <translation>Chanzo chenye jina hili tayari kipo katika mandhari hii.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Weka anwani kama 192.168.0.100, masafa kama 192.168.0.1-254, au mtandao kama 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Tafuta anwani zisizozidi 1024 kwa wakati mmoja, kama mtandao wa /22 au mdogo zaidi.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Hakuna kamera ya ONVIF iliyojibu kwenye anwani hiyo.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Inatafuta kwenye mtandao…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Kamera zilizopatikana: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Mtandao haukuweza kutafutwa.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Hakuna kamera iliyojibu. Kamera iliyo kwenye mtandao mwingine haitajibu; iongeze kwa kutumia anwani yake badala yake.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>Kamera haikukubali jina hili la mtumiaji na nenosiri.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>Kamera haikujibu. Hakikisha imewashwa na inafikika kutoka kwenye kompyuta hii.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>Muunganisho salama wa kamera haukuweza kuthibitishwa.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera haikuorodhesha mitiririko yoyote ya video.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Hii si anwani sahihi ya kamera.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Jibu la kamera halikuweza kusomwa.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7408,6 +7460,94 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Mandhari hii itatumia tena mipangilio ya pamoja ya kamera.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Anwani au masafa ya kamera, kama 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Anwani au masafa ya kamera</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Tafuta</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Anwani ya kamera hii</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Tayari imeongezwa kama “%2”</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Imepatikana kwenye mtandao</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Kamera hii inahitaji kuingia. Weka jina la mtumiaji na nenosiri hapo juu, kisha uchague Unganisha.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>Kamera haikuorodhesha mitiririko yoyote ya video.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Imeunganishwa. Kamera hii inaweza kugeuka, kuinama na kukuza; udhibiti wa PTZ umewekwa kwenye Ya kina.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Imeunganishwa.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Kamera hii inahitaji kuingia. Weka jina la mtumiaji na nenosiri hapo juu, kisha uchague kamera tena.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Kamera hii haitoi udhibiti wa PTZ kupitia ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>Mipangilio ya PTZ imejazwa kutoka kwenye kamera.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Mtiririko</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Inaomba mitiririko kutoka kwenye kamera…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Unganisha</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>Tafuta mipangilio ya PTZ…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>Wasifu wa PTZ</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Chagua kamera ambayo mipangilio yake ya PTZ itasomwa.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Tafuta kamera…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>Inaomba mipangilio ya PTZ kutoka kwenye kamera…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Tafuta kamera kwenye mtandao…</translation>
     </message>
 </context>
 <context>

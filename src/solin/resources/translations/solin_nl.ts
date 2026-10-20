@@ -6229,6 +6229,58 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <source>A source with this name already exists in this scene.</source>
         <translation>Er bestaat al een bron met deze naam in deze scène.</translation>
     </message>
+    <message>
+        <source>Enter an address such as 192.168.0.100, a range such as 192.168.0.1-254, or a network such as 192.168.0.0/24.</source>
+        <translation>Voer een adres in zoals 192.168.0.100, een bereik zoals 192.168.0.1-254 of een netwerk zoals 192.168.0.0/24.</translation>
+    </message>
+    <message>
+        <source>Search at most 1024 addresses at a time, such as a network ending in /22 or smaller.</source>
+        <translation>Doorzoek maximaal 1024 adressen tegelijk, zoals een netwerk met /22 of kleiner.</translation>
+    </message>
+    <message>
+        <source>No ONVIF camera answered at that address.</source>
+        <translation>Er antwoordde geen ONVIF-camera op dat adres.</translation>
+    </message>
+    <message>
+        <source>Searching the network…</source>
+        <translation>Netwerk doorzoeken…</translation>
+    </message>
+    <message>
+        <source>Cameras found: %1</source>
+        <translation>Gevonden camera’s: %1</translation>
+    </message>
+    <message>
+        <source>The network could not be searched.</source>
+        <translation>Het netwerk kon niet worden doorzocht.</translation>
+    </message>
+    <message>
+        <source>No cameras answered. A camera on another network will not answer; add it with its address instead.</source>
+        <translation>Geen enkele camera antwoordde. Een camera op een ander netwerk antwoordt niet; voeg die in plaats daarvan toe met het adres.</translation>
+    </message>
+    <message>
+        <source>The camera did not accept this user name and password.</source>
+        <translation>De camera accepteerde deze gebruikersnaam en dit wachtwoord niet.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer. Check that it is on and reachable from this computer.</source>
+        <translation>De camera antwoordde niet. Controleer of hij aan staat en bereikbaar is vanaf deze computer.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s secure connection could not be verified.</source>
+        <translation>De beveiligde verbinding van de camera kon niet worden gecontroleerd.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>De camera gaf geen videostreams op.</translation>
+    </message>
+    <message>
+        <source>This is not a valid camera address.</source>
+        <translation>Dit is geen geldig camera-adres.</translation>
+    </message>
+    <message>
+        <source>The camera&apos;s reply could not be read.</source>
+        <translation>Het antwoord van de camera kon niet worden gelezen.</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7408,6 +7460,94 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <source>This scene will reuse the camera's shared settings.</source>
         <translation>Deze scène gebruikt de gedeelde instellingen van de camera opnieuw.</translation>
+    </message>
+    <message>
+        <source>Camera address or range, such as 192.168.0.1-254</source>
+        <translation>Camera-adres of bereik, zoals 192.168.0.1-254</translation>
+    </message>
+    <message>
+        <source>Camera address or range</source>
+        <translation>Camera-adres of bereik</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Zoeken</translation>
+    </message>
+    <message>
+        <source>This camera&apos;s address</source>
+        <translation>Adres van deze camera</translation>
+    </message>
+    <message>
+        <source>%1 · Already added as “%2”</source>
+        <translation>%1 · Al toegevoegd als ‘%2’</translation>
+    </message>
+    <message>
+        <source>%1 · Found on the network</source>
+        <translation>%1 · Gevonden op het netwerk</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then select Connect.</source>
+        <translation>Deze camera vraagt om aanmeldgegevens. Vul hierboven de gebruikersnaam en het wachtwoord in en kies daarna Verbinden.</translation>
+    </message>
+    <message>
+        <source>The camera did not list any video streams.</source>
+        <translation>De camera gaf geen videostreams op.</translation>
+    </message>
+    <message>
+        <source>Connected. This camera can pan, tilt, and zoom; PTZ control is set up under Advanced settings.</source>
+        <translation>Verbonden. Deze camera kan pannen, kantelen en zoomen; PTZ-besturing is ingesteld onder Geavanceerd.</translation>
+    </message>
+    <message>
+        <source>Connected.</source>
+        <translation>Verbonden.</translation>
+    </message>
+    <message>
+        <source>This camera needs its login. Enter the user name and password above, then choose the camera again.</source>
+        <translation>Deze camera vraagt om aanmeldgegevens. Vul hierboven de gebruikersnaam en het wachtwoord in en kies de camera daarna opnieuw.</translation>
+    </message>
+    <message>
+        <source>This camera does not offer PTZ control over ONVIF.</source>
+        <translation>Deze camera biedt geen PTZ-besturing via ONVIF.</translation>
+    </message>
+    <message>
+        <source>PTZ settings filled in from the camera.</source>
+        <translation>PTZ-instellingen ingevuld vanuit de camera.</translation>
+    </message>
+    <message>
+        <source>Stream</source>
+        <translation>Stream</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its streams…</source>
+        <translation>Streams opvragen bij de camera…</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Verbinden</translation>
+    </message>
+    <message>
+        <source>Find PTZ settings…</source>
+        <translation>PTZ-instellingen zoeken…</translation>
+    </message>
+    <message>
+        <source>PTZ profile</source>
+        <translation>PTZ-profiel</translation>
+    </message>
+    <message>
+        <source>Choose the camera to read its PTZ settings from.</source>
+        <translation>Kies de camera waarvan de PTZ-instellingen worden gelezen.</translation>
+    </message>
+    <message>
+        <source>Search cameras…</source>
+        <translation>Camera’s zoeken…</translation>
+    </message>
+    <message>
+        <source>Asking the camera for its PTZ settings…</source>
+        <translation>PTZ-instellingen opvragen bij de camera…</translation>
+    </message>
+    <message>
+        <source>Find cameras…</source>
+        <translation>Camera’s vinden…</translation>
     </message>
 </context>
 <context>
