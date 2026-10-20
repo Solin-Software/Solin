@@ -12080,6 +12080,22 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <source>The scene engine is unavailable.</source>
         <translation>Näkymämoottori ei ole käytettävissä.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuaalikamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projektio</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Näytä tämä näkymä virtuaalikamerassa</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Näytä tämä näkymä projektiossa</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

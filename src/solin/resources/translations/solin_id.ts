@@ -12038,6 +12038,22 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <source>The scene engine is unavailable.</source>
         <translation>Mesin adegan tidak tersedia.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera virtual</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Proyeksi</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Tampilkan adegan ini di kamera virtual</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Tampilkan adegan ini di proyeksi</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

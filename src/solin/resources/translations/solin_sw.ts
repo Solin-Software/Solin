@@ -12080,6 +12080,22 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <source>The scene engine is unavailable.</source>
         <translation>Injini ya mandhari haipatikani.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera pepe</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Makadirio</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Onyesha mandhari hii kwenye kamera pepe</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Onyesha mandhari hii kwenye makadirio</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

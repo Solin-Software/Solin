@@ -12038,6 +12038,22 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>The scene engine is unavailable.</source>
         <translation>场景引擎不可用。</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>在虚拟摄像机上显示此场景</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>在投影上显示此场景</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

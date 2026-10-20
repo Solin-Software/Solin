@@ -12038,6 +12038,22 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>The scene engine is unavailable.</source>
         <translation>シーンエンジンを利用できません。</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>仮想カメラ</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>このシーンを仮想カメラに表示</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>このシーンを投影に表示</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

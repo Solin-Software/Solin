@@ -12080,6 +12080,22 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <source>The scene engine is unavailable.</source>
         <translation>Die Szenen-Engine ist nicht verfügbar.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projektion</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Diese Szene auf der virtuellen Kamera zeigen</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Diese Szene in der Projektion zeigen</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

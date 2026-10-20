@@ -12038,6 +12038,22 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>The scene engine is unavailable.</source>
         <translation>장면 엔진을 사용할 수 없습니다.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>가상 카메라</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>프로젝션</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>이 장면을 가상 카메라에 표시</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>이 장면을 프로젝션에 표시</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

@@ -169,23 +169,47 @@ def test_window_says_when_its_scene_is_on_air(windows) -> None:
     controller, _feeds, manager = windows()
     window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
+    camera, projection = window._camera_tally, window._projection_tally
+    # The virtual camera button only exists while that output runs, as on cards.
+    assert not camera.isVisibleTo(window) and projection.isVisibleTo(window)
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     controller.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
     other = next(scene.id for scene in controller.document.scenes if scene.id != CAMERA_SCENE_ID)
     controller.select_scene(BusId.MEDIA_WINDOWS, other)
     QCoreApplication.processEvents()
-    assert window._camera_tally.isVisibleTo(window)
-    assert not window._projection_tally.isVisibleTo(window)
+    assert camera.isVisibleTo(window) and camera.property("live") is True
+    assert camera.text() == "On air · virtual camera"
+    assert projection.property("live") is False and projection.text() == "Projection"
 
     controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
     QCoreApplication.processEvents()
-    assert window._projection_tally.isVisibleTo(window)
+    assert projection.property("live") is True
 
-    # The virtual camera off means nothing is on air there, whatever is routed.
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     QCoreApplication.processEvents()
-    assert not window._camera_tally.isVisibleTo(window)
+    assert not camera.isVisibleTo(window)
+
+
+def test_window_buttons_put_the_scene_on_each_output(windows) -> None:
+    controller, _feeds, manager = windows()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    other = next(scene.id for scene in controller.document.scenes if scene.id != CAMERA_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, other)
+    controller.select_scene(BusId.MEDIA_WINDOWS, other)
+    window = manager.show_scene(CAMERA_SCENE_ID)
+    assert window is not None
+
+    window._projection_tally.click()
+    QCoreApplication.processEvents()
+    # Each output independently, exactly as a card's buttons route.
+    assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CAMERA_SCENE_ID
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == other
+    assert window._projection_tally.property("live") is True
+
+    window._camera_tally.click()
+    QCoreApplication.processEvents()
+    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
 
 def test_window_follows_renames_and_closes_with_its_scene(windows) -> None:

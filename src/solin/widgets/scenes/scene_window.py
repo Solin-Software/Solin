@@ -200,9 +200,13 @@ class SceneWindow(QWidget):
         self._name.setObjectName("SceneWindowName")
         header_layout.addWidget(self._name, 1)
         # Same order as everywhere else for outputs: virtual camera, then projection.
-        self._camera_tally = self._tally_label("SceneWindowCameraTally", _svg(ICON_CAMERA))
+        self._camera_tally = self._output_button(
+            "SceneWindowCameraTally", _svg(ICON_CAMERA), BusId.VIRTUAL_CAMERA,
+        )
         header_layout.addWidget(self._camera_tally)
-        self._projection_tally = self._tally_label("SceneWindowProjectionTally", _svg(ICON_SCREEN))
+        self._projection_tally = self._output_button(
+            "SceneWindowProjectionTally", _svg(ICON_SCREEN), BusId.MEDIA_WINDOWS,
+        )
         header_layout.addWidget(self._projection_tally)
         root.addWidget(header)
 
@@ -218,16 +222,26 @@ class SceneWindow(QWidget):
         body.addWidget(self._ptz)
         root.addLayout(body, 1)
 
-    def _tally_label(self, object_name: str, icon: str) -> QPushButton:
-        # A button only for its icon-plus-text layout; it is not interactive.
-        label = QPushButton()
-        label.setObjectName(object_name)
-        label.setProperty("icon_svg", icon)
-        label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        label.setIconSize(QSize(13, 13))
-        label.hide()
-        return label
+    def _output_button(self, object_name: str, icon: str, bus_id: BusId) -> QPushButton:
+        """Shows whether the scene is on an output, and puts it there when clicked."""
+        button = QPushButton()
+        button.setObjectName(object_name)
+        button.setProperty("icon_svg", icon)
+        button.setProperty("live", False)
+        # The window keeps the keys for PTZ; these are mouse controls.
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setIconSize(QSize(13, 13))
+        button.clicked.connect(lambda: self._route_to(bus_id))
+        return button
+
+    def _route_to(self, bus_id: BusId) -> None:
+        """The same routing a scene card's output button does."""
+        try:
+            self._controller.select_scene(bus_id, self.scene_id)
+        except Exception:  # noqa: BLE001 - UI operation boundary
+            log.exception("Could not route the scene from its window")
+        self._render()
 
     # ── state ───────────────────────────────────────────────────────────────
 
@@ -274,14 +288,29 @@ class SceneWindow(QWidget):
             and controller.desired_scene(BusId.VIRTUAL_CAMERA) == self.scene_id
         )
         on_projection = controller.desired_scene(BusId.MEDIA_WINDOWS) == self.scene_id
-        for label, live, text in (
-            (self._camera_tally, on_camera, self.tr("On air · virtual camera")),
-            (self._projection_tally, on_projection, self.tr("On air · projection")),
+        for button, live, live_text, idle_text, hint in (
+            (
+                self._camera_tally, on_camera, self.tr("On air · virtual camera"),
+                self.tr("Virtual camera"), self.tr("Show this scene on the virtual camera"),
+            ),
+            (
+                self._projection_tally, on_projection, self.tr("On air · projection"),
+                self.tr("Projection"), self.tr("Show this scene on the projection"),
+            ),
         ):
-            label.setText(text)
-            label.setToolTip(text)
-            label.setAccessibleName(text)
-            label.setVisible(live)
+            button.setText(live_text if live else idle_text)
+            button.setToolTip(live_text if live else hint)
+            button.setAccessibleName(live_text if live else hint)
+            if button.property("live") != live or button.icon().isNull():
+                button.setProperty("live", live)
+                button.setIcon(make_icon(
+                    str(button.property("icon_svg")), 13,
+                    PALETTE.accent_text if live else PALETTE.text_secondary,
+                ))
+                button.style().unpolish(button)
+                button.style().polish(button)
+        # Like the card's button: the virtual camera only matters while it runs.
+        self._camera_tally.setVisible(controller.program_output_enabled)
 
     def _render_status(self) -> None:
         if self._controller.engine_ready:
@@ -440,8 +469,11 @@ class SceneWindow(QWidget):
 
     def apply_theme(self) -> None:
         self._ptz.apply_theme()
-        for label in (self._camera_tally, self._projection_tally):
-            label.setIcon(make_icon(str(label.property("icon_svg")), 13, PALETTE.accent_text))
+        for button in (self._camera_tally, self._projection_tally):
+            button.setIcon(make_icon(
+                str(button.property("icon_svg")), 13,
+                PALETTE.accent_text if button.property("live") else PALETTE.text_secondary,
+            ))
         self.setStyleSheet(
             f"""
             QWidget#SceneWindow {{ background:{PALETTE.surface}; }}
@@ -449,9 +481,16 @@ class SceneWindow(QWidget):
             QLabel {{ background:transparent; }}
             QLabel#SceneWindowName {{ color:{PALETTE.text_primary}; font-size:14px; font-weight:600; background:transparent; }}
             QPushButton#SceneWindowCameraTally, QPushButton#SceneWindowProjectionTally {{
+                color:{PALETTE.text_secondary}; background:{PALETTE.surface_card};
+                border:1px solid {PALETTE.border}; border-radius:7px;
+                padding:3px 10px; font-size:11px; font-weight:600;
+            }}
+            QPushButton#SceneWindowCameraTally:hover, QPushButton#SceneWindowProjectionTally:hover {{
+                background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; color:{PALETTE.text_primary};
+            }}
+            QPushButton#SceneWindowCameraTally[live="true"], QPushButton#SceneWindowProjectionTally[live="true"] {{
                 color:{PALETTE.accent_text}; background:{qss_rgba(PALETTE.accent, 0.14)};
-                border:1px solid {qss_rgba(PALETTE.accent, 0.50)}; border-radius:7px;
-                padding:2px 8px; font-size:11px; font-weight:600;
+                border-color:{qss_rgba(PALETTE.accent, 0.50)};
             }}
             """
         )

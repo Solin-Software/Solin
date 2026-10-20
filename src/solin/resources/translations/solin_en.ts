@@ -10667,6 +10667,22 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <source>The scene engine is unavailable.</source>
         <translation>The scene engine is unavailable.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projection</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Show this scene on the virtual camera</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Show this scene on the projection</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

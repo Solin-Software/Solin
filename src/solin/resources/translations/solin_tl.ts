@@ -12080,6 +12080,22 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <source>The scene engine is unavailable.</source>
         <translation>Hindi available ang scene engine.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual na camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projection</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Ipakita ang eksenang ito sa virtual na camera</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Ipakita ang eksenang ito sa projection</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

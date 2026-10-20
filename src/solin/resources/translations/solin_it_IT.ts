@@ -12080,6 +12080,22 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <source>The scene engine is unavailable.</source>
         <translation>Il motore delle scene non è disponibile.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Videocamera virtuale</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Proiezione</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Mostra questa scena sulla videocamera virtuale</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Mostra questa scena nella proiezione</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

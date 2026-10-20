@@ -12080,6 +12080,22 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
         <source>The scene engine is unavailable.</source>
         <translation>Le moteur de scènes n’est pas disponible.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Caméra virtuelle</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projection</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Afficher cette scène sur la caméra virtuelle</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Afficher cette scène sur la projection</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

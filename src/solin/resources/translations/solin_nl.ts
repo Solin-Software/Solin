@@ -12080,6 +12080,22 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <source>The scene engine is unavailable.</source>
         <translation>De scène-engine is niet beschikbaar.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projectie</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Deze scène op de virtuele camera tonen</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Deze scène in de projectie tonen</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

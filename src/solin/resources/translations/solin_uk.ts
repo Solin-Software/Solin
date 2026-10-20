@@ -12122,6 +12122,22 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>The scene engine is unavailable.</source>
         <translation>Рушій сцен недоступний.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Віртуальна камера</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Проекція</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Показати цю сцену на віртуальній камері</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Показати цю сцену в проекції</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

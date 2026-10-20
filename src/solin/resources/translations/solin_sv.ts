@@ -12079,6 +12079,22 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <source>The scene engine is unavailable.</source>
         <translation>Scenmotorn är inte tillgänglig.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projicering</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Visa den här scenen i den virtuella kameran</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Visa den här scenen i projiceringen</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>

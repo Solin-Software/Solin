@@ -12122,6 +12122,22 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
         <source>The scene engine is unavailable.</source>
         <translation>Silnik scen jest niedostępny.</translation>
     </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera wirtualna</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projekcja</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Pokaż tę scenę w kamerze wirtualnej</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Pokaż tę scenę w projekcji</translation>
+    </message>
 </context>
 <context>
     <name>ScenePtzPanel</name>
