@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QImage
 import pytest
 
@@ -62,8 +62,28 @@ def _frame(color: int) -> QImage:
     return image
 
 
+class _Feed(QObject):
+    """The capture's feed without shared memory or a reader thread."""
+
+    thumbnail_ready = Signal(str, QImage)
+
+    def __init__(self, channel_id: str, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.channel_id = channel_id
+        self.descriptor = None
+        self.closed = False
+
+    def reconfigure(self, scene_ids, width, height) -> bool:
+        self.descriptor = object()
+        return True
+
+    def close(self) -> None:
+        self.closed = True
+        self.descriptor = None
+
+
 def _capture(engine: _Engine, **timing) -> tuple[CameraStillCapture, list, list]:
-    capture = CameraStillCapture(engine, "stage", **timing)  # type: ignore[arg-type]
+    capture = CameraStillCapture(engine, "stage", feed_factory=_Feed, **timing)  # type: ignore[arg-type]
     captured: list = []
     failed: list = []
     capture.captured.connect(lambda camera, image: captured.append((camera, image)))
@@ -93,6 +113,7 @@ def test_capture_takes_the_settled_frame_and_closes_its_feed() -> None:
 
     assert engine.calls[0] == (camera_still_channel("stage"), True, ("stage",), 320, 180)
     assert engine.calls[-1][:2] == (camera_still_channel("stage"), False)  # closed again
+    assert capture._feed.closed
     assert failed == []
     (camera, image), = captured
     assert camera == "stage" and image.pixelColor(10, 10).green() == 255

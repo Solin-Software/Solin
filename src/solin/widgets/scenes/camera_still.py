@@ -8,6 +8,8 @@ as the still is taken, so a capture costs a second or so of rendering.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QImage
 
@@ -33,13 +35,21 @@ class CameraStillCapture(QObject):
         *,
         settle_ms: int = _SETTLE_MS,
         timeout_ms: int = _TIMEOUT_MS,
+        feed_factory: Callable[[str, QObject], SceneThumbnailEgressController] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self.camera_source_id = camera_source_id
         self._controller = controller
         self._channel_id = camera_still_channel(camera_source_id)
-        self._feed = SceneThumbnailEgressController(channel_id=self._channel_id, parent=self)
+        # The feed is injectable so the capture's own logic can be tested without
+        # shared memory and a reader thread; the reader has its own tests.
+        factory = feed_factory or (
+            lambda channel_id, parent: SceneThumbnailEgressController(
+                channel_id=channel_id, parent=parent,
+            )
+        )
+        self._feed = factory(self._channel_id, self)
         self._feed.thumbnail_ready.connect(self._on_frame)
         self._latest: QImage | None = None
         self._finished = False
