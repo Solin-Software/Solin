@@ -169,14 +169,14 @@ class WindowsVcamBroker:
                     try:
                         thread.start()
                         startup.accepted = True
-                    except BaseException:
+                    except BaseException:  # noqa: BLE001 - release untransferred event ownership on interruption, then re-raise
                         if not startup.accepted:
                             self._release_stop_event()
                         raise
                     finally:
                         startup.ready.set()
                 self._started = True
-            except BaseException:
+            except BaseException:  # noqa: BLE001 - roll back partial startup even on interruption, then re-raise
                 for index, pipe in enumerate(pipes):
                     if index >= len(startups) or not startups[index].accepted:
                         self._win.close_handle(pipe)
