@@ -25,6 +25,7 @@ from solin.core.scenes.model import (
 )
 from solin.core.scenes.media_control import ContentSourceKind, MediaControlAction, MediaPlaybackNativeState
 from solin.core.scenes.idle import IdleScreenState
+from solin.core.scenes.output_health import OutputHealth
 from solin.core.scenes.recording import (
     AudioDeviceDiscovery,
     AudioDeviceSelection,
@@ -700,6 +701,24 @@ class SourceHealthEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class OutputHealthEvent:
+    bus_id: BusId
+    state: OutputHealth
+    session_id: str
+    process_generation: str
+    sequence: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bus_id, BusId):
+            raise ValueError("Invalid output health bus")
+        if not isinstance(self.state, OutputHealth):
+            raise ValueError("Invalid output health state")
+        _identity(self.session_id, "output health session id")
+        _identity(self.process_generation, "output health process generation")
+        _non_negative_int(self.sequence, "output health sequence")
+
+
+@dataclass(frozen=True, slots=True)
 class EngineHealthEvent:
     health: SceneEngineHealth
 
@@ -756,6 +775,7 @@ class MediaVideoReadyEvent:
 
 SceneEngineEvent: TypeAlias = (
     SourceHealthEvent
+    | OutputHealthEvent
     | EngineHealthEvent
     | FrameEgressReadyEvent
     | ProgramRecordingEvent

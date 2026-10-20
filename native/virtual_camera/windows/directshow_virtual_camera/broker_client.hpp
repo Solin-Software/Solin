@@ -16,6 +16,7 @@ namespace solin::virtual_camera::windows_virtual_camera {
 class BrokerFrameProvider final {
   public:
     BrokerFrameProvider() noexcept;
+    explicit BrokerFrameProvider(std::wstring pipe_name) noexcept;
     ~BrokerFrameProvider();
 
     BrokerFrameProvider(const BrokerFrameProvider&) = delete;
@@ -29,14 +30,18 @@ class BrokerFrameProvider final {
 
   private:
     void reconnect_loop() noexcept;
+    void request_reconnect_locked() noexcept;
 
     std::wstring pipe_name_{};
     std::unique_ptr<SharedVideoFrameReader> reader_{};
     std::uintptr_t broker_connection_{0U};
     mutable std::mutex lifecycle_mutex_{};
     mutable std::mutex mutex_{};
-    std::chrono::steady_clock::time_point last_progress_{};
+    std::chrono::steady_clock::time_point last_heartbeat_progress_{};
+    std::chrono::steady_clock::time_point last_frame_progress_{};
     std::uint64_t last_heartbeat_{0U};
+    std::uint64_t frame_generation_{0U};
+    std::uint64_t last_frame_sequence_{0U};
     std::condition_variable reconnect_wakeup_{};
     std::atomic_bool stop_requested_{false};
     bool reconnect_requested_{false};

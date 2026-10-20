@@ -19,7 +19,8 @@ from __future__ import annotations
 import logging
 import struct
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import monotonic
 from typing import Callable, Optional
 
 from solin.core.scenes.windows_vcam_api import (
@@ -42,6 +43,8 @@ log = logging.getLogger(__name__)
 
 _PIPE_INSTANCES = 4
 _HANDSHAKE_TIMEOUT_MS = 2000
+_ACCEPT_RETRY_DELAY_MS = 100
+_STOP_TIMEOUT_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,12 @@ class VcamBrokerEndpoint:
 
 # Returns the current endpoint, or ``None`` when the ring is not ready.
 EndpointProvider = Callable[[], Optional[VcamBrokerEndpoint]]
+
+
+@dataclass
+class _WorkerStartup:
+    ready: threading.Event = field(default_factory=threading.Event)
+    accepted: bool = False
 
 
 def build_response_bytes(
@@ -109,73 +118,145 @@ class WindowsVcamBroker:
         self._endpoint_provider = endpoint_provider
         self._threads: list[threading.Thread] = []
         self._stop_event = None  # HANDLE to a Win32 manual-reset event
+        self._event_users = 0
+        self._event_lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
         self._started = False
         self._win = _Win32()
 
-    def start(self) -> None:
-        if self._started:
-            return
-        self._stop_event = self._win.create_event()
-        # Create the first instance synchronously so FILE_FLAG_FIRST_PIPE_INSTANCE
-        # cannot lose a race to a sibling worker (which would fail its create).
-        try:
-            first_pipe = self._win.create_pipe(self._pipe_name, self._sid, True)
-        except OSError:
-            self._win.close_handle(self._stop_event)
-            self._stop_event = None
-            raise
-        for index in range(_PIPE_INSTANCES):
-            thread = threading.Thread(
-                target=self._serve,
-                args=(first_pipe if index == 0 else None,),
-                name=f"solin-vcam-broker-{index}",
-                daemon=True,
+    @property
+    def healthy(self) -> bool:
+        """True only after startup and while all required workers remain alive."""
+        with self._lifecycle_lock:
+            return (
+                self._started
+                and len(self._threads) == _PIPE_INSTANCES
+                and all(thread.is_alive() for thread in self._threads)
             )
-            self._threads.append(thread)
-        self._started = True
-        for thread in self._threads:
-            thread.start()
+
+    def start(self) -> None:
+        with self._lifecycle_lock:
+            if self._started:
+                return
+            if any(thread.is_alive() for thread in self._threads):
+                raise RuntimeError("vcam broker workers are still stopping")
+            self._threads.clear()
+            self._stop_event = self._win.create_event()
+            # Startup owns one reference until all worker ownership transfers
+            # finish. A fast worker exit must not dispose the shared stop event.
+            self._event_users = 1
+            pipes = []
+            startups = []
+            try:
+                # Reserve every instance before launching workers. The first
+                # reservation protects identity; retaining these handles across
+                # clients also prevents another server taking over the name.
+                for index in range(_PIPE_INSTANCES):
+                    pipes.append(self._win.create_pipe(self._pipe_name, self._sid, index == 0))
+                startups = [_WorkerStartup() for _ in pipes]
+                self._threads = [
+                    threading.Thread(
+                        target=self._serve,
+                        args=(pipe, self._stop_event, startups[index]),
+                        name=f"solin-vcam-broker-{index}",
+                        daemon=True,
+                    )
+                    for index, pipe in enumerate(pipes)
+                ]
+                for thread, startup in zip(self._threads, startups, strict=True):
+                    with self._event_lock:
+                        self._event_users += 1
+                    try:
+                        thread.start()
+                        startup.accepted = True
+                    except BaseException:
+                        if not startup.accepted:
+                            self._release_stop_event()
+                        raise
+                    finally:
+                        startup.ready.set()
+                self._started = True
+            except BaseException:
+                for index, pipe in enumerate(pipes):
+                    if index >= len(startups) or not startups[index].accepted:
+                        self._win.close_handle(pipe)
+                self._threads = [
+                    thread for thread, startup in zip(self._threads, startups, strict=False)
+                    if startup.accepted
+                ]
+                self.stop()
+                raise
+            finally:
+                self._release_stop_event()
 
     def stop(self) -> None:
-        if not self._started:
-            return
-        self._started = False
-        if self._stop_event is not None:
-            self._win.set_event(self._stop_event)
-        for thread in self._threads:
-            thread.join(timeout=5.0)
-        self._threads.clear()
-        if self._stop_event is not None:
-            self._win.close_handle(self._stop_event)
-            self._stop_event = None
+        """Signal cancellation and wait at most one shared shutdown budget.
+
+        A delayed worker keeps its pipe and stop event until it exits. Starting
+        again is refused while any previous worker is still stopping.
+        """
+        with self._lifecycle_lock:
+            self._started = False
+            with self._event_lock:
+                if self._stop_event is not None:
+                    self._win.set_event(self._stop_event)
+            deadline = monotonic() + _STOP_TIMEOUT_S
+            for thread in self._threads:
+                if thread is not threading.current_thread():
+                    thread.join(timeout=max(0.0, deadline - monotonic()))
+            if not any(thread.is_alive() for thread in self._threads):
+                self._threads.clear()
+            else:
+                log.warning("vcam broker workers still stopping after shutdown wait")
+
+    def _release_stop_event(self) -> None:
+        with self._event_lock:
+            self._event_users -= 1
+            if self._event_users == 0:
+                self._win.close_handle(self._stop_event)
+                self._stop_event = None
 
     # ── worker loop ──────────────────────────────────────────────────────────
 
-    def _serve(self, initial_pipe) -> None:
+    def _serve(self, pipe, stop_event, startup: _WorkerStartup) -> None:
+        # Thread.start() can be interrupted after launching a native thread.
+        # Do not touch handles until the caller confirms ownership transfer.
+        startup.ready.wait()
+        if not startup.accepted:
+            return
         win = self._win
-        pipe = initial_pipe  # worker 0 inherits the pre-created first instance
         try:
-            while not win.stop_requested(self._stop_event):
+            while not win.stop_requested(stop_event):
+                retry = False
                 try:
-                    if pipe is None:
-                        pipe = win.create_pipe(self._pipe_name, self._sid, False)
-                    if not win.connect(pipe, self._stop_event):
-                        break
-                    self._handle_client(pipe)
-                except OSError:
-                    log.debug("vcam broker worker errored", exc_info=True)
-                    break
+                    if win.connect(pipe, stop_event):
+                        self._handle_client(pipe, stop_event)
+                    else:
+                        retry = True
+                except OSError as exc:
+                    error = getattr(exc, "winerror", None) or exc.errno
+                    if error not in _Win32Impl.CLIENT_DISCONNECT_ERRORS:
+                        raise
+                    log.debug("vcam broker client errored", exc_info=True)
+                    retry = True
                 finally:
-                    if pipe is not None:
-                        win.disconnect_and_close(pipe)
-                        pipe = None
+                    win.disconnect(pipe)
+                # A connect failure can be a client abort, not shutdown. Retry
+                # on the same reserved instance with a stop-aware delay so a
+                # persistent OS error cannot turn this into a busy loop.
+                if retry and win.stop_requested(stop_event, _ACCEPT_RETRY_DELAY_MS):
+                    break
+        except Exception:  # noqa: BLE001 - unexpected worker failure is exposed by healthy
+            log.exception("vcam broker worker stopped unexpectedly")
         finally:
-            if pipe is not None:
-                win.disconnect_and_close(pipe)
+            try:
+                win.close_handle(pipe)
+            finally:
+                self._release_stop_event()
 
-    def _handle_client(self, pipe) -> None:
+    def _handle_client(self, pipe, stop_event) -> None:
         win = self._win
-        request = win.read_exact(pipe, REQUEST_SIZE, self._stop_event, _HANDSHAKE_TIMEOUT_MS)
+        request = win.read_exact(pipe, REQUEST_SIZE, stop_event, _HANDSHAKE_TIMEOUT_MS)
         if request is None:
             return
         authorized = win.client_matches_identity(pipe, self._sid)
@@ -185,12 +266,12 @@ class WindowsVcamBroker:
         except Exception:  # noqa: BLE001 - provider boundary
             log.debug("vcam endpoint provider errored", exc_info=True)
         response = build_response_bytes(request, endpoint, authorized=authorized)
-        if not win.write_exact(pipe, response, self._stop_event, _HANDSHAKE_TIMEOUT_MS):
+        if not win.write_exact(pipe, response, stop_event, _HANDSHAKE_TIMEOUT_MS):
             return
         status = struct.unpack_from("<I", response, 12)[0]  # response status u32
         if status == int(BrokerStatus.OK):
             # A persistent filter holds the pipe open and streams presence markers.
-            win.drain_presence(pipe, self._stop_event)
+            win.drain_presence(pipe, stop_event)
 
 
 def _Win32():  # noqa: N802 - factory named for the class it stands in for
@@ -226,6 +307,10 @@ class _Win32Impl:
     ERROR_BROKEN_PIPE = 109
     ERROR_PIPE_NOT_CONNECTED = 233
     ERROR_NO_DATA = 232
+    ERROR_OPERATION_ABORTED = 995
+    CLIENT_DISCONNECT_ERRORS = (
+        ERROR_BROKEN_PIPE, ERROR_PIPE_NOT_CONNECTED, ERROR_NO_DATA, ERROR_OPERATION_ABORTED,
+    )
     ERROR_INSUFFICIENT_BUFFER = 122
     WAIT_OBJECT_0 = 0
     WAIT_TIMEOUT = 0x00000102
@@ -339,8 +424,8 @@ class _Win32Impl:
     def close_handle(self, handle) -> None:
         self._k32.CloseHandle(handle)
 
-    def stop_requested(self, stop_event) -> bool:
-        return self._k32.WaitForSingleObject(stop_event, 0) == self.WAIT_OBJECT_0
+    def stop_requested(self, stop_event, timeout_ms=0) -> bool:
+        return self._k32.WaitForSingleObject(stop_event, timeout_ms) == self.WAIT_OBJECT_0
 
     # ── pipe lifecycle ───────────────────────────────────────────────────────
 
@@ -394,6 +479,7 @@ class _Win32Impl:
             if error == self.ERROR_PIPE_CONNECTED:
                 return True
             if error != self.ERROR_IO_PENDING:
+                self._raise_unexpected_io_error(error, "ConnectNamedPipe")
                 return False
             if not self._wait_overlapped(pipe, overlapped, event, stop_event, self.INFINITE):
                 return False
@@ -401,9 +487,8 @@ class _Win32Impl:
         finally:
             self.close_handle(event)
 
-    def disconnect_and_close(self, pipe) -> None:
+    def disconnect(self, pipe) -> None:
         self._k32.DisconnectNamedPipe(pipe)
-        self.close_handle(pipe)
 
     # ── overlapped I/O ───────────────────────────────────────────────────────
 
@@ -413,21 +498,29 @@ class _Win32Impl:
         HANDLE = self._wintypes.HANDLE
         handles = (HANDLE * 2)(stop_event, event)
         result = self._k32.WaitForMultipleObjects(2, handles, False, timeout_ms)
-        if result == self.WAIT_OBJECT_0:  # stop
+        if result != self.WAIT_OBJECT_0 + 1:  # stop, timeout or failure
+            error = (
+                windows_last_error()
+                if result not in (self.WAIT_OBJECT_0, self.WAIT_TIMEOUT) else None
+            )
             self._k32.CancelIoEx(pipe, ctypes.byref(overlapped))
             transferred = self._wintypes.DWORD(0)
             self._k32.GetOverlappedResult(pipe, ctypes.byref(overlapped),
                                           ctypes.byref(transferred), True)
-            return False
-        if result != self.WAIT_OBJECT_0 + 1:  # timeout or failure
-            self._k32.CancelIoEx(pipe, ctypes.byref(overlapped))
-            transferred = self._wintypes.DWORD(0)
-            self._k32.GetOverlappedResult(pipe, ctypes.byref(overlapped),
-                                          ctypes.byref(transferred), True)
+            if error is not None:
+                raise OSError(error, "WaitForMultipleObjects failed")
             return False
         transferred = self._wintypes.DWORD(0)
-        return bool(self._k32.GetOverlappedResult(
-            pipe, ctypes.byref(overlapped), ctypes.byref(transferred), False))
+        if self._k32.GetOverlappedResult(
+            pipe, ctypes.byref(overlapped), ctypes.byref(transferred), False,
+        ):
+            return True
+        self._raise_unexpected_io_error(windows_last_error(), "GetOverlappedResult")
+        return False
+
+    def _raise_unexpected_io_error(self, error: int, where: str) -> None:
+        if error not in self.CLIENT_DISCONNECT_ERRORS:
+            raise OSError(error, f"{where} failed")
 
     def read_exact(self, pipe, count, stop_event, timeout_ms) -> Optional[bytes]:
         ctypes = self._ctypes
@@ -445,6 +538,7 @@ class _Win32Impl:
                 if not ok:
                     error = windows_last_error()
                     if error != self.ERROR_IO_PENDING:
+                        self._raise_unexpected_io_error(error, "ReadFile")
                         return None
                     if not self._wait_overlapped(pipe, overlapped, event, stop_event, timeout_ms):
                         return None
@@ -474,6 +568,7 @@ class _Win32Impl:
                 if not ok:
                     error = windows_last_error()
                     if error != self.ERROR_IO_PENDING:
+                        self._raise_unexpected_io_error(error, "WriteFile")
                         return False
                     if not self._wait_overlapped(pipe, overlapped, event, stop_event, timeout_ms):
                         return False
@@ -504,6 +599,7 @@ class _Win32Impl:
                                  self.ERROR_NO_DATA):
                         return
                     if error != self.ERROR_IO_PENDING:
+                        self._raise_unexpected_io_error(error, "ReadFile")
                         return
                     if not self._wait_overlapped(pipe, overlapped, event, stop_event, self.INFINITE):
                         return

@@ -73,6 +73,7 @@ from solin.core.scenes.recording import (
 )
 from solin.core.scenes.ptz import PtzControlKind, PtzControlResult, PtzCredentials, PtzRecallStatus
 from solin.core.scenes.process_engine import SceneEngineRequestTimeoutError
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.workspace import SceneWorkspaceService
 from solin.styles.icons import ICON_FOLDER, ICON_FOLDER_LINK, make_icon
 from solin.ui.qml.scenes_bridge import ScenesBridge
@@ -116,6 +117,63 @@ class _Notifications:
 
     def warning(self, message: str, **options: str) -> None:
         self.warnings.append((message, options))
+
+
+def test_requested_virtual_camera_does_not_claim_ready_before_output_confirmation(
+    scene_bridge_factory,
+) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+
+    assert bridge.virtualCameraEnabled
+    assert bridge.outputStateLabel != bridge.tr("On")
+    assert not bridge.virtualCameraReady
+
+
+@pytest.mark.parametrize("requested", [False, True])
+@pytest.mark.parametrize("status", list(OutputHealthStatus))
+def test_output_presentation_separates_requested_activation_and_delivery_health(
+    scene_bridge_factory, requested, status,
+) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, requested)
+    state = OutputHealth(
+        status, "virtual_camera_unavailable" if status in {
+            OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED,
+        } else "", generation=1,
+    )
+    controller._set_output_health(BusId.VIRTUAL_CAMERA, state)
+    # A failure from another operation must not become the output's status.
+    controller._set_last_engine_error_code("source_unavailable")
+
+    assert bridge.virtualCameraEnabled is requested
+    assert bridge.virtualCameraReady is (requested and status is OutputHealthStatus.READY)
+    if not requested:
+        assert bridge.outputStateLabel == bridge.tr("Off")
+    elif status is OutputHealthStatus.READY:
+        assert bridge.outputStateLabel == bridge.tr("On")
+    elif status is OutputHealthStatus.FAILED:
+        assert bridge.outputStateLabel == bridge.tr("Error")
+    else:
+        assert bridge.outputStateLabel not in {bridge.tr("On"), bridge.tr("Off"), bridge.tr("Error")}
+
+
+def test_output_recovery_updates_presentation_despite_previous_global_output_error(
+    scene_bridge_factory,
+) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller._set_last_engine_error_code("virtual_camera_unavailable")
+    changes = QSignalSpy(bridge.changed)
+    for status in (OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED, OutputHealthStatus.READY):
+        before = changes.count()
+        controller._set_output_health(BusId.VIRTUAL_CAMERA, OutputHealth(
+            status, "virtual_camera_unavailable" if status is not OutputHealthStatus.READY else "", 1,
+        ))
+        assert changes.count() > before
+        assert bridge.virtualCameraEnabled
+        assert bridge.virtualCameraReady is (status is OutputHealthStatus.READY)
+    assert bridge.outputStateLabel == bridge.tr("On")
 
 
 def test_recording_directory_uses_a_plain_folder_icon() -> None:

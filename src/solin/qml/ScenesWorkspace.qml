@@ -212,8 +212,9 @@ Item {
 
             OutputButton {
                 id: outputButton
+                objectName: "scenesOutputButton"
                 stateLabel: root.bridge ? root.bridge.outputStateLabel : qsTr("Off")
-                active: root.bridge && root.bridge.virtualCameraEnabled
+                active: root.bridge && root.bridge.virtualCameraReady
                 onClicked: root.popupBelow(outputMenu, outputButton)
             }
         }

@@ -27,4 +27,12 @@ ctest --test-dir build/native/virtual-camera-tests --output-on-failure
 
 On Windows the suite additionally exercises frame transport, the DirectShow
 consumer, backpressure, cadence, frame adaptation, and the frame-adapter
-benchmark. Consumer tests share a broker endpoint and use a CTest resource lock.
+benchmark. A separate test filter uses process-local broker endpoints without
+registering COM classes or connecting to an installed application's producer.
+
+Output readiness requires published frames, not just an enabled setting or a
+running broker. The sidecar observes publication progress and recreates stalled
+outputs with bounded backoff. The consumer independently checks both heartbeat
+and frame-sequence progress, shows standby for stale frames, and reconnects when
+the producer generation changes. Unchanged pixels remain valid as long as new
+frames are published.

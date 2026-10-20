@@ -38,6 +38,7 @@ from solin.core.scenes.model import SceneValidationError
 from solin.core.scenes.engine import LocalCameraModeQuery, SceneSourcePreview
 from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.idle import IdleScreenState
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ _NO_RUNTIME_ENV = "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME"
 # How often the media poller samples + reports playback state (position/state) so
 # the app's transport UI (scrubber, play/pause, ended) stays live.
 _MEDIA_POLL_INTERVAL_S = 0.25
+_OUTPUT_POLL_INTERVAL_S = 0.5
 
 
 # A runtime factory yields an object exposing ``ensure_started()`` / ``shutdown()``
@@ -349,6 +351,9 @@ class LibobsSidecarEngine:
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
         self._virtual_camera: Any | None = None
+        self._output_health_request: SceneIpcEnvelope | None = None
+        self._output_health: OutputHealth | None = None
+        self._next_output_poll_at = 0.0
         self._recorder: Any | None = None
         self._audio_mixer: Any | None = None
         self._camera_generation = 0
@@ -398,6 +403,7 @@ class LibobsSidecarEngine:
     def set_event_sink(self, sink: Callable[[SceneIpcEnvelope], None] | None) -> None:
         """Register the (thread-safe) writer serve() uses for unsolicited events."""
         self._event_sink = sink
+        self._output_health = None
 
     def _capabilities(self) -> dict[str, bool]:
         # Advertise honestly: features are only real once the runtime is up.
@@ -496,6 +502,7 @@ class LibobsSidecarEngine:
         if message_type == "ping":
             self._collect_retired_presentations()
             self._publish_camera_health()
+            self._publish_output_health(poll=True)
             return build_response(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
@@ -1485,13 +1492,57 @@ class LibobsSidecarEngine:
         if not self._runtime_started or camera is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
+        self._output_health_request = request
+        self._output_health = None
         if enabled:
-            if camera.start():
-                return _ack(request, applied=True)
-            return _ack(request, applied=False, error_code="virtual_camera_unavailable",
-                        error_message="the virtual camera device is not available")
-        camera.stop()
+            camera.start()
+        else:
+            camera.stop()
+        # ACK confirms the desired state accepted by the supervisor. Readiness
+        # and exhausted recovery are delivered independently as output health.
+        self._publish_output_health()
         return _ack(request, applied=True)
+
+    def poll_outputs(self) -> None:
+        """Reconcile outputs on the control thread during sustained command traffic.
+
+        The client suppresses heartbeats while commands are pending. Sampling
+        after command dispatch keeps output recovery live in that case too.
+        """
+        if time.monotonic() >= self._next_output_poll_at:
+            self._publish_output_health(poll=True)
+
+    def _publish_output_health(
+        self, *, poll: bool = False, state: OutputHealth | None = None,
+    ) -> None:
+        camera, request = self._virtual_camera, self._output_health_request
+        if camera is None or request is None:
+            return
+        if poll:
+            self._next_output_poll_at = time.monotonic() + _OUTPUT_POLL_INTERVAL_S
+        if state is None:
+            try:
+                state = camera.poll() if poll else camera.health
+            except Exception:  # noqa: BLE001 - output observation must not break supervision
+                log.warning("Could not reconcile virtual camera health", exc_info=True)
+                state = OutputHealth(OutputHealthStatus.FAILED, "output_observation_failed")
+        if not isinstance(state, OutputHealth):
+            state = OutputHealth(OutputHealthStatus.FAILED, "output_observation_failed")
+        if state == self._output_health:
+            return
+        sink = self._event_sink
+        if sink is None:
+            return
+        try:
+            sink(_reply(request, "output_health", {
+                "bus_id": "virtual_camera", **state.to_record(),
+            }))
+        except Exception:  # noqa: BLE001 - retry delivery on the next heartbeat
+            log.warning("Could not publish virtual camera health", exc_info=True)
+            return
+        self._output_health = state
+        log.info("Virtual camera output state: status=%s code=%s generation=%d",
+                 state.status, state.error_code, state.generation)
 
     def _handle_hydrate(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         graph = self._scene_graph
@@ -1629,13 +1680,22 @@ class LibobsSidecarEngine:
             camera = self._virtual_camera
             output_enabled = _payload_object(payload.get("output_enabled") or {})
             if camera is not None and "virtual_camera" in output_enabled:
+                # The graph's ACK describes its own application. Output readiness
+                # and restoration failures have an independent, observed state.
+                self._output_health_request = request
+                self._output_health = None
                 try:
                     if output_enabled["virtual_camera"]:
                         camera.start()
                     else:
                         camera.stop()
-                except Exception:  # noqa: BLE001 - vcam must not fail the hydrate
+                except Exception:  # noqa: BLE001 - output failure is independent of the graph
                     log.warning("libobs hydrate virtual-camera restore failed", exc_info=True)
+                    self._publish_output_health(state=OutputHealth(
+                        OutputHealthStatus.FAILED, "output_restore_failed",
+                    ))
+                else:
+                    self._publish_output_health()
         except Exception:  # noqa: BLE001 - a bad document must not crash the engine
             log.warning("libobs hydrate failed", exc_info=True)
             # A rejected camera update still belongs to the requested mode.
@@ -2300,22 +2360,25 @@ def serve(
                 return
             if request is None:
                 return  # clean EOF: the parent closed the pipe or exited
-            if request.message_type == "set_idle_screen":
-                idle_updates.submit(request)
-                continue
-            if request.message_type in {"list_local_cameras", "query_local_camera_modes"} and active.runtime_started:
-                camera_discovery.submit(request)
-                continue
             try:
-                response = active.handle(request)
-            except Exception:  # noqa: BLE001 - a handler bug must not kill the sidecar
-                log.exception("scene engine handler crashed for %s", request.message_type)
-                response = _reply(request, "error", {
-                    "error_code": "handler_error",
-                    "error_message": f"the engine failed to handle '{request.message_type}'",
-                })
-            if response is not None:
-                emit(response)
+                if request.message_type == "set_idle_screen":
+                    idle_updates.submit(request)
+                    continue
+                if request.message_type in {"list_local_cameras", "query_local_camera_modes"} and active.runtime_started:
+                    camera_discovery.submit(request)
+                    continue
+                try:
+                    response = active.handle(request)
+                except Exception:  # noqa: BLE001 - a handler bug must not kill the sidecar
+                    log.exception("scene engine handler crashed for %s", request.message_type)
+                    response = _reply(request, "error", {
+                        "error_code": "handler_error",
+                        "error_message": f"the engine failed to handle '{request.message_type}'",
+                    })
+                if response is not None:
+                    emit(response)
+            finally:
+                active.poll_outputs()
     finally:
         try:
             try:

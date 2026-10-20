@@ -34,6 +34,7 @@ from solin.core.scenes.engine import (
     LocalVideoResolutionRange,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
+    OutputHealthEvent,
     OutputWindowTarget,
     SceneEngine,
     SceneEngineAck,
@@ -82,10 +83,13 @@ from solin.core.scenes.ptz import (
     PtzRecallResult,
     PtzRecallStatus,
 )
-from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
+from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION, SceneIpcEnvelope
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
+    SceneEngineProcessConfig,
     SceneEngineRequestTimeoutError,
+    SubprocessSceneEngine,
 )
 from solin.core.scenes.media_control import (
     ContentSourceKind,
@@ -1266,6 +1270,270 @@ def _runtime_controller(
     cleanup.pop_all()
     cleanup.callback(controller.close)
     return documents, runtime, controller
+
+
+@pytest.mark.parametrize("enabled", [True, False], ids=["enable", "disable"])
+@pytest.mark.parametrize("complete", [True, False], ids=["finishes-after-5s", "exceeds-10s"])
+def test_output_lifecycle_allows_bounded_broker_shutdown(
+    request, monkeypatch, enabled, complete,
+):
+    engine = _Engine()
+    documents, _, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    if not enabled:
+        controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    _deliver_controller_results(controller)
+
+    # Exercise the real request deadline and ACK machinery without a process.
+    now = 100.0
+    transport = SubprocessSceneEngine(
+        SceneEngineProcessConfig(executable=Path("unused-engine")),
+        monotonic=lambda: now,
+    )
+    transport._started = transport._ready = True
+    transport._session_id = engine.session_id
+    transport._process_generation = engine.generation
+    transport._document_revision = documents.document.revision
+    sent: list[SceneIpcEnvelope] = []
+    monkeypatch.setattr(transport, "_write", sent.append)
+    monkeypatch.setattr(engine, "set_output_enabled", transport.set_output_enabled)
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, enabled)
+    command, = sent
+    assert command.payload == {"bus_id": BusId.VIRTUAL_CAMERA.value, "enabled": enabled}
+    future = transport._pending[command.request_id].future
+    now = 105.0
+    transport._expire_requests(now)
+    _deliver_controller_results(controller)
+    assert not future.done()
+    assert not controller.last_engine_error_code
+
+    if complete:
+        transport._receive(
+            replace(command, message_type="ack", payload={
+                "applied": True, "error_code": "", "error_message": "",
+            }),
+            engine.generation,
+        )
+        _deliver_controller_results(controller)
+        assert cast(SceneEngineAck, future.result(timeout=0)).applied
+        assert not controller.last_engine_error_code
+    else:
+        now = 109.99
+        transport._expire_requests(now)
+        assert not future.done()
+        now = 110.01
+        transport._expire_requests(now)
+        _deliver_controller_results(controller)
+        with pytest.raises(SceneEngineRequestTimeoutError):
+            future.result(timeout=0)
+        assert controller.last_engine_error_code == "engine_request_timed_out"
+    assert not transport._pending
+
+
+class _OutputHealthEngine(_Engine):
+    def __init__(self):
+        super().__init__()
+        self.output_events: list[OutputHealthEvent] = []
+
+    def set_output_enabled(self, bus_id, enabled, *, sequence, **kwargs):
+        self.output_events.append(OutputHealthEvent(
+            bus_id, OutputHealth(OutputHealthStatus.READY if enabled else OutputHealthStatus.STOPPED, generation=1),
+            self.session_id, self.generation, sequence,
+        ))
+        return super().set_output_enabled(bus_id, enabled, sequence=sequence, **kwargs)
+
+
+@pytest.mark.parametrize("obsolete", ["session", "process", "request", "future_request"])
+def test_output_health_requires_current_process_scope_and_request(request, obsolete):
+    engine = _OutputHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    ready = engine.output_events[-1]
+    current = replace(ready, state=OutputHealth(OutputHealthStatus.RECOVERING, "retry", 2))
+    controller._consume_engine_event(current)
+    changed = []
+    controller.output_health_changed.connect(changed.append)
+    stale = replace(ready, **{
+        "session": {"session_id": "another-session"},
+        "process": {"process_generation": "another-process"},
+        "request": {"sequence": ready.sequence - 1},
+        "future_request": {"sequence": ready.sequence + 1},
+    }[obsolete])
+
+    controller._consume_engine_event(stale)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == current.state
+    assert changed == []
+    fresh = replace(ready, state=OutputHealth(OutputHealthStatus.READY, generation=2))
+    controller._consume_engine_event(fresh)
+    controller._consume_engine_event(fresh)
+    assert changed == [BusId.VIRTUAL_CAMERA]
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == fresh.state
+
+
+def test_current_request_accepts_zero_generation_stop_and_observation_failure(request):
+    engine = _OutputHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    ready = engine.output_events[-1]
+    controller._consume_engine_event(ready)
+    failed = replace(ready, state=OutputHealth(OutputHealthStatus.FAILED, "output_observation_failed"))
+    controller._consume_engine_event(failed)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == failed.state
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    stopped = replace(engine.output_events[-1], state=OutputHealth())
+    controller._consume_engine_event(stopped)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == OutputHealth()
+
+
+def test_new_output_dispatch_invalidates_ready_and_rejects_previous_enable(request):
+    engine = _OutputHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    first = engine.output_events[-1]
+    controller._consume_engine_event(first)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.READY
+
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    controller._consume_engine_event(first)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.STOPPED
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller._consume_engine_event(first)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.STARTING
+    controller._consume_engine_event(engine.output_events[-1])
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.READY
+
+
+def test_output_dispatch_registers_correlation_before_synchronous_health_event(request):
+    class ImmediateHealthEngine(_OutputHealthEngine):
+        def set_output_enabled(self, *args, **kwargs):
+            result = super().set_output_enabled(*args, **kwargs)
+            self.listener(self.output_events[-1])
+            return result
+
+    engine = ImmediateHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.READY
+
+
+@pytest.mark.parametrize("status", [OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED])
+def test_output_failure_during_hydration_preserves_applied_scene_graph(request, status):
+    class HydrateHealthEngine(_Engine):
+        def hydrate(self, snapshot, **kwargs):
+            self.listener(OutputHealthEvent(
+                BusId.VIRTUAL_CAMERA, OutputHealth(status, "virtual_camera_unavailable", 1),
+                self.session_id, self.generation, snapshot.sequence,
+            ))
+            return super().hydrate(snapshot, **kwargs)
+
+    engine = HydrateHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.set_output_enabled(BusId.MEDIA_WINDOWS, True)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.start_engine()
+    assert controller.applied_scenes == controller.desired_scenes
+    assert controller.native_window_routing_ready
+    assert not controller.last_engine_error_code
+    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is status
+
+
+def test_output_change_while_hydration_waits_retires_old_ready_until_new_snapshot(request):
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller.start_engine()
+    original = OutputHealthEvent(
+        BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY, generation=1),
+        engine.session_id, engine.generation, engine.snapshots[0][1].sequence,
+    )
+    controller._consume_engine_event(original)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    controller._consume_engine_event(original)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.STARTING
+
+    engine.finish_hydration(0)
+    assert len(engine.snapshots) == 2
+    controller._consume_engine_event(original)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.STARTING
+    latest = replace(original, sequence=engine.snapshots[1][1].sequence)
+    controller._consume_engine_event(latest)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == latest.state
+
+
+@pytest.mark.parametrize("reset", ["stop", "generation", *[
+    status.value for status in SceneEngineStatus if status is not SceneEngineStatus.READY
+]])
+def test_output_health_is_invalidated_when_engine_becomes_unavailable_or_restarts(request, reset):
+    engine = _OutputHealthEngine()
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    old = engine.output_events[-1]
+    controller._consume_engine_event(old)
+    if reset == "stop":
+        controller.stop_engine()
+    elif reset == "generation":
+        engine.generation = "engine-generation-2"
+        engine.emit_health(SceneEngineStatus.READY)
+    else:
+        engine.emit_health(SceneEngineStatus(reset))
+    controller._consume_engine_event(old)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is not OutputHealthStatus.READY
+    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+
+
+def test_profile_hydration_accepts_only_its_own_output_health(pending_profile_health):
+    _, collection, controller, engine, _ = pending_profile_health
+    original = OutputHealthEvent(
+        BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY, generation=1),
+        engine.session_id, engine.generation, engine.snapshots[0][1].sequence,
+    )
+    controller.activate_scene_profile(collection.id)
+    controller._consume_engine_event(original)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is not OutputHealthStatus.READY
+    fresh = replace(original, sequence=engine.snapshots[1][1].sequence)
+    controller._consume_engine_event(fresh)
+    engine.finish_hydration(1)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == fresh.state
+
+
+@pytest.mark.parametrize("applied", [True, False])
+def test_profile_hydration_deferred_by_idle_replaces_output_request_correlation(
+    scene_workspace_factory, request, tmp_path, applied,
+):
+    workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
+    engine = _PendingIdleEngine()
+    controller = SceneRuntimeController(
+        workspace, _Projection(), engine=engine, session_id="test-session",
+    )
+    request.addfinalizer(controller.close)
+    controller.start_engine()
+    original = OutputHealthEvent(
+        BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY, generation=1),
+        engine.session_id, engine.generation, engine.snapshots[0][1].sequence,
+    )
+    controller.request_idle_media("candidate.mp4")
+    future = controller.activate_scene_profile(collection.id)
+    assert len(engine.snapshots) == 1
+    engine.finish_idle(0, applied=applied)
+    _deliver_controller_results(controller)
+    assert future.result().applied
+    assert len(engine.snapshots) == 2
+
+    controller._consume_engine_event(original)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.STOPPED
+    stopped = replace(original, state=OutputHealth(), sequence=engine.snapshots[1][1].sequence)
+    controller._consume_engine_event(stopped)
+    assert controller.output_health(BusId.VIRTUAL_CAMERA) == stopped.state
 
 
 def _deliver_controller_results(controller: SceneRuntimeController) -> None:
