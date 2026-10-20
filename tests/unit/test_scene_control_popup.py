@@ -37,8 +37,10 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.core.scenes.repository import SceneRuntimeRepository
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.runtime import SceneRuntimeState
 from solin.styles.theme import PALETTE
+from solin.ui.scene_output_status import virtual_camera_state_label
 from solin.widgets.scenes import control_popup
 from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
 from tests._qt import wait_until
@@ -399,22 +401,81 @@ def test_virtual_camera_button_states_its_status_with_static_live_style(
 
     # Disabled: the label and checked state describe the output.
     popup._set_output_enabled(False)
-    assert popup._output.text() == "Virtual camera disabled"
+    assert popup._output.text() == virtual_camera_state_label(False, OutputHealthStatus.STOPPED)
     assert not popup._output.isChecked()
 
-    # Enabled: the shared stylesheet supplies the static checked highlight.
+    # Requested activation does not claim the output is ready.
     popup._set_output_enabled(True)
-    assert popup._output.text() == "Virtual camera enabled"
     assert popup._output.isChecked()
+    assert popup._output.property("outputStatus") != OutputHealthStatus.READY.value
+    controller._set_output_health(BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY))
+    assert popup._output.text() == virtual_camera_state_label(True, OutputHealthStatus.READY)
+    assert popup._output.property("outputStatus") == OutputHealthStatus.READY.value
     assert popup._output.styleSheet() == ""
 
     # Back off: restore the inactive state.
     popup._set_output_enabled(False)
-    assert popup._output.text() == "Virtual camera disabled"
+    assert popup._output.text() == virtual_camera_state_label(False, OutputHealthStatus.STOPPED)
     assert not popup._output.isChecked()
 
     popup.deleteLater()
     QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("requested", [False, True])
+@pytest.mark.parametrize("status", list(OutputHealthStatus))
+def test_virtual_camera_button_observes_delivery_health(
+    controller_factory, request, requested, status,
+) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, requested)
+    popup = SceneControlPopup(controller)
+    request.addfinalizer(popup.deleteLater)
+    health = OutputHealth(
+        status,
+        "virtual_camera_unavailable" if status in {
+            OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED,
+        } else "",
+    )
+
+    controller._set_output_health(BusId.VIRTUAL_CAMERA, health)
+
+    assert popup._output.property("outputStatus") == (
+        status.value if requested else OutputHealthStatus.STOPPED.value
+    )
+    # The toggle still owns the user's request, so a failed or recovering output
+    # can be turned off without accidentally starting another attempt.
+    assert popup._output.isChecked() is requested
+    assert popup._output.isEnabled()
+    assert popup._output.accessibleName() == popup._output.text()
+    assert popup._output.accessibleDescription() == popup._output.toolTip()
+
+
+def test_failed_virtual_camera_button_can_be_disabled_and_started_again(
+    controller_factory, request,
+) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    popup = SceneControlPopup(controller)
+    request.addfinalizer(popup.deleteLater)
+    controller._set_output_health(
+        BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY),
+    )
+    ready_text = popup._output.text()
+
+    controller._set_output_health(
+        BusId.VIRTUAL_CAMERA,
+        OutputHealth(OutputHealthStatus.FAILED, "virtual_camera_unavailable"),
+    )
+    assert popup._output.text() != ready_text
+    assert popup._output.property("outputStatus") != OutputHealthStatus.READY.value
+    popup._output.click()
+    assert not controller.program_output_enabled
+    assert not popup._output.isChecked()
+    popup._output.click()
+    assert controller.program_output_enabled
+    assert popup._output.isChecked()
+    assert popup._output.property("outputStatus") != OutputHealthStatus.READY.value
 
 
 def test_record_button_is_icon_only_with_static_red_recording_style(
@@ -466,6 +527,7 @@ def test_live_controls_use_static_styles_without_graphics_effects(
     popup = SceneControlPopup(controller, recording=recording)
 
     popup._set_output_enabled(True)
+    controller._set_output_health(BusId.VIRTUAL_CAMERA, OutputHealth(OutputHealthStatus.READY))
     recording.toggle()
     QCoreApplication.processEvents()
     assert popup._output.isChecked()
@@ -477,7 +539,7 @@ def test_live_controls_use_static_styles_without_graphics_effects(
     assert popup._output.graphicsEffect() is None
     assert popup._recording_button.graphicsEffect() is None
     # The active label remains visible.
-    assert popup._output.text() == "Virtual camera enabled"
+    assert popup._output.text() == virtual_camera_state_label(True, OutputHealthStatus.READY)
 
     # Both states continue to use the panel's own stylesheet.
     popup._set_output_enabled(False)

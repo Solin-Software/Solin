@@ -578,6 +578,17 @@ class SubprocessSceneEngine:
             converter=_local_camera_discovery_from_envelope,
         )
 
+    def reconcile_local_cameras(
+        self, topology_revision: int, *, request_id: str, deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        require_non_negative_int(topology_revision, "camera topology revision")
+        return self._request(
+            message_type="reconcile_local_cameras", expected_message_type="ack",
+            request_id=request_id, sequence=0, document_revision=0,
+            deadline_ms=deadline_ms, payload={"topology_revision": topology_revision},
+            converter=_ack_from_envelope,
+        )
+
     def query_local_camera_modes(
         self,
         device_id: str,

@@ -126,7 +126,7 @@ class CameraCatalog:
         return devices
 
     def invalidate(self) -> None:
-        """Drop metadata when its owning native runtime is stopped."""
+        """Drop metadata after a topology change or native runtime shutdown."""
         with self._lock:
             self._epoch += 1
             self._discovery_cancelled = False

@@ -15,7 +15,7 @@ from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QCoreApplication, QObject, Property, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
@@ -105,6 +105,7 @@ from solin.core.scenes.workspace import LocalCameraConflictError, SceneCameraApp
 from solin.core.scenes.resources import camera_credential_references
 from solin.ui.qml.scenes_models import SceneLayerListModel, SceneListModel
 from solin.ui.scene_engine_status import scene_engine_error_summary
+from solin.ui.scene_output_status import scene_output_state_label
 from solin.ui.scene_recording_status import (
     scene_recording_audio_warning,
     scene_recording_error_summary,
@@ -441,14 +442,10 @@ class ScenesBridge(QObject):
 
     @Property(str, notify=changed)
     def outputStateLabel(self) -> str:
-        if not self.virtualCameraEnabled:
-            return self.tr("Off")
-        status = self._controller.output_health(BusId.VIRTUAL_CAMERA).status
-        if status is OutputHealthStatus.FAILED:
-            return self.tr("Error")
-        if status is OutputHealthStatus.READY:
-            return self.tr("On")
-        return QCoreApplication.translate("ScenesEditorView", "Starting…")
+        return scene_output_state_label(
+            self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled,
+            self._controller.output_health(BusId.VIRTUAL_CAMERA).status,
+        )
 
     @Property(str, notify=changed)
     def engineStatus(self) -> str:

@@ -30,6 +30,7 @@ from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.model import BusId
+from solin.core.scenes.output_health import OutputHealthStatus
 from solin.core.scenes.recording import ProgramRecordingStatus
 from solin.styles.icons import (
     ICON_CAMERA,
@@ -43,6 +44,10 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.scene_engine_status import scene_engine_error_summary
+from solin.ui.scene_output_status import (
+    virtual_camera_failure_summary,
+    virtual_camera_state_label,
+)
 from solin.ui.scene_recording_status import (
     scene_recording_audio_warning,
     scene_recording_error_summary,
@@ -360,6 +365,7 @@ class SceneControlPopup(QWidget):
         controller.engine_ready_changed.connect(self._render)
         controller.operational_state_changed.connect(self._render)
         controller.runtime_changed.connect(self._render)
+        controller.output_health_changed.connect(self._render)
         controller.scene_profiles_changed.connect(self._render)
         if recording is not None:
             recording.state_changed.connect(self._render)
@@ -719,17 +725,24 @@ class SceneControlPopup(QWidget):
         self._set_engine_visual(engine_state, engine_text)
 
         self._output.blockSignals(True)
+        # Checked owns the activation request; only confirmed delivery receives
+        # the live highlight. Keeping these separate lets a user cancel recovery.
         self._output.setChecked(runtime.enabled)
-        output_text = (
-            self.tr("Virtual camera enabled")
-            if runtime.enabled
-            else self.tr("Virtual camera disabled")
+        status = self._controller.output_health(BusId.VIRTUAL_CAMERA).status
+        self._output.setProperty(
+            "outputStatus", status.value if runtime.enabled else OutputHealthStatus.STOPPED.value,
         )
+        output_text = virtual_camera_state_label(runtime.enabled, status)
         self._output.setText(output_text)
-        self._output.setToolTip(self.tr("Output on") if runtime.enabled else self.tr("Output off"))
+        self._output.setToolTip(
+            virtual_camera_failure_summary()
+            if runtime.enabled and status is OutputHealthStatus.FAILED
+            else output_text
+        )
         self._output.setAccessibleName(output_text)
         self._output.setAccessibleDescription(self._output.toolTip())
         self._output.blockSignals(False)
+        self._repolish(self._output)
         self._sync_scene_cards()
         self._sync_geometry()
 
@@ -991,7 +1004,8 @@ class SceneControlPopup(QWidget):
             QPushButton:focus {{ border-color:{PALETTE.accent_alt}; }}
             QPushButton:pressed {{ background:{PALETTE.surface_alt}; }}
             QPushButton#SceneOutputToggle {{ min-width:84px; }}
-            QPushButton#SceneOutputToggle:checked {{ background:{qss_rgba(PALETTE.accent, 0.10)}; border-color:{qss_rgba(PALETTE.accent, 0.42)}; color:{PALETTE.accent_text}; }}
+            QPushButton#SceneOutputToggle[outputStatus="ready"] {{ background:{qss_rgba(PALETTE.accent, 0.10)}; border-color:{qss_rgba(PALETTE.accent, 0.42)}; color:{PALETTE.accent_text}; }}
+            QPushButton#SceneOutputToggle[outputStatus="failed"] {{ background:{PALETTE.danger_surface}; border-color:{PALETTE.danger_border}; color:{PALETTE.danger_text}; }}
             QPushButton#SceneControlRecording {{ min-width:{self._RECORD_BUTTON_SIZE - 2}px; max-width:{self._RECORD_BUTTON_SIZE - 2}px; min-height:{self._RECORD_BUTTON_SIZE - 2}px; max-height:{self._RECORD_BUTTON_SIZE - 2}px; padding:0; }}
             QPushButton#SceneControlRecording:hover {{ background:{qss_rgba(PALETTE.danger, 0.10)}; border-color:{qss_rgba(PALETTE.danger, 0.62)}; }}
             QPushButton#SceneControlRecording[recording="true"] {{ background:{qss_rgba(PALETTE.danger, 0.18)}; border-color:{qss_rgba(PALETTE.danger, 0.70)}; }}

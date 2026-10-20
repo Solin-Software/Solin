@@ -5874,6 +5874,41 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Imezimwa</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Imewashwa</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Hitilafu</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Inaanza…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera pepe</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Kamera pepe imewashwa</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Kamera pepe imezimwa</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Kamera pepe imeshindwa kufanya kazi. Izime kisha uiwashe tena ili kujaribu tena.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +5922,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Inabadilisha</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Hitilafu</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Imewashwa</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Imezimwa</translation>
     </message>
     <message>
         <location line="+5"/>

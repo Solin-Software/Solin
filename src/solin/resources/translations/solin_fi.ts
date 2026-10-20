@@ -5874,6 +5874,41 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Pois käytöstä</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Käytössä</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Virhe</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Käynnistetään…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuaalikamera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuaalikamera käytössä</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuaalikamera pois käytöstä</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Virtuaalikamerassa tapahtui virhe. Yritä uudelleen poistamalla se käytöstä ja ottamalla se takaisin käyttöön.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +5922,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Vaihdetaan</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Virhe</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Käytössä</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Pois käytöstä</translation>
     </message>
     <message>
         <location line="+5"/>

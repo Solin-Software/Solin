@@ -126,7 +126,7 @@ def test_requested_virtual_camera_does_not_claim_ready_before_output_confirmatio
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
 
     assert bridge.virtualCameraEnabled
-    assert bridge.outputStateLabel != bridge.tr("On")
+    assert bridge.outputStateLabel != QCoreApplication.translate("SceneOutputStatus", "On")
     assert not bridge.virtualCameraReady
 
 
@@ -149,13 +149,16 @@ def test_output_presentation_separates_requested_activation_and_delivery_health(
     assert bridge.virtualCameraEnabled is requested
     assert bridge.virtualCameraReady is (requested and status is OutputHealthStatus.READY)
     if not requested:
-        assert bridge.outputStateLabel == bridge.tr("Off")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "Off")
     elif status is OutputHealthStatus.READY:
-        assert bridge.outputStateLabel == bridge.tr("On")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "On")
     elif status is OutputHealthStatus.FAILED:
-        assert bridge.outputStateLabel == bridge.tr("Error")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "Error")
     else:
-        assert bridge.outputStateLabel not in {bridge.tr("On"), bridge.tr("Off"), bridge.tr("Error")}
+        assert bridge.outputStateLabel not in {
+            QCoreApplication.translate("SceneOutputStatus", source)
+            for source in ("On", "Off", "Error")
+        }
 
 
 def test_output_recovery_updates_presentation_despite_previous_global_output_error(
@@ -173,7 +176,7 @@ def test_output_recovery_updates_presentation_despite_previous_global_output_err
         assert changes.count() > before
         assert bridge.virtualCameraEnabled
         assert bridge.virtualCameraReady is (status is OutputHealthStatus.READY)
-    assert bridge.outputStateLabel == bridge.tr("On")
+    assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "On")
 
 
 def test_recording_directory_uses_a_plain_folder_icon() -> None:

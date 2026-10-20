@@ -5874,6 +5874,41 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Desactivado</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Activado</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Error</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Iniciando…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Cámara virtual</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Cámara virtual activada</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Cámara virtual desactivada</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>La cámara virtual falló. Desactívala y vuelve a activarla para intentarlo de nuevo.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +5922,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Cambiando</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Error</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Activado</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Desactivado</translation>
     </message>
     <message>
         <location line="+5"/>

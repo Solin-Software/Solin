@@ -117,6 +117,7 @@ from .core.projection.application import (
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
 from .core.scenes.model import BusId, SceneDocument
+from .core.scenes.output_health import OutputHealthStatus
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
 from .core.timer.application import TimerSession
@@ -136,6 +137,7 @@ from .core.playlists.items import create_playlist_item
 from .core.rendering.fonts import FontManager
 from .ui.notifications import NotificationCenter
 from .ui.scene_engine_status import scene_engine_error_summary
+from .ui.scene_output_status import virtual_camera_failure_summary, virtual_camera_title
 from .ui.screens import ScreenManager
 from .styles.theme import activate_theme, app_stylesheet, apply_application_palette
 from .core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -499,6 +501,9 @@ class MainWindow(QWidget):
         )
 
         self.notifications = NotificationCenter(self)
+        self._virtual_camera_failure_notified = False
+        self.scene_runtime.output_health_changed.connect(self._on_scene_output_health_changed)
+        self._on_scene_output_health_changed(BusId.VIRTUAL_CAMERA)
         self.scene_runtime.idle_media_failed.connect(self._on_idle_media_failed)
         self._last_program_recording_status = ProgramRecordingStatus.IDLE
         self._program_recording.state_changed.connect(
@@ -1273,6 +1278,24 @@ class MainWindow(QWidget):
             title=self.tr("Scenes"),
             dedupe_key="idle-screen-media-failed",
         )
+
+    def _on_scene_output_health_changed(self, bus_id: BusId) -> None:
+        if bus_id is not BusId.VIRTUAL_CAMERA:
+            return
+        status = self.scene_runtime.output_health(bus_id).status
+        if not self.scene_runtime.program_output_enabled or status in {
+            OutputHealthStatus.STOPPED, OutputHealthStatus.READY,
+        }:
+            self._virtual_camera_failure_notified = False
+        elif status is OutputHealthStatus.FAILED and not self._virtual_camera_failure_notified:
+            # Rehydrating the scene can temporarily report STARTING again for
+            # the same failed output. Only recovery or a stop ends this incident.
+            self._virtual_camera_failure_notified = True
+            self.notifications.error(
+                virtual_camera_failure_summary(),
+                title=virtual_camera_title(),
+                dedupe_key="virtual-camera-output-failed",
+            )
 
     def _on_scene_transition_fallback(self, message: str) -> None:
         self.notifications.warning(

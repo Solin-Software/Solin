@@ -5842,6 +5842,41 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>꺼짐</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>켜짐</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>오류</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>시작하는 중…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>가상 카메라</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>가상 카메라 활성화됨</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>가상 카메라 비활성화됨</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>가상 카메라에 오류가 발생했습니다. 껐다가 다시 켜서 재시도하세요.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5855,21 +5890,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>전환 중</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>오류</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>켜짐</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>꺼짐</translation>
     </message>
     <message>
         <location line="+5"/>

@@ -31,6 +31,7 @@ from solin.core.scenes.ipc_protocol import (
     read_envelope,
     reserve_protocol_stream,
     require_payload_fields,
+    require_non_negative_int,
     require_text,
     write_envelope,
 )
@@ -45,6 +46,7 @@ from solin.core.scenes.engine import (
 from solin.core.scenes.media_control import ContentSourceKind
 from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
+from solin.core.scenes.camera_recovery import LocalCameraRecovery
 
 log = logging.getLogger(__name__)
 
@@ -375,6 +377,7 @@ class LibobsSidecarEngine:
         self._camera_health_bindings: tuple[_CameraHealthBinding, ...] = ()
         self._camera_health_request: SceneIpcEnvelope | None = None
         self._camera_health: dict[str, tuple[int, str, str, int, int]] = {}
+        self._camera_recovery: LocalCameraRecovery | None = None
         self._media_source: Any | None = None
         self._bg_media_source: Any | None = None
         # Transport close must not replace the outgoing picture with old ingress
@@ -533,9 +536,12 @@ class LibobsSidecarEngine:
             return _reply(request, "hello_ack", self._capabilities())
         if message_type == "ping":
             self._collect_retired_presentations()
+            self._poll_camera_recovery()
             self._publish_camera_health()
             self._publish_output_health(poll=True)
             return build_response(request)
+        if message_type == "reconcile_local_cameras":
+            return self._reconcile_local_cameras(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
         if message_type == "stop_program_recording":
@@ -917,6 +923,29 @@ class LibobsSidecarEngine:
             log.warning("libobs audio device enumeration failed", exc_info=True)
             return _unavailable_discovery("audio_enumeration_failed")
 
+    def _reconcile_local_cameras(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        from solin.core.scenes.camera_catalog import camera_catalog
+
+        fields = require_payload_fields(request.payload, frozenset({"topology_revision"}),
+                                        message_type=request.message_type)
+        revision = require_non_negative_int(fields["topology_revision"], "camera topology revision")
+        if not self._runtime_started or time.monotonic() * 1000 >= request.deadline_monotonic_ms:
+            return _ack(request, applied=False)
+        if self._camera_recovery is None:
+            runtime = cast(Any, self._runtime)
+            self._camera_recovery = LocalCameraRecovery(
+                discover=lambda: (device.device_id for device in camera_catalog().devices(refresh=True)),
+                state=runtime.camera_capture_state,
+                reconnect=lambda device, generation: runtime.reconnect_camera(
+                    device, expected_generation=generation,
+                ),
+                cancel_discovery=camera_catalog().cancel_discovery,
+            )
+            self._set_camera_recovery_targets()
+        if self._camera_recovery.changed(revision):
+            camera_catalog().invalidate()
+        return _ack(request, applied=True)
+
     def _local_camera_list(self) -> dict[str, object]:
         from solin.core.scenes.camera_catalog import camera_catalog
         from solin.core.scenes.v4l2_camera_discovery import serialize_camera_device
@@ -965,9 +994,19 @@ class LibobsSidecarEngine:
                     str(source["id"]), config.device_id, camera_configuration_id(config),
                 ))
         self._camera_health_bindings = tuple(bindings)
+        self._set_camera_recovery_targets()
         self._camera_health_request = request
         self._camera_health.clear()
         self._publish_camera_health()
+
+    def _set_camera_recovery_targets(self) -> None:
+        if self._camera_recovery is not None:
+            self._camera_recovery.set_targets({binding.device_id: binding.configuration_id
+                                              for binding in self._camera_health_bindings})
+
+    def _poll_camera_recovery(self) -> None:
+        if self._camera_recovery is not None:
+            self._camera_recovery.poll()
 
     def _publish_camera_health(self) -> None:
         """Publish observed capture state, fenced by configuration and native generation."""
@@ -998,6 +1037,11 @@ class LibobsSidecarEngine:
             if request is not self._camera_health_request or bindings is not self._camera_health_bindings:
                 return
             generation, status, code, width, height = health
+            if (status == "starting" and self._camera_recovery is not None
+                    and self._camera_recovery.recovering(binding.device_id)):
+                # Requesting a native restart does not establish capture health.
+                # Preserve the warning until new frames confirm recovery.
+                status, code = "failed", "camera_no_frames"
             if status not in {"starting", "ready", "failed"}:
                 status, code = "failed", "camera_observation_failed"
             if status == "failed":
@@ -1545,6 +1589,7 @@ class LibobsSidecarEngine:
         The client suppresses heartbeats while commands are pending. Sampling
         after command dispatch keeps output recovery live in that case too.
         """
+        self._poll_camera_recovery()
         if time.monotonic() >= self._next_output_poll_at:
             self._publish_output_health(poll=True)
 
@@ -2292,6 +2337,13 @@ class LibobsSidecarEngine:
 
     def shutdown(self) -> None:
         from solin.core.scenes.camera_catalog import camera_catalog
+
+        recovery, self._camera_recovery = self._camera_recovery, None
+        if recovery is not None:
+            try:
+                recovery.close()
+            except Exception:  # noqa: BLE001 - continue releasing other runtime owners
+                log.warning("Local camera recovery shutdown failed", exc_info=True)
 
         self._camera_health_bindings = ()
         self._camera_health_request = None

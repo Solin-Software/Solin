@@ -233,6 +233,17 @@ class ObsVideoConfig:
     fps: int = _DEFAULT_FPS
 
 
+@dataclass(slots=True)
+class _CameraSource:
+    """Shared source with its requested mode and last effective capture settings."""
+
+    source: Any
+    signature: tuple[object, ...] | None
+    settings: dict[str, object]
+    width: int
+    height: int
+
+
 class ObsRuntime:
     """Lazily-started, process-wide wrapper around a single ``OBSContext``.
 
@@ -254,7 +265,7 @@ class ObsRuntime:
         # ONE shared capture source per camera device — a V4L2 device can't be
         # opened twice, so the projector and the virtual camera reference the same
         # source (see :meth:`camera_source`).
-        self._camera_sources: dict[str, tuple[Any, tuple[object, ...] | None]] = {}
+        self._camera_sources: dict[str, _CameraSource] = {}
         self._camera_probes: dict[str, Any] = {}
         self._camera_failures: dict[str, Any] = {}
         self._video_observers: Any | None = None
@@ -318,8 +329,8 @@ class ObsRuntime:
         signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator)
         with self._lock:
             existing = self._camera_sources.get(device_key)
-            if existing is not None and existing[1] == signature:
-                return existing[0]
+            if existing is not None and existing.signature == signature:
+                return existing.source
 
         # Validate the whole request before resolving Automatic or mutating OBS.
         kind, settings = camera_source_spec(
@@ -354,17 +365,18 @@ class ObsRuntime:
             # Another consumer may have created the device while preparing settings.
             existing = self._camera_sources.get(device_key)
             if existing is not None:
-                source, cached_signature = existing
-                if cached_signature != signature:
+                if existing.signature != signature:
                     try:
                         self._camera_probes[device_key].update(
                             settings, width=capture_width, height=capture_height,
                         )
                     except Exception as error:  # noqa: BLE001 - native update boundary
-                        self._camera_sources[device_key] = (source, None)
+                        existing.signature = None
                         raise ObsRuntimeError(f"Could not update camera mode for {device_path}") from error
-                    self._camera_sources[device_key] = (source, signature)
-                return source
+                    self._camera_sources[device_key] = _CameraSource(
+                        existing.source, signature, dict(settings), capture_width, capture_height,
+                    )
+                return existing.source
             self._camera_source_seq += 1
             try:
                 source = self.ob.Source.create(
@@ -384,8 +396,36 @@ class ObsRuntime:
                 raise
             self._camera_probes[device_key] = probe
             self._camera_failures.pop(device_key, None)
-            self._camera_sources[device_key] = (source, signature)
+            self._camera_sources[device_key] = _CameraSource(
+                source, signature, dict(settings), capture_width, capture_height,
+            )
             return source
+
+    def reconnect_camera(self, device_path: str, *, expected_generation: int) -> bool:
+        """Reapply a live Windows capture after an observed physical reconnect.
+
+        Reuse the last effective settings without resolving Automatic or creating
+        a source. The runtime lock serializes mode changes and shutdown; the
+        probe atomically reserves a still-failed generation against fresh frames.
+        Return whether an update was issued; native update failures propagate
+        without invalidating the requested mode or replacing the shared source.
+        macOS and Linux capture plugins handle physical reconnect themselves.
+        """
+        if sys.platform != "win32" or not device_path:
+            return False
+        device_key = local_camera_device_key(device_path)
+        with self._lock:
+            existing = self._camera_sources.get(device_key)
+            probe = self._camera_probes.get(device_key)
+            if existing is None or probe is None:
+                return False
+            try:
+                return probe.reconnect(
+                    dict(existing.settings), expected_generation=expected_generation,
+                    width=existing.width, height=existing.height,
+                )
+            except Exception as error:  # noqa: BLE001 - native update boundary
+                raise ObsRuntimeError(f"Could not reconnect camera for {device_path}") from error
 
     def _camera_creation_failed(self, device_key: str) -> None:
         from .obs_camera_capture import CameraCaptureState
@@ -469,9 +509,9 @@ class ObsRuntime:
             probe.close()
         self._camera_probes.clear()
         self._camera_failures.clear()
-        for source, _signature in self._camera_sources.values():
+        for entry in self._camera_sources.values():
             try:
-                source.release()
+                entry.source.release()
             except Exception:  # noqa: BLE001 - shutdown must be total
                 log.debug("Error releasing shared camera source", exc_info=True)
         self._camera_sources.clear()
