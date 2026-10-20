@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Nagpatuloy ang video</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: Bago ang pulong</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Simula ng pulong</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Katapusan ng pulong</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -6163,16 +6178,16 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Nilalaman ng Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Hindi available ang mga kakayahan ng camera. Maaari mong subukan ang awtomatikong mode o i-refresh ang mga camera.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Hindi available ang mga kakayahan ng camera. Maaari mong subukan ang awtomatikong mode.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Hinihintay ang mga frame mula sa camera…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Nagpapadala ang camera ng resolusyong iba sa napili. Pumili ng suportadong mode o i-refresh ang mga camera.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Nagpapadala ang camera ng resolusyong iba sa napili. Pumili ng suportadong mode.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6183,8 +6198,8 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Hindi mailapat ng camera ang napiling mode. Pumili ng ibang resolusyon, frame rate o format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Hindi masuri ang pagkuha ng video ng camera. I-refresh ang mga camera o ikonektang muli ang device.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Hindi masuri ang pagkuha ng video ng camera. Ikonektang muli ang device.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6301,11 +6316,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+2"/>
         <source>Device</source>
         <translation>Device</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>I-refresh ang mga camera</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7308,8 +7318,8 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Hindi available</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Hindi available ang naka-save na camera mode. I-refresh ang mga camera o pumili ng ibang mode.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Hindi available ang naka-save na camera mode. Pumili ng ibang mode.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7356,8 +7366,8 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation>Ang resolusyong ito ay lampas sa mga limitasyon o hindi sumusunod sa mga suportadong dagdag sa sukat ng camera.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. I-refresh ang mga camera o pumili ng ibang resolusyon.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Hindi makuha ang mga suportadong mode para sa resolusyong ito. Pumili ng ibang resolusyon.</translation>
     </message>
     <message>
         <source>Add scene</source>
@@ -7818,9 +7828,9 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <translation type="vanished">Scene na kumukuha ng projection monitor. Naa-activate kapag may ipinapakitang content.</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Mga kontrol sa audio at bilang ng dumalo sa mga pulong.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Mga kontrol sa audio at video ng pulong.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7888,11 +7898,6 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Mga Awtomatikong Shortcut</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Nagpapadala ng mga keyboard shortcut kapag nagbago ang estado ng visual media.</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8556,6 +8561,16 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Mag-load ng 5 pa</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Available lang sa Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Nagpapadala ng mga keyboard shortcut kapag nangyari ang mga napiling event ng app.</translation>
     </message>
 </context>
 <context>
@@ -10090,54 +10105,59 @@ Dapat nakakonekta ang dalawang device sa iisang Wi-Fi network.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Kanselahin</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Ikonekta ang iyong audio at video at i-mute ang lahat.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Idiskonekta ang iyong audio at video at payagang mag-unmute ang lahat.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Iugnay ang awit sa background</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Walang nakitang pulong. Magbukas ng Zoom meeting para gamitin ang mga kontrol na ito.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Bago/pagkatapos ng pulong</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Simula ng pulong</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Ihinto ang awit sa simula ng pulong; patugtugin ito bago/pagkatapos ng pulong. Inihahanda rin ng nakaiskedyul na paghinto ng awit ang Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom Meeting</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Hindi nakakonekta</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n na dumalo</numerusform>
-            <numerusform>%n na mga dumalo</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Bago ang pulong</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Aktibo ang pagbabahagi ng screen</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Buksan ang audio para sa lahat</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Nakakonekta sa meeting</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Maaaring bilangin ang attendance sa dalawang paraan:
-gumamit ng &amp;, |, o + sa pagitan ng mga pangalan, gaya ng &apos;Felipe &amp; Julia&apos; = 2;
-o maglagay ng numero sa dulo, gaya ng &apos;Family Alves 7&apos; = 7.
-Ang numero sa dulo ang mas matimbang.</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Katapusan ng pulong</translation>
     </message>
 </context>
 <context>
@@ -11997,6 +12017,14 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     <message>
         <source>Camera</source>
         <translation>Camera</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Hindi nakumpleto ang ilang pagkilos sa Zoom. Suriin ang Zoom at subukang muli.</translation>
     </message>
 </context>
 </TS>

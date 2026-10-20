@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -8,9 +9,56 @@ from pathlib import Path
 import pytest
 
 from solin.bootstrap import entrypoint
-from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT
+from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, encode_envelope, read_envelope
 from tests._paths import REPO_ROOT
+
+
+def test_zoom_role_exits_before_application_import(monkeypatch):
+    from solin.core.integrations.automation.zoom import worker
+
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", ZOOM_AUTOMATION_ARGUMENT])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    monkeypatch.setattr(worker, "main", lambda: 7)
+    with pytest.raises(SystemExit) as error:
+        entrypoint.run()
+    assert error.value.code == 7
+
+
+def test_zoom_parent_watch_rejects_unsupported_platform_before_loading_dlls(monkeypatch):
+    from types import SimpleNamespace
+
+    from solin.core.integrations.automation.zoom import worker
+    from solin.core.integrations.automation.zoom.state import ZoomAutomationError
+
+    monkeypatch.setattr(worker, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setenv("SOLIN_ZOOM_PARENT_PID", "1")
+    with pytest.raises(ZoomAutomationError, match="unsupported_platform"):
+        worker._watch_parent()
+
+
+def test_zoom_role_rejects_application_arguments(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", ZOOM_AUTOMATION_ARGUMENT, "--create-profile"])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    with pytest.raises(SystemExit, match="accepts no application arguments"):
+        entrypoint.run()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native discovery")
+def test_launcher_zoom_discovery_protocol_does_not_load_qt(tmp_path):
+    code = (
+        "import runpy,sys; sys.modules['PySide6']=None; "
+        "sys.modules['solin.bootstrap.application']=None; "
+        f"sys.argv=[{str(REPO_ROOT / 'main.py')!r},{ZOOM_AUTOMATION_ARGUMENT!r}]; "
+        f"runpy.run_path({str(REPO_ROOT / 'main.py')!r},run_name='__main__')"
+    )
+    result = subprocess.run([sys.executable, "-c", code],
+                            input=b'{"id":1,"command":"meeting"}\n',
+                            capture_output=True, timeout=10, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    messages = [json.loads(line) for line in result.stdout.splitlines()]
+    assert messages[0] == {"ready": 1}
+    assert messages[1]["id"] == 1 and type(messages[1]["connected"]) is bool
 
 
 def test_camera_discovery_role_exits_before_application_import(monkeypatch):

@@ -91,13 +91,30 @@ Inventory failures, individual capability failures, and an empty inventory are
 reported separately. Device labels do not claim that capture has been verified.
 
 The dialog loads capabilities asynchronously when opened and reuses successful
-results. Explicit refresh, inventory replacement, and process restart invalidate
-the cache. Concurrent requests share native work. Custom-size queries are cached
-with the inventory and discard stale completions. A dispatch worker runs outside
-foreground IPC handling and the Qt UI thread; native enumeration runs in a
-disposable helper process with no capture sources or graphics/audio outputs.
-Windows initializes COM on the helper's querying thread. Each OBS inventory scan
-reuses one properties session, with fresh settings for each device.
+results. Device changes, explicit refresh, inventory replacement, and process
+restart invalidate the cache. Concurrent requests share native work. Custom-size
+queries are cached with the inventory and discard stale completions. A dispatch
+worker runs outside foreground IPC handling and the Qt UI thread; native
+enumeration runs in a disposable helper process with no capture sources or
+graphics/audio outputs. Windows initializes COM on the helper's querying thread.
+Each OBS inventory scan reuses one properties session, with fresh settings for
+each device.
+
+Native device notifications start before the first inventory query and remain
+owned by the application controller until it closes. Platform adapters report
+changes without running inventory queries or opening capture sources. The
+controller marshals callbacks to its Qt thread, invalidates metadata, and groups
+event bursts before refreshing an open local-camera dialog. Closed dialogs defer
+enumeration until their next request. A change during discovery makes that scan
+obsolete; its result is discarded and one subsequent scan obtains the current
+inventory. Custom-size queries wait for current metadata. Existing device
+selections, modes, and scene settings remain unchanged.
+
+Windows uses device-interface notifications, macOS uses native camera
+notifications, and Linux uses libudev events for video devices. If notifications
+cannot start, the failure is logged and each subsequent dialog opening requests
+a fresh inventory. Discovery failures can also be retried by reopening the
+dialog; they do not trigger an automatic retry loop.
 
 The helper has a 15-second budget covering startup, queries, and teardown, with
 bounded forced cleanup. The caller's 20-second deadline also allows routing and
@@ -195,6 +212,11 @@ current-field rejection, resource normalization, and primary/backup recovery.
 `tests/integration/test_native_camera_capture.py` runs synthetic native sources
 in isolated processes to check passive observation, rendered pixels, and
 deferred updates without requiring camera hardware.
+
+Device-notification tests cover platform filtering and teardown, event bursts,
+changes during discovery, deferred refresh while hidden, and recovery on reopening
+after notification or discovery failure. QML tests exercise arrival and removal
+without invoking a refresh control and preserve the operator's draft settings.
 
 Hardware qualification must additionally compare advertised modes, native
 settings, and received dimensions on Windows, macOS, and Linux. For a reported

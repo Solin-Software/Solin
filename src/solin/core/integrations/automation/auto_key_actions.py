@@ -10,13 +10,27 @@ EVENT_MEDIA_STARTED = "media_started"
 EVENT_MEDIA_ENDED = "media_ended"
 EVENT_MEDIA_PAUSED = "media_paused"
 EVENT_MEDIA_RESUMED = "media_resumed"
+EVENT_ZOOM_BEFORE_MEETING = "zoom_before_meeting"
+EVENT_ZOOM_MEETING_STARTED = "zoom_meeting_started"
+EVENT_ZOOM_AFTER_MEETING = "zoom_after_meeting"
 
-AUTO_KEY_EVENTS = (
+_MEDIA_EVENTS = (
     EVENT_MEDIA_STARTED,
     EVENT_MEDIA_ENDED,
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
 )
+_WINDOWS_EVENTS = (
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
+)
+AUTO_KEY_EVENTS = _MEDIA_EVENTS + _WINDOWS_EVENTS
+
+
+def available_auto_key_events(platform: str) -> tuple[str, ...]:
+    """Filter runtime capabilities without discarding saved actions."""
+    return AUTO_KEY_EVENTS if platform == "win32" else _MEDIA_EVENTS
 
 
 def first_shortcut_chord(sequence: str) -> str:
@@ -89,7 +103,11 @@ __all__ = [
     "EVENT_MEDIA_PAUSED",
     "EVENT_MEDIA_RESUMED",
     "EVENT_MEDIA_STARTED",
+    "EVENT_ZOOM_BEFORE_MEETING",
+    "EVENT_ZOOM_MEETING_STARTED",
+    "EVENT_ZOOM_AFTER_MEETING",
     "AutoKeyAction",
+    "available_auto_key_events",
     "first_shortcut_chord",
     "parse_actions",
     "serialize_actions",

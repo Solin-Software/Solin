@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>视频恢复</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom：聚会前</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom：聚会开始</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom：聚会结束</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -6131,16 +6146,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solin 内容</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>无法获取摄像机的能力信息。您可以尝试自动模式或刷新摄像机。</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>无法获取摄像机的能力信息。您可以尝试自动模式。</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>正在等待摄像机画面…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>摄像机正在发送与所选分辨率不同的画面。请选择支持的模式或刷新摄像机。</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>摄像机正在发送与所选分辨率不同的画面。请选择支持的模式。</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6151,8 +6166,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>摄像机无法应用所选模式。请选择其他分辨率、帧率或格式。</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>无法检查摄像机的采集状态。请刷新摄像机或重新连接设备。</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>无法检查摄像机的采集状态。请重新连接设备。</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6269,11 +6284,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>设备</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>刷新摄像机</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7276,8 +7286,8 @@ Add content, a camera, or another scene.</source>
         <translation>不可用</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>已保存的摄像机模式不可用。请刷新摄像机或选择其他模式。</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>已保存的摄像机模式不可用。请选择其他模式。</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7324,8 +7334,8 @@ Add content, a camera, or another scene.</source>
         <translation>此分辨率超出摄像机支持的范围或不符合支持的步长。</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>无法获取此分辨率支持的模式。请刷新摄像机或选择其他分辨率。</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>无法获取此分辨率支持的模式。请选择其他分辨率。</translation>
     </message>
     <message>
         <source>Add scene</source>
@@ -7816,11 +7826,6 @@ Add content, a camera, or another scene.</source>
         <translation>自动快捷键</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>当视觉媒体状态改变时发送键盘快捷键。</translation>
-    </message>
-    <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
         <translation type="vanished">为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
@@ -7886,9 +7891,9 @@ Add content, a camera, or another scene.</source>
         <translation>更新</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>会议期间的音频控制和出席人数。</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>聚会音频和视频控制。</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -8524,6 +8529,16 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>再加载 5 个版本</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>仅适用于 Windows。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>在所选应用事件发生时发送键盘快捷键。</translation>
     </message>
 </context>
 <context>
@@ -10053,53 +10068,59 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>连接自己的音频和视频，并将所有人静音。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>断开自己的音频和视频，并允许所有人解除静音。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>关联背景诗歌</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>未找到会议。请打开Zoom会议以使用这些控件。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>聚会前后</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>聚会开始</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>聚会开始时停止歌曲，聚会前后播放歌曲。歌曲按计划停止时也会准备Zoom。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoom会议</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>已断开连接</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n位出席者</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>聚会前</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>屏幕共享已启用</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>开启所有人的音频</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>已连接到会议</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>出席人数可以通过两种方式统计：
-在姓名之间使用 &amp;、| 或 +，例如“Felipe &amp; Julia”= 2；
-或在末尾加上数字，例如“Family Alves 7”= 7。
-末尾的数字具有优先权。</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>聚会结束</translation>
     </message>
 </context>
 <context>
@@ -11954,6 +11975,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Camera</source>
         <translation>摄像机</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>部分Zoom操作无法完成。请检查Zoom并重试。</translation>
     </message>
 </context>
 </TS>

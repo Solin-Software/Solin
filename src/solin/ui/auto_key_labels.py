@@ -10,6 +10,9 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
     EVENT_MEDIA_STARTED,
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
 )
 
 _TR_CONTEXT = "AutoKeyEvents"
@@ -18,6 +21,9 @@ AUTO_KEY_EVENT_LABEL_SOURCES = {
     EVENT_MEDIA_ENDED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Media ends"),
     EVENT_MEDIA_PAUSED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Video pauses"),
     EVENT_MEDIA_RESUMED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Video resumes"),
+    EVENT_ZOOM_BEFORE_MEETING: QT_TRANSLATE_NOOP("AutoKeyEvents", "Zoom: before meeting"),
+    EVENT_ZOOM_MEETING_STARTED: QT_TRANSLATE_NOOP("AutoKeyEvents", "Zoom: start of meeting"),
+    EVENT_ZOOM_AFTER_MEETING: QT_TRANSLATE_NOOP("AutoKeyEvents", "Zoom: end of meeting"),
 }
 
 

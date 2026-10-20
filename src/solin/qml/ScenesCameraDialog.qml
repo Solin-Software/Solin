@@ -10,6 +10,11 @@ Dialog {
     property var theme: null
     property var draft: ({})
     property string cameraKind: "local_camera"
+    readonly property bool localInventoryActive: visible && cameraKind === "local_camera"
+    onLocalInventoryActiveChanged: {
+        if (bridge)
+            bridge.setLocalCameraInventoryActive(localInventoryActive)
+    }
     property string cameraId: ""
     property string deviceId: ""
     property string formatId: ""
@@ -240,7 +245,7 @@ Dialog {
                 return mode.width === width && mode.height === height && mode.available !== false
             })
             if (!success || !candidates.length) {
-                root.customResolutionError = qsTr("Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.")
+                root.customResolutionError = qsTr("Supported modes could not be retrieved for this resolution. Choose another resolution.")
                 return
             }
             root.chooseMode(candidates)
@@ -312,7 +317,7 @@ Dialog {
         if (cameraDevice.available === false)
             return qsTr("Unavailable device")
         if (formatId.length && selectedFormat.available === false)
-            return qsTr("Saved camera mode is unavailable. Refresh the cameras or choose another mode.")
+            return qsTr("Saved camera mode is unavailable. Choose another mode.")
         return cameraDevice.capabilitiesStatus || ""
     }
 
@@ -813,35 +818,31 @@ Dialog {
                     }
 
                     FieldLabel { visible: root.cameraKind === "local_camera"; text: qsTr("Device") }
-                    RowLayout {
+                    ScenesComboBox {
+                        id: deviceCombo
+                        theme: root.theme
                         visible: root.cameraKind === "local_camera"
                         Layout.fillWidth: true
-                        ScenesComboBox {
-                            id: deviceCombo
-                            theme: root.theme
-                            Layout.fillWidth: true
-                            objectName: "cameraDeviceCombo"
-                            model: root.devices
-                            currentIndex: root.findIndex(model, "id", root.deviceId)
-                            textRole: "name"
-                            delegate: ItemDelegate {
-                                required property int index
-                                required property var modelData
-                                width: deviceCombo.width - 8
-                                text: modelData.name + (modelData.available === false ? " · " + qsTr("Unavailable device") : "")
-                                enabled: {
-                                    var registered = root.bridge ? root.bridge.configuredLocalCamera(modelData.id) : ({})
-                                    return modelData.available !== false || !!registered.id || registered.conflict === true
-                                }
-                                highlighted: deviceCombo.highlightedIndex === index
-                                palette.text: root.textPrimary
-                                palette.highlight: root.hover
+                        objectName: "cameraDeviceCombo"
+                        model: root.devices
+                        currentIndex: root.findIndex(model, "id", root.deviceId)
+                        textRole: "name"
+                        delegate: ItemDelegate {
+                            required property int index
+                            required property var modelData
+                            width: deviceCombo.width - 8
+                            text: modelData.name + (modelData.available === false ? " · " + qsTr("Unavailable device") : "")
+                            enabled: {
+                                var registered = root.bridge ? root.bridge.configuredLocalCamera(modelData.id) : ({})
+                                return modelData.available !== false || !!registered.id || registered.conflict === true
                             }
-                            onActivated: {
-                                root.selectDevice(model[currentIndex])
-                            }
+                            highlighted: deviceCombo.highlightedIndex === index
+                            palette.text: root.textPrimary
+                            palette.highlight: root.hover
                         }
-                        SmallButton { iconName: "refresh"; toolTipText: qsTr("Refresh cameras"); onClicked: root.bridge.refreshLocalCameras() }
+                        onActivated: {
+                            root.selectDevice(model[currentIndex])
+                        }
                     }
 
                     FieldLabel { visible: root.cameraKind === "local_camera" && root.editingSettings; text: qsTr("Resolution") }

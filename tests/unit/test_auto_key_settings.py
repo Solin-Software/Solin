@@ -12,6 +12,10 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_MEDIA_PAUSED,
     EVENT_MEDIA_RESUMED,
     EVENT_MEDIA_STARTED,
+    EVENT_ZOOM_BEFORE_MEETING,
+    EVENT_ZOOM_MEETING_STARTED,
+    EVENT_ZOOM_AFTER_MEETING,
+    available_auto_key_events,
 )
 from solin.core.integrations.automation.settings import AutoKeySettingsStore
 from solin.core.profiles.settings import ProfileSettings
@@ -122,3 +126,15 @@ def test_shortcut_model_and_dispatch_keep_comma_key(sequence, expected, monkeypa
     monkeypatch.setattr(shortcuts, "_send_chord", lambda chord: sent.append(chord) or True)
     assert shortcuts.send_key_sequence(sequence) is True
     assert sent == [expected]
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+def test_platform_availability_preserves_all_saved_meeting_actions(platform):
+    from solin.core.integrations.automation.auto_key_actions import parse_actions, serialize_actions
+
+    events = (EVENT_ZOOM_BEFORE_MEETING, EVENT_ZOOM_MEETING_STARTED, EVENT_ZOOM_AFTER_MEETING)
+    actions = [AutoKeyAction(event, event, "Ctrl+1") for event in events]
+    assert parse_actions(serialize_actions(actions)) == actions
+    available = available_auto_key_events(platform)
+    assert all((event in available) == (platform == "win32") for event in events)
+    assert EVENT_MEDIA_STARTED in available

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import sys
 
-from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT
+from solin.core.foundation.constants import (
+    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
+)
 
 from .startup_timeline import startup_timeline
 
@@ -14,6 +16,12 @@ def run() -> None:
     """Dispatch the process role before importing application services or Qt."""
 
     arguments = sys.argv[1:]
+    if ZOOM_AUTOMATION_ARGUMENT in arguments:
+        if arguments != [ZOOM_AUTOMATION_ARGUMENT]:
+            raise SystemExit("The Zoom automation helper accepts no application arguments.")
+        from solin.core.integrations.automation.zoom.worker import main as run_zoom
+
+        raise SystemExit(run_zoom())
     if CAMERA_DISCOVERY_ARGUMENT in arguments:
         if arguments != [CAMERA_DISCOVERY_ARGUMENT]:
             raise SystemExit("The camera discovery helper accepts no application arguments.")

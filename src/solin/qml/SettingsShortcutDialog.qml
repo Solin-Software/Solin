@@ -80,6 +80,7 @@ Dialog {
                     model: root.draftState.shortcutEvents || []
                     textRole: "label"
                     valueRole: "value"
+                    displayText: currentIndex >= 0 ? currentText : root.draftState.shortcutEventLabel || ""
                     currentIndex: {
                         const choices = root.draftState.shortcutEvents || []
                         for (let i = 0; i < choices.length; ++i)
@@ -148,6 +149,15 @@ Dialog {
                             color: parent.highlighted || parent.hovered ? appTheme.hover : "transparent"
                         }
                     }
+                }
+                Text {
+                    objectName: "settingsShortcutUnavailable"
+                    Layout.fillWidth: true
+                    visible: events.currentIndex < 0
+                    text: root.draftState.shortcutUnavailableReason || ""
+                    color: appTheme.textMuted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
                 }
             }
             ColumnLayout {

@@ -48,6 +48,17 @@ def test_locked_requirements_cover_every_direct_runtime_dependency() -> None:
         assert str(actual.marker) == str(expected.marker)
 
 
+@pytest.mark.parametrize("recipe", [
+    "scripts/build_solin.bat", ".github/workflows/build-solin-windows.yml",
+])
+def test_windows_zoom_packaging_prepares_and_bundles_uia_interfaces(recipe):
+    source = (REPO_ROOT / recipe).read_text(encoding="utf-8")
+    preparation = source.index("prepare_zoom_bindings.py")
+    assert preparation < source.index("-m nuitka", preparation)
+    assert "--include-package=comtypes.gen" in source
+    assert "--nofollow-import-to=comtypes.gen" not in source
+
+
 def test_sideview_is_a_pinned_runtime_dependency():
     pyproject = _project_metadata()
     locked_requirements = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()

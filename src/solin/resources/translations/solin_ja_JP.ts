@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>ビデオ再開</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: 集会の前</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: 集会の開始</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: 集会の終了</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -6131,16 +6146,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Solinのコンテンツ</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>カメラの機能情報を取得できません。自動モードを試すか、カメラを更新してください。</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>カメラの機能情報を取得できません。自動モードを試してください。</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>カメラのフレームを待機中…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>カメラは選択した解像度とは異なる解像度で送信しています。対応するモードを選択するか、カメラを更新してください。</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>カメラは選択した解像度とは異なる解像度で送信しています。対応するモードを選択してください。</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6151,8 +6166,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>カメラに選択したモードを適用できませんでした。別の解像度、フレームレート、または形式を選択してください。</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>カメラのキャプチャを確認できませんでした。カメラを更新するか、デバイスを接続し直してください。</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>カメラのキャプチャを確認できませんでした。デバイスを接続し直してください。</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6269,11 +6284,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>デバイス</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>カメラを更新</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7276,8 +7286,8 @@ Add content, a camera, or another scene.</source>
         <translation>利用不可</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>保存済みのカメラモードは利用できません。カメラを更新するか、別のモードを選択してください。</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>保存済みのカメラモードは利用できません。別のモードを選択してください。</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7324,8 +7334,8 @@ Add content, a camera, or another scene.</source>
         <translation>この解像度は、カメラが対応する範囲外か、対応する刻み幅に合っていません。</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>この解像度に対応するモードを取得できませんでした。カメラを更新するか、別の解像度を選択してください。</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>この解像度に対応するモードを取得できませんでした。別の解像度を選択してください。</translation>
     </message>
     <message>
         <source>Add scene</source>
@@ -7657,9 +7667,9 @@ Add content, a camera, or another scene.</source>
         <translation>スクリーン</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>集会中の音声操作と出席者数。</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>集会の音声と映像の操作。</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7899,11 +7909,6 @@ Add content, a camera, or another scene.</source>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>自動ショートカット</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>ビジュアルメディアの状態が変化した際にキーボードショートカットを送信します。</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8524,6 +8529,16 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>さらに5件読み込む</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Windowsでのみ利用できます。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>選択したアプリのイベントが発生したときにキーボードショートカットを送信します。</translation>
     </message>
 </context>
 <context>
@@ -10053,53 +10068,59 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>自分の音声と映像を接続し、全員をミュートします。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>自分の音声と映像を切断し、全員がミュートを解除できるようにします。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>バックグラウンド音楽と連携</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>ミーティングが見つかりません。これらの操作を行うにはZoomミーティングを開いてください。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>集会の前後</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>集会の開始</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>集会の開始時に歌を停止し、集会の前後に再生します。歌の予定された停止時にもZoomを準備します。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Zoomミーティング</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>未接続</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n人の出席者</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>集会の前</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>画面共有中</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>全員の音声をオンにする</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>ミーティングに接続されました</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>出席者数は次の2つの方法でカウントできます。
-名前の間に「&amp;」、「|」、「+」を使用する（例：「Felipe &amp; Julia」＝2）；
-または末尾に数字を置く（例：「Family Alves 7」＝7）。
-末尾の数字が優先されます。</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>集会の終了</translation>
     </message>
 </context>
 <context>
@@ -11954,6 +11975,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Camera</source>
         <translation>カメラ</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Zoomの一部の操作を完了できませんでした。Zoomを確認して再試行してください。</translation>
     </message>
 </context>
 </TS>

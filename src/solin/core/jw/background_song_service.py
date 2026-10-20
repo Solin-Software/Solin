@@ -79,6 +79,7 @@ class BackgroundSongService(QObject):
     fade_seconds_changed = Signal(int)
     stop_before_seconds_changed = Signal(int)
     availability_changed = Signal(bool)
+    scheduled_stop_started = Signal(str)
 
     def __init__(
         self,
@@ -112,6 +113,7 @@ class BackgroundSongService(QObject):
         self._active_occurrence: MeetingOccurrence | None = None
         self._scheduled_fade_deadline: datetime | None = None
         self._suppressed_slot_id = ""
+        self._notified_stop_slot_id = ""
         self._started = False
 
         self._schedule_timer = QTimer(self)
@@ -183,6 +185,10 @@ class BackgroundSongService(QObject):
     @property
     def has_songs(self) -> bool:
         return bool(self._songs)
+
+    @property
+    def playback_requested(self) -> bool:
+        return self._desired_playing
 
     def start(self) -> None:
         if self._started:
@@ -329,6 +335,7 @@ class BackgroundSongService(QObject):
             self._auto_stop_timer.stop()
             self._suppressed_slot_id = occurrence.slot_id
             if self.is_playing or self._desired_playing:
+                self._notify_scheduled_stop()
                 self.stop(immediate=True)
             self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
             return
@@ -533,10 +540,12 @@ class BackgroundSongService(QObject):
 
         remaining_seconds = (deadline - datetime.now().astimezone()).total_seconds()
         if remaining_seconds <= 0:
+            self._notify_scheduled_stop()
             self.stop(immediate=True)
             self._set_status(BackgroundSongStatusCode.STOPPED_BEFORE_MEETING)
             return
 
+        self._notify_scheduled_stop()
         self._desired_playing = False
         self._manual_session = False
         self._fade_to(0.0, remaining_seconds, stop_after=True)
@@ -568,10 +577,22 @@ class BackgroundSongService(QObject):
         self._play_next()
 
     def _begin_scheduled_stop(self) -> None:
+        if not self._enabled:
+            return
+        self._notify_scheduled_stop()
         self._suppressed_slot_id = (
             self._active_occurrence.slot_id if self._active_occurrence else ""
         )
         self.stop()
+
+    def _notify_scheduled_stop(self) -> None:
+        occurrence = self._active_occurrence
+        if occurrence is None or not (self.is_playing or self._desired_playing):
+            return
+        if occurrence.slot_id == self._notified_stop_slot_id:
+            return
+        self._notified_stop_slot_id = occurrence.slot_id
+        self.scheduled_stop_started.emit(occurrence.slot_id)
 
     def _current_pre_meeting_occurrence(self) -> MeetingOccurrence | None:
         return self._schedule_source.load().pre_meeting_occurrence(

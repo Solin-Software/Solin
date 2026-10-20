@@ -1806,21 +1806,18 @@ class ScenesBridge(QObject):
 
     @Slot()
     def ensureLocalCameras(self) -> None:
-        self._refresh_local_cameras(force=False)
-
-    @Slot()
-    def refreshLocalCameras(self) -> None:
-        self._refresh_local_cameras(force=True)
-
-    def _refresh_local_cameras(self, *, force: bool) -> None:
         try:
-            self._controller.refresh_local_cameras(force=force)
+            self._controller.refresh_local_cameras(force=False)
         except Exception:  # noqa: BLE001 - engine discovery boundary
             log.warning("Could not refresh local cameras", exc_info=True)
             self._notify_failure(
                 self.tr("Camera discovery could not be refreshed."),
                 dedupe_key="scenes-camera-discovery-failed",
             )
+
+    @Slot(bool)
+    def setLocalCameraInventoryActive(self, active: bool) -> None:
+        self._controller.set_local_camera_inventory_active(active and not self._closed)
 
     @Slot(str, int, int, result=bool)
     def queryLocalCameraModes(self, device_id: str, width: int, height: int) -> bool:
@@ -2138,7 +2135,7 @@ class ScenesBridge(QObject):
         messages = {
             "camera_mode_mismatch": self.tr(
                 "The camera is sending a different resolution than selected. "
-                "Choose a supported mode or refresh the cameras."
+                "Choose a supported mode."
             ),
             "camera_no_frames": self.tr(
                 "No frames received from the camera. Check its connection, privacy "
@@ -2149,8 +2146,7 @@ class ScenesBridge(QObject):
                 "resolution, frame rate or format."
             ),
             "camera_observation_failed": self.tr(
-                "The camera capture could not be checked. Refresh the cameras "
-                "or reconnect the device."
+                "The camera capture could not be checked. Reconnect the device."
             ),
         }
         return messages.get(health.error_code, self.tr(
@@ -2418,6 +2414,7 @@ class ScenesBridge(QObject):
         self._source_edit_connections.clear()
         self._clear_framing_session()
         self._disconnect_controller()
+        self._controller.set_local_camera_inventory_active(False)
         self._disconnect_recording()
         self.stopAllPtz()
         for future in tuple(self._ptz_recall_futures):
@@ -2785,8 +2782,7 @@ class ScenesBridge(QObject):
             "probeErrorCode": device.probe.error_code,
             "capabilitiesStatus": (
                 self.tr(
-                    "Camera capabilities are unavailable. You can try automatic mode "
-                    "or refresh the cameras."
+                    "Camera capabilities are unavailable. You can try automatic mode."
                 )
                 if not (device.formats or device.frame_rate_ranges)
                 else ""

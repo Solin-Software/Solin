@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>Видео возобновлено</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom: До встречи</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom: Начало встречи</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom: Конец встречи</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -6194,16 +6209,16 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Контент Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Информация о возможностях камеры недоступна. Можно попробовать автоматический режим или обновить список камер.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Информация о возможностях камеры недоступна. Можно попробовать автоматический режим.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>Ожидание кадров с камеры…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>Камера передаёт изображение с разрешением, отличным от выбранного. Выберите поддерживаемый режим или обновите список камер.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>Камера передаёт изображение с разрешением, отличным от выбранного. Выберите поддерживаемый режим.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6214,8 +6229,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Камера не смогла применить выбранный режим. Выберите другое разрешение, частоту кадров или формат.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>Не удалось проверить захват изображения с камеры. Обновите список камер или переподключите устройство.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>Не удалось проверить захват изображения с камеры. Переподключите устройство.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6332,11 +6347,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+2"/>
         <source>Device</source>
         <translation>Устройство</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Обновить камеры</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7339,8 +7349,8 @@ Add content, a camera, or another scene.</source>
         <translation>Недоступно</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Сохранённый режим камеры недоступен. Обновите список камер или выберите другой режим.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Сохранённый режим камеры недоступен. Выберите другой режим.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7387,8 +7397,8 @@ Add content, a camera, or another scene.</source>
         <translation>Это разрешение выходит за пределы поддерживаемого камерой диапазона или не соответствует допустимому шагу изменения размеров.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Обновите список камер или выберите другое разрешение.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Не удалось получить поддерживаемые режимы для этого разрешения. Выберите другое разрешение.</translation>
     </message>
     <message>
         <source>Add scene</source>
@@ -7720,9 +7730,9 @@ Add content, a camera, or another scene.</source>
         <translation>Экраны</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Управление звуком и подсчет присутствующих во время встреч.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Управление звуком и видео встречи.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7962,11 +7972,6 @@ Add content, a camera, or another scene.</source>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Автоматические сочетания клавиш</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Отправляет сочетания клавиш при изменении состояния визуальных медиафайлов.</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8587,6 +8592,16 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Загрузить ещё 5</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Доступно только в Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Отправляет сочетания клавиш при наступлении выбранных событий приложения.</translation>
     </message>
 </context>
 <context>
@@ -10126,55 +10141,59 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Подключить свои звук и видео и выключить звук у всех.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Отключить свои звук и видео и разрешить всем включать звук.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Связать с фоновой песней</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Встреча не найдена. Откройте встречу Zoom, чтобы использовать эти функции.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>До/после встречи</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Начало встречи</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Остановить песню в начале встречи; воспроизводить до/после встречи. Остановка песни по расписанию также подготавливает Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Конференция Zoom</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Отключено</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n присутствующий</numerusform>
-            <numerusform>%n присутствующих</numerusform>
-            <numerusform>%n присутствующих</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>До встречи</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Демонстрация экрана включена</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Включить звук для всех</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Подключено к конференции</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Посещаемость можно учитывать двумя способами:
-используйте &amp;, | или + между именами, например «Фелипе &amp; Юлия» = 2;
-или укажите число в конце, например «Семья Алвес 7» = 7.
-Число в конце имеет приоритет.</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Конец встречи</translation>
     </message>
 </context>
 <context>
@@ -12039,6 +12058,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Camera</source>
         <translation>Камера</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Не удалось выполнить некоторые действия Zoom. Проверьте Zoom и повторите попытку.</translation>
     </message>
 </context>
 </TS>

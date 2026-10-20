@@ -345,6 +345,21 @@
         <source>Video resumes</source>
         <translation>La vidéo reprend</translation>
     </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: before meeting</source>
+        <translation>Zoom : Avant la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: start of meeting</source>
+        <translation>Zoom : Début de la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../ui/auto_key_labels.py"/>
+        <source>Zoom: end of meeting</source>
+        <translation>Zoom : Fin de la réunion</translation>
+    </message>
 </context>
 <context>
     <name>AutoKeysSectionMixin</name>
@@ -6163,16 +6178,16 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Contenu Solin</translation>
     </message>
     <message>
-        <source>Camera capabilities are unavailable. You can try automatic mode or refresh the cameras.</source>
-        <translation>Les capacités de la caméra sont indisponibles. Vous pouvez essayer le mode automatique ou actualiser les caméras.</translation>
+        <source>Camera capabilities are unavailable. You can try automatic mode.</source>
+        <translation>Les capacités de la caméra sont indisponibles. Vous pouvez essayer le mode automatique.</translation>
     </message>
     <message>
         <source>Waiting for camera frames…</source>
         <translation>En attente d’images de la caméra…</translation>
     </message>
     <message>
-        <source>The camera is sending a different resolution than selected. Choose a supported mode or refresh the cameras.</source>
-        <translation>La caméra envoie une résolution différente de celle sélectionnée. Choisissez un mode pris en charge ou actualisez les caméras.</translation>
+        <source>The camera is sending a different resolution than selected. Choose a supported mode.</source>
+        <translation>La caméra envoie une résolution différente de celle sélectionnée. Choisissez un mode pris en charge.</translation>
     </message>
     <message>
         <source>No frames received from the camera. Check its connection, privacy permissions, or whether another application is using it.</source>
@@ -6183,8 +6198,8 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>La caméra n’a pas pu appliquer le mode sélectionné. Choisissez une autre résolution, fréquence d’images ou un autre format.</translation>
     </message>
     <message>
-        <source>The camera capture could not be checked. Refresh the cameras or reconnect the device.</source>
-        <translation>La capture de la caméra n’a pas pu être vérifiée. Actualisez les caméras ou reconnectez le périphérique.</translation>
+        <source>The camera capture could not be checked. Reconnect the device.</source>
+        <translation>La capture de la caméra n’a pas pu être vérifiée. Reconnectez le périphérique.</translation>
     </message>
     <message>
         <source>Check the source name and settings.</source>
@@ -6301,11 +6316,6 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <location line="+2"/>
         <source>Device</source>
         <translation>Appareil</translation>
-    </message>
-    <message>
-        <location line="+17"/>
-        <source>Refresh cameras</source>
-        <translation>Actualiser les caméras</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7308,8 +7318,8 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Indisponible</translation>
     </message>
     <message>
-        <source>Saved camera mode is unavailable. Refresh the cameras or choose another mode.</source>
-        <translation>Le mode de caméra enregistré est indisponible. Actualisez les caméras ou choisissez un autre mode.</translation>
+        <source>Saved camera mode is unavailable. Choose another mode.</source>
+        <translation>Le mode de caméra enregistré est indisponible. Choisissez un autre mode.</translation>
     </message>
     <message>
         <source>Resolution</source>
@@ -7356,8 +7366,8 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Cette résolution dépasse les limites ou ne respecte pas les incréments pris en charge par la caméra.</translation>
     </message>
     <message>
-        <source>Supported modes could not be retrieved for this resolution. Refresh the cameras or choose another resolution.</source>
-        <translation>Les modes pris en charge pour cette résolution n’ont pas pu être récupérés. Actualisez les caméras ou choisissez une autre résolution.</translation>
+        <source>Supported modes could not be retrieved for this resolution. Choose another resolution.</source>
+        <translation>Les modes pris en charge pour cette résolution n’ont pas pu être récupérés. Choisissez une autre résolution.</translation>
     </message>
     <message>
         <source>Add scene</source>
@@ -7689,9 +7699,9 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Écrans</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Audio controls and attendance count during meetings.</source>
-        <translation>Commandes audio et nombre de participants pendant les réunions.</translation>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Meeting audio and video controls.</source>
+        <translation>Commandes audio et vidéo de la réunion.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -7931,11 +7941,6 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location line="+1"/>
         <source>Automatic Shortcuts</source>
         <translation>Raccourcis automatiques</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Sends keyboard shortcuts when visual media changes state.</source>
-        <translation>Envoie des raccourcis clavier lorsque l&apos;état d&apos;un support visuel change.</translation>
     </message>
     <message>
         <source>Create one or more shortcuts for start, end, pause and resume events.</source>
@@ -8556,6 +8561,16 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Charger 5 versions supplémentaires</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/integrations.py"/>
+        <source>Available only on Windows.</source>
+        <translation>Disponible uniquement sous Windows.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py"/>
+        <source>Sends keyboard shortcuts when selected app events occur.</source>
+        <translation>Envoie des raccourcis clavier lorsque les événements sélectionnés de l’application se produisent.</translation>
     </message>
 </context>
 <context>
@@ -10090,54 +10105,59 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
 <context>
     <name>ZoomPanel</name>
     <message>
-        <location filename="../../widgets/zoom_panel.py" line="+91"/>
-        <location line="+312"/>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Connect your audio and video and mute everyone.</source>
+        <translation>Connecter votre audio et votre vidéo et couper le son de tous.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Disconnect your audio and video and allow everyone to unmute.</source>
+        <translation>Déconnecter votre audio et votre vidéo et autoriser chacun à rétablir le son.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Link background song</source>
+        <translation>Lier le cantique de fond</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No meeting found. Open a Zoom meeting to use these controls.</source>
+        <translation>Aucune réunion trouvée. Ouvrez une réunion Zoom pour utiliser ces commandes.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before/after meeting</source>
+        <translation>Avant/après la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Start of meeting</source>
+        <translation>Début de la réunion</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
+        <translation>Arrêter le cantique au début de la réunion ; le lire avant/après la réunion. L’arrêt programmé du cantique prépare aussi Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
         <source>Zoom Meeting</source>
         <translation>Réunion Zoom</translation>
     </message>
     <message>
-        <location line="-293"/>
-        <location line="+214"/>
-        <source>Disconnected</source>
-        <translation>Déconnecté</translation>
-    </message>
-    <message numerus="yes">
-        <location line="-180"/>
-        <location line="+193"/>
-        <source>%n attendee(s)</source>
-        <translation>
-            <numerusform>%n assistant</numerusform>
-            <numerusform>%n assistants</numerusform>
-        </translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Before meeting</source>
+        <translation>Avant la réunion</translation>
     </message>
     <message>
-        <location line="-163"/>
-        <location line="+176"/>
-        <location line="+57"/>
-        <source>Screen sharing active</source>
-        <translation>Partage d’écran actif</translation>
-    </message>
-    <message>
-        <location line="-204"/>
-        <location line="+201"/>
-        <source>Open audio for all</source>
-        <translation>Activer l’audio pour tous</translation>
-    </message>
-    <message>
-        <location line="-88"/>
-        <source>Connected to meeting</source>
-        <translation>Connecté à la réunion</translation>
-    </message>
-    <message>
-        <location line="+77"/>
-        <source>Attendance can be counted in two ways:
-use &amp;, |, or + between names, like &apos;Felipe &amp; Julia&apos; = 2;
-or put a number at the end, like &apos;Family Alves 7&apos; = 7.
-A number at the end has priority.</source>
-        <translation>Le nombre de présents peut être compté de deux manières :
-utilisez &amp;, |, ou + entre les noms, par exemple « Felipe &amp; Julia » = 2 ;
-ou ajoutez un nombre à la fin, par exemple « Famille Alves 7 » = 7.
-Le nombre placé à la fin est prioritaire.</translation>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>End of meeting</source>
+        <translation>Fin de la réunion</translation>
     </message>
 </context>
 <context>
@@ -11997,6 +12017,14 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
     <message>
         <source>Camera</source>
         <translation>Caméra</translation>
+    </message>
+</context>
+<context>
+    <name>ZoomMeetingController</name>
+    <message>
+        <location filename="../../controllers/zoom_meeting_controller.py"/>
+        <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
+        <translation>Certaines actions Zoom n’ont pas pu être effectuées. Vérifiez Zoom et réessayez.</translation>
     </message>
 </context>
 </TS>

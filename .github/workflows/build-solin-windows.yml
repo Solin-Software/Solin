@@ -141,6 +141,9 @@ jobs:
             throw "The installed SideView package is missing its Windows native backend: $sideviewDll"
           }
 
+          python scripts/prepare_zoom_bindings.py
+          if ($LASTEXITCODE -ne 0) { throw "UI Automation bindings could not be prepared." }
+
           python -m nuitka `
             --standalone `
             --output-dir="$env:BUILD_DIR" `
@@ -171,8 +174,9 @@ jobs:
             --include-module=websocket._app `
             --include-package=ephem `
             --include-package=keyring `
-            --include-package=pywinauto `
             --include-package=comtypes `
+            --include-package=comtypes.gen `
+            --nofollow-import-to=comtypes.test `
             --include-package-data=pyqttoast `
             --include-data-dir="src\solin\resources\assets=solin/resources/assets" `
             --include-data-dir="src\solin\resources\remote_control=solin/resources/remote_control" `

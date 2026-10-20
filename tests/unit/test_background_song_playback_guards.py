@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+import pytest
+
 import solin.core.jw.background_song_service as service_module
 from solin.core.jw.background_song_service import BackgroundSongService
 from solin.core.jw.background_song_status import (
@@ -122,6 +124,7 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
         _fade_to=lambda target, seconds, *, stop_after: faded.append((target, seconds, stop_after)),
         _set_status=statuses.append,
         stop=lambda *, immediate=False: None,
+        _notify_scheduled_stop=lambda: None,
     )
 
     BackgroundSongService._start_scheduled_fade(service)
@@ -133,6 +136,80 @@ def test_scheduled_fade_uses_only_time_remaining_until_cutoff():
     assert 1.0 <= faded[0][1] <= 2.0
     assert faded[0][2] is True
     assert statuses == [BackgroundSongStatusCode.STOPPING]
+
+
+def test_scheduled_stop_event_is_emitted_once_per_occurrence():
+    from types import MethodType
+
+    events = []
+    service = SimpleNamespace(
+        _active_occurrence=_occurrence(30), _notified_stop_slot_id="",
+        is_playing=True, _desired_playing=True,
+        scheduled_stop_started=SimpleNamespace(emit=events.append),
+    )
+    service._notify_scheduled_stop = MethodType(BackgroundSongService._notify_scheduled_stop, service)
+    service._notify_scheduled_stop()
+    service._notify_scheduled_stop()
+    assert events == [service._active_occurrence.slot_id]
+    service._active_occurrence = _occurrence(24 * 3600)
+    service._notify_scheduled_stop()
+    assert len(events) == 2
+
+
+def test_zero_fade_scheduled_stop_emits_before_stopping_audio():
+    events = []
+    service = SimpleNamespace(
+        _enabled=True, _active_occurrence=_occurrence(30),
+        _notify_scheduled_stop=lambda: events.append("scheduled"),
+        stop=lambda: events.append("stop"),
+    )
+    BackgroundSongService._begin_scheduled_stop(service)
+    assert events == ["scheduled", "stop"]
+
+
+@pytest.mark.parametrize("playing,fade_seconds", [(True, 5), (True, 0), (False, 5)])
+def test_manual_stop_preserves_fade_without_publishing_a_scheduled_stop_event(
+    playing, fade_seconds,
+):
+    events = []
+    fades = []
+    timer = _TimerStub()
+    service = SimpleNamespace(
+        _current_pre_meeting_occurrence=lambda: _occurrence(30),
+        _auto_stop_timer=timer, _retry_timer=timer, _fade_seconds=fade_seconds,
+        is_playing=playing,
+        _fade_to=lambda target, seconds, *, stop_after: fades.append((target, seconds, stop_after)),
+        _set_status=lambda _code: None,
+        _finish_stop=lambda: events.append("stop"),
+        _notify_scheduled_stop=lambda: events.append("scheduled"),
+    )
+    BackgroundSongService.stop(service, manual=True)
+    assert events == ([] if playing and fade_seconds else ["stop"])
+    assert fades == ([(0.0, fade_seconds, True)] if playing and fade_seconds else [])
+    assert not service._desired_playing
+    assert timer.stopped == 2
+
+
+def test_manual_stop_suppresses_automatic_restart_for_the_current_meeting():
+    occurrence = _occurrence(30)
+    service, timer, statuses = _guard_service(occurrence)
+    service._enabled = True
+    service._fade_seconds = 0
+    service.is_playing = False
+    service._retry_timer = _TimerStub()
+    service._finish_stop = lambda: None
+    # Keep the same schedule snapshot throughout this playback evaluation.
+    schedule = service._schedule_source.load()
+    schedule.has_configured_slot = True
+    service._schedule_source.load = lambda: schedule
+
+    BackgroundSongService.stop(service, manual=True)
+    BackgroundSongService.evaluate_auto_playback(service)
+
+    assert service._suppressed_slot_id == occurrence.slot_id
+    assert not service._desired_playing
+    assert not timer.started_with
+    assert statuses == [BackgroundSongStatusCode.STOPPED_FOR_MEETING]
 
 
 def test_auto_start_inside_fade_window_loads_song_and_schedules_short_fade():
@@ -236,6 +313,23 @@ def test_songs_ready_starts_playback_when_idle_and_waiting():
     )
 
     assert plays == [True]
+
+
+def test_late_song_list_cannot_resume_playback_after_a_manual_stop():
+    service, plays, _statuses = _ready_service(current_title="", is_playing=False)
+    service._current_pre_meeting_occurrence = lambda: None
+    service._auto_stop_timer = _TimerStub()
+    service._retry_timer = _TimerStub()
+    service._fade_seconds = 0
+    service._finish_stop = lambda: None
+
+    BackgroundSongService.stop(service, manual=True)
+    BackgroundSongService._on_songs_ready(
+        service, "E||regular|audio", [{"url": "u"}], "", 0.0, False
+    )
+
+    assert plays == []
+    assert not service._desired_playing
 
 
 def test_background_song_status_translation_renders_at_ui_boundary():

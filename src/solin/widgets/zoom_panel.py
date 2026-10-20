@@ -1,416 +1,251 @@
-"""
-ZoomPanel — floating popup showing Zoom meeting controls.
-
-Displayed when the user clicks the Zoom icon in the QuickAccessToolbar.
-Design mirrors OBSScenePopup for visual consistency — premium glassmorphism.
-"""
+"""Floating audio/video workflows for Windows Zoom meetings."""
 
 from __future__ import annotations
 
+from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, QSize, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGraphicsOpacityEffect,
+    QCheckBox,
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import (
-    Qt, QSize, QPropertyAnimation, QEasingCurve, QEvent, Signal,
-)
-from PySide6.QtGui import QGuiApplication
 
-from ..styles.icons import (
-    make_icon, ICON_ZOOM, ICON_PEOPLE,
-    ICON_INFO_CIRCLE, ICON_SPEAKER_PHONE,
-)
+from solin.styles.icons import ICON_PEOPLE, ICON_VIDEO, ICON_ZOOM, make_icon
+from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.themed_tooltip import install_themed_tooltip
-from ..styles.theme import PALETTE, qss_rgba
 
 
 class ZoomPanel(QWidget):
-    """
-    Floating popup with Zoom meeting info & quick-actions.
-
-    Shows:
-      • Connection status dot + label
-      • Participant count (SVG icon, tooltip with names list)
-      • Sharing indicator badge
-      • "Open audio for all" action button
-      • Info icon with tooltip for name separator tips
-    """
-
-    open_audio_requested = Signal()
-
-    _POP_W = 280
+    before_meeting_requested = Signal()
+    meeting_start_requested = Signal()
+    after_meeting_requested = Signal()
+    background_song_link_toggled = Signal(bool)
+    cancel_requested = Signal()
 
     def __init__(self, parent=None):
-        super().__init__(
-            parent,
-            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
-        )
+        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        # Fade animation
-        self._opacity_eff = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self._opacity_eff)
-        self._fade = QPropertyAnimation(self._opacity_eff, b"opacity")
-        self._fade.setDuration(180)
-        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
-
         self._connected = False
-        self._participant_count = 0
-        self._sharing = False
-
-        self._build_ui()
-
-    # ── Build ─────────────────────────────────────────────────────────────
-
-    def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-
-        self._card = QFrame()
+        self._busy = False
+        self._anchor_rect: QRect | None = None
+        self._available_rect: QRect | None = None
+        self._opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacity)
+        self._fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        self._fade.setDuration(140)
+        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(0, 0, 0, 0)
+        self._root_layout.setSpacing(0)
+        self._card = QFrame(self)
         self._card.setObjectName("ZoomPanelCard")
-        self._card.setStyleSheet(self._card_style())
-        card_lay = QVBoxLayout(self._card)
-        card_lay.setContentsMargins(0, 0, 0, 0)
-        card_lay.setSpacing(0)
+        self._card_layout = QVBoxLayout(self._card)
+        self._card_layout.setContentsMargins(0, 0, 0, 0)
+        self._card_layout.setSpacing(0)
+        header = QHBoxLayout()
+        header.setContentsMargins(16, 14, 16, 10)
+        header.setSpacing(8)
+        self._header_icon = QLabel(self._card)
+        self._header_icon.setFixedSize(15, 15)
+        header.addWidget(self._header_icon)
+        self._title = QLabel(self._card)
+        self._title.setMinimumHeight(20)
+        header.addWidget(self._title)
+        header.addStretch()
+        self._cancel = QPushButton(self._card)
+        self._cancel.setObjectName("ZoomCancel")
+        self._cancel.setFixedHeight(20)
+        self._cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cancel.clicked.connect(self.cancel_requested)
+        self._cancel.hide()
+        header.addWidget(self._cancel)
+        self._card_layout.addLayout(header)
+        self._header_divider = QFrame(self._card)
+        self._header_divider.setFixedHeight(1)
+        self._card_layout.addWidget(self._header_divider)
 
-        # ── Header ────────────────────────────────────────────────────────
-        hdr = QWidget()
-        hdr.setStyleSheet("background: transparent;")
-        h_lay = QHBoxLayout(hdr)
-        h_lay.setContentsMargins(16, 14, 16, 6)
-        h_lay.setSpacing(8)
+        actions = QVBoxLayout()
+        actions.setContentsMargins(12, 12, 12, 12)
+        actions.setSpacing(8)
+        self._before = QPushButton(self._card)
+        self._start = QPushButton(self._card)
+        self._start.setObjectName("ZoomMeetingStart")
+        self._after = QPushButton(self._card)
+        self._combined = QPushButton(self._card)
+        for button in (self._before, self._start, self._after, self._combined):
+            button.setMinimumHeight(40)
+            button.setIconSize(QSize(16, 16))
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            install_themed_tooltip(button)
+            actions.addWidget(button)
+        self._before.clicked.connect(self.before_meeting_requested)
+        self._start.clicked.connect(self.meeting_start_requested)
+        self._after.clicked.connect(self.after_meeting_requested)
+        self._combined.clicked.connect(self.before_meeting_requested)
+        self._before.hide()
+        self._after.hide()
+        self._card_layout.addLayout(actions)
 
-        self._zoom_icon = QLabel()
-        self._zoom_icon.setPixmap(make_icon(ICON_ZOOM, 15, PALETTE.accent).pixmap(15, 15))
-        self._zoom_icon.setFixedSize(15, 15)
-        self._zoom_icon.setStyleSheet("background: transparent;")
+        self._integration = QWidget(self._card)
+        self._integration.setStyleSheet("background:transparent;")
+        self._integration_layout = QVBoxLayout(self._integration)
+        self._integration_layout.setContentsMargins(0, 0, 0, 0)
+        self._integration_layout.setSpacing(0)
+        self._link_divider = QFrame(self._integration)
+        self._link_divider.setFixedHeight(1)
+        self._integration_layout.addWidget(self._link_divider)
+        options = QHBoxLayout()
+        options.setContentsMargins(16, 12, 16, 14)
+        self._link = QCheckBox(self._integration)
+        self._link.setCursor(Qt.CursorShape.PointingHandCursor)
+        install_themed_tooltip(self._link)
+        self._link.toggled.connect(self.background_song_link_toggled)
+        options.addWidget(self._link, 1)
+        self._integration_layout.addLayout(options)
+        self._integration.hide()
+        self._card_layout.addWidget(self._integration)
+        self._root_layout.addWidget(self._card)
+        self.setFixedWidth(340)
+        self._retranslate()
+        self.apply_theme()
 
-        self._title_lbl = QLabel(self.tr("Zoom Meeting"))
-        self._title_lbl.setStyleSheet(self._title_style())
-
-        h_lay.addWidget(self._zoom_icon)
-        h_lay.addWidget(self._title_lbl)
-        h_lay.addStretch()
-        card_lay.addWidget(hdr)
-
-        # ── Status row ────────────────────────────────────────────────────
-        status_w = QWidget()
-        status_w.setStyleSheet("background: transparent;")
-        s_lay = QHBoxLayout(status_w)
-        s_lay.setContentsMargins(16, 2, 16, 8)
-        s_lay.setSpacing(6)
-
-        self._status_dot = QLabel("●")
-        self._status_dot.setFixedWidth(12)
-        self._status_dot.setStyleSheet(self._dot_style(PALETTE.text_faint))
-
-        self._status_lbl = QLabel(self.tr("Disconnected"))
-        self._status_lbl.setStyleSheet(self._status_label_style(PALETTE.text_muted))
-
-        s_lay.addWidget(self._status_dot)
-        s_lay.addWidget(self._status_lbl, stretch=1)
-        card_lay.addWidget(status_w)
-
-        # ── Separator thin ────────────────────────────────────────────────
-        self._sep1 = QFrame()
-        self._sep1.setFixedHeight(1)
-        self._sep1.setStyleSheet(self._divider_style())
-        card_lay.addWidget(self._sep1)
-
-        # ── Content area (participants + sharing) ─────────────────────────
-        self._content_w = QWidget()
-        self._content_w.setStyleSheet("background: transparent;")
-        c_lay = QVBoxLayout(self._content_w)
-        c_lay.setContentsMargins(16, 12, 16, 10)
-        c_lay.setSpacing(10)
-
-        # Participant row
-        self._part_row = QWidget()
-        self._part_row.setStyleSheet("background: transparent;")
-        p_lay = QHBoxLayout(self._part_row)
-        p_lay.setContentsMargins(0, 0, 0, 0)
-        p_lay.setSpacing(10)
-
-        self._part_icon = QLabel()
-        self._part_icon.setPixmap(
-            make_icon(ICON_PEOPLE, 16, PALETTE.text_muted).pixmap(16, 16)
+    def _retranslate(self) -> None:
+        self._title.setText(self.tr("Zoom Meeting"))
+        self._before.setText(self.tr("Before meeting"))
+        self._start.setText(self.tr("Start of meeting"))
+        self._start.setToolTip(self.tr("Connect your audio and video and mute everyone."))
+        self._after.setText(self.tr("End of meeting"))
+        self._combined.setText(self.tr("Before/after meeting"))
+        for button in (self._before, self._after, self._combined):
+            button.setToolTip(
+                self.tr("Disconnect your audio and video and allow everyone to unmute.")
+            )
+        self._link.setText(self.tr("Link background song"))
+        self._link.setToolTip(
+            self.tr(
+                "Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom."
+            )
         )
-        self._part_icon.setFixedSize(16, 16)
-        self._part_icon.setStyleSheet("background: transparent;")
-
-        self._part_lbl = QLabel(self.tr("%n attendee(s)", "", 0))
-        self._part_lbl.setStyleSheet(self._participant_label_style())
-
-        # Info button (ℹ️  → shows tooltip on hover)
-        self._info_btn = QPushButton()
-        self._info_btn.setFixedSize(18, 18)
-        self._info_btn.setIcon(make_icon(ICON_INFO_CIRCLE, 14, PALETTE.text_faint))
-        self._info_btn.setIconSize(QSize(14, 14))
-        self._info_btn.setCursor(Qt.CursorShape.WhatsThisCursor)
-        self._info_btn.setStyleSheet(self._info_button_style())
-        self._info_btn.setToolTip(self._info_tooltip_text())
-        install_themed_tooltip(self._info_btn)
-
-        p_lay.addWidget(self._part_icon)
-        p_lay.addWidget(self._part_lbl, stretch=1)
-        p_lay.addWidget(self._info_btn)
-
-        self._part_row.setVisible(False)
-        c_lay.addWidget(self._part_row)
-
-        # Sharing badge
-        self._share_w = QWidget()
-        self._share_w.setStyleSheet("background: transparent;")
-        sh_lay = QHBoxLayout(self._share_w)
-        sh_lay.setContentsMargins(0, 0, 0, 0)
-        sh_lay.setSpacing(6)
-
-        self._share_dot = QLabel("●")
-        self._share_dot.setFixedWidth(12)
-        self._share_dot.setStyleSheet(self._dot_style(PALETTE.success))
-        self._share_lbl = QLabel(self.tr("Screen sharing active"))
-        self._share_lbl.setStyleSheet(self._share_label_style())
-
-        sh_lay.addWidget(self._share_dot)
-        sh_lay.addWidget(self._share_lbl, stretch=1)
-        self._share_w.setVisible(False)
-        c_lay.addWidget(self._share_w)
-
-        card_lay.addWidget(self._content_w)
-
-        # ── Separator ─────────────────────────────────────────────────────
-        self._sep2 = QFrame()
-        self._sep2.setFixedHeight(1)
-        self._sep2.setStyleSheet(self._divider_style())
-        card_lay.addWidget(self._sep2)
-
-        # ── Action button ─────────────────────────────────────────────────
-        actions_w = QWidget()
-        actions_w.setStyleSheet("background: transparent;")
-        a_lay = QVBoxLayout(actions_w)
-        a_lay.setContentsMargins(12, 10, 12, 12)
-        a_lay.setSpacing(0)
-
-        self._audio_btn = QPushButton()
-        self._audio_btn.setObjectName("ZoomAudioBtn")
-        self._audio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._audio_btn.setFixedHeight(36)
-        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, PALETTE.text_primary))
-        self._audio_btn.setIconSize(QSize(14, 14))
-        self._audio_btn.setText(self.tr("Open audio for all"))
-        self._audio_btn.setStyleSheet(self._audio_button_style())
-        self._audio_btn.clicked.connect(self._on_audio_clicked)
-        a_lay.addWidget(self._audio_btn)
-
-        card_lay.addWidget(actions_w)
-        root.addWidget(self._card)
-
-    @staticmethod
-    def _card_style() -> str:
-        return (
-            "QFrame#ZoomPanelCard {"
-            f"  background: {qss_rgba(PALETTE.surface, 0.96)};"
-            f"  border: 1px solid {qss_rgba(PALETTE.border, 0.85)};"
-            "  border-radius: 16px;"
-            "}"
-        )
-
-    @staticmethod
-    def _title_style() -> str:
-        return (
-            f"color: {PALETTE.text_primary}; font-size: 13px; font-weight: 600;"
-            " letter-spacing: 0.2px; background: transparent;"
-        )
-
-    @staticmethod
-    def _dot_style(color: str) -> str:
-        return f"color: {color}; font-size: 8px; background: transparent;"
-
-    @staticmethod
-    def _status_label_style(color: str) -> str:
-        return f"font-size: 11px; color: {color}; background: transparent;"
-
-    @staticmethod
-    def _divider_style() -> str:
-        return f"background: {qss_rgba(PALETTE.border, 0.5)}; border: none;"
-
-    @staticmethod
-    def _participant_label_style() -> str:
-        return (
-            f"font-size: 14px; color: {PALETTE.text_primary}; font-weight: 600;"
-            " background: transparent;"
-        )
-
-    @staticmethod
-    def _info_button_style() -> str:
-        return (
-            "QPushButton {"
-            "  border: none; background: transparent; padding: 0;"
-            "}"
-            "QPushButton:hover {"
-            f"  background: {qss_rgba(PALETTE.white, 0.06)}; border-radius: 9px;"
-            "}"
-        )
-
-    @staticmethod
-    def _share_label_style() -> str:
-        return (
-            f"font-size: 11px; color: {PALETTE.success}; font-weight: 500;"
-            " background: transparent;"
-        )
-
-    @staticmethod
-    def _audio_button_style() -> str:
-        return (
-            "QPushButton#ZoomAudioBtn {"
-            f"  background: {qss_rgba(PALETTE.accent, 0.10)};"
-            f"  border: 1px solid {qss_rgba(PALETTE.accent, 0.25)};"
-            "  border-radius: 10px;"
-            f"  color: {PALETTE.accent};"
-            "  font-size: 12px; font-weight: 600;"
-            "  padding: 0 16px;"
-            "  text-align: center;"
-            "}"
-            "QPushButton#ZoomAudioBtn:hover {"
-            f"  background: {qss_rgba(PALETTE.accent, 0.18)};"
-            f"  border-color: {qss_rgba(PALETTE.accent, 0.45)};"
-            "}"
-            "QPushButton#ZoomAudioBtn:pressed {"
-            f"  background: {qss_rgba(PALETTE.accent, 0.28)};"
-            "}"
-            "QPushButton#ZoomAudioBtn:disabled {"
-            f"  color: {PALETTE.text_faint}; border-color: {qss_rgba(PALETTE.border, 0.5)};"
-            "  background: transparent;"
-            "}"
-        )
+        self._cancel.setText(self.tr("Cancel"))
+        self._refresh()
 
     def apply_theme(self) -> None:
-        self._card.setStyleSheet(self._card_style())
-        self._zoom_icon.setPixmap(make_icon(ICON_ZOOM, 15, PALETTE.accent).pixmap(15, 15))
-        self._title_lbl.setStyleSheet(self._title_style())
-        self._sep1.setStyleSheet(self._divider_style())
-        self._sep2.setStyleSheet(self._divider_style())
-        self._part_icon.setPixmap(make_icon(ICON_PEOPLE, 16, PALETTE.text_muted).pixmap(16, 16))
-        self._part_lbl.setStyleSheet(self._participant_label_style())
-        self._info_btn.setIcon(make_icon(ICON_INFO_CIRCLE, 14, PALETTE.text_faint))
-        self._info_btn.setStyleSheet(self._info_button_style())
-        self._info_btn.setToolTip(self._info_tooltip_text())
-        self._share_dot.setStyleSheet(self._dot_style(PALETTE.success))
-        self._share_lbl.setStyleSheet(self._share_label_style())
-        self._audio_btn.setIcon(make_icon(ICON_SPEAKER_PHONE, 14, PALETTE.text_primary))
-        self._audio_btn.setStyleSheet(self._audio_button_style())
-        self.set_connected(self._connected)
-        self.set_sharing(self._sharing)
-
-    # ── Public API ────────────────────────────────────────────────────────
-
-    def set_connected(self, connected: bool):
-        self._connected = connected
-        if connected:
-            self._status_dot.setStyleSheet(
-                self._dot_style(PALETTE.success)
-            )
-            self._status_lbl.setText(self.tr("Connected to meeting"))
-            self._status_lbl.setStyleSheet(
-                self._status_label_style(PALETTE.text_primary)
-            )
-        else:
-            self._status_dot.setStyleSheet(
-                self._dot_style(PALETTE.text_faint)
-            )
-            self._status_lbl.setText(self.tr("Disconnected"))
-            self._status_lbl.setStyleSheet(
-                self._status_label_style(PALETTE.text_muted)
-            )
-            self._part_row.setVisible(False)
-            self._share_w.setVisible(False)
-        self._audio_btn.setEnabled(connected)
-
-    def set_participants(self, count: int, names: list[str]):
-        self._participant_count = count
-        self._part_row.setVisible(True)
-        
-        # Parameters: tr(source_text, disambiguation, n)
-        text = self.tr("%n attendee(s)", "", count)
-        
-        self._part_lbl.setText(text)
-        # Participant-name tooltip removed.
-        # if names:
-        #     self._part_lbl.setToolTip("\n".join(names))
-        # else:
-        #     self._part_lbl.setToolTip("")
-
-    def set_sharing(self, sharing: bool):
-        self._sharing = sharing
-        self._share_w.setVisible(sharing)
-        if sharing:
-            self._share_lbl.setText(self.tr("Screen sharing active"))
-        # Disable audio-for-all during sharing — it's disruptive
-        self._audio_btn.setEnabled(self._connected and not sharing)
-        self.adjustSize()
-
-    # ── Positioning ───────────────────────────────────────────────────────
-
-    def show_above(self, anchor: QWidget):
-        self.setFixedWidth(self._POP_W)
-        self.adjustSize()
-        g = anchor.mapToGlobal(anchor.rect().topLeft())
-        x = g.x() + (anchor.width() - self.width()) // 2
-        y = g.y() - self.height() - 10
-
-        screen_geo = (
-            anchor.screen().availableGeometry()
-            if hasattr(anchor, "screen")
-            else QGuiApplication.primaryScreen().availableGeometry()
+        self._card.setStyleSheet(
+            "QFrame#ZoomPanelCard {"
+            f"background:{PALETTE.surface};"
+            f"border:1px solid {PALETTE.border};border-radius:12px;}}"
+            f"QLabel {{color:{PALETTE.text_primary};background:transparent;border:none;}}"
+            f"QCheckBox {{color:{PALETTE.text_secondary};background:transparent;"
+            "font-size:12px;spacing:8px;}"
+            "QCheckBox::indicator {width:14px;height:14px;}"
+            "QCheckBox::indicator:unchecked {"
+            f"border:1px solid {PALETTE.border_strong};border-radius:4px;"
+            f"background:{PALETTE.surface_alt};}}"
+            f"QCheckBox::indicator:unchecked:hover {{border-color:{PALETTE.accent};}}"
+            f"QCheckBox:disabled {{color:{PALETTE.text_dim};}}"
+            "QPushButton {"
+            f"color:{PALETTE.text_primary};background:{PALETTE.surface_alt};"
+            f"border:1px solid {PALETTE.border_muted};"
+            "border-radius:7px;padding:0 12px;font-size:12px;font-weight:500;text-align:left;}"
+            f"QPushButton:hover {{background:{PALETTE.surface_hover};border-color:{PALETTE.border_strong};}}"
+            f"QPushButton:pressed {{background:{PALETTE.surface_hover_strong};}}"
+            "QPushButton#ZoomMeetingStart {"
+            f"color:{PALETTE.accent_text};background:{PALETTE.accent_muted};"
+            f"border-color:{qss_rgba(PALETTE.accent, 0.32)};}}"
+            f"QPushButton#ZoomMeetingStart:hover {{background:{PALETTE.accent_muted_hover};}}"
+            f"QPushButton#ZoomMeetingStart:pressed {{background:{PALETTE.accent_tint};}}"
+            "QPushButton#ZoomCancel {"
+            f"color:{PALETTE.text_secondary};background:transparent;border-color:transparent;"
+            "padding:3px 6px;font-size:11px;text-align:center;}"
+            f"QPushButton#ZoomCancel:hover {{background:{PALETTE.surface_hover};}}"
+            "QPushButton:disabled,QPushButton#ZoomMeetingStart:disabled {"
+            f"color:{PALETTE.text_dim};background:transparent;border-color:{PALETTE.border_muted};}}"
+            f"QPushButton:focus {{border-color:{PALETTE.accent_alt};}}"
         )
-        if x < screen_geo.left() + 4:
-            x = screen_geo.left() + 4
-        if x + self.width() > screen_geo.right() - 4:
-            x = screen_geo.right() - self.width() - 4
-        if y < screen_geo.top() + 4:
-            y = g.y() + anchor.height() + 10
+        self._title.setStyleSheet("font-size:13px;font-weight:600;background:transparent;")
+        self._header_icon.setPixmap(make_icon(ICON_ZOOM, 15, PALETTE.text_muted).pixmap(15, 15))
+        self._start.setIcon(make_icon(ICON_VIDEO, 16, PALETTE.accent_text))
+        for button in (self._before, self._after, self._combined):
+            button.setIcon(make_icon(ICON_PEOPLE, 16, PALETTE.text_secondary))
+        for divider in (self._header_divider, self._link_divider):
+            divider.setStyleSheet(f"background:{PALETTE.border_muted};border:none;")
+        self._sync_geometry()
 
+    def set_connected(self, connected: bool) -> None:
+        self._connected = connected
+        self._refresh()
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self._refresh()
+
+    def set_split_meeting_actions(self, split: bool) -> None:
+        self._before.setVisible(split)
+        self._after.setVisible(split)
+        self._combined.setVisible(not split)
+        self._sync_geometry()
+
+    def set_background_song_link(self, available: bool, linked: bool) -> None:
+        self._integration.setVisible(available)
+        previous = self._link.blockSignals(True)
+        self._link.setChecked(linked)
+        self._link.blockSignals(previous)
+        self._sync_geometry()
+
+    def _refresh(self) -> None:
+        for button in (self._before, self._start, self._after, self._combined):
+            button.setEnabled(self._connected and not self._busy)
+        self._link.setEnabled(not self._busy)
+        self._cancel.setVisible(self._busy)
+        self.setToolTip(
+            ""
+            if self._connected
+            else self.tr("No meeting found. Open a Zoom meeting to use these controls.")
+        )
+        self._sync_geometry()
+
+    def _sync_geometry(self) -> None:
+        self.ensurePolished()
+        # Hidden child widgets defer layout propagation. Resolve their hints
+        # from the inside out before sizing and positioning the popup.
+        self._integration_layout.activate()
+        self._card_layout.activate()
+        self._root_layout.invalidate()
+        self._root_layout.activate()
+        self.adjustSize()
+        if self._anchor_rect is None or self._available_rect is None:
+            return
+        anchor = self._anchor_rect
+        screen = self._available_rect
+        x = max(
+            screen.left() + 4,
+            min(
+                anchor.x() + (anchor.width() - self.width()) // 2, screen.right() - self.width() - 4
+            ),
+        )
+        y = anchor.y() - self.height() - 10
+        if y < screen.top() + 4:
+            y = anchor.y() + anchor.height() + 10
+        y = max(screen.top() + 4, min(y, screen.bottom() - self.height() - 4))
         self.move(x, y)
-        self._opacity_eff.setOpacity(0.0)
+
+    def show_above(self, anchor: QWidget) -> None:
+        self._anchor_rect = QRect(anchor.mapToGlobal(anchor.rect().topLeft()), anchor.size())
+        self._available_rect = anchor.screen().availableGeometry()
+        self._sync_geometry()
+        self._fade.stop()
+        self._opacity.setOpacity(0)
         self.show()
         self.raise_()
-        self._fade.stop()
-        self._fade.setStartValue(0.0)
-        self._fade.setEndValue(1.0)
+        self._fade.setStartValue(0)
+        self._fade.setEndValue(1)
         self._fade.start()
-
-    # ── Internal ──────────────────────────────────────────────────────────
-
-    def _on_audio_clicked(self):
-        self.open_audio_requested.emit()
-        self.close()
-
-    def _info_tooltip_text(self) -> str:
-        return self.tr(
-            "Attendance can be counted in two ways:\n"
-            "use &, |, or + between names, like 'Felipe & Julia' = 2;\n"
-            "or put a number at the end, like 'Family Alves 7' = 7.\n"
-            "A number at the end has priority."
-        )
-
-    # ── i18n ──────────────────────────────────────────────────────────────
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
-            self._title_lbl.setText(self.tr("Zoom Meeting"))
-            self._audio_btn.setText(self.tr("Open audio for all"))
-            self._info_btn.setToolTip(self._info_tooltip_text())
-            if self._sharing:
-                self._share_lbl.setText(self.tr("Screen sharing active"))
-            # Refresh status text
-            self.set_connected(self._connected)
-            # Refresh participant text
-            if self._part_row.isVisible():
-                self.set_participants(
-                    self._participant_count,
-                    [],  # names tooltip doesn't need refresh
-                )
+            self._retranslate()
         super().changeEvent(event)

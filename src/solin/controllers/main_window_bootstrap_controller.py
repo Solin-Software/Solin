@@ -110,9 +110,6 @@ class MainWindowBootstrapController:
         zoom = dependencies.zoom_service
         live = dependencies.live_integrations
         zoom.connection_changed.connect(live.on_zoom_connection_changed)
-        zoom.participants_updated.connect(live.on_zoom_participants_updated)
-        zoom.sharing_state_changed.connect(live.on_zoom_sharing_state_changed)
-        zoom.share_error.connect(live.on_zoom_share_error)
 
     def start_zoom_if_enabled(self) -> None:
         dependencies = self._dependencies

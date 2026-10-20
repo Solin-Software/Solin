@@ -110,7 +110,6 @@ class _WindowStub:
             integrations=_signal_namespace(
                 "settings.integrations",
                 "zoom_enabled_toggled",
-                "zoom_participants_toggled",
                 "obs_stream_config_changed",
             ),
             remote=SimpleNamespace(),
@@ -246,7 +245,7 @@ def test_connect_signals_wires_expected_signal_graph():
     controller.connect_signals()
 
     total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 52
+    assert total_connections == 51
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]
@@ -302,9 +301,6 @@ def test_connect_signals_wires_expected_signal_graph():
     integrations = window.settings_widget.integrations
     assert integrations.zoom_enabled_toggled.connected == [
         window._live_integrations.on_zoom_settings_enabled_toggled
-    ]
-    assert integrations.zoom_participants_toggled.connected == [
-        window._live_integrations.on_zoom_settings_parts_toggled
     ]
     assert integrations.obs_stream_config_changed.connected == [
         window._live_integrations.refresh_obs_stream_availability

@@ -14,10 +14,6 @@ from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
 log = logging.getLogger(__name__)
 
 _TR_CONTEXT = "LiveIntegration"
-_ZOOM_SHARING_FAILED_SOURCE = QT_TRANSLATE_NOOP(
-    "LiveIntegration",
-    "Zoom sharing failed",
-)
 _OBS_NOT_CONFIGURED_SOURCE = QT_TRANSLATE_NOOP(
     "LiveIntegration",
     "OBS stream is not configured.",
@@ -83,43 +79,11 @@ class LiveIntegrationController:
             context.zoom_service.start()
         else:
             context.zoom_service.stop()
-            toolbar = context.quick_toolbar()
-            if toolbar is not None:
-                toolbar.set_zoom_connected(False)
-
-    @Slot(bool)
-    def on_zoom_settings_parts_toggled(self, show: bool) -> None:
-        context = self._context
-        if context.platform != "win32":
-            return
-        if show:
-            context.zoom_service.start_participant_polling()
-        else:
-            context.zoom_service.stop_participant_polling()
-            self.on_zoom_participants_updated(0, [])
 
     def on_zoom_connection_changed(self, connected: bool) -> None:
         toolbar = self._context.quick_toolbar()
         if toolbar is not None:
             toolbar.set_zoom_connected(connected)
-
-    def on_zoom_participants_updated(self, count: int, names: list) -> None:
-        toolbar = self._context.quick_toolbar()
-        if toolbar is not None:
-            toolbar.set_zoom_participants(count, names)
-
-    def on_zoom_sharing_state_changed(self, sharing: bool) -> None:
-        toolbar = self._context.quick_toolbar()
-        if toolbar is not None:
-            toolbar.set_zoom_sharing(sharing)
-
-    def on_zoom_share_error(self, message: str) -> None:
-        context = self._context
-        context.notifications.error(
-            message,
-            title=_tr(_ZOOM_SHARING_FAILED_SOURCE),
-            dedupe_key=f"zoom-share:{message}",
-        )
 
     def on_obs_state_changed(self, _state, _message: str) -> None:
         self.refresh_obs_btn_availability()

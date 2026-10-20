@@ -362,8 +362,18 @@ available on a particular machine.
   `v4l2loopback` device and the libobs `virtualcam_output` plugin. The macOS
   runtime includes `mac-virtualcam`; validate camera-extension availability,
   permissions, and camera output on the target Mac before distributing a build.
-- Zoom meeting detection and participant/audio automation require Windows and
-  `pywinauto`. Automatic screen sharing on macOS requires Accessibility
+- Zoom meeting audio/video automation requires Windows and `comtypes`. A
+  supervised, persistent helper uses native UI Automation with bounded requests.
+  `scripts/prepare_zoom_bindings.py` generates `comtypes.gen.UIAutomationClient`
+  and its type-library module from Windows' `UIAutomationCore.dll` before Nuitka
+  bundles them. Installed executables use the bundled interfaces.
+  Background-song linking is available whenever background playback is enabled,
+  including manual playback without scheduled days. An application controller
+  stops playback on manual meeting start, respecting the configured fade and
+  suppressing automatic restart for that occurrence. Scheduled song stops
+  prepare Zoom without restarting the fade; successful before/after-meeting
+  actions start playback.
+- Automatic screen sharing on macOS requires Accessibility
   permission; on Linux it requires `xdotool` and an X11 session. The Linux
   automation rejects Wayland sessions.
 - Recording microphone capture uses WASAPI on Windows and PulseAudio or ALSA
