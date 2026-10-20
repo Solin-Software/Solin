@@ -45,6 +45,7 @@ Dialog {
     property bool hasCredentials: false
     property bool hasStreamCredentials: false
     property bool clearStreamCredentials: false
+    property bool streamCredentialsEdited: false
     property bool clearCredentials: false
     property bool addToScene: true
     property var editContext: ({})
@@ -409,10 +410,10 @@ Dialog {
             return
         streamIndex = index
         uriField.text = onvifStreams[index].uri
-        // A login the camera put in the address: stored apart, like a typed one.
-        if (onvifStreams[index].username && !streamUsernameField.text.trim().length) {
-            streamUsernameField.text = onvifStreams[index].username
-            streamPasswordField.text = onvifStreams[index].password
+        // Follow the profile's login until the operator takes ownership of it.
+        if (!streamCredentialsEdited && !hasStreamCredentials && !clearStreamCredentials) {
+            streamUsernameField.text = onvifStreams[index].username || ""
+            streamPasswordField.text = onvifStreams[index].password || ""
         }
         if (ptzProtocol === "onvif" && onvifStreams[index].ptz)
             onvifProfileToken.text = onvifStreams[index].token
@@ -495,6 +496,7 @@ Dialog {
         hasCredentials = draft.hasCredentials === true
         hasStreamCredentials = draft.hasStreamCredentials === true
         clearStreamCredentials = false
+        streamCredentialsEdited = false
         streamUsernameField.text = ""
         streamPasswordField.text = ""
         clearCredentials = false
@@ -895,6 +897,7 @@ Dialog {
                     StyledField {
                         id: streamUsernameField
                         objectName: "cameraStreamUsernameField"
+                        onTextEdited: root.streamCredentialsEdited = true
                         visible: root.cameraKind === "rtsp_camera" && root.editingSettings
                         Layout.fillWidth: true
                         placeholderText: root.hasStreamCredentials
@@ -906,6 +909,7 @@ Dialog {
                     StyledField {
                         id: streamPasswordField
                         objectName: "cameraStreamPasswordField"
+                        onTextEdited: root.streamCredentialsEdited = true
                         visible: root.cameraKind === "rtsp_camera" && root.editingSettings
                         Layout.fillWidth: true
                         echoMode: TextInput.Password

@@ -1820,15 +1820,32 @@ def test_ptz_finder_keeps_the_stream_login_it_succeeded_with(scene_editor_factor
     assert QMetaObject.invokeMethod(dialog, "close")
 
 
-def test_found_camera_login_in_the_stream_address_is_kept_apart(scene_editor_factory, tmp_path) -> None:
-    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+@pytest.mark.parametrize("sub_login", [
+    ("sub-viewer", "sub-secret"),
+    ("viewer", "sub-secret"),
+    ("", ""),
+])
+def test_found_camera_stream_login_follows_selected_profile(
+    scene_editor_factory, tmp_path, monkeypatch, sub_login,
+) -> None:
+    workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    saved_credentials = []
+    monkeypatch.setattr(widget.bridge, "_credentials", SimpleNamespace(
+        save=lambda credentials: saved_credentials.append(credentials) or "stream-credential",
+    ))
     details = OnvifDeviceDetails(
         device_service=_ONVIF_DETAILS.device_service,
         ptz_endpoint="",
-        profiles=(OnvifMediaProfile(
-            "main", "MainStream", "rtsp://192.0.2.40/main", False,
-            stream_username="viewer", stream_password="stream-secret",
-        ),),
+        profiles=(
+            OnvifMediaProfile(
+                "main", "MainStream", "rtsp://192.0.2.40/main", False,
+                stream_username="viewer", stream_password="stream-secret",
+            ),
+            OnvifMediaProfile(
+                "sub", "SubStream", "rtsp://192.0.2.40/sub", False,
+                stream_username=sub_login[0], stream_password=sub_login[1],
+            ),
+        ),
     )
     onvif = _Onvif(cameras=[_ONVIF_CAMERA], details=details)
     dialog = _open_network_camera_dialog(widget, onvif)
@@ -1840,4 +1857,54 @@ def test_found_camera_login_in_the_stream_address_is_kept_apart(scene_editor_fac
     assert _wait_until(lambda: uri.property("text") == "rtsp://192.0.2.40/main", timeout_ms=5000)
     assert dialog.findChild(QObject, "cameraStreamUsernameField").property("text") == "viewer"
     assert dialog.findChild(QObject, "cameraStreamPasswordField").property("text") == "stream-secret"
+    for index in (1, 0, 1):
+        assert QMetaObject.invokeMethod(dialog, "selectStream", Q_ARG("QVariant", index))
+        expected = sub_login if index else ("viewer", "stream-secret")
+        assert dialog.findChild(QObject, "cameraStreamUsernameField").property("text") == expected[0]
+        assert dialog.findChild(QObject, "cameraStreamPasswordField").property("text") == expected[1]
+
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert not dialog.property("visible")
+    camera = next(camera for camera in workspace.configured_cameras if camera.name == "Acme PTZ-200")
+    assert camera.configuration.uri == "rtsp://192.0.2.40/sub"
+    assert camera.credential_ref == ("stream-credential" if sub_login[0] else "")
+    assert [(login.username, login.password) for login in saved_credentials] == (
+        [sub_login] if sub_login[0] else []
+    )
+
+
+@pytest.mark.parametrize("edit_before_profile", [True, False])
+@pytest.mark.parametrize("manual_login", [
+    ("operator", "operator-secret"),
+    (None, "corrected-secret"),
+    ("viewer", None),
+    ("", ""),
+])
+def test_selecting_stream_preserves_manual_login_until_dialog_is_reopened(
+    scene_editor_factory, tmp_path, manual_login, edit_before_profile,
+) -> None:
+    _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    dialog = _open_network_camera_dialog(widget, _Onvif())
+    profiles = [
+        {"uri": "rtsp://192.0.2.40/main", "username": "viewer", "password": "stream-secret"},
+        {"uri": "rtsp://192.0.2.40/sub", "username": "sub-viewer", "password": "sub-secret"},
+    ]
+    dialog.setProperty("onvifStreams", profiles)
+    if not edit_before_profile:
+        assert QMetaObject.invokeMethod(dialog, "selectStream", Q_ARG("QVariant", 0))
+    username = dialog.findChild(QObject, "cameraStreamUsernameField")
+    password = dialog.findChild(QObject, "cameraStreamPasswordField")
+    for field, value in zip((username, password), manual_login, strict=True):
+        if value is not None:
+            _set_edited_text(field, value)
+    expected = (username.property("text"), password.property("text"))
+
+    assert QMetaObject.invokeMethod(dialog, "selectStream", Q_ARG("QVariant", 1))
+    assert dialog.findChild(QObject, "cameraUriField").property("text") == profiles[1]["uri"]
+    assert (username.property("text"), password.property("text")) == expected
+
     assert QMetaObject.invokeMethod(dialog, "close")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "rtsp_camera"))
+    dialog.setProperty("onvifStreams", profiles)
+    assert QMetaObject.invokeMethod(dialog, "selectStream", Q_ARG("QVariant", 1))
+    assert (username.property("text"), password.property("text")) == ("sub-viewer", "sub-secret")
