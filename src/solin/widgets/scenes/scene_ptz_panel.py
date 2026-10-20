@@ -46,7 +46,7 @@ from solin.styles.icons import (
     ICON_REC_STOP,
     make_icon,
 )
-from solin.styles.theme import PALETTE, qss_rgba
+from solin.styles.theme import PALETTE, qss_rgba, slider_stylesheet
 from solin.widgets.scenes.camera_still import CameraStillCapture
 
 
@@ -112,6 +112,7 @@ class _PresetRow(QPushButton):
         self.image.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self.image, 0, Qt.AlignmentFlag.AlignHCenter)
         caption_host = QWidget()
+        caption_host.setObjectName("ScenePtzPresetCaption")
         caption_host.setFixedHeight(_TILE_CAPTION_HEIGHT)
         caption_host.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         caption = QHBoxLayout(caption_host)
@@ -121,20 +122,29 @@ class _PresetRow(QPushButton):
         self.label.setObjectName("ScenePtzPresetName")
         self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         caption.addWidget(self.label, 1)
-        layout.addWidget(caption_host)
-        # Over the bottom of the picture, so the name keeps its full width.
-        self.feedback = QLabel(self.image)
+        # In the footer beside the name, never over the picture.
+        self.feedback = QLabel()
         self.feedback.setObjectName("ScenePtzPresetFeedback")
-        self.feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.feedback.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.feedback.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.feedback.setGeometry(0, THUMBNAIL_SIZE[1] - 18, THUMBNAIL_SIZE[0], 18)
         self.feedback.hide()
+        caption.addWidget(self.feedback)
+        layout.addWidget(caption_host)
+        self._text = ""
 
     def set_text(self, text: str) -> None:
-        metrics = self.label.fontMetrics()
-        self.label.setText(metrics.elidedText(text, Qt.TextElideMode.ElideRight, THUMBNAIL_SIZE[0] - 4))
+        self._text = text
         self.label.setToolTip(text)
         self.setAccessibleName(text)
+        self._elide()
+
+    def _elide(self) -> None:
+        # The name shares the footer with the feedback; shorten it to what is left.
+        room = THUMBNAIL_SIZE[0] - 4
+        if self.feedback.text():
+            room -= self.feedback.fontMetrics().horizontalAdvance(self.feedback.text()) + 6
+        metrics = self.label.fontMetrics()
+        self.label.setText(metrics.elidedText(self._text, Qt.TextElideMode.ElideRight, max(20, room)))
 
     def set_thumbnail(self, image: QImage | None, placeholder: str) -> None:
         if image is None or image.isNull():
@@ -153,6 +163,7 @@ class _PresetRow(QPushButton):
     def set_feedback(self, state: str, text: str) -> None:
         self.feedback.setText(text)
         self.feedback.setVisible(bool(text))
+        self._elide()
         # Restyle each widget whose look depends on the state; Qt does not
         # re-evaluate a child when only its parent's property changes.
         for widget in (self, self.feedback):
@@ -208,6 +219,7 @@ class ScenePtzPanel(QWidget):
         self._camera_title = self._section_label()
         root.addWidget(self._camera_title)
         self._chips_host = QWidget()
+        self._chips_host.setObjectName("ScenePtzChips")
         self._chips = QGridLayout(self._chips_host)
         self._chips.setContentsMargins(0, 0, 0, 0)
         self._chips.setSpacing(6)
@@ -868,6 +880,9 @@ class ScenePtzPanel(QWidget):
         super().changeEvent(event)
 
     def apply_theme(self) -> None:
+        # The app's own slider look, set on the slider itself so no inherited
+        # rule paints a box behind its groove.
+        self._speed.setStyleSheet(slider_stylesheet(groove_height=4, handle_size=14))
         for button in self._pad_buttons.values():
             icon = button.property("icon_svg")
             if isinstance(icon, str) and icon:
@@ -889,16 +904,18 @@ class ScenePtzPanel(QWidget):
             QPushButton:pressed {{ background:{PALETTE.surface_alt}; }}
             QPushButton:disabled {{ color:{PALETTE.text_faint}; border-color:{PALETTE.border_muted}; }}
             QPushButton[pad="true"] {{ padding:0; font-size:16px; }}
-            QPushButton#ScenePtzCamera {{ min-height:26px; }}
-            QPushButton#ScenePtzCamera:checked {{ background:{qss_rgba(PALETTE.accent, 0.14)}; border-color:{qss_rgba(PALETTE.accent, 0.50)}; color:{PALETTE.accent_text}; }}
+            QPushButton#ScenePtzCamera, QPushButton#ScenePtzCamera:checked, QPushButton#ScenePtzCamera:hover {{ min-height:28px; max-height:28px; padding:0 10px; border-radius:8px; }}
+            QPushButton#ScenePtzCamera:checked {{ background:{qss_rgba(PALETTE.accent, 0.14)}; border:1px solid {qss_rgba(PALETTE.accent, 0.50)}; color:{PALETTE.accent_text}; }}
+            QPushButton#ScenePtzCamera:checked:hover {{ background:{qss_rgba(PALETTE.accent, 0.20)}; }}
             QPushButton#ScenePtzSave {{ padding:3px 10px; font-size:11px; }}
             QPushButton#ScenePtzPreset {{ padding:0; border-radius:8px; background:{PALETTE.surface_card}; }}
             QPushButton#ScenePtzPreset:hover {{ border-color:{PALETTE.border_strong}; }}
             QPushButton#ScenePtzPreset[feedback="moving"], QPushButton#ScenePtzPreset[feedback="done"] {{ border-color:{qss_rgba(PALETTE.accent, 0.70)}; }}
             QPushButton#ScenePtzPreset[feedback="error"] {{ border-color:{qss_rgba(PALETTE.danger, 0.75)}; }}
             QLabel#ScenePtzPresetImage {{ background:{PALETTE.surface_alt}; border-radius:5px; color:{PALETTE.text_muted}; font-size:10px; }}
+            QWidget#ScenePtzPresetCaption, QWidget#ScenePtzChips {{ background:transparent; }}
             QLabel#ScenePtzPresetName {{ color:{PALETTE.text_secondary}; font-size:11px; }}
-            QLabel#ScenePtzPresetFeedback {{ background:rgba(0,0,0,0.62); color:{PALETTE.accent_text}; font-size:10px; font-weight:600; border-bottom-left-radius:5px; border-bottom-right-radius:5px; }}
+            QLabel#ScenePtzPresetFeedback {{ color:{PALETTE.accent_text}; font-size:10px; font-weight:600; }}
             QLabel#ScenePtzPresetFeedback[feedback="done"] {{ color:{PALETTE.success}; }}
             QLabel#ScenePtzPresetFeedback[feedback="error"] {{ color:{PALETTE.danger}; }}
             QScrollArea#ScenePtzPresets, QWidget#ScenePtzPresetsHost {{ background:transparent; border:none; }}
