@@ -12027,4 +12027,38 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <translation>Sommige Zoom-acties konden niet worden voltooid. Controleer Zoom en probeer opnieuw.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 in een venster openen</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scènes</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>In de uitzending · virtuele camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>In de uitzending · projectie</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Voorbeeld laden…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>De scène-engine start…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>De scène-engine is niet beschikbaar.</translation>
+    </message>
+</context>
 </TS>

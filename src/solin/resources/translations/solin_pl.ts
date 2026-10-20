@@ -12069,4 +12069,38 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
         <translation>Nie udało się ukończyć niektórych działań Zoom. Sprawdź Zoom i spróbuj ponownie.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Otwórz %1 w oknie</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Sceny Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Na antenie · kamera wirtualna</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Na antenie · projekcja</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Wczytywanie podglądu…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Silnik scen się uruchamia…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Silnik scen jest niedostępny.</translation>
+    </message>
+</context>
 </TS>

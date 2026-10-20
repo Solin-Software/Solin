@@ -44,6 +44,7 @@ from solin.core.scenes.engine import (
     MediaVideoReadyEvent,
     SceneEngine,
     SceneEngineSnapshot,
+    scene_window_channel,
 )
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
 from solin.core.scenes.process_engine import SubprocessSceneEngine
@@ -628,6 +629,11 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
         _BgraEgress(160, 90 * len(scene_ids), channel_id="solin-thumbnails")
         if preview_content != "none" else None
     )
+    # A scene window's feed runs beside the card atlas, at its own size.
+    window_feed = (
+        _BgraEgress(320, 180, channel_id=scene_window_channel(content_scene_id))
+        if preview_content == "thumbnails" else None
+    )
     projection = ProjectionSession()
     content = ProgramContentController(
         projection, _FontManager(), ingress.submit_frame, lambda: ("", "", ""),
@@ -660,6 +666,12 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
                 thumbnails.descriptor, scene_ids, 160, 90, request_id="image-thumbnails",
                 sequence=controller._next_sequence(), deadline_ms=10_000,
             ).result(15).applied
+        if window_feed is not None:
+            assert engine.set_thumbnail_egress(
+                window_feed.descriptor, (content_scene_id,), 320, 180,
+                request_id="image-scene-window", sequence=controller._next_sequence(),
+                deadline_ms=10_000, channel_id=scene_window_channel(content_scene_id),
+            ).result(15).applied
         projection.set_state({"type": "image"})
         image = QImage(160, 90, QImage.Format.Format_ARGB32)
         image.fill(QColor("#00ff00"))
@@ -673,6 +685,10 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
             assert _wait_for_pixel(
                 thumbnails, x=80, y=scene_ids.index(content_scene_id) * 90 + 45,
                 expected=bytes((0, 255, 0, 255)),
+            ) is not None
+        if window_feed is not None:
+            assert _wait_for_pixel(
+                window_feed, x=160, y=90, expected=bytes((0, 255, 0, 255)),
             ) is not None
         time.sleep(0.7)
         with _record_program_centers(program) as samples:

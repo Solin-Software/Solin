@@ -11985,4 +11985,38 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>일부 Zoom 작업을 완료하지 못했습니다. Zoom을 확인하고 다시 시도하세요.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1을(를) 창으로 열기</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin 장면</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>방송 중 · 가상 카메라</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>방송 중 · 프로젝션</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>미리보기를 불러오는 중…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>장면 엔진을 시작하는 중…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>장면 엔진을 사용할 수 없습니다.</translation>
+    </message>
+</context>
 </TS>

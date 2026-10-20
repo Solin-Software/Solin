@@ -11985,4 +11985,38 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>部分Zoom操作无法完成。请检查Zoom并重试。</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>在窗口中打开 %1</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin 场景</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>直播中 · 虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>直播中 · 投影</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>正在加载预览……</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>场景引擎正在启动……</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>场景引擎不可用。</translation>
+    </message>
+</context>
 </TS>

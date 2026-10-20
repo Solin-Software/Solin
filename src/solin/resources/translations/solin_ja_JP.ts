@@ -11985,4 +11985,38 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Zoomの一部の操作を完了できませんでした。Zoomを確認して再試行してください。</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 をウィンドウで開く</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin のシーン</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>放送中 · 仮想カメラ</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>放送中 · 投影</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>プレビューを読み込んでいます…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>シーンエンジンを起動しています…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>シーンエンジンを利用できません。</translation>
+    </message>
+</context>
 </TS>

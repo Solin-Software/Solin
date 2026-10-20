@@ -12027,4 +12027,38 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <translation>Hindi nakumpleto ang ilang pagkilos sa Zoom. Suriin ang Zoom at subukang muli.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Buksan ang %1 sa isang window</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Mga eksena ng Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Live · virtual na camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Live · projection</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Nilo-load ang preview…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Nagsisimula ang scene engine…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Hindi available ang scene engine.</translation>
+    </message>
+</context>
 </TS>

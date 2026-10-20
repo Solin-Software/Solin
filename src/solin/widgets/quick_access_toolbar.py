@@ -487,6 +487,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._scene_runtime,
             self,
             recording=self._program_recording,
+            window_geometry=self._app_settings,
         )
         self._popup_hover.bind_button("scenes", popup.hover_button)
         popup.dock_button.toggled.connect(self._on_scene_panel_dock_toggled)

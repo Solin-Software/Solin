@@ -12027,4 +12027,38 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Baadhi ya vitendo vya Zoom havikuweza kukamilishwa. Kagua Zoom na ujaribu tena.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Fungua %1 kwenye dirisha</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Mandhari ya Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Hewani · kamera pepe</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Hewani · makadirio</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Inapakia onyesho la kukagua…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Injini ya mandhari inaanza…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Injini ya mandhari haipatikani.</translation>
+    </message>
+</context>
 </TS>

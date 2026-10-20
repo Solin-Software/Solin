@@ -10614,4 +10614,38 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Some Zoom actions could not be completed. Check Zoom and try again.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Open %1 in a window</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin scenes</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>On air · virtual camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>On air · projection</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Loading preview…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>The scene engine is starting…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>The scene engine is unavailable.</translation>
+    </message>
+</context>
 </TS>

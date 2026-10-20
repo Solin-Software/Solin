@@ -12068,4 +12068,38 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Не удалось выполнить некоторые действия Zoom. Проверьте Zoom и повторите попытку.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Открыть %1 в окне</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Сцены Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>В эфире · виртуальная камера</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>В эфире · проекция</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Загрузка предпросмотра…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Движок сцен запускается…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Движок сцен недоступен.</translation>
+    </message>
+</context>
 </TS>

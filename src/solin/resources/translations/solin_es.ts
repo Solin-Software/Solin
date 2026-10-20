@@ -12027,4 +12027,38 @@ Use el botón de reproducción para proyectar · Arrastre el control ⠿ para re
         <translation>No se pudieron completar algunas acciones de Zoom. Revise Zoom e inténtelo de nuevo.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Abrir %1 en una ventana</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Escenas de Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>En directo · cámara virtual</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>En directo · proyección</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Cargando vista previa…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>El motor de escenas se está iniciando…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>El motor de escenas no está disponible.</translation>
+    </message>
+</context>
 </TS>

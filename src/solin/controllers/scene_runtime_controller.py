@@ -15,6 +15,7 @@ from solin.core.scenes.camera_discovery_process import CAMERA_DISCOVERY_DEADLINE
 from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
+    SCENE_THUMBNAILS_CHANNEL,
     EngineHealthEvent,
     FrameChannelDescriptor,
     FrameEgressReadyEvent,
@@ -1066,8 +1067,13 @@ class SceneRuntimeController(QObject):
         scene_ids: tuple[str, ...],
         cell_width: int,
         cell_height: int,
+        *,
+        channel_id: str = SCENE_THUMBNAILS_CHANNEL,
     ) -> bool:
-        """Point the engine at the scene-card thumbnail atlas.
+        """Point the engine at a scene-render feed: the card atlas or a scene window.
+
+        Each ``channel_id`` is an independent feed; clearing one (``descriptor``
+        None) leaves the others running.
 
         Returns False when there is no engine to tell yet, so the caller knows to
         try again rather than assuming the engine heard it.
@@ -1087,6 +1093,7 @@ class SceneRuntimeController(QObject):
                 request_id=self._request_id_factory(),
                 sequence=self._next_sequence(),
                 deadline_ms=_TAKE_DEADLINE_MS,
+                channel_id=channel_id,
             ),
             "thumbnail_egress",
             None,

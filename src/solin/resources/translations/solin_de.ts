@@ -12027,4 +12027,38 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <translation>Einige Zoom-Aktionen konnten nicht abgeschlossen werden. Prüfe Zoom und versuche es erneut.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 in einem Fenster öffnen</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-Szenen</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Auf Sendung · virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Auf Sendung · Projektion</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Vorschau wird geladen…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Die Szenen-Engine startet…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Die Szenen-Engine ist nicht verfügbar.</translation>
+    </message>
+</context>
 </TS>

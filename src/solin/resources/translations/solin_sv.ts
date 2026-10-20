@@ -12026,4 +12026,38 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Vissa Zoom-åtgärder kunde inte slutföras. Kontrollera Zoom och försök igen.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Öppna %1 i ett fönster</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scener</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>I sändning · virtuell kamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>I sändning · projicering</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Läser in förhandsvisning…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Scenmotorn startar…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Scenmotorn är inte tillgänglig.</translation>
+    </message>
+</context>
 </TS>

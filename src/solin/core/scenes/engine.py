@@ -406,6 +406,27 @@ class LocalCameraDiscovery:
             raise ValueError("Pending local camera discovery cannot contain results")
 
 
+# Scene-render feeds the engine keeps by channel: the scenes panel's card atlas,
+# plus one per open scene window (``scene_window_channel``).
+SCENE_THUMBNAILS_CHANNEL = "scene-thumbnails"
+_SCENE_WINDOW_CHANNEL_PREFIX = "scene-window:"
+
+
+def scene_window_channel(scene_id: str) -> str:
+    """The feed channel of the floating window that shows ``scene_id``."""
+    return f"{_SCENE_WINDOW_CHANNEL_PREFIX}{scene_id}"
+
+
+def is_scene_render_channel(channel_id: object) -> bool:
+    """Whether ``channel_id`` names a scene-render feed the engine may keep."""
+    if not isinstance(channel_id, str) or not 0 < len(channel_id) <= 160:
+        return False
+    if channel_id == SCENE_THUMBNAILS_CHANNEL:
+        return True
+    scene_id = channel_id.removeprefix(_SCENE_WINDOW_CHANNEL_PREFIX)
+    return scene_id != channel_id and bool(scene_id) and scene_id.isprintable()
+
+
 @dataclass(frozen=True, slots=True)
 class FrameChannelDescriptor:
     channel_id: str
@@ -939,6 +960,7 @@ class SceneEngine(Protocol):
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        channel_id: str = SCENE_THUMBNAILS_CHANNEL,
     ) -> Future[SceneEngineAck]: ...
 
     def start_program_recording(

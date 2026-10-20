@@ -12027,4 +12027,38 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <translation>Joitakin Zoom-toimintoja ei voitu suorittaa. Tarkista Zoom ja yritä uudelleen.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Avaa %1 ikkunassa</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-näkymät</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Lähetyksessä · virtuaalikamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Lähetyksessä · projektio</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Ladataan esikatselua…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Näkymämoottori käynnistyy…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Näkymämoottori ei ole käytettävissä.</translation>
+    </message>
+</context>
 </TS>

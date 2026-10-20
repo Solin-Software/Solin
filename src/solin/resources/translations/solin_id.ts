@@ -11985,4 +11985,38 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Beberapa tindakan Zoom tidak dapat diselesaikan. Periksa Zoom dan coba lagi.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Buka %1 di jendela</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Adegan Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Tayang · kamera virtual</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Tayang · proyeksi</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Memuat pratinjau…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Mesin adegan sedang dimulai…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Mesin adegan tidak tersedia.</translation>
+    </message>
+</context>
 </TS>

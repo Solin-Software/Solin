@@ -22,6 +22,7 @@ from solin.controllers.program_recording_controller import ProgramRecordingContr
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.scenes.application import DuplicateLayerNameError
+from solin.core.scenes.composition import scene_ptz_camera_ids
 from solin.core.scenes.editor_geometry import (
     FramingRect,
     MINIMUM_LAYER_SIZE,
@@ -3176,12 +3177,7 @@ class ScenesBridge(QObject):
         return tuple(result)
 
     def _ptz_camera_ids_for_scene(self, scene_id: str) -> tuple[str, ...]:
-        result: list[str] = []
-        for layer in self._controller.document.scene(scene_id).layers:
-            for camera_id in self._ptz_camera_ids_for_layer(layer.id):
-                if camera_id not in result:
-                    result.append(camera_id)
-        return tuple(result)
+        return scene_ptz_camera_ids(self._controller.document, scene_id)
 
     def _observe_ptz_future(
         self,

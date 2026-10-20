@@ -34,6 +34,7 @@ from solin.core.scenes.recording import ProgramRecordingStatus
 from solin.styles.icons import (
     ICON_CAMERA,
     ICON_CLAPPERBOARD,
+    ICON_FULLSCREEN,
     ICON_REC_CIRCLE,
     ICON_REC_STOP,
     ICON_SCREEN,
@@ -49,6 +50,7 @@ from solin.ui.scene_recording_status import (
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.popup_dock_button import PopupDockButton
 from solin.widgets.common.popup_hover_button import PopupHoverButton
+from solin.widgets.scenes.scene_window import SceneWindowGeometryStore, SceneWindowManager
 
 
 log = logging.getLogger(__name__)
@@ -70,10 +72,25 @@ class _ScenePreview(QFrame):
     _CORNER_RADIUS = 9  # matches the card's radius minus its 1px border
     _PLACEHOLDER_SIZE = 26
 
+    _OVERLAY_MARGIN = 4
+    _EXPAND_SIZE = 20
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._image: QImage | None = None
         self._placeholder = False
+        # Over the preview rather than in the footer: the footer already holds the
+        # name and both routing buttons, and this acts on the picture itself.
+        self.expand_button = QPushButton(self)
+        self.expand_button.setObjectName("SceneCardExpand")
+        self.expand_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.expand_button.setFixedSize(self._EXPAND_SIZE, self._EXPAND_SIZE)
+        self.expand_button.setIconSize(QSize(12, 12))
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        margin = self._OVERLAY_MARGIN
+        self.expand_button.move(self.width() - self.expand_button.width() - margin, margin)
 
     def set_image(self, image: QImage | None) -> None:
         self._image = image if image is not None and not image.isNull() else None
@@ -153,6 +170,7 @@ class _SceneCard(QFrame):
 
     routing_requested = Signal(str, str)  # (scene_id, "projection" | "program")
     routing_return_requested = Signal(str, str)
+    window_requested = Signal(str)  # scene_id
 
     _BUTTON_SIZE = 22
     _FOOTER_HEIGHT = 30
@@ -178,6 +196,9 @@ class _SceneCard(QFrame):
 
         self._preview = _ScenePreview()
         self._preview.setObjectName("SceneCardPreview")
+        self._preview.expand_button.clicked.connect(
+            lambda: self.window_requested.emit(self.scene_id)
+        )
         layout.addWidget(self._preview)
 
         footer = QWidget()
@@ -214,6 +235,14 @@ class _SceneCard(QFrame):
     def set_name(self, name: str) -> None:
         if self._name.text() != name:
             self._name.setText(name)
+        text = self.tr("Open %1 in a window").replace("%1", name)
+        self._preview.expand_button.setToolTip(text)
+        self._preview.expand_button.setAccessibleName(text)
+
+    def apply_icons(self) -> None:
+        self._preview.expand_button.setIcon(
+            make_icon(_svg(ICON_FULLSCREEN), 12, PALETTE.text_secondary)
+        )
 
     def set_thumbnail(self, image: QImage | None) -> None:
         self._preview.set_image(image)
@@ -276,6 +305,7 @@ class SceneControlPopup(QWidget):
         parent: QWidget | None = None,
         *,
         recording: ProgramRecordingController | None = None,
+        window_geometry: SceneWindowGeometryStore | None = None,
     ) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -291,6 +321,14 @@ class SceneControlPopup(QWidget):
         self._engine_visual_state = "unavailable"
         self._hidden_at: float | None = None
         self._scene_cards: dict[str, _SceneCard] = {}
+        # Scene windows outlive the panel's popups: they belong to the main window,
+        # not to this popup, which closes as soon as a window takes focus.
+        self._scene_windows = SceneWindowManager(
+            controller,
+            parent_window=parent.window() if parent is not None else None,
+            geometry_store=window_geometry,
+            parent=self,
+        )
         self._success_flash = ButtonSuccessFlash(self)
         # Live card thumbnails, requested only while the panel is on screen.
         from solin.controllers.scene_thumbnail_egress import SceneThumbnailEgressController
@@ -486,6 +524,9 @@ class SceneControlPopup(QWidget):
                     scene.name,
                     parent=self._cards_host,
                 )
+                card.set_name(scene.name)
+                card.apply_icons()
+                card.window_requested.connect(self._open_scene_window)
                 card.routing_requested.connect(self._on_card_routing_requested)
                 card.routing_return_requested.connect(self._on_card_routing_return_requested)
                 self._scene_cards[scene.id] = card
@@ -505,6 +546,16 @@ class SceneControlPopup(QWidget):
                 program_available=program_available,
             )
         self._sync_thumbnail_feed()
+
+    @property
+    def scene_windows(self) -> SceneWindowManager:
+        return self._scene_windows
+
+    def _open_scene_window(self, scene_id: str) -> None:
+        try:
+            self._scene_windows.open(scene_id)
+        except Exception:  # noqa: BLE001 - UI operation boundary
+            log.exception("Could not open the scene window")
 
     def _on_card_routing_requested(self, scene_id: str, role: str) -> None:
         """Route a scene to one output, leaving the other where it is."""
@@ -925,6 +976,9 @@ class SceneControlPopup(QWidget):
     def apply_theme(self) -> None:
         self.hover_button.apply_theme()
         self.dock_button.apply_theme()
+        self._scene_windows.apply_theme()
+        for card in self._scene_cards.values():
+            card.apply_icons()
         self._set_engine_visual(self._engine_visual_state, self._icon.toolTip())
         self.setStyleSheet(
             f"""
@@ -951,6 +1005,8 @@ class SceneControlPopup(QWidget):
             QPushButton#SceneCardProjection, QPushButton#SceneCardProgram {{ min-width:{_SceneCard._BUTTON_SIZE}px; max-width:{_SceneCard._BUTTON_SIZE}px; min-height:{_SceneCard._BUTTON_SIZE}px; max-height:{_SceneCard._BUTTON_SIZE}px; padding:0; border-radius:7px; background:transparent; border:1px solid transparent; }}
             QPushButton#SceneCardProjection:hover, QPushButton#SceneCardProgram:hover {{ background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; }}
             QPushButton#SceneCardProjection:checked, QPushButton#SceneCardProgram:checked {{ background:{qss_rgba(PALETTE.accent, 0.14)}; border-color:{qss_rgba(PALETTE.accent, 0.50)}; }}
+            QPushButton#SceneCardExpand {{ min-width:{_ScenePreview._EXPAND_SIZE}px; max-width:{_ScenePreview._EXPAND_SIZE}px; min-height:{_ScenePreview._EXPAND_SIZE}px; max-height:{_ScenePreview._EXPAND_SIZE}px; padding:0; border-radius:6px; background:{qss_rgba(PALETTE.surface, 0.72)}; border:1px solid {qss_rgba(PALETTE.border, 0.9)}; }}
+            QPushButton#SceneCardExpand:hover {{ background:{PALETTE.surface_hover}; border-color:{PALETTE.border_strong}; }}
             QScrollBar:horizontal {{ height:5px; margin-top:3px; background:transparent; }}
             QScrollBar::handle:horizontal {{ background:{PALETTE.border}; border-radius:2px; min-width:24px; }}
             QScrollBar::handle:horizontal:hover {{ background:{PALETTE.text_dim}; }}
