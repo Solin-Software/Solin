@@ -23,6 +23,7 @@ from solin.core.scenes.engine import scene_window_channel
 from solin.core.scenes.model import BusId
 from solin.styles.icons import ICON_CAMERA, ICON_SCREEN, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.widgets.scenes.scene_ptz_panel import Confirm, ScenePtzPanel, confirm_with_dialog
 
 
 log = logging.getLogger(__name__)
@@ -140,6 +141,8 @@ class SceneWindow(QWidget):
         scene_id: str,
         *,
         geometry_store: SceneWindowGeometryStore | None = None,
+        ptz_speeds: dict[str, int] | None = None,
+        confirm: Confirm = confirm_with_dialog,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent, Qt.WindowType.Window)
@@ -156,6 +159,10 @@ class SceneWindow(QWidget):
         # (not ready yet, restarted), so the next sync sends it again.
         self._feed_sent: tuple | None = None
         self._closing = False
+        self._ptz_speeds = ptz_speeds
+        self._confirm = confirm
+        # Keys belong to the window: its controls take no keyboard focus.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._feed_timer = QTimer(self)
         self._feed_timer.setSingleShot(True)
@@ -199,8 +206,17 @@ class SceneWindow(QWidget):
         header_layout.addWidget(self._projection_tally)
         root.addWidget(header)
 
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
         self._preview = _LivePreview()
-        root.addWidget(self._preview, 1)
+        body.addWidget(self._preview, 1)
+        self._ptz = ScenePtzPanel(
+            self._controller, self.scene_id, speeds=self._ptz_speeds, confirm=self._confirm,
+        )
+        self._ptz.hide()
+        body.addWidget(self._ptz)
+        root.addLayout(body, 1)
 
     def _tally_label(self, object_name: str, icon: str) -> QPushButton:
         # A button only for its icon-plus-text layout; it is not interactive.
@@ -218,6 +234,10 @@ class SceneWindow(QWidget):
     @property
     def preview(self) -> _LivePreview:
         return self._preview
+
+    @property
+    def ptz_panel(self) -> ScenePtzPanel:
+        return self._ptz
 
     def _scene(self):
         return next(
@@ -243,6 +263,8 @@ class SceneWindow(QWidget):
         self._preview.set_aspect(width / height if width > 0 and height > 0 else 16 / 9)
         self._render_tally()
         self._render_status()
+        self._ptz.refresh()
+        self._ptz.setVisible(bool(self._ptz.camera_ids))
         self._sync_feed()
 
     def _render_tally(self) -> None:
@@ -367,7 +389,32 @@ class SceneWindow(QWidget):
         if event.key() == Qt.Key.Key_Escape:
             self.close()
             return
+        if self._ptz.isVisible() and self._ptz.handle_key_press(
+            int(event.key()), event.isAutoRepeat()
+        ):
+            event.accept()
+            return
         super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event) -> None:  # noqa: N802
+        if self._ptz.isVisible() and self._ptz.handle_key_release(
+            int(event.key()), event.isAutoRepeat()
+        ):
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
+
+    def focusNextPrevChild(self, next: bool) -> bool:  # noqa: A002, N802 - Qt override
+        # Tab and Shift+Tab switch the PTZ camera; nothing else here takes focus.
+        if self._ptz.isVisible():
+            self._ptz.cycle_camera(1 if next else -1)
+            return True
+        return super().focusNextPrevChild(next)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802
+        # A key released elsewhere never reaches us: never leave a camera moving.
+        self._ptz.stop_motion()
+        super().focusOutEvent(event)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if not self._closing:
@@ -375,6 +422,7 @@ class SceneWindow(QWidget):
             self._geometry_timer.stop()
             self._save_geometry()
             self._stop_feed()
+            self._ptz.stop_motion()
             self._feed.close()
             for signal, handler in self._connections:
                 try:
@@ -390,6 +438,7 @@ class SceneWindow(QWidget):
         super().changeEvent(event)
 
     def apply_theme(self) -> None:
+        self._ptz.apply_theme()
         for label in (self._camera_tally, self._projection_tally):
             label.setIcon(make_icon(str(label.property("icon_svg")), 13, PALETTE.accent_text))
         self.setStyleSheet(
@@ -415,10 +464,14 @@ class SceneWindowManager(QObject):
         *,
         parent_window: QWidget | None = None,
         geometry_store: SceneWindowGeometryStore | None = None,
+        confirm: Confirm = confirm_with_dialog,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._controller = controller
+        self._confirm = confirm
+        # Speeds are per camera, shared by every window showing it, for the session.
+        self._ptz_speeds: dict[str, int] = {}
         self._parent_window = parent_window
         self._geometry_store = geometry_store
         self._windows: dict[str, SceneWindow] = {}
@@ -432,7 +485,7 @@ class SceneWindowManager(QObject):
     def windows(self) -> dict[str, SceneWindow]:
         return dict(self._windows)
 
-    def open(self, scene_id: str) -> SceneWindow | None:
+    def show_scene(self, scene_id: str) -> SceneWindow | None:
         if not any(scene.id == scene_id for scene in self._controller.document.scenes):
             return None
         window = self._windows.get(scene_id)
@@ -441,6 +494,8 @@ class SceneWindowManager(QObject):
                 self._controller,
                 scene_id,
                 geometry_store=self._geometry_store,
+                ptz_speeds=self._ptz_speeds,
+                confirm=self._confirm,
                 parent=self._parent_window,
             )
             window.closed.connect(self._forget)

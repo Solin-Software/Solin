@@ -61,8 +61,11 @@ from solin.core.scenes.model import (
     PtzTimeoutPolicy,
     RecallPtzPresetAction,
     RtspCameraConfig,
+    ViscaIpPtzBinding,
+    ViscaSerialPtzBinding,
 )
 from solin.core.scenes.ptz import (
+    PendingCameraPreset,
     PtzControlKind,
     PtzControlResult,
     PtzRecallExecutor,
@@ -1525,6 +1528,62 @@ class SceneRuntimeController(QObject):
             camera_source_id=preset.camera_source_id,
             binding=binding,
             preset=preset,
+        )
+
+    def store_current_camera_position(
+        self,
+        camera_source_id: str,
+        name: str,
+    ) -> tuple[PendingCameraPreset | None, Future[PtzControlResult]]:
+        """Save where the camera points now as a new preset, on the camera itself.
+
+        Returns the pending preset and the store future. Nothing is added to the
+        document here: a store the camera refuses must leave no orphan preset, so
+        the caller adds ``pending.stored(result.preset_token)`` on success. VISCA
+        presets take the lowest number this camera does not use yet; ONVIF
+        presets are created by the camera, which chooses the token.
+        """
+        binding = self._camera_ptz_binding(camera_source_id)
+        if binding is None:
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.STORE_PRESET, "ptz_binding_unavailable",
+            )
+        ptz = self._ptz
+        if ptz is None:
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.STORE_PRESET, "ptz_executor_unavailable",
+            )
+        if isinstance(binding, (ViscaIpPtzBinding, ViscaSerialPtzBinding)):
+            used: set[int] = set()
+            for preset in self._documents.document.camera_presets:
+                if preset.camera_source_id != camera_source_id:
+                    continue
+                try:
+                    used.add(int(preset.remote_token, 0))
+                except ValueError:
+                    continue
+            free = next((number for number in range(1, 128) if number not in used), None)
+            if free is None and 0 not in used:
+                free = 0
+            if free is None:
+                return None, _completed_ptz_control_failure(
+                    camera_source_id, PtzControlKind.STORE_PRESET, "ptz_preset_slots_full",
+                )
+            pending = PendingCameraPreset(new_identity(), camera_source_id, name, str(free))
+            return pending, ptz.store_preset(
+                camera_source_id=camera_source_id,
+                binding=binding,
+                preset=pending.stored(),
+            )
+        create = getattr(ptz, "create_preset", None)
+        if not callable(create):
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.CREATE_PRESET, "ptz_control_unsupported",
+            )
+        pending = PendingCameraPreset(new_identity(), camera_source_id, name)
+        return pending, cast(
+            Future[PtzControlResult],
+            create(camera_source_id=camera_source_id, binding=binding, name=name),
         )
 
     def stop_engine(self) -> None:

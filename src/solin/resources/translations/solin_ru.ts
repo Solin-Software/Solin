@@ -12102,4 +12102,195 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Движок сцен недоступен.</translation>
     </message>
 </context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Камера не смогла выполнить команду.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Пресеты</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Скорость</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Сохранить текущее</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Сохранить текущее направление камеры как новый пресет</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Для этой камеры пока нет пресетов.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Движение…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Переименовать…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Время истекло</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Вход отклонён</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Камера занята</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Недоступна</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Камера не успела завершить движение.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Камера отклонила вход PTZ. Проверьте его в настройках камеры.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Камера занята другой командой.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Камера не ответила.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>У этой камеры нет свободных ячеек пресетов.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Вверх</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Вниз</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Влево</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Вправо</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Стоп</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Приблизить</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Отдалить</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Управление PTZ недоступно в этой установке.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>виртуальная камера</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>проекция</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Пресет %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Переименовать пресет</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Название пресета</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>В эфире · живое управление разблокировано</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>В эфире · движения видны зрителям</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Камера в эфире</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Не удалось переместить камеру.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Не удалось сохранить пресет.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Сохранение «%1»…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Удалить пресет</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Не удалось изменить пресет.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Также в: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Удалить пресет «%1»? Сцены, которые его вызывают, перестанут это делать.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 в эфире: %2. Движение меняет то, что видят зрители. Разрешить движение, пока камера не выйдет из эфира?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 в эфире: %2. Всё равно вызвать «%3»?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>«%1» сохранён.</translation>
+    </message>
+</context>
 </TS>

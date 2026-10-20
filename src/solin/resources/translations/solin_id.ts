@@ -12019,4 +12019,195 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Mesin adegan tidak tersedia.</translation>
     </message>
 </context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Gagal</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Kamera tidak dapat menyelesaikan perintah.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Preset</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Kecepatan</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Simpan posisi saat ini</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Simpan arah kamera saat ini sebagai preset baru</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Belum ada preset untuk kamera ini.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Bergerak…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Ganti nama…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Hapus</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Waktu habis</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Login ditolak</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Kamera sibuk</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Tidak dapat dijangkau</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Kamera tidak selesai bergerak tepat waktu.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Kamera menolak login PTZ. Periksa di pengaturan kamera.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Kamera sedang menjalankan perintah lain.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Kamera tidak merespons.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Kamera ini tidak memiliki slot preset kosong.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Gerak ke atas</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Gerak ke bawah</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Gerak ke kiri</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Gerak ke kanan</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Berhenti</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Perbesar</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Perkecil</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Kendali PTZ tidak tersedia di instalasi ini.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>kamera virtual</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>proyeksi</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Ganti nama preset</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Nama preset</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>Tayang · kendali langsung dibuka</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>Tayang · gerakan terlihat oleh penonton</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Kamera sedang tayang</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Kamera tidak dapat digerakkan.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Preset tidak dapat disimpan.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Menyimpan “%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Hapus preset</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Preset tidak dapat diubah.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Juga di: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Hapus preset “%1”? Adegan yang memanggilnya tidak akan memanggilnya lagi.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 sedang tayang: %2. Menggerakkannya mengubah apa yang dilihat penonton. Izinkan menggerakkannya sampai tidak tayang lagi?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 di %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 sedang tayang: %2. Tetap panggil “%3”?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>“%1” tersimpan.</translation>
+    </message>
+</context>
 </TS>

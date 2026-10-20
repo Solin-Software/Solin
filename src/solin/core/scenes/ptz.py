@@ -32,6 +32,9 @@ class PtzControlKind(str, Enum):
     MOVE = "move"
     STOP = "stop"
     STORE_PRESET = "store_preset"
+    # Store the current position as a *new* camera preset whose token the camera
+    # chooses (ONVIF SetPreset without a token). The result carries that token.
+    CREATE_PRESET = "create_preset"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +86,7 @@ class PtzControlRequest:
     tilt: float = 0.0
     zoom: float = 0.0
     preset: CameraPreset | None = None
+    preset_name: str = ""
 
     def __post_init__(self) -> None:
         if not self.request_id or not self.camera_source_id:
@@ -110,9 +114,38 @@ class PtzControlRequest:
                 raise ValueError("PTZ store request requires a preset for the camera")
         elif self.preset is not None:
             raise ValueError("PTZ preset is accepted only by store commands")
+        if self.kind is PtzControlKind.CREATE_PRESET:
+            name = self.preset_name
+            if not isinstance(name, str) or not name.strip() or len(name) > 120:
+                raise ValueError("PTZ create request requires a preset name")
+        elif self.preset_name:
+            raise ValueError("PTZ preset names are accepted only by create commands")
 
     def remaining_seconds(self, clock: Callable[[], float] = time.monotonic) -> float:
         return max(0.0, self.deadline_monotonic - clock())
+
+
+@dataclass(frozen=True, slots=True)
+class PendingCameraPreset:
+    """A preset being saved on the camera, before its token is known for certain.
+
+    VISCA presets know their number up front; ONVIF presets learn their token
+    from the camera's answer. Either way the document only receives a real
+    ``CameraPreset`` once the camera confirms the store.
+    """
+
+    id: str
+    camera_source_id: str
+    name: str
+    remote_token: str = ""
+
+    def stored(self, token: str = "") -> CameraPreset:
+        return CameraPreset(
+            id=self.id,
+            camera_source_id=self.camera_source_id,
+            name=self.name,
+            remote_token=token or self.remote_token,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +155,9 @@ class PtzControlResult:
     kind: PtzControlKind
     status: PtzRecallStatus
     error_code: str = ""
+    # For a stored preset: the camera-side token it was stored under. A preset
+    # stored without one (ONVIF creating a new preset) learns it here.
+    preset_token: str = ""
 
     @property
     def succeeded(self) -> bool:
@@ -204,7 +240,9 @@ class PtzAdapter(Protocol):
         self,
         request: PtzControlRequest,
         cancellation: PtzCancellation,
-    ) -> None: ...
+    ) -> str | None:
+        """Run a control command; a preset store may return the token it used."""
+        ...
 
 
 class PtzRecallExecutor(Protocol):
@@ -243,6 +281,15 @@ class PtzRecallExecutor(Protocol):
         camera_source_id: str,
         binding: PtzBinding,
         preset: CameraPreset,
+        timeout_ms: int = 3000,
+    ) -> Future[PtzControlResult]: ...
+
+    def create_preset(
+        self,
+        *,
+        camera_source_id: str,
+        binding: PtzBinding,
+        name: str,
         timeout_ms: int = 3000,
     ) -> Future[PtzControlResult]: ...
 
@@ -420,6 +467,31 @@ class PtzExecutor:
             )
         )
 
+    def create_preset(
+        self,
+        *,
+        camera_source_id: str,
+        binding: PtzBinding,
+        name: str,
+        timeout_ms: int = 3000,
+    ) -> Future[PtzControlResult]:
+        """Store the current position as a new preset the camera names itself."""
+        request = self._control_request(
+            camera_source_id=camera_source_id,
+            binding=binding,
+            kind=PtzControlKind.CREATE_PRESET,
+            timeout_ms=timeout_ms,
+            preset_name=name,
+        )
+        return self._enqueue(
+            _ControlWorkItem(
+                request,
+                PtzCancellation(),
+                Future(),
+                "ptz_command_superseded",
+            )
+        )
+
     @overload
     def _enqueue(self, item: _RecallWorkItem) -> Future[PtzRecallResult]: ...
 
@@ -509,6 +581,7 @@ class PtzExecutor:
         failed_error_code = "ptz_recall_failed" if recall else "ptz_control_failed"
         timeout_error_code = "ptz_recall_timeout" if recall else "ptz_control_timeout"
         error_code = failed_error_code
+        stored_token = ""
         try:
             if item.cancellation.cancelled:
                 status = PtzRecallStatus.CANCELLED
@@ -526,7 +599,17 @@ class PtzExecutor:
                     control = getattr(adapter, "control", None)
                     if not callable(control):
                         raise PtzExecutionError("ptz_control_unsupported")
-                    control(request, item.cancellation)
+                    returned = control(request, item.cancellation)
+                    if request.kind is PtzControlKind.CREATE_PRESET:
+                        if not isinstance(returned, str) or not returned:
+                            raise PtzExecutionError("ptz_preset_token_missing")
+                        stored_token = returned
+                    elif request.kind is PtzControlKind.STORE_PRESET:
+                        preset = request.preset
+                        stored_token = (
+                            returned if isinstance(returned, str) and returned
+                            else (preset.remote_token if preset is not None else "")
+                        )
                 if item.cancellation.cancelled:
                     status = PtzRecallStatus.CANCELLED
                     error_code = item.cancellation_error_code
@@ -548,7 +631,10 @@ class PtzExecutor:
         except (OSError, RuntimeError, ValueError):
             status = PtzRecallStatus.FAILED
             error_code = failed_error_code
-        _resolve(item, status, error_code)
+        _resolve(
+            item, status, error_code,
+            preset_token=stored_token if status is PtzRecallStatus.SUCCEEDED else "",
+        )
 
         if (
             isinstance(request, PtzControlRequest)
@@ -594,6 +680,7 @@ class PtzExecutor:
         tilt: float = 0.0,
         zoom: float = 0.0,
         preset: CameraPreset | None = None,
+        preset_name: str = "",
     ) -> PtzControlRequest:
         if not 100 <= timeout_ms <= 60_000:
             raise ValueError("PTZ timeout must be between 100 and 60000 ms")
@@ -607,6 +694,7 @@ class PtzExecutor:
             tilt=tilt,
             zoom=zoom,
             preset=preset,
+            preset_name=preset_name,
         )
 
     def _arm_deadman(
@@ -692,6 +780,7 @@ def _result(
     item: _RecallWorkItem,
     status: PtzRecallStatus,
     error_code: str,
+    preset_token: str = "",
 ) -> PtzRecallResult: ...
 
 
@@ -700,6 +789,7 @@ def _result(
     item: _ControlWorkItem,
     status: PtzRecallStatus,
     error_code: str,
+    preset_token: str = "",
 ) -> PtzControlResult: ...
 
 
@@ -707,6 +797,7 @@ def _result(
     item: _WorkItem,
     status: PtzRecallStatus,
     error_code: str,
+    preset_token: str = "",
 ) -> PtzRecallResult | PtzControlResult:
     if isinstance(item, _RecallWorkItem):
         request = item.request
@@ -724,6 +815,7 @@ def _result(
         kind=request.kind,
         status=status,
         error_code=error_code,
+        preset_token=preset_token,
     )
 
 
@@ -731,12 +823,14 @@ def _resolve(
     item: _WorkItem,
     status: PtzRecallStatus,
     error_code: str,
+    *,
+    preset_token: str = "",
 ) -> None:
     if isinstance(item, _RecallWorkItem):
         if not item.future.done():
             item.future.set_result(_result(item, status, error_code))
     elif not item.future.done():
-        item.future.set_result(_result(item, status, error_code))
+        item.future.set_result(_result(item, status, error_code, preset_token))
 
 
 def _cancel(item: _WorkItem, error_code: str) -> None:

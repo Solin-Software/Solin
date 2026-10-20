@@ -12061,4 +12061,195 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <translation>Hindi available ang scene engine.</translation>
     </message>
 </context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Nabigo</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Hindi natapos ng camera ang utos.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Mga preset</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Bilis</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>I-save ang kasalukuyan</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>I-save ang kasalukuyang tinututukan ng camera bilang bagong preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Wala pang preset para sa camera na ito.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Gumagalaw…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Palitan ang pangalan…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Burahin</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Nag-time out</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Tinanggihan ang login</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Abala ang camera</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Hindi maabot</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Hindi natapos ng camera ang paggalaw sa oras.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Tinanggihan ng camera ang PTZ login. Suriin ito sa mga setting ng camera.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Abala ang camera sa ibang utos.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Hindi sumagot ang camera.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Wala nang bakanteng puwang para sa preset ang camera na ito.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Igalaw pataas</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Igalaw pababa</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Igalaw pakaliwa</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Igalaw pakanan</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Ihinto</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Mag-zoom in</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Mag-zoom out</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Hindi available ang kontrol ng PTZ sa installation na ito.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>ang virtual na camera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>ang projection</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Palitan ang pangalan ng preset</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Pangalan ng preset</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>Live · naka-unlock ang live na kontrol</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>Live · nakikita ng audience ang mga galaw</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Live ang camera</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Hindi maigalaw ang camera.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Hindi ma-save ang preset.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Sine-save ang “%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Burahin ang preset</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Hindi mabago ang preset.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Nasa rin sa: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Burahin ang preset na “%1”? Hindi na ito tatawagin ng mga eksenang gumagamit nito.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>Live ang %1: %2. Binabago ng paggalaw ang nakikita ng audience. Payagan ang paggalaw hanggang hindi na ito live?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 sa %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>Live ang %1: %2. Tawagin pa rin ang “%3”?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>Na-save ang “%1”.</translation>
+    </message>
+</context>
 </TS>

@@ -553,7 +553,7 @@ class SceneControlPopup(QWidget):
 
     def _open_scene_window(self, scene_id: str) -> None:
         try:
-            self._scene_windows.open(scene_id)
+            self._scene_windows.show_scene(scene_id)
         except Exception:  # noqa: BLE001 - UI operation boundary
             log.exception("Could not open the scene window")
 

@@ -12061,4 +12061,195 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <translation>Il motore delle scene non è disponibile.</translation>
     </message>
 </context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Non riuscito</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>La telecamera non ha potuto completare il comando.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Telecamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Preset</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Velocità</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Salva attuale</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Salva il punto in cui la telecamera inquadra ora come nuovo preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Nessun preset per questa telecamera.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>In movimento…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Rinomina…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Elimina</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Tempo scaduto</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Accesso rifiutato</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Telecamera occupata</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Non raggiungibile</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>La telecamera non ha finito di muoversi in tempo.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>La telecamera ha rifiutato l’accesso PTZ. Controllalo nelle impostazioni della telecamera.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>La telecamera è occupata con un altro comando.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>La telecamera non ha risposto.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Questa telecamera non ha posizioni preset libere.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Muovi in alto</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Muovi in basso</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Muovi a sinistra</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Muovi a destra</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Ferma</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Zoom avanti</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Zoom indietro</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Il controllo PTZ non è disponibile in questa installazione.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>la videocamera virtuale</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>la proiezione</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Rinomina preset</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Nome del preset</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>In onda · controllo dal vivo sbloccato</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>In onda · i movimenti sono visibili al pubblico</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Telecamera in onda</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Impossibile muovere la telecamera.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Impossibile salvare il preset.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Salvataggio di «%1»…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Elimina preset</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Impossibile modificare il preset.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Anche in: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Eliminare il preset «%1»? Le scene che lo richiamano non lo faranno più.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 è in onda: %2. Muoverla cambia ciò che vede il pubblico. Consentire di muoverla finché non esce dall’onda?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 su %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 è in onda: %2. Richiamare comunque «%3»?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>«%1» salvato.</translation>
+    </message>
+</context>
 </TS>

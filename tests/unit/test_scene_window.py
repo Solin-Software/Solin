@@ -78,22 +78,22 @@ def test_feed_size_fits_the_output_and_never_exceeds_it(available, ratio, expect
 def test_one_window_per_scene_and_reopening_raises_it(windows) -> None:
     controller, _feeds, manager = windows()
 
-    first = manager.open(CAMERA_SCENE_ID)
-    again = manager.open(CAMERA_SCENE_ID)
+    first = manager.show_scene(CAMERA_SCENE_ID)
+    again = manager.show_scene(CAMERA_SCENE_ID)
     other_id = next(scene.id for scene in controller.document.scenes if scene.id != CAMERA_SCENE_ID)
-    other = manager.open(other_id)
+    other = manager.show_scene(other_id)
 
     assert first is not None and first is again
     assert other is not None and other is not first
     assert set(manager.windows) == {CAMERA_SCENE_ID, other_id}
-    assert manager.open("no-such-scene") is None
+    assert manager.show_scene("no-such-scene") is None
 
 
 def test_window_feeds_its_scene_on_its_own_channel_and_releases_it(windows) -> None:
     controller, feeds, manager = windows()
     channel = scene_window_channel(CAMERA_SCENE_ID)
 
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
     window.resize(900, 600)
     wait_until(
@@ -120,7 +120,7 @@ def test_window_feeds_its_scene_on_its_own_channel_and_releases_it(windows) -> N
 def test_window_retries_its_feed_until_the_engine_hears_it(windows) -> None:
     controller, feeds, manager = windows(ready=False)
     channel = scene_window_channel(CAMERA_SCENE_ID)
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
     QCoreApplication.processEvents()
 
@@ -148,7 +148,7 @@ def test_window_retries_its_feed_until_the_engine_hears_it(windows) -> None:
 
 def test_window_paints_the_frames_of_its_own_scene_only(windows) -> None:
     _controller, _feeds, manager = windows()
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
     image = QImage(160, 90, QImage.Format.Format_ARGB32)
     image.fill(0xFF00FF00)
@@ -167,7 +167,7 @@ def test_window_paints_the_frames_of_its_own_scene_only(windows) -> None:
 
 def test_window_says_when_its_scene_is_on_air(windows) -> None:
     controller, _feeds, manager = windows()
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
@@ -191,7 +191,7 @@ def test_window_says_when_its_scene_is_on_air(windows) -> None:
 def test_window_follows_renames_and_closes_with_its_scene(windows) -> None:
     controller, _feeds, manager = windows()
     controller.documents.create_scene("Pulpit", scene_id="pulpit")
-    window = manager.open("pulpit")
+    window = manager.show_scene("pulpit")
     assert window is not None
 
     controller.documents.rename_scene("pulpit", "Pulpit close-up")
@@ -207,14 +207,14 @@ def test_window_follows_renames_and_closes_with_its_scene(windows) -> None:
 def test_window_remembers_where_it_was_per_scene(windows) -> None:
     geometry = _Geometry()
     _controller, _feeds, manager = windows(geometry=geometry)
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
     window.resize(700, 480)
     window.close()
     QCoreApplication.processEvents()
     assert geometry.saved[CAMERA_SCENE_ID]
 
-    reopened = manager.open(CAMERA_SCENE_ID)
+    reopened = manager.show_scene(CAMERA_SCENE_ID)
     assert reopened is not None and reopened is not window
     assert (reopened.width(), reopened.height()) == (700, 480)
 
@@ -237,7 +237,7 @@ def test_card_expand_button_opens_that_scenes_window(controller_factory) -> None
 
 def test_scene_windows_close_when_the_application_quits(windows) -> None:
     _controller, feeds, manager = windows()
-    window = manager.open(CAMERA_SCENE_ID)
+    window = manager.show_scene(CAMERA_SCENE_ID)
     assert window is not None
 
     QCoreApplication.instance().aboutToQuit.emit()
