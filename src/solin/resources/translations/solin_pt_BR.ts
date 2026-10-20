@@ -5621,14 +5621,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Câmera virtual</translation>
     </message>
     <message>
-        <source>Virtual camera enabled</source>
-        <translation>Câmera virtual habilitada</translation>
-    </message>
-    <message>
-        <source>Virtual camera disabled</source>
-        <translation>Câmera virtual desabilitada</translation>
-    </message>
-    <message>
         <location line="-250"/>
         <location line="+617"/>
         <source>Auto-switch media</source>
@@ -5903,6 +5895,41 @@ A organização atual e os arquivos serão preservados. As alterações pendente
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Desligado</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Ligado</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Erro</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Iniciando…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Câmera virtual</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Câmera virtual habilitada</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Câmera virtual desabilitada</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>A câmera virtual falhou. Desative-a e ative-a novamente para tentar de novo.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5916,21 +5943,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Trocando</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Erro</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Ligado</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Desligado</translation>
     </message>
     <message>
         <location line="+5"/>

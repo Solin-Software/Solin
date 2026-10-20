@@ -5842,6 +5842,41 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>オフ</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>オン</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>エラー</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>起動しています…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>仮想カメラ</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>仮想カメラは有効です</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>仮想カメラは無効です</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>仮想カメラでエラーが発生しました。オフにしてから再度オンにして、もう一度お試しください。</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5855,21 +5890,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>切り替え中</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>エラー</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>オン</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>オフ</translation>
     </message>
     <message>
         <location line="+5"/>

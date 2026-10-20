@@ -5873,6 +5873,41 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Av</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>På</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fel</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Startar…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuell kamera aktiverad</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuell kamera inaktiverad</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Den virtuella kameran slutade fungera. Stäng av och slå på den igen för att försöka på nytt.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5886,21 +5921,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Byter</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Fel</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>På</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Av</translation>
     </message>
     <message>
         <location line="+5"/>
