@@ -251,6 +251,11 @@ class SharedFrameRingWriter:
 def pack_nv12(y_plane: bytes, y_stride: int, uv_plane: bytes, uv_stride: int,
               width: int, height: int) -> bytes:
     """Tightly pack (stride==width) Y + interleaved UV planes for the ring."""
+    if (width <= 0 or height <= 0 or width % 2 or height % 2
+            or y_stride < width or uv_stride < width
+            or len(y_plane) < (height - 1) * y_stride + width
+            or len(uv_plane) < (height // 2 - 1) * uv_stride + width):
+        raise ValueError("invalid NV12 frame planes")
     y_bytes = width * height
     uv_bytes = y_bytes // 2
     if y_stride == width and uv_stride == width:

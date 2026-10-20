@@ -15,7 +15,7 @@ from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QObject, Property, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
@@ -91,6 +91,7 @@ from solin.core.scenes.onvif_discovery import (
     OnvifDiscoveryService,
     device_service_url,
 )
+from solin.core.scenes.output_health import OutputHealthStatus
 from solin.core.scenes.ptz import (
     PtzCancellation,
     PtzCancelledError,
@@ -266,6 +267,7 @@ class ScenesBridge(QObject):
             (controller.preview_egress_changed, self._runtime_changed),
             (controller.local_cameras_changed, self._runtime_changed),
             (controller.source_health_changed, self._runtime_changed),
+            (controller.output_health_changed, self._runtime_changed),
             (controller.editor_source_preview_invalidated, self._clear_framing_session),
         )
         for signal, handler in self._controller_connections:
@@ -417,6 +419,13 @@ class ScenesBridge(QObject):
         return self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
 
     @Property(bool, notify=changed)
+    def virtualCameraReady(self) -> bool:
+        return (
+            self.virtualCameraEnabled
+            and self._controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.READY
+        )
+
+    @Property(bool, notify=changed)
     def mediaMirrorEnabled(self) -> bool:
         return self._controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
 
@@ -431,11 +440,14 @@ class ScenesBridge(QObject):
 
     @Property(str, notify=changed)
     def outputStateLabel(self) -> str:
-        if self._controller.hydration_in_progress:
-            return self.tr("Switching")
-        if self._controller.last_engine_error_code:
+        if not self.virtualCameraEnabled:
+            return self.tr("Off")
+        status = self._controller.output_health(BusId.VIRTUAL_CAMERA).status
+        if status is OutputHealthStatus.FAILED:
             return self.tr("Error")
-        return self.tr("On") if self.virtualCameraEnabled else self.tr("Off")
+        if status is OutputHealthStatus.READY:
+            return self.tr("On")
+        return QCoreApplication.translate("ScenesEditorView", "Starting…")
 
     @Property(str, notify=changed)
     def engineStatus(self) -> str:

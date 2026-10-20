@@ -36,6 +36,7 @@ from solin.core.scenes.engine import (
     MAXIMUM_LOCAL_CAMERA_DEVICES,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
+    OutputHealthEvent,
     OutputWindowTarget,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -52,6 +53,7 @@ from solin.core.scenes.engine import (
     scene_engine_document_record,
 )
 from solin.core.scenes.idle import IdleScreenState
+from solin.core.scenes.output_health import OutputHealth
 from solin.core.scenes.media_control import (
     ContentSourceKind,
     MAXIMUM_MEDIA_PATH_LENGTH,
@@ -1319,6 +1321,7 @@ class SubprocessSceneEngine:
             self._last_received_monotonic = self._monotonic()
             if envelope.message_type in {
                 "source_health",
+                "output_health",
                 "frame_egress_ready",
                 "program_recording_state",
                 "media_playback_state",
@@ -1329,6 +1332,9 @@ class SubprocessSceneEngine:
                 pending = self._pending.pop(envelope.request_id, None)
         if envelope.message_type == "source_health":
             self._emit_event(_source_health_from_envelope(envelope))
+            return
+        if envelope.message_type == "output_health":
+            self._emit_event(_output_health_from_envelope(envelope))
             return
         if envelope.message_type == "frame_egress_ready":
             self._emit_event(_frame_egress_ready_from_envelope(envelope))
@@ -1819,6 +1825,26 @@ def _heartbeat_from_envelope(envelope: SceneIpcEnvelope) -> int:
         message_type="heartbeat",
     )
     return require_non_negative_int(payload["monotonic_ms"], "heartbeat timestamp")
+
+
+def _output_health_from_envelope(envelope: SceneIpcEnvelope) -> OutputHealthEvent:
+    payload = require_payload_fields(
+        envelope.payload,
+        frozenset({"bus_id", "status", "error_code", "generation"}),
+        message_type="output health",
+    )
+    try:
+        return OutputHealthEvent(
+            bus_id=BusId(payload["bus_id"]),
+            state=OutputHealth.from_record({key: payload[key] for key in (
+                "status", "error_code", "generation",
+            )}),
+            session_id=envelope.session_id,
+            process_generation=envelope.process_generation,
+            sequence=envelope.sequence,
+        )
+    except (TypeError, ValueError) as exc:
+        raise SceneIpcMessageError("Invalid output health event") from exc
 
 
 def _source_health_from_envelope(envelope: SceneIpcEnvelope) -> SourceHealthEvent:

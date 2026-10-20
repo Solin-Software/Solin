@@ -26,6 +26,7 @@ from solin.core.scenes.onvif_discovery import (
     OnvifDiscoveryError,
     OnvifMediaProfile,
 )
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
 from solin.core.scenes.workspace import LocalCameraConflictError
 from solin.core.scenes.recording import (
@@ -212,6 +213,35 @@ def _wait_until(predicate, timeout_ms: int = 1000) -> bool:
         QTest.qWait(10)
         elapsed += 10
     return bool(predicate())
+
+
+def test_output_button_tracks_delivery_health_while_toggle_remains_requested(
+    scene_editor_factory, tmp_path: Path,
+) -> None:
+    _, controller, widget, _ = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1280, 760)
+    widget.show()
+    assert widget._qml.status() is QQuickWidget.Status.Ready
+    button = widget._qml.rootObject().findChild(QQuickItem, "scenesOutputButton")
+    assert button is not None
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    QCoreApplication.processEvents()
+    assert widget.bridge.virtualCameraEnabled
+    assert not button.property("active")
+
+    for status in (OutputHealthStatus.READY, OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED):
+        controller._set_output_health(BusId.VIRTUAL_CAMERA, OutputHealth(
+            status, "virtual_camera_unavailable" if status is not OutputHealthStatus.READY else "", 1,
+        ))
+        QCoreApplication.processEvents()
+        assert button.property("active") is (status is OutputHealthStatus.READY)
+        assert button.property("stateLabel") == widget.bridge.outputStateLabel
+        assert widget.bridge.virtualCameraEnabled
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    QCoreApplication.processEvents()
+    assert not widget.bridge.virtualCameraEnabled
+    assert not button.property("active")
+    assert button.property("stateLabel") == widget.bridge.tr("Off")
 
 
 def test_scenes_qml_editor_loads_with_the_real_workspace(

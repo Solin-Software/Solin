@@ -117,6 +117,15 @@ def test_nv12_layout_rejects_odd_dimensions():
 # ── shared-memory frame ring (SLNVDO01) ──────────────────────────────────────
 
 
+@pytest.mark.parametrize("y_stride,uv_stride,y_size,uv_size", [
+    (2, 4, 8, 4), (4, 2, 8, 4), (4, 4, 7, 4), (4, 4, 8, 3),
+    (8, 8, 11, 4),
+])
+def test_pack_nv12_rejects_invalid_strides_and_truncated_planes(y_stride, uv_stride, y_size, uv_size):
+    with pytest.raises(ValueError, match="NV12"):
+        pack_nv12(bytes(y_size), y_stride, bytes(uv_size), uv_stride, 4, 2)
+
+
 def _read_ring_header(buf: bytes) -> dict:
     """Mirror of the C++ parse_header validation."""
     assert buf[0:8] == b"SLNVDO01"

@@ -22,6 +22,7 @@ from solin.core.scenes.engine import (
     LocalCameraModeQuery,
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
+    OutputHealthEvent,
     OutputWindowTarget,
     ProgramRecordingEvent,
     SceneEngine,
@@ -75,6 +76,7 @@ from solin.core.scenes.process_engine import (
     SceneEngineRequestTimeoutError,
 )
 from solin.core.scenes.runtime import SceneRuntimeService, SceneRuntimeState
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.workspace import (
     SceneWorkspaceActivation,
     SceneWorkspaceChange,
@@ -90,6 +92,7 @@ _START_DEADLINE_MS = DEFAULT_ENGINE_STARTUP_DEADLINE_MS
 _HYDRATE_DEADLINE_MS = 12000
 _PREPARE_DEADLINE_MS = 1500
 _TAKE_DEADLINE_MS = 1000
+_OUTPUT_LIFECYCLE_DEADLINE_MS = 10000
 _LAYER_GEOMETRY_DEADLINE_MS = 500
 _IDLE_DEADLINE_MS = 5000
 
@@ -218,6 +221,7 @@ class SceneRuntimeController(QObject):
     local_cameras_changed = Signal(object)
     content_ingress_demand_changed = Signal(bool)
     source_health_changed = Signal(str)
+    output_health_changed = Signal(object)
     preview_scene_changed = Signal(object)
     preview_frame_changed = Signal(str, object)
     content_playing_changed = Signal(bool)
@@ -287,6 +291,8 @@ class SceneRuntimeController(QObject):
         self._editor_preview_target: OutputWindowTarget | None = None
         self._local_cameras = _unavailable_local_cameras("engine_unavailable")
         self._source_health: dict[str, SourceHealthEvent] = {}
+        self._output_health: dict[BusId, OutputHealth] = {}
+        self._output_health_sequences: dict[BusId, int] = {}
         self._local_camera_request_id = ""
         self._camera_inventory_epoch = 0
         self._camera_mode_inflight: dict[tuple[str, int, int], tuple[str, Future[LocalCameraDiscovery]]] = {}
@@ -391,6 +397,35 @@ class SceneRuntimeController(QObject):
 
     def source_health(self, source_id: str) -> SourceHealthEvent | None:
         return self._source_health.get(source_id)
+
+    def output_health(self, bus_id: BusId) -> OutputHealth:
+        return self._output_health.get(bus_id, OutputHealth())
+
+    def _set_output_health(self, bus_id: BusId, state: OutputHealth) -> None:
+        if self.output_health(bus_id) != state:
+            self._output_health[bus_id] = state
+            self.output_health_changed.emit(bus_id)
+
+    def _expect_output_health(
+        self, bus_id: BusId, enabled: bool, sequence: int | None = None,
+    ) -> None:
+        # Retire the old request even when the new command must wait for hydration.
+        self._output_health_sequences.pop(bus_id, None)
+        if sequence is not None:
+            self._output_health_sequences[bus_id] = sequence
+        self._set_output_health(bus_id, OutputHealth(
+            OutputHealthStatus.STARTING if enabled else OutputHealthStatus.STOPPED,
+            generation=self.output_health(bus_id).generation,
+        ))
+
+    def _expect_snapshot_output_health(self, snapshot: SceneEngineSnapshot) -> None:
+        for bus_id, enabled in snapshot.output_enabled:
+            self._expect_output_health(bus_id, enabled, snapshot.sequence)
+
+    def _clear_output_health(self) -> None:
+        self._output_health_sequences.clear()
+        for bus_id in tuple(self._output_health):
+            self._set_output_health(bus_id, OutputHealth())
 
     @property
     def content_ingress_required(self) -> bool:
@@ -752,6 +787,7 @@ class SceneRuntimeController(QObject):
             # must replay a confirmed choice, never recover an unaccepted one.
             self._profile_idle_waiter = Future()
             return self._profile_idle_waiter
+        self._expect_snapshot_output_health(snapshot)
         future = self._engine.hydrate(
             snapshot,
             request_id=request_id,
@@ -777,6 +813,7 @@ class SceneRuntimeController(QObject):
             context.snapshot, sequence=self._next_sequence(), idle_screen=idle,
         ))
         self._profile_activation = context
+        self._expect_snapshot_output_health(context.snapshot)
         future = self._engine.hydrate(
             context.snapshot, request_id=context.request_id, deadline_ms=_HYDRATE_DEADLINE_MS,
         )
@@ -1605,6 +1642,8 @@ class SceneRuntimeController(QObject):
             else None
         )
         self._clear_source_health(retained=retained_health)
+        if not self._committing_hydrated_profile:
+            self._clear_output_health()
         self._observed_graph_record = scene_engine_graph_signature(self._documents.document)
         self._observed_document = self._documents.document
         self._layer_geometry_in_flight = None
@@ -1623,6 +1662,10 @@ class SceneRuntimeController(QObject):
             self._hydrate_if_ready()
 
     def _on_runtime_changed(self, _state: SceneRuntimeState) -> None:
+        previous = dict(self._last_destination_enabled)
+        for bus_id, enabled in self._destination_enabled():
+            if previous.get(bus_id) != enabled:
+                self._expect_output_health(bus_id, enabled)
         self.runtime_changed.emit(_state)
         self._reconcile_engine_outputs()
         self._reconcile_desired(prepare=True)
@@ -1678,6 +1721,7 @@ class SceneRuntimeController(QObject):
             (
                 EngineHealthEvent,
                 SourceHealthEvent,
+                OutputHealthEvent,
                 FrameEgressReadyEvent,
                 ProgramRecordingEvent,
                 MediaPlaybackEvent,
@@ -1687,6 +1731,16 @@ class SceneRuntimeController(QObject):
             self._report_exception("event", RuntimeError("Invalid scene engine event"))
             return
         self.engine_event.emit(event)
+        if isinstance(event, OutputHealthEvent):
+            if (
+                not self._engine_ready
+                or event.session_id != self._session_id
+                or event.process_generation != self._process_generation
+                or event.sequence != self._output_health_sequences.get(event.bus_id)
+            ):
+                return
+            self._set_output_health(event.bus_id, event.state)
+            return
         if isinstance(event, MediaVideoReadyEvent):
             if (
                 not self._engine_ready or event.session_id != self._session_id
@@ -1769,6 +1823,7 @@ class SceneRuntimeController(QObject):
             generation_changed = health.process_generation != self._process_generation
             was_ready = self._engine_ready
             if generation_changed:
+                self._clear_output_health()
                 self._reset_local_camera_discovery()
                 self._clear_source_health()
                 self._reset_idle_update()
@@ -1925,12 +1980,13 @@ class SceneRuntimeController(QObject):
                 continue
             request_id = self._request_id_factory()
             sequence = self._next_sequence()
+            self._expect_output_health(bus_id, enabled, sequence)
             future = self._engine.set_output_enabled(
                 bus_id,
                 enabled,
                 request_id=request_id,
                 sequence=sequence,
-                deadline_ms=_TAKE_DEADLINE_MS,
+                deadline_ms=_OUTPUT_LIFECYCLE_DEADLINE_MS,
             )
             self._track_future(
                 future,
@@ -2016,6 +2072,7 @@ class SceneRuntimeController(QObject):
         self._hydrate_in_flight = context
         self._hydrate_dirty = False
         self.operational_state_changed.emit()
+        self._expect_snapshot_output_health(snapshot)
         future = self._engine.hydrate(
             snapshot,
             request_id=request_id,
@@ -2408,6 +2465,7 @@ class SceneRuntimeController(QObject):
         generation_changed = result.process_generation != self._process_generation
         was_ready = self._engine_ready
         if generation_changed:
+            self._clear_output_health()
             self._reset_local_camera_discovery()
         self._process_generation = result.process_generation
         self._set_engine_ready(True)
@@ -3093,6 +3151,8 @@ class SceneRuntimeController(QObject):
 
     def _set_engine_ready(self, ready: bool) -> None:
         ready = bool(ready)
+        if not ready:
+            self._clear_output_health()
         if self._engine_ready == ready:
             return
         self._engine_ready = ready

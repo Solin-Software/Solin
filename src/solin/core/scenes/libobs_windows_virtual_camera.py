@@ -27,6 +27,7 @@ import tempfile
 import threading
 import time
 import uuid
+from functools import partial
 from pathlib import Path
 from typing import Any, Optional
 
@@ -37,6 +38,7 @@ from solin.core.scenes.windows_vcam_api import (
     windows_last_error,
 )
 from solin.core.scenes.windows_vcam_broker import VcamBrokerEndpoint, WindowsVcamBroker
+from solin.core.scenes.output_health import OUTPUT_FRAME_TIMEOUT_S, OutputHealth, OutputHealthStatus
 from solin.core.scenes.windows_vcam_identity import (
     current_user_broker_pipe_name,
     current_user_sid,
@@ -50,9 +52,6 @@ from solin.core.scenes.windows_vcam_transport import (
 )
 
 log = logging.getLogger(__name__)
-
-_HEARTBEAT_INTERVAL_S = 0.5
-
 
 def temporary_frame_file_name(guid: str) -> str:
     """The ring filename the filter expects: ``Solin.VirtualCamera.{GUID}.frames``."""
@@ -70,6 +69,7 @@ class LibobsWindowsVirtualCamera:
     def __init__(self, runtime: Any) -> None:
         require_windows()
         self._runtime = runtime
+        self._lifecycle_lock = threading.RLock()
         self._lock = threading.Lock()
         self._ring_file: Optional[_WindowsSharedRingFile] = None
         self._writer: Optional[SharedFrameRingWriter] = None
@@ -77,17 +77,40 @@ class LibobsWindowsVirtualCamera:
         self._callback: Any = None
         self._layout: Optional[PackedVideoFrameLayout] = None
         self._endpoint: Optional[VcamBrokerEndpoint] = None
-        self._heartbeat_thread: Optional[threading.Thread] = None
-        self._heartbeat_stop = threading.Event()
+        self._generation = 0
+        self._started_at = 0.0
+        self._last_frame_at: float | None = None
+        self._frame_error = ""
 
     @property
     def active(self) -> bool:
-        return self._broker is not None
+        with self._lock:
+            return self._broker is not None and self._broker.healthy
+
+    @property
+    def health(self) -> OutputHealth:
+        with self._lock:
+            generation = self._generation
+            if self._broker is None:
+                return OutputHealth()
+            if not self._broker.healthy:
+                return OutputHealth(OutputHealthStatus.FAILED, "output_broker_unavailable", generation)
+            last_frame = self._last_frame_at
+            if time.monotonic() - (self._started_at if last_frame is None else last_frame) >= OUTPUT_FRAME_TIMEOUT_S:
+                return OutputHealth(
+                    OutputHealthStatus.FAILED, self._frame_error or "output_no_frames", generation,
+                )
+            return OutputHealth(
+                OutputHealthStatus.STARTING if last_frame is None else OutputHealthStatus.READY,
+                generation=generation,
+            )
 
     def start(self) -> bool:
-        with self._lock:
+        # Registration/removal can wait for the OBS callback. Never hold the
+        # callback's lock across those native calls.
+        with self._lifecycle_lock:
             if self._broker is not None:
-                return True
+                return self.active
             video = self._runtime.video
             width, height, fps = int(video.width), int(video.height), int(video.fps)
             if width % 2 or height % 2 or width <= 0 or height <= 0:
@@ -115,89 +138,82 @@ class LibobsWindowsVirtualCamera:
                     current_user_broker_pipe_name(), current_user_sid(),
                     lambda: self._endpoint,
                 )
-                callback = self._runtime.ob.add_raw_video_callback(
-                    self._on_frame, format=int(self._runtime.ob.VideoFormat.NV12),
-                    width=width, height=height,
-                )
             except Exception:  # noqa: BLE001 - libobs / broker boundary
                 log.warning("could not start the Windows virtual camera producer", exc_info=True)
                 ring_file.close()
                 return False
-            self._ring_file = ring_file
-            self._writer = writer
-            self._layout = layout
-            self._endpoint = endpoint
-            self._callback = callback
-            self._broker = broker
-        try:
-            broker.start()
-        except Exception:  # noqa: BLE001 - broker boundary
-            log.warning("could not start the virtual camera broker", exc_info=True)
-            self.stop()
-            return False
-        self._heartbeat_stop.clear()
-        self._heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop, name="solin-vcam-heartbeat", daemon=True)
-        self._heartbeat_thread.start()
-        log.info("Windows virtual camera producer serving %dx%d@%d on %s",
-                 width, height, fps, self._endpoint.mapping_file_path_utf8)
-        return True
+            with self._lock:
+                self._ring_file = ring_file
+                self._writer = writer
+                self._layout = layout
+                self._endpoint = endpoint
+                self._broker = broker
+                self._generation = generation
+                self._started_at = time.monotonic()
+                self._last_frame_at = None
+                self._frame_error = ""
+            try:
+                broker.start()
+                callback = self._runtime.ob.add_raw_video_callback(
+                    partial(self._on_frame, generation),
+                    format=int(self._runtime.ob.VideoFormat.NV12), width=width, height=height,
+                )
+                with self._lock:
+                    self._callback = callback
+            except Exception:  # noqa: BLE001 - native producer lifecycle boundary
+                log.warning("could not start the Windows virtual camera producer", exc_info=True)
+                self.stop()
+                return False
+            log.info("Windows virtual camera producer started: %dx%d@%d generation=%d",
+                     width, height, fps, generation)
+            return True
 
-    def _on_frame(self, planes, linesizes, width, height, _fmt, timestamp) -> None:
+    def _on_frame(self, generation, planes, linesizes, width, height, _fmt, timestamp) -> None:
         # Runs on the obs video thread for every rendered main-mix frame.
         with self._lock:
             writer = self._writer
             layout = self._layout
-        if writer is None or layout is None or len(planes) < 2 or len(linesizes) < 2:
-            return
-        y_plane, uv_plane = planes[0], planes[1]
-        y_stride, uv_stride = int(linesizes[0]), int(linesizes[1])
-        if not y_plane or not uv_plane or y_stride <= 0 or uv_stride <= 0:
-            return
-        try:
-            payload = pack_nv12(y_plane, y_stride, uv_plane, uv_stride,
-                                layout.width, layout.height)
-            writer.write(payload, presentation_timestamp_ns=int(timestamp or 0))
-        except Exception:  # noqa: BLE001 - shared-memory boundary
-            log.debug("virtual camera frame write errored", exc_info=True)
-
-    def _heartbeat_loop(self) -> None:
-        # Keeps the ring's liveness counter advancing between frames so the filter
-        # can tell a paused-but-live producer from a dead one.
-        while not self._heartbeat_stop.wait(_HEARTBEAT_INTERVAL_S):
-            with self._lock:
-                writer = self._writer
-            if writer is None:
+            if writer is None or layout is None or generation != self._generation:
                 return
             try:
-                writer.heartbeat()
+                if (width != layout.width or height != layout.height
+                        or _fmt != int(self._runtime.ob.VideoFormat.NV12)
+                        or len(planes) < 2 or len(linesizes) < 2
+                        or not 0 <= int(timestamp or 0) < 2**64):
+                    raise ValueError("invalid virtual camera frame")
+                payload = pack_nv12(planes[0], int(linesizes[0]), planes[1], int(linesizes[1]),
+                                    layout.width, layout.height)
+                writer.write(payload, presentation_timestamp_ns=int(timestamp or 0),
+                             produced_monotonic_ns=time.monotonic_ns())
+                self._last_frame_at = time.monotonic()
+                self._frame_error = ""
             except Exception:  # noqa: BLE001 - shared-memory boundary
-                return
+                if not self._frame_error:
+                    log.warning("virtual camera frame publication failed", exc_info=True)
+                self._frame_error = "output_frame_write_failed"
 
     def stop(self) -> None:
-        self._heartbeat_stop.set()
-        heartbeat, self._heartbeat_thread = self._heartbeat_thread, None
-        if heartbeat is not None:
-            heartbeat.join(timeout=2.0)
-        with self._lock:
-            broker, self._broker = self._broker, None
-            callback, self._callback = self._callback, None
-            ring_file, self._ring_file = self._ring_file, None
-            self._writer = None
-            self._layout = None
-            self._endpoint = None
-        if callback is not None:
-            try:
-                self._runtime.ob.remove_raw_video_callback(callback)
-            except Exception:  # noqa: BLE001 - libobs boundary
-                log.debug("virtual camera callback removal errored", exc_info=True)
-        if broker is not None:
-            try:
-                broker.stop()
-            except Exception:  # noqa: BLE001 - broker boundary
-                log.debug("virtual camera broker stop errored", exc_info=True)
-        if ring_file is not None:
-            ring_file.close()
+        with self._lifecycle_lock:
+            with self._lock:
+                broker, self._broker = self._broker, None
+                callback, self._callback = self._callback, None
+                ring_file, self._ring_file = self._ring_file, None
+                self._writer = None
+                self._layout = None
+                self._endpoint = None
+                self._generation = 0
+            if callback is not None:
+                try:
+                    self._runtime.ob.remove_raw_video_callback(callback)
+                except Exception:  # noqa: BLE001 - libobs boundary
+                    log.warning("virtual camera callback removal failed", exc_info=True)
+            if broker is not None:
+                try:
+                    broker.stop()
+                except Exception:  # noqa: BLE001 - broker boundary
+                    log.warning("virtual camera broker stop failed", exc_info=True)
+            if ring_file is not None:
+                ring_file.close()
 
 
 def _sweep_orphaned_rings() -> int:

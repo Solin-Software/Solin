@@ -9,6 +9,10 @@
 #include <windows.h>
 #include <bcrypt.h>
 
+#ifdef SOLIN_VIRTUAL_CAMERA_TEST_ENDPOINT
+#include "broker_test_endpoint.hpp"
+#endif
+
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -236,16 +240,22 @@ void close_broker_connection(std::uintptr_t& connection) noexcept {
 
 } // namespace
 
-BrokerFrameProvider::BrokerFrameProvider() noexcept
-    : last_progress_(std::chrono::steady_clock::now()) {
+BrokerFrameProvider::BrokerFrameProvider() noexcept {
     try {
+#ifdef SOLIN_VIRTUAL_CAMERA_TEST_ENDPOINT
+        pipe_name_ = test_broker_pipe_name();
+#else
         pipe_name_ = current_user_broker_pipe_name();
+#endif
     } catch (...) {
         // Identity or thread creation failure must not prevent an offline camera
         // graph from opening and receiving its pre-rendered standby frame.
         pipe_name_.clear();
     }
 }
+
+BrokerFrameProvider::BrokerFrameProvider(std::wstring pipe_name) noexcept
+    : pipe_name_(std::move(pipe_name)) {}
 
 BrokerFrameProvider::~BrokerFrameProvider() { stop(); }
 
@@ -279,9 +289,22 @@ void BrokerFrameProvider::stop() noexcept {
         close_broker_connection(broker_connection_);
         generation_.store(0U);
         last_heartbeat_ = 0U;
+        frame_generation_ = 0U;
+        last_frame_sequence_ = 0U;
         reconnect_requested_ = false;
     } catch (...) {
     }
+}
+
+void BrokerFrameProvider::request_reconnect_locked() noexcept {
+    reader_.reset();
+    close_broker_connection(broker_connection_);
+    generation_.store(0U);
+    last_heartbeat_ = 0U;
+    // Preserve sequence age across reconnects to the same ring. Opening that
+    // mapping again is not evidence that its producer has published a new frame.
+    reconnect_requested_ = true;
+    reconnect_wakeup_.notify_one();
 }
 
 bool BrokerFrameProvider::visit_live_frame(
@@ -298,27 +321,43 @@ bool BrokerFrameProvider::visit_live_frame(
         const auto heartbeat = reader_->heartbeat();
         if (heartbeat != 0U && heartbeat != last_heartbeat_) {
             last_heartbeat_ = heartbeat;
-            last_progress_ = now;
+            last_heartbeat_progress_ = now;
         }
-        if (now - last_progress_ >= kProducerStaleTimeout) {
-            reader_.reset();
-            close_broker_connection(broker_connection_);
-            generation_.store(0U);
-            last_heartbeat_ = 0U;
-            reconnect_requested_ = true;
-            reconnect_wakeup_.notify_one();
+        if (now - last_heartbeat_progress_ >= kProducerStaleTimeout) {
+            request_reconnect_locked();
             return false;
         }
-        return reader_->visit_current_frame(visitor);
+        std::uint64_t sequence = 0U;
+        bool fresh = false;
+        const auto visited = reader_->visit_current_frame([&](const VideoFrameView& frame) {
+            sequence = frame.sequence;
+            fresh = sequence > last_frame_sequence_ ||
+                    (sequence == last_frame_sequence_ &&
+                     now - last_frame_progress_ < kProducerStaleTimeout);
+            if (fresh) {
+                visitor(frame);
+            }
+        });
+        // Commit progress only after the reader validates the borrowed slot.
+        if (visited && fresh) {
+            if (sequence > last_frame_sequence_) {
+                last_frame_sequence_ = sequence;
+                last_frame_progress_ = now;
+            }
+            generation_.store(frame_generation_);
+            return true;
+        }
+        if (now - last_frame_progress_ >= kProducerStaleTimeout) {
+            // Keep the reader and presence lease while the heartbeat is healthy:
+            // frames can resume in this same generation without a broker roundtrip.
+            // An inactive generation also invalidates the filter's adapted cache.
+            generation_.store(0U);
+        }
+        return false;
     } catch (...) {
         try {
             std::scoped_lock lock{mutex_};
-            reader_.reset();
-            close_broker_connection(broker_connection_);
-            generation_.store(0U);
-            last_heartbeat_ = 0U;
-            reconnect_requested_ = true;
-            reconnect_wakeup_.notify_one();
+            request_reconnect_locked();
         } catch (...) {
         }
         return false;
@@ -357,9 +396,16 @@ void BrokerFrameProvider::reconnect_loop() noexcept {
                 close_broker_connection(broker_connection_);
                 reader_ = std::move(reader);
                 broker_connection_ = std::exchange(broker_connection, 0U);
-                generation_.store(response.generation);
+                const auto now = std::chrono::steady_clock::now();
+                if (frame_generation_ != response.generation) {
+                    frame_generation_ = response.generation;
+                    last_frame_sequence_ = 0U;
+                    last_frame_progress_ = now;
+                }
+                generation_.store(
+                    now - last_frame_progress_ < kProducerStaleTimeout ? response.generation : 0U);
                 last_heartbeat_ = reader_->heartbeat();
-                last_progress_ = std::chrono::steady_clock::now();
+                last_heartbeat_progress_ = now;
             }
             close_broker_connection(broker_connection);
         } else {

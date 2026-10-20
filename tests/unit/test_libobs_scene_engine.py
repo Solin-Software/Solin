@@ -498,6 +498,8 @@ class _FakeOutput:
         self.released = 0
         self.start_ok = True
         self.failing_encoders: set[str] = set()
+        self.active = False
+        self.total_frames = 0
 
     def set_media(self, video, audio) -> None:
         self.media = (video, audio)
@@ -515,10 +517,12 @@ class _FakeOutput:
         # A hardware encoder that creates fine but won't start (no GPU session).
         if getattr(self.video_encoder, "kind", None) in self.failing_encoders:
             return False
+        self.active = True
         return True
 
     def stop(self, *args, **kwargs) -> None:
         self.stopped += 1
+        self.active = False
 
     def release(self) -> None:
         self.released += 1
@@ -2361,6 +2365,187 @@ def test_engine_hydrate_restores_the_virtual_camera_output(monkeypatch):
     }))
     assert len(runtime.outputs) == before  # no second output created
     assert runtime.outputs[-1].started == 1
+
+
+def test_hydrate_reports_output_failure_without_rejecting_the_applied_graph(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    runtime = _CompositingRuntime()
+    runtime.output_start_ok = False
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    engine.set_event_sink(events.append)
+    try:
+        engine.handle(_request("hello"))
+        response = engine.handle(_request("hydrate", {
+            "document": _MEDIA_DOC,
+            "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+            "output_enabled": {"virtual_camera": True},
+        }, sequence=7))
+        assert response.payload["applied"]
+        output_events = [event for event in events if event.message_type == "output_health"]
+        assert len(output_events) == 1
+        assert output_events[0].payload["status"] == "recovering"
+        assert output_events[0].payload["error_code"] == "virtual_camera_unavailable"
+        assert output_events[0].sequence == 7
+        assert engine._scene_graph.program_source is not None
+    finally:
+        engine.shutdown()
+
+
+def test_output_enable_accepts_supervised_recovery_and_reports_readiness_separately(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    runtime = _CompositingRuntime()
+    runtime.output_start_ok = False
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    engine.set_event_sink(events.append)
+    try:
+        engine.handle(_request("hello"))
+        response = engine.handle(_request("set_output_enabled", {
+            "bus_id": "virtual_camera", "enabled": True,
+        }, sequence=4))
+        assert response.payload["applied"]
+        state = next(event for event in events if event.message_type == "output_health")
+        assert state.payload["status"] == "recovering"
+        assert state.payload["error_code"] == "virtual_camera_unavailable"
+        assert state.sequence == 4
+    finally:
+        engine.shutdown()
+
+
+def test_control_traffic_recovers_output_even_when_no_heartbeat_is_sent(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    runtime = _CompositingRuntime()
+
+    class Engine(LibobsSidecarEngine):
+        def handle(self, request):
+            clock[0] += 0.25
+            response = super().handle(request)
+            if len(runtime.outputs) > 1:
+                runtime.outputs[-1].total_frames += 1
+            return response
+
+    requests = [_request("hello"), _request("set_output_enabled", {
+        "bus_id": "virtual_camera", "enabled": True,
+    }, sequence=2)]
+    requests.extend(_request("set_output_enabled", {
+        "bus_id": "media_windows", "enabled": True,
+    }, sequence=sequence) for sequence in range(3, 25))
+    source = io.BytesIO(b"".join(encode_envelope(request) for request in requests))
+    sink = io.BytesIO()
+    engine = Engine(runtime_factory=lambda: runtime)
+    serve(source, sink, engine=engine)
+    sink.seek(0)
+    events = []
+    while (event := read_envelope(sink)) is not None:
+        events.append(event)
+    states = [event.payload["status"] for event in events if event.message_type == "output_health"]
+    assert "recovering" in states
+    assert states[-1] == "ready"
+    assert len(runtime.outputs) == 2
+    assert not any(event.message_type == "heartbeat" for event in events)
+
+
+def test_heartbeat_reports_output_progress_recovery_and_disable(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    clock = [time.monotonic()]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    engine.set_event_sink(events.append)
+
+    def health():
+        return [event for event in events if event.message_type == "output_health"]
+
+    try:
+        engine.handle(_request("hello"))
+        engine.handle(_request("set_output_enabled", {
+            "bus_id": "virtual_camera", "enabled": True,
+        }, sequence=4))
+        assert health()[-1].payload["status"] == "starting"
+        runtime.outputs[-1].total_frames = 1
+        engine.handle(_request("ping"))
+        assert health()[-1].payload["status"] == "ready"
+        before = len(health())
+        engine.handle(_request("ping"))
+        assert len(health()) == before
+        clock[0] += 3
+        engine.handle(_request("ping"))
+        assert health()[-1].payload["status"] == "recovering"
+        assert runtime.outputs[-1].released == 1
+        clock[0] += 1
+        engine.handle(_request("ping"))
+        assert health()[-1].payload["status"] == "starting"
+        runtime.outputs[-1].total_frames = 1
+        engine.handle(_request("ping"))
+        assert health()[-1].payload["status"] == "ready"
+        assert health()[-1].sequence == 4
+        engine.handle(_request("set_output_enabled", {
+            "bus_id": "virtual_camera", "enabled": False,
+        }, sequence=8))
+        assert health()[-1].payload["status"] == "stopped"
+        assert health()[-1].sequence == 8
+    finally:
+        engine.shutdown()
+
+
+def test_hydrate_keeps_graph_ack_independent_of_output_exceptions(monkeypatch):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    engine.set_event_sink(events.append)
+
+    def fail():
+        raise RuntimeError("injected native output exception")
+
+    try:
+        engine.handle(_request("hello"))
+        monkeypatch.setattr(engine._virtual_camera, "start", fail)
+        response = engine.handle(_request("hydrate", {
+            "document": _MEDIA_DOC,
+            "active_scenes": {"virtual_camera": "s1"},
+            "output_enabled": {"virtual_camera": True},
+        }, sequence=7))
+        assert response.payload["applied"]
+        state = next(event for event in events if event.message_type == "output_health")
+        assert state.payload["status"] == "failed"
+        assert state.payload["error_code"] == "output_restore_failed"
+        assert state.sequence == 7
+        assert engine._scene_graph.program_source is not None
+    finally:
+        engine.shutdown()
+
+
+def test_output_health_delivery_failure_is_retried_without_failing_ping(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    events = []
+    rejected = []
+
+    def sink(event):
+        if event.message_type == "output_health" and not rejected:
+            rejected.append(event)
+            raise OSError("injected event delivery failure")
+        events.append(event)
+
+    engine.set_event_sink(sink)
+    try:
+        engine.handle(_request("hello"))
+        response = engine.handle(_request("set_output_enabled", {
+            "bus_id": "virtual_camera", "enabled": True,
+        }, sequence=4))
+        assert response.payload["applied"]
+        assert rejected and not any(event.message_type == "output_health" for event in events)
+        assert engine.handle(_request("ping")).message_type == "heartbeat"
+        delivered = next(event for event in events if event.message_type == "output_health")
+        assert delivered.sequence == 4
+        assert delivered.payload["status"] == "starting"
+    finally:
+        engine.shutdown()
 
 
 def test_engine_set_output_enabled_other_bus_is_a_noop_ack():

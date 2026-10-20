@@ -1,6 +1,8 @@
-#include "solin/virtual_camera/windows_virtual_camera_contract.hpp"
+#include "broker_test_endpoint.hpp"
+#include "frame_adapter.hpp"
 #include "solin/virtual_camera/shared_video_frame_channel.hpp"
 #include "solin/virtual_camera/virtual_camera_broker_protocol.hpp"
+#include "solin/virtual_camera/windows_virtual_camera_contract.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -185,60 +187,61 @@ constexpr GUID kTestRendererClassId{
     return ERROR_SUCCESS;
 }
 
-void serve_live_frame_endpoint(
-    const HANDLE pipe,
-    const solin::virtual_camera::SharedVideoFramePublisher& publisher,
-    const std::chrono::steady_clock::time_point deadline,
-    std::atomic_bool& completed, std::atomic_bool& valid_exchange) noexcept {
+void serve_live_frame_endpoint(const HANDLE pipe,
+                               const solin::virtual_camera::SharedVideoFramePublisher& publisher,
+                               const std::chrono::steady_clock::time_point deadline,
+                               std::atomic_bool& completed, std::atomic_bool& valid_exchange,
+                               const std::uint32_t maximum_exchanges,
+                               std::atomic_uint32_t& exchanges) noexcept {
     using namespace solin::virtual_camera;
     const auto event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     try {
         if (event == nullptr) {
             throw std::runtime_error{"broker event creation failed"};
         }
-        OVERLAPPED overlapped{};
-        overlapped.hEvent = event;
-        DWORD transferred = 0U;
-        const auto started = ConnectNamedPipe(pipe, &overlapped);
-        const auto error = complete_pipe_operation(
-            pipe, overlapped, started, transferred, deadline);
-        std::array<std::uint8_t, kVirtualCameraBrokerRequestSize> request_bytes{};
-        if ((error != ERROR_SUCCESS && error != ERROR_PIPE_CONNECTED) ||
-            transfer_pipe_bytes(pipe, event, request_bytes, false, deadline) !=
-                ERROR_SUCCESS) {
-            throw std::runtime_error{"broker read failed"};
-        }
-        const auto request =
-            decode_virtual_camera_broker_request(request_bytes);
-        const auto& configuration = publisher.configuration();
-        auto response = encode_virtual_camera_broker_response({
-            .status = VirtualCameraBrokerStatus::ok,
-            .nonce = request.nonce,
-            .mapping_file_path_utf8 =
-                std::string{publisher.backing_file_path_utf8()},
-            .mapping_size = publisher.mapping_size(),
-            .generation = configuration.generation,
-            .layout = configuration.layout,
-            .fps_numerator = 30U,
-            .fps_denominator = 1U,
-        });
-        if (transfer_pipe_bytes(pipe, event, response, true, deadline) !=
-            ERROR_SUCCESS) {
-            throw std::runtime_error{"broker write failed"};
-        }
-        std::array<std::uint8_t, 1U> presence_marker{};
-        if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
-                ERROR_SUCCESS ||
-            presence_marker.front() != kVirtualCameraBrokerPresenceMarker) {
-            throw std::runtime_error{"broker presence marker missing"};
-        }
-        valid_exchange.store(true);
-        // Keep the current protocol's presence lease alive. The fixture leaves
-        // its heartbeat unchanged so the filter must detect staleness, return
-        // to standby, and close the lease itself.
-        if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
-            ERROR_BROKEN_PIPE) {
-            throw std::runtime_error{"broker lease did not disconnect"};
+        for (std::uint32_t exchange = 0U; exchange < maximum_exchanges; ++exchange) {
+            static_cast<void>(ResetEvent(event));
+            OVERLAPPED overlapped{};
+            overlapped.hEvent = event;
+            DWORD transferred = 0U;
+            const auto started = ConnectNamedPipe(pipe, &overlapped);
+            const auto error =
+                complete_pipe_operation(pipe, overlapped, started, transferred, deadline);
+            std::array<std::uint8_t, kVirtualCameraBrokerRequestSize> request_bytes{};
+            if ((error != ERROR_SUCCESS && error != ERROR_PIPE_CONNECTED) ||
+                transfer_pipe_bytes(pipe, event, request_bytes, false, deadline) != ERROR_SUCCESS) {
+                throw std::runtime_error{"broker read failed"};
+            }
+            const auto request = decode_virtual_camera_broker_request(request_bytes);
+            const auto& configuration = publisher.configuration();
+            auto response = encode_virtual_camera_broker_response({
+                .status = VirtualCameraBrokerStatus::ok,
+                .nonce = request.nonce,
+                .mapping_file_path_utf8 = std::string{publisher.backing_file_path_utf8()},
+                .mapping_size = publisher.mapping_size(),
+                .generation = configuration.generation,
+                .layout = configuration.layout,
+                .fps_numerator = 30U,
+                .fps_denominator = 1U,
+            });
+            if (transfer_pipe_bytes(pipe, event, response, true, deadline) != ERROR_SUCCESS) {
+                throw std::runtime_error{"broker write failed"};
+            }
+            std::array<std::uint8_t, 1U> presence_marker{};
+            if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
+                    ERROR_SUCCESS ||
+                presence_marker.front() != kVirtualCameraBrokerPresenceMarker) {
+                throw std::runtime_error{"broker presence marker missing"};
+            }
+            valid_exchange.store(true);
+            exchanges.fetch_add(1U);
+            // Keep the presence lease until the filter detects a stalled heartbeat
+            // or the graph stops. Frame-only stalls must retain this lease.
+            if (transfer_pipe_bytes(pipe, event, presence_marker, false, deadline) !=
+                ERROR_BROKEN_PIPE) {
+                throw std::runtime_error{"broker lease did not disconnect"};
+            }
+            static_cast<void>(DisconnectNamedPipe(pipe));
         }
     } catch (...) {
         valid_exchange.store(false);
@@ -327,6 +330,148 @@ class SampleCaptureRenderer final : public CBaseRenderer {
     const std::chrono::milliseconds consumer_delay_;
 };
 
+[[nodiscard]] bool exercise_frame_freshness(
+    SampleCaptureRenderer& renderer, solin::virtual_camera::SharedVideoFramePublisher& publisher,
+    const solin::virtual_camera::PackedVideoFrame& frame, const std::uint64_t live_checksum,
+    const std::atomic_uint32_t& exchanges, const std::chrono::steady_clock::time_point deadline) {
+    using namespace std::chrono_literals;
+    const auto wait_duration = [&](const auto duration) {
+        const auto until = std::chrono::steady_clock::now() + duration;
+        return renderer.wait_for_samples(deadline, [until](const auto& samples) {
+            return !samples.empty() && samples.back().received_at >= until;
+        });
+    };
+    auto samples =
+        renderer.wait_for_samples(deadline, [&](const auto&) { return exchanges.load() == 1U; });
+    if (!expect(exchanges.load() == 1U, "the no-frame producer must be connected")) {
+        return false;
+    }
+    samples = wait_duration(1800ms);
+    const auto standby_checksum = samples.front().checksum;
+    if (!expect(
+            std::all_of(samples.begin(), samples.end(),
+                        [&](const auto& sample) { return sample.checksum == standby_checksum; }),
+            "a healthy heartbeat without frames must remain on standby")) {
+        return false;
+    }
+
+    // Two stalls and recoveries use the same mapping and generation. Recovery
+    // republishes identical pixels: transport sequence, not content, is health.
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        static_cast<void>(publisher.publish(solin::virtual_camera::video_frame_view(frame)));
+        const auto first = samples.size();
+        samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+            return captured.size() > first && captured.back().checksum == live_checksum;
+        });
+        const auto recovered =
+            std::find_if(samples.begin() + static_cast<std::ptrdiff_t>(first), samples.end(),
+                         [&](const auto& sample) { return sample.checksum == live_checksum; });
+        if (!expect(recovered != samples.end() && recovered->discontinuity,
+                    "new frames must recover in the same generation")) {
+            return false;
+        }
+        if (cycle == 0) {
+            const auto live_begin = samples.size();
+            std::atomic_bool publishing_failed{false};
+            std::jthread static_publisher{[&](const std::stop_token stop) {
+                try {
+                    while (!stop.stop_requested()) {
+                        static_cast<void>(
+                            publisher.publish(solin::virtual_camera::video_frame_view(frame)));
+                        std::this_thread::sleep_for(20ms);
+                    }
+                } catch (...) {
+                    publishing_failed.store(true);
+                }
+            }};
+            samples = wait_duration(1800ms);
+            if (!expect(!publishing_failed.load() &&
+                            std::all_of(samples.begin() + static_cast<std::ptrdiff_t>(live_begin),
+                                        samples.end(),
+                                        [&](const auto& sample) {
+                                            return sample.checksum == live_checksum;
+                                        }),
+                        "static images with advancing sequences must stay live")) {
+                return false;
+            }
+        }
+        const auto live_end = samples.size();
+        samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+            return captured.size() > live_end && captured.back().checksum == standby_checksum;
+        });
+        const auto stalled =
+            std::find_if(samples.begin() + static_cast<std::ptrdiff_t>(live_end), samples.end(),
+                         [&](const auto& sample) { return sample.checksum == standby_checksum; });
+        if (!expect(stalled != samples.end() && stalled->discontinuity,
+                    "stalled frames with healthy heartbeats must fall back to standby")) {
+            return false;
+        }
+        const auto standby_begin = samples.size();
+        samples = wait_duration(600ms);
+        if (!expect(std::all_of(
+                        samples.begin() + static_cast<std::ptrdiff_t>(standby_begin), samples.end(),
+                        [&](const auto& sample) { return sample.checksum == standby_checksum; }),
+                    "stale frames must not reappear during standby")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool exercise_stale_reconnect(
+    SampleCaptureRenderer& renderer, solin::virtual_camera::SharedVideoFramePublisher& publisher,
+    const solin::virtual_camera::PackedVideoFrame& frame, const std::uint64_t live_checksum,
+    const std::atomic_uint32_t& exchanges, const std::chrono::steady_clock::time_point deadline) {
+    using namespace std::chrono_literals;
+    auto samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+        return !captured.empty() && captured.back().checksum == live_checksum;
+    });
+    if (!expect(!samples.empty() && samples.back().checksum == live_checksum,
+                "the initial connection must deliver its frame")) {
+        return false;
+    }
+    const auto standby_checksum = samples.front().checksum;
+    const auto live_end = samples.size();
+    samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+        return captured.size() > live_end && captured.back().checksum == standby_checksum;
+    });
+    const auto standby_begin = samples.size();
+    const auto observe_until = std::chrono::steady_clock::now() + 1900ms;
+    samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+        return exchanges.load() >= 3U && !captured.empty() &&
+               captured.back().received_at >= observe_until;
+    });
+    if (!expect(exchanges.load() == 3U && samples.size() > standby_begin &&
+                    std::all_of(
+                        samples.begin() + static_cast<std::ptrdiff_t>(standby_begin - 1U),
+                        samples.end(),
+                        [&](const auto& sample) { return sample.checksum == standby_checksum; }),
+                "reconnecting the same generation must not replay its stale sequence")) {
+        return false;
+    }
+    const auto recovery_begin = samples.size();
+    static_cast<void>(publisher.publish(solin::virtual_camera::video_frame_view(frame)));
+    samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+        return captured.size() > recovery_begin && captured.back().checksum == live_checksum;
+    });
+    const auto recovered =
+        std::find_if(samples.begin() + static_cast<std::ptrdiff_t>(recovery_begin), samples.end(),
+                     [&](const auto& sample) { return sample.checksum == live_checksum; });
+    if (!expect(recovered != samples.end() && recovered->discontinuity,
+                "a new sequence must recover after reconnecting the same generation")) {
+        return false;
+    }
+    const auto recovery_end = samples.size();
+    samples = renderer.wait_for_samples(deadline, [&](const auto& captured) {
+        return captured.size() > recovery_end && captured.back().checksum == standby_checksum;
+    });
+    const auto stalled =
+        std::find_if(samples.begin() + static_cast<std::ptrdiff_t>(recovery_end), samples.end(),
+                     [&](const auto& sample) { return sample.checksum == standby_checksum; });
+    return expect(stalled != samples.end() && stalled->discontinuity,
+                  "a recovered producer must still detect subsequent stalls");
+}
+
 [[nodiscard]] bool validate_profile(const AM_MEDIA_TYPE& media_type,
                                     const ExpectedProfile& expected) {
     if (media_type.majortype != MEDIATYPE_Video ||
@@ -365,16 +510,20 @@ class SampleCaptureRenderer final : public CBaseRenderer {
 } // namespace
 
 int wmain(const int argument_count, wchar_t** arguments) {
+    const auto mode = argument_count == 3 ? std::wstring{arguments[2]} : L"";
+    const auto freshness = mode == L"--frame-freshness" || mode == L"--frame-freshness-yuy2";
+    const auto stale_reconnect = mode == L"--stale-reconnect";
     if (argument_count < 2 || argument_count > 3 ||
-        (argument_count == 3 &&
-         std::wstring{arguments[2]} != L"--slow-consumer")) {
-        std::cerr << "filter path [--slow-consumer] required\n";
+        (!mode.empty() && mode != L"--slow-consumer" && !freshness && !stale_reconnect)) {
+        std::cerr << "filter path "
+                     "[--slow-consumer|--frame-freshness|--frame-freshness-yuy2|--stale-reconnect] "
+                     "required\n";
         return 2;
     }
     // Sustained backpressure exceeds a 30 fps slot. The graph must still make
     // the live/stale transitions without requiring the consumer to run at 30 fps.
-    const auto consumer_delay = std::chrono::milliseconds{
-        argument_count == 3 ? 80 : 0};
+    const auto consumer_delay = std::chrono::milliseconds{mode == L"--slow-consumer" ? 80 : 0};
+    const auto capture_profile = mode == L"--frame-freshness-yuy2" ? 6U : 2U;
     ComApartment apartment;
     if (!expect(SUCCEEDED(apartment.result()), "COM initialization failed")) {
         return 1;
@@ -619,36 +768,51 @@ int wmain(const int argument_count, wchar_t** arguments) {
     std::unique_ptr<solin::virtual_camera::SharedVideoFramePublisher>
         live_publisher;
     std::uint64_t expected_live_checksum = 0U;
+    solin::virtual_camera::PackedVideoFrame live_frame;
     try {
         const auto live_layout = solin::virtual_camera::packed_video_frame_layout(
             640U, 360U, solin::virtual_camera::VideoFramePixelFormat::nv12);
         live_publisher =
             solin::virtual_camera::make_cross_process_shared_video_frame_publisher(
                 {.generation = 77U, .layout = live_layout});
-        solin::virtual_camera::PackedVideoFrame live_frame{
+        live_frame = {
             .width = live_layout.width,
             .height = live_layout.height,
             .pixel_format = live_layout.pixel_format,
             .plane_strides = live_layout.plane_strides,
             .plane_offsets = live_layout.plane_offsets,
-            .bytes = std::vector<std::uint8_t>(
-                static_cast<std::size_t>(live_layout.payload_size),
-                std::uint8_t{210U}),
+            .bytes = std::vector<std::uint8_t>(static_cast<std::size_t>(live_layout.payload_size),
+                                               std::uint8_t{210U}),
         };
         std::fill(live_frame.bytes.begin() +
                       static_cast<std::ptrdiff_t>(live_layout.plane_offsets[1]),
                   live_frame.bytes.end(), std::uint8_t{128U});
-        expected_live_checksum = frame_checksum(live_frame.bytes);
-        valid = expect(
-            live_publisher->publish(
-                solin::virtual_camera::video_frame_view(live_frame)) == 1U,
-            "live broker fixture could not publish its NV12 frame");
+        using namespace solin::virtual_camera::windows_virtual_camera;
+        DirectShowFrameAdapter adapter{kMediaProfiles[capture_profile]};
+        std::vector<std::uint8_t> output(kMediaProfiles[capture_profile].sample_size());
+        valid = expect(adapter.adapt(solin::virtual_camera::video_frame_view(live_frame), output),
+                       "fixture output adaptation failed");
+        expected_live_checksum = frame_checksum(output);
+        valid = valid &&
+                (freshness || expect(live_publisher->publish(
+                                         solin::virtual_camera::video_frame_view(live_frame)) == 1U,
+                                     "live broker fixture could not publish its NV12 frame"));
     } catch (...) {
         valid = expect(false, "live broker fixture creation failed");
     }
     std::atomic_bool broker_completed{false};
     std::atomic_bool broker_exchange_valid{false};
-    std::thread broker_thread;
+    std::atomic_uint32_t broker_exchanges{0U};
+    std::jthread broker_thread;
+    std::jthread heartbeat_thread;
+    if (freshness && valid) {
+        heartbeat_thread = std::jthread{[&](const std::stop_token stop) {
+            while (!stop.stop_requested()) {
+                live_publisher->heartbeat();
+                std::this_thread::sleep_for(std::chrono::milliseconds{20});
+            }
+        }};
+    }
     if (valid) {
         result = CoCreateInstance(CLSID_FilterGraph, nullptr,
                                   CLSCTX_INPROC_SERVER, IID_IFilterGraph2,
@@ -698,8 +862,8 @@ int wmain(const int argument_count, wchar_t** arguments) {
         }
         AM_MEDIA_TYPE* reconnect_type = nullptr;
         if (SUCCEEDED(result)) {
-            result = stream_config.get()->GetStreamCaps(
-                2, &reconnect_type, capabilities.data());
+            result = stream_config.get()->GetStreamCaps(static_cast<int>(capture_profile),
+                                                        &reconnect_type, capabilities.data());
         }
         if (SUCCEEDED(result)) {
             result = stream_config.get()->SetFormat(reconnect_type);
@@ -708,7 +872,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
         if (SUCCEEDED(result)) {
             result = pin.get()->ConnectionMediaType(&connection_type);
             if (SUCCEEDED(result) &&
-                !validate_profile(connection_type, expected_profiles[2])) {
+                !validate_profile(connection_type, expected_profiles[capture_profile])) {
                 result = VFW_E_INVALIDMEDIATYPE;
             }
             FreeMediaType(connection_type);
@@ -735,7 +899,9 @@ int wmain(const int argument_count, wchar_t** arguments) {
             result = E_FAIL;
         }
         const auto capture_started = std::chrono::steady_clock::now();
-        const auto capture_deadline = capture_started + kCaptureTimeout;
+        const auto capture_deadline =
+            capture_started +
+            (freshness || stale_reconnect ? std::chrono::milliseconds{12000} : kCaptureTimeout);
         std::vector<CapturedSample> samples;
         if (SUCCEEDED(result)) {
             // Expose the broker only after the offline graph has delivered a
@@ -751,30 +917,41 @@ int wmain(const int argument_count, wchar_t** arguments) {
         }
         if (SUCCEEDED(result)) {
             const auto pipe = CreateNamedPipeW(
-                solin::virtual_camera::windows_virtual_camera::
-                    current_user_broker_pipe_name()
-                        .c_str(),
-                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE |
-                    FILE_FLAG_OVERLAPPED,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
-                    PIPE_REJECT_REMOTE_CLIENTS,
-                1U,
-                static_cast<DWORD>(
-                    solin::virtual_camera::kVirtualCameraBrokerResponseSize),
-                static_cast<DWORD>(
-                    solin::virtual_camera::kVirtualCameraBrokerRequestSize),
-                0U, nullptr);
+                solin::virtual_camera::windows_virtual_camera::test_broker_pipe_name().c_str(),
+                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1U,
+                static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerResponseSize),
+                static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerRequestSize), 0U,
+                nullptr);
             if (pipe == INVALID_HANDLE_VALUE || live_publisher == nullptr) {
                 result = HRESULT_FROM_WIN32(GetLastError());
             } else {
-                broker_thread = std::thread{
-                    serve_live_frame_endpoint, pipe,
-                    std::cref(*live_publisher), capture_deadline,
-                    std::ref(broker_completed),
-                    std::ref(broker_exchange_valid)};
+                broker_thread =
+                    std::jthread{serve_live_frame_endpoint,  pipe,
+                                 std::cref(*live_publisher), capture_deadline,
+                                 std::ref(broker_completed), std::ref(broker_exchange_valid),
+                                 stale_reconnect ? 3U : 1U,  std::ref(broker_exchanges)};
             }
         }
-        if (SUCCEEDED(result)) {
+        if (SUCCEEDED(result) && freshness) {
+            if (!exercise_frame_freshness(*capture_renderer, *live_publisher, live_frame,
+                                          expected_live_checksum, broker_exchanges,
+                                          capture_deadline)) {
+                result = E_FAIL;
+            }
+            samples = capture_renderer->wait_for_samples(capture_deadline,
+                                                         [](const auto&) { return true; });
+        }
+        if (SUCCEEDED(result) && stale_reconnect) {
+            if (!exercise_stale_reconnect(*capture_renderer, *live_publisher, live_frame,
+                                          expected_live_checksum, broker_exchanges,
+                                          capture_deadline)) {
+                result = E_FAIL;
+            }
+            samples = capture_renderer->wait_for_samples(capture_deadline,
+                                                         [](const auto&) { return true; });
+        }
+        if (SUCCEEDED(result) && !freshness && !stale_reconnect) {
             // Both capture phases share the original three-second deadline.
             // Require the stale-producer transition before stopping the graph,
             // as Stop itself also closes the broker presence lease.
@@ -794,10 +971,9 @@ int wmain(const int argument_count, wchar_t** arguments) {
                                        });
                 });
         }
-        if (SUCCEEDED(result) &&
+        if (SUCCEEDED(result) && !freshness &&
             (WaitForSingleObject(broker_thread.native_handle(),
-                                 remaining_wait_ms(capture_deadline)) !=
-                 WAIT_OBJECT_0 ||
+                                 remaining_wait_ms(capture_deadline)) != WAIT_OBJECT_0 ||
              !broker_completed.load() || !broker_exchange_valid.load())) {
             result = E_FAIL;
         }
@@ -811,7 +987,7 @@ int wmain(const int argument_count, wchar_t** arguments) {
                                      capture_started;
         if (SUCCEEDED(result)) {
             const auto expected_size =
-                static_cast<LONG>(expected_profiles[2].sample_size);
+                static_cast<LONG>(expected_profiles[capture_profile].sample_size);
             if (samples.size() < 4U || samples[0].length != expected_size ||
                 !samples[0].sync_point || !samples[0].discontinuity ||
                 samples[0].start != 0 ||
@@ -870,13 +1046,13 @@ int wmain(const int argument_count, wchar_t** arguments) {
                     break;
                 }
             }
-            if (SUCCEEDED(result) &&
-                (standby_index + 1U >= samples.size() ||
-                 !samples[standby_index].discontinuity)) {
+            if (SUCCEEDED(result) && !freshness && !stale_reconnect &&
+                (standby_index + 1U >= samples.size() || !samples[standby_index].discontinuity)) {
                 result = E_FAIL;
             }
             for (std::size_t index = standby_index + 1U;
-                 SUCCEEDED(result) && index < samples.size(); ++index) {
+                 SUCCEEDED(result) && !freshness && !stale_reconnect && index < samples.size();
+                 ++index) {
                 if (samples[index].checksum != samples[0].checksum) {
                     result = E_FAIL;
                 }

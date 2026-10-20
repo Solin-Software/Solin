@@ -103,54 +103,73 @@ function(solin_add_virtual_camera_filter)
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
     )
 
-    add_library(solin-virtual-camera SHARED
-        windows/directshow_virtual_camera/broker_client.cpp
-        windows/directshow_virtual_camera/filter.cpp
-        windows/directshow_virtual_camera/module.cpp
-        windows/directshow_virtual_camera/standby_resources.rc
-        windows/directshow_virtual_camera/solin_virtual_camera.def
-    )
-    target_include_directories(solin-virtual-camera
-        PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/include"
-            "${CMAKE_CURRENT_SOURCE_DIR}/windows/directshow_virtual_camera"
-    )
-    target_compile_features(solin-virtual-camera PRIVATE cxx_std_20)
-    target_compile_definitions(solin-virtual-camera
-        PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
-                WINVER=0x0A00 _WIN32_WINNT=0x0A00
-    )
-    target_compile_options(solin-virtual-camera
-        PRIVATE /W4 /WX /wd4324 /wd4596 /permissive /Zc:strictStrings- /EHsc
-    )
-    target_link_options(solin-virtual-camera
-        PRIVATE /DYNAMICBASE /NXCOMPAT /CETCOMPAT /GUARD:CF
-    )
-    target_link_libraries(solin-virtual-camera
-        PRIVATE
-            solin_directshow_baseclasses
-            solin_virtual_camera_frame_adapter
-            solin_virtual_camera_transport
-            solin_virtual_camera_libyuv
-            advapi32
-            bcrypt
-            gdi32
-            ole32
-            oleaut32
-            quartz
-            strmiids
-            user32
-            uuid
-            winmm
-    )
-    set_property(TARGET solin-virtual-camera PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-    )
-    set_target_properties(solin-virtual-camera PROPERTIES
-        PREFIX ""
-        OUTPUT_NAME "solin-virtual-camera"
-    )
+    set(filter_targets solin-virtual-camera)
+    if(SOLIN_VIRTUAL_CAMERA_BUILD_TESTS)
+        list(APPEND filter_targets solin-virtual-camera-test)
+    endif()
+    foreach(filter_target IN LISTS filter_targets)
+        add_library(${filter_target} SHARED
+            windows/directshow_virtual_camera/broker_client.cpp
+            windows/directshow_virtual_camera/filter.cpp
+            windows/directshow_virtual_camera/module.cpp
+            windows/directshow_virtual_camera/standby_resources.rc
+            windows/directshow_virtual_camera/solin_virtual_camera.def
+        )
+        target_include_directories(${filter_target}
+            PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/include"
+                "${CMAKE_CURRENT_SOURCE_DIR}/windows/directshow_virtual_camera"
+        )
+        target_compile_features(${filter_target} PRIVATE cxx_std_20)
+        target_compile_definitions(${filter_target}
+            PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+                    WINVER=0x0A00 _WIN32_WINNT=0x0A00
+        )
+        target_compile_options(${filter_target}
+            PRIVATE /W4 /WX /wd4324 /wd4596 /permissive /Zc:strictStrings- /EHsc
+        )
+        target_link_options(${filter_target}
+            PRIVATE /DYNAMICBASE /NXCOMPAT /CETCOMPAT /GUARD:CF
+        )
+        target_link_libraries(${filter_target}
+            PRIVATE
+                solin_directshow_baseclasses
+                solin_virtual_camera_frame_adapter
+                solin_virtual_camera_transport
+                solin_virtual_camera_libyuv
+                advapi32
+                bcrypt
+                gdi32
+                ole32
+                oleaut32
+                quartz
+                strmiids
+                user32
+                uuid
+                winmm
+        )
+        set_property(TARGET ${filter_target} PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        )
+        set_target_properties(${filter_target} PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "${filter_target}"
+        )
 
+    endforeach()
+    if(SOLIN_VIRTUAL_CAMERA_BUILD_TESTS)
+        target_compile_definitions(solin-virtual-camera-test
+            PRIVATE SOLIN_VIRTUAL_CAMERA_TEST_ENDPOINT
+        )
+        target_include_directories(solin-virtual-camera-test
+            PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+        )
+        set_target_properties(solin-virtual-camera-test PROPERTIES
+            OUTPUT_NAME "solin-virtual-camera"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test"
+            ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test"
+        )
+    endif()
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)
         set(filter_architecture x64)
     else()
@@ -170,6 +189,21 @@ function(solin_add_virtual_camera_filter)
 
     if(SOLIN_VIRTUAL_CAMERA_BUILD_TESTS)
         enable_testing()
+        add_executable(solin-virtual-camera-broker-probe
+            tests/broker_frame_probe.cpp
+            windows/directshow_virtual_camera/broker_client.cpp
+        )
+        target_include_directories(solin-virtual-camera-broker-probe
+            PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/windows/directshow_virtual_camera"
+        )
+        target_compile_definitions(solin-virtual-camera-broker-probe
+            PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX
+                    WINVER=0x0A00 _WIN32_WINNT=0x0A00
+        )
+        target_link_libraries(solin-virtual-camera-broker-probe
+            PRIVATE solin_virtual_camera_transport bcrypt
+        )
+        solin_camera_target(solin-virtual-camera-broker-probe)
         add_executable(solin-virtual-camera-filter-tests
             tests/directshow_virtual_camera_tests.cpp
         )
@@ -191,6 +225,7 @@ function(solin_add_virtual_camera_filter)
             PRIVATE
                 solin_directshow_baseclasses
                 solin_virtual_camera_transport
+                solin_virtual_camera_frame_adapter
                 ole32
                 oleaut32
                 strmiids
@@ -200,20 +235,29 @@ function(solin_add_virtual_camera_filter)
         set_property(TARGET solin-virtual-camera-filter-tests PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
         )
-        add_dependencies(solin-virtual-camera-filter-tests solin-virtual-camera)
+        add_dependencies(solin-virtual-camera-filter-tests solin-virtual-camera-test)
         add_test(NAME directshow-virtual-camera-filter
             COMMAND solin-virtual-camera-filter-tests
-                    $<TARGET_FILE:solin-virtual-camera>
+                    $<TARGET_FILE:solin-virtual-camera-test>
         )
         add_test(NAME directshow-virtual-camera-filter-backpressure
             COMMAND solin-virtual-camera-filter-tests
-                    $<TARGET_FILE:solin-virtual-camera> --slow-consumer
+                    $<TARGET_FILE:solin-virtual-camera-test> --slow-consumer
         )
-        # Both graph fixtures own the same per-user broker endpoint.
-        set_tests_properties(
-            directshow-virtual-camera-filter
-            directshow-virtual-camera-filter-backpressure
-            PROPERTIES RESOURCE_LOCK solin-directshow-broker
+        foreach(freshness_format IN ITEMS nv12 yuy2)
+            if(freshness_format STREQUAL "nv12")
+                set(freshness_argument --frame-freshness)
+            else()
+                set(freshness_argument --frame-freshness-yuy2)
+            endif()
+            add_test(NAME directshow-virtual-camera-freshness-${freshness_format}
+                COMMAND solin-virtual-camera-filter-tests
+                        $<TARGET_FILE:solin-virtual-camera-test> ${freshness_argument}
+            )
+        endforeach()
+        add_test(NAME directshow-virtual-camera-stale-reconnect
+            COMMAND solin-virtual-camera-filter-tests
+                    $<TARGET_FILE:solin-virtual-camera-test> --stale-reconnect
         )
         add_executable(solin-virtual-camera-frame-cadence-tests
             tests/directshow_frame_cadence_tests.cpp
