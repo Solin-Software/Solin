@@ -5874,6 +5874,41 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Uit</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Aan</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fout</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Starten…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuele camera ingeschakeld</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuele camera uitgeschakeld</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>De virtuele camera is uitgevallen. Schakel deze uit en weer in om het opnieuw te proberen.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +5922,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Schakelen</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Fout</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Aan</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Uit</translation>
     </message>
     <message>
         <location line="+5"/>

@@ -1,11 +1,13 @@
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import Mock
 
 import pytest
 from PySide6.QtGui import QImage
 
 import solin.main_window as main_window
 from solin.core.scenes.model import BusId
+from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from solin.main_window import (
     MainWindow,
@@ -366,3 +368,78 @@ def test_idle_media_failure_notifies_without_loading_scenes(monkeypatch, error_c
         ("Translated scene error", "Translated Scenes", "idle-screen-media-failed")
     ]
     assert not hasattr(host, "scenes_widget")
+
+
+def test_virtual_camera_notifies_only_once_per_terminal_failure() -> None:
+    runtime = SimpleNamespace(
+        program_output_enabled=True,
+        output_health=lambda _bus: health,
+    )
+    notifications = Mock()
+    host = SimpleNamespace(
+        scene_runtime=runtime,
+        notifications=notifications,
+        _virtual_camera_failure_notified=False,
+    )
+
+    for status in OutputHealthStatus:
+        health = OutputHealth(
+            status, "virtual_camera_unavailable" if status in {
+                OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED,
+            } else "",
+        )
+        MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+        MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+
+    assert notifications.error.call_count == 1
+    # Scene rehydration and intermediate retry states do not represent a new
+    # incident while the output has neither recovered nor been stopped.
+    for status in (
+        OutputHealthStatus.STARTING, OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED,
+    ):
+        health = OutputHealth(
+            status, "output_no_frames" if status in {
+                OutputHealthStatus.RECOVERING, OutputHealthStatus.FAILED,
+            } else "", generation=2,
+        )
+        MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    assert notifications.error.call_count == 1
+    notifications.warning.assert_not_called()
+    notifications.success.assert_not_called()
+    notifications.information.assert_not_called()
+
+    # A new generation in the same failure does not spam the user. A later
+    # failure after recovery is a new incident and must be reported.
+    health = OutputHealth(OutputHealthStatus.FAILED, "output_no_frames", generation=2)
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    assert notifications.error.call_count == 1
+    health = OutputHealth(OutputHealthStatus.READY, generation=2)
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    health = OutputHealth(OutputHealthStatus.FAILED, "output_no_frames", generation=2)
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    assert notifications.error.call_count == 2
+    runtime.program_output_enabled = False
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    assert notifications.error.call_count == 2
+    runtime.program_output_enabled = True
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), BusId.VIRTUAL_CAMERA)
+    assert notifications.error.call_count == 3
+    assert not hasattr(host, "scenes_widget")
+
+
+@pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.EDITOR, BusId.VIRTUAL_CAMERA])
+@pytest.mark.parametrize("requested", [False, True])
+def test_output_failure_notification_respects_output_and_activation(bus_id, requested) -> None:
+    notifications = Mock()
+    host = SimpleNamespace(
+        scene_runtime=SimpleNamespace(
+            program_output_enabled=requested,
+            output_health=lambda _bus: OutputHealth(
+                OutputHealthStatus.FAILED, "output_no_frames",
+            ),
+        ),
+        notifications=notifications,
+        _virtual_camera_failure_notified=False,
+    )
+    MainWindow._on_scene_output_health_changed(cast(MainWindow, host), bus_id)
+    assert notifications.error.call_count == int(requested and bus_id is BusId.VIRTUAL_CAMERA)

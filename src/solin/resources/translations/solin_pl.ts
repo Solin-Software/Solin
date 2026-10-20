@@ -5906,6 +5906,41 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Wyłączone</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Włączone</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Błąd</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Uruchamianie…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera wirtualna</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Kamera wirtualna włączona</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Kamera wirtualna wyłączona</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Wystąpił błąd kamery wirtualnej. Wyłącz ją i włącz ponownie, aby spróbować jeszcze raz.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5919,21 +5954,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Przełączanie</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Błąd</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Włączone</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Wyłączone</translation>
     </message>
     <message>
         <location line="+5"/>
