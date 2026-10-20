@@ -12251,5 +12251,29 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <source>Saved “%1”.</source>
         <translation>„%1“ gespeichert.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Bild aktualisieren</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ein neues Bild von der aktuellen Kameraausrichtung aufnehmen</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Das Bild des Presets konnte nicht gespeichert werden.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Bild wird aufgenommen…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Kein Bild</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Von „%1“ konnte kein Bild aufgenommen werden. Versuche es mit „Bild aktualisieren“ erneut.</translation>
+    </message>
 </context>
 </TS>

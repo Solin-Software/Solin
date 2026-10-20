@@ -12250,5 +12250,29 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <source>Saved “%1”.</source>
         <translation>”%1” sparades.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Uppdatera bild</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ta en ny bild från kamerans nuvarande riktning</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Förinställningens bild kunde inte sparas.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Tar bild…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Ingen bild</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Ingen bild av ”%1” kunde tas. Använd Uppdatera bild för att försöka igen.</translation>
+    </message>
 </context>
 </TS>

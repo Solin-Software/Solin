@@ -152,3 +152,79 @@ def test_shutdown_releases_every_scene_window_feed() -> None:
 
     assert created[0].shutdowns == 1
     assert engine._scene_window_feeds == {}
+
+
+class _Graph:
+    def __init__(self, cameras=("stage",)) -> None:
+        self.cameras = set(cameras)
+        self.prepared: list[str] = []
+        self.released: list[str] = []
+
+    def prepare_camera_still(self, camera_id: str) -> bool:
+        self.prepared.append(camera_id)
+        return camera_id in self.cameras
+
+    def release_camera_still(self, camera_id: str) -> None:
+        self.released.append(camera_id)
+
+
+def _still_engine(graph: _Graph):
+    engine, cards, scene_feeds = _engine()
+    stills: list[_Feed] = []
+
+    def factory() -> _Feed:
+        stills.append(_Feed())
+        return stills[-1]
+
+    engine._camera_still_factory = factory  # type: ignore[assignment]
+    engine._scene_graph = graph  # type: ignore[assignment]
+    return engine, scene_feeds, stills
+
+
+def test_a_camera_still_feed_builds_its_still_first_and_releases_it_after() -> None:
+    from solin.core.scenes.engine import camera_still_channel
+
+    graph = _Graph()
+    engine, scene_feeds, stills = _still_engine(graph)
+    channel = camera_still_channel("stage")
+
+    opened = engine._handle_set_thumbnail_egress(_request(_feed_payload(channel, ("stage",))))
+    assert opened.payload["applied"]
+    assert graph.prepared == ["stage"] and len(stills) == 1 and scene_feeds == []
+    assert stills[0].scene_ids == ("stage",)
+
+    engine._handle_set_thumbnail_egress(_request(_feed_payload(channel, cleared=True)))
+    assert stills[0].shutdowns == 1 and graph.released == ["stage"]
+
+
+def test_a_camera_no_scene_shows_cannot_be_pictured() -> None:
+    from solin.core.scenes.engine import camera_still_channel
+
+    engine, _scene_feeds, stills = _still_engine(_Graph(cameras=()))
+
+    response = engine._handle_set_thumbnail_egress(
+        _request(_feed_payload(camera_still_channel("ghost"), ("ghost",)))
+    )
+
+    assert not response.payload["applied"]
+    assert response.payload["error_code"] == "camera_unavailable"
+    assert stills == []
+
+
+def test_camera_stills_are_rebuilt_after_the_graph_is() -> None:
+    from solin.core.scenes.engine import camera_still_channel
+
+    graph = _Graph(cameras=("stage", "audience"))
+    engine, _scene_feeds, _stills = _still_engine(graph)
+    for camera in ("stage", "audience"):
+        engine._handle_set_thumbnail_egress(
+            _request(_feed_payload(camera_still_channel(camera), (camera,)))
+        )
+    engine._handle_set_thumbnail_egress(
+        _request(_feed_payload(scene_window_channel("pulpit"), ("pulpit",)))
+    )
+    graph.prepared.clear()
+
+    engine._prepare_camera_stills()
+
+    assert sorted(graph.prepared) == ["audience", "stage"]  # scene windows need none

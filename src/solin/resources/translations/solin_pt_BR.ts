@@ -12292,5 +12292,29 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
         <source>Saved “%1”.</source>
         <translation>“%1” salvo.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Atualizar imagem</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Tirar uma nova imagem de onde a câmera aponta agora</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Não foi possível salvar a imagem do preset.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Tirando imagem…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Sem imagem</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Não foi possível tirar uma imagem de “%1”. Use Atualizar imagem para tentar de novo.</translation>
+    </message>
 </context>
 </TS>

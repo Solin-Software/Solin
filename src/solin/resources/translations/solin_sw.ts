@@ -12251,5 +12251,29 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <source>Saved “%1”.</source>
         <translation>“%1” imehifadhiwa.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Onyesha upya picha</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Piga picha mpya kutoka mahali kamera inapoelekeza sasa</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Picha ya mpangilio haikuweza kuhifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Inapiga picha…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Hakuna picha</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Picha ya “%1” haikuweza kupigwa. Tumia Onyesha upya picha kujaribu tena.</translation>
+    </message>
 </context>
 </TS>

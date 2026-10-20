@@ -12251,5 +12251,29 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <source>Saved “%1”.</source>
         <translation>«%1» salvato.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Aggiorna immagine</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Scatta una nuova immagine da dove inquadra ora la telecamera</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Impossibile salvare l’immagine del preset.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Acquisizione immagine…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Nessuna immagine</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Impossibile acquisire un’immagine di «%1». Usa Aggiorna immagine per riprovare.</translation>
+    </message>
 </context>
 </TS>

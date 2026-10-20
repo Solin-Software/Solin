@@ -39,6 +39,7 @@ from solin.core.scenes.engine import (
     SCENE_THUMBNAILS_CHANNEL,
     LocalCameraModeQuery,
     SceneSourcePreview,
+    camera_still_camera_id,
     is_scene_render_channel,
 )
 from solin.core.scenes.media_control import ContentSourceKind
@@ -360,6 +361,7 @@ class LibobsSidecarEngine:
         # the graph through suspend/resume/refresh exactly like the cards do.
         self._scene_window_feeds: dict[str, LibobsThumbnailEgress] = {}
         self._scene_render_factory: Callable[[], LibobsThumbnailEgress] | None = None
+        self._camera_still_factory: Callable[[], LibobsThumbnailEgress] | None = None
         self._content_consumer: Any | None = None
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
@@ -479,15 +481,26 @@ class LibobsSidecarEngine:
         )
         graph_for_feeds = self._scene_graph
 
-        def scene_render_feed() -> LibobsThumbnailEgress:
+        def render_feed(resolver: Callable[[str], Any]) -> LibobsThumbnailEgress:
             return LibobsThumbnailEgress(
-                runtime,
+                runtime, resolver, before_render=graph_for_feeds.refresh_source_crops,
+            )
+
+        def scene_render_feed() -> LibobsThumbnailEgress:
+            return render_feed(
                 lambda scene_id: self._scene_graph.scene_source(scene_id)
-                if self._scene_graph is not None else None,
-                before_render=graph_for_feeds.refresh_source_crops,
+                if self._scene_graph is not None else None
+            )
+
+        def camera_still_feed() -> LibobsThumbnailEgress:
+            # Reads the graph's cache only: the render callback must never build.
+            return render_feed(
+                lambda camera_id: self._scene_graph.camera_still_source(camera_id)
+                if self._scene_graph is not None else None
             )
 
         self._scene_render_factory = scene_render_feed
+        self._camera_still_factory = camera_still_feed
         self._thumbnail_egress = scene_render_feed()
         self._program_egress = LibobsProgramEgress(
             runtime,
@@ -1676,6 +1689,7 @@ class LibobsSidecarEngine:
                 )
                 self._document_revision = request.document_revision
             self._bind_camera_health(request, source_records)
+            self._prepare_camera_stills()
             for feed in render_feeds:
                 feed.resume()
             self._reconcile_projection(active_scenes)
@@ -1730,6 +1744,10 @@ class LibobsSidecarEngine:
                 log.debug("Rejected document has no valid camera health bindings", exc_info=True)
             # Never leave the thumbnails suspended: a failed rebuild would freeze
             # every card until the next successful hydrate.
+            try:
+                self._prepare_camera_stills()
+            except Exception:  # noqa: BLE001 - best-effort recovery
+                log.debug("camera stills after failed hydrate errored", exc_info=True)
             for feed in self._scene_render_feeds():
                 try:
                     feed.resume()
@@ -2194,6 +2212,12 @@ class LibobsSidecarEngine:
         try:
             if not isinstance(scene_ids, (list, tuple)):
                 raise SceneIpcError("Invalid scene_ids")
+            camera_id = camera_still_camera_id(channel_id)
+            if camera_id and descriptor is not None:
+                graph = self._scene_graph
+                if graph is None or not graph.prepare_camera_still(camera_id):
+                    return _ack(request, applied=False, error_code="camera_unavailable",
+                                error_message="no scene shows that camera")
             egress = self._scene_render_feed(str(channel_id), create=descriptor is not None)
             if egress is not None:
                 egress.configure(
@@ -2216,7 +2240,10 @@ class LibobsSidecarEngine:
         feed = self._scene_window_feeds.get(channel_id)
         if feed is not None or not create:
             return feed
-        factory = self._scene_render_factory
+        factory = (
+            self._camera_still_factory if camera_still_camera_id(channel_id)
+            else self._scene_render_factory
+        )
         if factory is None:
             return None
         if len(self._scene_window_feeds) >= _MAXIMUM_SCENE_WINDOW_FEEDS:
@@ -2233,6 +2260,21 @@ class LibobsSidecarEngine:
             feed.shutdown()
         except Exception:  # noqa: BLE001 - a closing window must not break the engine
             log.warning("scene window feed shutdown errored", exc_info=True)
+            return  # still rendering, perhaps: keep what it renders alive
+        camera_id = camera_still_camera_id(channel_id)
+        graph = self._scene_graph
+        if camera_id and graph is not None:
+            graph.release_camera_still(camera_id)
+
+    def _prepare_camera_stills(self) -> None:
+        """Rebuild the still scenes of open camera feeds after a graph rebuild."""
+        graph = self._scene_graph
+        if graph is None:
+            return
+        for channel_id in self._scene_window_feeds:
+            camera_id = camera_still_camera_id(channel_id)
+            if camera_id:
+                graph.prepare_camera_still(camera_id)
 
     def _handle_set_window_targets(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         output = self._window_output

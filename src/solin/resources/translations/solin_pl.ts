@@ -12293,5 +12293,29 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
         <source>Saved “%1”.</source>
         <translation>Zapisano „%1”.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Odśwież obraz</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Zrób nowy obraz z obecnego ustawienia kamery</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Nie udało się zapisać obrazu presetu.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Robienie obrazu…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Brak obrazu</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Nie udało się zrobić obrazu „%1”. Użyj opcji Odśwież obraz, aby spróbować ponownie.</translation>
+    </message>
 </context>
 </TS>

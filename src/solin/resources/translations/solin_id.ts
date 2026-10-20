@@ -12209,5 +12209,29 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <source>Saved “%1”.</source>
         <translation>“%1” tersimpan.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Perbarui gambar</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ambil gambar baru dari arah kamera saat ini</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Gambar preset tidak dapat disimpan.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Mengambil gambar…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Tidak ada gambar</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Gambar “%1” tidak dapat diambil. Gunakan Perbarui gambar untuk mencoba lagi.</translation>
+    </message>
 </context>
 </TS>

@@ -18,6 +18,7 @@ from dataclasses import replace
 import logging
 
 from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -46,11 +47,20 @@ from solin.styles.icons import (
     make_icon,
 )
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.widgets.scenes.camera_still import CameraStillCapture
 
 
 log = logging.getLogger(__name__)
 
 PANEL_WIDTH = 280
+# Two tiles across the panel; 16:9 like the stills they show.
+THUMBNAIL_SIZE = (110, 62)
+_TILE_PADDING = 4
+_TILE_CAPTION_HEIGHT = 18
+TILE_SIZE = (
+    THUMBNAIL_SIZE[0] + 2 * _TILE_PADDING,
+    THUMBNAIL_SIZE[1] + _TILE_CAPTION_HEIGHT + 2 * _TILE_PADDING + 2,
+)
 # ONVIF continuous moves expire on the camera after 0.75 s; re-send while held.
 _MOTION_REPEAT_MS = 350
 _DONE_FEEDBACK_MS = 2000
@@ -78,7 +88,7 @@ def confirm_with_dialog(parent: QWidget, title: str, text: str) -> bool:
 
 
 class _PresetRow(QPushButton):
-    """One preset: its number and name, with recall feedback on the right."""
+    """One preset tile: its still, number and name, and recall feedback."""
 
     context_requested = Signal(str)
 
@@ -90,28 +100,65 @@ class _PresetRow(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(lambda _point: self.context_requested.emit(preset_id))
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0)
-        layout.setSpacing(8)
+        # A button does not size itself to a layout inside it: fix the tile size.
+        self.setFixedSize(*TILE_SIZE)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(_TILE_PADDING, _TILE_PADDING, _TILE_PADDING, _TILE_PADDING)
+        layout.setSpacing(2)
+        self.image = QLabel()
+        self.image.setObjectName("ScenePtzPresetImage")
+        self.image.setFixedSize(QSize(*THUMBNAIL_SIZE))
+        self.image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        layout.addWidget(self.image, 0, Qt.AlignmentFlag.AlignHCenter)
+        caption_host = QWidget()
+        caption_host.setFixedHeight(_TILE_CAPTION_HEIGHT)
+        caption_host.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        caption = QHBoxLayout(caption_host)
+        caption.setContentsMargins(2, 0, 2, 0)
+        caption.setSpacing(4)
         self.label = QLabel()
         self.label.setObjectName("ScenePtzPresetName")
         self.label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        layout.addWidget(self.label, 1)
-        self.feedback = QLabel()
+        caption.addWidget(self.label, 1)
+        layout.addWidget(caption_host)
+        # Over the bottom of the picture, so the name keeps its full width.
+        self.feedback = QLabel(self.image)
         self.feedback.setObjectName("ScenePtzPresetFeedback")
+        self.feedback.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.feedback.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        layout.addWidget(self.feedback)
-        self.setMinimumHeight(34)
+        self.feedback.setGeometry(0, THUMBNAIL_SIZE[1] - 18, THUMBNAIL_SIZE[0], 18)
+        self.feedback.hide()
 
     def set_text(self, text: str) -> None:
-        self.label.setText(text)
+        metrics = self.label.fontMetrics()
+        self.label.setText(metrics.elidedText(text, Qt.TextElideMode.ElideRight, THUMBNAIL_SIZE[0] - 4))
+        self.label.setToolTip(text)
         self.setAccessibleName(text)
+
+    def set_thumbnail(self, image: QImage | None, placeholder: str) -> None:
+        if image is None or image.isNull():
+            self.image.setPixmap(QPixmap())
+            self.image.setText(placeholder)
+            return
+        self.image.setText("")
+        self.image.setPixmap(
+            QPixmap.fromImage(image).scaled(
+                self.image.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
 
     def set_feedback(self, state: str, text: str) -> None:
         self.feedback.setText(text)
-        self.setProperty("feedback", state)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        self.feedback.setVisible(bool(text))
+        # Restyle each widget whose look depends on the state; Qt does not
+        # re-evaluate a child when only its parent's property changes.
+        for widget in (self, self.feedback):
+            widget.setProperty("feedback", state)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
 
 
 class ScenePtzPanel(QWidget):
@@ -130,6 +177,9 @@ class ScenePtzPanel(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("ScenePtzPanel")
+        # A plain QWidget subclass paints its stylesheet background (and the
+        # on-air edge) only when asked to.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedWidth(PANEL_WIDTH)
         self._controller = controller
         self.scene_id = scene_id
@@ -152,8 +202,8 @@ class ScenePtzPanel(QWidget):
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(14, 12, 14, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(14, 14, 14, 12)
+        root.setSpacing(8)
 
         self._camera_title = self._section_label()
         root.addWidget(self._camera_title)
@@ -171,9 +221,11 @@ class ScenePtzPanel(QWidget):
         self._live.setObjectName("ScenePtzLive")
         self._live.setWordWrap(True)
         root.addWidget(self._live)
+        root.addWidget(self._divider())
 
         pad_row = QHBoxLayout()
-        pad_row.setSpacing(10)
+        pad_row.setSpacing(14)
+        pad_row.addStretch()
         pad = QGridLayout()
         pad.setSpacing(4)
         self._pad_buttons: dict[str, QPushButton] = {}
@@ -195,6 +247,7 @@ class ScenePtzPanel(QWidget):
         pad_row.addLayout(pad)
         zoom = QVBoxLayout()
         zoom.setSpacing(4)
+        zoom.addStretch()
         for name, text, direction in (("zoom_in", "+", 1.0), ("zoom_out", "−", -1.0)):
             button = self._pad_button(f"ScenePtz_{name}", "")
             button.setText(text)
@@ -202,6 +255,7 @@ class ScenePtzPanel(QWidget):
             button.released.connect(self.stop_motion)
             zoom.addWidget(button)
             self._pad_buttons[name] = button
+        zoom.addStretch()
         pad_row.addLayout(zoom)
         pad_row.addStretch()
         root.addLayout(pad_row)
@@ -217,7 +271,14 @@ class ScenePtzPanel(QWidget):
         self._speed.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._speed.valueChanged.connect(self._remember_speed)
         speed_row.addWidget(self._speed, 1)
+        self._speed_value = QLabel()
+        self._speed_value.setObjectName("ScenePtzSpeedValue")
+        self._speed_value.setFixedWidth(18)
+        self._speed_value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._speed.valueChanged.connect(lambda value: self._speed_value.setText(str(value)))
+        speed_row.addWidget(self._speed_value)
         root.addLayout(speed_row)
+        root.addWidget(self._divider())
 
         presets_header = QHBoxLayout()
         self._presets_title = self._section_label()
@@ -236,24 +297,42 @@ class ScenePtzPanel(QWidget):
         self._presets_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self._presets_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._presets_host = QWidget()
-        self._presets_layout = QVBoxLayout(self._presets_host)
-        self._presets_layout.setContentsMargins(0, 0, 0, 0)
-        self._presets_layout.setSpacing(4)
-        self._presets_layout.addStretch()
-        self._presets_scroll.setWidget(self._presets_host)
-        root.addWidget(self._presets_scroll, 1)
-        self._preset_rows: dict[str, _PresetRow] = {}
+        self._presets_host.setObjectName("ScenePtzPresetsHost")
+        self._presets_scroll.viewport().setAutoFillBackground(False)
+        presets_column = QVBoxLayout(self._presets_host)
+        presets_column.setContentsMargins(0, 0, 0, 0)
+        presets_column.setSpacing(4)
         self._empty = QLabel()
         self._empty.setObjectName("ScenePtzMuted")
         self._empty.setWordWrap(True)
-        self._presets_layout.insertWidget(0, self._empty)
+        presets_column.addWidget(self._empty)
+        self._presets_layout = QGridLayout()
+        self._presets_layout.setContentsMargins(0, 0, 0, 0)
+        self._presets_layout.setHorizontalSpacing(8)
+        self._presets_layout.setVerticalSpacing(8)
+        self._presets_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        presets_column.addLayout(self._presets_layout)
+        presets_column.addStretch()
+        self._presets_scroll.setWidget(self._presets_host)
+        root.addWidget(self._presets_scroll, 1)
+        self._preset_rows: dict[str, _PresetRow] = {}
+        # Stills by preset id; None once looked up and found missing.
+        self._thumbnails: dict[str, QImage | None] = {}
+        self._captures: dict[str, CameraStillCapture] = {}
 
         self._status = QLabel()
         self._status.setObjectName("ScenePtzStatus")
         self._status.setWordWrap(True)
         self._status.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         root.addWidget(self._status)
+        self._status.hide()
         self._retranslate()
+
+    def _divider(self) -> QWidget:
+        line = QWidget()
+        line.setObjectName("ScenePtzDivider")
+        line.setFixedHeight(1)
+        return line
 
     def _section_label(self) -> QLabel:
         label = QLabel()
@@ -324,6 +403,7 @@ class ScenePtzPanel(QWidget):
         self._speed.blockSignals(True)
         self._speed.setValue(self._speeds.get(self._camera_id, _DEFAULT_SPEED))
         self._speed.blockSignals(False)
+        self._speed_value.setText(str(self._speed.value()))
         others = [
             scene.name for scene in document.scenes
             if scene.id != self.scene_id
@@ -394,9 +474,13 @@ class ScenePtzPanel(QWidget):
                 row.context_requested.connect(self._show_preset_menu)
                 self._preset_rows[preset.id] = row
             self._presets_layout.removeWidget(row)
-            self._presets_layout.insertWidget(index + 1, row)
-            number = f"{index + 1}  " if index < 9 else "    "
+            self._presets_layout.addWidget(row, index // 2, index % 2)
+            number = f"{index + 1}  " if index < 9 else ""
             row.set_text(f"{number}{preset.name}")
+            row.set_thumbnail(
+                self.thumbnail(preset.id),
+                self.tr("Taking picture…") if preset.id in self._captures else self.tr("No picture"),
+            )
             state, text = self._preset_feedback.get(preset.id, ("", ""))
             row.set_feedback(state, text)
         self._empty.setVisible(not presets)
@@ -560,7 +644,63 @@ class ScenePtzPanel(QWidget):
 
     def delete_preset(self, preset_id: str) -> bool:
         self._preset_feedback.pop(preset_id, None)
+        capture = self._captures.pop(preset_id, None)
+        if capture is not None:
+            capture.cancel()
+        self._thumbnails.pop(preset_id, None)
         return self._edit(lambda: self._controller.workspace.delete_camera_preset(preset_id))
+
+    # ── thumbnails ──────────────────────────────────────────────────────────
+
+    def _thumbnail_store(self):
+        return getattr(self._controller.workspace, "preset_thumbnails", None)
+
+    def thumbnail(self, preset_id: str) -> QImage | None:
+        if preset_id not in self._thumbnails:
+            store = self._thumbnail_store()
+            self._thumbnails[preset_id] = store.load_image(preset_id) if store is not None else None
+        return self._thumbnails[preset_id]
+
+    def capture_thumbnail(self, preset_id: str) -> None:
+        """Take the preset's still from where its camera points now."""
+        preset = next(
+            (item for item in self._controller.document.camera_presets if item.id == preset_id), None,
+        )
+        if preset is None or preset_id in self._captures:
+            return
+        capture = CameraStillCapture(self._controller, preset.camera_source_id, parent=self)
+        capture.captured.connect(lambda _camera, image, preset_id=preset_id: self._store_thumbnail(preset_id, image))
+        capture.failed.connect(lambda _camera, preset_id=preset_id: self._thumbnail_failed(preset_id))
+        self._captures[preset_id] = capture
+        self._rebuild_presets()
+        capture.start()
+
+    def cancel_captures(self) -> None:
+        for capture in tuple(self._captures.values()):
+            capture.cancel()
+        self._captures.clear()
+
+    def _store_thumbnail(self, preset_id: str, image: QImage) -> None:
+        self._captures.pop(preset_id, None)
+        store = self._thumbnail_store()
+        if store is None or not store.save_image(preset_id, image):
+            self._set_status(self.tr("The preset's picture could not be saved."), error=True)
+        else:
+            self._thumbnails[preset_id] = image
+        self._rebuild_presets()
+
+    def _thumbnail_failed(self, preset_id: str) -> None:
+        self._captures.pop(preset_id, None)
+        preset = next(
+            (item for item in self._controller.document.camera_presets if item.id == preset_id), None,
+        )
+        if preset is not None:
+            self._set_status(
+                self.tr("No picture of “%1” could be taken. Use Refresh picture to try again.").replace(
+                    "%1", preset.name
+                )
+            )
+        self._rebuild_presets()
 
     def _show_preset_menu(self, preset_id: str) -> None:
         preset = next((item for item in self.presets() if item.id == preset_id), None)
@@ -568,10 +708,14 @@ class ScenePtzPanel(QWidget):
         if preset is None or row is None:
             return
         menu = QMenu(self)
+        refresh = menu.addAction(self.tr("Refresh picture"))
+        refresh.setToolTip(self.tr("Take a new picture from where the camera points now"))
         rename = menu.addAction(self.tr("Rename…"))
         delete = menu.addAction(self.tr("Delete"))
         chosen = menu.exec(row.mapToGlobal(row.rect().bottomLeft()))
-        if chosen is rename:
+        if chosen is refresh:
+            self.capture_thumbnail(preset_id)
+        elif chosen is rename:
             name, accepted = QInputDialog.getText(
                 self, self.tr("Rename preset"), self.tr("Preset name"), text=preset.name,
             )
@@ -631,6 +775,8 @@ class ScenePtzPanel(QWidget):
                     lambda: self._controller.workspace.create_camera_preset(pending.stored(token))
                 ):
                     self._set_status(self.tr("Saved “%1”.").replace("%1", pending.name))
+                    # The camera is still where it was saved: picture it now.
+                    self.capture_thumbnail(pending.id)
             else:
                 self._set_status(self._long_error(error_code), error=True)
         elif not succeeded and error_code not in {"", "ptz_command_superseded"}:
@@ -654,6 +800,7 @@ class ScenePtzPanel(QWidget):
 
     def _set_status(self, text: str, *, error: bool = False) -> None:
         self._status.setText(text)
+        self._status.setVisible(bool(text))
         self._status.setProperty("error", error)
         self._status.style().unpolish(self._status)
         self._status.style().polish(self._status)
@@ -728,9 +875,12 @@ class ScenePtzPanel(QWidget):
         self.setStyleSheet(
             f"""
             QWidget#ScenePtzPanel {{ background:{PALETTE.surface}; border-left:1px solid {PALETTE.border}; }}
-            QWidget#ScenePtzPanel[live="true"] {{ border-left:2px solid {qss_rgba(PALETTE.danger, 0.70)}; }}
-            QLabel#ScenePtzSection {{ color:{PALETTE.text_primary}; font-size:12px; font-weight:600; }}
+            QWidget#ScenePtzPanel[live="true"] {{ border-left:3px solid {qss_rgba(PALETTE.danger, 0.80)}; }}
+            QLabel {{ background:transparent; }}
+            QWidget#ScenePtzDivider {{ background:{PALETTE.border}; }}
+            QLabel#ScenePtzSection {{ color:{PALETTE.text_muted}; font-size:11px; font-weight:600; }}
             QLabel#ScenePtzMuted, QLabel#ScenePtzAlsoIn {{ color:{PALETTE.text_muted}; font-size:11px; }}
+            QLabel#ScenePtzSpeedValue {{ color:{PALETTE.text_secondary}; font-size:11px; }}
             QLabel#ScenePtzLive {{ color:{PALETTE.danger}; font-size:11px; font-weight:600; }}
             QLabel#ScenePtzStatus {{ color:{PALETTE.text_secondary}; font-size:11px; }}
             QLabel#ScenePtzStatus[error="true"] {{ color:{PALETTE.danger}; }}
@@ -739,15 +889,22 @@ class ScenePtzPanel(QWidget):
             QPushButton:pressed {{ background:{PALETTE.surface_alt}; }}
             QPushButton:disabled {{ color:{PALETTE.text_faint}; border-color:{PALETTE.border_muted}; }}
             QPushButton[pad="true"] {{ padding:0; font-size:16px; }}
+            QPushButton#ScenePtzCamera {{ min-height:26px; }}
             QPushButton#ScenePtzCamera:checked {{ background:{qss_rgba(PALETTE.accent, 0.14)}; border-color:{qss_rgba(PALETTE.accent, 0.50)}; color:{PALETTE.accent_text}; }}
-            QPushButton#ScenePtzPreset {{ text-align:left; padding:0; }}
-            QPushButton#ScenePtzPreset[feedback="moving"] {{ border-color:{qss_rgba(PALETTE.accent, 0.60)}; }}
-            QPushButton#ScenePtzPreset[feedback="done"] {{ border-color:{qss_rgba(PALETTE.accent, 0.60)}; }}
-            QPushButton#ScenePtzPreset[feedback="error"] {{ border-color:{qss_rgba(PALETTE.danger, 0.70)}; }}
-            QLabel#ScenePtzPresetName {{ color:{PALETTE.text_secondary}; background:transparent; }}
-            QLabel#ScenePtzPresetFeedback {{ color:{PALETTE.accent_text}; background:transparent; font-size:11px; }}
-            QPushButton#ScenePtzPreset[feedback="error"] QLabel#ScenePtzPresetFeedback {{ color:{PALETTE.danger}; }}
-            QScrollArea#ScenePtzPresets {{ background:transparent; border:none; }}
+            QPushButton#ScenePtzSave {{ padding:3px 10px; font-size:11px; }}
+            QPushButton#ScenePtzPreset {{ padding:0; border-radius:8px; background:{PALETTE.surface_card}; }}
+            QPushButton#ScenePtzPreset:hover {{ border-color:{PALETTE.border_strong}; }}
+            QPushButton#ScenePtzPreset[feedback="moving"], QPushButton#ScenePtzPreset[feedback="done"] {{ border-color:{qss_rgba(PALETTE.accent, 0.70)}; }}
+            QPushButton#ScenePtzPreset[feedback="error"] {{ border-color:{qss_rgba(PALETTE.danger, 0.75)}; }}
+            QLabel#ScenePtzPresetImage {{ background:{PALETTE.surface_alt}; border-radius:5px; color:{PALETTE.text_muted}; font-size:10px; }}
+            QLabel#ScenePtzPresetName {{ color:{PALETTE.text_secondary}; font-size:11px; }}
+            QLabel#ScenePtzPresetFeedback {{ background:rgba(0,0,0,0.62); color:{PALETTE.accent_text}; font-size:10px; font-weight:600; border-bottom-left-radius:5px; border-bottom-right-radius:5px; }}
+            QLabel#ScenePtzPresetFeedback[feedback="done"] {{ color:{PALETTE.success}; }}
+            QLabel#ScenePtzPresetFeedback[feedback="error"] {{ color:{PALETTE.danger}; }}
+            QScrollArea#ScenePtzPresets, QWidget#ScenePtzPresetsHost {{ background:transparent; border:none; }}
+            QScrollBar:vertical {{ width:6px; background:transparent; margin:0; }}
+            QScrollBar::handle:vertical {{ background:{PALETTE.border}; border-radius:3px; min-height:24px; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
             """
         )
 

@@ -44,6 +44,7 @@ from solin.core.scenes.engine import (
     MediaVideoReadyEvent,
     SceneEngine,
     SceneEngineSnapshot,
+    camera_still_channel,
     scene_window_channel,
 )
 from solin.core.scenes.libobs_engine import create_libobs_scene_engine
@@ -53,8 +54,13 @@ from solin.core.scenes.model import (
     BusId,
     CONTENT_SOURCE_ID,
     NO_SIGNAL_SOURCE_ID,
+    ColorSourceConfig,
+    NormalizedRect,
     SceneDefinition,
     SceneDocument,
+    SceneLayer,
+    SourceDefinition,
+    SourceKind,
     TransitionKind,
     TransitionSpec,
     VideoPixelFormat,
@@ -739,6 +745,57 @@ def test_closing_image_preserves_outgoing_pixels_until_return_transition(
         program.close()
         if thumbnails is not None:
             thumbnails.close()
+        if window_feed is not None:
+            window_feed.close()
+
+
+def test_a_source_still_shows_that_source_alone(
+    tmp_path: Path, scene_workspace_factory, qt_object_owner: QObject,
+) -> None:
+    """A preset still renders the camera's own picture, not the scene around it."""
+    paths = ProfilePaths.from_roots(
+        data_dir=tmp_path / "data", cache_dir=tmp_path / "cache", profile_id="source-still",
+    )
+    paths.ensure_dirs()
+    workspace = scene_workspace_factory(paths, seed_names=_seed_names())
+    scene_id = workspace.documents.document.scenes[0].id
+    magenta = SourceDefinition(
+        id="still-subject", kind=SourceKind.COLOR, name="Subject",
+        configuration=ColorSourceConfig(color="#FF00FFFF"),
+    )
+    # A small inset: the scene around it is not what the still must show.
+    workspace.documents.add_source_layer(scene_id, magenta, SceneLayer(
+        id="still-subject-layer", source_id=magenta.id, name="Subject",
+        rect=NormalizedRect(x=0.7, y=0.7, width=0.2, height=0.2),
+    ))
+    engine = _create_native_transition_engine(tmp_path)
+    still = _BgraEgress(320, 180, channel_id=camera_still_channel(magenta.id))
+    controller = SceneRuntimeController(workspace, ProjectionSession(), engine=engine, parent=qt_object_owner)
+    application = QCoreApplication.instance()
+    assert application is not None
+    try:
+        controller.start_engine()
+        assert _wait_for(lambda: controller.engine_ready, application=application, timeout=15)
+        assert engine.set_thumbnail_egress(
+            still.descriptor, (magenta.id,), 320, 180, request_id="source-still",
+            sequence=controller._next_sequence(), deadline_ms=10_000,
+            channel_id=camera_still_channel(magenta.id),
+        ).result(15).applied
+        assert _wait_for_pixel(still, x=160, y=90, expected=bytes((255, 0, 255, 255))) is not None
+        # A source no scene shows cannot be pictured.
+        ghost = _BgraEgress(320, 180, channel_id=camera_still_channel("ghost"))
+        try:
+            refused = engine.set_thumbnail_egress(
+                ghost.descriptor, ("ghost",), 320, 180, request_id="ghost-still",
+                sequence=controller._next_sequence(), deadline_ms=10_000,
+                channel_id=camera_still_channel("ghost"),
+            ).result(15)
+            assert not refused.applied and refused.error_code == "camera_unavailable"
+        finally:
+            ghost.close()
+    finally:
+        controller.close()
+        still.close()
 
 
 @pytest.mark.parametrize("autoplay", [True, False], ids=["playing", "paused"])

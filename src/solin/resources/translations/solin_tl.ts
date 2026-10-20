@@ -12251,5 +12251,29 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <source>Saved “%1”.</source>
         <translation>Na-save ang “%1”.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>I-refresh ang larawan</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Kumuha ng bagong larawan mula sa kasalukuyang tinututukan ng camera</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Hindi ma-save ang larawan ng preset.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Kumukuha ng larawan…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Walang larawan</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Hindi makakuha ng larawan ng “%1”. Gamitin ang I-refresh ang larawan para subukang muli.</translation>
+    </message>
 </context>
 </TS>

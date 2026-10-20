@@ -12251,5 +12251,29 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
         <source>Saved “%1”.</source>
         <translation>« %1 » enregistré.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Actualiser l’image</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Prendre une nouvelle image depuis la position actuelle de la caméra</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>L’image du préréglage n’a pas pu être enregistrée.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Prise de l’image…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Aucune image</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Impossible de prendre une image de « %1 ». Utilisez Actualiser l’image pour réessayer.</translation>
+    </message>
 </context>
 </TS>

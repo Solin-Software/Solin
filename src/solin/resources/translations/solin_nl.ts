@@ -12251,5 +12251,29 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <source>Saved “%1”.</source>
         <translation>‘%1’ opgeslagen.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Afbeelding vernieuwen</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Maak een nieuwe afbeelding van waar de camera nu op gericht is</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>De afbeelding van de preset kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Afbeelding maken…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Geen afbeelding</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Van ‘%1’ kon geen afbeelding worden gemaakt. Probeer het opnieuw met Afbeelding vernieuwen.</translation>
+    </message>
 </context>
 </TS>

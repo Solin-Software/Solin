@@ -410,6 +410,8 @@ class LocalCameraDiscovery:
 # plus one per open scene window (``scene_window_channel``).
 SCENE_THUMBNAILS_CHANNEL = "scene-thumbnails"
 _SCENE_WINDOW_CHANNEL_PREFIX = "scene-window:"
+# A camera's own picture, fitted to the frame, for a preset's still image.
+_CAMERA_STILL_CHANNEL_PREFIX = "camera-still:"
 
 
 def scene_window_channel(scene_id: str) -> str:
@@ -417,11 +419,26 @@ def scene_window_channel(scene_id: str) -> str:
     return f"{_SCENE_WINDOW_CHANNEL_PREFIX}{scene_id}"
 
 
+def camera_still_channel(camera_source_id: str) -> str:
+    """The feed channel that renders one camera on its own."""
+    return f"{_CAMERA_STILL_CHANNEL_PREFIX}{camera_source_id}"
+
+
+def camera_still_camera_id(channel_id: object) -> str:
+    """The camera a ``camera_still_channel`` renders, or empty for any other channel."""
+    if not isinstance(channel_id, str):
+        return ""
+    camera_id = channel_id.removeprefix(_CAMERA_STILL_CHANNEL_PREFIX)
+    if camera_id == channel_id or not camera_id or not camera_id.isprintable():
+        return ""
+    return camera_id
+
+
 def is_scene_render_channel(channel_id: object) -> bool:
-    """Whether ``channel_id`` names a scene-render feed the engine may keep."""
+    """Whether ``channel_id`` names a render feed the engine may keep."""
     if not isinstance(channel_id, str) or not 0 < len(channel_id) <= 160:
         return False
-    if channel_id == SCENE_THUMBNAILS_CHANNEL:
+    if channel_id == SCENE_THUMBNAILS_CHANNEL or camera_still_camera_id(channel_id):
         return True
     scene_id = channel_id.removeprefix(_SCENE_WINDOW_CHANNEL_PREFIX)
     return scene_id != channel_id and bool(scene_id) and scene_id.isprintable()

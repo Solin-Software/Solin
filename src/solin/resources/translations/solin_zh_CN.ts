@@ -12209,5 +12209,29 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>已保存“%1”。</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>刷新图片</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>从摄像机当前的朝向拍一张新图片</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>无法保存预置位的图片。</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>正在拍摄图片……</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>无图片</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>无法为“%1”拍摄图片。请使用“刷新图片”重试。</translation>
+    </message>
 </context>
 </TS>

@@ -12251,5 +12251,29 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <source>Saved “%1”.</source>
         <translation>”%1” tallennettu.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Päivitä kuva</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ota uusi kuva kameran nykyisestä suunnasta</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Esiasetuksen kuvaa ei voitu tallentaa.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Otetaan kuvaa…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Ei kuvaa</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Kohteesta ”%1” ei voitu ottaa kuvaa. Yritä uudelleen valitsemalla Päivitä kuva.</translation>
+    </message>
 </context>
 </TS>

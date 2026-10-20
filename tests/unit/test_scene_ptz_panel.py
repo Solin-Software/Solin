@@ -4,7 +4,7 @@ from concurrent.futures import Future
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QEvent, Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtGui import QImage, QKeyEvent
 import pytest
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
@@ -408,3 +408,98 @@ def test_closing_or_leaving_the_window_never_leaves_a_camera_moving(setup) -> No
     window.close()
     _process()
     assert ptz.stops == [DEFAULT_CAMERA_SOURCE_ID] * 2
+
+
+def _green(width: int = 320, height: int = 180) -> QImage:
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(0xFF00FF00)
+    return image
+
+
+def _finish_capture(panel, preset_id: str, image: QImage | None) -> None:
+    capture = panel._captures[preset_id]
+    if image is not None:
+        capture._on_frame(capture.camera_source_id, image)
+    capture._finish()
+    _process()
+
+
+def test_a_saved_preset_gets_a_picture_from_its_camera(setup) -> None:
+    controller, ptz, manager, _confirm = setup()
+    requests: list[str] = []
+    controller.set_thumbnail_egress = lambda *args, channel_id="", **kwargs: requests.append(channel_id) or True
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+
+    panel.save_current_position()
+    ptz.creates[-1][1].set_result(_stored(token="cam-1"))
+    _process()
+    (preset,) = panel.presets()
+
+    assert preset.id in panel._captures
+    assert f"camera-still:{DEFAULT_CAMERA_SOURCE_ID}" in requests
+    assert panel._preset_rows[preset.id].image.text() == "Taking picture…"
+
+    _finish_capture(panel, preset.id, _green())
+
+    stored = controller.workspace.preset_thumbnails.load(preset.id)
+    assert stored and QImage.fromData(stored).pixelColor(5, 5).green() > 200
+    assert not panel._preset_rows[preset.id].image.pixmap().isNull()
+    assert preset.id not in panel._captures
+
+
+def test_preset_pictures_load_when_the_window_opens_and_go_with_the_preset(setup) -> None:
+    controller, _ptz, manager, _confirm = setup()
+    _preset(controller, "wide", "Wide", "1")
+    _preset(controller, "pulpit", "Pulpit", "2")
+    store = controller.workspace.preset_thumbnails
+    buffer_image = _green()
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    buffer_image.save(buffer, "JPG")
+    assert store.save("wide", bytes(data.data()))
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+
+    assert not panel._preset_rows["wide"].image.pixmap().isNull()
+    assert panel._preset_rows["pulpit"].image.text() == "No picture"
+
+    assert panel.delete_preset("wide")
+    assert store.load("wide") is None
+
+
+def test_refreshing_a_picture_replaces_it_and_a_failed_one_says_so(setup) -> None:
+    controller, _ptz, manager, _confirm = setup()
+    _preset(controller, "wide", "Wide", "1")
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+
+    panel.capture_thumbnail("wide")
+    _finish_capture(panel, "wide", None)
+    assert "No picture of “Wide” could be taken" in panel.status_text
+    assert controller.workspace.preset_thumbnails.load("wide") is None
+
+    panel.capture_thumbnail("wide")
+    _finish_capture(panel, "wide", _green())
+    assert controller.workspace.preset_thumbnails.load("wide")
+
+
+def test_closing_the_window_cancels_a_picture_in_progress(setup) -> None:
+    controller, _ptz, manager, _confirm = setup()
+    _preset(controller, "wide", "Wide", "1")
+    requests: list[tuple[str, bool]] = []
+    controller.set_thumbnail_egress = (
+        lambda descriptor, *args, channel_id="", **kwargs: requests.append((channel_id, descriptor is not None)) or True
+    )
+    window = manager.show_scene(CAMERA_SCENE_ID)
+    window.ptz_panel.capture_thumbnail("wide")
+
+    window.close()
+    _process()
+
+    still = f"camera-still:{DEFAULT_CAMERA_SOURCE_ID}"
+    assert (still, True) in requests and requests[-1] != (still, True)
+    assert (still, False) in requests

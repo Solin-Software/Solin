@@ -12209,5 +12209,29 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>「%1」を保存しました。</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>画像を更新</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>カメラの現在の向きから新しい画像を撮る</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>プリセットの画像を保存できませんでした。</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>画像を撮影しています…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>画像なし</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>「%1」の画像を撮影できませんでした。「画像を更新」でもう一度お試しください。</translation>
+    </message>
 </context>
 </TS>

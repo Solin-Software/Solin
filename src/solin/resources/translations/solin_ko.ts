@@ -12209,5 +12209,29 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>“%1” 저장됨.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>이미지 새로 고침</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>카메라가 지금 향한 위치에서 새 이미지 찍기</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>프리셋 이미지를 저장할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>이미지 찍는 중…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>이미지 없음</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>“%1”의 이미지를 찍을 수 없습니다. 이미지 새로 고침으로 다시 시도하세요.</translation>
+    </message>
 </context>
 </TS>

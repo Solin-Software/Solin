@@ -423,6 +423,7 @@ class SceneWindow(QWidget):
             self._save_geometry()
             self._stop_feed()
             self._ptz.stop_motion()
+            self._ptz.cancel_captures()
             self._feed.close()
             for signal, handler in self._connections:
                 try:
@@ -445,7 +446,8 @@ class SceneWindow(QWidget):
             f"""
             QWidget#SceneWindow {{ background:{PALETTE.surface}; }}
             QWidget#SceneWindowHeader {{ background:{PALETTE.surface}; border-bottom:1px solid {PALETTE.border}; }}
-            QLabel#SceneWindowName {{ color:{PALETTE.text_primary}; font-size:14px; font-weight:600; }}
+            QLabel {{ background:transparent; }}
+            QLabel#SceneWindowName {{ color:{PALETTE.text_primary}; font-size:14px; font-weight:600; background:transparent; }}
             QPushButton#SceneWindowCameraTally, QPushButton#SceneWindowProjectionTally {{
                 color:{PALETTE.accent_text}; background:{qss_rgba(PALETTE.accent, 0.14)};
                 border:1px solid {qss_rgba(PALETTE.accent, 0.50)}; border-radius:7px;

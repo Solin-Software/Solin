@@ -10838,5 +10838,29 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>Saved “%1”.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Refresh picture</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Take a new picture from where the camera points now</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>The preset&apos;s picture could not be saved.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Taking picture…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>No picture</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>No picture of “%1” could be taken. Use Refresh picture to try again.</translation>
+    </message>
 </context>
 </TS>

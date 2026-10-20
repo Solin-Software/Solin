@@ -12292,5 +12292,29 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>«%1» сохранён.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Обновить изображение</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Сделать новое изображение с текущего направления камеры</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Не удалось сохранить изображение пресета.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Съёмка изображения…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Нет изображения</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Не удалось сделать изображение «%1». Используйте «Обновить изображение», чтобы повторить.</translation>
+    </message>
 </context>
 </TS>

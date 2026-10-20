@@ -12293,5 +12293,29 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Saved “%1”.</source>
         <translation>«%1» збережено.</translation>
     </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Оновити зображення</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Зробити нове зображення з поточного напрямку камери</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Не вдалося зберегти зображення пресету.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Зйомка зображення…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Немає зображення</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Не вдалося зробити зображення «%1». Скористайтеся «Оновити зображення», щоб повторити.</translation>
+    </message>
 </context>
 </TS>
