@@ -334,6 +334,9 @@ class _Engine:
         self.snapshots.append((request_id, snapshot))
         return _completed(self._ack(request_id, snapshot.sequence, snapshot.document.revision))
 
+    def reconcile_local_cameras(self, topology_revision, *, request_id, deadline_ms):
+        return _completed(self._ack(request_id, 0, 0))
+
     def list_local_cameras(
         self,
         *,
@@ -2418,9 +2421,116 @@ def camera_hotplug_runtime(request):
     return engine, controller, notifications
 
 
+def test_reconnect_notifications_start_without_opening_camera_dialog(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    assert notifications.starts == 1
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.list_local_cameras = lambda **kwargs: pytest.fail("Closed dialog must not request inventory")
+
+    def reconcile(revision, **kwargs):
+        calls.append(revision)
+        return _completed(engine._ack(kwargs["request_id"], 0, 0))
+
+    engine.reconcile_local_cameras = reconcile
+    for _ in range(5):
+        notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert not calls
+    wait_until(lambda: calls == [5], description="camera recovery with no dialog")
+    controller.close()
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert calls == [5] and notifications.closes == 1
+
+
+def test_reconnect_pending_notification_is_sent_to_restarted_engine(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.reconcile_local_cameras = lambda revision, **kwargs: (
+        calls.append(revision) or _completed(engine._ack(kwargs["request_id"], 0, 0))
+    )
+    controller._set_engine_ready(False)
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert not calls and not controller._camera_recovery_timer.isActive()
+    controller._set_engine_ready(True)
+    wait_until(lambda: calls == [1], description="camera recovery after engine readiness")
+    assert notifications.starts == 1
+
+
+def test_reconnect_acknowledged_event_is_not_replayed_on_engine_restart(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.reconcile_local_cameras = lambda revision, **kwargs: (
+        calls.append(revision) or _completed(engine._ack(kwargs["request_id"], 0, 0))
+    )
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    wait_until(lambda: calls == [1], description="first physical camera change")
+    assert controller._camera_recovery_revision is None
+    controller._set_engine_ready(False)
+    controller._set_engine_ready(True)
+    assert not controller._camera_recovery_timer.isActive()
+    assert calls == [1]
+
+
+def test_older_reconnect_ack_does_not_consume_a_new_physical_change(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    pending = []
+    controller._camera_recovery_timer.setInterval(0)
+
+    def reconcile(revision, **kwargs):
+        future = Future()
+        pending.append((revision, kwargs["request_id"], future))
+        return future
+
+    engine.reconcile_local_cameras = reconcile
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    wait_until(lambda: len(pending) == 1, description="first recovery dispatch")
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert controller._camera_recovery_revision == 2
+    _, request_id, future = pending[0]
+    future.set_result(engine._ack(request_id, 0, 0))
+    assert controller._camera_recovery_revision == 2
+    wait_until(lambda: len(pending) == 2, description="new recovery dispatch")
+    _, request_id, future = pending[1]
+    future.set_result(engine._ack(request_id, 0, 0))
+    assert controller._camera_recovery_revision is None
+
+
+def test_dialog_reopen_orders_topology_invalidation_before_inventory(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls, pending = [], Future()
+    inventory = engine.list_local_cameras
+
+    def reconcile(revision, **kwargs):
+        calls.append(("topology", revision))
+        return pending
+
+    def discover(**kwargs):
+        calls.append(("inventory", None))
+        return inventory(**kwargs)
+
+    engine.reconcile_local_cameras = reconcile
+    engine.list_local_cameras = discover
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    # Reopen immediately, before either debounce timer is delivered.
+    controller.refresh_local_cameras()
+    controller.refresh_local_cameras()
+    assert calls == [("topology", 1), ("inventory", None), ("inventory", None)]
+    assert not controller._camera_recovery_timer.isActive()
+    pending.cancel()
+
+
 def test_runtime_device_events_coalesce_and_keep_the_last_snapshot(camera_hotplug_runtime):
     engine, controller, notifications = camera_hotplug_runtime
-    assert notifications.starts == 0
+    assert notifications.starts == 1
     first = controller.refresh_local_cameras().result()
     controller.set_local_camera_inventory_active(True)
     pending, calls = Future(), []

@@ -810,6 +810,10 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[LocalCameraDiscovery]: ...
 
+    def reconcile_local_cameras(
+        self, topology_revision: int, *, request_id: str, deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
     def query_local_camera_modes(
         self,
         device_id: str,

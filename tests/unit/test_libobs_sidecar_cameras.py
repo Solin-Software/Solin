@@ -24,6 +24,7 @@ from solin.core.scenes.model import CameraMediaType, LocalCameraConfig
 from solin.core.scenes.process_engine import (
     _local_camera_discovery_from_envelope, _source_health_from_envelope,
 )
+from tests._qt import wait_until
 
 
 def _request(kind="list_local_cameras", identity="request-1", **changes):
@@ -500,6 +501,75 @@ def test_document_replacement_during_health_observation_suppresses_old_result():
     runtime.camera_capture_state = superseded
     engine.handle(_request("ping"))
     assert len(events) == 1
+
+
+def test_reconnect_keeps_warning_until_fresh_frames_and_does_not_block_ping(monkeypatch):
+    engine, runtime, events = _health_engine()
+    runtime.state = CameraCaptureState(1, "failed", "camera_no_frames")
+    calls, invalidations = [], []
+    entered, release = threading.Event(), threading.Event()
+
+    def discover(**kwargs):
+        entered.set()
+        assert release.wait(2)
+        return (SimpleNamespace(device_id="camera-1"),)
+
+    def reconnect(device, *, expected_generation):
+        calls.append((device, expected_generation))
+        runtime.state = CameraCaptureState(expected_generation + 1, "starting")
+        return True
+
+    runtime.reconnect_camera = reconnect
+    monkeypatch.setattr("solin.core.scenes.camera_catalog.camera_catalog", lambda: SimpleNamespace(
+        devices=discover, invalidate=lambda: invalidations.append(True), cancel_discovery=release.set,
+    ))
+    try:
+        _hydrate(engine)
+        admitted = engine.handle(_request("reconcile_local_cameras", payload={"topology_revision": 1}))
+        assert admitted.payload["applied"]
+        engine.poll_outputs()
+        assert entered.wait(2)
+        assert _ping(engine).message_type == "heartbeat" and not calls
+        release.set()
+
+        def recovered():
+            engine.poll_outputs()
+            return bool(calls)
+
+        wait_until(recovered, description="native camera reactivation dispatch")
+        _ping(engine)
+        assert events[-1].payload["error_code"] == "camera_no_frames"
+        # Rebinding an unchanged source to a new document must retain warning too.
+        _hydrate(engine, revision=5)
+        assert events[-1].payload["error_code"] == "camera_no_frames"
+        runtime.state = CameraCaptureState(2, "ready", width=1920, height=1080, frame_sequence=1)
+        _ping(engine)
+        assert events[-1].payload["status"] == "ready"
+        assert not events[-1].payload["error_code"]
+        assert calls == [("camera-1", 1)] and invalidations == [True]
+        engine.handle(_request("reconcile_local_cameras", payload={"topology_revision": 1}))
+        assert invalidations == [True]
+    finally:
+        release.set()
+        engine.shutdown()
+
+
+@pytest.mark.parametrize("payload", [{}, {"topology_revision": True}, {"topology_revision": -1},
+                                     {"topology_revision": 1, "unexpected": 2}])
+def test_reconnect_admission_validates_payload(payload):
+    from solin.core.scenes.ipc_protocol import SceneIpcMessageError
+
+    with pytest.raises(SceneIpcMessageError):
+        LibobsSidecarEngine().handle(_request("reconcile_local_cameras", payload=payload))
+
+
+def test_reconnect_admission_requires_a_live_runtime_and_deadline():
+    engine = LibobsSidecarEngine()
+    request = _request("reconcile_local_cameras", payload={"topology_revision": 1})
+    assert not engine.handle(request).payload["applied"]
+    engine._runtime_started = True
+    assert not engine.handle(replace(request, deadline_monotonic_ms=0)).payload["applied"]
+    assert engine._camera_recovery is None
 
 
 def test_shutdown_invalidates_catalog_and_stops_health_events(monkeypatch):

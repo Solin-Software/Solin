@@ -302,6 +302,8 @@ class SceneRuntimeController(QObject):
         self._camera_device_subscription: CameraDeviceSubscription | None = None
         self._camera_device_notifications_attempted = False
         self._camera_devices_revision = 0
+        self._camera_recovery_revision: int | None = None
+        self._camera_recovery_dispatch: tuple[str, int] | None = None
         self._camera_inventory_revision = 0
         self._camera_inventory_dirty = True
         self._camera_inventory_active = False
@@ -309,6 +311,10 @@ class SceneRuntimeController(QObject):
         self._camera_refresh_timer.setSingleShot(True)
         self._camera_refresh_timer.setInterval(250)
         self._camera_refresh_timer.timeout.connect(self._refresh_changed_camera_inventory)
+        self._camera_recovery_timer = QTimer(self)
+        self._camera_recovery_timer.setSingleShot(True)
+        self._camera_recovery_timer.setInterval(250)
+        self._camera_recovery_timer.timeout.connect(self._reconcile_changed_cameras)
         self._camera_devices_changed.connect(
             self._on_camera_devices_changed, Qt.ConnectionType.QueuedConnection,
         )
@@ -1178,6 +1184,9 @@ class SceneRuntimeController(QObject):
             self._reset_local_camera_discovery()
             return None
         self._ensure_camera_device_notifications()
+        # Order the topology invalidation before metadata requests, including
+        # callers that reopen the dialog before the debounce timer expires.
+        self._reconcile_changed_cameras()
         if self._local_camera_request_id and self._local_camera_future is not None:
             return self._local_camera_future
         if (
@@ -1235,10 +1244,32 @@ class SceneRuntimeController(QObject):
         if self._closed:
             return
         self._camera_devices_revision += 1
+        self._camera_recovery_revision = self._camera_devices_revision
         self._camera_inventory_dirty = True
         self._invalidate_camera_mode_inflight()
+        if self._engine_ready:
+            self._camera_recovery_timer.start()
         if self._camera_inventory_active:
             self._camera_refresh_timer.start()
+
+    @Slot()
+    def _reconcile_changed_cameras(self) -> None:
+        revision = self._camera_recovery_revision
+        if self._closed or self._engine is None or not self._engine_ready or revision is None:
+            return
+        dispatch = (self._process_generation, revision)
+        if dispatch == self._camera_recovery_dispatch:
+            return
+        self._camera_recovery_timer.stop()
+        self._camera_recovery_dispatch = dispatch
+        try:
+            future = self._engine.reconcile_local_cameras(
+                revision, request_id=self._request_id_factory(), deadline_ms=5000,
+            )
+            self._track_future(future, "camera_recovery", dispatch)
+        except Exception:  # noqa: BLE001 - recovery dispatch cannot interrupt scene operation
+            self._camera_recovery_dispatch = None
+            log.warning("Could not request local camera reconciliation", exc_info=True)
 
     def _schedule_camera_inventory_refresh(self) -> None:
         if (not self._closed and self._camera_inventory_active and self._engine_ready
@@ -2361,6 +2392,17 @@ class SceneRuntimeController(QObject):
     def _consume_async_result(self, payload: object) -> None:
         values = _context_tuple(payload, 4, "async result")
         operation, context, result, error = values
+        if operation == "camera_recovery":
+            generation, revision = _context_tuple(context, 2, "camera recovery")
+            if (generation, revision) == self._camera_recovery_dispatch:
+                self._camera_recovery_dispatch = None
+            if not self._closed and generation == self._process_generation:
+                if error is not None:
+                    log.warning("Local camera reconciliation failed (%s)", type(error).__name__)
+                elif (isinstance(result, SceneEngineAck) and result.applied
+                        and revision == self._camera_recovery_revision):
+                    self._camera_recovery_revision = None
+            return
         if operation == "camera_modes":
             self._finish_camera_modes(context, result, error)
             return
@@ -3152,6 +3194,8 @@ class SceneRuntimeController(QObject):
     def _set_engine_ready(self, ready: bool) -> None:
         ready = bool(ready)
         if not ready:
+            self._camera_recovery_timer.stop()
+            self._camera_recovery_dispatch = None
             self._clear_output_health()
         if self._engine_ready == ready:
             return
@@ -3163,6 +3207,9 @@ class SceneRuntimeController(QObject):
         self.engine_ready_changed.emit(ready)
         self.operational_state_changed.emit()
         if ready:
+            self._ensure_camera_device_notifications()
+            if self._camera_recovery_revision is not None:
+                self._camera_recovery_timer.start()
             self._schedule_camera_inventory_refresh()
 
     def _reset_idle_update(self) -> None:
