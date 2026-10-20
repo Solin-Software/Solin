@@ -1,0 +1,68 @@
+name: Generate beta
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solin-beta-preparation
+  cancel-in-progress: false
+
+env:
+  BETA_RELEASE_ACTORS: ${{ vars.BETA_RELEASE_ACTORS }}
+  BETA_RELEASE_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0 requests==2.32.5
+      - name: Authorize dispatch
+        run: python scripts/prepare_beta.py authorize
+
+  beta:
+    needs: authorize
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Store the App key here and restrict this environment to the main branch.
+    environment: beta-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.12"
+      - run: python -m pip install packaging==26.0 requests==2.32.5
+      # A failed-job rerun must authorize its new triggering actor as well.
+      - name: Authorize execution
+        run: python scripts/prepare_beta.py authorize
+      - name: Create repository-scoped App token
+        id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.BETA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.BETA_RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-checks: read
+          permission-statuses: read
+          permission-actions: read
+          permission-workflows: write
+      - name: Prepare, merge, and tag beta
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BETA_RELEASE_BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: python scripts/prepare_beta.py run
