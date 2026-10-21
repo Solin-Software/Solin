@@ -130,6 +130,9 @@ def setup(request, tmp_path: Path, scene_workspace_factory):
             ))
         ptz = _Ptz()
         controller = SceneRuntimeController(workspace, _Projection(), ptz=ptz)
+        # Close, then let the conftest's DeferredDelete pass destroy it on the main
+        # thread rather than cyclic GC on a later test's worker thread.
+        request.addfinalizer(controller.deleteLater)
         request.addfinalizer(controller.close)
         controller.set_thumbnail_egress = lambda *args, **kwargs: True
         confirm = confirm or _Confirm()

@@ -159,6 +159,10 @@ def controller_factory(request, tmp_path: Path, scene_workspace_factory):
                 id="configured-camera-layer", source_id=camera.id, name="Camera",
             ))
         controller = SceneRuntimeController(workspace, projection or _Projection())
+        # Finalizers run last-in first-out: close, then hand the controller to the
+        # conftest's DeferredDelete pass, so the main thread destroys it. Left to
+        # cyclic GC, it and its timers can be freed on a later test's worker thread.
+        request.addfinalizer(controller.deleteLater)
         request.addfinalizer(controller.close)
         return controller
 
