@@ -1548,6 +1548,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Имя папки:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Например: Особое мероприятие</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Введите имя папки.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Имя не может начинаться или заканчиваться пробельными символами.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Имя не может содержать / \ &lt; &gt; : &quot; | ? * или управляющие символы.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Это имя зарезервировано операционной системой.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Имя не может начинаться с точки.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Имя не может заканчиваться точкой.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Имя папки слишком длинное.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Файл или папка с таким именем уже существует.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Это имя зарезервировано для встреч. Выберите другое имя папки.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2811,14 +2862,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Отключить синхронизацию встречи</translation>
+        <source>Help</source>
+        <translation>Справка</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Синхронизировать встречу со связанной папкой</translation>
+        <source>Folder present</source>
+        <translation>Папка существует</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Папка не найдена</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Папка недоступна</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Проверка папки…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Синхронизация включена</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Синхронизация выключена</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Синхронизация…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Завершение…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Папка встречи</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Путь к папке</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Связанная папка недоступна. Проверьте её расположение и права доступа.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Открыть папку</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Синхронизация встречи</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Эта настройка применяется ко всем компьютерам, связанным с этой папкой встречи.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Удалить папку…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Отключите синхронизацию, чтобы удалить эту папку</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Создание папки…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Не удалось открыть папку.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Не удалось обновить папку встречи.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Удалить папку</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Удалить папку «{name}» и всё её содержимое?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Элементы встречи, связанные с этими файлами, также будут удалены. Это действие нельзя отменить.
+
+Служба синхронизации папок также может удалить эти файлы на других компьютерах.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Остановите проекцию перед удалением этой папки.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Подготовка к удалению папки…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Удаление папки…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Синхронизация встречи</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Отключить синхронизацию этой встречи на связанных компьютерах?
+
+Папка и её видимые файлы будут сохранены.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Не удалось обновить синхронизацию встречи.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Изменения сохранены на этом компьютере. Повторите попытку или откройте связанную папку.</translation>
     </message>
 </context>
 <context>
@@ -4402,6 +4575,14 @@ This action cannot be undone.</source>
 The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
         <translation>Сбросить синхронизацию для «{name}»?
 Текущее расположение и файлы будут сохранены. Ожидающие изменения предыдущей синхронизации не будут применены.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Создать пустую папку в связанной папке</translation>
     </message>
 </context>
 <context>

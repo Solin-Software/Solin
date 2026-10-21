@@ -1520,6 +1520,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Nama folder:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Mis.: Acara khusus</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Buat folder</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Masukkan nama folder.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Nama tidak boleh diawali atau diakhiri dengan spasi kosong.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Nama tidak boleh berisi / \ &lt; &gt; : &quot; | ? * atau karakter kontrol.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Nama ini dicadangkan oleh sistem operasi.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Nama tidak boleh diawali dengan titik.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Nama tidak boleh diakhiri dengan titik.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Nama folder ini terlalu panjang.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>File atau folder dengan nama ini sudah ada.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Nama ini dicadangkan untuk perhimpunan. Pilih nama folder lain.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2777,14 +2828,136 @@ Konten yang ditambahkan secara manual, pemangkasan, pembingkaian, dan status ter
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Nonaktifkan sinkronisasi perhimpunan</translation>
+        <source>Help</source>
+        <translation>Bantuan</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Sinkronkan perhimpunan ke folder tertaut</translation>
+        <source>Folder present</source>
+        <translation>Folder tersedia</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Folder tidak ditemukan</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Folder tidak tersedia</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Memeriksa folder…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Sinkronisasi aktif</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Sinkronisasi nonaktif</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Menyinkronkan…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Menyelesaikan…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Folder perhimpunan</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Lokasi folder</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Folder tertaut tidak tersedia. Periksa lokasi dan izin aksesnya.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Buat folder</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Buka folder</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Sinkronisasi perhimpunan</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Pengaturan ini berlaku untuk semua komputer yang tertaut ke folder perhimpunan ini.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Hapus folder…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Nonaktifkan sinkronisasi untuk menghapus folder ini</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Membuat folder…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Folder tidak dapat dibuka.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Folder perhimpunan tidak dapat diperbarui.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Hapus folder</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Hapus folder &quot;{name}&quot; dan seluruh isinya?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Item perhimpunan yang terkait dengan file ini juga akan dihapus. Tindakan ini tidak dapat dibatalkan.
+
+Layanan sinkronisasi folder juga dapat menghapus file ini di komputer lain.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Hentikan proyeksi sebelum menghapus folder ini.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Menyiapkan penghapusan folder…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Menghapus folder…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Sinkronisasi perhimpunan</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Nonaktifkan sinkronisasi perhimpunan ini di komputer tertaut?
+
+Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Sinkronisasi perhimpunan tidak dapat diperbarui.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Perubahan tersimpan di komputer ini. Coba lagi atau buka folder tertaut.</translation>
     </message>
 </context>
 <context>
@@ -4347,6 +4520,14 @@ Tindakan ini tidak dapat dibatalkan.</translation>
 The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
         <translation>Atur ulang sinkronisasi untuk "{name}"?
 Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisasi sebelumnya tidak akan diterapkan.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Buat folder</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Buat folder kosong di dalam folder tertaut</translation>
     </message>
 </context>
 <context>

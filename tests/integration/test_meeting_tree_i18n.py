@@ -10,10 +10,10 @@ def test_meeting_section_dialogs_use_playlist_edit_translation_context():
     )
 
     assert '_PLAYLIST_EDIT_CONTEXT = "PlaylistEditView"' in source
-    assert '_tr(_PLAYLIST_EDIT_CONTEXT, "Section name:")' in source
-    assert '_tr(_PLAYLIST_EDIT_CONTEXT, "New Section")' in source
-    assert '_tr("_PlaylistEditView", "Section name:")' not in source
-    assert '_tr("_PlaylistEditView", "New Section")' not in source
+    assert 'QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Section name:")' in source
+    assert 'QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "New Section")' in source
+    assert 'QCoreApplication.translate("_PlaylistEditView", "Section name:")' not in source
+    assert 'QCoreApplication.translate("_PlaylistEditView", "New Section")' not in source
 
 
 def test_canonical_restore_catalog_is_complete_in_brazilian_portuguese():

@@ -12,6 +12,7 @@ import re
 import time
 from typing import Any, Protocol
 
+from solin.core.foundation.folder_names import ensure_available_folder_name
 from solin.core.ingest.local_files import (
     LocalFileAvailabilitySignature,
     local_file_availability_signature,
@@ -155,11 +156,31 @@ class WatchedFolderFileStore:
             raise
         return WatchedFolderCopyResult(source, destination, copied, content=(copied, digest.hexdigest()))
 
+    def folder_entry_names(self, folder: str | Path) -> tuple[str, ...]:
+        """Read sibling names without opening any cloud-backed file contents."""
+        return tuple(entry.name for entry in Path(folder).iterdir())
+
+    def create_folder(self, root: str | Path, name: str) -> str:
+        root_path = Path(root).resolve(strict=True)
+        name = ensure_available_folder_name(name, self.folder_entry_names(root_path))
+        destination = root_path / name
+        destination.mkdir(exist_ok=False)
+        return os.fspath(destination)
+
     def rename_folder(self, folder: str | Path, new_name: str) -> str:
-        if Path(new_name).name != new_name or not new_name.strip():
-            raise ValueError(f"Invalid folder name: {new_name!r}")
         folder_path = Path(folder)
+        if folder_path.is_symlink() or folder_path.is_junction():
+            raise ValueError("Cannot rename a redirected linked folder")
+        if not folder_path.is_dir():
+            raise NotADirectoryError(f"Linked playlist folder is not a directory: {folder_path}")
+        new_name = ensure_available_folder_name(
+            new_name,
+            self.folder_entry_names(folder_path.parent),
+            excluding_name=folder_path.name,
+        )
         destination = folder_path.parent / new_name
+        if destination == folder_path and destination.name == folder_path.name:
+            return os.fspath(folder_path)
         folder_path.rename(destination)
         return os.fspath(destination)
 

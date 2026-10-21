@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Ordnername:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Z. B.: Besondere Veranstaltung</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Einen Ordnernamen eingeben.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Der Name darf nicht mit Leerraum beginnen oder enden.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Der Name darf weder / \ &lt; &gt; : &quot; | ? * noch Steuerzeichen enthalten.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Dieser Name ist vom Betriebssystem reserviert.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Der Name darf nicht mit einem Punkt beginnen.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Der Name darf nicht mit einem Punkt enden.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Dieser Ordnername ist zu lang.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Eine Datei oder ein Ordner mit diesem Namen ist bereits vorhanden.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Dieser Name ist für Zusammenkünfte reserviert. Einen anderen Ordnernamen wählen.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Manuell hinzugefügte Inhalte, Zuschnitte, Bildausschnitte und der ausgeklappte 
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Synchronisierung der Zusammenkunft deaktivieren</translation>
+        <source>Help</source>
+        <translation>Hilfe</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Zusammenkunft mit verknüpftem Ordner synchronisieren</translation>
+        <source>Folder present</source>
+        <translation>Ordner vorhanden</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Ordner nicht gefunden</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Ordner nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Ordner wird geprüft…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synchronisierung aktiviert</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synchronisierung deaktiviert</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchronisierung…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Wird abgeschlossen…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Ordner der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Ordnerpfad</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Der verknüpfte Ordner ist nicht verfügbar. Speicherort und Zugriffsberechtigungen prüfen.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Ordner öffnen</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Synchronisierung der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Diese Einstellung gilt für alle Computer, die mit diesem Ordner der Zusammenkunft verknüpft sind.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Ordner löschen…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Synchronisierung deaktivieren, um diesen Ordner zu löschen</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Ordner wird erstellt…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Der Ordner konnte nicht geöffnet werden.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Der Ordner der Zusammenkunft konnte nicht aktualisiert werden.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Ordner löschen</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Ordner „{name}“ und seinen gesamten Inhalt löschen?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Die mit diesen Dateien verknüpften Elemente der Zusammenkunft werden ebenfalls entfernt. Diese Aktion kann nicht rückgängig gemacht werden.
+
+Der Ordnersynchronisierungsdienst löscht diese Dateien möglicherweise auch auf anderen Computern.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Vor dem Löschen dieses Ordners die Projektion beenden.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Löschen des Ordners wird vorbereitet…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Ordner wird gelöscht…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Synchronisierung der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Synchronisierung dieser Zusammenkunft auf verknüpften Computern deaktivieren?
+
+Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Die Synchronisierung der Zusammenkunft konnte nicht aktualisiert werden.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Die Änderungen sind auf diesem Computer gespeichert. Erneut versuchen oder den verknüpften Ordner öffnen.</translation>
     </message>
 </context>
 <context>
@@ -4375,6 +4548,14 @@ Diese Aktion kann nicht rückgängig gemacht werden.</translation>
 The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
         <translation>Synchronisierung für „{name}“ zurücksetzen?
 Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen der vorherigen Synchronisierung werden nicht angewendet.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Einen leeren Ordner im verknüpften Ordner erstellen</translation>
     </message>
 </context>
 <context>
