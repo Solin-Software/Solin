@@ -138,3 +138,28 @@ Scripts: `s9_moderation/moderation_test.py` (25 checks, Python clients + `liveki
 - **Attributes are lost on reconnect** (server shows `{}` after a same-identity reconnect): the attendee page must re-send `attendance` (and hand state) on every connect — it already keeps them in `localStorage`.
 - **Removed participants can rejoin with a still-valid token**: Solin's token issuer must refuse removed identities for that meeting and keep token TTLs short.
 - A participant needs `can_update_metadata` to raise a hand; that also lets them change their own name/metadata (acceptable; operator can rename back).
+
+## S2: hall capacity (50 and 100 attendees)
+
+Scripts: `s2_capacity/run_s2.sh`, `s2_capacity/sample_server.py`, server config `s2_capacity/livekit.yaml` (Prometheus on :6789). Publisher = S1 path B (libobs clip → software H.264, 3-layer simulcast, top layer max 1.7 Mbps), pinned to 8 threads. Subscribers = `lk load-test` on the same machine; the subscriber `--layout` picks the layer they request ("speaker" = top 720p, "3x3" = 360p, "5x5" = 180p). 120 s samples per variant; egress from the server's `livekit_packet_bytes` counter (= what the hall would upload).
+
+| Variant | Hall upload (server egress) | Per attendee | LiveKit CPU | LiveKit RSS | Publisher CPU | Loss / NACK |
+|---|---|---|---|---|---|---|
+| Audio only, 50 | **2.7 Mbps** | 48 kbps | 0.20 cores | 249 MB | 0.45 | 0 / 0 |
+| 720p program, 50 | **88.5 Mbps** | 1.7 Mbps | 0.58 | 298 MB | 0.77 | 0 / 0 |
+| 360p program, 50 | **25.2 Mbps** | 0.49 Mbps | 0.35 | 282 MB | 0.73 | 0 / 0 |
+| 180p program, 50 | **10.2 Mbps** | 0.20 Mbps | 0.30 | 279 MB | 0.78 | 0 / 0 |
+| 720p program + 1 commenter camera (medium), 50 | 77.1 Mbps | — | 0.56 | 302 MB | 0.74 | 0 / 0 |
+| 720p program, 100 | **176.8 Mbps** | 1.7 Mbps | 0.93 | 487 MB | 0.68 | 0 / 0 |
+
+- libobs held 30 fps and no frames were dropped in any variant.
+- **The SFU is cheap**: under 0.6 cores for 50 attendees at 720p, under 1 core for 100. Server load scales linearly.
+- **Upload is the limit, and 720p costs more than estimated**: 1.7 Mbps per attendee (estimate was 1.5), so 50 attendees at 720p need ~90 Mbps up. 360p fits the earlier estimate (~25 Mbps).
+- In the camera variant, the "speaker" layout gave the commenter's camera the top slot, so the program was received at a lower layer; the total is therefore lower than program-only 720p. A real layout (program large, camera small) would add roughly +0.2–0.5 Mbps per attendee.
+- Loopback only: no packet loss, NACKs or retransmissions. A real line adds retransmission overhead (typically a few %) and congestion control may lower layers.
+
+**Implications**
+- Hall-direct mode: default the attendees' video to **360p** (≈25 Mbps for 50); allow 720p only on lines with ≥100 Mbps upload. Audio-only fits any line (≈3 Mbps).
+- Edge mode (community node / hub) remains the answer for halls with weak upload: the hall sends one copy (~2–3 Mbps), the node pays the fan-out above.
+- Hall PC CPU budget for 50 attendees, all-in on this CPU: publisher ~0.75 + LiveKit ~0.6 = **~1.4 cores**.
+- Consider lowering the top simulcast layer to ~1.2 Mbps: a wide stage shot doesn't need 1.7 Mbps.
