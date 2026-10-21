@@ -33,7 +33,8 @@ class Handler(SimpleHTTPRequestHandler):
         token = (
             api.AccessToken("devkey", "secret")
             .with_identity(q.get("identity", ["probe"])[0])
-            .with_grants(api.VideoGrants(room_join=True, room=q.get("room", ["s1"])[0], can_publish=False))
+            .with_grants(api.VideoGrants(room_join=True, room=q.get("room", ["s1"])[0],
+                                        can_publish=q.get("publish", ["0"])[0] == "1"))
             .to_jwt()
         )
         self._json({"token": token, "url": "ws://127.0.0.1:7880"})

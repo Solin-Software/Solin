@@ -179,3 +179,21 @@ Scripts: `s7_e2ee/run_s7.sh`, page `s1_publish/web/e2ee.html` (served by `s1_pub
 - **A participant without the key gets nothing usable**: no picture; audio is undecryptable data rendered as noise. With a wrong key nothing decodes at all and the client reports encryption errors, which the attendee page can turn into a clear "wrong link" message.
 - Publisher cost of E2EE measured in S1: ~+0.05 cores.
 - Not yet tested: **Safari / iOS**, Android Chrome on a real phone, and the decrypt CPU cost on phones (planned in S8).
+
+## S3: comment audio round trip and echo
+
+Scripts: `s3_audio/hall.py` (hall side: libobs program audio from the hall mic, optional WebRTC APM echo cancellation/noise suppression from the `livekit` SDK, remote audio played via `pw-cat`), `s1_publish/web/s3.html` (remote commenter: publishes a synthetic 1 kHz beep every 2.5 s as its microphone and detects it coming back in the program), `s3_audio/run_s3.sh`, `s3_audio/analyze.py`, `s3_audio/cdp_close.py`. Local LiveKit server, headless Chromium as the remote.
+
+**Setup notes.** The real speaker → Brio path was too weak against room noise to time reliably (beep ≈ 0.02 vs broadband ≈ 0.05 at the mic), and routing through PipeWire virtual devices (null sink, `pw-loopback`) carried only digital silence from this session. The hall path was therefore emulated in-process: the remote audio that is played is also mixed back into the hall feed after a fixed delay (40 ms, gain 0.5) — a worst case equivalent to a mixer without mix-minus — with the far-end reference and the echo clocked on the same 10 ms tick, as a sound card would. Sound-card I/O latency (typically 10–30 ms each way) and the room are not included.
+
+| Phase (75 s each) | Beeps returned to the commenter | Round trip (commenter → hall → program → commenter) | Echo attenuation in the program (1 kHz band) | Returned echo level |
+|---|---|---|---|---|
+| No echo cancellation | 25 / 26 | **≈ 150 ms** (page median 125 ms + ~30 ms page timestamp bias; includes the 40 ms emulated path) | 0 dB | 0.18 |
+| Echo cancellation | 5 / 28 (residual, mostly during convergence) | — | **≈ 61 dB** median after convergence | 0.014 |
+| Echo cancellation + noise suppression | 10 / 28 | — | **≈ 66 dB** | 0.013 |
+
+- Software round trip on a local server is ≈ 110 ms excluding the emulated path. Remote voice → hall arrival is a few ms plus the jitter buffer locally; add the real network one-way delay (typically 20–60 ms) in production. Comfortably inside conversational limits.
+- **The SDK's echo canceller (`rtc.AudioProcessingModule`) is effective, but only with a well-aligned reference.** An earlier run where the reference was fed when the remote audio *arrived* (not when it was *played*) and the echo delay jittered by ±10 ms gave only 10–15 dB. Product requirement: feed `process_reverse_stream` from the same clock/device that plays the remote audio, and run the hall capture and the playout as one duplex audio path (or at least on the same device clock), with `set_stream_delay_ms` set to the measured device delay.
+- Mixer wiring still matters: recommend a mix-minus send (the computer's own channel excluded from the feed back to the computer) as in the current Zoom wiring; the canceller then only handles acoustic pickup from stage mics.
+
+**Still open:** validate on real hall hardware (mixer, stage mics, loudspeakers) where the acoustic echo path and sound-card latencies are real.
