@@ -107,7 +107,7 @@ def _assert_camera_registered(env: dict[str, str], scope: _InstallScope) -> None
             purpose=f"{architecture} installed DirectShow graph verification",
         )
         verification = subprocess.run(  # noqa: S603 - trusted build harness
-            [str(harness), str(dll_path)],
+            [str(harness), str(dll_path), "--production-broker"],
             cwd=harness.parent,
             env=env,
             capture_output=True,

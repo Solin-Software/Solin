@@ -235,11 +235,24 @@ function(solin_add_virtual_camera_filter)
         set_property(TARGET solin-virtual-camera-filter-tests PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
         )
-        add_dependencies(solin-virtual-camera-filter-tests solin-virtual-camera-test)
+        add_dependencies(solin-virtual-camera-filter-tests
+            solin-virtual-camera-test solin-virtual-camera
+        )
         add_test(NAME directshow-virtual-camera-filter
             COMMAND solin-virtual-camera-filter-tests
                     $<TARGET_FILE:solin-virtual-camera-test>
         )
+        if(SOLIN_VIRTUAL_CAMERA_QUALIFY_PRODUCTION)
+            add_test(NAME directshow-virtual-camera-production-filter
+                COMMAND solin-virtual-camera-filter-tests
+                        $<TARGET_FILE:solin-virtual-camera> --production-broker
+            )
+            set_tests_properties(directshow-virtual-camera-production-filter PROPERTIES
+                RESOURCE_LOCK solin_virtual_camera_production_broker
+                LABELS production
+                TIMEOUT 30
+            )
+        endif()
         add_test(NAME directshow-virtual-camera-filter-backpressure
             COMMAND solin-virtual-camera-filter-tests
                     $<TARGET_FILE:solin-virtual-camera-test> --slow-consumer
