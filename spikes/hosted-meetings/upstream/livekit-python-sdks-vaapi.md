@@ -1,4 +1,4 @@
-# Draft issue for livekit/python-sdks (NOT posted)
+# Upstream issue: https://github.com/livekit/python-sdks/issues/882
 
 **Title:** VAAPI H.264 encoder: publisher RSS grows ~4.5 KB per encoded frame without bound; SIGBUS in `vaEndPicture` with low `max_bitrate`
 

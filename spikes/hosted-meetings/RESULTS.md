@@ -89,6 +89,23 @@ The 35-minute webcam run showed publisher RSS growing **344 → 962 MB (~18 MB/m
 - CPU 0.5–0.7 cores, libobs 30.0 fps throughout, layers 720p@30 / 360p@20 / 180p@15, 0 video drops.
 - **Audio: 1231 dropped 1024-sample chunks (~26 s)**, all between ~70 and ~85 min, when heavy profiling jobs (memray analysis, FFmpeg, extra publishers) were running on the same machine. Likely cause: the spike's audio hand-off (50-chunk queue drained through the shared default thread pool) stalls under load. To be re-run on an idle machine; the product design should use a dedicated audio thread / larger buffer.
 
-### Upstream report (draft, not posted)
+### Upstream report (posted: livekit/python-sdks#882)
 
 `upstream/livekit-python-sdks-vaapi.md`: VAAPI leak (~4.5 KB per encoded frame, frame-proportional; controls: software flat, FFmpeg `h264_vaapi` flat; memray/smaps/malloc_trim checks) and a SIGBUS in `vaEndPicture` with `max_bitrate=400000` (3/3, core-dump stack). Reproducer: `s1_publish/leak_repro.py`.
+
+### Upstream fix (proposed: livekit/rust-sdks#1552)
+
+Root cause: `webrtc-sys/src/vaapi/vaapi_h264_encoder_wrapper.cpp` created picture/slice parameter buffers every frame (plus sequence, rate-control and packed-header buffers on IDR) with `vaCreateBuffer()` and never destroyed them. The PR tracks them per frame and destroys them after `vaEndPicture()` and in `Destroy()`.
+
+Verified with `livekit-ffi` built from the commit pinned by python `livekit` 1.1.21 (`5a656c4`) plus the patch, loaded via `LIVEKIT_LIB_PATH` (build: `~/Projetos/upstream/rust-sdks-pinned/target/release/liblivekit_ffi.so`):
+
+| Library | Layers | RSS growth (5 min) |
+|---|---|---|
+| Official 1.1.21 | 1 | +8.4 MB/min |
+| Patched | 1 | flat (±0.1 MB) |
+| Patched | 3 | flat |
+
+`max_bitrate=400_000`: no SIGBUS with the patch in two short runs, but VAAPI still sends 0 bytes (software sends ~390 kbps) — separate, unfixed.
+
+Until a release ships the fix, the spike can use VAAPI only with the patched library; the product default stays software encoding.
+
