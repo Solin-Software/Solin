@@ -163,3 +163,19 @@ Scripts: `s2_capacity/run_s2.sh`, `s2_capacity/sample_server.py`, server config 
 - Edge mode (community node / hub) remains the answer for halls with weak upload: the hall sends one copy (~2–3 Mbps), the node pays the fan-out above.
 - Hall PC CPU budget for 50 attendees, all-in on this CPU: publisher ~0.75 + LiveKit ~0.6 = **~1.4 cores**.
 - Consider lowering the top simulcast layer to ~1.2 Mbps: a wide stage shot doesn't need 1.7 Mbps.
+
+## S7: end-to-end encryption
+
+Scripts: `s7_e2ee/run_s7.sh`, page `s1_publish/web/e2ee.html` (served by `s1_publish/probe_server.py`). Publisher = S1 path B with `--e2ee-key` (software H.264, 3-layer simulcast, shared key). Headless Chromium (snap) and Firefox 158 using `livekit-client` 2.23.0 + its E2EE worker, key taken from the URL fragment. Each run: 12 s at the top layer, 12 s at the low layer, 12 s back at the top layer.
+
+| Browser | Mode | Video | Simulcast switch | Audio | Encryption errors |
+|---|---|---|---|---|---|
+| Chromium | correct key | 1280×720 @ 28–29 fps, real content | 720p → 320×180 @ 15 fps → 720p | steady test tone | 0 |
+| Firefox 158 | correct key | 1280×720 @ 24–29 fps, real content | 720p → 320×180 @ 15 fps → 720p | steady test tone | 0 |
+| Both | no key (e.g. a node operator with a valid token) | ~0–1 fps, blank (luma σ = 0) | — | erratic noise only | reported |
+| Both | wrong key | nothing decoded | — | silence | 12, reported |
+
+- **E2EE works end to end** between the Python/libobs publisher and both browser engines, including simulcast layer switching.
+- **A participant without the key gets nothing usable**: no picture; audio is undecryptable data rendered as noise. With a wrong key nothing decodes at all and the client reports encryption errors, which the attendee page can turn into a clear "wrong link" message.
+- Publisher cost of E2EE measured in S1: ~+0.05 cores.
+- Not yet tested: **Safari / iOS**, Android Chrome on a real phone, and the decrypt CPU cost on phones (planned in S8).

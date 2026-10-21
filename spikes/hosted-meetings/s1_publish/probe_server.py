@@ -7,6 +7,7 @@ Spike code. Usage:
 from __future__ import annotations
 
 import json
+import os
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,7 +18,7 @@ from livekit import api
 HERE = Path(__file__).resolve().parent
 WEB = HERE / "web"
 RESULTS = HERE.parent / "results"
-LOG = RESULTS / f"av_probe_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"
+LOG = RESULTS / f"{os.environ.get('LOG_NAME', 'av_probe')}_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
 
 class Handler(SimpleHTTPRequestHandler):

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E2EE probe</title>
+<style>
+  body { margin: 0; background: #111; color: #aaa; font: 13px/1.4 ui-monospace, monospace; }
+  video { width: 640px; height: 360px; background: #000; display: block; }
+  #log { white-space: pre; padding: 8px; }
+</style>
+</head>
+<body>
+<video id="v" autoplay muted playsinline></video>
+<div id="log">starting…</div>
+<script src="vendor/livekit-client.umd.js"></script>
+<script>
+// Usage: e2ee.html?mode=key|nokey|wrong&room=s7#k=<shared key>
+const LK = LivekitClient;
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode') || 'key';
+const roomName = params.get('room') || 's7';
+const sharedKey = new URLSearchParams(location.hash.slice(1)).get('k') || '';
+const video = document.getElementById('v');
+const logEl = document.getElementById('log');
+
+const state = { mode, ua: navigator.userAgent, phase: 'connecting', frames: 0, width: 0, height: 0,
+                lumaStd: 0, audioRms: 0, encErrors: 0, encStatus: null, e2eeSupported: LK.isE2EESupported() };
+const post = (extra = {}) => fetch('/log', { method: 'POST', body: JSON.stringify({ test: 's7', t: Math.round(performance.now() / 1000), ...state, ...extra }) }).catch(() => {});
+
+function watchVideo(track) {
+  track.attach(video);
+  const canvas = new OffscreenCanvas(64, 36), c = canvas.getContext('2d', { willReadFrequently: true });
+  const onFrame = () => {
+    state.frames++;
+    state.width = video.videoWidth; state.height = video.videoHeight;
+    if (state.frames % 15 === 0) {
+      c.drawImage(video, 0, 0, 64, 36);
+      const d = c.getImageData(0, 0, 64, 36).data;
+      let s = 0, s2 = 0, n = d.length / 4;
+      for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; s += y; s2 += y * y; }
+      state.lumaStd = Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2));
+    }
+    video.requestVideoFrameCallback(onFrame);
+  };
+  video.requestVideoFrameCallback(onFrame);
+}
+
+function watchAudio(track) {
+  const el = track.attach(); el.muted = true; document.body.appendChild(el);
+  const ctx = new AudioContext();
+  const an = ctx.createAnalyser(); an.fftSize = 2048;
+  ctx.createMediaStreamSource(new MediaStream([track.mediaStreamTrack])).connect(an);
+  const buf = new Float32Array(an.fftSize);
+  setInterval(() => { an.getFloatTimeDomainData(buf); let s = 0; for (const x of buf) s += x * x; state.audioRms = Math.sqrt(s / buf.length); ctx.resume(); }, 250);
+}
+
+(async () => {
+  const opts = { adaptiveStream: false, dynacast: false };
+  let keyProvider = null;
+  if (mode !== 'nokey') {
+    keyProvider = new LK.ExternalE2EEKeyProvider();
+    await keyProvider.setKey(mode === 'wrong' ? 'definitely-not-the-key' : sharedKey);
+    opts.e2ee = { keyProvider, worker: new Worker('vendor/livekit-client.e2ee.worker.mjs', { type: 'module' }) };
+  }
+  const room = new LK.Room(opts);
+  if (keyProvider) await room.setE2EEEnabled(true);
+  room.on(LK.RoomEvent.EncryptionError, () => { state.encErrors++; });
+  room.on(LK.RoomEvent.ParticipantEncryptionStatusChanged, (enabled, p) => { if (p && !p.isLocal) state.encStatus = enabled; });
+  let videoPub = null;
+  room.on(LK.RoomEvent.TrackSubscribed, (track, pub) => {
+    if (track.kind === 'video') { videoPub = pub; watchVideo(track); } else watchAudio(track);
+  });
+  const { token, url } = await (await fetch(`/token?identity=s7-${mode}-${Date.now()}&room=${roomName}`)).json();
+  await room.connect(url, token);
+
+  // phases: HIGH 12 s -> LOW 12 s -> HIGH 12 s, reporting every 3 s
+  const phases = [['high', LK.VideoQuality.HIGH], ['low', LK.VideoQuality.LOW], ['high-again', LK.VideoQuality.HIGH]];
+  for (const [name, q] of phases) {
+    state.phase = name;
+    if (videoPub) videoPub.setVideoQuality(q);
+    const f0 = state.frames, t0 = performance.now();
+    for (let i = 0; i < 4; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      state.fps = Math.round((state.frames - f0) / ((performance.now() - t0) / 1000));
+      logEl.textContent = JSON.stringify(state, null, 1);
+      post();
+    }
+  }
+  state.phase = 'done'; post({ done: true });
+  logEl.textContent = 'DONE\n' + JSON.stringify(state, null, 1);
+  await room.disconnect();
+})().catch(e => { state.phase = 'error: ' + e; logEl.textContent = state.phase; post({ error: String(e) }); });
+</script>
+</body>
+</html>
