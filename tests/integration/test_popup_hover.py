@@ -417,6 +417,20 @@ def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):
     assert camera_scene.id in toolbar._solin_scene_popup._scene_cards
 
 
+@pytest.mark.parametrize("visible", [False, True])
+def test_scene_panel_restores_and_persists_projection_controls(toolbar_host, settings, visible):
+    _parent, toolbar = toolbar_host
+    settings.set_scenes_panel_projection_controls_visible(visible)
+    popup = toolbar._ensure_solin_scene_popup()
+    assert popup.projection_controls_button.isChecked() is visible
+
+    popup.projection_controls_button.click()
+
+    reloaded = ProfileAppSettingsStore.for_organization("hover-test")
+    assert reloaded.scenes_panel_projection_controls_visible() is not visible
+    assert toolbar._ensure_solin_scene_popup() is popup
+
+
 def test_zoom_remains_available_without_an_open_meeting(toolbar_host):
     from solin.core.integrations.automation.zoom.service import ZoomService
 

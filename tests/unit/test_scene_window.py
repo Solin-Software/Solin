@@ -250,10 +250,36 @@ def test_card_expand_button_opens_that_scenes_window(controller_factory) -> None
     QCoreApplication.processEvents()
     card = popup._scene_cards[CAMERA_SCENE_ID]
 
-    card._preview.expand_button.click()
+    card.expand_button.click()
 
     assert set(popup.scene_windows.windows) == {CAMERA_SCENE_ID}
-    assert "Camera" in card._preview.expand_button.accessibleName()
+    assert "Camera" in card.expand_button.accessibleName()
+    popup.scene_windows.close_all()
+    popup.deleteLater()
+    QCoreApplication.processEvents()
+
+
+def test_card_expand_button_stays_above_a_routing_button_covering_the_card(
+    controller_factory,  # noqa: F811
+) -> None:
+    controller = controller_factory()
+    controller.set_thumbnail_egress = _Feeds()
+    popup = SceneControlPopup(controller)
+    QCoreApplication.processEvents()
+    card = popup._scene_cards[CAMERA_SCENE_ID]
+
+    # One visible output: its routing button is laid over the whole card.
+    card.set_routing(
+        on_projection=False, on_program=False,
+        projection_visible=True, program_available=False,
+    )
+    card.resize(card.size())
+    card.show()
+    QCoreApplication.processEvents()
+
+    assert card._expanded_button is card._projection
+    corner = card.expand_button.geometry().center()
+    assert card.childAt(corner) is card.expand_button
     popup.scene_windows.close_all()
     popup.deleteLater()
     QCoreApplication.processEvents()

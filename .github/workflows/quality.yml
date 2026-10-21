@@ -165,6 +165,15 @@ jobs:
 
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
 
+      - name: Windows virtual-camera filter tests
+        if: runner.os == 'Windows'
+        env:
+          SOLIN_TEST_PRODUCTION_CAMERA: "1"
+        run: |
+          python scripts/build_virtual_camera.py --configuration Release --qualify-production --exclude-test-label '^performance$'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests/integration/test_native_virtual_camera.py -k filter_qualification -q
+
       - name: Virtual-camera transport tests
         if: runner.os == 'Linux'
         run: |

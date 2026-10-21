@@ -222,6 +222,16 @@ class ProfileAppSettingsStore:
     def set_scene_window_geometry(self, scene_id: str, geometry: bytes) -> None:
         self.settings.set_value(_scene_window_geometry_key(scene_id), bytes(geometry))
 
+    def scenes_panel_projection_controls_visible(self) -> bool:
+        value = self.settings.value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, False)
+        if isinstance(value, bool):
+            return value
+        # QSettings round-trips booleans as strings on some backends.
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def set_scenes_panel_projection_controls_visible(self, visible: bool) -> None:
+        self.settings.set_value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, bool(visible))
+
 
 def _scene_window_geometry_key(scene_id: str) -> str:
     # Scene ids are document identities; keep any separator out of the QSettings

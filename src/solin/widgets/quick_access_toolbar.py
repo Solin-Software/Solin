@@ -489,10 +489,19 @@ class QuickAccessToolbar(QQuickWidget):
             recording=self._program_recording,
             window_geometry=self._app_settings,
         )
+        popup.projection_controls_button.setChecked(
+            self._app_settings.scenes_panel_projection_controls_visible()
+        )
+        popup.projection_controls_button.toggled.connect(
+            self._on_scene_projection_controls_toggled
+        )
         self._popup_hover.bind_button("scenes", popup.hover_button)
         popup.dock_button.toggled.connect(self._on_scene_panel_dock_toggled)
         self._solin_scene_popup = popup
         return popup
+
+    def _on_scene_projection_controls_toggled(self, visible: bool) -> None:
+        self._app_settings.set_scenes_panel_projection_controls_visible(visible)
 
     def _on_scene_panel_dock_toggled(self, docked: bool) -> None:
         # Persist the attach preference so the panel comes back attached. The

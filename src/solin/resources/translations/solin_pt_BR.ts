@@ -5609,6 +5609,10 @@ A organização atual e os arquivos serão preservados. As alterações pendente
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Mostrar controles de projeção</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

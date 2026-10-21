@@ -14,6 +14,7 @@
 #include <ks.h>
 #include <ksproxy.h>
 #include <windows.h>
+#include <sddl.h>
 
 #include <algorithm>
 #include <array>
@@ -38,6 +39,46 @@ namespace {
 using DllGetClassObjectFunction = HRESULT(STDAPICALLTYPE*)(REFCLSID, REFIID,
                                                            void**);
 using DllInstallFunction = HRESULT(STDAPICALLTYPE*)(BOOL, LPCWSTR);
+
+class BrokerEndpoint final {
+  public:
+    BrokerEndpoint() = default;
+    BrokerEndpoint(const BrokerEndpoint&) = delete;
+    BrokerEndpoint& operator=(const BrokerEndpoint&) = delete;
+    ~BrokerEndpoint() {
+        if (pipe_ != INVALID_HANDLE_VALUE) {
+            static_cast<void>(CloseHandle(pipe_));
+        }
+    }
+    [[nodiscard]] bool create(const std::wstring& name) noexcept {
+        PSECURITY_DESCRIPTOR descriptor = nullptr;
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                L"D:P(A;;GA;;;SY)(A;;GA;;;OW)", SDDL_REVISION_1, &descriptor, nullptr)) {
+            std::cerr << "Could not restrict broker endpoint access: " << GetLastError() << '\n';
+            return false;
+        }
+        SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), descriptor, FALSE};
+        pipe_ = CreateNamedPipeW(
+            name.c_str(),
+            PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1U,
+            static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerResponseSize),
+            static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerRequestSize), 0U,
+            &security);
+        const auto error = GetLastError();
+        static_cast<void>(LocalFree(descriptor));
+        if (pipe_ == INVALID_HANDLE_VALUE) {
+            std::cerr << "Could not reserve broker endpoint (Windows error " << error
+                      << "). Close the producer or other production-filter tests first.\n";
+            return false;
+        }
+        return true;
+    }
+    [[nodiscard]] HANDLE get() const noexcept { return pipe_; }
+
+  private:
+    HANDLE pipe_{INVALID_HANDLE_VALUE};
+};
 
 class ComApartment final {
   public:
@@ -199,7 +240,10 @@ void serve_live_frame_endpoint(const HANDLE pipe,
         if (event == nullptr) {
             throw std::runtime_error{"broker event creation failed"};
         }
-        for (std::uint32_t exchange = 0U; exchange < maximum_exchanges; ++exchange) {
+        for (std::uint32_t exchange = 0U; exchange < maximum_exchanges;) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                throw std::runtime_error{"broker connection deadline exceeded"};
+            }
             static_cast<void>(ResetEvent(event));
             OVERLAPPED overlapped{};
             overlapped.hEvent = event;
@@ -207,9 +251,18 @@ void serve_live_frame_endpoint(const HANDLE pipe,
             const auto started = ConnectNamedPipe(pipe, &overlapped);
             const auto error =
                 complete_pipe_operation(pipe, overlapped, started, transferred, deadline);
+            if (error != ERROR_SUCCESS && error != ERROR_PIPE_CONNECTED) {
+                throw std::runtime_error{"broker connection failed"};
+            }
+            ULONG client_process = 0U;
+            if (!GetNamedPipeClientProcessId(pipe, &client_process) ||
+                client_process != GetCurrentProcessId()) {
+                // Fixture frames belong only to the graph loaded in this process.
+                static_cast<void>(DisconnectNamedPipe(pipe));
+                continue;
+            }
             std::array<std::uint8_t, kVirtualCameraBrokerRequestSize> request_bytes{};
-            if ((error != ERROR_SUCCESS && error != ERROR_PIPE_CONNECTED) ||
-                transfer_pipe_bytes(pipe, event, request_bytes, false, deadline) != ERROR_SUCCESS) {
+            if (transfer_pipe_bytes(pipe, event, request_bytes, false, deadline) != ERROR_SUCCESS) {
                 throw std::runtime_error{"broker read failed"};
             }
             const auto request = decode_virtual_camera_broker_request(request_bytes);
@@ -242,12 +295,12 @@ void serve_live_frame_endpoint(const HANDLE pipe,
                 throw std::runtime_error{"broker lease did not disconnect"};
             }
             static_cast<void>(DisconnectNamedPipe(pipe));
+            ++exchange;
         }
     } catch (...) {
         valid_exchange.store(false);
     }
     static_cast<void>(DisconnectNamedPipe(pipe));
-    static_cast<void>(CloseHandle(pipe));
     if (event != nullptr) {
         static_cast<void>(CloseHandle(event));
     }
@@ -510,15 +563,43 @@ class SampleCaptureRenderer final : public CBaseRenderer {
 } // namespace
 
 int wmain(const int argument_count, wchar_t** arguments) {
-    const auto mode = argument_count == 3 ? std::wstring{arguments[2]} : L"";
+    std::wstring mode;
+    bool production_broker = false;
+    bool valid_arguments = argument_count >= 2;
+    for (int index = 2; valid_arguments && index < argument_count; ++index) {
+        const std::wstring argument{arguments[index]};
+        if (argument == L"--production-broker" && !production_broker) {
+            production_broker = true;
+        } else if (mode.empty() &&
+                   (argument == L"--slow-consumer" || argument == L"--frame-freshness" ||
+                    argument == L"--frame-freshness-yuy2" || argument == L"--stale-reconnect")) {
+            mode = argument;
+        } else {
+            valid_arguments = false;
+        }
+    }
     const auto freshness = mode == L"--frame-freshness" || mode == L"--frame-freshness-yuy2";
     const auto stale_reconnect = mode == L"--stale-reconnect";
-    if (argument_count < 2 || argument_count > 3 ||
-        (!mode.empty() && mode != L"--slow-consumer" && !freshness && !stale_reconnect)) {
+    if (!valid_arguments) {
         std::cerr << "filter path "
+                     "[--production-broker] "
                      "[--slow-consumer|--frame-freshness|--frame-freshness-yuy2|--stale-reconnect] "
                      "required\n";
         return 2;
+    }
+    BrokerEndpoint broker_endpoint;
+    if (production_broker) {
+        // Reserve the real endpoint before loading the DLL. Fail without opening
+        // a graph if a producer already owns it; never connect to a running app.
+        try {
+            if (!broker_endpoint.create(solin::virtual_camera::windows_virtual_camera::
+                                            current_user_broker_pipe_name())) {
+                return 1;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "Broker identity unavailable: " << error.what() << '\n';
+            return 1;
+        }
     }
     // Sustained backpressure exceeds a 30 fps slot. The graph must still make
     // the live/stale transitions without requiring the consumer to run at 30 fps.
@@ -916,18 +997,14 @@ int wmain(const int argument_count, wchar_t** arguments) {
             }
         }
         if (SUCCEEDED(result)) {
-            const auto pipe = CreateNamedPipeW(
-                solin::virtual_camera::windows_virtual_camera::test_broker_pipe_name().c_str(),
-                PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1U,
-                static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerResponseSize),
-                static_cast<DWORD>(solin::virtual_camera::kVirtualCameraBrokerRequestSize), 0U,
-                nullptr);
-            if (pipe == INVALID_HANDLE_VALUE || live_publisher == nullptr) {
-                result = HRESULT_FROM_WIN32(GetLastError());
+            if ((!production_broker &&
+                 !broker_endpoint.create(solin::virtual_camera::windows_virtual_camera::
+                                             test_broker_pipe_name())) ||
+                live_publisher == nullptr) {
+                result = E_FAIL;
             } else {
                 broker_thread =
-                    std::jthread{serve_live_frame_endpoint,  pipe,
+                    std::jthread{serve_live_frame_endpoint, broker_endpoint.get(),
                                  std::cref(*live_publisher), capture_deadline,
                                  std::ref(broker_completed), std::ref(broker_exchange_valid),
                                  stale_reconnect ? 3U : 1U,  std::ref(broker_exchanges)};

@@ -205,6 +205,57 @@ def test_profile_app_settings_store_persists_theme_id(monkeypatch) -> None:
     }
 
 
+def test_scenes_panel_projection_controls_preference_survives_restart(
+    monkeypatch, tmp_path
+) -> None:
+    from PySide6.QtCore import QSettings
+
+    monkeypatch.setattr(
+        settings_store,
+        "QSettings",
+        lambda organization, application: QSettings(
+            str(tmp_path / organization / f"{application}.ini"), QSettings.Format.IniFormat
+        ),
+    )
+    organization = "SolinDev_main_hall"
+    store = settings_store.ProfileAppSettingsStore.for_organization(organization)
+
+    assert store.scenes_panel_projection_controls_visible() is False
+    assert store.settings.all_keys() == []
+
+    for visible in (True, False):
+        store.set_scenes_panel_projection_controls_visible(visible)
+        store = settings_store.ProfileAppSettingsStore.for_organization(organization)
+        assert store.scenes_panel_projection_controls_visible() is visible
+        assert (tmp_path / organization / f"{QSETTINGS_APP_APP}.ini").is_file()
+        other_profile = settings_store.ProfileAppSettingsStore.for_organization("SolinDev_other")
+        assert other_profile.scenes_panel_projection_controls_visible() is False
+
+
+@pytest.mark.parametrize("value, expected", [
+    (True, True),
+    (False, False),
+    ("true", True),
+    ("1", True),
+    ("yes", True),
+    (" ON ", True),
+    ("false", False),
+    ("0", False),
+    ("no", False),
+    ("off", False),
+    ("invalid", False),
+    (None, False),
+])
+def test_scenes_panel_projection_controls_preference_reads_backend_booleans(
+    monkeypatch, value, expected
+) -> None:
+    _install_fake_settings(monkeypatch)
+    store = settings_store.ProfileAppSettingsStore.for_organization("SolinDev_main_hall")
+    store.settings.set_value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, value)
+
+    assert store.scenes_panel_projection_controls_visible() is expected
+
+
 def test_settings_store_clears_removes_and_lists_keys(monkeypatch) -> None:
     _install_fake_settings(monkeypatch)
     store = settings_store.SettingsStore.for_namespace("Org", "App")

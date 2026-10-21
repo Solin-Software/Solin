@@ -31,6 +31,52 @@ def test_publication_requires_all_platforms_and_quality():
     assert {row["architecture"] for row in mac["strategy"]["matrix"]["include"]} == {"arm64", "x86_64"}
 
 
+def test_beta_dispatch_authorizes_before_environment_and_app_credentials():
+    configuration = workflow("prepare-beta.yml")
+    assert configuration["name"] == "Generate beta"
+    assert set(configuration["on"]) == {"workflow_dispatch"}
+    assert configuration["permissions"] == {"contents": "read"}
+    assert configuration["concurrency"] == {
+        "group": "solin-beta-preparation", "cancel-in-progress": "false",
+    }
+    assert configuration["env"] == {
+        "BETA_RELEASE_ACTORS": "${{ vars.BETA_RELEASE_ACTORS }}",
+        "BETA_RELEASE_TRIGGERING_ACTOR": "${{ github.triggering_actor }}",
+    }
+    jobs = configuration["jobs"]
+    assert set(jobs) == {"authorize", "beta"}
+    assert "environment" not in jobs["authorize"]
+    assert jobs["beta"]["needs"] == "authorize"
+    assert jobs["beta"]["environment"] == "beta-release"
+    assert jobs["beta"]["if"] == "github.ref == 'refs/heads/main'"
+    assert int(jobs["beta"]["timeout-minutes"]) < 60  # Installation token lifetime.
+    for job in jobs.values():
+        steps = job["steps"]
+        checkout = next(step for step in steps if "actions/checkout@" in step.get("uses", ""))
+        assert checkout["with"]["persist-credentials"] == "false"
+        authorization = next(i for i, step in enumerate(steps)
+                             if step.get("run") == "python scripts/prepare_beta.py authorize")
+        app = next((i for i, step in enumerate(steps) if step.get("id") == "app"), None)
+        if app is not None:
+            assert authorization < app
+            assert steps[app]["with"] == {
+                "app-id": "${{ vars.BETA_RELEASE_APP_ID }}",
+                "private-key": "${{ secrets.BETA_RELEASE_APP_PRIVATE_KEY }}",
+                "permission-contents": "write", "permission-pull-requests": "write",
+                "permission-checks": "read", "permission-statuses": "read",
+                "permission-actions": "read",
+                "permission-workflows": "write",
+            }
+            assert checkout["with"]["ref"] == "main"
+            assert checkout["with"]["fetch-depth"] == "0"
+            execution = steps[-1]
+            assert execution["run"] == "python scripts/prepare_beta.py run"
+            assert execution["env"]["GH_TOKEN"] == "${{ steps.app.outputs.token }}"
+        else:
+            assert not any("secrets." in str(step) for step in steps)
+        assert all("${{" not in step.get("run", "") for step in steps)
+
+
 def test_main_cache_builds_are_trusted_serialized_and_skip_release_preparation():
     configuration = workflow("main-build-cache.yml")
     assert set(configuration["on"]) == {"push", "workflow_dispatch"}
@@ -327,8 +373,10 @@ def test_python_suite_preserves_fatal_qt_destruction_diagnostic(tmp_path):
 
 def test_all_external_actions_are_pinned_to_commits():
     for path in (REPO_ROOT / ".github/workflows").glob("*.yml"):
-        for action in re.findall(r"uses: ([^\s#]+)", path.read_text()):
-            assert action.startswith("./") or re.search(r"@[a-f0-9]{40}$", action), action
+        for job in workflow(path.name)["jobs"].values():
+            for entry in (job, *job.get("steps", [])):
+                if action := entry.get("uses"):
+                    assert action.startswith("./") or re.search(r"@[a-f0-9]{40}$", action), action
 
 
 @pytest.mark.parametrize("failed_suite", ["contract", "integration", "unit", None])

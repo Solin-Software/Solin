@@ -5592,6 +5592,10 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Afficher les commandes de projection</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

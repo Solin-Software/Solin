@@ -5592,6 +5592,10 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Projectiebediening tonen</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

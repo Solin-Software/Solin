@@ -5560,6 +5560,10 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Tampilkan kontrol proyeksi</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
