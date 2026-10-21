@@ -1,0 +1,10 @@
+# Overrides for local validation (docker compose -f ../hub/docker-compose.yml -f compose.local.yml ...).
+services:
+  caddy:
+    volumes:
+      - ${LOCAL_DIR}/Caddyfile.local:/etc/caddy/Caddyfile:ro
+  coturn:
+    # Locally the hall LiveKit is on loopback/LAN, which the VM config refuses to relay to.
+    command: ["-c", "/etc/coturn/turnserver.conf", "--static-auth-secret=${TURN_SECRET}", "--realm=${HUB_DOMAIN}",
+              "--listening-ip=0.0.0.0", "--relay-ip=${PRIVATE_IP}", "--allow-loopback-peers",
+              "--allowed-peer-ip=127.0.0.1", "--allowed-peer-ip=192.168.0.0-192.168.255.255", "--verbose"]

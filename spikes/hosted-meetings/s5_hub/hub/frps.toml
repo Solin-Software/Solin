@@ -1,0 +1,18 @@
+# Reverse tunnel server. Hall PCs (frpc) dial out to :7000; HTTP(S)/WebSocket for
+# <hall>.HUB_DOMAIN arrives from Caddy on 127.0.0.1:8080 and is routed through the tunnel.
+bindPort = 7000
+vhostHTTPPort = 8080
+proxyBindAddr = "127.0.0.1"
+subDomainHost = "{{ .Envs.HUB_DOMAIN }}"
+
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+
+# No app-level heartbeatTimeout: with tcpMux, frpc relies on the mux keepalive and sends no
+# heartbeats, so a server-side heartbeatTimeout drops the whole tunnel every timeout period.
+transport.tcpMux = true
+
+webServer.addr = "127.0.0.1"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "{{ .Envs.FRP_DASH_PASSWORD }}"

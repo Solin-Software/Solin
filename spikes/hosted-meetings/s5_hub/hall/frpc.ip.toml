@@ -1,0 +1,15 @@
+# Hall side, IP-only hub: the hub's TCP :80 is forwarded to this hall's LiveKit (raw TCP, so
+# signaling WebSockets aren't subject to HTTP proxy timeouts).
+serverAddr = "{{ .Envs.HUB_ADDR }}"
+serverPort = 443
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+transport.tcpMux = true
+loginFailExit = false
+
+[[proxies]]
+name = "hall-a-livekit"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 7880
+remotePort = 80

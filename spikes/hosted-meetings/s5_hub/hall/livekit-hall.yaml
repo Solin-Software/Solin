@@ -1,0 +1,28 @@
+# Hall LiveKit for S5: signaling reachable through the hub tunnel; media direct when possible,
+# otherwise via the hub's TURN (credentials generated per attendee from the shared secret).
+# Placeholders (__HUB_DOMAIN__, __TURN_SECRET__, __TURN_HOST__) are filled by tools/render_hall_config.sh.
+port: 7880
+bind_addresses: ["0.0.0.0"]
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
+  stun_servers:
+    - __TURN_HOST__:3478
+  turn_servers:
+    - host: __TURN_HOST__
+      port: 3478
+      protocol: udp
+      secret: __TURN_SECRET__
+      ttl: 14400
+    - host: __TURN_HOST__
+      port: 3478
+      protocol: tcp
+      secret: __TURN_SECRET__
+      ttl: 14400
+keys:
+  devkey: secret
+prometheus:
+  port: 6789
+logging:
+  level: info

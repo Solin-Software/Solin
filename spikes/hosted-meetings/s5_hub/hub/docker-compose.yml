@@ -1,0 +1,45 @@
+# S5 hub: TLS + per-hall subdomains (Caddy on-demand TLS) -> reverse tunnel (frps) -> hall PCs,
+# plus a TURN relay (coturn). Host networking: TURN needs a large UDP port range.
+#
+#   cp hub.env.example hub.env   # fill it in
+#   docker compose --env-file hub.env up -d
+services:
+  caddy:
+    image: caddy:2.11.7-alpine
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  frps:
+    image: fatedier/frps:v0.71.1
+    network_mode: host
+    restart: unless-stopped
+    command: ["-c", "/etc/frp/frps.toml"]
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    volumes:
+      - ./frps.toml:/etc/frp/frps.toml:ro
+
+  ask:
+    # Caddy asks this before issuing a certificate: only subdomains of halls currently connected to frps.
+    image: python:3.13-alpine
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    command: ["python", "/app/ask.py"]
+    volumes:
+      - ./ask/ask.py:/app/ask.py:ro
+
+  coturn:
+    image: coturn/coturn:4.18.0
+    network_mode: host
+    restart: unless-stopped
+    command: ["-c", "/etc/coturn/turnserver.conf", "--static-auth-secret=${TURN_SECRET}",
+              "--realm=${HUB_DOMAIN}", "--external-ip=${PUBLIC_IP}/${PRIVATE_IP}"]
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+
+volumes:
+  caddy-data:

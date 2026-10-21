@@ -197,3 +197,58 @@ Scripts: `s3_audio/hall.py` (hall side: libobs program audio from the hall mic, 
 - Mixer wiring still matters: recommend a mix-minus send (the computer's own channel excluded from the feed back to the computer) as in the current Zoom wiring; the canceller then only handles acoustic pickup from stage mics.
 
 **Still open:** validate on real hall hardware (mixer, stage mics, loudspeakers) where the acoustic echo path and sound-card latencies are real.
+
+## S5: hub (local validation; Oracle run pending)
+
+Bundle in `s5_hub/`: `hub/` (docker-compose: Caddy 2.11.7 with on-demand TLS gated by an `ask` service that only approves subdomains of halls connected to frps; frps 0.71.1; coturn 4.18.0 with TURN-REST secret), `hall/` (frpc with `/rtc`+`/twirp` → LiveKit, `/` → join page; LiveKit `turn_servers` with the shared secret), `tools/` (relay load generator forcing TURN, 2.5 h signaling soak, VM sampler), `local/` (overrides to run everything on one machine), `README.md` (Oracle setup steps). All images have arm64 builds (Oracle A1).
+
+**Validated locally** (one machine, `hub.localhost`, plain HTTP):
+- Routing: `hall-a.hub.localhost` → Caddy → frps → tunnel → frpc → hall LiveKit (LiveKit answers through the tunnel).
+- Certificate gate: `ask` approves a connected hall's subdomain (200) and refuses unknown names (403).
+- TURN: coturn allocates with time-limited credentials derived from the shared secret, both for the load generator's own credentials and for the ones the hall's LiveKit hands out.
+- **End to end with relay forced**: an attendee allowed only relayed ICE candidates gets signaling through the tunnel and media through coturn — 30 fps video + continuous audio.
+- 30 relay-only attendees (medium layer): all connected and receiving (~445 kbps video + ~99 kbps audio each, 16 Mbps total); **coturn ≈ 0.11 cores**, Caddy/frps ≈ 0.01. (A later load step was invalidated by a stuck earlier load process and an unrelated VM starting on the machine.)
+
+Local caveats: relaying to a **loopback** peer did not complete ICE (LiveKit ignores loopback candidates) — the local test uses the LAN address instead; on the VM the peer is the hall's public/NATed address. A single Python process decoding video tops out at ~20 attendees, so the generator now reads WebRTC stats instead of decoding, and must run off the hub VM.
+
+**Pending (needs the Oracle VM + DNS):** relay capacity on 2 OCPU, 2.5 h signaling soak through the tunnel, tunnel recovery after a hall network drop, idle-reclamation behaviour. Steps in `s5_hub/README.md`.
+
+### S5 on a real cloud VM (Google Cloud e2-micro, São Paulo)
+
+VM: e2-micro (2 shared vCPU, 1 GB RAM + 1 GB swap), Debian 13, `southamerica-east1` (not a free-tier region — paid, ≈ US$0.35–0.50/day, deleted after the spike). No DNS: **IP-only variant** (`hub/docker-compose.ip.yml`, `hub/frps.ip.toml`, `hall/frpc.ip.toml`) — frps tunnel on :443, the hall's LiveKit forwarded as raw TCP on :80, coturn on 3478/50000–50999. Hall = this PC behind a NAT that LiveKit could not validate as reachable (typical CGNAT/no port forward) — exactly the case the hub exists for.
+
+**Two configuration bugs found and fixed:**
+1. frp **HTTP vhost** proxy closed long-lived LiveKit signaling WebSockets after ~60 s (≈ 1 reconnect per attendee per minute). → Forward signaling as **raw TCP** (`type = "tcp"`), or raise frp's HTTP timeouts in the domain/TLS variant.
+2. `transport.heartbeatTimeout = 90` on frps with `tcpMux` (frpc then sends no app heartbeats) **dropped the whole tunnel every 90 s** — all attendees reconnected at once. → Removed from both frps configs.
+
+**Test 2 — 50 attendees joining through the hub** (media direct on the hall machine, so the hub carries signaling only), after both fixes:
+
+| Metric | Result |
+|---|---|
+| Joined | 50 / 50 |
+| Join time via the São Paulo hub | median **197 ms**, p90 265 ms |
+| Reconnects in 5 min | **0** |
+| frps CPU | ≤ 0.02 cores |
+| Hub egress | ~0.9 Mbps during joins, then **0.13–0.2 Mbps steady** (≈ 3–4 kbps per attendee) |
+
+→ **Signaling for a 2 h, 50-attendee meeting ≈ 120–150 MB of hub egress** (connection-quality/active-speaker updates to every participant) — 5–10× the earlier 10–30 MB estimate. A 1 GB/month free allowance covers only ~6–8 such meetings; production hubs need a plan with real bandwidth (cheap VPS, TBs/month).
+
+**Test 6 — TURN over the public IP:** a relay-only attendee (signaling via the hub, media hall → coturn São Paulo → attendee, no direct path allowed) joined in 363 ms and received the low layer (15 fps, ~148 kbps) + audio (~99 kbps) for 2 min, 0 reconnects; hub egress ~5 MB.
+
+**Tests 3+4 — 2.5 h soak with tunnel cuts** (`tools/run_soak.sh`: one attendee through the hub; hall frpc stopped for 10/30/60 s at minutes 20/40/60):
+
+| Time | Event | Attendee |
+|---|---|---|
+| 14:53 | connected | stable (100 audio fr/s, 30 fps) |
+| 15:07 | no cut — spontaneous blip (frpc saw nothing; likely the home line) | reconnecting → reconnected in **3 s** |
+| 15:13 | **10 s cut** | reconnecting → reconnected **2 s after the tunnel returned** (≈ 12 s outage) |
+| 15:33 | **30 s cut** | SDK **gave up after ~27 s** ("Connection refused" on every retry) → disconnected for good |
+| 15:53 | 60 s cut | (attendee already gone) |
+
+- Hub egress for the whole soak: **41 MB**.
+- Why the 30 s cut is fatal: while the hall's frpc is down, frps closes the hall's public port, so resume attempts get an immediate *connection refused* and the SDK's resume budget (~25–30 s) runs out before the tunnel is back. Short blips (≤ ~15 s) are absorbed transparently.
+
+**Implications**
+- The attendee page needs its **own rejoin loop** on top of the SDK resume: on `disconnected`, keep retrying with backoff (same device identity, attendance re-sent from `localStorage`, "reconnecting…" banner) for as long as the meeting runs.
+- On rejoin the participant starts again with the token's permissions (lobby) — Solin should **auto-admit device identities already admitted** in this meeting, so a hall-side blip doesn't strand everyone in the lobby.
+- Hall-side: frpc reconnects within seconds once the line is back; consider a hub-side "hall reconnecting" response instead of a refused port.

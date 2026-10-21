@@ -1,0 +1,24 @@
+# Hall side of the tunnel: dials out to the hub and publishes <HALL_NAME>.<HUB_DOMAIN>.
+# LiveKit signaling (/rtc, /twirp) goes to the hall's LiveKit; everything else to the join page.
+serverAddr = "{{ .Envs.HUB_ADDR }}"
+serverPort = 7000
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+transport.tcpMux = true
+loginFailExit = false
+
+[[proxies]]
+name = "{{ .Envs.HALL_NAME }}-livekit"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 7880
+subdomain = "{{ .Envs.HALL_NAME }}"
+locations = ["/rtc", "/twirp"]
+
+[[proxies]]
+name = "{{ .Envs.HALL_NAME }}-web"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 8090
+subdomain = "{{ .Envs.HALL_NAME }}"
+locations = ["/"]

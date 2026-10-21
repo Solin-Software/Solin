@@ -1,0 +1,15 @@
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		ask http://127.0.0.1:7400/caddy-ask
+	}
+}
+
+# Every hall gets <name>.{$HUB_DOMAIN}; the certificate is issued on first use, only for
+# names the ask service approves. Traffic goes to frps' vhost port, which routes by Host header.
+{$SCHEME}://{$HUB_DOMAIN}, {$SCHEME}://*.{$HUB_DOMAIN} {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:8080
+}

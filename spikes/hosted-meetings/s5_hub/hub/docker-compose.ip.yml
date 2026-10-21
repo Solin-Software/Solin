@@ -1,0 +1,20 @@
+# IP-only hub for the S5 spike: frps (signaling tunnel on :80) + coturn. No Caddy/ask.
+#   docker compose -f docker-compose.ip.yml --env-file hub.env up -d
+services:
+  frps:
+    image: fatedier/frps:v0.71.1
+    network_mode: host
+    restart: unless-stopped
+    command: ["-c", "/etc/frp/frps.toml"]
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    volumes:
+      - ./frps.ip.toml:/etc/frp/frps.toml:ro
+
+  coturn:
+    image: coturn/coturn:4.18.0
+    network_mode: host
+    restart: unless-stopped
+    command: ["-c", "/etc/coturn/turnserver.conf", "--static-auth-secret=${TURN_SECRET}",
+              "--realm=solin-hub", "--external-ip=${PUBLIC_IP}/${PRIVATE_IP}"]
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro

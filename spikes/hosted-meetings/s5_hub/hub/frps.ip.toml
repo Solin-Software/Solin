@@ -1,0 +1,16 @@
+# IP-only variant (no DNS, no TLS): the hall's LiveKit signaling is forwarded as a raw TCP tunnel
+# on :80 (frp's HTTP vhost proxy closed long-lived WebSockets after ~60 s).
+bindPort = 443
+allowPorts = [{ single = 80 }]
+
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+
+# No app-level heartbeatTimeout: with tcpMux, frpc relies on the mux keepalive and sends no
+# heartbeats, so a server-side heartbeatTimeout drops the whole tunnel every timeout period.
+transport.tcpMux = true
+
+webServer.addr = "127.0.0.1"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "{{ .Envs.FRP_DASH_PASSWORD }}"

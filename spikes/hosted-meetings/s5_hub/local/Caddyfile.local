@@ -1,0 +1,4 @@
+# Local validation: plain HTTP on :8880, same routing as the VM.
+http://{$HUB_DOMAIN}:8880, http://*.{$HUB_DOMAIN}:8880 {
+	reverse_proxy 127.0.0.1:8080
+}
