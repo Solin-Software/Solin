@@ -209,3 +209,13 @@ class ProfileAppSettingsStore:
 
     def set_scenes_panel_docked(self, docked: bool) -> None:
         self.settings.set_value(SettingsKey.SCENES_PANEL_DOCKED, bool(docked))
+
+    def scenes_panel_projection_controls_visible(self) -> bool:
+        value = self.settings.value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, False)
+        if isinstance(value, bool):
+            return value
+        # QSettings round-trips booleans as strings on some backends.
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def set_scenes_panel_projection_controls_visible(self, visible: bool) -> None:
+        self.settings.set_value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, bool(visible))

@@ -43,7 +43,7 @@ from solin.styles.theme import PALETTE
 from solin.ui.scene_output_status import virtual_camera_state_label
 from solin.widgets.scenes import control_popup
 from solin.widgets.scenes.control_popup import SceneControlPopup, _SceneCard
-from tests._qt import wait_until
+from tests._qt import show_and_activate, wait_until
 
 
 class _Projection:
@@ -807,19 +807,21 @@ def test_card_routing_buttons_are_exclusive_with_static_live_style(controller_fa
     QCoreApplication.processEvents()
 
 
+@pytest.mark.parametrize("projection_visible", [False, True])
 def test_card_virtual_camera_button_only_shows_while_that_output_runs(
     controller_factory,
+    projection_visible: bool,
 ) -> None:
     controller = controller_factory()
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     popup = SceneControlPopup(controller)
+    popup.projection_controls_button.setChecked(projection_visible)
     popup.show()
     QCoreApplication.processEvents()
 
     cards = list(popup._scene_cards.values())
     assert all(not card._program.isVisibleTo(card) for card in cards)
-    # the projection button is always offered
-    assert all(card._projection.isVisibleTo(card) for card in cards)
+    assert all(card._projection.isVisibleTo(card) == projection_visible for card in cards)
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     QCoreApplication.processEvents()
@@ -833,6 +835,143 @@ def test_card_virtual_camera_button_only_shows_while_that_output_runs(
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("docked", [False, True])
+def test_projection_controls_toggle_only_changes_presentation(controller_factory, docked) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    host = _DockHost()
+    popup = SceneControlPopup(controller, host)
+    try:
+        host.show()
+        popup.set_docked(docked)
+        popup.show()
+        QCoreApplication.processEvents()
+        toggle = popup.projection_controls_button
+        assert toggle.isCheckable()
+        assert not toggle.isChecked()
+        assert not toggle.icon().isNull()
+        assert toggle.accessibleName()
+        assert toggle.toolTip()
+        before_document = controller.document
+        before_runtime = controller.runtime.state
+        cards = tuple(popup._scene_cards.values())
+        for checked in (True, False, True):
+            QTest.mouseClick(toggle, Qt.MouseButton.LeftButton)
+            assert toggle.isChecked() == checked
+            assert all(card._projection.isVisibleTo(card) == checked for card in cards)
+            assert all(card._program.isVisibleTo(card) for card in cards)
+            assert controller.document == before_document
+            assert controller.runtime.state == before_runtime
+            assert tuple(popup._scene_cards.values()) == cards
+        controller.documents.create_scene("New scene", scene_id="new-scene")
+        QCoreApplication.processEvents()
+        assert popup._scene_cards["new-scene"]._projection.isVisibleTo(popup)
+        toggle.setChecked(False)
+        assert not popup._scene_cards["new-scene"]._projection.isVisibleTo(popup)
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.deleteLater()
+
+
+@pytest.mark.parametrize("docked", [False, True], ids=["popup", "docked"])
+@pytest.mark.parametrize(
+    ("projection_visible", "program_available", "role"),
+    [(False, True, "program"), (True, False, "projection")],
+)
+def test_single_output_card_is_its_routing_button(
+    controller_factory, projection_visible, program_available, role, docked,
+) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, program_available)
+    host = _DockHost()
+    host.resize(900, 600)
+    popup = SceneControlPopup(controller, host)
+    try:
+        popup.projection_controls_button.setChecked(projection_visible)
+        # Cocoa popups receive input through the active owner without becoming
+        # the active native window themselves. Activate the real window first.
+        show_and_activate(host)
+        popup.set_docked(docked)
+        popup.show()
+        if not docked:
+            wait_until(
+                lambda: QApplication.activePopupWidget() is popup
+                and popup.windowHandle() is not None
+                and popup.windowHandle().isExposed(),
+                description="scene popup exposure and input ownership",
+            )
+        card = next(iter(popup._scene_cards.values()))
+        button = card._program if role == "program" else card._projection
+        assert button.geometry() == card.rect()
+        assert button.icon().isNull()
+        assert button.accessibleName() == card._name.text()
+        routed = []
+        returns = []
+        card.routing_requested.connect(lambda *args: routed.append(args))
+        card.routing_return_requested.connect(lambda *args: returns.append(args))
+        for point in (card.rect().center(), card._name.mapTo(card, card._name.rect().center())):
+            target = card.childAt(point)
+            assert target is button
+            QTest.mouseClick(target, Qt.MouseButton.LeftButton, pos=target.mapFrom(card, point))
+        QTest.mouseClick(button, Qt.MouseButton.RightButton)
+        assert routed == [(card.scene_id, role)] * 2
+        assert returns == [(card.scene_id, role)]
+        assert button.isChecked()
+        button.setFocus()
+        wait_until(button.hasFocus, description="scene routing button focus")
+        QTest.keyClick(host.windowHandle(), Qt.Key.Key_Space)
+        assert routed == [(card.scene_id, role)] * 3
+        assert button.hasFocus()
+        popup.projection_controls_button.setChecked(True)
+        controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+        QCoreApplication.processEvents()
+        assert button.hasFocus()
+        for output_button in (card._program, card._projection):
+            assert output_button.isVisibleTo(card)
+            assert output_button.width() == output_button.height()
+            assert output_button.height() <= card._FOOTER_HEIGHT
+            assert not output_button.icon().isNull()
+        assert card.childAt(card.rect().center()) not in (card._program, card._projection)
+        assert card._projection.x() < card._program.x()
+        popup.projection_controls_button.setChecked(projection_visible)
+        controller.set_output_enabled(BusId.VIRTUAL_CAMERA, program_available)
+        QCoreApplication.processEvents()
+        assert button.geometry() == card.rect()
+        assert button.icon().isNull()
+        assert button.hasFocus()
+        card.set_canvas_aspect(96, 4 / 3)
+        QCoreApplication.processEvents()
+        assert button.geometry() == card.rect()
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.close()
+        host.deleteLater()
+
+
+def test_scene_card_without_visible_outputs_does_not_route(controller_factory) -> None:
+    controller = controller_factory()
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
+    popup = SceneControlPopup(controller)
+    try:
+        popup.show()
+        QCoreApplication.processEvents()
+        before = controller.runtime.state
+        routed = []
+        for card in popup._scene_cards.values():
+            assert not card._projection.isVisibleTo(card)
+            assert not card._program.isVisibleTo(card)
+            card.routing_requested.connect(lambda *args: routed.append(args))
+            for target in (card._preview, card._name):
+                QTest.mouseClick(target, Qt.MouseButton.LeftButton)
+        assert routed == []
+        assert controller.runtime.state == before
+    finally:
+        popup.close()
+        popup.deleteLater()
 
 
 def test_panel_requests_thumbnails_only_while_it_is_on_screen(controller_factory) -> None:

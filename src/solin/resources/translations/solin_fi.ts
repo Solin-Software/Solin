@@ -5592,6 +5592,10 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Näytä projektion ohjaimet</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
