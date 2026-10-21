@@ -5624,6 +5624,10 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Pokaż sterowanie projekcją</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

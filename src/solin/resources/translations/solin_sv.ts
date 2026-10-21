@@ -5591,6 +5591,10 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Visa projektionskontroller</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

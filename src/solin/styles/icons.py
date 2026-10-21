@@ -182,6 +182,7 @@ _ICON_NAMES = frozenset(
         "ICON_PANEL_RIGHT",
         "ICON_PANEL_BOTTOM",
         "ICON_SCREEN",
+        "ICON_SCREEN_OFF",
         "ICON_PLAY_ALL",
         "ICON_PLAY_SHUFFLE",
         "ICON_CHEVRON_DOWN",
@@ -598,6 +599,14 @@ def _build_icon_svg(name: str) -> str:
             '<rect x="2" y="3" width="20" height="14" rx="2"/>'
             '<path d="M8 21h8"/>'
             '<path d="M12 17v4"/>'
+            "</svg>"
+        )
+    elif name == "ICON_SCREEN_OFF":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M7 3h13a2 2 0 0 1 2 2v10M17 17H4a2 2 0 0 1-2-2V5"/>'
+            '<path d="M8 21h8M12 17v4M2 2l20 20"/>'
             "</svg>"
         )
     elif name == "ICON_PLAY_ALL":

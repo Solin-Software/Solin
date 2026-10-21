@@ -5592,6 +5592,10 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Mostrar controles de proyección</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>

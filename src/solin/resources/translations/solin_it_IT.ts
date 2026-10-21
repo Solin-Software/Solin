@@ -5592,6 +5592,10 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Mostra i controlli di proiezione</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
