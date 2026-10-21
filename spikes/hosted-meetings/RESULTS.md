@@ -252,3 +252,23 @@ VM: e2-micro (2 shared vCPU, 1 GB RAM + 1 GB swap), Debian 13, `southamerica-eas
 - The attendee page needs its **own rejoin loop** on top of the SDK resume: on `disconnected`, keep retrying with backoff (same device identity, attendance re-sent from `localStorage`, "reconnecting…" banner) for as long as the meeting runs.
 - On rejoin the participant starts again with the token's permissions (lobby) — Solin should **auto-admit device identities already admitted** in this meeting, so a hall-side blip doesn't strand everyone in the lobby.
 - Hall-side: frpc reconnects within seconds once the line is back; consider a hub-side "hall reconnecting" response instead of a refused port.
+
+## S6: edge-node failover
+
+Scripts: `s6_failover/` (`failover.py` hall/attendee client with failover between an ordered list of edge nodes, keeping the device identity; `run_s6.sh` starts nodes A and B, the hall and 10 attendees — one process each, like independent browsers — then kills node A at t = 30 s; `analyze.py` timeline). Local machine, two LiveKit nodes, no network latency.
+
+| Failure | Strategy | Hall publishing on B | Attendees on B | Attendees hear the program again |
+|---|---|---|---|---|
+| Node crash (`docker kill`: connections refused at once) | wait (switch on SDK `disconnected`) | 16.4 s | 21.8 s median (25.7 max) | **21.9 s** median (25.7 max) |
+| Node crash | **eager** (switch on SDK `reconnecting`) | 0.18 s | 0.13 s | **0.38 s** |
+| Silent failure (`docker pause`: no answer at all) | eager | 11.7 s | 11.0 s | **11.9 s** (SDK ping timeout) |
+| Silent failure | **eager + HTTP health probe** (1 s interval, 2 misses) | 3.4 s | 2.7 s median (3.7 max) | **3.6 s** median (3.7 max) |
+| Node crash | eager + probe | 0.14 s | 0.11 s | **0.34 s** |
+
+- With eager switching plus a health probe, a dead edge node costs attendees **~0.3 s** (crash) to **~3.5 s** (silent failure) of program, locally. Real networks add signaling RTT + ICE/DTLS setup (~0.5–2 s).
+- Measurement pitfalls fixed along the way: awaiting a goodbye from the dead node (2 s) and running 10 attendees in one Python process (connects serialised → ~2.9 s) both inflated the first results; audio still draining from the dead node was briefly counted as "recovered".
+
+**Design implications**
+- Attendee page: switch eagerly on `reconnecting`, plus a 1 s health probe of the current node; the meeting pointer carries primary + backup node and tokens for both (both nodes must accept the hall's meeting key).
+- **Attendees must follow the hall, not switch on their own**: if only the attendee's own line blips, eagerly moving to node B would strand them in an empty room while the hall stays on A. The failover target should be "where the hall is now" — the hall publishes its current node into the (encrypted) meeting pointer, and an attendee that lands on a node without the hall goes back/checks the pointer.
+- Probe false positives (one slow response) must not cause flapping: 2 consecutive misses worked here; tune with real networks.
