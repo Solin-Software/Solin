@@ -109,3 +109,32 @@ Verified with `livekit-ffi` built from the commit pinned by python `livekit` 1.1
 
 Until a release ships the fix, the spike can use VAAPI only with the patched library; the product default stays software encoding.
 
+
+## S9: moderation with LiveKit primitives
+
+Scripts: `s9_moderation/moderation_test.py` (25 checks, Python clients + `livekit-api` operator), `s9_moderation/followups.py` (media-flow measurements). LiveKit server 1.13.10 (`--dev`), `livekit` 1.1.21.
+
+**Result: everything we need works with stock LiveKit — no patches.** 23/25 event-level checks pass; the 2 "failures" are missing client *events*, while the server does enforce the change on the media (measured below).
+
+| Need | Primitive | Verified behaviour |
+|---|---|---|
+| Lobby | Token with `can_subscribe=False, can_publish=False` | Hears nothing; publish attempts time out |
+| Lobby invisible to others | `hidden=True` | Invisible to other participants, listed by the server API |
+| Admit | `UpdateParticipant(permission)` | Starts receiving the program within ~1 s; `hidden=False` makes them visible |
+| Meeting-live lock (no self-unmute) | `can_publish=False` | Self-publish refused; revoking it while speaking cuts the speaker's media immediately |
+| Operator unmutes one commenter | `can_publish=True, can_publish_sources=[MICROPHONE]` | Client auto-publishes on the permission event; others stay locked; camera refused |
+| Stop video | Drop `CAMERA` from `can_publish_sources` | Camera unpublished |
+| Raised hand | Participant sets own attribute `hand=<ts>` (`can_update_metadata`) | Hall sees the change; operator clears it via `UpdateParticipant(attributes={"hand": ""})`; other attributes (`attendance`) kept |
+| Rename | `UpdateParticipant(name=…)` | Visible to everyone |
+| Back to lobby | Lobby permissions again | Program audio stops immediately (100 → 0 frames/s); client re-subscribe attempts get nothing |
+| Remove | `RemoveParticipant` | Disconnected |
+| Reconnect (same `device_id` identity) | — | Replaces the old connection, no duplicate |
+
+### Gotchas for the product design
+
+- **`can_publish_sources=[]` means "all sources"**, not none. The lock must use `can_publish=False`.
+- **Server mute is not a lock**: a server-muted participant can unmute themselves. Use permissions.
+- **Clients are not always told**: after `can_subscribe`/`can_publish` are revoked the media stops, but the client may not get `track_unsubscribed`/`local_track_unpublished`. The attendee page must drive its UI from `participant_permissions_changed`.
+- **Attributes are lost on reconnect** (server shows `{}` after a same-identity reconnect): the attendee page must re-send `attendance` (and hand state) on every connect — it already keeps them in `localStorage`.
+- **Removed participants can rejoin with a still-valid token**: Solin's token issuer must refuse removed identities for that meeting and keep token TTLs short.
+- A participant needs `can_update_metadata` to raise a hand; that also lets them change their own name/metadata (acceptable; operator can rename back).
