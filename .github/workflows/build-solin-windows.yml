@@ -90,7 +90,7 @@ jobs:
 
       - name: Build and test DirectShow virtual-camera filters
         shell: pwsh
-        run: python scripts\build_virtual_camera.py --configuration Release
+        run: python scripts\build_virtual_camera.py --configuration Release --qualify-production
 
       - name: Install Inno Setup
         shell: pwsh

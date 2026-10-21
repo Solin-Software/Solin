@@ -1,10 +1,11 @@
-"""Real libobs → Python producer → native consumer, without COM registration."""
+"""Native filter qualification and libobs transport, without COM registration."""
 
 from __future__ import annotations
 
 from contextlib import ExitStack
 import importlib.util
 import json
+import os
 from pathlib import Path
 from queue import Empty, Queue
 import subprocess
@@ -20,13 +21,68 @@ import pytest
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(sys.platform != "win32", reason="Windows virtual camera"),
-    pytest.mark.skipif(importlib.util.find_spec("pylibobs") is None, reason="libobs required"),
 ]
 _ROOT = Path(__file__).resolve().parents[2]
 _REPORT = "VIRTUAL_CAMERA_REPORT="
 
 
 @pytest.mark.parametrize("architecture", ["x64", "x86"])
+@pytest.mark.skipif(
+    os.environ.get("SOLIN_TEST_PRODUCTION_CAMERA") != "1",
+    reason="Production broker qualification requires an explicitly opted-in test session",
+)
+def test_filter_qualification_preserves_broker_ownership(architecture):
+    import ctypes
+    from ctypes import wintypes
+
+    from solin.core.scenes.windows_vcam_identity import current_user_broker_pipe_name
+
+    directory = _ROOT / "build" / "native" / f"virtual-camera-{architecture}"
+    harness = directory / "Release" / "solin-virtual-camera-filter-tests.exe"
+    production = directory / "Release" / "solin-virtual-camera.dll"
+    isolated = directory / "test" / "Release" / "solin-virtual-camera.dll"
+    if not all(path.is_file() for path in (harness, production, isolated)):
+        pytest.skip("Build the Release virtual-camera qualification targets first")
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateNamedPipeW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+        wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+    ]
+    kernel32.CreateNamedPipeW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    # Reserve the endpoint as a producer would. Never replace an existing owner.
+    pipe = kernel32.CreateNamedPipeW(
+        current_user_broker_pipe_name(), 0x00000003 | 0x00080000 | 0x40000000,
+        0x00000008, 1, 4096, 4096, 0, None,
+    )
+    assert pipe != ctypes.c_void_p(-1).value, (
+        f"Cannot reserve production broker: Windows error {ctypes.get_last_error()}; "
+        "close Solin and other production-filter tests first"
+    )
+
+    def qualify(dll, *options):
+        return subprocess.run(
+            [str(harness), str(dll), *options],
+            cwd=harness.parent, capture_output=True, text=True, timeout=15, check=False,
+        )
+
+    try:
+        occupied = qualify(production, "--production-broker")
+        assert occupied.returncode == 1, occupied.stdout + occupied.stderr
+        assert "Could not reserve broker endpoint" in occupied.stderr
+        assert "graph validation" not in occupied.stderr
+        independent = qualify(isolated)
+        assert independent.returncode == 0, independent.stdout + independent.stderr
+    finally:
+        assert kernel32.CloseHandle(pipe)
+    recovered = qualify(production, "--production-broker")
+    assert recovered.returncode == 0, recovered.stdout + recovered.stderr
+
+
+@pytest.mark.parametrize("architecture", ["x64", "x86"])
+@pytest.mark.skipif(importlib.util.find_spec("pylibobs") is None, reason="libobs required")
 def test_native_output_recovers_after_publication_stalls(architecture):
     probe = (_ROOT / "build" / "native" / f"virtual-camera-{architecture}" / "Release"
              / "solin-virtual-camera-broker-probe.exe")

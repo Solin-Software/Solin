@@ -133,7 +133,7 @@ class BetaPreparation:
                 or self.marker not in (pull.get("body") or "") or pull["draft"]):
             raise ValueError("PR does not belong to this automated beta preparation")
 
-    def check_other_preparations(self) -> None:
+    def needs_preparation(self, main: str) -> bool:
         branches = git("ls-remote", "--heads", "origin", f"refs/heads/{PREFIX}*")
         for line in branches.splitlines():
             branch = line.split("refs/heads/", 1)[1]
@@ -143,22 +143,25 @@ class BetaPreparation:
                     raise ValueError(
                         f"Unfinished preparation on {branch}; rerun its Generate beta workflow first"
                     )
-        current = version_at("origin/main")
-        if current.is_beta:
-            remote = git("ls-remote", "--tags", "origin", f"refs/tags/{current.tag}")
-            if not remote:
-                raise ValueError("The current beta is not tagged; finish its existing release preparation")
-            if not any(item.get("tag_name") == current.tag and item.get("draft") is False
-                       for item in release.published_releases()):
-                raise ValueError("The current beta is not published; finish or rerun its Release workflow")
+        remote = git("ls-remote", "--tags", "origin")
+        refs = dict(line.split()[::-1] for line in remote.splitlines())
+        current = version_at(main)
+        if current.is_beta and f"refs/tags/{current.tag}" not in refs:
+            raise ValueError("The current beta is not tagged; finish its existing release preparation")
+        return not any(
+            target == main and release.ReleaseVersion.from_tag(
+                ref.removeprefix("refs/tags/").removesuffix("^{}")
+            ) is not None
+            for ref, target in refs.items()
+        )
 
-    def prepare_pull(self) -> dict:
+    def prepare_pull(self) -> dict | None:
         existing = self.pulls(self.branch)
         if existing:
             self.validate_pull(existing[0])
             return existing[0]
         main = self.refresh_main()
-        self.check_other_preparations()
+        needed = self.needs_preparation(main)
         remote = git("ls-remote", "--heads", "origin", f"refs/heads/{self.branch}")
         if remote:
             git("fetch", "origin", f"refs/heads/{self.branch}")
@@ -168,6 +171,8 @@ class BetaPreparation:
             if version_at(main) != version_at(base):
                 raise ValueError("main has another release version; abandon the stale preparation")
         else:
+            if not needed:
+                return None
             git("checkout", "-b", self.branch, main)
             release.prepare("beta")
             version = release.current_version()
@@ -281,12 +286,18 @@ class BetaPreparation:
 
     def run(self) -> None:
         pull = self.prepare_pull()
-        pull = self.merge(pull["number"])
-        version, sha, created = self.tag(pull)
-        url = f"https://github.com/{self.repository}/pull/{pull['number']}"
-        status = ("Tag pushed; follow the Release workflow for build and publication results."
-                  if created else "Tag already exists. If publication failed, rerun the Release workflow.")
-        summary = f"### {version.tag}\n\nPreparation: {url}\n\nCommit: `{sha}`\n\n{status}\n"
+        if pull is None:
+            summary = (
+                "No beta prepared: main already has a release tag. "
+                "Merge new changes before starting another preparation.\n"
+            )
+        else:
+            pull = self.merge(pull["number"])
+            version, sha, created = self.tag(pull)
+            url = f"https://github.com/{self.repository}/pull/{pull['number']}"
+            status = ("Tag pushed; follow the Release workflow for build and publication results."
+                      if created else "Tag already exists. If publication failed, rerun the Release workflow.")
+            summary = f"### {version.tag}\n\nPreparation: {url}\n\nCommit: `{sha}`\n\n{status}\n"
         print(summary)
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:

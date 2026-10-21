@@ -1,4 +1,4 @@
-"""Authorization, committed-content boundaries, and resumable beta publication."""
+"""Authorization, committed-content boundaries, and resumable beta preparation."""
 
 from __future__ import annotations
 
@@ -413,7 +413,7 @@ class GitHubFixture:
 
 @pytest.fixture
 def lifecycle(history, tmp_path, monkeypatch):
-    # Start from stable so this scenario doesn't require a previously published beta.
+    # Start from stable to exercise the first beta and subsequent preparations.
     # Normalize native write_text endings when staging, including on Windows.
     git(history.repository, "config", "core.autocrlf", "input")
     stable = history.commit({VERSION_PATH: ("100644", version_source("26.31.1"))})
@@ -593,24 +593,66 @@ def test_another_dispatch_cannot_start_while_preparation_is_unfinished(
     assert sum(method == "POST" for method, _, _ in api.calls) == (0 if orphan else 1)
 
 
-@pytest.mark.parametrize("state", ["missing-tag", "unpublished", "draft"])
-def test_next_dispatch_requires_current_beta_to_be_tagged_and_published(
-    lifecycle, monkeypatch, state
-):
+def test_next_dispatch_requires_current_beta_to_be_tagged(lifecycle, monkeypatch):
     automation, api = lifecycle
-    pull = automation.merge(automation.prepare_pull()["number"])
-    if state != "missing-tag":
-        automation.tag(pull)
-    releases = [{"tag_name": "26.32.0-beta.1", "draft": True}] if state == "draft" else []
-    monkeypatch.setattr(beta.release, "published_releases", lambda: releases)
+    automation.merge(automation.prepare_pull()["number"])
     other = beta.BetaPreparation("456", automation.bot)
     monkeypatch.setattr(other, "api", api)
-    with pytest.raises(
-        ValueError, match="not tagged" if state == "missing-tag" else "not published"
-    ):
+    with pytest.raises(ValueError, match="not tagged"):
         other.prepare_pull()
     assert not git(api.remote, "for-each-ref", f"refs/heads/{other.branch}")
     assert sum(method == "POST" for method, _, _ in api.calls) == 1
+
+
+def test_next_dispatch_tags_merged_fix_independently_of_publication(lifecycle, monkeypatch):
+    automation, api = lifecycle
+    automation.run()
+    first_sha = api.pull["merge_commit_sha"]
+    api.advance_main()
+    base = git(api.remote, "rev-parse", "refs/heads/main")
+    other = beta.BetaPreparation("456", automation.bot)
+    next_api = GitHubFixture(api.history, api.remote, other)
+    monkeypatch.setattr(other, "api", next_api)
+
+    def publication_unavailable():
+        pytest.fail("Beta preparation must not depend on publication state or availability")
+
+    monkeypatch.setattr(beta.release, "published_releases", publication_unavailable)
+    other.run()
+
+    second_sha = next_api.pull["merge_commit_sha"]
+    assert next_api.pull["merged"] and second_sha != first_sha
+    assert git(api.remote, "rev-parse", "refs/heads/main") == second_sha
+    assert git(api.remote, "rev-parse", "refs/tags/26.32.0-beta.1^{commit}") == first_sha
+    assert git(api.remote, "rev-parse", "refs/tags/26.32.0-beta.2^{commit}") == second_sha
+    assert git(api.history.repository, "rev-parse", f"{second_sha}^") == base
+    assert beta.version_at(second_sha).canonical == "26.32.0b2"
+    assert (
+        git(api.history.repository, "show", f"{second_sha}:src/solin/application.py")
+        == "VALUE = 2"
+    )
+
+
+@pytest.mark.parametrize("tag", ["26.31.1", "26.32.0-beta.1"])
+@pytest.mark.parametrize("annotated", [False, True], ids=["lightweight", "annotated"])
+def test_dispatch_does_not_prepare_when_main_has_release_tag(lifecycle, capsys, tag, annotated):
+    automation, api = lifecycle
+    repository = api.history.repository
+    version = beta.release.ReleaseVersion.from_tag(tag)
+    main = api.history.commit({VERSION_PATH: ("100644", version_source(version.canonical))})
+    git(repository, "reset", "--hard", main)
+    git(repository, "push", "origin", f"{main}:refs/heads/main")
+    arguments = ["--annotate", "--message", tag] if annotated else []
+    git(repository, "tag", *arguments, tag, main)
+    git(repository, "push", "origin", f"refs/tags/{tag}")
+    before = git(api.remote, "for-each-ref", "refs/heads", "refs/tags")
+
+    automation.run()
+
+    assert git(api.remote, "for-each-ref", "refs/heads", "refs/tags") == before
+    assert api.pull is None and not any(method != "GET" for method, _, _ in api.calls)
+    assert git(repository, "status", "--porcelain") == ""
+    assert "main already has a release tag" in capsys.readouterr().out
 
 
 def test_pending_checks_timeout_leaves_existing_pr_resumable(lifecycle):

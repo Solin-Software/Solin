@@ -174,8 +174,11 @@ including after GitHub deletes a merged branch. A closed, unmerged preparation
 is treated as cancelled.
 
 Preparations are serialized. A different dispatch refuses to start while another
-automation branch has unfinished work, or while the current beta is untagged or
-unpublished. After successful publication, a new dispatch prepares the next beta.
+automation branch has unfinished work or the current beta is untagged. Once the
+tag is pushed, a new dispatch can prepare the next beta from current `main`,
+regardless of the previous beta's publication status. If the latest commit on
+`main` already has a release tag, the run succeeds without creating a branch,
+PR, or tag; merge new changes before starting another preparation.
 GitHub concurrency retains only one pending run, so repeated clicks can replace
 an earlier queued run; avoid queuing multiple preparations.
 
@@ -187,9 +190,10 @@ the PR for inspection. If an interruption leaves a branch without a PR and it
 must be abandoned, delete that automation branch before a new dispatch.
 
 An existing matching tag is a no-op; a tag pointing elsewhere stops preparation.
-Tags are never moved. If tag push succeeded but publication failed, rerun the
+Tags are never moved. To retry publication of the same tagged source, rerun the
 associated **Release** workflow; rerunning **Generate beta** does not push the
-same tag again.
+same tag again. To include source fixes, merge the changes into `main` and start
+a new **Generate beta** run to create the next version and tag.
 
 ## Publishing
 
