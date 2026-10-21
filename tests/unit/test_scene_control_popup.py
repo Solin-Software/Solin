@@ -876,19 +876,33 @@ def test_projection_controls_toggle_only_changes_presentation(controller_factory
         host.deleteLater()
 
 
+@pytest.mark.parametrize("docked", [False, True], ids=["popup", "docked"])
 @pytest.mark.parametrize(
     ("projection_visible", "program_available", "role"),
     [(False, True, "program"), (True, False, "projection")],
 )
 def test_single_output_card_is_its_routing_button(
-    controller_factory, projection_visible, program_available, role,
+    controller_factory, projection_visible, program_available, role, docked,
 ) -> None:
     controller = controller_factory()
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, program_available)
-    popup = SceneControlPopup(controller)
+    host = _DockHost()
+    host.resize(900, 600)
+    popup = SceneControlPopup(controller, host)
     try:
         popup.projection_controls_button.setChecked(projection_visible)
-        show_and_activate(popup)
+        # Cocoa popups receive input through the active owner without becoming
+        # the active native window themselves. Activate the real window first.
+        show_and_activate(host)
+        popup.set_docked(docked)
+        popup.show()
+        if not docked:
+            wait_until(
+                lambda: QApplication.activePopupWidget() is popup
+                and popup.windowHandle() is not None
+                and popup.windowHandle().isExposed(),
+                description="scene popup exposure and input ownership",
+            )
         card = next(iter(popup._scene_cards.values()))
         button = card._program if role == "program" else card._projection
         assert button.geometry() == card.rect()
@@ -906,9 +920,10 @@ def test_single_output_card_is_its_routing_button(
         assert routed == [(card.scene_id, role)] * 2
         assert returns == [(card.scene_id, role)]
         assert button.isChecked()
-        QTest.keyClick(button, Qt.Key.Key_Space)
-        assert routed == [(card.scene_id, role)] * 3
         button.setFocus()
+        wait_until(button.hasFocus, description="scene routing button focus")
+        QTest.keyClick(host.windowHandle(), Qt.Key.Key_Space)
+        assert routed == [(card.scene_id, role)] * 3
         assert button.hasFocus()
         popup.projection_controls_button.setChecked(True)
         controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
@@ -933,6 +948,8 @@ def test_single_output_card_is_its_routing_button(
     finally:
         popup.close()
         popup.deleteLater()
+        host.close()
+        host.deleteLater()
 
 
 def test_scene_card_without_visible_outputs_does_not_route(controller_factory) -> None:
