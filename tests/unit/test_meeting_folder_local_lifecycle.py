@@ -26,6 +26,16 @@ class _QueuedOperations:
     def cancel(self, operation_id):
         self.pending = [spec for spec in self.pending if spec.operation_id != operation_id]
 
+    def cancel_scope(self, scope_id):
+        for spec in tuple(self.pending):
+            if spec.scope_id == scope_id:
+                self.cancel(spec.operation_id)
+                if spec.cancelled is not None:
+                    spec.cancelled()
+
+    def scope_is_idle(self, scope_id):
+        return not any(spec.scope_id == scope_id for spec in self.pending)
+
     def take(self, operation_type):
         spec = next(spec for spec in self.pending if spec.operation_type == operation_type)
         self.pending.remove(spec)
@@ -87,6 +97,7 @@ class _LocalMeeting:
     _import_meeting_folder_source = MeetingTreeController._import_meeting_folder_source
     _insert_meeting_folder_nodes = MeetingTreeController._insert_meeting_folder_nodes
     _record_meeting_folder_import = MeetingTreeController._record_meeting_folder_import
+    _record_meeting_folder_failure = MeetingTreeController._record_meeting_folder_failure
     _manual_media_node = MeetingTreeController._manual_media_node
     _insert_nodes = MeetingTreeController._insert_nodes
     _commit_inserted_nodes = MeetingTreeController._commit_inserted_nodes
@@ -110,6 +121,14 @@ class _LocalMeeting:
     _save_local_cache = MeetingTreeController._save_local_cache
     _snapshot_storage_key = MeetingTreeController._snapshot_storage_key
     _on_snapshot_write_completed = MeetingTreeController._on_snapshot_write_completed
+    _cancel_local_snapshot = MeetingTreeController._cancel_local_snapshot
+    _set_sync_busy = MeetingTreeController._set_sync_busy
+    _folder_has_active_media = MeetingTreeController._folder_has_active_media
+    _drain_folder_deletion = MeetingTreeController._drain_folder_deletion
+    _finish_folder_deletion = MeetingTreeController._finish_folder_deletion
+    _apply_folder_deletion_result = MeetingTreeController._apply_folder_deletion_result
+    deleteMeetingFolder = MeetingTreeController.deleteMeetingFolder
+    syncPending = property(MeetingTreeController.syncPending.fget)
 
     def __init__(self, root, pub_type="mwb"):
         self.operations = _QueuedOperations()
@@ -131,8 +150,19 @@ class _LocalMeeting:
             date(2026, 5, 25),
         )
         self._tree_key = self._sync_identity.tree_key
+        self._tree_session.owner_id = f"meeting:{self._tree_key}"
         self._sync_root = str(root)
         self._sync_folder = ""
+        self._folder_state = "checking"
+        self._folder_mutation_pending = False
+        self._folder_deletion_persistence = {}
+        self._pending_folder_delete = None
+        self._folder_delete_timer = SimpleNamespace(start=lambda: None, stop=lambda: None)
+        self._active_media_paths_provider = lambda: ()
+        self._confirm_folder_deletion = lambda _folder: True
+        self._warn_folder_failed = lambda message: pytest.fail(message)
+        self._sync_busy = False
+        self._sync_busy_message = ""
         self._sync_enabled = False
         self._sync_available = True
         self._sync_snapshot = ReplicaSnapshot()
@@ -166,6 +196,7 @@ class _LocalMeeting:
         self._profile_paths = SimpleNamespace(embedded_dir=root.parent / "detached")
         self._arm_sync_save_timer = lambda: None
         self._flush_image_framing_save = lambda: True
+        self._flush_derived_media_patches = lambda: True
         self._start_media_requests = lambda *_args: None
         self._emit_section_counts = lambda: None
         self._cancel_media_info_requests_for_item = lambda _id: None
@@ -181,8 +212,12 @@ class _LocalMeeting:
         return [node for node in iter_nodes(self._nodes) if node.get("type") == "media"]
 
     def _submit_modal_operation(self, **options):
-        value = options["runner"](lambda _progress: None, CancellationFlag())
-        options["commit"](value)
+        try:
+            value = options["runner"](lambda _progress: None, CancellationFlag())
+            options["commit"](value)
+        finally:
+            if options.get("settled") is not None:
+                options["settled"]()
         return True
 
     def _persist_snapshot(self, key, write):
@@ -212,6 +247,270 @@ def local_meeting(tmp_path):
     folder = root / "2026-05-25 MW"
     folder.mkdir(parents=True)
     return _LocalMeeting(root), folder
+
+
+def test_folder_presence_is_reported_without_enabling_sync(local_meeting):
+    meeting, folder = local_meeting
+    meeting.refresh()
+
+    assert meeting._folder_state == "present"
+    assert meeting._sync_folder == str(folder)
+    assert not meeting._sync_enabled
+
+
+def test_missing_folder_is_distinct_from_unavailable_root(local_meeting):
+    meeting, folder = local_meeting
+    folder.rmdir()
+    meeting.refresh()
+    assert meeting._folder_state == "missing"
+
+    offline = folder.parent.with_name("offline")
+    folder.parent.rename(offline)
+    meeting.refresh()
+    assert meeting._folder_state == "unavailable"
+    assert not meeting._sync_enabled
+
+
+def test_create_meeting_folder_does_not_activate_sync(local_meeting):
+    meeting, folder = local_meeting
+    folder.rmdir()
+    meeting.refresh()
+
+    MeetingTreeController.createMeetingFolder(meeting)
+    meeting.operations.drain()
+
+    assert folder.is_dir()
+    assert meeting._folder_state == "present"
+    assert not meeting._sync_service.activation_path(folder).exists()
+    assert not meeting._sync_enabled
+
+
+def test_explicit_folder_delete_updates_tree_and_persists_before_ack(local_meeting):
+    from solin.core.meetings.folder_lifecycle import MeetingFolderDeletion
+
+    meeting, folder = local_meeting
+    (folder / "clip.mp4").write_bytes(b"video")
+    meeting.refresh()
+    assert len(meeting.media()) == 1
+
+    meeting.deleteMeetingFolder()
+    meeting.operations.drain()
+
+    assert not folder.exists()
+    assert meeting.media() == []
+    assert meeting._folder_state == "missing"
+    assert not meeting._folder_mutation_pending
+    assert not meeting._store.snapshot(meeting._tree_key).meeting_folder_imports
+    assert MeetingFolderDeletion.pending_for(
+        meeting._store.path.parent / "meeting_folder_deletions", folder.parent,
+        meeting._sync_identity,
+    ) is None
+
+
+def test_folder_delete_requires_sync_disabled(local_meeting):
+    meeting, folder = local_meeting
+    meeting.refresh()
+    meeting.activate(folder)
+    meeting._confirm_folder_deletion = lambda _folder: pytest.fail("Must not ask while sync is active")
+
+    meeting.deleteMeetingFolder()
+
+    assert folder.is_dir()
+    assert meeting._sync_enabled
+
+
+def test_folder_delete_recovery_waits_for_successful_snapshot_save(local_meeting, monkeypatch):
+    from solin.core.meetings.folder_lifecycle import MeetingFolderDeletion
+
+    meeting, folder = local_meeting
+    (folder / "clip.mp4").write_bytes(b"video")
+    meeting.refresh()
+    writes = {}
+
+    def queue_write(key, writer):
+        writes[key] = writer
+        return 1
+
+    meeting._media_tree_runtime.snapshots.request = queue_write
+    meeting.deleteMeetingFolder()
+    deletion = MeetingFolderDeletion.pending_for(
+        meeting._store.path.parent / "meeting_folder_deletions", folder.parent,
+        meeting._sync_identity,
+    )
+    assert deletion is not None
+    assert not folder.exists()
+    assert meeting.media() == []
+    assert meeting.syncPending
+    key = meeting._snapshot_storage_key()
+
+    def locked_snapshot(*_args, **_kwargs):
+        raise PermissionError("snapshot is locked")
+
+    with monkeypatch.context() as denied:
+        denied.setattr(meeting._store, "save", locked_snapshot)
+        with pytest.raises(PermissionError, match="locked"):
+            writes[key]()
+    assert deletion.pending
+    assert meeting._store.snapshot(meeting._tree_key).media_count == 1
+    assert meeting.syncPending
+
+    MeetingTreeController.createMeetingFolder(meeting)
+    assert not folder.exists()
+    writes[key]()
+    meeting._on_snapshot_write_completed(key, 1)
+    meeting.operations.drain()
+    assert not deletion.pending
+    assert not meeting.syncPending
+    assert meeting._store.snapshot(meeting._tree_key).media_count == 0
+
+
+def test_folder_delete_waits_for_workers_and_blocks_new_insertions(local_meeting):
+    meeting, folder = local_meeting
+    meeting.refresh()
+    idle = False
+    meeting.operations.scope_is_idle = lambda _scope: idle
+
+    meeting.deleteMeetingFolder()
+
+    assert meeting._folder_mutation_pending
+    assert folder.exists()
+    assert not meeting._insert_nodes("root", 0, [{"id": "late", "type": "media"}])
+    assert meeting.media() == []
+    idle = True
+    meeting._drain_folder_deletion()
+    meeting.operations.drain()
+    assert not folder.exists()
+    assert not meeting._folder_mutation_pending
+
+
+@pytest.mark.parametrize("worker_field", ["_pdf_threads", "_lo_threads", "_jwpub_threads"])
+@pytest.mark.parametrize("outcome", ["success", "failure", "manual-failure"])
+def test_folder_delete_drains_document_callbacks_before_removal(local_meeting, worker_field, outcome):
+    meeting, folder = local_meeting
+    meeting.refresh()
+    source = {
+        "source_key": "pending-document", "kind": "pdf",
+        "path": str(folder / "document.pdf"), "folder_path": str(folder),
+        "_tree_key": meeting._tree_key,
+    }
+    for field in ("_pdf_threads", "_lo_threads", "_jwpub_threads"):
+        setattr(meeting, field, [])
+    getattr(meeting, worker_field).append(object())
+    meeting._meeting_folder_pending_sources.add(source["source_key"])
+    meeting._warn_import_failed = lambda *_args: pytest.fail("Retired import must not open a dialog")
+
+    meeting.deleteMeetingFolder()
+
+    assert folder.exists()
+    assert meeting._folder_mutation_pending
+    if outcome == "success":
+        meeting._insert_meeting_folder_nodes(
+            source, [meeting._manual_media_node(str(folder.parent.parent / "page.jpg"))],
+            "section:default", 0,
+        )
+    elif outcome == "failure":
+        meeting._record_meeting_folder_failure(source, "document", "conversion failed")
+    else:
+        MeetingTreeController._warn_import_failed(meeting, "document", "conversion failed")
+    assert meeting.media() == []
+    assert meeting._meeting_folder_imports == {}
+    meeting._drain_folder_deletion()
+    assert folder.exists()
+    getattr(meeting, worker_field).clear()  # Queued finished handler has now run.
+    meeting._drain_folder_deletion()
+    meeting.operations.drain()
+    assert not folder.exists()
+    assert meeting.media() == []
+    assert not meeting._meeting_folder_pending_sources
+
+
+def test_cancelled_folder_delete_preserves_files_and_tree(local_meeting):
+    meeting, folder = local_meeting
+    (folder / "clip.mp4").write_bytes(b"video")
+    meeting.refresh()
+    before = clone_nodes(meeting._nodes)
+    meeting._confirm_folder_deletion = lambda _folder: False
+
+    meeting.deleteMeetingFolder()
+
+    assert (folder / "clip.mp4").read_bytes() == b"video"
+    assert meeting._nodes == before
+    assert not meeting._folder_mutation_pending
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure"])
+def test_cancelled_waiting_deletion_releases_discarded_import_for_retry(local_meeting, outcome):
+    meeting, folder = local_meeting
+    meeting.refresh()
+    path = folder / "clip.mp4"
+    path.write_bytes(b"video")
+    source = meeting._watched_folder_file_store.scan_meeting_sources(folder.parent)[0]["sources"][0]
+    source = {**source, "folder_path": str(folder), "_tree_key": meeting._tree_key}
+    meeting._meeting_folder_pending_sources.add(source["source_key"])
+    meeting._pdf_threads = [object()]
+    meeting._modal_operation_cancellable = True
+    meeting._modal_operation_id = ""
+    meeting._warn_import_failed = lambda *_args: pytest.fail("Retired import must not warn")
+    meeting.deleteMeetingFolder()
+    if outcome == "success":
+        meeting._insert_meeting_folder_nodes(
+            source, [meeting._manual_media_node(str(path))], "section:default", 0,
+        )
+    else:
+        meeting._record_meeting_folder_failure(source, "clip", "failed")
+
+    MeetingTreeController.cancelModalOperation(meeting)
+    meeting.operations.drain()
+
+    assert folder.exists()
+    assert not meeting._folder_mutation_pending
+    assert len(meeting.media()) == 1
+    assert not meeting._meeting_folder_pending_sources
+
+
+def test_folder_delete_is_blocked_for_projected_source(local_meeting):
+    meeting, folder = local_meeting
+    source = folder / "clip.mp4"
+    source.write_bytes(b"video")
+    meeting.refresh()
+    messages = []
+    meeting._warn_folder_failed = messages.append
+    meeting._active_media_paths_provider = lambda: (str(source),)
+    meeting._confirm_folder_deletion = lambda _folder: pytest.fail("Cannot delete projected source")
+
+    meeting.deleteMeetingFolder()
+
+    assert messages
+    assert source.exists()
+
+
+def test_reopen_reconciles_explicit_delete_without_redeleting(local_meeting):
+    from solin.core.meetings.folder_lifecycle import MeetingFolderDeletion
+
+    meeting, folder = local_meeting
+    (folder / "clip.mp4").write_bytes(b"video")
+    meeting.refresh()
+    saved = meeting._store.snapshot(meeting._tree_key)
+    deletion = MeetingFolderDeletion(
+        folder.parent, folder, meeting._sync_identity,
+        meeting._store.path.parent / "meeting_folder_deletions",
+    )
+    deletion.delete(
+        meeting._watched_folder_file_store, meeting._sync_service,
+        nodes=meeting._nodes, imports=meeting._meeting_folder_imports,
+        cancellation=CancellationFlag(),
+    )
+    assert deletion.pending
+    restarted = _LocalMeeting(folder.parent)
+    restarted._nodes = saved.nodes
+    restarted._meeting_folder_imports = saved.meeting_folder_imports
+
+    restarted.refresh()
+
+    assert restarted.media() == []
+    assert not deletion.pending
+    assert not folder.exists()
+    assert restarted._store.snapshot(restarted._tree_key).media_count == 0
 
 
 @pytest.mark.parametrize("pub_type, tag", [("mwb", "MW"), ("wt", "WE")])

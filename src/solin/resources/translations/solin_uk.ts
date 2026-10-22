@@ -1548,6 +1548,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Назва папки:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Наприклад: Особлива подія</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Створити папку</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Введіть назву папки.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Назва не може починатися або закінчуватися пробільними символами.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Назва не може містити / \ &lt; &gt; : &quot; | ? * або керівні символи.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Цю назву зарезервовано операційною системою.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Назва не може починатися з крапки.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Назва не може закінчуватися крапкою.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Назва папки надто довга.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Файл або папка з такою назвою вже існує.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Цю назву зарезервовано для зібрань. Виберіть іншу назву папки.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2811,14 +2862,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Вимкнути синхронізацію зібрання</translation>
+        <source>Help</source>
+        <translation>Довідка</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Синхронізувати зібрання з пов’язаною папкою</translation>
+        <source>Folder present</source>
+        <translation>Папка існує</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Папку не знайдено</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Папка недоступна</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Перевірка папки…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Синхронізацію ввімкнено</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Синхронізацію вимкнено</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Синхронізація…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Завершення…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Папка зібрання</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Шлях до папки</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Пов’язана папка недоступна. Перевірте її розташування та права доступу.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Створити папку</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Відкрити папку</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Синхронізація зібрання</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Це налаштування застосовується до всіх комп’ютерів, пов’язаних із цією папкою зібрання.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Видалити папку…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Вимкніть синхронізацію, щоб видалити цю папку</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Створення папки…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Не вдалося відкрити папку.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Не вдалося оновити папку зібрання.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Видалити папку</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Видалити папку «{name}» і весь її вміст?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Елементи зібрання, пов’язані з цими файлами, також буде видалено. Цю дію неможливо скасувати.
+
+Служба синхронізації папок також може видалити ці файли на інших комп’ютерах.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Зупиніть проєкцію перед видаленням цієї папки.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Підготовка до видалення папки…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Видалення папки…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Синхронізація зібрання</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Вимкнути синхронізацію цього зібрання на пов’язаних комп’ютерах?
+
+Папку та її видимі файли буде збережено.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Не вдалося оновити синхронізацію зібрання.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Зміни збережено на цьому комп’ютері. Спробуйте ще раз або відкрийте пов’язану папку.</translation>
     </message>
 </context>
 <context>
@@ -4403,6 +4576,14 @@ This action cannot be undone.</source>
 The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</source>
         <translation>Скинути синхронізацію для «{name}»?
 Поточне розташування та файли буде збережено. Зміни попередньої синхронізації, що очікують на застосування, не буде застосовано.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Створити папку</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Створити порожню папку в пов’язаній папці</translation>
     </message>
 </context>
 <context>
