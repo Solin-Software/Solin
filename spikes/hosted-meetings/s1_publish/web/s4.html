@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S4 connectivity</title>
+<style>
+  body { margin: 0; padding: 12px; background: #111; color: #ddd; font: 15px/1.45 system-ui, sans-serif; }
+  video { width: 100%; max-width: 640px; background: #000; border-radius: 6px; display: block; }
+  button { font-size: 18px; padding: 12px 20px; margin: 8px 0; width: 100%; max-width: 640px; }
+  #status { font-size: 18px; margin: 10px 0; }
+  .ok { color: #6c6; } .bad { color: #e66; } .wait { color: #db4; }
+  pre { white-space: pre-wrap; font-size: 12px; color: #999; }
+</style>
+</head>
+<body>
+<button id="go">Join test</button>
+<div id="status" class="wait">Tap “Join test”.</div>
+<video id="v" playsinline autoplay muted></video>
+<pre id="detail"></pre>
+<script src="vendor/livekit-client.umd.js"></script>
+<script>
+// S4: which ICE path does this device get to the hall? Reports the selected candidate pair.
+const LK = LivekitClient;
+const label = new URLSearchParams(location.search).get('label') || 'phone';
+const statusEl = document.getElementById('status'), detail = document.getElementById('detail');
+const setStatus = (text, cls) => { statusEl.textContent = text; statusEl.className = cls; };
+const post = rec => fetch('log', { method: 'POST', body: JSON.stringify({ test: 's4', label, ua: navigator.userAgent, ...rec }) }).catch(() => {});
+
+async function selectedPair(track) {
+  const report = await track.getRTCStatsReport();
+  if (!report) return null;
+  let pair = null;
+  report.forEach(s => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = report.get(s.selectedCandidatePairId); });
+  if (!pair) report.forEach(s => { if (s.type === 'candidate-pair' && s.state === 'succeeded' && (s.nominated || s.selected)) pair = s; });
+  if (!pair) return null;
+  const l = report.get(pair.localCandidateId) || {}, r = report.get(pair.remoteCandidateId) || {};
+  return { local: `${l.candidateType} ${l.protocol} ${l.address || l.ip || ''}`, remote: `${r.candidateType} ${r.protocol} ${r.address || r.ip || ''}:${r.port}`,
+           relayed: l.candidateType === 'relay' || r.candidateType === 'relay', rtt_ms: pair.currentRoundTripTime ? Math.round(pair.currentRoundTripTime * 1000) : null,
+           bytes_received: pair.bytesReceived };
+}
+
+document.getElementById('go').onclick = async (e) => {
+  e.target.disabled = true;
+  setStatus('Connecting…', 'wait');
+  const t0 = performance.now();
+  try {
+    const { token, url } = await (await fetch(`token?identity=s4-${label}-${Date.now()}&room=s4`)).json();
+    const room = new LK.Room({ adaptiveStream: false, dynacast: false });
+    let videoTrack = null;
+    room.on(LK.RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind === 'video') { videoTrack = track; track.attach(document.getElementById('v')); }
+      else { const el = track.attach(); el.muted = true; document.body.appendChild(el); }
+    });
+    room.on(LK.RoomEvent.Disconnected, r => { setStatus('Disconnected (' + r + ')', 'bad'); post({ event: 'disconnected', reason: String(r) }); });
+    await room.connect(url, token);
+    const joinMs = Math.round(performance.now() - t0);
+    setStatus(`Signaling connected (${joinMs} ms). Waiting for media…`, 'wait');
+    post({ event: 'signaling_connected', join_ms: joinMs });
+    let reported = false;
+    const tick = async () => {
+      if (!videoTrack) return;
+      const p = await selectedPair(videoTrack);
+      const v = document.getElementById('v');
+      if (p && v.videoWidth) {
+        setStatus(`Media OK — ${p.relayed ? 'RELAYED' : 'DIRECT'} path (${v.videoWidth}x${v.videoHeight})`, 'ok');
+        detail.textContent = JSON.stringify(p, null, 1);
+        if (!reported) { reported = true; post({ event: 'media', media_ms: Math.round(performance.now() - t0), ...p }); }
+      }
+    };
+    setInterval(tick, 1000);
+    setTimeout(() => { if (!reported) { setStatus('No media after 20 s — direct path failed (no relay available)', 'bad'); post({ event: 'media_failed' }); } }, 20000);
+  } catch (err) {
+    setStatus('Failed: ' + err, 'bad'); post({ event: 'error', error: String(err) });
+  }
+};
+</script>
+</body>
+</html>

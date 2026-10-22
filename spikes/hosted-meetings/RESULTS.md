@@ -272,3 +272,35 @@ Scripts: `s6_failover/` (`failover.py` hall/attendee client with failover betwee
 - Attendee page: switch eagerly on `reconnecting`, plus a 1 s health probe of the current node; the meeting pointer carries primary + backup node and tokens for both (both nodes must accept the hall's meeting key).
 - **Attendees must follow the hall, not switch on their own**: if only the attendee's own line blips, eagerly moving to node B would strand them in an empty room while the hall stays on A. The failover target should be "where the hall is now" — the hall publishes its current node into the (encrypted) meeting pointer, and an attendee that lands on a node without the hall goes back/checks the pointer.
 - Probe false positives (one slow response) must not cause flapping: 2 consecutive misses worked here; tune with real networks.
+
+## S4: connectivity matrix (partial)
+
+Tools: `s4_connectivity/hall.yaml` (hall LiveKit advertising its STUN-discovered public IPv4), `s1_publish/web/s4.html` (attendee page that reports the selected ICE candidate pair), a STUN NAT probe, and two temporary Cloudflare quick tunnels (test-only, no account) to give the phone HTTPS signaling to the hall.
+
+**Networks measured**
+
+| Network | IPv4 | IPv6 | NAT mapping |
+|---|---|---|---|
+| Home line (hall PC) | Behind **CGNAT** (upstream hop `100.72.0.1`, 100.64/10); Wi-Fi is double-NATed on the same line | **None** (only ULA `fd42::/64`) | **Endpoint-independent** (same public port toward 3 STUN servers) → hole punching possible |
+| Phone hotspot (mobile carrier) | **Not usable**: tethered PC can't reach IPv4 at all (carrier is IPv6-only with NAT64/DNS64; the phone's own 464XLAT doesn't extend to hotspot clients) | **Native global IPv6** (`2804:214:…`) | n/a over IPv6 (no NAT; carrier firewall unknown) |
+
+**Test 1 — hall on home CGNAT (IPv4-only) ↔ attendee phone on 4G (Chrome 155, Android):** signaling OK, **media failed** ("could not establish pc connection"). The hall's ICE log shows why: the phone offered **only IPv6 candidates** (host + srflx `2804:214:…`) and no IPv4 at all; the hall has no routable IPv6 (it tried from `fd42::1`, 8 checks, 0 answers). **No common address family → no direct path possible**, regardless of NAT behaviour.
+
+**Implications**
+- IPv6-only mobile attendees + IPv4-only CGNAT halls will be a *common* combination in Brazil, not an edge case. They can only meet through a **dual-stack** relay or edge node (attendee over IPv6, hall over IPv4).
+- **Hub TURN and community edge nodes must be dual-stack (IPv4 + IPv6)** — a hard requirement. (The S5 GCP VM was IPv4-only.)
+- A hall on a phone hotspot is **IPv6-only**: it needs IPv6 candidates in LiveKit and a dual-stack path for IPv4-only attendees.
+- Halls with home IPv6 should advertise IPv6 so IPv6 attendees can connect directly.
+- Home CGNAT with endpoint-independent mapping means IPv4 attendees with friendly NATs may still connect directly — not yet measured (needs an IPv4 attendee on another network).
+
+**Dual-stack fix, demonstrated** (temporary GCP VM `e2-small`, São Paulo, custom VPC with an `IPV4_IPV6` subnet; deleted afterwards). Same phone on 4G (IPv6-only), same home hall (IPv4-only CGNAT):
+
+| Path | Result | Selected ICE pair (phone side) | RTT | Signaling / first video |
+|---|---|---|---|---|
+| **Edge node** (LiveKit on the dual-stack VM; hall publishes to it over IPv4) | **Media OK, direct** | host IPv6 `2804:214:…` ↔ host IPv6 `2600:1900:40f0:231::`:7882 | 134 ms | 2.6 s / 4.6 s |
+| **Dual-stack TURN** (coturn on the VM, listening on IPv4 + IPv6; hall's LiveKit hands out both via `turn_servers` + secret) | **Media OK, relayed** | relay `35.247.228.99` (an **IPv4** relay address) ↔ prflx = hall's CGNAT address (coturn permission for peer `181.232.152.160`) | 78 ms | 2.1 s / 3.1 s |
+
+- Both approaches bridge the IPv6-only attendee to the IPv4-only CGNAT hall. The phone obtained an IPv4 relay address even though it is IPv6-only (via its carrier's IPv4 emulation or a requested address family) — so a dual-stack TURN on the hub works as the last-resort path, and a dual-stack edge node works as the media node.
+- Setup pitfall: installing Debian's `coturn` package starts a default `coturn` service that grabs :3478; a separately configured instance then fails to bind (first relay attempt failed for that reason only). Disable the packaged service or configure it instead.
+
+**Not done:** hall on mobile ↔ attendee on another network (needs a second device), UDP-blocked attendee (TURN over TCP/TLS 443).

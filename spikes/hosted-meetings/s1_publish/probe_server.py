@@ -37,7 +37,7 @@ class Handler(SimpleHTTPRequestHandler):
                                         can_publish=q.get("publish", ["0"])[0] == "1"))
             .to_jwt()
         )
-        self._json({"token": token, "url": "ws://127.0.0.1:7880"})
+        self._json({"token": token, "url": os.environ.get("LK_PUBLIC_URL", "ws://127.0.0.1:7880")})
 
     def do_POST(self):
         if self.path != "/log":
