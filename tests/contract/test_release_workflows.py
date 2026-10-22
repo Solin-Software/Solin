@@ -465,7 +465,11 @@ def test_packaged_smoke_selection_respects_platform_with_strict_skips(platform):
     steps = configuration["jobs"]["build"]["steps"]
     step_name = "Run AppImage startup smoke" if platform == "linux" else "Run packaged startup smoke"
     commands = next(step["run"] for step in steps if step.get("name") == step_name)
-    targets = re.findall(r"tests[/\\]e2e[/\\][\w]+\.py(?:::[\w]+)?", commands)
+    # Workflow paths must also be collectable on hosts with POSIX separators.
+    targets = [
+        target.replace("\\", "/")
+        for target in re.findall(r"tests[/\\]e2e[/\\][\w]+\.py(?:::[\w]+)?", commands)
+    ]
     assert targets
     # Collect the actual workflow targets. Stub artifact checks, while retaining
     # pytest's real skip handling and the release suite's strict reporting hook.
