@@ -5,10 +5,10 @@ file, using libobs' own recording pipeline: an ``ffmpeg_muxer`` output fed by a
 video encoder (``obs_x264`` — universal + reliable) and an AAC audio encoder,
 both auto-attached to the global mix.
 
-Audio track: the encoder binds the main audio mix, so recordings carry an audio
-track. Selecting specific microphone / system-audio devices (adding capture
-sources to the mix) is a later slice; today the track is whatever the main mix
-carries.
+Audio track: the audio encoder binds mix track 1 (``RECORDING_MIX_INDEX``), which
+carries the microphone and system-audio captures (see ``libobs_audio_sources``).
+Media sources are monitor-only with no mixer tracks, so media is heard in the
+recording through the system-audio capture alone, never twice.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+
+from solin.core.media.obs_runtime import RECORDING_MIX_INDEX
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +117,8 @@ class LibobsRecorder:
                 video_encoder_id, "solin-rec-video", {"bitrate": video_bitrate}
             )
             audio_encoder = ob.AudioEncoder.create(
-                _AUDIO_ENCODER, "solin-rec-audio", {"bitrate": audio_bitrate}
+                _AUDIO_ENCODER, "solin-rec-audio", {"bitrate": audio_bitrate},
+                mixer_idx=RECORDING_MIX_INDEX,
             )
             output = ob.Output.create(output_kind, "solin-recording", {"path": path})
             output.set_video_encoder(video_encoder)
