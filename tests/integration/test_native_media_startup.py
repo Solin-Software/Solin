@@ -485,7 +485,11 @@ def test_native_monitoring_uses_system_default_and_reset_preserves_playback() ->
 def _assert_monitor_only_media_stays_out_of_the_recording_mix() -> None:
     from array import array
 
-    from solin.core.media.obs_runtime import RECORDING_AUDIO_MIXERS, RECORDING_MIX_INDEX
+    from solin.core.media.obs_runtime import (
+        MONITORING_MONITOR_AND_OUTPUT,
+        RECORDING_AUDIO_MIXERS,
+        RECORDING_MIX_INDEX,
+    )
 
     with _native_media() as (runtime, media, path):
         tone = path.with_name("tone.wav")
@@ -518,6 +522,9 @@ def _assert_monitor_only_media_stays_out_of_the_recording_mix() -> None:
             assert media.source.audio_mixers == 0
             assert loudest_over(1.0) < 1e-4
             # Control: the same playing source does reach the track once routed.
+            # Stock libobs 32 drops monitor-only audio before any mix whatever the
+            # tracks, so routing it takes monitor-and-output as well.
+            runtime.set_source_monitoring(media.source, MONITORING_MONITOR_AND_OUTPUT)
             media.source.audio_mixers = RECORDING_AUDIO_MIXERS
             assert loudest_over(1.0) > 0.05
         finally:
