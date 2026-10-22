@@ -5775,18 +5775,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Peralihan otomatis</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Jendela media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Tampilkan di jendela media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Status perekaman tidak dapat diubah.</translation>
@@ -5855,11 +5843,6 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Status keluaran tidak dapat diubah.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Pencerminan di jendela media tidak dapat diubah.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7198,11 +7181,6 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Peralihan otomatis</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Tampilkan di jendela media</translation>
     </message>
     <message>
         <location line="+19"/>

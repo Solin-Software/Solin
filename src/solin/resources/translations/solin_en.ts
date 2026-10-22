@@ -4687,18 +4687,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation type="unfinished"></translation>
@@ -4766,11 +4754,6 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location line="+9"/>
         <source>The output state could not be changed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -6109,11 +6092,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Auto-switch media</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Show in media windows</translation>
     </message>
     <message>
         <location line="+19"/>

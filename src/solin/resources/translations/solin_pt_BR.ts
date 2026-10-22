@@ -5812,12 +5812,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Troca automática</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Janelas de mídia</translation>
-    </message>
-    <message>
         <location line="-674"/>
         <location line="+670"/>
         <source>Configured</source>
@@ -5828,12 +5822,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+654"/>
         <source>Other scenes</source>
         <translation>Outras cenas</translation>
-    </message>
-    <message>
-        <location line="-607"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Exibir nas janelas de mídia</translation>
     </message>
     <message>
         <location line="-502"/>
@@ -5854,11 +5842,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Não foi possível alterar o estado da saída.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Não foi possível alterar o espelhamento nas janelas de mídia.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -6692,11 +6675,6 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Troca automática</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Exibir nas janelas de mídia</translation>
     </message>
     <message>
         <location line="+19"/>

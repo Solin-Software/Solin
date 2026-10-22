@@ -2185,7 +2185,7 @@ def test_engine_prepare_then_take_scene():
 
 
 def _engine_hydrated_on_a_with_fake_preview():
-    """Engine hydrated with both buses on scene 'a' and a recording preview egress."""
+    """Engine hydrated with all buses on scene 'a' and a recording preview egress."""
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
@@ -2193,7 +2193,7 @@ def _engine_hydrated_on_a_with_fake_preview():
     engine._preview_egress = fake
     engine.handle(_request("hydrate", {
         "document": _TWO_SCENE_DOC,
-        "active_scenes": {"media_windows": "a", "virtual_camera": "a"},
+        "active_scenes": {"media_windows": "a", "virtual_camera": "a", "editor": "a"},
     }))
     return runtime, engine, fake
 
@@ -4532,7 +4532,7 @@ def test_engine_hydrate_configures_preview_egress_and_sets_scene():
                   "width": 1920, "height": 1080}
     engine.handle(_request("hydrate", {
         "document": _MEDIA_DOC,
-        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1", "editor": "s1"},
         "preview_egress": descriptor,
     }))
     assert fake.configured[-1] == descriptor

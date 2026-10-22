@@ -8,7 +8,6 @@ from typing import Any, TYPE_CHECKING
 
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 from PySide6.QtCore import QObject, QPoint, QTimer, Signal, QEvent, Qt
-from PySide6.QtGui import QImage
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
 from .controllers.language_controller import LanguageContext, LanguageController
@@ -159,11 +158,10 @@ _OPERATOR_VIDEO_OUTPUT_TARGET_ID = "media-control-video"
 def _use_native_media_presentation(
     *,
     native_window_routing_ready: bool,
-    mirror_enabled: bool,
     raw_visual: bool,
 ) -> bool:
     """Keep every media surface on the same native routing policy."""
-    return native_window_routing_ready and (mirror_enabled or raw_visual)
+    return native_window_routing_ready and raw_visual
 
 
 def _native_scene_routing_supported() -> bool:
@@ -171,8 +169,9 @@ def _native_scene_routing_supported() -> bool:
 
     Supported on platforms whose top-level window handles can be shared
     cross-process with the libobs sidecar so it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
-    Native Wayland cannot share a window handle, so those sessions keep the
-    CPU-readback (egress) path instead of direct native painting.
+    Native Wayland cannot share a window handle, so those sessions use the
+    application's Qt presentation widgets instead of direct native painting.
+    These widgets do not reproduce the authored scene composition.
     """
     from PySide6.QtGui import QGuiApplication
 
@@ -446,21 +445,18 @@ class MainWindow(QWidget):
                 dialog_parent=self,
                 timer_output=lambda: getattr(self, "timer_output", None),
                 timer_bridge=lambda: getattr(self, "timer_bridge", None),
-                program_mirror_enabled=self._program_mirror_enabled,
                 native_outputs_changed=self._reconcile_native_scene_surfaces,
             )
         )
         self.scene_runtime.idle_media_applied.connect(
             self._projection_targets.on_idle_media_applied
         )
-        self._media_mirror_was_enabled = self._program_mirror_enabled()
         self._native_window_output_suppressed = False
         # Surfaces whose geometry_changed is already wired to the reconcile.
         self._geometry_watched_surfaces: list[weakref.ref] = []
         self._unsubscribe_native_projection_state = self.projection_session.subscribe(
             self._on_projection_state_changed_for_native
         )
-        self.scene_runtime.runtime_changed.connect(self._on_scene_window_route_changed)
         self.destroyed.connect(
             lambda _object=None: self._unsubscribe_native_projection_state()
         )
@@ -470,7 +466,6 @@ class MainWindow(QWidget):
             )
         document = self.scene_documents.document
         preview_output = document.output(BusId.MEDIA_WINDOWS)
-        program_output = document.output(BusId.VIRTUAL_CAMERA)
         self._scene_preview_egress = SharedMemoryPreviewEgressController(
             preview_output.video_format.width,
             preview_output.video_format.height,
@@ -482,20 +477,7 @@ class MainWindow(QWidget):
         self._scene_preview_egress.frame_ready.connect(
             self._on_scene_preview_frame
         )
-        self._scene_program_egress = SharedMemoryPreviewEgressController(
-            program_output.video_format.width,
-            program_output.video_format.height,
-            self,
-            channel_id="solin-program",
-        )
-        self._scene_program_egress.descriptor_changed.connect(
-            self._on_scene_frame_egress_descriptor_changed
-        )
-        self._scene_program_egress.frame_ready.connect(
-            self._on_scene_program_frame
-        )
         self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
-        self.scene_runtime.set_program_egress(None)
         self.scene_runtime.document_changed.connect(
             self._on_scene_document_changed_for_egress
         )
@@ -1041,7 +1023,6 @@ class MainWindow(QWidget):
                     content_frame_ingress=self._content_frame_ingress,
                     scene_frame_egresses=(
                         self._scene_preview_egress,
-                        self._scene_program_egress,
                     ),
                 ),
                 widget_providers=(
@@ -1072,26 +1053,13 @@ class MainWindow(QWidget):
             preview_output.video_format.height,
         )
         self._apply_canvas_aspect_to_video_hosts(preview_output.video_format)
-        program_output = document.output(BusId.VIRTUAL_CAMERA)
-        self._scene_program_egress.reconfigure(
-            program_output.video_format.width,
-            program_output.video_format.height,
-        )
         self._reconcile_native_scene_surfaces()
 
-    def _on_scene_frame_egress_descriptor_changed(self, _descriptor) -> None:
-        self._reconcile_scene_media_egress()
+    def _on_scene_frame_egress_descriptor_changed(self, descriptor) -> None:
+        self.scene_runtime.set_preview_egress(descriptor)
 
     def _on_scene_desired_changed_for_egress(self, _scenes) -> None:
         self._reconcile_native_scene_surfaces()
-
-    def _reconcile_scene_media_egress(self) -> None:
-        self.scene_runtime.set_preview_egress(self._scene_preview_egress.descriptor)
-        # Program egress feeds the operator preview and fallback projection windows.
-        program_required = self._program_mirror_enabled()
-        self.scene_runtime.set_program_egress(
-            self._scene_program_egress.descriptor if program_required else None
-        )
 
     def _apply_canvas_aspect_to_video_hosts(self, video_format) -> None:
         """Tell the operator video host what aspect to inset its native surface to.
@@ -1164,10 +1132,6 @@ class MainWindow(QWidget):
             self.media_ctrl.on_engine_media_state(event.state)
 
     def _reconcile_native_scene_surfaces(self) -> None:
-        mirror_enabled = self._program_mirror_enabled()
-        render_bus = (
-            BusId.VIRTUAL_CAMERA if mirror_enabled else BusId.MEDIA_WINDOWS
-        )
         state = self.projection_session.state
         raw_visual = projection_presentation_type(state) in {
             "idle",
@@ -1186,7 +1150,6 @@ class MainWindow(QWidget):
         )
         native_presentation = _use_native_media_presentation(
             native_window_routing_ready=native_window_routing_ready,
-            mirror_enabled=mirror_enabled,
             raw_visual=raw_visual,
         )
         physical_windows = tuple(self.projection_session.projection_windows)
@@ -1198,7 +1161,7 @@ class MainWindow(QWidget):
             if callable(set_native_active):
                 was_native = bool(getattr(window, "native_output_active", False))
                 set_native_active(native_presentation)
-                if was_native and not native_presentation and not mirror_enabled:
+                if was_native and not native_presentation:
                     raw_fallback_windows.append(window)
             if native_presentation:
                 surface = window.native_video_surface
@@ -1206,7 +1169,7 @@ class MainWindow(QWidget):
                     self._native_window_target(
                         surface,
                         f"media-window-{index}",
-                        render_bus,
+                        BusId.MEDIA_WINDOWS,
                     )
                 )
         for window in self.projection_session.all_windows():
@@ -1220,14 +1183,14 @@ class MainWindow(QWidget):
                     and hasattr(window, "native_video_surface")
                 )
                 set_native_active(auxiliary_native)
-                if was_native and not auxiliary_native and not mirror_enabled:
+                if was_native and not auxiliary_native:
                     raw_fallback_windows.append(window)
                 if auxiliary_native:
                     targets.append(
                         self._native_window_target(
                             window.native_video_surface,
                             "media-floating-preview",
-                            render_bus,
+                            BusId.MEDIA_WINDOWS,
                         )
                     )
 
@@ -1259,7 +1222,6 @@ class MainWindow(QWidget):
             self.scene_runtime.set_window_targets(())
         for window in raw_fallback_windows:
             self._projection_targets.restore_state_to_window(window)
-        self._reconcile_scene_media_egress()
 
     def _on_native_scene_engine_ready_changed(self, ready: bool) -> None:
         if ready:
@@ -1359,25 +1321,6 @@ class MainWindow(QWidget):
     def _on_scene_preview_frame(self, image) -> None:
         self.scene_runtime.publish_preview_frame(image)
 
-    def _on_scene_program_frame(self, image: QImage) -> None:
-        if not self._program_mirror_enabled():
-            return
-        if image.isNull():
-            return
-        # Egress feeds each window whose surface is not owned by the native
-        # renderer, including libobs fallback after native-output failure.
-        for window in self.projection_session.all_windows():
-            if getattr(window, "native_output_active", False):
-                continue
-            show_image = getattr(window, "show_image_from_qimage", None)
-            if callable(show_image):
-                show_image(image, cache_pixmap=False)
-        if hasattr(self, "proj_bar"):
-            self.proj_bar.update_tab_live_preview(image)
-
-    def _program_mirror_enabled(self) -> bool:
-        return self.scene_live.state.output(BusId.MEDIA_WINDOWS).enabled
-
     @property
     def scene_documents(self):
         return self.scene_workspace.documents
@@ -1395,30 +1338,11 @@ class MainWindow(QWidget):
         self._program_content.refresh()
 
     def _raw_projection_windows(self) -> list:
-        if self._program_mirror_enabled():
-            return []
         return [
             window
             for window in self.projection_session.all_windows()
             if not getattr(window, "native_output_active", False)
         ]
-
-    def _on_scene_window_route_changed(self, _state) -> None:
-        mirror_enabled = self._program_mirror_enabled()
-        if mirror_enabled == self._media_mirror_was_enabled:
-            return
-        self._media_mirror_was_enabled = mirror_enabled
-        self._reconcile_native_scene_surfaces()
-        if mirror_enabled:
-            self._program_content.refresh()
-            return
-        QTimer.singleShot(0, self._restore_raw_projection_windows)
-
-    def _restore_raw_projection_windows(self) -> None:
-        if self._program_mirror_enabled() or getattr(self, "_closing", False):
-            return
-        for window in self._raw_projection_windows():
-            self._projection_targets.apply_full_state_to_window(window)
 
     def _start_deferred_startup(self) -> None:
         if self._deferred_startup_started or getattr(self, "_closing", False):
@@ -1971,11 +1895,6 @@ class MainWindow(QWidget):
         self._partial_cleanup_method(
             "scene preview egress",
             getattr(self, "_scene_preview_egress", None),
-            "close",
-        )
-        self._partial_cleanup_method(
-            "scene program egress",
-            getattr(self, "_scene_program_egress", None),
             "close",
         )
         self._partial_cleanup_method(

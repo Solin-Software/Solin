@@ -5807,18 +5807,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Cambio automatico</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Finestre dei media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Mostra nelle finestre dei media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Impossibile modificare lo stato della registrazione.</translation>
@@ -5887,11 +5875,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Non è stato possibile cambiare lo stato dell’uscita.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Non è stato possibile cambiare la duplicazione nelle finestre dei media.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Cambio automatico</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Mostra nelle finestre dei media</translation>
     </message>
     <message>
         <location line="+19"/>

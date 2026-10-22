@@ -559,87 +559,6 @@ class SceneRuntimeController(QObject):
         self._reconcile_desired(prepare=True)
         return state
 
-    def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        self._documents.document.scene(scene_id)
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-        category = content_category_for_projection(self._projection.state)
-        automatic_media_session = (
-            runtime.mode is OutputMode.AUTO and category in AUTOMATIC_MEDIA_CATEGORIES
-        )
-        safe_media_scene = (
-            automatic_media_session and self._scene_keeps_media_automation(scene_id)
-        )
-        if automatic_media_session:
-            previous_suspension = self.program_automation_suspended
-            previous_selection = self._automatic_media_scene_selections.copy()
-            self._automatic_media_scene_selections = {
-                bus_id: self._media_session_selection(scene_id, bus_id)
-                for bus_id in DELIVERY_BUSES
-            }
-            try:
-                if safe_media_scene:
-                    state = self._runtime.state
-                    if previous_suspension:
-                        state = self._runtime.select_base_scenes({
-                            bus_id: item.return_scene_id
-                            for bus_id, item in self._automatic_media_scene_selections.items()
-                        })
-                else:
-                    state = self._runtime.select_program_scene(scene_id)
-            except Exception:  # noqa: BLE001 - restore transient state on write failure
-                self._automatic_media_scene_selections = previous_selection
-                raise
-            self._reconcile_desired(prepare=True)
-            return state
-        if scene_id == self.desired_scene(BusId.VIRTUAL_CAMERA):
-            return self._runtime.state
-        state = self._runtime.select_program_scene(scene_id)
-        self._reconcile_desired(prepare=True)
-        return state
-
-    @property
-    def program_automation_suspended(self) -> bool:
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-        category = content_category_for_projection(self._projection.state)
-        selection = self._current_media_session_selection()
-        return (
-            runtime.mode is OutputMode.AUTO
-            and category in AUTOMATIC_MEDIA_CATEGORIES
-            and selection is not None
-            and not self._scene_keeps_media_automation(selection.scene_id)
-        )
-
-    @property
-    def program_return_scene_id(self) -> str:
-        """Return the current automatic-media exit target."""
-
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-        scene_ids = {scene.id for scene in self._documents.document.scenes}
-        return runtime.base_scene_id if runtime.base_scene_id in scene_ids else ""
-
-    @property
-    def program_return_override_available(self) -> bool:
-        runtime = self._runtime.state.output(BusId.VIRTUAL_CAMERA)
-        category = content_category_for_projection(self._projection.state)
-        desired_scene_id = self.desired_scene(BusId.VIRTUAL_CAMERA)
-        return bool(
-            runtime.mode is OutputMode.AUTO
-            and not self.program_automation_suspended
-            and category in AUTOMATIC_MEDIA_CATEGORIES
-            and self._scene_keeps_media_automation(desired_scene_id)
-            and self.applied_scene(BusId.VIRTUAL_CAMERA) == desired_scene_id
-        )
-
-    def set_program_return_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Override where automatic Program returns after the active media."""
-
-        self._documents.document.scene(scene_id)
-        if not self.program_return_override_available:
-            raise SceneValidationError(
-                "Program return can only change while the automatic media scene is live"
-            )
-        return self._set_return_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
-
     def return_scene_override_available(self, bus_id: BusId) -> bool:
         """Return whether this output is showing an automatic media composition."""
         return (
@@ -671,9 +590,6 @@ class SceneRuntimeController(QObject):
         except Exception:  # noqa: BLE001 - restore transient state on write failure
             self._automatic_media_scene_selections = previous_selections
             raise
-
-    def resume_program_automation(self) -> SceneRuntimeState:
-        return self.set_program_automatic(True)
 
     def set_program_automatic(self, enabled: bool) -> SceneRuntimeState:
         if enabled and not self._documents.media_automation_configured:
@@ -798,7 +714,6 @@ class SceneRuntimeController(QObject):
         preview_required = self._profile_preview_scene_id is not None
         program_required = (
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
-            or activation.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
             or self._program_egress is not None
             or self._program_recording_required
             or any(target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets)
@@ -3279,7 +3194,7 @@ class SceneRuntimeController(QObject):
         )
 
     def _current_media_session_selection(
-        self, bus_id: BusId = BusId.VIRTUAL_CAMERA,
+        self, bus_id: BusId,
     ) -> _AutomaticMediaSceneSelection | None:
         selection = self._automatic_media_scene_selections.get(bus_id)
         return (
@@ -3293,7 +3208,7 @@ class SceneRuntimeController(QObject):
         )
 
     def _media_session_selection(
-        self, scene_id: str, bus_id: BusId = BusId.VIRTUAL_CAMERA,
+        self, scene_id: str, bus_id: BusId,
     ) -> _AutomaticMediaSceneSelection:
         current = self._current_media_session_selection(bus_id)
         scene_ids = {scene.id for scene in self._documents.document.scenes}
@@ -3328,7 +3243,6 @@ class SceneRuntimeController(QObject):
         preview_required = self._preview_scene_id is not None
         program_required = (
             destination.output(BusId.VIRTUAL_CAMERA).enabled
-            or destination.output(BusId.MEDIA_WINDOWS).enabled
             or self._program_egress is not None
             or self._program_recording_required
             or any(

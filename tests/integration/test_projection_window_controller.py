@@ -1,5 +1,3 @@
-from dataclasses import replace
-
 import pytest
 
 from PySide6.QtCore import QDateTime
@@ -596,19 +594,14 @@ def test_idle_clear_is_confirmed_asynchronously(popup_present):
         assert window._monitor_popup.idle_paths == ["previous.mp4", ""]
 
 
-def test_program_mirror_does_not_restore_qt_idle_or_active_pixels():
+def test_projection_fallback_restores_active_image_with_configured_idle_media():
     window = _WindowStub()
     window.projection_session.set_idle_media_path("idle.mp4")
     window.projection_session.set_state({"type": "image", "data": b"active"})
-    controller = ProjectionWindowController(
-        replace(
-            _projection_context(window),
-            program_mirror_enabled=lambda: True,
-        )
-    )
+    controller = ProjectionWindowController(_projection_context(window))
     target = _ProjectionWindowStub()
 
     controller.apply_full_state_to_window(target)
 
     assert target.yearly == [("Quote", "Reference", "E")]
-    assert target.images == []
+    assert target.images == [b"active"]
