@@ -325,3 +325,18 @@ Page: `s1_publish/web/s8.html` (Portuguese attendee page close to the product: r
 - Offer an **audio-only** mode for mobile data (≈ 0.1 Mbps vs 0.55 Mbps).
 
 **Not done:** iPhone/Safari, 1 h battery/data run, usability with an older person.
+
+## Phase 1 · M0: program audio for the meeting
+
+Script: `m0_audio/mix_tracks.py` (headless libobs 32.2.2 via pylibobs, monitoring device "Default" set as Solin does, S1 test clip, raw audio callbacks on mix 0 = track 1 and mix 5 = track 6).
+
+| Media source setting | Track 1 | Track 6 |
+|---|---|---|
+| `MONITOR_ONLY` (Solin's current media/tempo setting), default mixers `0xff` | audio (RMS 0.197) | audio |
+| `MONITOR_AND_OUTPUT`, mixers = track 6 only (`0x20`) | **silent** | audio |
+| No monitoring, default mixers | audio | audio |
+
+- In this libobs build **monitor-only audio still reaches every output mix**, so songs/videos are available to the publisher.
+- A **dedicated meeting track (track 6)** works: sources can be put on it alone, and a raw-audio callback on mix 5 receives exactly them. Meeting mix = media sources + the hall feed (mixer return), excluding the recording's system-audio loopback capture (which would re-capture the speakers).
+- `pylibobs 0.1.2` (pinned) exposes `add_raw_audio_callback` and `Source.audio_mixers`.
+- Side observation (not verified): because media already reaches track 1, a program recording that also captures system audio may contain songs/videos twice.
