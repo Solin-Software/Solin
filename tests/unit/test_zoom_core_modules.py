@@ -33,7 +33,10 @@ def test_automation_rejects_unsupported_platform_before_importing_com(monkeypatc
 
 
 @pytest.mark.parametrize("generated", [False, True])
-def test_automation_uses_packaged_bindings_or_generates_them_on_first_run(monkeypatch, generated):
+@pytest.mark.parametrize("compiled", [False, True])
+def test_automation_loads_bindings_without_regenerating_packaged_modules(
+    monkeypatch, generated, compiled,
+):
     import sys
     from types import ModuleType
     from unittest.mock import Mock
@@ -52,9 +55,17 @@ def test_automation_uses_packaged_bindings_or_generates_them_on_first_run(monkey
     comtypes.client.GetModule = Mock(return_value=api)
     load = Mock(return_value=api, side_effect=None if generated else ImportError)
     monkeypatch.setattr(controls_module, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(controls_module, "IS_COMPILED", compiled)
     monkeypatch.setattr(controls_module, "import_module", load)
     monkeypatch.setitem(sys.modules, "comtypes", comtypes)
     monkeypatch.setitem(sys.modules, "comtypes.client", comtypes.client)
+
+    if compiled and not generated:
+        with pytest.raises(ImportError):
+            Automation()
+        comtypes.client.GetModule.assert_not_called()
+        comtypes.CoCreateInstance.assert_not_called()
+        return
 
     automation = Automation()
 

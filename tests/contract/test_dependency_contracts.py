@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+import sys
 import tomllib
 from importlib.metadata import version
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 import pylibobs
 import pytest
 import sideview
+import yaml
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
@@ -57,6 +59,42 @@ def test_windows_zoom_packaging_prepares_and_bundles_uia_interfaces(recipe):
     assert preparation < source.index("-m nuitka", preparation)
     assert "--include-package=comtypes.gen" in source
     assert "--nofollow-import-to=comtypes.gen" not in source
+    assert "--user-package-configuration-file=" in source
+    assert "solin.nuitka-package.config.yml" in source
+    assert "--verify-zoom-runtime" in source
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows COM type libraries")
+def test_bundled_com_bindings_accept_other_windows_timestamps_but_require_generator_version(
+    tmp_path,
+):
+    from comtypes import _tlib_version_checker
+    from comtypes.tools.codegenerator import version as generator_version
+
+    configuration = yaml.safe_load(
+        (REPO_ROOT / "packaging/windows/solin.nuitka-package.config.yml")
+        .read_text(encoding="utf-8")
+    )
+    entry = next(
+        item for item in configuration
+        if item["module-name"] == "comtypes._tlib_version_checker"
+    )
+    rule, = entry["anti-bloat"]
+    assert rule["when"] == "win32 and standalone"
+    source = Path(_tlib_version_checker.__file__).read_text(encoding="utf-8")
+    for original, replacement in rule["replacements_plain"].items():
+        assert source.count(original) == 1, "Review the compiler integration after comtypes changes."
+        source = source.replace(original, replacement)
+
+    # A different Windows image or update changes the library timestamp without
+    # changing its COM interface. Simulate it without touching any system file.
+    typelib = tmp_path / "system.tlb"
+    typelib.touch()
+    namespace = {"typelib_path": str(typelib), "generator_version": generator_version}
+    exec(compile(source, _tlib_version_checker.__file__, "exec"), namespace)
+    exec("_check_version(generator_version, 0)", namespace)
+    with pytest.raises(ImportError, match="Wrong version"):
+        exec("_check_version('incompatible-generator', 0)", namespace)
 
 
 def test_sideview_is_a_pinned_runtime_dependency():

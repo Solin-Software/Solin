@@ -118,6 +118,7 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 "%PYTHON%" -m nuitka ^
     --standalone ^
+    --user-package-configuration-file="%PROJECT_ROOT%packaging\windows\solin.nuitka-package.config.yml" ^
     --output-dir="%OUTPUT_DIR%" ^
     --output-filename="%APP_NAME%" ^
     --windows-icon-from-ico="%ICON%" ^
@@ -176,6 +177,9 @@ echo.
 echo  Removendo arquivos desnecessarios...
  
 set DIST=%OUTPUT_DIR%\main.dist
+
+"%DIST%\Solin.exe" --verify-zoom-runtime
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
 if not exist "%DIST%\sideview\sideview_native.dll" (
     echo  [ERRO] O backend nativo do SideView nao foi empacotado.
