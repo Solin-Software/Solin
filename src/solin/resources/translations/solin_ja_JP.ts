@@ -12009,4 +12009,269 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Zoomの一部の操作を完了できませんでした。Zoomを確認して再試行してください。</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 をウィンドウで開く</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin のシーン</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>放送中 · 仮想カメラ</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>放送中 · 投影</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>プレビューを読み込んでいます…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>シーンエンジンを起動しています…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>シーンエンジンを利用できません。</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>仮想カメラ</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>このシーンを仮想カメラに表示</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>このシーンを投影に表示</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>失敗</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>カメラはコマンドを完了できませんでした。</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>カメラ</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>プリセット</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>速度</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>現在の位置を保存</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>このカメラの現在の向きを新しいプリセットとして保存</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>このカメラにはまだプリセットがありません。</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>移動中…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>名前を変更…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>タイムアウト</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>ログインが拒否されました</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>カメラが使用中</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>接続できません</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>カメラが時間内に移動を完了しませんでした。</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>カメラが PTZ ログインを拒否しました。カメラの設定で確認してください。</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>カメラは別のコマンドを実行中です。</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>カメラが応答しませんでした。</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>このカメラには空きのプリセット枠がありません。</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>上へ移動</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>下へ移動</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>左へ移動</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>右へ移動</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>ズームイン</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>ズームアウト</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>このインストールでは PTZ 制御を利用できません。</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>仮想カメラ</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>プリセット %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>プリセット名を変更</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>プリセット名</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>放送中 · ライブ操作のロック解除済み</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>放送中 · 動きが視聴者に見えます</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>放送中のカメラ</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>カメラを移動できませんでした。</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>プリセットを保存できませんでした。</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>「%1」を保存しています…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>プリセットを削除</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>プリセットを変更できませんでした。</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>ほかの使用先: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>プリセット「%1」を削除しますか？ これを呼び出すシーンは呼び出さなくなります。</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 は放送中です: %2。動かすと視聴者に見える映像が変わります。放送から外れるまで動かすことを許可しますか？</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%2 の %1</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 は放送中です: %2。それでも「%3」を呼び出しますか？</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>「%1」を保存しました。</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>画像を更新</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>カメラの現在の向きから新しい画像を撮る</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>プリセットの画像を保存できませんでした。</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>画像を撮影しています…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>画像なし</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>「%1」の画像を撮影できませんでした。「画像を更新」でもう一度お試しください。</translation>
+    </message>
+</context>
 </TS>

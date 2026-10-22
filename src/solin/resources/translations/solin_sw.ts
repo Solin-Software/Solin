@@ -12051,4 +12051,269 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Baadhi ya vitendo vya Zoom havikuweza kukamilishwa. Kagua Zoom na ujaribu tena.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Fungua %1 kwenye dirisha</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Mandhari ya Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Hewani · kamera pepe</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Hewani · makadirio</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Inapakia onyesho la kukagua…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Injini ya mandhari inaanza…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Injini ya mandhari haipatikani.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Kamera pepe</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Makadirio</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Onyesha mandhari hii kwenye kamera pepe</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Onyesha mandhari hii kwenye makadirio</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Imeshindwa</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Kamera haikuweza kukamilisha amri.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Mipangilio iliyohifadhiwa</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Kasi</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Hifadhi ya sasa</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Hifadhi mahali kamera hii inapoelekeza sasa kama mpangilio mpya</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Bado hakuna mipangilio ya kamera hii.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Inasogea…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Badilisha jina…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Futa</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Muda umeisha</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Kuingia kumekataliwa</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Kamera ina shughuli</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Haifikiki</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Kamera haikumaliza kusogea kwa wakati.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Kamera imekataa kuingia kwa PTZ. Ikague kwenye mipangilio ya kamera.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Kamera inashughulikia amri nyingine.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Kamera haikujibu.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Kamera hii haina nafasi wazi za mipangilio.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Sogeza juu</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Sogeza chini</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Sogeza kushoto</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Sogeza kulia</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Simamisha</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Kuza</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Punguza</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Udhibiti wa PTZ haupatikani kwenye usakinishaji huu.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>kamera pepe</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>makadirio</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Mpangilio %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Badilisha jina la mpangilio</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Jina la mpangilio</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>Hewani · udhibiti wa moja kwa moja umefunguliwa</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>Hewani · mienendo inaonekana kwa hadhira</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Kamera iko hewani</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Kamera haikuweza kusogezwa.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Mpangilio haukuweza kuhifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Inahifadhi “%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Futa mpangilio</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Mpangilio haukuweza kubadilishwa.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Pia katika: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Ufute mpangilio “%1”? Mandhari zinazouita zitaacha kufanya hivyo.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 iko hewani: %2. Kuisogeza hubadilisha kile hadhira inaona. Ruhusu kuisogeza hadi itoke hewani?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 kwenye %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 iko hewani: %2. Ita “%3” hata hivyo?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>“%1” imehifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Onyesha upya picha</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Piga picha mpya kutoka mahali kamera inapoelekeza sasa</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Picha ya mpangilio haikuweza kuhifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Inapiga picha…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Hakuna picha</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Picha ya “%1” haikuweza kupigwa. Tumia Onyesha upya picha kujaribu tena.</translation>
+    </message>
+</context>
 </TS>

@@ -331,3 +331,44 @@ def test_executor_shutdown_sends_stop_for_a_moving_camera() -> None:
     executor.close()
 
     assert adapter.calls == [PtzControlKind.MOVE, PtzControlKind.STOP]
+
+
+class _PresetAdapter:
+    protocol = PtzProtocol.ONVIF
+
+    def recall(self, request, cancellation) -> None:
+        del request, cancellation
+
+    def control(self, request: PtzControlRequest, cancellation: PtzCancellation) -> str | None:
+        del cancellation
+        return "camera-made" if request.kind is PtzControlKind.CREATE_PRESET else None
+
+
+def test_preset_results_carry_the_token_they_were_stored_under() -> None:
+    executor = PtzExecutor({PtzProtocol.ONVIF: _PresetAdapter()}, request_id_factory=lambda: "request")
+    try:
+        created = executor.create_preset(
+            camera_source_id="camera-one", binding=_binding(), name="Pulpit",
+        ).result(timeout=1)
+        stored = executor.store_preset(
+            camera_source_id="camera-one", binding=_binding(), preset=_preset("wide"),
+        ).result(timeout=1)
+    finally:
+        executor.close()
+
+    assert created.succeeded and created.preset_token == "camera-made"
+    assert stored.succeeded and stored.preset_token == "1"  # the preset's own token
+
+
+def test_a_create_that_returns_no_token_fails() -> None:
+    executor = PtzExecutor({PtzProtocol.ONVIF: _ControlAdapter()}, request_id_factory=lambda: "request")  # returns None
+    try:
+        result = executor.create_preset(
+            camera_source_id="camera-one", binding=_binding(), name="Pulpit",
+        ).result(timeout=1)
+    finally:
+        executor.close()
+
+    assert not result.succeeded
+    assert result.error_code == "ptz_preset_token_missing"
+    assert result.preset_token == ""

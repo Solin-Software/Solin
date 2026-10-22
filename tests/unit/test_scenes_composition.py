@@ -7,11 +7,14 @@ import pytest
 from solin.core.scenes.composition import (
     SceneComposition,
     analyze_scene_compositions,
+    scene_ptz_camera_ids,
     scene_uses_content_source,
 )
 from solin.core.scenes.model import (
     CONTENT_SOURCE_ID,
     DEFAULT_CAMERA_SOURCE_ID,
+    LocalCameraConfig,
+    OnvifPtzBinding,
     SceneDefinition,
     SolinContentConfig,
     SolinContentMode,
@@ -195,3 +198,56 @@ def test_content_composition_uses_source_type_and_mode_with_arbitrary_identity(m
     scenes = tuple(replace(scene, layers=tuple(replace(layer, source_id=changed_id) if layer.source_id == CONTENT_SOURCE_ID else layer for layer in scene.layers)) for scene in document.scenes)
     changed = replace(document, sources=sources, scenes=scenes)
     assert analyze_scene_compositions(changed) == analyze_scene_compositions(document)
+
+
+def _with_ptz_camera(document):
+    return replace(
+        document,
+        sources=tuple(
+            replace(
+                source,
+                configuration=LocalCameraConfig(
+                    ptz_binding=OnvifPtzBinding(endpoint="http://camera.test/onvif/ptz_service"),
+                ),
+            )
+            if source.id == DEFAULT_CAMERA_SOURCE_ID
+            else source
+            for source in document.sources
+        ),
+    )
+
+
+def _wrapping_scene(scene_id: str, target_scene_id: str, reference_id: str):
+    reference = SourceDefinition(
+        id=reference_id,
+        kind=SourceKind.SCENE_REFERENCE,
+        name="Nested",
+        configuration=SceneReferenceConfig(target_scene_id=target_scene_id),
+    )
+    scene = SceneDefinition(
+        id=scene_id,
+        name=scene_id,
+        layers=(SceneLayer(id=f"{scene_id}-layer", source_id=reference.id, name="Nested"),),
+        created_at="2026-08-28T12:00:00+00:00",
+        updated_at="2026-08-28T12:00:00+00:00",
+    )
+    return reference, scene
+
+
+def test_ptz_cameras_are_found_directly_and_through_nested_scenes() -> None:
+    document = _with_ptz_camera(_document())
+    reference, wrapper = _wrapping_scene("wrapper", CAMERA_SCENE_ID, "wrapper-reference")
+    document = replace(
+        document,
+        sources=(*document.sources, reference),
+        scenes=(*document.scenes, wrapper),
+    )
+
+    assert scene_ptz_camera_ids(document, CAMERA_SCENE_ID) == (DEFAULT_CAMERA_SOURCE_ID,)
+    assert scene_ptz_camera_ids(document, "wrapper") == (DEFAULT_CAMERA_SOURCE_ID,)
+    assert scene_ptz_camera_ids(document, CONTENT_SCENE_ID) == ()
+    assert scene_ptz_camera_ids(document, "missing-scene") == ()
+
+
+def test_cameras_without_ptz_are_not_listed() -> None:
+    assert scene_ptz_camera_ids(_document(), CAMERA_SCENE_ID) == ()

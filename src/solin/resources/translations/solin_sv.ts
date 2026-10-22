@@ -12050,4 +12050,269 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Vissa Zoom-åtgärder kunde inte slutföras. Kontrollera Zoom och försök igen.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Öppna %1 i ett fönster</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scener</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>I sändning · virtuell kamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>I sändning · projicering</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Läser in förhandsvisning…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Scenmotorn startar…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Scenmotorn är inte tillgänglig.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projicering</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Visa den här scenen i den virtuella kameran</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Visa den här scenen i projiceringen</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Misslyckades</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Kameran kunde inte slutföra kommandot.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Förinställningar</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Hastighet</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Spara nuvarande</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Spara kamerans nuvarande riktning som en ny förinställning</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Inga förinställningar för den här kameran ännu.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Rör sig…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Byt namn…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Ta bort</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Tidsgränsen nåddes</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Inloggningen nekades</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Kameran upptagen</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Kan inte nås</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Kameran hann inte röra sig klart.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Kameran nekade PTZ-inloggningen. Kontrollera den i kamerainställningarna.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Kameran är upptagen med ett annat kommando.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Kameran svarade inte.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Kameran har inga lediga platser för förinställningar.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Uppåt</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Nedåt</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Åt vänster</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Åt höger</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stoppa</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Zooma in</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Zooma ut</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ-styrning är inte tillgänglig i den här installationen.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>den virtuella kameran</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>projiceringen</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Förinställning %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Byt namn på förinställning</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Namn på förinställning</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>I sändning · livestyrning upplåst</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>I sändning · rörelser syns för publiken</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Kamera i sändning</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Kameran kunde inte flyttas.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Förinställningen kunde inte sparas.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Sparar ”%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Ta bort förinställning</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Förinställningen kunde inte ändras.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Även i: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Ta bort förinställningen ”%1”? Scener som använder den slutar göra det.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 är i sändning: %2. Att röra den ändrar vad publiken ser. Tillåt rörelser tills den lämnar sändningen?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 i %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 är i sändning: %2. Använd ”%3” ändå?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>”%1” sparades.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Uppdatera bild</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ta en ny bild från kamerans nuvarande riktning</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Förinställningens bild kunde inte sparas.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Tar bild…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Ingen bild</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Ingen bild av ”%1” kunde tas. Använd Uppdatera bild för att försöka igen.</translation>
+    </message>
+</context>
 </TS>

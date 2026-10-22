@@ -12009,4 +12009,269 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>일부 Zoom 작업을 완료하지 못했습니다. Zoom을 확인하고 다시 시도하세요.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1을(를) 창으로 열기</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin 장면</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>방송 중 · 가상 카메라</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>방송 중 · 프로젝션</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>미리보기를 불러오는 중…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>장면 엔진을 시작하는 중…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>장면 엔진을 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>가상 카메라</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>프로젝션</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>이 장면을 가상 카메라에 표시</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>이 장면을 프로젝션에 표시</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>실패</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>카메라가 명령을 완료하지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>카메라</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>프리셋</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>속도</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>현재 위치 저장</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>이 카메라가 지금 향한 위치를 새 프리셋으로 저장</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>이 카메라에는 아직 프리셋이 없습니다.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>이동 중…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>이름 바꾸기…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>삭제</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>시간 초과</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>로그인 거부됨</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>카메라 사용 중</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>연결할 수 없음</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>카메라가 제시간에 이동을 마치지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>카메라가 PTZ 로그인을 거부했습니다. 카메라 설정에서 확인하세요.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>카메라가 다른 명령을 처리하고 있습니다.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>카메라가 응답하지 않았습니다.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>이 카메라에는 빈 프리셋 슬롯이 없습니다.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>위로 이동</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>아래로 이동</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>왼쪽으로 이동</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>오른쪽으로 이동</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>정지</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>확대</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>축소</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>이 설치에서는 PTZ 제어를 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>가상 카메라</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>프로젝션</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>프리셋 %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>프리셋 이름 바꾸기</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>프리셋 이름</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>방송 중 · 실시간 제어 잠금 해제됨</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>방송 중 · 움직임이 시청자에게 보입니다</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>방송 중인 카메라</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>카메라를 움직일 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>프리셋을 저장할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>“%1” 저장 중…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>프리셋 삭제</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>프리셋을 변경할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>다른 사용 위치: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>프리셋 “%1”을(를) 삭제할까요? 이를 불러오는 장면은 더 이상 불러오지 않습니다.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1이(가) 방송 중입니다: %2. 움직이면 시청자가 보는 화면이 바뀝니다. 방송에서 벗어날 때까지 움직이도록 허용할까요?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%2의 %1</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1이(가) 방송 중입니다: %2. 그래도 “%3”을(를) 불러올까요?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>“%1” 저장됨.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>이미지 새로 고침</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>카메라가 지금 향한 위치에서 새 이미지 찍기</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>프리셋 이미지를 저장할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>이미지 찍는 중…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>이미지 없음</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>“%1”의 이미지를 찍을 수 없습니다. 이미지 새로 고침으로 다시 시도하세요.</translation>
+    </message>
+</context>
 </TS>

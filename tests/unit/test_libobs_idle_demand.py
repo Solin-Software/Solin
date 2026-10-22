@@ -366,3 +366,13 @@ def test_first_live_entry_restarts_preview_loop_but_additional_live_consumers_do
     engine._thumbnail_egress.scene_ids = ()
     engine._reconcile_idle_demand()
     assert not idle.demand and idle.pauses == 1
+
+
+def test_a_scene_window_alone_keeps_a_shared_loop_running():
+    engine, idle, _pointer, _trees = _engine()
+    engine._thumbnail_egress = SimpleNamespace(scene_ids=())
+    engine._scene_window_feeds["scene-window:idle"] = SimpleNamespace(scene_ids=("idle",))
+
+    engine._reconcile_idle_demand()
+
+    assert idle.demand

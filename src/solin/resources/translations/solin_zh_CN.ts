@@ -12009,4 +12009,269 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>部分Zoom操作无法完成。请检查Zoom并重试。</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>在窗口中打开 %1</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin 场景</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>直播中 · 虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>直播中 · 投影</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>正在加载预览……</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>场景引擎正在启动……</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>场景引擎不可用。</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>在虚拟摄像机上显示此场景</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>在投影上显示此场景</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>失败</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>摄像机无法完成该命令。</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>摄像机</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>预置位</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>速度</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>保存当前位置</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>将此摄像机当前的朝向保存为新的预置位</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>此摄像机还没有预置位。</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>正在移动……</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>重命名……</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>已超时</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>登录被拒绝</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>摄像机忙</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>无法连接</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>摄像机未能及时完成移动。</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>摄像机拒绝了 PTZ 登录。请在摄像机设置中检查。</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>摄像机正在执行其他命令。</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>摄像机没有响应。</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>此摄像机没有空闲的预置位。</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>向上</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>向下</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>向左</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>向右</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>放大</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>缩小</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>此安装中无法使用 PTZ 控制。</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>预置位 %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>重命名预置位</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>预置位名称</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>直播中 · 实时控制已解锁</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>直播中 · 观众可以看到移动</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>摄像机正在直播</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>无法移动摄像机。</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>无法保存预置位。</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>正在保存“%1”……</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>删除预置位</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>无法更改预置位。</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>也用于：%1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>删除预置位“%1”？调用它的场景将不再调用。</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 正在直播：%2。移动它会改变观众看到的画面。在它离开直播之前允许移动吗？</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%2 中的 %1</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 正在直播：%2。仍要调用“%3”吗？</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>已保存“%1”。</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>刷新图片</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>从摄像机当前的朝向拍一张新图片</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>无法保存预置位的图片。</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>正在拍摄图片……</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>无图片</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>无法为“%1”拍摄图片。请使用“刷新图片”重试。</translation>
+    </message>
+</context>
 </TS>

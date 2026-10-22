@@ -487,6 +487,7 @@ class QuickAccessToolbar(QQuickWidget):
             self._scene_runtime,
             self,
             recording=self._program_recording,
+            window_geometry=self._app_settings,
         )
         popup.projection_controls_button.setChecked(
             self._app_settings.scenes_panel_projection_controls_visible()

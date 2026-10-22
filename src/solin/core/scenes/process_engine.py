@@ -19,6 +19,8 @@ from uuid import uuid4
 
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
+    SCENE_THUMBNAILS_CHANNEL,
+    is_scene_render_channel,
     MAXIMUM_OUTPUT_WINDOW_TARGETS,
     EngineHealthEvent,
     FrameEgressReadyEvent,
@@ -879,7 +881,10 @@ class SubprocessSceneEngine:
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        channel_id: str = SCENE_THUMBNAILS_CHANNEL,
     ) -> Future[SceneEngineAck]:
+        if not is_scene_render_channel(channel_id):
+            return _failed_future(TypeError("Invalid thumbnail channel"))
         if descriptor is not None and not isinstance(descriptor, FrameChannelDescriptor):
             return _failed_future(TypeError("Invalid thumbnail egress descriptor"))
         if not isinstance(scene_ids, tuple) or not all(
@@ -896,6 +901,7 @@ class SubprocessSceneEngine:
             document_revision=document_revision,
             deadline_ms=deadline_ms,
             payload={
+                "channel_id": channel_id,
                 "thumbnail_egress": _frame_channel_record(descriptor),
                 "scene_ids": list(scene_ids),
                 "cell_width": int(cell_width),

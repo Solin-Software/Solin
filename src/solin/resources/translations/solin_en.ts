@@ -10638,4 +10638,269 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Some Zoom actions could not be completed. Check Zoom and try again.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Open %1 in a window</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin scenes</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>On air · virtual camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>On air · projection</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Loading preview…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>The scene engine is starting…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>The scene engine is unavailable.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projection</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Show this scene on the virtual camera</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Show this scene on the projection</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Failed</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>The camera could not complete the command.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Presets</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Speed</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Save current</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Save where this camera points now as a new preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>No presets for this camera yet.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Moving…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Rename…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Timed out</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Login refused</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Camera busy</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Unreachable</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>The camera did not finish moving in time.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>The camera refused the PTZ login. Check it in the camera settings.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>The camera is busy with another command.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>The camera did not answer.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>This camera has no free preset slots.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Move up</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Move down</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Move left</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Move right</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Zoom in</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Zoom out</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ control is unavailable in this installation.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>the virtual camera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>the projection</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Rename preset</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Preset name</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>On air · live control unlocked</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>On air · moves are visible to the audience</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Camera on air</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>The camera could not be moved.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>The preset could not be saved.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Saving “%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Delete preset</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>The preset could not be changed.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Also in: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Delete the preset “%1”? Scenes that recall it stop doing so.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 on %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 is on air: %2. Recall “%3” anyway?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>Saved “%1”.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Refresh picture</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Take a new picture from where the camera points now</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>The preset&apos;s picture could not be saved.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Taking picture…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>No picture</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>No picture of “%1” could be taken. Use Refresh picture to try again.</translation>
+    </message>
+</context>
 </TS>

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import CancelledError, Future
 from dataclasses import dataclass, field, replace
@@ -15,6 +17,7 @@ from solin.core.scenes.camera_discovery_process import CAMERA_DISCOVERY_DEADLINE
 from solin.core.scenes.composition import scene_uses_content_source
 from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
+    SCENE_THUMBNAILS_CHANNEL,
     EngineHealthEvent,
     FrameChannelDescriptor,
     FrameEgressReadyEvent,
@@ -60,8 +63,11 @@ from solin.core.scenes.model import (
     PtzTimeoutPolicy,
     RecallPtzPresetAction,
     RtspCameraConfig,
+    ViscaIpPtzBinding,
+    ViscaSerialPtzBinding,
 )
 from solin.core.scenes.ptz import (
+    PendingCameraPreset,
     PtzControlKind,
     PtzControlResult,
     PtzRecallExecutor,
@@ -106,6 +112,9 @@ _CATEGORY_BY_PROJECTION_TYPE = {
     "browser": ContentCategory.BROWSER,
     "obs_stream": ContentCategory.EXTERNAL_STREAM,
 }
+# How long past a transition's nominal duration its outgoing scene still counts
+# as on air: the engine starts it once the take is acknowledged.
+_OUTGOING_SCENE_MARGIN_MS = 250
 
 
 class ProjectionStateSource(Protocol):
@@ -211,6 +220,8 @@ class SceneRuntimeController(QObject):
     document_changed = Signal(object)
     desired_scenes_changed = Signal(object)
     applied_scenes_changed = Signal(object)
+    # A scene finished leaving an output: its transition has run its course.
+    outgoing_scenes_changed = Signal()
     engine_capabilities_changed = Signal(object)
     engine_ready_changed = Signal(bool)
     engine_event = Signal(object)
@@ -324,6 +335,16 @@ class SceneRuntimeController(QObject):
         self._last_content_playing = self.content_is_playing
         self._desired_scenes = self._resolve_desired_scenes()
         self._applied_scenes: tuple[tuple[BusId, str], ...] = ()
+        # The scene each output is transitioning away from, with when its
+        # transition ends: the audience still sees it until then.
+        self._outgoing_scenes: dict[BusId, tuple[str, float]] = {}
+        self._outgoing_timer = QTimer(self)
+        self._outgoing_timer.setSingleShot(True)
+        self._outgoing_timer.timeout.connect(self._expire_outgoing_scenes)
+        # VISCA preset slots chosen for saves the document does not hold yet,
+        # by pending preset id: (camera, slot). Released from executor threads.
+        self._preset_slot_reservations: dict[str, tuple[str, int]] = {}
+        self._preset_slot_lock = threading.Lock()
         self._pending: dict[BusId, _PendingTake] = {}
         self._waiting_video_take: tuple[ScenePreparation, _PendingTake] | None = None
         self._ready_video_epoch: int | None = None
@@ -463,6 +484,24 @@ class SceneRuntimeController(QObject):
 
     def desired_scene(self, bus_id: BusId) -> str:
         return _scene_for_bus(self._desired_scenes, bus_id)
+
+    def scenes_on_air(self, bus_id: BusId) -> tuple[str, ...]:
+        """Every scene the audience may see on this output now, most visible first.
+
+        The applied scene, then the one a transition is still leaving, then the
+        desired scene a switch is heading to: during a switch more than one of
+        them is on screen, and safety checks must count each of them.
+        """
+        scenes: list[str] = []
+        outgoing = self._outgoing_scenes.get(bus_id)
+        for scene_id in (
+            self.applied_scene(bus_id),
+            outgoing[0] if outgoing is not None and outgoing[1] > time.monotonic() else None,
+            self.desired_scene(bus_id),
+        ):
+            if scene_id and scene_id not in scenes:
+                scenes.append(scene_id)
+        return tuple(scenes)
 
     def applied_scene(self, bus_id: BusId) -> str | None:
         return next(
@@ -1072,8 +1111,13 @@ class SceneRuntimeController(QObject):
         scene_ids: tuple[str, ...],
         cell_width: int,
         cell_height: int,
+        *,
+        channel_id: str = SCENE_THUMBNAILS_CHANNEL,
     ) -> bool:
-        """Point the engine at the scene-card thumbnail atlas.
+        """Point the engine at a scene-render feed: the card atlas or a scene window.
+
+        Each ``channel_id`` is an independent feed; clearing one (``descriptor``
+        None) leaves the others running.
 
         Returns False when there is no engine to tell yet, so the caller knows to
         try again rather than assuming the engine heard it.
@@ -1093,6 +1137,7 @@ class SceneRuntimeController(QObject):
                 request_id=self._request_id_factory(),
                 sequence=self._next_sequence(),
                 deadline_ms=_TAKE_DEADLINE_MS,
+                channel_id=channel_id,
             ),
             "thumbnail_egress",
             None,
@@ -1551,6 +1596,96 @@ class SceneRuntimeController(QObject):
             preset=preset,
         )
 
+    def store_current_camera_position(
+        self,
+        camera_source_id: str,
+        name: str,
+    ) -> tuple[PendingCameraPreset | None, Future[PtzControlResult]]:
+        """Save where the camera points now as a new preset, on the camera itself.
+
+        Returns the pending preset and the store future. Nothing is added to the
+        document here: a store the camera refuses must leave no orphan preset, so
+        the caller adds ``pending.stored(result.preset_token)`` on success. VISCA
+        presets take the lowest number this camera does not use yet; ONVIF
+        presets are created by the camera, which chooses the token.
+        """
+        binding = self._camera_ptz_binding(camera_source_id)
+        if binding is None:
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.STORE_PRESET, "ptz_binding_unavailable",
+            )
+        ptz = self._ptz
+        if ptz is None:
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.STORE_PRESET, "ptz_executor_unavailable",
+            )
+        if isinstance(binding, (ViscaIpPtzBinding, ViscaSerialPtzBinding)):
+            presets = self._documents.document.camera_presets
+            used: set[int] = set()
+            for preset in presets:
+                if preset.camera_source_id != camera_source_id:
+                    continue
+                try:
+                    used.add(int(preset.remote_token, 0))
+                except ValueError:
+                    continue
+            pending_id = new_identity()
+            with self._preset_slot_lock:
+                # A save the document now holds no longer needs its reservation.
+                saved = {preset.id for preset in presets}
+                for reserved_id in tuple(self._preset_slot_reservations):
+                    if reserved_id in saved:
+                        del self._preset_slot_reservations[reserved_id]
+                # Saves still on their way to the camera or the document own
+                # their slots too, or two quick saves would share one.
+                used.update(
+                    slot for camera, slot in self._preset_slot_reservations.values()
+                    if camera == camera_source_id
+                )
+                free = next((number for number in range(1, 128) if number not in used), None)
+                if free is None and 0 not in used:
+                    free = 0
+                if free is not None:
+                    self._preset_slot_reservations[pending_id] = (camera_source_id, free)
+            if free is None:
+                return None, _completed_ptz_control_failure(
+                    camera_source_id, PtzControlKind.STORE_PRESET, "ptz_preset_slots_full",
+                )
+            pending = PendingCameraPreset(pending_id, camera_source_id, name, str(free))
+            try:
+                future = ptz.store_preset(
+                    camera_source_id=camera_source_id,
+                    binding=binding,
+                    preset=pending.stored(),
+                )
+            except BaseException:  # noqa: BLE001 - free the slot, then re-raise
+                self.release_camera_preset_slot(pending_id)
+                raise
+            future.add_done_callback(
+                lambda done: None if _ptz_future_succeeded(done)
+                else self.release_camera_preset_slot(pending_id)
+            )
+            return pending, future
+        create = getattr(ptz, "create_preset", None)
+        if not callable(create):
+            return None, _completed_ptz_control_failure(
+                camera_source_id, PtzControlKind.CREATE_PRESET, "ptz_control_unsupported",
+            )
+        pending = PendingCameraPreset(new_identity(), camera_source_id, name)
+        return pending, cast(
+            Future[PtzControlResult],
+            create(camera_source_id=camera_source_id, binding=binding, name=name),
+        )
+
+    def release_camera_preset_slot(self, preset_id: str) -> None:
+        """Free the camera slot a save reserved: it failed, was abandoned, or is saved.
+
+        Safe from any thread; releasing an unknown or already released id does
+        nothing. A failed store releases its own slot.
+        """
+        with self._preset_slot_lock:
+            self._preset_slot_reservations.pop(preset_id, None)
+
     def stop_engine(self) -> None:
         if self._profile_idle_waiter is not None:
             self._profile_idle_waiter.cancel()
@@ -1581,6 +1716,8 @@ class SceneRuntimeController(QObject):
         self._layer_geometry_in_flight = None
         self._queued_layer_geometry.clear()
         self._set_last_engine_error_code("")
+        self._outgoing_scenes.clear()
+        self._outgoing_timer.stop()
         if self._applied_scenes:
             self._applied_scenes = ()
             self.applied_scenes_changed.emit(())
@@ -2869,8 +3006,52 @@ class SceneRuntimeController(QObject):
             self._take_reconciliation_required.clear()
         if scenes == self._applied_scenes:
             return
+        self._remember_outgoing_scenes(dict(self._applied_scenes), dict(scenes))
         self._applied_scenes = scenes
         self.applied_scenes_changed.emit(scenes)
+
+    def _remember_outgoing_scenes(
+        self, previous: dict[BusId, str], current: dict[BusId, str],
+    ) -> None:
+        now = time.monotonic()
+        for bus_id, scene_id in previous.items():
+            incoming = current.get(bus_id)
+            if incoming == scene_id:
+                continue
+            duration_ms = 0
+            if incoming:
+                try:
+                    duration_ms = self._documents.effective_transition(incoming).duration_ms
+                except Exception:  # noqa: BLE001 - a deleted scene simply cuts
+                    duration_ms = 0
+            if duration_ms <= 0:
+                self._outgoing_scenes.pop(bus_id, None)
+                continue
+            # A little past the nominal end: the engine starts the transition
+            # after the take is acknowledged, not at this instant.
+            self._outgoing_scenes[bus_id] = (
+                scene_id, now + (duration_ms + _OUTGOING_SCENE_MARGIN_MS) / 1000,
+            )
+        self._schedule_outgoing_expiry()
+
+    def _schedule_outgoing_expiry(self) -> None:
+        if not self._outgoing_scenes:
+            self._outgoing_timer.stop()
+            return
+        soonest = min(deadline for _scene_id, deadline in self._outgoing_scenes.values())
+        self._outgoing_timer.start(max(0, round((soonest - time.monotonic()) * 1000)) + 1)
+
+    def _expire_outgoing_scenes(self) -> None:
+        now = time.monotonic()
+        expired = [
+            bus_id for bus_id, (_scene_id, deadline) in self._outgoing_scenes.items()
+            if deadline <= now
+        ]
+        for bus_id in expired:
+            del self._outgoing_scenes[bus_id]
+        self._schedule_outgoing_expiry()
+        if expired:
+            self.outgoing_scenes_changed.emit()
 
     def _cancel_pending(self, bus_id: BusId, *, cancel_native: bool) -> None:
         if self._waiting_video_take is not None and self._waiting_video_take[0].bus_id is bus_id:
@@ -3284,6 +3465,16 @@ def _completed_ptz_failure(
         )
     )
     return future
+
+
+def _ptz_future_succeeded(future: Future[PtzControlResult]) -> bool:
+    if future.cancelled():
+        return False
+    try:
+        result = future.result()
+    except BaseException:  # noqa: BLE001 - any failure frees what the store held
+        return False
+    return bool(getattr(result, "succeeded", False))
 
 
 def _completed_ptz_control_failure(

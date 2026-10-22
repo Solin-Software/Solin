@@ -12093,4 +12093,269 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Не вдалося виконати деякі дії Zoom. Перевірте Zoom і спробуйте знову.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Відкрити %1 у вікні</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Сцени Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>В ефірі · віртуальна камера</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>В ефірі · проекція</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Завантаження попереднього перегляду…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Рушій сцен запускається…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Рушій сцен недоступний.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Віртуальна камера</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Проекція</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Показати цю сцену на віртуальній камері</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Показати цю сцену в проекції</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Помилка</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Камера не змогла виконати команду.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Пресети</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Швидкість</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Зберегти поточне</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Зберегти поточний напрямок камери як новий пресет</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Для цієї камери ще немає пресетів.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Рух…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Перейменувати…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Час вичерпано</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Вхід відхилено</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Камера зайнята</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Недоступна</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Камера не встигла завершити рух.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Камера відхилила вхід PTZ. Перевірте його в налаштуваннях камери.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Камера зайнята іншою командою.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Камера не відповіла.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>У цієї камери немає вільних комірок пресетів.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Угору</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Униз</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Ліворуч</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Праворуч</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Стоп</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Наблизити</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Віддалити</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Керування PTZ недоступне в цій установці.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>віртуальна камера</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>проекція</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Пресет %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Перейменувати пресет</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Назва пресету</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>В ефірі · живе керування розблоковано</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>В ефірі · рухи бачать глядачі</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Камера в ефірі</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Не вдалося перемістити камеру.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Не вдалося зберегти пресет.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Збереження «%1»…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Видалити пресет</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Не вдалося змінити пресет.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Також у: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Видалити пресет «%1»? Сцени, які його викликають, перестануть це робити.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 в ефірі: %2. Рух змінює те, що бачать глядачі. Дозволити рух, доки камера не вийде з ефіру?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 в ефірі: %2. Усе одно викликати «%3»?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>«%1» збережено.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Оновити зображення</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Зробити нове зображення з поточного напрямку камери</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Не вдалося зберегти зображення пресету.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Зйомка зображення…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Немає зображення</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Не вдалося зробити зображення «%1». Скористайтеся «Оновити зображення», щоб повторити.</translation>
+    </message>
+</context>
 </TS>

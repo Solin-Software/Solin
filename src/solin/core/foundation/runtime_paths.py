@@ -122,6 +122,10 @@ class ProfilePaths:
     def scenes_assets_dir(self) -> Path:
         return self.profile_dir / "scenes_assets"
 
+    @property
+    def ptz_preset_thumbnails_dir(self) -> Path:
+        return self.profile_dir / "ptz_preset_thumbnails"
+
     @classmethod
     def from_roots(
         cls,

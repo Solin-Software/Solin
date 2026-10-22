@@ -12051,4 +12051,269 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <translation>Sommige Zoom-acties konden niet worden voltooid. Controleer Zoom en probeer opnieuw.</translation>
     </message>
 </context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 in een venster openen</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scènes</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>In de uitzending · virtuele camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>In de uitzending · projectie</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Voorbeeld laden…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>De scène-engine start…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>De scène-engine is niet beschikbaar.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projectie</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Deze scène op de virtuele camera tonen</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Deze scène in de projectie tonen</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Mislukt</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>De camera kon de opdracht niet uitvoeren.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Presets</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Snelheid</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Huidige opslaan</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Sla op waar deze camera nu op gericht is als nieuwe preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Nog geen presets voor deze camera.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Bezig met bewegen…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Naam wijzigen…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Time-out</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Aanmelding geweigerd</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Camera bezet</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Onbereikbaar</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>De camera was niet op tijd klaar met bewegen.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>De camera weigerde de PTZ-aanmelding. Controleer die in de camera-instellingen.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>De camera is bezig met een andere opdracht.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>De camera antwoordde niet.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Deze camera heeft geen vrije presetplaatsen.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Omhoog</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Omlaag</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Naar links</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Naar rechts</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stoppen</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Inzoomen</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Uitzoomen</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ-besturing is niet beschikbaar in deze installatie.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>de virtuele camera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>de projectie</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Naam van preset wijzigen</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Presetnaam</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>In de uitzending · livebesturing ontgrendeld</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>In de uitzending · bewegingen zijn zichtbaar voor het publiek</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Camera in de uitzending</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>De camera kon niet worden bewogen.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>De preset kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>‘%1’ opslaan…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Preset verwijderen</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>De preset kon niet worden gewijzigd.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Ook in: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Preset ‘%1’ verwijderen? Scènes die hem oproepen doen dat dan niet meer.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 is in de uitzending: %2. Bewegen verandert wat het publiek ziet. Bewegen toestaan tot hij uit de uitzending is?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 op %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 is in de uitzending: %2. ‘%3’ toch oproepen?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>‘%1’ opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Afbeelding vernieuwen</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Maak een nieuwe afbeelding van waar de camera nu op gericht is</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>De afbeelding van de preset kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Afbeelding maken…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Geen afbeelding</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Van ‘%1’ kon geen afbeelding worden gemaakt. Probeer het opnieuw met Afbeelding vernieuwen.</translation>
+    </message>
+</context>
 </TS>
