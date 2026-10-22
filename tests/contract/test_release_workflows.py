@@ -407,6 +407,47 @@ def test_windows_quality_preserves_suite_failure_and_stops_later_suites(failed_s
     assert result.stdout.splitlines() == [f"tests/{suite}" for suite in expected]
 
 
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_windows_zoom_qualification_waits_for_process_and_propagates_failure(
+    tmp_path, monkeypatch, exit_code,
+):
+    monkeypatch.setenv("PYTHONFAULTHANDLER", "1")
+    steps = workflow("build-solin-windows.yml")["jobs"]["build"]["steps"]
+    step = next(item for item in steps if item.get("name") == "Qualify packaged Zoom automation runtime")
+    assert "if" not in step  # Both manual and release builds must qualify the artifact.
+    assert step["shell"] == "python"
+    build_dir = tmp_path / "build staging"
+    monkeypatch.setenv("BUILD_DIR", str(build_dir))
+    completed = tmp_path / "completed"
+    interpreter = (
+        Path(sys.executable).with_name("pythonw.exe") if os.name == "nt" else Path(sys.executable)
+    )
+    child = (
+        "import faulthandler; from pathlib import Path; "
+        "assert faulthandler.is_enabled(); "
+        f"Path({str(completed)!r}).touch(); "
+        f"raise SystemExit({exit_code})"
+    )
+    run_process = subprocess.run
+
+    def launch(command, **kwargs):
+        assert command == [str(build_dir / "main.dist" / "Solin.exe"), "--verify-zoom-runtime"]
+        assert kwargs["check"] is True
+        assert 0 < kwargs["timeout"] <= 60
+        # Use a real GUI-subsystem process on Windows, without opening a window.
+        # Explicit streams let pythonw initialize CI's inherited faulthandler.
+        return run_process([str(interpreter), "-c", child], capture_output=True, text=True, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", launch)
+    if exit_code:
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            exec(step["run"], {})
+        assert failure.value.returncode == exit_code, failure.value.stderr
+    else:
+        exec(step["run"], {})
+    assert completed.exists()
+
+
 def test_linux_smoke_rejects_clean_early_exit(monkeypatch):
     from tests.e2e._packaged_app import assert_process_survives_startup
 
