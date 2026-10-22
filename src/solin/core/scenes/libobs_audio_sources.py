@@ -36,6 +36,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from solin.core.scenes.engine import MEETING_AUDIO_MIX_INDEX
+
 log = logging.getLogger(__name__)
 
 # libobs' sentinel device id for "follow the OS default device".
@@ -246,6 +248,12 @@ class LibobsAudioMixer:
             return _DEVICE_UNAVAILABLE
         if source is None:
             return _DEVICE_UNAVAILABLE
+        try:
+            # Recording captures stay off the meeting mix: the system-audio loopback
+            # would re-capture the speakers (echo) and the meeting has its own hall feed.
+            source.audio_mixers = int(source.audio_mixers) & ~(1 << MEETING_AUDIO_MIX_INDEX)
+        except Exception:  # noqa: BLE001 - mixer routing is best-effort
+            log.warning("could not keep %s off the meeting mix", kind, exc_info=True)
 
         channel: int | None = None
         try:

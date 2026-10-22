@@ -140,6 +140,11 @@ jobs:
           if (-not (Test-Path -LiteralPath $sideviewDll)) {
             throw "The installed SideView package is missing its Windows native backend: $sideviewDll"
           }
+          $livekitDir = python -c "from pathlib import Path; import livekit.rtc; print(Path(livekit.rtc.__file__).resolve().parent / 'resources')"
+          $livekitDll = Join-Path $livekitDir "livekit_ffi.dll"
+          if (-not (Test-Path -LiteralPath $livekitDll)) {
+            throw "The installed LiveKit SDK is missing its native core: $livekitDll"
+          }
 
           python scripts/prepare_zoom_bindings.py
           if ($LASTEXITCODE -ne 0) { throw "UI Automation bindings could not be prepared." }
@@ -169,6 +174,7 @@ jobs:
             --include-package=solin.widgets `
             --include-package=sideview `
             --include-package=pylibobs `
+            --include-package=livekit `
             --include-module=websocket `
             --include-module=websocket._core `
             --include-module=websocket._app `
@@ -187,6 +193,7 @@ jobs:
             --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
             --include-data-files="$env:BUILD_DIR/translations/windows/*.qm=solin/resources/translations/" `
             --include-data-files="$sideviewDll=sideview/sideview_native.dll" `
+            --include-data-files="$livekitDll=livekit/rtc/resources/livekit_ffi.dll" `
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,position `
             main.py
@@ -219,6 +226,9 @@ jobs:
           }
           if (-not (Test-Path "$dist\sideview\sideview_native.dll")) {
             throw "The SideView Windows backend was not packaged."
+          }
+          if (-not (Test-Path "$dist\livekit\rtc\resources\livekit_ffi.dll")) {
+            throw "The LiveKit native core was not packaged."
           }
 
           $remove = @(

@@ -161,6 +161,11 @@ jobs:
               'from pathlib import Path; import sideview; print(Path(sideview.__file__).resolve().parent / "libsideview_native.dylib")'
           )"
           test -f "${SIDEVIEW_DYLIB}"
+          LIVEKIT_FFI="$(
+            python -c \
+              'from pathlib import Path; import livekit.rtc; print(Path(livekit.rtc.__file__).resolve().parent / "resources" / "liblivekit_ffi.dylib")'
+          )"
+          test -f "${LIVEKIT_FFI}"
 
           qml_binary_args=()
           if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.dylib" -print -quit | grep -q .; then
@@ -191,6 +196,7 @@ jobs:
             --include-package=solin.widgets \
             --include-package=sideview \
             --include-package=pylibobs \
+            --include-package=livekit \
             --include-module=websocket \
             --include-module=websocket._core \
             --include-module=websocket._app \
@@ -205,6 +211,7 @@ jobs:
             "${qml_binary_args[@]}" \
             --include-data-files="${BUILD_DIR}/translations/macos/*.qm=solin/resources/translations/" \
             --include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib" \
+            --include-data-files="${LIVEKIT_FFI}=livekit/rtc/resources/liblivekit_ffi.dylib" \
             --enable-plugin=pyside6 \
             --include-qt-plugins=platforms,styles,imageformats,position \
             main.py

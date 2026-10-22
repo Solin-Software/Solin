@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 from solin.bootstrap import entrypoint
-from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT
+from solin.core.foundation.constants import (
+    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, MEETING_PUBLISHER_ARGUMENT,
+    ZOOM_AUTOMATION_ARGUMENT,
+)
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, encode_envelope, read_envelope
 from tests._paths import REPO_ROOT
 
@@ -147,3 +150,34 @@ def test_launcher_sidecar_dispatch_speaks_binary_ipc_without_loading_qt(tmp_path
     response = read_envelope(io.BytesIO(result.stdout))
     assert response is not None and response.message_type == "hello_ack"
     assert response.request_id == request.request_id
+
+
+def test_meeting_publisher_role_exits_before_application_import(monkeypatch):
+    from solin.core.conference import publisher_worker
+
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", MEETING_PUBLISHER_ARGUMENT])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    monkeypatch.setattr(publisher_worker, "main", lambda: 7)
+    with pytest.raises(SystemExit) as error:
+        entrypoint.run()
+    assert error.value.code == 7
+
+
+def test_meeting_publisher_role_rejects_application_arguments(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["Solin.exe", MEETING_PUBLISHER_ARGUMENT, "--create-profile"])
+    monkeypatch.setitem(sys.modules, "solin.bootstrap.application", None)
+    with pytest.raises(SystemExit, match="accepts no application arguments"):
+        entrypoint.run()
+
+
+def test_launcher_meeting_publisher_handshake_does_not_load_qt(tmp_path):
+    code = (
+        "import runpy,sys; sys.modules['PySide6']=None; "
+        "sys.modules['solin.bootstrap.application']=None; "
+        f"sys.argv=[{str(REPO_ROOT / 'main.py')!r},{MEETING_PUBLISHER_ARGUMENT!r}]; "
+        f"runpy.run_path({str(REPO_ROOT / 'main.py')!r},run_name='__main__')"
+    )
+    result = subprocess.run([sys.executable, "-c", code], input=b'{"command":"stop"}\n',
+                            capture_output=True, timeout=20, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
+    assert [json.loads(line) for line in result.stdout.splitlines()] == [{"ready": 1}]

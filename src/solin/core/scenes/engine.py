@@ -136,6 +136,7 @@ class SceneEngineCapabilities:
     program_recording: bool
     audio_input_capture: bool
     system_audio_capture: bool
+    meeting_egress: bool = False
 
     def __post_init__(self) -> None:
         _positive_int(self.protocol_version, "protocol_version")
@@ -148,6 +149,7 @@ class SceneEngineCapabilities:
             self.program_recording,
             self.audio_input_capture,
             self.system_audio_capture,
+            self.meeting_egress,
         )
 
 
@@ -439,6 +441,51 @@ class FrameChannelDescriptor:
             raise ValueError("Invalid frame color range")
 
 
+MEETING_AUDIO_MIX_INDEX = 5  # libobs mixer track 6: media + hall feed, no loopback captures
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingEgressDescriptor:
+    """Shared-memory rings the sidecar fills for the meeting publisher process.
+
+    Video: the program as tightly packed I420 at ``width``x``height``; audio: the
+    ``audio_mix`` libobs mix as planar float32. The app creates and owns both rings.
+    """
+
+    channel_id: str
+    generation: int
+    video_ring: str
+    audio_ring: str
+    width: int
+    height: int
+    fps: int
+    audio_mix: int = MEETING_AUDIO_MIX_INDEX
+
+    def __post_init__(self) -> None:
+        _identity(self.channel_id, "meeting egress channel id")
+        _non_negative_int(self.generation, "meeting egress generation")
+        _identity(self.video_ring, "meeting video ring")
+        _identity(self.audio_ring, "meeting audio ring")
+        _bounded_int(self.width, 16, 3840, "meeting video width")
+        _bounded_int(self.height, 16, 2160, "meeting video height")
+        if self.width % 2 or self.height % 2:
+            raise ValueError("Meeting video dimensions must be even (I420)")
+        _bounded_int(self.fps, 1, 60, "meeting video frame rate")
+        _bounded_int(self.audio_mix, 0, 5, "meeting audio mix")
+
+    def to_record(self) -> dict[str, object]:
+        return {
+            "channel_id": self.channel_id,
+            "generation": self.generation,
+            "video_ring": self.video_ring,
+            "audio_ring": self.audio_ring,
+            "width": self.width,
+            "height": self.height,
+            "fps": self.fps,
+            "audio_mix": self.audio_mix,
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class OutputWindowTarget:
     bus_id: BusId
@@ -488,6 +535,7 @@ class SceneEngineSnapshot:
     program_egress: FrameChannelDescriptor | None = None
     window_targets: tuple[OutputWindowTarget, ...] = ()
     idle_screen: IdleScreenState = IdleScreenState()
+    meeting_egress: MeetingEgressDescriptor | None = None
 
     def __post_init__(self) -> None:
         _identity(self.session_id, "engine session id")
@@ -524,6 +572,10 @@ class SceneEngineSnapshot:
                 FrameChannelDescriptor,
             ):
                 raise ValueError(f"Invalid {field_name} descriptor")
+        if self.meeting_egress is not None and not isinstance(
+            self.meeting_egress, MeetingEgressDescriptor
+        ):
+            raise ValueError("Invalid meeting egress descriptor")
         if (
             not isinstance(self.window_targets, tuple)
             or len(self.window_targets) > MAXIMUM_OUTPUT_WINDOW_TARGETS

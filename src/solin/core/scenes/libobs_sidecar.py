@@ -52,6 +52,7 @@ CAPABILITIES: dict[str, bool] = {
     "program_recording": False,
     "audio_input_capture": False,
     "system_audio_capture": False,
+    "meeting_egress": False,
 }
 
 # Control messages the client sends fire-and-forget (no response is expected).
@@ -350,6 +351,7 @@ class LibobsSidecarEngine:
         self._content_consumer: Any | None = None
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
+        self._meeting_egress: Any | None = None
         self._virtual_camera: Any | None = None
         self._output_health_request: SceneIpcEnvelope | None = None
         self._output_health: OutputHealth | None = None
@@ -411,6 +413,7 @@ class LibobsSidecarEngine:
         capabilities["hardware_compositing"] = self._runtime_started
         capabilities["virtual_camera"] = self._runtime_started
         capabilities["program_recording"] = self._runtime_started
+        capabilities["meeting_egress"] = self._runtime_started
         if self._runtime_started and self._audio_mixer is not None:
             microphone, system_audio = self._audio_mixer.available()
             capabilities["audio_input_capture"] = microphone
@@ -474,6 +477,9 @@ class LibobsSidecarEngine:
             runtime,
             on_ready=self._emit_frame_egress_ready,
         )
+        from solin.core.scenes.libobs_meeting_egress import LibobsMeetingEgress
+
+        self._meeting_egress = LibobsMeetingEgress(runtime)
         from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
@@ -1623,6 +1629,8 @@ class LibobsSidecarEngine:
                     self._projection_route.prepare_all()
                 if self._program_egress is not None:
                     self._program_egress.configure(payload.get("program_egress"))
+                if self._meeting_egress is not None:
+                    self._meeting_egress.configure(payload.get("meeting_egress"))
                 if self._preview_egress is not None:
                     self._preview_egress.configure(payload.get("preview_egress"))
 
@@ -2250,6 +2258,12 @@ class LibobsSidecarEngine:
                 egress.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("preview egress shutdown errored", exc_info=True)
+        meeting_egress, self._meeting_egress = self._meeting_egress, None
+        if meeting_egress is not None:
+            try:
+                meeting_egress.shutdown()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("meeting egress shutdown errored", exc_info=True)
         program_egress, self._program_egress = self._program_egress, None
         if program_egress is not None:
             try:

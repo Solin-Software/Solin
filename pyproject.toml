@@ -16,6 +16,7 @@ dependencies = [
     "ephem==4.2.1",
     "fonttools==4.62.1",
     "keyring==25.7.0",
+    "livekit==1.1.21",
     "packaging==26.0",
     "pillow==12.1.1",
     "pyserial==3.5",

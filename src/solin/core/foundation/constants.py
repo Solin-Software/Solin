@@ -36,6 +36,7 @@ IS_DEV: bool = not IS_COMPILED and _is_development_checkout()
 LIBOBS_SIDECAR_ARGUMENT: str = "--scene-engine-sidecar"
 CAMERA_DISCOVERY_ARGUMENT: str = "--camera-discovery"
 ZOOM_AUTOMATION_ARGUMENT: str = "--zoom-automation"
+MEETING_PUBLISHER_ARGUMENT: str = "--meeting-publisher"
 
 # Qt / QSettings identity
 # Use a separate development namespace to keep registry entries and data

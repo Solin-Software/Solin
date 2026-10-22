@@ -199,6 +199,13 @@ SIDEVIEW_NATIVE="${SIDEVIEW_PACKAGE_DIR}/libsideview_native.so"
     "The installed SideView package is missing its Linux native backend: ${SIDEVIEW_NATIVE}"
 "${PYTHON}" -c "from sideview._backend import NativeBackend; NativeBackend()"
 
+# LiveKit's WebRTC core is a ctypes library Nuitka cannot discover on its own.
+LIVEKIT_FFI="$(
+    "${PYTHON}" -c \
+        'from pathlib import Path; import livekit.rtc; print(Path(livekit.rtc.__file__).resolve().parent / "resources" / "liblivekit_ffi.so")'
+)"
+[[ -f "${LIVEKIT_FFI}" ]] || fail "The installed LiveKit SDK is missing its native core: ${LIVEKIT_FFI}"
+
 if ldd "${SIDEVIEW_NATIVE}" | grep -q 'not found'; then
     ldd "${SIDEVIEW_NATIVE}" >&2
     fail "The installed SideView backend has unresolved shared-library dependencies."
@@ -243,6 +250,7 @@ fi
     --include-package=solin.widgets \
     --include-package=sideview \
     --include-package=pylibobs \
+    --include-package=livekit \
     --include-module=websocket \
     --include-module=websocket._core \
     --include-module=websocket._app \
@@ -256,6 +264,7 @@ fi
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
     --include-data-files="${TRANSLATIONS_DIR}/*.qm=solin/resources/translations/" \
+    --include-data-files="${LIVEKIT_FFI}=livekit/rtc/resources/liblivekit_ffi.so" \
     --enable-plugin=pyside6 \
     --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py
@@ -263,6 +272,8 @@ fi
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
 [[ -f "${DIST_DIR}/sideview/libsideview_native.so" ]] || fail \
     "The SideView Linux backend was not packaged."
+[[ -f "${DIST_DIR}/livekit/rtc/resources/liblivekit_ffi.so" ]] || fail \
+    "The LiveKit native core was not packaged."
 [[ -f "${DIST_DIR}/solin/qml/Solin/qmldir" ]] || fail \
     "Compiled app QML metadata was not packaged."
 find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qmlc' -print -quit | grep -q . || fail \

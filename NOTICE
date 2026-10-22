@@ -23,3 +23,6 @@ Source notices and dependency revisions: native/virtual_camera/THIRD_PARTY.md.
 LiveKit server (bundled as bin/livekit-server for Solin-hosted meetings):
 Copyright LiveKit, Inc., Apache License 2.0; license text in licenses/livekit-server.txt.
 Source: https://github.com/livekit/livekit
+LiveKit Python SDK and its native WebRTC core (livekit/rtc/resources/liblivekit_ffi), used by
+the meeting publisher: Copyright LiveKit, Inc., Apache License 2.0.
+Source: https://github.com/livekit/python-sdks and https://github.com/livekit/rust-sdks

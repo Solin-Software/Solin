@@ -471,6 +471,7 @@ def test_supervisor_checks_engine_health_while_camera_metadata_hangs(
                 "hardware_compositing": False, "virtual_camera": False,
                 "program_recording": False, "audio_input_capture": False,
                 "system_audio_capture": False,
+                "meeting_egress": False,
             })
         elif request.message_type == "ping" and responsive:
             response = replace(request, message_type="heartbeat", payload={"monotonic_ms": 1})

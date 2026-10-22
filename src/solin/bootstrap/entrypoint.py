@@ -3,7 +3,8 @@ from __future__ import annotations
 import sys
 
 from solin.core.foundation.constants import (
-    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
+    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, MEETING_PUBLISHER_ARGUMENT,
+    ZOOM_AUTOMATION_ARGUMENT,
 )
 
 from .startup_timeline import startup_timeline
@@ -28,6 +29,12 @@ def run() -> None:
         from solin.core.scenes.camera_discovery_process import main as run_camera_discovery
 
         raise SystemExit(run_camera_discovery())
+    if MEETING_PUBLISHER_ARGUMENT in arguments:
+        if arguments != [MEETING_PUBLISHER_ARGUMENT]:
+            raise SystemExit("The meeting publisher accepts no application arguments.")
+        from solin.core.conference.publisher_worker import main as run_publisher
+
+        raise SystemExit(run_publisher())
 
     if any(argument.split("=", 1)[0] == "--verify-media-runtime" for argument in arguments):
         from .media_runtime_verification import main as verify_media_runtime

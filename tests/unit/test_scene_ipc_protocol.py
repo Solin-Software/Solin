@@ -62,9 +62,9 @@ def test_decoder_rejects_a_sidecar_from_the_previous_protocol_generation() -> No
         decode_envelope(json.dumps(record).encode())
 
 
-def test_camera_flag_retirement_requires_protocol_ten() -> None:
-    assert PROTOCOL_VERSION == 10
-    for version in (9, 11, True, 10.0):
+def test_meeting_egress_requires_protocol_eleven() -> None:
+    assert PROTOCOL_VERSION == 11
+    for version in (10, 12, True, 11.0):
         with pytest.raises(SceneIpcMessageError, match="protocol version"):
             _envelope(protocol_version=version)
 
@@ -78,6 +78,7 @@ def _capabilities_payload() -> dict[str, object]:
         "program_recording": False,
         "audio_input_capture": True,
         "system_audio_capture": False,
+        "meeting_egress": False,
     }
 
 

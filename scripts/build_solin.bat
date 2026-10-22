@@ -52,6 +52,13 @@ if not exist "%SIDEVIEW_NATIVE_DLL%" (
     exit /b 1
 )
 
+for /f "delims=" %%I in ('call "%PYTHON%" -c "from pathlib import Path; import livekit.rtc; print(Path(livekit.rtc.__file__).resolve().parent / 'resources' / 'livekit_ffi.dll')"') do set "LIVEKIT_FFI_DLL=%%I"
+if not exist "%LIVEKIT_FFI_DLL%" (
+    echo  [ERRO] O nucleo nativo do LiveKit nao foi encontrado em %LIVEKIT_FFI_DLL%.
+    pause
+    exit /b 1
+)
+
 rmdir /s /q "%PROJECT_ROOT%.venv\Lib\site-packages\win32com\gen_py" 2>nul
 rmdir /s /q "%LOCALAPPDATA%\Temp\gen_py" 2>nul
 
@@ -142,6 +149,7 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --include-package=solin.widgets ^
     --include-package=sideview ^
     --include-package=pylibobs ^
+    --include-package=livekit ^
 	--include-module=websocket ^
 	--include-module=websocket._core ^
 	--include-module=websocket._app ^
@@ -160,6 +168,7 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
     --include-data-files="%TRANSLATIONS_DIR%\*.qm=solin/resources/translations/" ^
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
+    --include-data-files="%LIVEKIT_FFI_DLL%=livekit/rtc/resources/livekit_ffi.dll" ^
     --enable-plugin=pyside6 ^
     --include-qt-plugins=platforms,styles,imageformats,position ^
     "%MAIN_SCRIPT%"
@@ -179,6 +188,11 @@ set DIST=%OUTPUT_DIR%\main.dist
 
 if not exist "%DIST%\sideview\sideview_native.dll" (
     echo  [ERRO] O backend nativo do SideView nao foi empacotado.
+    pause
+    exit /b 1
+)
+if not exist "%DIST%\livekit\rtc\resources\livekit_ffi.dll" (
+    echo  [ERRO] O nucleo nativo do LiveKit nao foi empacotado.
     pause
     exit /b 1
 )

@@ -23,6 +23,7 @@ from solin.core.scenes.engine import (
     DEFAULT_ENGINE_STARTUP_DEADLINE_MS,
     EngineHealthEvent,
     FrameChannelDescriptor,
+    MeetingEgressDescriptor,
     FrameChannelTransport,
     FrameEgressReadyEvent,
     FrameProducerKind,
@@ -6217,3 +6218,29 @@ def test_windows_custom_size_alias_queries_current_selector_once(request, monkey
     assert queried.formats[0] in controller.local_cameras.devices[0].formats
     assert controller.query_local_camera_modes("USB-DEVICE", 800, 600).result() == first.result()
     assert len(engine.mode_calls) == 1
+
+
+def test_meeting_egress_rehydrates_once_per_descriptor_change(request) -> None:
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    hydrated = len(engine.snapshots)
+    descriptor = MeetingEgressDescriptor(
+        channel_id="solin-meeting", generation=1, video_ring="video", audio_ring="audio",
+        width=640, height=360, fps=30,
+    )
+
+    controller.set_meeting_egress(descriptor)
+    assert engine.snapshots[-1][1].meeting_egress == descriptor
+    count = len(engine.snapshots)
+    assert count > hydrated
+
+    controller.set_meeting_egress(descriptor)
+    assert len(engine.snapshots) == count
+
+    controller.set_meeting_egress(None)
+    assert engine.snapshots[-1][1].meeting_egress is None
+    with pytest.raises(TypeError):
+        controller.set_meeting_egress({"channel_id": "solin-meeting"})
