@@ -5807,18 +5807,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Automatisch schakelen</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediavensters</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>De opnamestatus kon niet worden gewijzigd.</translation>
@@ -5887,11 +5875,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>De status van de uitvoer kon niet worden gewijzigd.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>De spiegeling in de mediavensters kon niet worden gewijzigd.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
         <location line="+19"/>

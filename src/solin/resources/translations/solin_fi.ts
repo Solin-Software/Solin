@@ -5807,18 +5807,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Automaattinen vaihto</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediaikkunat</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Näytä mediaikkunoissa</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Tallennuksen tilaa ei voitu muuttaa.</translation>
@@ -5887,11 +5875,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Lähdön tilan vaihtaminen epäonnistui.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Mediaikkunoiden peilauksen vaihtaminen epäonnistui.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automaattinen vaihto</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Näytä mediaikkunoissa</translation>
     </message>
     <message>
         <location line="+19"/>

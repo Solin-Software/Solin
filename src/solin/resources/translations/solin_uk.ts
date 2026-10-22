@@ -5839,18 +5839,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Автоперемикання</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Вікна медіа</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Показувати у вікнах медіа</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Не вдалося змінити стан запису.</translation>
@@ -5919,11 +5907,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Не вдалося змінити стан виводу.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Не вдалося змінити дублювання у вікнах медіа.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7262,11 +7245,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Автоперемикання</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Показувати у вікнах медіа</translation>
     </message>
     <message>
         <location line="+19"/>

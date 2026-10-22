@@ -5807,18 +5807,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Automatisches Umschalten</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Medienfenster</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>In den Medienfenstern anzeigen</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Der Aufnahmestatus konnte nicht geändert werden.</translation>
@@ -5887,11 +5875,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Der Ausgabestatus konnte nicht geändert werden.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Die Spiegelung in den Medienfenstern konnte nicht geändert werden.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatisches Umschalten</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>In den Medienfenstern anzeigen</translation>
     </message>
     <message>
         <location line="+19"/>

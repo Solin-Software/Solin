@@ -5807,18 +5807,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Awtomatikong paglipat</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mga window ng media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Ipakita sa mga window ng media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Hindi mabago ang status ng recording.</translation>
@@ -5887,11 +5875,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Hindi mapalitan ang estado ng output.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Hindi mapalitan ang pag-mirror sa mga window ng media.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Awtomatikong paglipat</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Ipakita sa mga window ng media</translation>
     </message>
     <message>
         <location line="+19"/>

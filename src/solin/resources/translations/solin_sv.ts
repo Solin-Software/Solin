@@ -5806,18 +5806,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Automatiskt byte</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediafönster</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Visa i mediafönstren</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Det gick inte att ändra inspelningstillståndet.</translation>
@@ -5886,11 +5874,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Det gick inte att ändra utgångens status.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Det gick inte att ändra speglingen i mediafönstren.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7229,11 +7212,6 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatiskt byte</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Visa i mediafönstren</translation>
     </message>
     <message>
         <location line="+19"/>

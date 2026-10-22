@@ -5839,18 +5839,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Automatyczne przełączanie</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Okna multimediów</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Pokaż w oknach multimediów</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Nie można zmienić stanu nagrywania.</translation>
@@ -5919,11 +5907,6 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Nie udało się zmienić stanu wyjścia.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Nie udało się zmienić dublowania w oknach multimediów.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7262,11 +7245,6 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatyczne przełączanie</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Pokaż w oknach multimediów</translation>
     </message>
     <message>
         <location line="+19"/>

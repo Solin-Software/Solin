@@ -5807,18 +5807,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Ubadilishaji otomatiki</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Madirisha ya media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Onyesha kwenye madirisha ya media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Hali ya kurekodi haikuweza kubadilishwa.</translation>
@@ -5887,11 +5875,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Hali ya utoaji haikuweza kubadilishwa.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Uakisi kwenye madirisha ya media haukuweza kubadilishwa.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7230,11 +7213,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Ubadilishaji otomatiki</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Onyesha kwenye madirisha ya media</translation>
     </message>
     <message>
         <location line="+19"/>

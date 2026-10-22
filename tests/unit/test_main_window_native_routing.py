@@ -3,7 +3,6 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtGui import QImage
 
 import solin.main_window as main_window
 from solin.core.scenes.model import BusId
@@ -27,25 +26,17 @@ def test_native_routing_depends_on_shared_window_handles(monkeypatch, platform, 
     assert _native_scene_routing_supported() is supported
 
 
-def test_every_media_surface_uses_native_presentation_for_raw_visual_or_program() -> None:
+def test_every_media_surface_uses_native_presentation_for_visual_content() -> None:
     assert _use_native_media_presentation(
         native_window_routing_ready=True,
-        mirror_enabled=False,
         raw_visual=True,
-    )
-    assert _use_native_media_presentation(
-        native_window_routing_ready=True,
-        mirror_enabled=True,
-        raw_visual=False,
     )
     assert not _use_native_media_presentation(
         native_window_routing_ready=True,
-        mirror_enabled=False,
         raw_visual=False,
     )
     assert not _use_native_media_presentation(
         native_window_routing_ready=False,
-        mirror_enabled=True,
         raw_visual=True,
     )
 
@@ -74,7 +65,6 @@ def _native_preview_host(*, requested: bool):
     projection_bar = _ProjectionBar(requested=requested)
     runtime = _SceneRuntime()
     host = SimpleNamespace(
-        _program_mirror_enabled=lambda: False,
         _native_window_output_suppressed=False,
         projection_session=SimpleNamespace(
             state={"type": "video", "is_audio": False},
@@ -86,8 +76,6 @@ def _native_preview_host(*, requested: bool):
         _native_window_target=(
             lambda surface, target_id, bus_id: (surface, target_id, bus_id)
         ),
-        _native_fallback_mirror_required=False,
-        _reconcile_scene_media_egress=lambda: None,
         _projection_targets=SimpleNamespace(
             restore_state_to_window=lambda _window: None,
         ),
@@ -211,64 +199,6 @@ def test_audio_only_demand_does_not_republish_a_stale_video_frame() -> None:
 
     assert enabled == [True]
     assert submitted == []
-
-
-def test_program_frames_reach_fallback_windows_and_skip_native_outputs() -> None:
-    image = QImage(2, 2, QImage.Format.Format_ARGB32)
-    image.fill(0xFF112233)
-
-    class Window:
-        def __init__(self, native_output_active: bool) -> None:
-            self.native_output_active = native_output_active
-            self.frames: list[tuple[QImage, bool]] = []
-
-        def show_image_from_qimage(self, received: QImage, *, cache_pixmap: bool) -> None:
-            self.frames.append((received, cache_pixmap))
-
-    fallback = Window(False)
-    native = Window(True)
-    previews: list[QImage] = []
-    host = SimpleNamespace(
-        _program_mirror_enabled=lambda: True,
-        projection_session=SimpleNamespace(all_windows=lambda: (native, fallback)),
-        proj_bar=SimpleNamespace(update_tab_live_preview=previews.append),
-    )
-
-    MainWindow._on_scene_program_frame(cast(MainWindow, host), image)
-
-    assert len(fallback.frames) == 1
-    received, cache_pixmap = fallback.frames[0]
-    assert received == image
-    assert cache_pixmap is False
-    assert native.frames == []
-    assert len(previews) == 1
-    assert previews[0] is received
-
-
-@pytest.mark.parametrize("mirror_enabled", [False, True])
-def test_program_frames_are_not_delivered_when_unmirrored_or_null(
-    mirror_enabled: bool,
-) -> None:
-    image = QImage()
-    if not mirror_enabled:
-        image = QImage(2, 2, QImage.Format.Format_ARGB32)
-        image.fill(0xFF112233)
-    received: list[QImage] = []
-    window = SimpleNamespace(
-        native_output_active=False,
-        show_image_from_qimage=lambda frame, **_options: received.append(frame),
-    )
-    previews: list[QImage] = []
-    host = SimpleNamespace(
-        _program_mirror_enabled=lambda: mirror_enabled,
-        projection_session=SimpleNamespace(all_windows=lambda: (window,)),
-        proj_bar=SimpleNamespace(update_tab_live_preview=previews.append),
-    )
-
-    MainWindow._on_scene_program_frame(cast(MainWindow, host), image)
-
-    assert received == []
-    assert previews == []
 
 
 def test_active_program_recording_blocks_normal_window_close() -> None:

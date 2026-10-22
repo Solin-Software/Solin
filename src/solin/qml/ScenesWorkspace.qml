@@ -946,13 +946,6 @@ Item {
             enabled: root.bridge && root.bridge.automationConfigured
             onTriggered: root.bridge.setAutomaticEnabled(checked)
         }
-        ScenesMenuItem {
-            theme: root.theme
-            text: qsTr("Show in media windows")
-            checkable: true
-            checked: root.bridge && root.bridge.mediaMirrorEnabled
-            onTriggered: root.bridge.setMediaMirrorEnabled(checked)
-        }
     }
 
     Menu {

@@ -442,10 +442,6 @@ class ScenesBridge(QObject):
         )
 
     @Property(bool, notify=changed)
-    def mediaMirrorEnabled(self) -> bool:
-        return self._controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
-
-    @Property(bool, notify=changed)
     def automaticEnabled(self) -> bool:
         output = self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
         return output.mode is OutputMode.AUTO
@@ -931,12 +927,6 @@ class ScenesBridge(QObject):
     def setVirtualCameraEnabled(self, enabled: bool) -> None:
         self._run_runtime(
             lambda: self._controller.set_output_enabled(BusId.VIRTUAL_CAMERA, bool(enabled))
-        )
-
-    @Slot(bool)
-    def setMediaMirrorEnabled(self, enabled: bool) -> None:
-        self._run_runtime(
-            lambda: self._controller.set_output_enabled(BusId.MEDIA_WINDOWS, bool(enabled))
         )
 
     @Slot(bool)

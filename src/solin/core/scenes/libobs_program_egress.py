@@ -1,17 +1,8 @@
-"""Program-mirror egress for the scene-engine sidecar (libobs → operator tab).
+"""Read back the libobs program mix into a shared-memory BGRA channel.
 
-The projection bar's live **Program** tab shows a thumbnail of the program
-output — the main video mix, exactly what the projection windows and the virtual
-camera show (including transitions). Unlike the editor preview (a specific edit
-scene rendered on demand), the program is already libobs' main mix, so this
-mirrors it with a raw video callback: obs converts+scales each rendered frame to
-BGRA at the channel's size and this writes it into the cross-platform block the
-app created (``SharedMemoryPreviewEgressController`` with the ``solin-program``
-channel), which the app paints into the operator Program tab.
-
-The callback is registered only while a program-egress descriptor is present
-(the app supplies it only while the mirror is on), so obs does no conversion
-work when the tab is not in use.
+The raw video callback converts and scales the main mix to the consumer's
+requested size. It is registered only while an egress descriptor is attached,
+so an unused channel incurs no frame conversion work.
 """
 
 from __future__ import annotations
@@ -53,7 +44,7 @@ class LibobsProgramEgress:
         return self._writer is not None
 
     def configure(self, descriptor: object) -> None:
-        """Attach (or detach) the mirror to the app's program egress block."""
+        """Attach or detach a consumer's program egress block."""
         if not isinstance(descriptor, dict) or descriptor.get("transport") != SHARED_MEMORY_BGRA:
             self._teardown()
             return

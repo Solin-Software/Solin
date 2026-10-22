@@ -5775,18 +5775,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>自动切换</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>媒体窗口</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>无法更改录制状态。</translation>
@@ -5855,11 +5843,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>无法更改输出状态。</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>无法更改媒体窗口的镜像。</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7198,11 +7181,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>自动切换</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
     </message>
     <message>
         <location line="+19"/>
