@@ -135,3 +135,49 @@ def test_get_bytes_enforces_response_limit(monkeypatch) -> None:
 
     with pytest.raises(http.HttpResponseTooLargeError):
         http.get_bytes("https://example.test/image.jpg", timeout=12, max_bytes=5)
+
+
+def _post_response(status, content):
+    class _Response:
+        url = "http://127.0.0.1:7880/twirp/x"
+        headers = {"Content-Type": "application/json"}
+
+    response = _Response()
+    response.status_code = status
+    response.content = content
+    return response
+
+
+def test_post_json_sends_json_and_decodes_the_reply(monkeypatch) -> None:
+    calls = []
+
+    def fake_post(url, *, json, headers, params, timeout, verify):
+        calls.append((url, json, headers, timeout))
+        return _post_response(200, b'{"participants": []}')
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    reply = http.post_json("http://127.0.0.1:7880/twirp/x", {"room": "r"}, timeout=3,
+                           headers={"Authorization": "Bearer t"})
+    assert reply == {"participants": []}
+    assert calls == [("http://127.0.0.1:7880/twirp/x", {"room": "r"},
+                      {"Authorization": "Bearer t"}, 3)]
+
+
+def test_post_json_returns_none_for_an_empty_body(monkeypatch) -> None:
+    monkeypatch.setattr(requests, "post", lambda *a, **k: _post_response(200, b""))
+    assert http.post_json("http://127.0.0.1/x", {}) is None
+
+
+def test_post_json_reports_status_and_transport_errors(monkeypatch) -> None:
+    monkeypatch.setattr(requests, "post",
+                        lambda *a, **k: _post_response(404, b'{"code":"not_found"}'))
+    with pytest.raises(http.HttpStatusError, match="POST .* 404: .*not_found") as error:
+        http.post_json("http://127.0.0.1/x", {})
+    assert error.value.status_code == 404
+
+    def offline(*_a, **_k):
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(requests, "post", offline)
+    with pytest.raises(http.HttpTransportError):
+        http.post_json("http://127.0.0.1/x", {})

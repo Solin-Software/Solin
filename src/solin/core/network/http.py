@@ -29,8 +29,8 @@ class HttpTimeoutError(HttpTransportError):
 class HttpStatusError(HttpError):
     """The server responded with an unsuccessful HTTP status."""
 
-    def __init__(self, url: str, status_code: int, message: str) -> None:
-        super().__init__(f"GET {url} returned HTTP {status_code}: {message}")
+    def __init__(self, url: str, status_code: int, message: str, *, method: str = "GET") -> None:
+        super().__init__(f"{method} {url} returned HTTP {status_code}: {message}")
         self.url = url
         self.status_code = status_code
 
@@ -138,6 +138,12 @@ class HttpTransport(Protocol):
     def stream(self, request: HttpRequest) -> HttpByteStream: ...
 
 
+class HttpJsonPoster(Protocol):
+    """Optional port for transports that can POST a JSON body (RPC-style APIs)."""
+
+    def post_json(self, request: HttpRequest, payload: Any) -> HttpResponse: ...
+
+
 class _RequestsByteStream:
     def __init__(self, response: Any, fallback_url: str) -> None:
         self._response = response
@@ -218,6 +224,36 @@ class RequestsHttpTransport:
     def stream(self, request: HttpRequest) -> HttpByteStream:
         response = self._send(request, stream=True)
         return _RequestsByteStream(response, request.url)
+
+    def post_json(self, request: HttpRequest, payload: Any) -> HttpResponse:
+        import certifi
+        import requests
+
+        verify_tls = certifi.where() if self._verify_tls is None else self._verify_tls
+        try:
+            response = requests.post(
+                request.url,
+                json=payload,
+                headers=dict(request.headers),
+                params=request.params,
+                timeout=request.timeout,
+                verify=verify_tls,
+            )
+        except requests.Timeout as exc:
+            raise HttpTimeoutError(f"POST {request.url} timed out: {exc}") from exc
+        except requests.RequestException as exc:
+            raise HttpTransportError(f"POST {request.url} failed: {exc}") from exc
+        status = int(getattr(response, "status_code", 0) or 0)
+        content = bytes(getattr(response, "content", b""))
+        if not 200 <= status < 300:
+            message = content[:512].decode("utf-8", errors="replace")
+            raise HttpStatusError(request.url, status, message, method="POST")
+        return HttpResponse(
+            url=str(getattr(response, "url", "") or request.url),
+            status_code=status,
+            headers=HttpHeaders(getattr(response, "headers", {})),
+            content=content,
+        )
 
     def _send(self, request: HttpRequest, *, stream: bool) -> Any:
         import certifi
@@ -438,3 +474,22 @@ def stream_get(
     )
     return (transport or _DEFAULT_TRANSPORT).stream(request)
 
+
+def post_json(
+    url: str,
+    payload: Any,
+    *,
+    timeout: HttpTimeout = DEFAULT_TIMEOUT,
+    headers: Mapping[str, str] | None = None,
+    transport: HttpJsonPoster | None = None,
+) -> Any:
+    """POST ``payload`` as JSON and decode the JSON response (``None`` for an empty body)."""
+    poster = transport
+    if poster is None:
+        default = _DEFAULT_TRANSPORT
+        poster = default if hasattr(default, "post_json") else RequestsHttpTransport()
+    request = HttpRequest(url=url, timeout=timeout, headers=headers or {})
+    response = poster.post_json(request, payload)  # type: ignore[union-attr]
+    if not response.content.strip():
+        return None
+    return response.json()

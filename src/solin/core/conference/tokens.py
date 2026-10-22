@@ -27,16 +27,24 @@ class RoomGrants:
     hidden: bool = False
     room_admin: bool = False
     can_publish_sources: tuple[str, ...] = ()
+    room_join: bool = True
+    room_create: bool = False
+    room_list: bool = False
 
     def to_claim(self) -> dict[str, object]:
-        claim: dict[str, object] = {
-            "roomJoin": True,
-            "room": self.room,
-            "canPublish": self.can_publish,
-            "canSubscribe": self.can_subscribe,
-            "canPublishData": self.can_publish_data,
-            "canUpdateOwnMetadata": self.can_update_own_metadata,
-        }
+        claim: dict[str, object] = {"room": self.room}
+        if self.room_join:
+            claim.update({
+                "roomJoin": True,
+                "canPublish": self.can_publish,
+                "canSubscribe": self.can_subscribe,
+                "canPublishData": self.can_publish_data,
+                "canUpdateOwnMetadata": self.can_update_own_metadata,
+            })
+        if self.room_create:
+            claim["roomCreate"] = True
+        if self.room_list:
+            claim["roomList"] = True
         if self.hidden:
             claim["hidden"] = True
         if self.room_admin:
@@ -64,7 +72,7 @@ def mint_access_token(api_key: str, api_secret: str, request: AccessTokenRequest
                       *, now: float | None = None) -> str:
     if not api_key or not api_secret:
         raise ValueError("LiveKit API key and secret are required")
-    if not request.identity or not request.grants.room:
+    if not request.identity or (request.grants.room_join and not request.grants.room):
         raise ValueError("A participant identity and room are required")
     if request.ttl_seconds <= 0:
         raise ValueError("Token lifetime must be positive")
@@ -87,3 +95,13 @@ def mint_access_token(api_key: str, api_secret: str, request: AccessTokenRequest
     signing_input = f"{header}.{payload}".encode("ascii")
     signature = hmac.new(api_secret.encode(), signing_input, hashlib.sha256).digest()
     return f"{header}.{payload}.{_b64(signature)}"
+
+
+def mint_admin_token(api_key: str, api_secret: str, room: str = "", *,
+                     ttl_seconds: int = 600, now: float | None = None) -> str:
+    """A server-API token: administer ``room`` and create/list rooms, never join."""
+    grants = RoomGrants(room, room_join=False, room_admin=bool(room), room_create=True,
+                        room_list=True)
+    return mint_access_token(api_key, api_secret, AccessTokenRequest(
+        "solin-operator", grants, ttl_seconds=ttl_seconds,
+    ), now=now)

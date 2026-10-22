@@ -13,8 +13,7 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_ZOOM_MEETING_STARTED,
     EVENT_ZOOM_AFTER_MEETING,
 )
-from solin.core.integrations.automation.zoom.service import ZoomService
-from solin.core.integrations.automation.zoom.state import SequenceResult
+from solin.core.conference.provider import MeetingProvider, SequenceResult
 from solin.core.jw.background_song_service import BackgroundSongService
 
 log = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ class ZoomMeetingController(QObject):
 
     def __init__(
         self,
-        zoom: ZoomService,
+        zoom: MeetingProvider,
         song: BackgroundSongService,
         settings: ZoomSettingsStore,
         notifications,

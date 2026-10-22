@@ -9,7 +9,7 @@ import pytest
 from PySide6.QtCore import QByteArray, QCoreApplication, QProcess
 
 from solin.core.integrations.automation.zoom.service import ZoomService, _Request
-from solin.core.integrations.automation.zoom.state import SequenceResult
+from solin.core.conference.provider import SequenceResult
 
 
 @pytest.fixture

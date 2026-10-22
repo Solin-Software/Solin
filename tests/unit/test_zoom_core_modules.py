@@ -7,13 +7,12 @@ import pytest
 
 from solin.core.integrations.automation.zoom import controls as controls_module
 from solin.core.integrations.automation.zoom.controls import Automation, Element, ZoomControls
+from solin.core.conference.provider import SequenceResult, StepFailure
 from solin.core.integrations.automation.zoom.native import Window
 from solin.core.integrations.automation.zoom.sequences import run_sequence
 from solin.core.integrations.automation.zoom.state import (
     AudioState,
     MeetingState,
-    SequenceResult,
-    StepFailure,
     VideoState,
     ZoomAutomationError,
 )

@@ -13,7 +13,7 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_ZOOM_AFTER_MEETING,
 )
 from solin.core.integrations.automation import shortcuts
-from solin.core.integrations.automation.zoom.state import SequenceResult, StepFailure
+from solin.core.conference.provider import SequenceResult, StepFailure
 from solin.widgets.zoom_panel import ZoomPanel
 
 

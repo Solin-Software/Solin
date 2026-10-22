@@ -6,10 +6,11 @@ import logging
 from collections.abc import Callable
 from typing import Protocol
 
-from .state import SequenceResult, StepFailure, ZoomAutomationError
+from solin.core.conference.provider import SEQUENCES, SequenceResult, StepFailure
+
+from .state import ZoomAutomationError
 
 log = logging.getLogger(__name__)
-SEQUENCES = frozenset({"pre_meeting", "post_meeting"})
 
 
 class MeetingControls(Protocol):

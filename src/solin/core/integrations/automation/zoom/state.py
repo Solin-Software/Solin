@@ -32,23 +32,6 @@ class MeetingState:
     in_meeting: bool = False
 
 
-@dataclass(frozen=True, slots=True)
-class StepFailure:
-    step: str
-    code: str
-
-
-@dataclass(frozen=True, slots=True)
-class SequenceResult:
-    sequence: str
-    failed_steps: tuple[StepFailure, ...] = ()
-    cancelled: bool = False
-
-    @property
-    def ok(self) -> bool:
-        return not self.cancelled and not self.failed_steps
-
-
 class ZoomAutomationError(RuntimeError):
     """Stable error code from the native automation boundary."""
 

@@ -10,10 +10,10 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
 
+from solin.core.conference.provider import SequenceResult, StepFailure
 from solin.core.foundation.constants import IS_COMPILED, ZOOM_AUTOMATION_ARGUMENT
 
 from .sequences import SEQUENCES
-from .state import SequenceResult, StepFailure
 from .protocol import MAX_MESSAGE_BYTES, PROTOCOL_VERSION
 
 log = logging.getLogger(__name__)

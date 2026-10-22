@@ -29,7 +29,7 @@ def test_token_carries_livekit_claims_and_a_valid_signature():
     assert claims == {
         "iss": "SOLkey", "sub": "hall", "nbf": 1000, "exp": 1060, "name": "Kingdom Hall",
         "attributes": {"role": "hall"},
-        "video": {"roomJoin": True, "room": "meeting", "canPublish": True,
+        "video": {"room": "meeting", "roomJoin": True, "canPublish": True,
                   "canSubscribe": True, "canPublishData": True,
                   "canUpdateOwnMetadata": False, "hidden": True,
                   "canPublishSources": ["camera"]},
