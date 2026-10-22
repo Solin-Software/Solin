@@ -1,0 +1,62 @@
+/* Shared by the attendee (join) and stage pages: large type and targets for every age. */
+:root {
+  --bg: #0f1115;
+  --card: #1a1d24;
+  --raised: #2a3040;
+  --text: #eef0f4;
+  --muted: #9aa3b2;
+  --accent: #4f8cff;
+  --ok: #3ccf7a;
+  --warn: #f0b429;
+  --danger: #ff6b6b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 18px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 16px 16px 40px; }
+h1 { font-size: 22px; font-weight: 600; margin: 8px 0 16px; }
+.card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.hidden { display: none !important; }
+.gap { height: 14px; }
+.muted { color: var(--muted); font-size: 15px; }
+label { display: block; color: var(--muted); font-size: 16px; margin-bottom: 6px; }
+input {
+  width: 100%; font-size: 20px; padding: 12px; border-radius: 10px;
+  border: 1px solid #333a46; background: #0c0e12; color: var(--text);
+}
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button {
+  width: 64px; height: 64px; font-size: 32px; border-radius: 12px; border: 0;
+  background: var(--raised); color: var(--text);
+}
+.stepper output { font-size: 34px; min-width: 56px; text-align: center; }
+.big {
+  width: 100%; font-size: 22px; padding: 18px; border: 0; border-radius: 14px;
+  background: var(--accent); color: #fff; font-weight: 600;
+}
+.big:disabled { opacity: 0.6; }
+.big.secondary { background: var(--raised); color: var(--text); }
+.big.up { background: var(--warn); color: #222; }
+.big.live { background: var(--ok); color: #10251a; }
+video { width: 100%; border-radius: 12px; background: #000; display: block; aspect-ratio: 16 / 9; }
+.banner { background: var(--warn); color: #222; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-weight: 600; }
+.banner.error { background: var(--danger); color: #fff; }
+.waiting { text-align: center; padding: 28px 16px; }
+.waiting .dot {
+  width: 14px; height: 14px; border-radius: 7px; background: var(--accent);
+  display: inline-block; animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.25; } }
+.speaking { border: 2px solid var(--ok); }
+
+/* Stage page */
+.stage main { max-width: 900px; }
+.hands { list-style: none; margin: 0; padding: 0; }
+.hands li {
+  display: flex; align-items: center; gap: 18px; background: var(--card);
+  border-radius: 14px; padding: 18px 22px; margin-bottom: 12px; font-size: 34px;
+}
+.hands .position { color: var(--muted); min-width: 1.6em; text-align: right; }
+.hands li.speaking { border: 3px solid var(--ok); }
+.hands .badge { margin-left: auto; font-size: 20px; color: var(--ok); }
+.empty { color: var(--muted); font-size: 26px; text-align: center; padding: 40px 0; }

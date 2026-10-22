@@ -259,6 +259,7 @@ fi
     --include-package-data=pyqttoast \
     --include-data-dir=src/solin/resources/assets=solin/resources/assets \
     --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
+    --include-data-dir=src/solin/resources/conference_web=solin/resources/conference_web \
     --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
     --include-data-dir="${QML_APP_DIR}=solin/qml/Solin" \
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
@@ -356,6 +357,10 @@ done
 "${PYTHON}" scripts/fetch_livekit_server.py --dest "${DIST_DIR}/bin" \
     --license "${DIST_DIR}/licenses/livekit-server.txt" \
     || fail "Could not fetch the pinned LiveKit server"
+# The attendee page's browser client (livekit-client, Apache-2.0) is served by the hall.
+"${PYTHON}" scripts/fetch_livekit_client.py --dest "${DIST_DIR}/web/livekit-client" \
+    --license "${DIST_DIR}/licenses/livekit-client.txt" \
+    || fail "Could not fetch the pinned LiveKit browser client"
 
 while IFS= read -r plugin; do
     relative_root="$(realpath --relative-to="$(dirname "${plugin}")" "${DIST_DIR}")"

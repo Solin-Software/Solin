@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Meeting</title>
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<main>
+  <h1 id="title" data-t="title"></h1>
+  <div id="banner" class="banner hidden"></div>
+
+  <section id="closedCard" class="card hidden">
+    <p id="closedText" data-t="notOpen"></p>
+  </section>
+
+  <section id="joinCard" class="card hidden">
+    <label for="name" data-t="name"></label>
+    <input id="name" autocomplete="name" maxlength="64" data-t-placeholder="namePlaceholder">
+    <div class="gap"></div>
+    <label id="attendanceLabel" data-t="attendance"></label>
+    <div class="stepper" role="group" aria-labelledby="attendanceLabel">
+      <button id="minus" type="button" data-t-label="fewer">−</button>
+      <output id="count" aria-live="polite">1</output>
+      <button id="plus" type="button" data-t-label="more">+</button>
+    </div>
+    <div class="gap"></div>
+    <button id="join" class="big" type="button" data-t="join"></button>
+  </section>
+
+  <section id="lobbyCard" class="card waiting hidden">
+    <span class="dot"></span>
+    <p data-t="waiting"></p>
+  </section>
+
+  <section id="meetingCard" class="card hidden">
+    <video id="video" playsinline autoplay muted></video>
+    <div class="gap"></div>
+    <button id="mic" class="big secondary hidden" type="button" data-t="unmute"></button>
+    <div id="micGap" class="gap hidden"></div>
+    <button id="hand" class="big secondary" type="button" data-t="raiseHand"></button>
+    <div class="gap"></div>
+    <button id="leave" class="big secondary" type="button" data-t="leave"></button>
+    <p id="status" class="muted"></p>
+  </section>
+</main>
+<script src="/assets/i18n.js"></script>
+<script src="/vendor/livekit-client.umd.js"></script>
+<script src="/assets/join.js"></script>
+</body>
+</html>

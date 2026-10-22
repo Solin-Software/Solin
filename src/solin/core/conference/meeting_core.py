@@ -201,6 +201,9 @@ class MeetingCore:
             self._speaking.clear()
         return self._reconcile()
 
+    def removed(self) -> frozenset[str]:
+        return frozenset(self._removed)
+
     def may_join(self, identity: str) -> bool:
         """Whether the token issuer may hand ``identity`` a token for this meeting."""
         return is_attendee(identity) and identity not in self._removed

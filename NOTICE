@@ -26,3 +26,6 @@ Source: https://github.com/livekit/livekit
 LiveKit Python SDK and its native WebRTC core (livekit/rtc/resources/liblivekit_ffi), used by
 the meeting publisher: Copyright LiveKit, Inc., Apache License 2.0.
 Source: https://github.com/livekit/python-sdks and https://github.com/livekit/rust-sdks
+LiveKit browser client (served to meeting attendees from web/livekit-client):
+Copyright LiveKit, Inc., Apache License 2.0; license text in licenses/livekit-client.txt.
+Source: https://github.com/livekit/client-sdk-js

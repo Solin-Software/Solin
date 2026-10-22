@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
 from solin.core.conference.meeting_core import MeetingParticipant, ParticipantStatus
 from solin.core.conference.meeting_service import MeetingState
@@ -83,6 +84,10 @@ class MeetingConsoleBridge(QObject):
     def _get_hands(self) -> list:
         return self._hands
 
+    def _get_attendee_address(self) -> str:
+        # The address only: the full link carries the encryption key and is copied, not shown.
+        return str(self._service.join_url).split("#", 1)[0]
+
     def _get_lobby_count(self) -> int:
         return sum(1 for row in self._participants if row["status"] == ParticipantStatus.LOBBY)
 
@@ -98,6 +103,7 @@ class MeetingConsoleBridge(QObject):
     participants = Property("QVariantList", _get_participants, notify=participantsChanged)
     hands = Property("QVariantList", _get_hands, notify=participantsChanged)
     lobbyCount = Property(int, _get_lobby_count, notify=participantsChanged)
+    attendeeAddress = Property(str, _get_attendee_address, notify=stateChanged)
 
     # -- commands ---------------------------------------------------------------------------
     @Slot()
@@ -154,6 +160,19 @@ class MeetingConsoleBridge(QObject):
     @Slot(str)
     def remove(self, identity: str) -> None:
         self._service.remove(identity)
+
+    @Slot()
+    def copyJoinLink(self) -> None:
+        self._copy(self._service.join_url)
+
+    @Slot()
+    def copyStageLink(self) -> None:
+        self._copy(self._service.stage_url)
+
+    def _copy(self, text: str) -> None:
+        clipboard = QGuiApplication.clipboard()
+        if text and clipboard is not None:
+            clipboard.setText(text)
 
     @Slot()
     def openSettings(self) -> None:

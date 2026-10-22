@@ -83,11 +83,12 @@ def meeting(tmp_path):
                               http_port=_free_port(), rtc_tcp_port=_free_port(),
                               rtc_udp_port=_free_port(), bind_addresses=("127.0.0.1",),
                               node_ip="127.0.0.1"),
-        width=320, height=180, fps=15,
+        width=320, height=180, fps=15, web_port=0, web_bind="127.0.0.1",
     )
     server = ConferenceServerService(tmp_path / "conference")
     publisher = MeetingPublisherService()
-    service = SolinMeetingService(server, publisher, poll_interval_ms=200)
+    service = SolinMeetingService(server, publisher, poll_interval_ms=200,
+                                  lan_address=lambda: "127.0.0.1")
     service.configure(settings)
     attendee = _Attendee()
     yield service, settings, attendee
@@ -111,15 +112,17 @@ def test_a_meeting_from_lobby_to_removal(meeting):
     wait_until(lambda: service.state is MeetingState.OPEN and service.is_connected,
                description="meeting open and hall publishing", timeout_ms=30000)
     assert egress and egress[0] is not None  # the scene runtime gets the rings
-    url = f"ws://127.0.0.1:{settings.server.http_port}"
+    # Attendees reach the room only through the attendee page's origin.
+    assert service.join_url.endswith("#k=" + service.e2ee_key)
+    url = service.join_url.split("/join")[0].replace("http", "ws")
 
-    token = service.attendee_token("phone-1", "Ann")
+    token = service.attendee_token("phone-001", "Ann")
     attendee.connect(url, token, service.e2ee_key)
-    wait_until(lambda: _status(service, "att:phone-1") is ParticipantStatus.LOBBY,
+    wait_until(lambda: _status(service, "att:phone-001") is ParticipantStatus.LOBBY,
                description="attendee in the lobby", timeout_ms=10000)
     assert attendee.subscribed == []  # the lobby hears nothing
 
-    service.admit("att:phone-1")
+    service.admit("att:phone-001")
     wait_until(lambda: "program-audio" in attendee.subscribed,
                description="admitted attendee hears the program", timeout_ms=15000)
     assert service.attendance() == 3
@@ -129,25 +132,28 @@ def test_a_meeting_from_lobby_to_removal(meeting):
     assert results[0].sequence == "pre_meeting" and results[0].ok
     wait_until(lambda: attendee.permissions and not attendee.permissions[-1].can_publish,
                description="attendee locked", timeout_ms=10000)
+    # The page tells "called on" from "free to unmute" by the room's lock.
+    wait_until(lambda: '"locked":true' in attendee.room.metadata,
+               description="room metadata says locked", timeout_ms=10000)
 
     attendee.set_attributes({"hand": "1"})
-    wait_until(lambda: [p.identity for p in service.hands()] == ["att:phone-1"],
+    wait_until(lambda: [p.identity for p in service.hands()] == ["att:phone-001"],
                description="hand in the queue", timeout_ms=10000)
 
-    service.call_on("att:phone-1")
+    service.call_on("att:phone-001")
     wait_until(lambda: attendee.permissions[-1].can_publish,
                description="attendee may speak", timeout_ms=10000)
     assert list(attendee.permissions[-1].can_publish_sources) == [2]  # MICROPHONE only
-    assert _status(service, "att:phone-1") is ParticipantStatus.SPEAKING
+    assert _status(service, "att:phone-001") is ParticipantStatus.SPEAKING
 
-    service.finish("att:phone-1")
+    service.finish("att:phone-001")
     wait_until(lambda: service.hands() == [] and not attendee.permissions[-1].can_publish,
                description="comment finished", timeout_ms=10000)
 
-    service.remove("att:phone-1")
+    service.remove("att:phone-001")
     wait_until(attendee.disconnected.is_set, description="attendee removed", timeout_ms=10000)
-    assert service.attendee_token("phone-1") is None
-    assert service.attendee_token("phone-2") is not None
+    assert service.attendee_token("phone-001") is None
+    assert service.attendee_token("phone-002") is not None
 
     service.stop(wait=True)
     assert service.state is MeetingState.IDLE and egress[-1] is None

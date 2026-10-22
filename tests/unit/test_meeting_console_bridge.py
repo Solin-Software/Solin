@@ -25,6 +25,8 @@ class _Service(QObject):
         self.is_connected = False
         self.is_busy = False
         self.locked = False
+        self.join_url = "http://192.168.1.20:7890/join#k=secret-key"
+        self.stage_url = "http://192.168.1.20:7890/stage/abc"
         self.calls = []
 
     def attendance(self):
@@ -102,3 +104,15 @@ def test_commands_reach_the_service_and_failures_show():
     assert bridge.property("failed")
     bridge.stopMeeting()
     assert not bridge.property("failed") and bridge.property("participants") == []
+
+
+def test_links_are_copied_and_the_key_is_never_displayed():
+    from PySide6.QtGui import QGuiApplication
+
+    service = _Service()
+    bridge = MeetingConsoleBridge(service, _Switch("solin"), _Store())
+    assert bridge.property("attendeeAddress") == "http://192.168.1.20:7890/join"
+    bridge.copyJoinLink()
+    assert QGuiApplication.clipboard().text() == "http://192.168.1.20:7890/join#k=secret-key"
+    bridge.copyStageLink()
+    assert QGuiApplication.clipboard().text() == "http://192.168.1.20:7890/stage/abc"

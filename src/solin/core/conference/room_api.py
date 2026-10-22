@@ -159,6 +159,9 @@ class RoomApi:
     def delete_room(self, room: str) -> None:
         self._call("DeleteRoom", room, {"room": room})
 
+    def update_room_metadata(self, room: str, metadata: str) -> None:
+        self._call("UpdateRoomMetadata", room, {"room": room, "metadata": metadata})
+
     def list_participants(self, room: str) -> list[ParticipantInfo]:
         reply = self._call("ListParticipants", room, {"room": room}) or {}
         return [ParticipantInfo.from_record(p) for p in reply.get("participants") or ()]

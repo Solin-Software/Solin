@@ -93,6 +93,31 @@ Rectangle {
             }
         }
 
+        // Links for attendees and the stage (the encryption key is copied, never displayed).
+        RowLayout {
+            visible: meetingConsole.open
+            Layout.fillWidth: true
+            Layout.leftMargin: root.sideMargin
+            Layout.rightMargin: root.sideMargin
+            Layout.bottomMargin: 12
+            spacing: 10
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("Attendees join at %1").arg(meetingConsole.attendeeAddress)
+                color: appTheme.textSecondary
+                font.pixelSize: 13
+                elide: Text.ElideMiddle
+            }
+            SettingsButton {
+                text: qsTr("Copy attendee link")
+                onClicked: meetingConsole.copyJoinLink()
+            }
+            SettingsButton {
+                text: qsTr("Copy stage link")
+                onClicked: meetingConsole.copyStageLink()
+            }
+        }
+
         Rectangle { Layout.fillWidth: true; height: 1; color: appTheme.border_ }
 
         // ── Not hosted here / not available ─────────────────────────────────

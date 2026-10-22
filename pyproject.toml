@@ -62,6 +62,7 @@ solin = [
     "resources/remote_control/icons/*",
     "resources/remote_control/scripts/*",
     "resources/remote_control/styles/*",
+    "resources/conference_web/*",
     "resources/assets/*.icns",
     "resources/assets/*.ico",
     "resources/assets/*.png",

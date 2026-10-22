@@ -161,6 +161,7 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --include-package-data=pyqttoast ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\assets=solin/resources/assets" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\remote_control=solin/resources/remote_control" ^
+    --include-data-dir="%PROJECT_ROOT%src\solin\resources\conference_web=solin/resources/conference_web" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\translations\locales=solin/resources/translations/locales" ^
     --include-data-dir="%QML_CACHE_DIR%=solin/qml/Solin" ^
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
@@ -247,6 +248,12 @@ rem Solin-hosted meetings run the pinned LiveKit server (Apache-2.0) from bin\, 
 "%PYTHON%" scripts\fetch_livekit_server.py --dest "%DIST%\bin" --license "%DIST%\licenses\livekit-server.txt"
 if errorlevel 1 (
     echo  [ERRO] Nao foi possivel obter o servidor LiveKit fixado.
+    pause
+    exit /b 1
+)
+"%PYTHON%" scripts\fetch_livekit_client.py --dest "%DIST%\web\livekit-client" --license "%DIST%\licenses\livekit-client.txt"
+if errorlevel 1 (
+    echo  [ERRO] Nao foi possivel obter o cliente web do LiveKit fixado.
     pause
     exit /b 1
 )

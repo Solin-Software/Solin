@@ -14,6 +14,7 @@ either provider the same way.
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from collections.abc import Callable
@@ -26,28 +27,28 @@ from typing import Any
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from .meeting_core import (
-    ATTENDEE_PREFIX,
     ClearHand,
     MeetingAction,
     MeetingCore,
     MeetingPolicy,
+    ParticipantStatus,
     RemoveParticipant,
     SetName,
     SetPermission,
     is_attendee,
 )
+from .attendee_access import AttendeeAccess, JoinRefusedError, StageHand, attendee_token
+from .attendee_server import AttendeeHttpApplication, AttendeeServer
 from .provider import POST_MEETING, PRE_MEETING, SequenceResult, StepFailure
 from .publisher_service import MeetingPublisherService, PublisherConfig, PublisherState
 from .room_api import ParticipantNotFoundError, RoomApi, RoomApiError
 from .server_binary import ServerUnavailableError, server_executable
 from .server_config import ServerSettings
 from .server_process import ConferenceServerService, ServerState
-from .tokens import AccessTokenRequest, RoomGrants, mint_access_token
 
 log = logging.getLogger(__name__)
 
-ATTENDEE_TOKEN_TTL_S = 15 * 60
-MAX_DEVICE_ID_LENGTH = 64
+DEFAULT_WEB_PORT = 7890
 
 
 class MeetingState(StrEnum):
@@ -68,6 +69,8 @@ class MeetingSettings:
     audio_only: bool = False
     e2ee: bool = True
     policy: MeetingPolicy = field(default_factory=MeetingPolicy)
+    web_port: int = DEFAULT_WEB_PORT
+    web_bind: str = "0.0.0.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +123,8 @@ class SolinMeetingService(QObject):
         *,
         available: Callable[[], bool] = lambda: True,
         room_api_factory: Callable[[ServerSettings], RoomApi] | None = None,
+        attendee_server_factory: Callable[[str], AttendeeServer] | None = None,
+        lan_address: Callable[[], str] | None = None,
         poll_interval_ms: int = 1000,
         parent: QObject | None = None,
     ) -> None:
@@ -133,6 +138,12 @@ class SolinMeetingService(QObject):
         self._room_api_factory = room_api_factory or (
             lambda s: RoomApi(f"http://127.0.0.1:{s.http_port}", s.api_key, s.api_secret)
         )
+        self._attendee_server_factory = attendee_server_factory or default_attendee_server
+        self._lan_address = lan_address or first_lan_address
+        self._attendee_server: AttendeeServer | None = None
+        self._meeting_id = ""
+        self._stage_secret = ""
+        self._origin = ""
         self._settings: MeetingSettings | None = None
         self._api: RoomApi | None = None
         self._core = MeetingCore()
@@ -179,6 +190,8 @@ class SolinMeetingService(QObject):
             return
         self._core = MeetingCore(policy=settings.policy)
         self._e2ee_key = secrets.token_urlsafe(24) if settings.e2ee else ""
+        self._meeting_id = secrets.token_urlsafe(8)
+        self._stage_secret = secrets.token_urlsafe(18)
         self._api = self._room_api_factory(settings.server)
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="solin-meeting")
         self._set_state(MeetingState.STARTING)
@@ -195,6 +208,10 @@ class SolinMeetingService(QObject):
         executor, self._executor = self._executor, None
         if executor is not None:
             executor.shutdown(wait=wait, cancel_futures=True)
+        attendee_server, self._attendee_server = self._attendee_server, None
+        if attendee_server is not None:
+            attendee_server.stop()
+        self._origin = ""
         # The room lives only in this server, so stopping it ends the room too.
         self._server.stop(wait=wait, timeout_ms=int(timeout * 1000))
         self._api = None
@@ -244,20 +261,35 @@ class SolinMeetingService(QObject):
 
     def attendee_token(self, device_id: str, name: str = "") -> str | None:
         """A short-lived lobby token for one attendee device, or None if it may not join."""
+        access = self._access()
+        if access is None:
+            return None
+        try:
+            return attendee_token(access, device_id, name)
+        except JoinRefusedError:
+            return None
+
+    @property
+    def join_url(self) -> str:
+        """The link attendees open; the encryption key rides in the never-sent fragment."""
+        if not self._origin:
+            return ""
+        return f"{self._origin}/join" + (f"#k={self._e2ee_key}" if self._e2ee_key else "")
+
+    @property
+    def stage_url(self) -> str:
+        return f"{self._origin}/stage/{self._stage_secret}" if self._origin else ""
+
+    def _access(self) -> AttendeeAccess | None:
         settings = self._settings
         if settings is None or self._state is not MeetingState.OPEN:
             return None
-        device_id = device_id.strip()
-        if not device_id or len(device_id) > MAX_DEVICE_ID_LENGTH or not device_id.isprintable():
-            return None
-        identity = ATTENDEE_PREFIX + device_id
-        if not self._core.may_join(identity):
-            return None
-        grants = RoomGrants(settings.room, can_publish=False, can_subscribe=False,
-                            can_publish_data=False, hidden=True, can_update_own_metadata=True)
-        return mint_access_token(settings.server.api_key, settings.server.api_secret,
-                                 AccessTokenRequest(identity, grants, name=name.strip()[:64],
-                                                    ttl_seconds=ATTENDEE_TOKEN_TTL_S))
+        return AttendeeAccess(
+            meeting_id=self._meeting_id, hall_name=settings.display_name, room=settings.room,
+            api_key=settings.server.api_key, api_secret=settings.server.api_secret,
+            stage_secret=self._stage_secret, removed=self._core.removed(),
+            e2ee=bool(self._e2ee_key),
+        )
 
     def admit(self, identity: str) -> None:
         self._command(self._core.admit(identity))
@@ -283,6 +315,7 @@ class SolinMeetingService(QObject):
     def remove(self, identity: str) -> None:
         if is_attendee(identity):
             self._command(self._core.remove(identity))
+            self._publish_access()
 
     def refresh(self) -> None:
         if self._poll_in_flight or self._state is not MeetingState.OPEN:
@@ -310,11 +343,41 @@ class SolinMeetingService(QObject):
         if api is None or settings is None:
             return
 
+        metadata = room_metadata(self._core.locked)
+
         def create() -> _ApiResult:
-            api.create_room(settings.room, metadata="solin")
+            api.create_room(settings.room, metadata=metadata)
             return _ApiResult("room_ready")
 
         self._submit(create, on_error=lambda: _ApiResult("room_failed"))
+
+    def _start_attendee_server(self) -> bool:
+        settings = self._settings
+        if settings is None:
+            return False
+        server = self._attendee_server_factory(f"http://127.0.0.1:{settings.server.http_port}")
+        try:
+            server.start(settings.web_bind, settings.web_port)
+        except (OSError, RuntimeError) as exc:
+            log.warning("The attendee page could not start: %s", exc)
+            self._on_failure("The attendee page could not start")
+            return False
+        self._attendee_server = server
+        self._origin = f"http://{self._lan_address()}:{server.port}"
+        self._publish_access()
+        self._publish_hands()
+        return True
+
+    def _publish_access(self) -> None:
+        if self._attendee_server is not None:
+            self._attendee_server.publish_access(self._access())
+
+    def _publish_hands(self) -> None:
+        if self._attendee_server is None:
+            return
+        hands = [StageHand(p.name, index + 1, p.status is ParticipantStatus.SPEAKING)
+                 for index, p in enumerate(self._core.hands())]
+        self._attendee_server.publish_hands(hands, self._core.attendance())
 
     def _start_publishing(self) -> None:
         settings = self._settings
@@ -347,9 +410,19 @@ class SolinMeetingService(QObject):
         actions = self._core.set_locked(locked)
         self._emit_views()
         api, room = self._api, self.room
+
+        def apply() -> _ApiResult:
+            # The attendee page reads the lock from the room: called on (locked) switches
+            # the microphone on by itself; before the meeting attendees unmute themselves.
+            failures = list(apply_actions(api, room, actions))
+            try:
+                api.update_room_metadata(room, room_metadata(locked))
+            except RoomApiError as exc:
+                failures.append(StepFailure("room_lock", exc.code))
+            return _ApiResult("applied", sequence=sequence, failures=tuple(failures))
+
         self._submit(
-            lambda: _ApiResult("applied", sequence=sequence,
-                               failures=apply_actions(api, room, actions)),
+            apply,
             on_error=lambda: _ApiResult("applied", sequence=sequence,
                                         failures=(StepFailure("lock", "unavailable"),)),
         )
@@ -390,6 +463,8 @@ class SolinMeetingService(QObject):
         if result.kind == "room_ready":
             if self._state is MeetingState.STARTING:
                 self._set_state(MeetingState.OPEN)
+                if not self._start_attendee_server():
+                    return
                 self._start_publishing()
                 self._poll.start()
             self.refresh()
@@ -420,6 +495,8 @@ class SolinMeetingService(QObject):
             return
         previous = self._last_views
         self._last_views = views
+        if not previous or previous[1:] != views[1:]:
+            self._publish_hands()
         if not previous or previous[0] != views[0]:
             self.participants_changed.emit(participants)
         if not previous or previous[1] != views[1]:
@@ -459,3 +536,32 @@ def create_hosted_meeting_service(config_dir: Path, parent: QObject | None = Non
         available=_server_available,
         parent=parent,
     )
+
+
+def room_metadata(locked: bool) -> str:
+    return json.dumps({"solin": 1, "locked": bool(locked)}, separators=(",", ":"))
+
+
+def default_attendee_server(livekit_http_url: str) -> AttendeeServer:
+    from solin.core.foundation.resources import application_resource_path
+
+    from .web_client import WebClientUnavailableError, client_directory
+
+    try:
+        client = client_directory()
+    except WebClientUnavailableError as exc:
+        log.warning("%s; attendees cannot join from a browser", exc)
+        client = None
+    return AttendeeServer(AttendeeHttpApplication(
+        pages_directory=application_resource_path("conference_web"),
+        client_directory=client,
+        livekit_http_url=livekit_http_url,
+    ))
+
+
+def first_lan_address() -> str:
+    """The address attendees on this network use to reach the hall (loopback if none)."""
+    from solin.core.remote_control.network import discover_lan_interfaces
+
+    interfaces = discover_lan_interfaces()
+    return str(interfaces[0].ipv4_address) if interfaces else "127.0.0.1"

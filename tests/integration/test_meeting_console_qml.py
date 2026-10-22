@@ -29,6 +29,8 @@ class _Service(QObject):
         self.is_connected = True
         self.is_busy = False
         self.locked = True
+        self.join_url = "http://192.168.1.20:7890/join#k=secret-key"
+        self.stage_url = "http://192.168.1.20:7890/stage/abc"
         self.calls = []
 
     def attendance(self):
