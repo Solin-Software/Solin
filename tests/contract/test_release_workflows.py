@@ -458,6 +458,70 @@ def test_linux_smoke_rejects_clean_early_exit(monkeypatch):
         assert_process_survives_startup(Path(sys.executable), args=("-c", "raise SystemExit(0)"))
 
 
+@pytest.mark.parametrize("platform", ["windows", "macos", "linux"])
+def test_packaged_smoke_selection_respects_platform_with_strict_skips(platform):
+    configuration = workflow(f"build-solin-{platform}.yml")
+    assert configuration["env"]["SOLIN_E2E_STRICT"] == "1"
+    steps = configuration["jobs"]["build"]["steps"]
+    step_name = "Run AppImage startup smoke" if platform == "linux" else "Run packaged startup smoke"
+    commands = next(step["run"] for step in steps if step.get("name") == step_name)
+    targets = re.findall(r"tests[/\\]e2e[/\\][\w]+\.py(?:::[\w]+)?", commands)
+    assert targets
+    # Collect the actual workflow targets. Stub artifact checks, while retaining
+    # pytest's real skip handling and the release suite's strict reporting hook.
+    script = '''
+import pytest
+
+def windows_gate(mark):
+    return mark.name == "skipif" and mark.kwargs.get("reason") == "Windows UI Automation runtime"
+
+class ArtifactChecks:
+    def pytest_collection_modifyitems(self, items):
+        windows_items = [item for item in items if any(windows_gate(m) for m in item.iter_markers())]
+        assert items
+        if PLATFORM == "windows":
+            assert windows_items, "Windows runtime qualification was not selected"
+        # Apply the target platform's guard rather than the host's guard.
+        for item in items:
+            for node in item.listchain():
+                node.own_markers[:] = [m for m in node.own_markers if not windows_gate(m)]
+            item.obj = lambda **fixtures: None
+        if PLATFORM != "windows":
+            for item in windows_items:
+                item.add_marker(pytest.mark.skip(reason="Windows UI Automation runtime"))
+
+raise SystemExit(pytest.main(TARGETS + ["-q"], plugins=[ArtifactChecks()]))
+'''
+    environment = os.environ.copy()
+    environment["SOLIN_E2E_STRICT"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", f"PLATFORM = {platform!r}\nTARGETS = {targets!r}\n" + script],
+        cwd=REPO_ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("outcome", ["pass", "skip", "fail"])
+def test_strict_packaged_acceptance_rejects_missing_or_failed_checks(tmp_path, outcome):
+    child = tmp_path / "test_acceptance.py"
+    body = {
+        "pass": "pass",
+        "skip": "pytest.skip('required artifact is missing')",
+        "fail": "pytest.fail('artifact qualification failed')",
+    }[outcome]
+    child.write_text(f"import pytest\ndef test_artifact():\n    {body}\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["SOLIN_E2E_STRICT"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", str(child), "-q", "-p", "tests.e2e.conftest",
+         "-c", str(REPO_ROOT / "pyproject.toml"), f"--confcutdir={tmp_path}"],
+        cwd=REPO_ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == (0 if outcome == "pass" else 1), result.stdout + result.stderr
+    if outcome == "skip":
+        assert "Required release test skipped" in result.stdout
+
+
 def test_windows_distribution_contains_only_the_full_installer():
     text = (REPO_ROOT / ".github/workflows/build-solin-windows.yml").read_text()
     upload = text.split("- name: Upload Windows packages", 1)[1]
