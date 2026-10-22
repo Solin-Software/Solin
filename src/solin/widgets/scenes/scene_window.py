@@ -4,8 +4,7 @@ Opened from a scene card in the scenes panel. Each scene gets at most one window
 asking again raises it. A window renders its scene through its own engine feed
 (one ``scene-window:<id>`` channel each, next to the cards' atlas), sized to the
 window and capped at the output resolution, and it says when the scene is on air.
-
-PTZ controls join the window in a later phase; this module is the shell.
+Scenes with PTZ cameras also get the camera controls of ``scene_ptz_panel``.
 """
 
 from __future__ import annotations
@@ -178,6 +177,7 @@ class SceneWindow(QWidget):
             (controller.document_changed, self._render),
             (controller.desired_scenes_changed, self._render),
             (controller.applied_scenes_changed, self._render),
+            (controller.outgoing_scenes_changed, self._render),
             (controller.runtime_changed, self._render),
             (controller.engine_ready_changed, self._on_engine_ready_changed),
         )
@@ -453,6 +453,7 @@ class SceneWindow(QWidget):
             self._stop_feed()
             self._ptz.stop_motion()
             self._ptz.cancel_captures()
+            self._ptz.abandon_pending_saves()
             self._feed.close()
             for signal, handler in self._connections:
                 try:

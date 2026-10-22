@@ -512,7 +512,11 @@ class ScenePtzPanel(QWidget):
         self.select_camera(self._camera_ids[(index + step) % len(self._camera_ids)])
 
     def live_outputs(self, camera_id: str) -> list[tuple[BusId, str]]:
-        """Each output showing this camera now, with the scene that shows it."""
+        """Each output that may show this camera now, with the scene that shows it.
+
+        Counts every scene an output can have on screen, not only the one it is
+        switching to: while a switch runs, the scene it leaves is still visible.
+        """
         if not camera_id:
             return []
         controller = self._controller
@@ -522,8 +526,14 @@ class ScenePtzPanel(QWidget):
             buses.insert(0, BusId.VIRTUAL_CAMERA)
         live: list[tuple[BusId, str]] = []
         for bus_id in buses:
-            scene_id = controller.desired_scene(bus_id)
-            if scene_id and camera_id in scene_ptz_camera_ids(document, scene_id):
+            scene_id = next(
+                (
+                    scene_id for scene_id in controller.scenes_on_air(bus_id)
+                    if camera_id in scene_ptz_camera_ids(document, scene_id)
+                ),
+                None,
+            )
+            if scene_id is not None:
                 live.append((bus_id, scene_id))
         return live
 
@@ -687,6 +697,12 @@ class ScenePtzPanel(QWidget):
         self._rebuild_presets()
         capture.start()
 
+    def abandon_pending_saves(self) -> None:
+        """Give up on saves still in flight: their results will find no window."""
+        for pending in self._pending_saves.values():
+            self._controller.release_camera_preset_slot(pending.id)
+        self._pending_saves.clear()
+
     def cancel_captures(self) -> None:
         for capture in tuple(self._captures.values()):
             capture.cancel()
@@ -783,9 +799,12 @@ class ScenePtzPanel(QWidget):
             pending = self._pending_saves.pop(future_key, None)
             if succeeded and pending is not None:
                 token = str(getattr(result, "preset_token", "") or "")
-                if self._edit(
+                saved = self._edit(
                     lambda: self._controller.workspace.create_camera_preset(pending.stored(token))
-                ):
+                )
+                # Saved, the document now holds the slot; not saved, nobody does.
+                self._controller.release_camera_preset_slot(pending.id)
+                if saved:
                     self._set_status(self.tr("Saved “%1”.").replace("%1", pending.name))
                     # The camera is still where it was saved: picture it now.
                     self.capture_thumbnail(pending.id)

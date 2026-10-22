@@ -18,6 +18,8 @@ from solin.core.scenes.model import (
     SceneLayer,
     SourceDefinition,
     SourceKind,
+    TransitionKind,
+    TransitionSpec,
     ViscaIpPtzBinding,
 )
 from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
@@ -321,6 +323,75 @@ def test_manual_moves_on_a_live_camera_ask_once_until_it_leaves_the_air(setup) -
     assert len(confirm.asked) == 2  # off air re-locked it
 
 
+def _applied(controller, **scenes: str) -> tuple[tuple[BusId, str], ...]:
+    """The applied scenes with some outputs changed, as the engine would report."""
+    applied = dict(controller.applied_scenes or controller.desired_scenes)
+    for bus_name, scene_id in scenes.items():
+        applied[BusId[bus_name]] = scene_id
+    return tuple(applied.items())
+
+
+def test_a_camera_still_on_screen_while_its_scene_leaves_stays_protected(
+    setup, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from solin.controllers import scene_runtime_controller
+
+    clock = [1000.0]
+    monkeypatch.setattr(scene_runtime_controller.time, "monotonic", lambda: clock[0])
+    confirm = _Confirm(answer=False)
+    controller, ptz, manager, _confirm = setup(confirm=confirm)
+    other = next(
+        scene.id for scene in controller.document.scenes
+        if not any(layer.source_id == DEFAULT_CAMERA_SOURCE_ID for layer in scene.layers)
+    )
+    monkeypatch.setattr(
+        controller._documents, "effective_transition",
+        lambda _scene_id: TransitionSpec(TransitionKind.DISSOLVE, 500),
+    )
+    controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    controller._set_applied_scenes(controller.desired_scenes)
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+
+    # Switching away: the output still shows the camera until the engine takes.
+    controller.select_scene(BusId.MEDIA_WINDOWS, other)
+    _process()
+    panel.start_motion(1.0, 0.0, 0.0)
+    assert ptz.moves == [] and len(confirm.asked) == 1
+
+    # Taken, but the fade away from the camera is still running.
+    controller._set_applied_scenes(_applied(controller, MEDIA_WINDOWS=other))
+    _process()
+    panel.start_motion(1.0, 0.0, 0.0)
+    assert ptz.moves == [] and len(confirm.asked) == 2
+    assert panel._live.isVisibleTo(panel)
+
+    # The fade is over: the camera has left the air.
+    clock[0] += 0.5 + 0.3
+    controller._expire_outgoing_scenes()
+    _process()
+    assert controller.scenes_on_air(BusId.MEDIA_WINDOWS) == (other,)
+    assert not panel._live.isVisibleTo(panel)
+    panel.start_motion(1.0, 0.0, 0.0)
+    assert len(ptz.moves) == 1 and len(confirm.asked) == 2
+
+
+def test_a_cut_away_leaves_no_outgoing_scene(setup, monkeypatch: pytest.MonkeyPatch) -> None:
+    controller, _ptz, _manager, _confirm = setup()
+    other = next(scene.id for scene in controller.document.scenes if scene.id != CAMERA_SCENE_ID)
+    controller.select_scene(BusId.MEDIA_WINDOWS, CAMERA_SCENE_ID)
+    controller._set_applied_scenes(controller.desired_scenes)
+    monkeypatch.setattr(
+        controller._documents, "effective_transition",
+        lambda _scene_id: TransitionSpec(TransitionKind.CUT, 0),
+    )
+
+    controller.select_scene(BusId.MEDIA_WINDOWS, other)
+    controller._set_applied_scenes(_applied(controller, MEDIA_WINDOWS=other))
+
+    assert controller.scenes_on_air(BusId.MEDIA_WINDOWS) == (other,)
+
+
 def test_declined_live_move_does_not_move(setup) -> None:
     confirm = _Confirm(answer=False)
     controller, ptz, manager, _confirm = setup(confirm=confirm)
@@ -371,6 +442,46 @@ def test_save_current_on_visca_takes_the_lowest_free_preset_number(setup) -> Non
     assert preset.remote_token == "2"
     assert [item.remote_token for item in panel.presets()] == ["1", "3", "2"]
     assert panel.presets()[-1].name == "Preset 3"
+
+
+def test_quick_visca_saves_never_share_a_camera_slot(setup) -> None:
+    controller, ptz, manager, _confirm = setup(binding=ViscaIpPtzBinding(host="192.0.2.8"))
+    _preset(controller, "one", "One", "1")
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+
+    # Three saves before any of them is confirmed or written to the document.
+    panel.save_current_position()
+    panel.save_current_position()
+    panel.save_current_position()
+    tokens = [preset.remote_token for preset, _future in ptz.stores]
+    assert tokens == ["2", "3", "4"]
+
+    # A refused store frees its slot for the next save; the others keep theirs.
+    ptz.stores[1][1].set_result(_stored(status=PtzRecallStatus.FAILED, error_code="ptz_network_unavailable"))
+    for preset, future in (ptz.stores[0], ptz.stores[2]):
+        future.set_result(_stored(token=preset.remote_token))
+    _process()
+    assert sorted(item.remote_token for item in panel.presets()) == ["1", "2", "4"]
+
+    panel.save_current_position()
+    assert ptz.stores[-1][0].remote_token == "3"
+
+
+def test_a_save_abandoned_with_its_window_frees_its_slot(setup) -> None:
+    controller, ptz, manager, _confirm = setup(binding=ViscaIpPtzBinding(host="192.0.2.8"))
+    window = manager.show_scene(CAMERA_SCENE_ID)
+    _process()
+
+    window.ptz_panel.save_current_position()
+    assert ptz.stores[-1][0].remote_token == "1"
+    window.close()
+    _process()
+
+    panel = manager.show_scene(CAMERA_SCENE_ID).ptz_panel
+    _process()
+    panel.save_current_position()
+    assert ptz.stores[-1][0].remote_token == "1"
 
 
 def test_presets_can_be_renamed_and_deleted(setup) -> None:
