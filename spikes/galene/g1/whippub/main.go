@@ -4,8 +4,10 @@
 // (video) and :5006 (audio); both are forwarded as-is.
 //
 // -stdin mode (G1 path D): reads encoded frames from stdin, each framed as
-// 1 byte kind (0 audio, 1 video), 8 bytes duration in ns, 4 bytes length
-// (big endian), then the frame (Annex-B H.264 access unit or one Opus packet).
+// 1 byte kind (0 audio, 1 video), 8 bytes pts in ns, 4 bytes length (big
+// endian), then the frame (Annex-B H.264 access unit or one Opus packet).
+// RTP timestamps follow the pts, and sender reports map them to the capture
+// clock (not the send time), so the browser can lip-sync audio and video.
 package main
 
 import (
@@ -21,35 +23,120 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
+	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
-	"github.com/pion/webrtc/v4/pkg/media"
 )
 
-// readFrames feeds framed samples from stdin to the sample tracks.
-func readFrames(video, audio *webrtc.TrackLocalStaticSample, vbytes, abytes *atomic.Int64) {
+// ptsTrack packetizes frames with RTP timestamps derived from their pts.
+type ptsTrack struct {
+	track      *webrtc.TrackLocalStaticRTP
+	packetizer rtp.Packetizer
+	clock      uint64
+	base       uint32
+	ssrc       uint32
+
+	mu      sync.Mutex
+	lastRTP uint32
+	lastPTS time.Duration
+	packets uint32
+	octets  uint32
+	started bool
+}
+
+func newPTSTrack(c webrtc.RTPCodecCapability, id string, payloader rtp.Payloader) *ptsTrack {
+	track, err := webrtc.NewTrackLocalStaticRTP(c, id, "solin")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Payload type and SSRC are rewritten by the track's binding.
+	return &ptsTrack{
+		track:      track,
+		packetizer: rtp.NewPacketizer(1200, 0, 0, payloader, rtp.NewRandomSequencer(), uint32(c.ClockRate)),
+		clock:      uint64(c.ClockRate),
+		base:       uint32(time.Now().UnixNano()),
+	}
+}
+
+func (t *ptsTrack) write(data []byte, pts time.Duration) {
+	ts := t.base + uint32(int64(pts)*int64(t.clock)/int64(time.Second)) // pts may start negative (Opus pre-skip)
+	packets := t.packetizer.Packetize(data, 0)
+	for _, p := range packets {
+		p.Timestamp = ts
+		if err := t.track.WriteRTP(p); err != nil {
+			log.Printf("write: %v", err)
+		}
+	}
+	t.mu.Lock()
+	t.lastRTP, t.lastPTS, t.started = ts, pts, true
+	t.packets += uint32(len(packets))
+	t.octets += uint32(len(data))
+	t.mu.Unlock()
+}
+
+// senderReport maps the last packet's RTP timestamp to wall0 + its pts.
+func (t *ptsTrack) senderReport(wall0 time.Time) *rtcp.SenderReport {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.started {
+		return nil
+	}
+	return &rtcp.SenderReport{
+		SSRC: t.ssrc, NTPTime: ntpTime(wall0.Add(t.lastPTS)), RTPTime: t.lastRTP,
+		PacketCount: t.packets, OctetCount: t.octets,
+	}
+}
+
+func ntpTime(t time.Time) uint64 {
+	secs := uint64(t.Unix()) + 2208988800
+	frac := uint64(t.Nanosecond()) << 32 / uint64(time.Second)
+	return secs<<32 | frac
+}
+
+// readFrames feeds framed samples from stdin to the pts tracks and sends
+// sender reports every second.
+func readFrames(pc *webrtc.PeerConnection, video, audio *ptsTrack, ptsSR bool, vbytes, abytes *atomic.Int64) {
 	r := bufio.NewReaderSize(os.Stdin, 1<<20)
 	var hdr [13]byte
+	var wall0 time.Time
+	lastSR := time.Now()
 	for {
 		if _, err := io.ReadFull(r, hdr[:]); err != nil {
 			log.Fatalf("stdin: %v", err)
 		}
-		dur := time.Duration(binary.BigEndian.Uint64(hdr[1:9]))
+		pts := time.Duration(binary.BigEndian.Uint64(hdr[1:9]))
 		data := make([]byte, binary.BigEndian.Uint32(hdr[9:13]))
 		if _, err := io.ReadFull(r, data); err != nil {
 			log.Fatalf("stdin: %v", err)
+		}
+		if wall0.IsZero() {
+			// Audio and video pts share libobs' clock; anchor it once.
+			wall0 = time.Now().Add(-pts)
 		}
 		t, counter := audio, abytes
 		if hdr[0] == 1 {
 			t, counter = video, vbytes
 		}
-		if err := t.WriteSample(media.Sample{Data: data, Duration: dur}); err != nil {
-			log.Printf("write: %v", err)
-		}
+		t.write(data, pts)
 		counter.Add(int64(len(data)))
+		if ptsSR && time.Since(lastSR) >= time.Second {
+			lastSR = time.Now()
+			var reports []rtcp.Packet
+			for _, tr := range []*ptsTrack{video, audio} {
+				if sr := tr.senderReport(wall0); sr != nil {
+					reports = append(reports, sr)
+				}
+			}
+			if err := pc.WriteRTCP(reports); err != nil {
+				log.Printf("rtcp: %v", err)
+			}
+		}
 	}
 }
 
@@ -75,15 +162,29 @@ func main() {
 	endpoint := flag.String("url", "http://127.0.0.1:8443/group/g1/.whip", "WHIP endpoint")
 	token := flag.String("token", "", "bearer token")
 	stdin := flag.Bool("stdin", false, "read framed encoded samples from stdin instead of RTP")
+	srMode := flag.String("sr", "pts", "-stdin sender reports: pts (capture clock) or send (Pion, send time)")
 	flag.Parse()
 
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
 		log.Fatal(err)
 	}
-	// NACK responder, sender reports (lip sync) and TWCC, as a browser would send.
 	ir := &interceptor.Registry{}
-	if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
+	if *stdin {
+		// NACK responder and TWCC; sender reports come from readFrames.
+		if err := webrtc.ConfigureNack(m, ir); err != nil {
+			log.Fatal(err)
+		}
+		if err := webrtc.ConfigureTWCCHeaderExtensionSender(m, ir); err != nil {
+			log.Fatal(err)
+		}
+		if *srMode == "send" {
+			if err := webrtc.ConfigureRTCPReports(ir); err != nil {
+				log.Fatal(err)
+			}
+		}
+	} else if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
+		// NACK responder, sender reports (lip sync) and TWCC, as a browser would send.
 		log.Fatal(err)
 	}
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir))
@@ -98,20 +199,37 @@ func main() {
 	}
 	audioCap := webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}
 	var videoRTP, audioRTP *webrtc.TrackLocalStaticRTP
-	var videoSample, audioSample *webrtc.TrackLocalStaticSample
-	var tracks []webrtc.TrackLocal
+	var videoPTS, audioPTS *ptsTrack
 	if *stdin {
-		videoSample, _ = webrtc.NewTrackLocalStaticSample(videoCap, "video", "solin")
-		audioSample, _ = webrtc.NewTrackLocalStaticSample(audioCap, "audio", "solin")
-		tracks = []webrtc.TrackLocal{videoSample, audioSample}
+		videoPTS = newPTSTrack(videoCap, "video", &codecs.H264Payloader{})
+		audioPTS = newPTSTrack(audioCap, "audio", &codecs.OpusPayloader{})
+		videoRTP, audioRTP = videoPTS.track, audioPTS.track
 	} else {
 		videoRTP, _ = webrtc.NewTrackLocalStaticRTP(videoCap, "video", "solin")
 		audioRTP, _ = webrtc.NewTrackLocalStaticRTP(audioCap, "audio", "solin")
-		tracks = []webrtc.TrackLocal{videoRTP, audioRTP}
 	}
-	for _, t := range tracks {
-		if _, err := pc.AddTransceiverFromTrack(t, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
+	for _, t := range []*webrtc.TrackLocalStaticRTP{videoRTP, audioRTP} {
+		tr, err := pc.AddTransceiverFromTrack(t, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly})
+		if err != nil {
 			log.Fatal(err)
+		}
+		// Incoming RTCP (NACK, PLI, receiver reports) only reaches the
+		// interceptors if something reads it.
+		go func(sender *webrtc.RTPSender) {
+			buf := make([]byte, 1500)
+			for {
+				if _, _, err := sender.Read(buf); err != nil {
+					return
+				}
+			}
+		}(tr.Sender())
+		if *stdin {
+			ssrc := uint32(tr.Sender().GetParameters().Encodings[0].SSRC)
+			if t == videoRTP {
+				videoPTS.ssrc = ssrc
+			} else {
+				audioPTS.ssrc = ssrc
+			}
 		}
 	}
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) { log.Printf("connection: %s", s) })
@@ -149,7 +267,7 @@ func main() {
 
 	var vbytes, abytes atomic.Int64
 	if *stdin {
-		go readFrames(videoSample, audioSample, &vbytes, &abytes)
+		go readFrames(pc, videoPTS, audioPTS, *srMode == "pts", &vbytes, &abytes)
 	} else {
 		go forward(5004, videoRTP, &vbytes)
 		go forward(5006, audioRTP, &abytes)

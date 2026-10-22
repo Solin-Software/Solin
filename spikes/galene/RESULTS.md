@@ -52,12 +52,47 @@ With the webcam filming the flashing probe page, OBS's x264 marked **49 keyframe
 
 - **Galene costs almost nothing here:** 0.02 cores and under 20 MB with one viewer. Frames reach the browser as fast as through LiveKit: 226 ms vs 247 ms, though with different encoders.
 - **Path D works** with stock pylibobs: libobs' own x264 and Opus encoders → `null_output` → `add_packet_callback` → whippub. It needs no plugin rebuild and no Python-side encoding, and could use libobs' hardware encoders (to be tested).
-- **The remaining gap to S1 is in the browser, before display** (~90 ms here vs ~16 ms in S1), together with audio arriving early. whippub stamps packets on arrival instead of carrying libobs' capture timestamps (pts), so the browser's lip-sync and jitter buffer work from send times. S1's LiveKit SDK path used capture timestamps. This is publisher work: drive RTP timestamps and sender reports from the packet pts.
+- **The remaining A/V offset comes from capture, not from Galene or the transport.** See the timestamp follow-up below.
 - **Option 1 isn't a product candidate.** FFmpeg's capture and RTP timing gave the widest arrival spread (117–344 ms) and the largest A/V offset.
+
+### Follow-up: timestamps and where the A/V offset comes from (2026-10-22)
+
+whippub's `-stdin` mode now:
+- sets RTP timestamps from libobs packet pts (Python sends pts in place of a fixed duration);
+- by default sends its own sender reports that map them to libobs' capture clock (`-sr pts`); `-sr send` keeps Pion's send-time reports for comparison;
+- reads incoming RTCP, so NACK retransmission works. Before, nothing read it, so the NACK responder never saw requests.
+
+Galene keeps the publisher's timing: each downstream sender report is computed from the upstream one (`remoteRTP + (now − remoteNTP)`).
+
+**Capture offset in libobs itself** (`g1/raw_check.py`): raw-callback timestamps of the probe's flash and beep, 40 s, Brio 105 video + mic.
+
+| Check | Audio − video in libobs timestamps (median, range) |
+|---|---|
+| Before the A/B run | −101 ms (−144 to −53) |
+| After the first A/B run | −104 ms (−138 to −71) |
+| After the send-time rerun | −75 ms (−110 to +55) |
+
+**The Brio's video reaches libobs ~75–105 ms later than its audio.** This exists before any encoder or network, and sets the floor for browser-side A/V sync.
+
+**A/B of the sender-report clock** (5 min each, `g1/run_sr_ab.sh`, same rig, nobody using the PC):
+
+| | `-sr pts` (capture clock) | `-sr send` (Pion, send time) |
+|---|---|---|
+| Video glass-to-glass | **333 ms** (300–367) | 350 ms (283–417) |
+| Video until received | 221 ms (196–259) | 230 ms (186–284) |
+| Audio glass-to-glass | **213 ms (205–222)** | 234 ms (218–319) |
+| A/V sync | −121 ms (−157 to −83) | −115 ms (−171 to −49) |
+| Matched stimuli | 141 / 149 | 139 / 149 |
+
+- Both modes keep sync within ~15–45 ms of the capture offset, so **Galene and the WebRTC hop preserve A/V sync**.
+- Capture-clock reports give tighter, lower audio latency and ~17 ms lower video latency. Keep `-sr pts`.
+- **Product fix for lip sync:** delay the mic in libobs by the camera's latency (OBS's per-source "Sync Offset", `obs_source_set_sync_offset`). With the Brio that's ~100 ms. Devices differ, so make it a setting, or measure it with this flash/beep method.
+- An earlier 10-minute pts run (video 517 ms, sync −308 ms) is discarded: the PC was in use, the full-screen probe was covered and Chrome throttled it.
+- Rig note: reopening the Brio straight after another libobs process released it sometimes stalls the webcam (`v4l2-input: select timed out`) and invalidates a run.
 
 ### Still open for G1
 
-- Carry libobs pts into RTP timestamps and sender reports; re-measure A/V sync and video render delay.
+- Verify the mic sync offset closes the A/V gap end to end.
 - Hardware encoder in path D (libobs `ffmpeg_vaapi` / QSV) with `repeat_headers` or SPS/PPS prepended on keyframes.
 - 2 h soak of path D (memory, audio drops).
 - Windows: path A (pylibobs ships `obs-webrtc.dll`) and path D.

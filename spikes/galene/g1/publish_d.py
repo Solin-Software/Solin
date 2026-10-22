@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--url", default="http://127.0.0.1:8443/group/g1/.whip")
     p.add_argument("--token", default="")
+    p.add_argument("--sr", choices=("pts", "send"), default="pts", help="whippub sender-report clock")
     p.add_argument("--clip", type=Path, default=DEFAULT_CLIP)
     p.add_argument("--webcam", default="", help="V4L2 device (e.g. /dev/video0) instead of the clip")
     p.add_argument("--mic", default="", help="PulseAudio/PipeWire source name for the program audio")
@@ -73,30 +74,32 @@ def build_program(args: argparse.Namespace) -> tuple:
 def main() -> None:
     args = parse_args()
     pub = subprocess.Popen(
-        [str(WHIPPUB), "-stdin", "-url", args.url] + (["-token", args.token] if args.token else []),
+        [str(WHIPPUB), "-stdin", "-sr", args.sr, "-url", args.url] + (["-token", args.token] if args.token else []),
         stdin=subprocess.PIPE,
     )
     pipe = pub.stdin
     lock = threading.Lock()
+    first_pts: dict[int, int] = {}
     counts = {"video": 0, "audio": 0, "video_bytes": 0, "keyframes": 0, "write_errors": 0}
-    last_audio_pts = [None]
-    frame_ns = int(1e9 / args.fps)
 
     def on_packet(pkt: dict) -> None:
+        num, den = pkt["timebase"]
+        pts_ns = pkt["pts"] * num * 1_000_000_000 // den
+        if pkt["type"] not in first_pts:
+            first_pts[pkt["type"]] = pts_ns
+            print(f"first {'video' if pkt['type'] == 1 else 'audio'} pts {pts_ns / 1e6:.1f} ms "
+                  f"(timebase {num}/{den})", flush=True)
         if pkt["type"] == 1:
-            kind, dur = 1, frame_ns
+            kind = 1
             counts["video"] += 1
             counts["video_bytes"] += pkt["size"]
             counts["keyframes"] += pkt["keyframe"]
         else:
-            num, den = pkt["timebase"]
-            prev, last_audio_pts[0] = last_audio_pts[0], pkt["pts"]
-            dur = int((pkt["pts"] - prev) * num * 1e9 / den) if prev is not None else 20_000_000
             kind = 0
             counts["audio"] += 1
         try:
             with lock:
-                pipe.write(struct.pack(">BQI", kind, dur, len(pkt["data"])) + pkt["data"])
+                pipe.write(struct.pack(">BqI", kind, pts_ns, len(pkt["data"])) + pkt["data"])
                 pipe.flush()
         except OSError:
             counts["write_errors"] += 1
