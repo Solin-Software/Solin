@@ -304,3 +304,24 @@ Tools: `s4_connectivity/hall.yaml` (hall LiveKit advertising its STUN-discovered
 - Setup pitfall: installing Debian's `coturn` package starts a default `coturn` service that grabs :3478; a separately configured instance then fails to bind (first relay attempt failed for that reason only). Disable the packaged service or configure it instead.
 
 **Not done:** hall on mobile ↔ attendee on another network (needs a second device), UDP-blocked attendee (TURN over TCP/TLS 443).
+
+## S8: real device (Android Chrome) — partial
+
+Page: `s1_publish/web/s8.html` (Portuguese attendee page close to the product: remembered name and device id, attendance stepper asked once per meeting, big join button, raise hand, reconnect banner + own rejoin loop; logs visibility, audio level, decoded frames, data and battery every 10 s). Hall on this PC (`s8_devices/hall.yaml`), phone on the home Wi-Fi (direct LAN media), HTTPS via temporary quick tunnels. Device: Android 10, Chrome 155, battery saver off.
+
+| Check | Result |
+|---|---|
+| Join, video + audio, raise/lower hand | OK (640×360 at 20 fps, audio steady) |
+| Name + attendance remembered | OK ("Entrar novamente", count kept) |
+| Screen locked 37 s | Audio kept playing; video paused automatically (adaptive stream) |
+| Screen locked > ~30 s (2 min 15 s) | **Audio stops after ~15–30 s**: Chrome freezes the hidden page and the connection drops — even with Media Session metadata, playing audio and no battery saver |
+| Recovery after unlock | First version: stuck ~1 min ("could not restart participant" while the SDK kept resuming a dead session). **With a visibility check (no frames 3 s after becoming visible → drop and rejoin): back in ≈ 11 s automatically** |
+| Data | ≈ 0.55 Mbps (≈ 245 MB/h) at 360p + audio; ~0.1 Mbps when hidden (video paused) |
+| Battery | ≈ 1 % per 6 min with screen on (≈ 10 %/h, indicative only) |
+
+**Implications**
+- A web page cannot keep a meeting playing in a pocket on Android: attendees who listen with the screen off need a **thin app** (Android: foreground service with an ongoing "meeting in progress" notification; iOS: background audio mode). The web page remains fine for screen-on viewing; it should request a screen wake lock and explain "keep the screen on".
+- The attendee page must include the visibility-based stale-session recovery and its own rejoin loop (now validated on a real phone).
+- Offer an **audio-only** mode for mobile data (≈ 0.1 Mbps vs 0.55 Mbps).
+
+**Not done:** iPhone/Safari, 1 h battery/data run, usability with an older person.
