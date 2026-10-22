@@ -388,7 +388,7 @@ jobs:
           SOLIN_PACKAGED_EXE: 'build\main.dist\Solin.exe'
           SOLIN_E2E_STARTUP_SECONDS: "8"
         run: |
-          python -m pytest tests\e2e\test_packaged_app_smoke.py -q
+          python -m pytest tests\e2e\test_packaged_app_smoke.py tests\e2e\test_packaged_windows_smoke.py -q
 
       - name: Collect installer artifacts
         shell: pwsh
