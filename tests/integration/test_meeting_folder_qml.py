@@ -268,6 +268,19 @@ def test_folder_help_opens_the_meeting_sync_guide(meeting_folder_ui, keyboard):
         QDesktopServices.unsetUrlHandler("https")
 
 
+@pytest.fixture
+def all_controls_tab_focus():
+    """Enable full keyboard navigation for this test and restore the host preference."""
+    hints = QApplication.styleHints()
+    previous = hints.tabFocusBehavior()
+    hints.setTabFocusBehavior(Qt.TabFocusBehavior.TabFocusAllControls)
+    try:
+        yield
+    finally:
+        hints.setTabFocusBehavior(previous)
+
+
+@pytest.mark.usefixtures("all_controls_tab_focus")
 def test_keyboard_focus_reveals_actions_in_short_popup(meeting_folder_ui):
     widget, _, item, _ = meeting_folder_ui
     widget.resize(520, 300)
