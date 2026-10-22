@@ -50,6 +50,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     BusId,
+    DELIVERY_BUSES,
     CameraMediaType,
     CameraPreset,
     Crop,
@@ -402,19 +403,32 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def selectedSceneLive(self) -> bool:
-        return self._controller.applied_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+        return any(
+            self._controller.applied_scene(bus_id) == self._selected_scene_id
+            for bus_id in DELIVERY_BUSES
+        )
 
     @Property(bool, notify=changed)
     def selectedSceneRequiresReplacement(self) -> bool:
         return self._controller.program_scene_is_live(self._selected_scene_id)
 
-    @Property(bool, notify=changed)
-    def selectedSceneDesired(self) -> bool:
-        return self._controller.desired_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+    @Property("QStringList", constant=True)  # type: ignore[arg-type]
+    def deliveryBusIds(self) -> list[str]:
+        return [bus_id.value for bus_id in DELIVERY_BUSES]
 
-    @Property(bool, notify=changed)
-    def canTakeLive(self) -> bool:
-        return not self.selectedSceneDesired and not self._controller.hydration_in_progress
+    @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
+    def selectedSceneOutputs(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "busId": bus_id.value,
+                "live": self._controller.applied_scene(bus_id) == self._selected_scene_id,
+                "canTake": (
+                    self._controller.desired_scene(bus_id) != self._selected_scene_id
+                    and not self._controller.hydration_in_progress
+                ),
+            }
+            for bus_id in DELIVERY_BUSES
+        ]
 
     @Property(bool, notify=changed)
     def virtualCameraEnabled(self) -> bool:
@@ -901,9 +915,17 @@ class ScenesBridge(QObject):
         self._selected_layer_id = layer_id
         self.changed.emit()
 
-    @Slot()
-    def takeLive(self) -> None:
-        self._run_runtime(lambda: self._controller.take_program_scene(self._selected_scene_id))
+    @Slot(str)
+    def takeScene(self, bus_id: str) -> None:
+        if self._controller.hydration_in_progress:
+            return
+        try:
+            bus = BusId(bus_id)
+        except ValueError:
+            return
+        if bus not in DELIVERY_BUSES:
+            return
+        self._run_runtime(lambda: self._controller.select_scene(bus, self._selected_scene_id))
 
     @Slot(bool)
     def setVirtualCameraEnabled(self, enabled: bool) -> None:
