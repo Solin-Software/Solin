@@ -1067,9 +1067,7 @@ def test_thumbnail_request_is_retried_until_the_engine_hears_it(controller_facto
 
 
 def test_card_buttons_route_each_output_independently(controller_factory) -> None:
-    # Regression: the card handler was left calling take_program_scene, the old
-    # lockstep take, so routing the projection dragged the virtual camera with it
-    # (and the reverse). The outputs are independent.
+    # Routing either card button must preserve the other output's selection.
     controller = controller_factory()
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
     controller.documents.create_scene("Projection choice", scene_id="projection-choice")
@@ -1531,7 +1529,7 @@ def test_failed_automation_resume_preserves_temporary_card_routing(
             patch.setattr(controller.runtime, "_store", repository)
             patch.setattr(repository, "save", fail_save)
             with pytest.raises(OSError, match="Runtime save failed"):
-                controller.resume_program_automation()
+                controller.set_program_automatic(True)
             assert len(attempts) == 1
             assert controller.runtime.state is before_runtime
             assert repository.load_or_create(controller.document) == before_runtime
@@ -1558,7 +1556,7 @@ def test_failed_automation_enable_never_persists_an_intermediate_return_base(
     controller.documents.create_scene("Lectern", scene_id="lectern")
     popup = SceneControlPopup(controller)
     projection.set_state({"type": "video", "path": "clip.mp4"})
-    controller.take_program_scene("lectern")
+    controller.select_scene(BusId.VIRTUAL_CAMERA, "lectern")
     controller.take_scene(BusId.MEDIA_WINDOWS, "camera-pip")
     before_runtime = controller.runtime.state
     before_desired = controller.desired_scenes

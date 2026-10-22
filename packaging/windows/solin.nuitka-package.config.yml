@@ -1,0 +1,10 @@
+---
+- module-name: 'comtypes._tlib_version_checker'
+  anti-bloat:
+    - description: 'Keep bundled COM interfaces independent of build-host typelib timestamps'
+      # Standalone bindings are immutable. Timestamp checks invalidate source
+      # caches, but Windows updates legitimately change these files on users' PCs.
+      # Retain comtypes' generator-version check above this source-cache branch.
+      replacements_plain:
+        'if not hasattr(sys, "frozen"):': 'if False:'
+      when: 'win32 and standalone'

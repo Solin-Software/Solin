@@ -809,6 +809,7 @@ class MeetingsWidget(QWidget):
         memorial_service_factory: Callable[[QObject], MemorialService],
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         projection_aspect_ratio_provider: Callable[[], object] | None = None,
+        active_media_paths_provider: Callable[[], tuple[str, ...]] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -866,6 +867,7 @@ class MeetingsWidget(QWidget):
                 linked_folder_sync=self._meeting_linked_folder_sync,
                 media_info_queue_factory=self._media_info_queue_factory,
                 projection_aspect_ratio_provider=(self._projection_aspect_ratio_provider),
+                active_media_paths_provider=active_media_paths_provider,
             )
         )
         startup.mark("meetings_controller_factory_ready")

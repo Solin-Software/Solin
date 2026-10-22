@@ -43,10 +43,6 @@ def _no_object() -> Any | None:
     return None
 
 
-def _false() -> bool:
-    return False
-
-
 def _nothing() -> None:
     return None
 
@@ -71,7 +67,6 @@ class ProjectionWindowContext:
     dialog_parent: Any | None = None
     timer_output: Callable[[], Any | None] = _no_object
     timer_bridge: Callable[[], Any | None] = _no_object
-    program_mirror_enabled: Callable[[], bool] = _false
     native_outputs_changed: Callable[[], None] = _nothing
 
 
@@ -416,8 +411,6 @@ class ProjectionWindowController:
             bridge.refreshMonitors()
 
     def restore_state_to_window(self, win) -> None:
-        if self._context.program_mirror_enabled():
-            return
         state = self._session.state
         kind = state.get("type", "idle")
         if kind == "idle":

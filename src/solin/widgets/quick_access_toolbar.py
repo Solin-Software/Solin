@@ -270,7 +270,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._popup_hover.register(
             "scenes",
             lambda: self._on_solin_scenes_clicked(False),
-            lambda: self._bridge.pillVisible and self._scene_runtime is not None,
+            lambda: self._bridge.pillVisible and self._bridge.scenesVisible,
         )
         self._bridge.popupHoverRequested.connect(self._popup_hover.enter)
         self._bridge.popupHoverCancelled.connect(self._popup_hover.cancel)
@@ -508,6 +508,7 @@ class QuickAccessToolbar(QQuickWidget):
         # button reverts itself when no host can take it, so this records the
         # state that actually took effect.
         self._app_settings.set_scenes_panel_docked(bool(docked))
+        self._sync_solin_scene_state()
 
     def restore_docked_scene_panel(self) -> None:
         """Re-attach the scenes panel if it was docked when Solin last closed.
@@ -678,7 +679,9 @@ class QuickAccessToolbar(QQuickWidget):
         if controller is None:
             self._bridge.set_scenes_visible(False)
             return
-        self._bridge.set_scenes_visible(True)
+        self._bridge.set_scenes_visible(
+            self._solin_scene_popup is None or not self._solin_scene_popup.docked
+        )
         if controller.engine_ready:
             color = PALETTE.accent
             tooltip = self.tr("Solin scenes · engine ready")

@@ -273,34 +273,6 @@ class SceneRuntimeService:
             )
         )
 
-    def take_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Pin every delivery output to ``scene_id`` in manual mode."""
-        self._documents.document.scene(scene_id)
-        return self._commit(
-            replace(
-                self._state,
-                outputs=tuple(
-                    replace(
-                        output,
-                        mode=OutputMode.MANUAL,
-                        base_scene_id=scene_id,
-                    )
-                    for output in self._state.outputs
-                ),
-            )
-        )
-
-    def select_program_scene(self, scene_id: str) -> SceneRuntimeState:
-        """Select every output base without changing auto-switch."""
-
-        return self.select_base_scenes({bus_id: scene_id for bus_id in DELIVERY_BUSES})
-
-    def resume_program_automation(self) -> SceneRuntimeState:
-        return self.set_program_automatic(
-            True,
-            scene_ids={output.bus_id: output.base_scene_id for output in self._state.outputs},
-        )
-
     def set_program_automatic(
         self,
         enabled: bool,

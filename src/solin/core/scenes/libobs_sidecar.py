@@ -1815,11 +1815,7 @@ class LibobsSidecarEngine:
         graph = self._scene_graph
         if route is None or graph is None:
             return
-        scene_id = str(
-            active_scenes.get("media_windows")
-            or active_scenes.get("virtual_camera")
-            or ""
-        )
+        scene_id = str(active_scenes.get("media_windows") or "")
         source = graph.scene_source(scene_id) if scene_id else None
         route.set_scene(scene_id, source)
 
@@ -1832,13 +1828,7 @@ class LibobsSidecarEngine:
         graph = self._scene_graph
         if graph is None:
             return
-        # The editor previews the MEDIA_WINDOWS (edit) bus scene.
-        preview_scene_id = (
-            active_scenes.get("editor")
-            or active_scenes.get("media_windows")
-            or active_scenes.get("virtual_camera")
-        )
-        self._editor_scene_id = str(preview_scene_id or "")
+        self._editor_scene_id = str(active_scenes.get("editor") or "")
         if egress is None:
             return
         source = graph.editor_scene_source(self._editor_scene_id)
@@ -1848,14 +1838,11 @@ class LibobsSidecarEngine:
         # cache still reads "enabled" and so never re-sends set_render_enabled.
         # Apply the snapshot's render demand here so one hydrate fully restores the
         # editor preview (source *and* enable) — the canvas updates after a restart.
-        for key in ("editor", "media_windows"):
-            if render_enabled and key in render_enabled:
-                egress.set_enabled(bool(render_enabled[key]))
-                break
+        egress.set_enabled(bool(render_enabled and render_enabled.get("editor", False)))
 
     def _handle_set_render_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
-        # the program bus always composites, so just ack it.
+        # Only the editor bus gates its preview egress. Delivery outputs keep
+        # independent demand and native references.
         payload = request.payload
         self._render_demand[str(payload.get("bus_id") or "")] = bool(payload.get("enabled"))
         if payload.get("bus_id") == "editor" and self._preview_egress is not None:

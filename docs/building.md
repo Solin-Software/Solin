@@ -366,7 +366,13 @@ available on a particular machine.
   supervised, persistent helper uses native UI Automation with bounded requests.
   `scripts/prepare_zoom_bindings.py` generates `comtypes.gen.UIAutomationClient`
   and its type-library module from Windows' `UIAutomationCore.dll` before Nuitka
-  bundles them. Installed executables use the bundled interfaces.
+  bundles them. Installed executables use the bundled interfaces without runtime
+  regeneration. The shared Windows Nuitka package configuration disables only
+  source-cache timestamp invalidation for these immutable bindings, retaining
+  the generator-version check. Both Windows build recipes initialize the packaged
+  COM client with `--verify-zoom-runtime` before accepting the artifact; no Zoom
+  meeting is required. Meeting automation is enabled by default on Windows and
+  respects an explicitly saved preference.
   Background-song linking is available whenever background playback is enabled,
   including manual playback without scheduled days. An application controller
   stops playback on manual meeting start, respecting the configured fade and

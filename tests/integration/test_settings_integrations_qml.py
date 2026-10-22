@@ -298,10 +298,17 @@ def test_cleanup_cancels_pending_saves_and_ignores_late_service_results(setup_do
 
 
 @pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
-def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeypatch, platform):
+@pytest.mark.parametrize("saved_enabled", [None, False, True])
+def test_platform_permissions_and_zoom_initialization_once(
+    setup_domain, monkeypatch, platform, saved_enabled,
+):
     ctx = setup_domain
     ctx.domain.cleanup()
     ctx.zoom.set_background_song_linked(True)
+    if saved_enabled is not None:
+        ctx.zoom.set_enabled(saved_enabled)
+    enabled = saved_enabled if saved_enabled is not None else True
+    saved_keys = ctx.zoom.settings.all_keys()
     monkeypatch.setattr(integrations.sys, "platform", platform)
     domain = IntegrationSettings(
         obs_service=None, ndi_service=None, obs_settings=ctx.obs,
@@ -311,6 +318,7 @@ def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeyp
     )
     try:
         assert domain.state["zoomAvailable"] is (platform == "win32")
+        assert domain.state["zoomEnabled"] is enabled
         assert "cameraAvailable" not in domain.state
         assert "cameraEnabled" not in domain.state
         assert domain.state["accessibilityRequired"] is (platform == "darwin")
@@ -319,9 +327,24 @@ def test_platform_permissions_and_zoom_initialization_once(setup_domain, monkeyp
         ctx.zoom.set_background_song_linked(True)
         domain.refresh_language()
         domain.refresh_runtime()
+        assert domain.state["zoomEnabled"] is enabled
+        assert ctx.zoom.settings.all_keys() == saved_keys
         assert ctx.zoom.background_song_linked() is True
         domain.invoke("findNdiSources")
         assert domain.state["ndiStatusKind"] == "error"
+
+        toggled = []
+        domain.zoom_enabled_toggled.connect(toggled.append)
+        domain.setValue("zoomEnabled", not enabled)
+        if platform == "win32":
+            assert domain.state["zoomEnabled"] is not enabled
+            assert ctx.zoom.is_enabled() is not enabled
+            assert toggled == [not enabled]
+        else:
+            assert domain.state["zoomEnabled"] is enabled
+            assert ctx.zoom.is_enabled() is enabled
+            assert ctx.zoom.settings.all_keys() == saved_keys
+            assert toggled == []
     finally:
         domain.cleanup()
 

@@ -93,6 +93,27 @@ def _spec(
     )
 
 
+def test_scope_idle_waits_for_cancelled_worker_and_gui_completion() -> None:
+    coordinator = MediaOperationCoordinator()
+    started, release = threading.Event(), threading.Event()
+
+    def run(_report, _cancellation):
+        started.set()
+        release.wait(3)
+
+    try:
+        assert coordinator.scope_is_idle("playlist:test")
+        assert coordinator.submit(_spec("scope-idle", "folder:test", run))
+        _wait_until(started.is_set)
+        coordinator.cancel_scope("playlist:test")
+        assert not coordinator.scope_is_idle("playlist:test")
+        release.set()
+        _wait_until(lambda: coordinator.scope_is_idle("playlist:test"))
+    finally:
+        release.set()
+        coordinator.shutdown()
+
+
 def test_coordinator_runs_independent_work_and_serializes_conflicts() -> None:
     coordinator = MediaOperationCoordinator(max_workers=2)
     started: list[str] = []

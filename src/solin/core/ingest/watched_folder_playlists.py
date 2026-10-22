@@ -13,6 +13,7 @@ from solin.core.foundation.resource_keys import (
     ResourceClaim,
     child_folder_resource_claim,
     folder_read_resource_claim,
+    folder_resource_key,
 )
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest.local_files import (
@@ -20,6 +21,7 @@ from solin.core.ingest.local_files import (
     local_file_availability_signature,
 )
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+from solin.core.ingest.playlist_folder_names import normalize_playlist_folder_name
 from solin.core.playlists.linked_folder import playlist_sync, register_playlist_sync
 
 
@@ -102,18 +104,37 @@ class WatchedFolderPlaylistStore:
     def rename_folder(self, folder_path: str, new_name: str,
                       file_store: WatchedFolderFileStore) -> str:
         def rename() -> str:
+            validated_name = normalize_playlist_folder_name(new_name)
             service = playlist_sync(folder_path)
             with service.lock, service.intent_lock:
                 old_folder = service.folder
-                destination = Path(file_store.rename_folder(old_folder, new_name))
+                destination = Path(file_store.rename_folder(old_folder, validated_name))
                 try:
                     service.rebind_folder(destination)
                 except BaseException:  # noqa: BLE001 - Restore the physical folder after any failed binding transaction.
-                    file_store.rename_folder(destination, old_folder.name)
+                    # Restore the exact trusted original path, including legacy
+                    # names that would no longer pass new-name validation.
+                    destination.rename(old_folder)
                     raise
                 register_playlist_sync(destination, service)
                 return os.fspath(destination)
-        result = self._run_claimed(child_folder_resource_claim(folder_path), rename)
+        result = self._run_claimed(
+            ResourceClaim(exclusive_key=folder_resource_key(Path(folder_path).parent)),
+            rename,
+        )
+        self._publish_changed()
+        return result
+
+    def create_folder(
+        self, root_path: str, name: str, file_store: WatchedFolderFileStore
+    ) -> str:
+        """Create an empty linked-playlist folder without publishing sync state."""
+        def create() -> str:
+            return file_store.create_folder(root_path, normalize_playlist_folder_name(name))
+
+        result = self._run_claimed(
+            ResourceClaim(exclusive_key=folder_resource_key(root_path)), create
+        )
         self._publish_changed()
         return result
 

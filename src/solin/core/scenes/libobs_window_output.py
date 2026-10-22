@@ -1,8 +1,8 @@
 """Bind libobs ``Display``s to the app's native projection-window handles.
 
 ``set_window_targets`` hands the engine the application's native window handles;
-each becomes an ``obs_display`` that renders the composited main texture
-(letterboxed). libobs runs in the sidecar while the windows belong to the app
+each becomes an ``obs_display`` that renders its selected source or output
+with letterboxing. libobs runs in the sidecar while the windows belong to the app
 process — ``pylibobs`` ``Display.from_window`` binds to the server-global window
 handle (X11 ``Window`` XID / Win32 ``HWND``); on X11 it opens its own connection
 to ``$DISPLAY``.
@@ -11,7 +11,7 @@ Each target is routed to exactly one thing, in precedence order: a ``scene_id``
 renders that one scene directly on the GPU (the editor's preview surface); a
 target on the projection bus renders the projection transition
 (:class:`~solin.core.scenes.libobs_projection_route.LibobsProjectionRoute`), which
-is independent of the program; anything else renders the composited main texture
+is independent of the program; a program target renders the composited main texture
 (the program that also feeds the virtual camera and the recording).
 
 Thread-safety: draw callbacks run on libobs' graphics thread while ``hydrate``
@@ -26,25 +26,29 @@ import logging
 import threading
 from typing import Any, Callable
 
+from solin.core.scenes.model import BusId
+
 log = logging.getLogger(__name__)
 
 # Opaque black for the letterbox bars outside the rendered canvas.
 _BACKGROUND_COLOR = 0xFF000000
 
 # What a window shows. Precedence when routing a target: an explicit scene wins
-# (the editor's direct-GPU surface), then the projection output, else the program.
+# (the editor's direct-GPU surface), then an explicit delivery output.
 _ROUTE_PROGRAM = "program"
 _ROUTE_PROJECTION = "projection"
 _ROUTE_SCENE = "scene"
-_PROJECTION_BUS = "media_windows"
 
 
 def _route_for(target: dict, scene_id: str) -> str:
     if scene_id:
         return _ROUTE_SCENE
-    if str(target.get("bus_id", "") or "") == _PROJECTION_BUS:
+    bus_id = target.get("bus_id")
+    if bus_id == BusId.MEDIA_WINDOWS.value:
         return _ROUTE_PROJECTION
-    return _ROUTE_PROGRAM
+    if bus_id == BusId.VIRTUAL_CAMERA.value:
+        return _ROUTE_PROGRAM
+    raise ValueError("Window target requires an explicit delivery bus or scene")
 
 # A display factory yields a Display-like object exposing add_draw_callback /
 # resize / release. Injected so the manager is testable without pylibobs.
@@ -160,7 +164,9 @@ class LibobsWindowOutput:
                 render_source_letterboxed,
             )
 
-            route = self._routes.get(handle, _ROUTE_PROGRAM)
+            route = self._routes.get(handle)
+            if route is None:
+                return
             if route == _ROUTE_PROGRAM:
                 # The main texture is owned by libobs and always valid: no lock.
                 render_main_texture_letterboxed(canvas_w, canvas_h, display_cx, display_cy)

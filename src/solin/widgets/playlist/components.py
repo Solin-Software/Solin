@@ -251,6 +251,9 @@ class CollapsibleSection(QWidget):
     def set_header_visible(self, visible: bool) -> None:
         self._header_widget.setVisible(visible)
 
+    def add_header_action(self, widget: QWidget) -> None:
+        self._header_widget.layout().addWidget(widget)
+
     def set_content(self, widget: QWidget) -> None:
         self._content = widget
         self.layout().addWidget(widget)

@@ -146,12 +146,29 @@ def test_zoom_settings_read_defaults_and_saved_values():
     zoom = ZoomSettingsStore(settings)
     settings.clear()
     try:
-        assert zoom.is_enabled() is False
+        assert zoom.is_enabled() is True
+        assert SettingsKey.ZOOM_ENABLED not in settings.all_keys()
         assert zoom.background_song_linked() is False
         zoom.set_enabled(True)
         zoom.set_background_song_linked(True)
 
         assert zoom.is_enabled() is True
         assert zoom.background_song_linked() is True
+    finally:
+        settings.clear()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_zoom_settings_preserves_saved_preference(enabled):
+    profile_settings = _profile_settings()
+    settings = _settings(profile_settings)
+    zoom = ZoomSettingsStore(settings)
+    settings.clear()
+    try:
+        zoom.set_enabled(enabled)
+
+        restored = ZoomSettingsStore.for_profile_settings(profile_settings)
+        assert restored.is_enabled() is enabled
+        assert settings.value(SettingsKey.ZOOM_ENABLED, None, bool) is enabled
     finally:
         settings.clear()
