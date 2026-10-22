@@ -482,6 +482,56 @@ def test_native_monitoring_uses_system_default_and_reset_preserves_playback() ->
     _run_native("audio-monitoring")
 
 
+def _assert_monitor_only_media_stays_out_of_the_recording_mix() -> None:
+    from array import array
+
+    from solin.core.media.obs_runtime import RECORDING_AUDIO_MIXERS, RECORDING_MIX_INDEX
+
+    with _native_media() as (runtime, media, path):
+        tone = path.with_name("tone.wav")
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+             "-i", "sine=frequency=440:duration=8", "-ac", "2", str(tone)],
+            check=True,
+        )
+        peaks: list[float] = []
+
+        def listen(_mix, planes, _frames, _timestamp) -> None:
+            samples = array("f", planes[0])
+            peaks.append(max((abs(value) for value in samples), default=0.0))
+
+        def loudest_over(seconds: float) -> float:
+            peaks.clear()
+            time.sleep(seconds)
+            return max(peaks, default=0.0)
+
+        assert media.open(str(tone), autoplay=True, volume_percent=100)
+        scene = runtime.ob.Scene.create("program")
+        scene.add(media.source)
+        channel = runtime.acquire_channel()
+        runtime.set_channel_source(channel, scene.as_source())
+        handle = runtime.ob.add_raw_audio_callback(listen, mix_idx=RECORDING_MIX_INDEX, channels=2)
+        try:
+            assert _wait_for(lambda: media.position_ms > 300), _observation(media)
+            # Heard on the speakers only: the system-audio capture is what puts it
+            # in the recording, so a direct copy here would be heard twice.
+            assert media.source.audio_mixers == 0
+            assert loudest_over(1.0) < 1e-4
+            # Control: the same playing source does reach the track once routed.
+            media.source.audio_mixers = RECORDING_AUDIO_MIXERS
+            assert loudest_over(1.0) > 0.05
+        finally:
+            runtime.ob.remove_raw_audio_callback(handle, mix_idx=RECORDING_MIX_INDEX)
+            runtime.set_channel_source(channel, None)
+            runtime.release_channel(channel)
+            scene.release()
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg fixtures required")
+def test_native_monitor_only_media_stays_out_of_the_recording_mix() -> None:
+    _run_native("monitor-only-mix")
+
+
 def _assert_audio_monitoring_reset_overlaps_media_replacement() -> None:
     from pylibobs._ffi import ffi, get_lib
     from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
@@ -594,6 +644,7 @@ if __name__ == "__main__":
     {
         "audio-monitoring": _assert_system_default_audio_monitoring,
         "audio-monitoring-overlap": _assert_audio_monitoring_reset_overlaps_media_replacement,
+        "monitor-only-mix": _assert_monitor_only_media_stays_out_of_the_recording_mix,
         "stop": _assert_stop_before_first_input_update,
         "speed": _assert_speed_before_initial_pause_acknowledgement,
         "audio-before-video": _assert_visual_wait_does_not_pause_before_the_first_video,

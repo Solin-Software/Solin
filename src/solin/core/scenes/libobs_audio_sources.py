@@ -1,10 +1,15 @@
 """Audio capture sources (microphone + system audio) for the libobs sidecar.
 
-The recorder and Linux virtual-camera output bind the libobs **main audio mix**
-(``context.get_audio()``). Any source placed on a global output channel is summed
-into that mix, so this module turns the app's per-recording audio *selection*
+The recorder encodes the recording track (track 1) of libobs' audio output. Any
+source placed on a global output channel is summed into the tracks its
+``audio_mixers`` select, so this module turns the app's per-recording audio *selection*
 (a microphone + a system-audio choice) into libobs capture sources routed onto
-their own channels. The Windows DirectShow virtual camera receives video only.
+their own channels, on the recording track only. The Windows DirectShow virtual
+camera receives video only.
+
+Media is not mixed in directly: media sources are monitor-only with no mixer
+tracks, so it reaches the recording exactly once — through the system-audio
+capture of the speakers it plays on.
 
 Two selections are handled, each an :class:`AudioDeviceSelection` reduced to its
 wire form ``{"mode", "device_id"}`` (see ``recording.py``):
@@ -35,6 +40,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from typing import Any
+
+from solin.core.media.obs_runtime import RECORDING_AUDIO_MIXERS
 
 log = logging.getLogger(__name__)
 
@@ -246,6 +253,15 @@ class LibobsAudioMixer:
             return _DEVICE_UNAVAILABLE
         if source is None:
             return _DEVICE_UNAVAILABLE
+
+        try:
+            # Recording track only: track 6 belongs to the hosted-meeting mix. libobs'
+            # monitoring deduplication silences monitored sources on every track an
+            # output capture shares, so a capture on track 6 would mute media that
+            # the meeting mix routes there.
+            source.audio_mixers = RECORDING_AUDIO_MIXERS
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.warning("could not set the %s mixer tracks", kind, exc_info=True)
 
         channel: int | None = None
         try:

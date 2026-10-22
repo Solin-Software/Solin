@@ -479,6 +479,7 @@ class _FakeEncoder:
         # True means the encoder binds libobs' global mix — the same composite the
         # virtual camera outputs.
         self.attach_global = attach_global
+        self.mixer_idx: int | None = None  # audio encoders only: the mix track encoded
         self.released = 0
 
     def release(self) -> None:
@@ -683,6 +684,7 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict, mixer_idx: int = 0,
                        *, attach_global: bool = True):
                 encoder = _FakeEncoder(kind, name, settings, attach_global)
+                encoder.mixer_idx = mixer_idx
                 runtime.encoders.append(encoder)
                 return encoder
 
@@ -2593,6 +2595,18 @@ def test_recorder_start_creates_muxer_and_encoders_then_stops():
     assert all(encoder.released == 1 for encoder in runtime.encoders)
 
 
+def test_recorder_encodes_the_recording_track_not_the_meeting_track():
+    from solin.core.media.obs_runtime import RECORDING_MIX_INDEX
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    assert LibobsRecorder(runtime).start(_recording_path("solin-test.mp4")) is True
+
+    audio = runtime.outputs[-1].audio_encoder
+    assert audio.mixer_idx == RECORDING_MIX_INDEX == 0
+    assert audio.mixer_idx != 5  # track 6 carries the hosted-meeting mix
+
+
 def test_recorder_double_start_is_rejected():
     from solin.core.scenes.libobs_recorder import LibobsRecorder
 
@@ -2884,6 +2898,20 @@ def test_audio_mixer_apply_system_default_uses_default_device_id():
     assert mic.settings["device_id"] == "default"
     assert system.settings["device_id"] == "default"
     assert mic in runtime.channels.values() and system in runtime.channels.values()
+
+
+def test_audio_mixer_puts_captures_on_the_recording_track_only():
+    from solin.core.media.obs_runtime import RECORDING_AUDIO_MIXERS
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    LibobsAudioMixer(runtime).apply({"mode": "system_default"}, {"mode": "system_default"})
+
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    system = _audio_sources(runtime, "pulse_output_capture")[0]
+    assert mic.audio_mixers == system.audio_mixers == RECORDING_AUDIO_MIXERS == 0b1
+    # Off track 6 (mix index 5), which the hosted-meeting mix owns.
+    assert not system.audio_mixers & (1 << 5)
 
 
 def test_audio_mixer_apply_none_creates_no_source():
