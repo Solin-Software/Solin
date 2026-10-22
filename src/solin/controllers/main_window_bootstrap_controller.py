@@ -25,6 +25,7 @@ class MainWindowStartupDependencies:
     monitor_popup_factory: Callable[[], Any]
     ipc_controller_factory: Callable[[], Any]
     remote_services_factory: Callable[[], Any]
+    meeting_provider: Any = None  # the toolbar's provider; defaults to Zoom
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,9 +108,9 @@ class MainWindowBootstrapController:
 
     def connect_zoom_signals(self) -> None:
         dependencies = self._dependencies
-        zoom = dependencies.zoom_service
+        provider = dependencies.meeting_provider or dependencies.zoom_service
         live = dependencies.live_integrations
-        zoom.connection_changed.connect(live.on_zoom_connection_changed)
+        provider.connection_changed.connect(live.on_zoom_connection_changed)
 
     def start_zoom_if_enabled(self) -> None:
         dependencies = self._dependencies

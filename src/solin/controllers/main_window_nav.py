@@ -24,6 +24,7 @@ class MainPage(IntEnum):
     PLAYLISTS = 6
     WIFI = 7
     SCENES = 8
+    MEETING_CONSOLE = 9
 
 
 NAV_ITEMS = (
@@ -36,6 +37,11 @@ NAV_ITEMS = (
     ("nav_playlist_btn", QT_TRANSLATE_NOOP("MainWindow", "Playlists"), MainPage.PLAYLISTS),
     ("nav_wifi_btn", QT_TRANSLATE_NOOP("MainWindow", "Receive via Wi-Fi"), MainPage.WIFI),
     ("nav_scenes_btn", QT_TRANSLATE_NOOP("MainWindow", "Scenes"), MainPage.SCENES),
+    (
+        "nav_meeting_console_btn",
+        QT_TRANSLATE_NOOP("MainWindow", "Live meeting"),
+        MainPage.MEETING_CONSOLE,
+    ),
 )
 
 NAV_LABELS = tuple((attribute, label) for attribute, label, _page in NAV_ITEMS)

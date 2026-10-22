@@ -35,6 +35,7 @@ class ShutdownServices:
     program_content: Any | None = None
     content_frame_ingress: Any | None = None
     scene_frame_egresses: tuple[Any, ...] = ()
+    hosted_meeting: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +132,10 @@ class ShutdownController:
     def stop_media_services(self) -> None:
         services = self._dependencies.services
         services.projection_integrations.cleanup()
+        # End a Solin-hosted meeting first: its publisher reads the scene engine's
+        # meeting egress, which closes with the scene runtime below.
+        if services.hosted_meeting is not None:
+            services.hosted_meeting.stop(wait=True)
         # Close recording and content ingress, then join app-side frame workers
         # before closing the scene runtime and its libobs sidecar.
         if services.program_recording is not None:

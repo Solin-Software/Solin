@@ -109,6 +109,10 @@ from .controllers.wifi_media_controller import (
 )
 from .controllers.window_state_controller import WindowStateContext, WindowStateController
 from .controllers.zoom_meeting_controller import ZoomMeetingController
+from .core.conference.provider_switch import MeetingProviderSwitch
+from .core.conference.settings import MeetingProviderChoice
+from .ui.qml.meeting_console_bridge import MeetingConsoleBridge
+from .ui.qml.settings.conference import ConferenceSettings
 from .core.projection.aspect_ratio import projection_aspect_ratio_from_windows
 from .core.projection.application import (
     ObsSceneSession,
@@ -308,6 +312,7 @@ class MainWindow(QWidget):
         self._app_settings = profile_settings_bundle.app
         self._obs_settings = profile_settings_bundle.obs
         self._zoom_settings = profile_settings_bundle.zoom
+        self._hosted_meeting_settings = profile_settings_bundle.hosted_meeting
         self._auto_share_settings = profile_settings_bundle.auto_share
         self._auto_key_settings = profile_settings_bundle.auto_key
         self._media_settings = profile_settings_bundle.media
@@ -568,6 +573,20 @@ class MainWindow(QWidget):
         # Zoom Meetings integration
         self._zoom_service = service_factories.zoom(self)
 
+        # Solin-hosted meetings: the hall PC runs the room; the program reaches it
+        # through the scene engine's meeting egress.
+        self._hosted_meeting = service_factories.hosted_meeting(self)
+        self._hosted_meeting.egress_changed.connect(self.scene_runtime.set_meeting_egress)
+        # The meeting workflow and toolbar talk to whichever provider is chosen.
+        self._meeting_provider = MeetingProviderSwitch(
+            {
+                MeetingProviderChoice.ZOOM: self._zoom_service,
+                MeetingProviderChoice.SOLIN: self._hosted_meeting,
+            },
+            self._hosted_meeting_settings.provider(),
+            self,
+        )
+
         self._background_song_service = service_factories.background_song(
             self.lang,
             self._background_song_settings,
@@ -577,13 +596,18 @@ class MainWindow(QWidget):
             self,
         )
         self._zoom_meetings = ZoomMeetingController(
-            self._zoom_service,
+            self._meeting_provider,
             self._background_song_service,
             self._zoom_settings,
             self.notifications,
             self,
         )
         self._zoom_meetings.event_triggered.connect(self._auto_keys.dispatch)
+        self._meeting_console_bridge = MeetingConsoleBridge(
+            self._hosted_meeting,
+            self._meeting_provider,
+            self._hosted_meeting_settings,
+        )
 
         self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
@@ -635,7 +659,8 @@ class MainWindow(QWidget):
                 screen_manager=self.screen_mgr,
                 obs_service=self._obs_service,
                 ndi_service=self._ndi_service,
-                zoom_service=self._zoom_service,
+                # The toolbar follows the chosen provider (Zoom or Solin-hosted).
+                zoom_service=self._meeting_provider,
                 zoom_meetings=self._zoom_meetings,
                 app_settings=self._app_settings,
                 about_settings_factory=service_factories.about_settings,
@@ -668,6 +693,13 @@ class MainWindow(QWidget):
                 ),
                 background_song_service=self._background_song_service,
                 timer_bridge=self.timer_bridge,
+                meeting_console_bridge=self._meeting_console_bridge,
+                conference_settings_factory=lambda parent: ConferenceSettings(
+                    self._hosted_meeting_settings,
+                    self._meeting_provider,
+                    hosting_available=self._hosted_meeting.is_available,
+                    parent=parent,
+                ),
                 playlist_storage_paths=self.playlist_storage_paths,
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
@@ -979,6 +1011,7 @@ class MainWindow(QWidget):
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
+        self._meeting_console_bridge.settingsRequested.connect(self._open_hosted_meeting_settings)
         self.settings_widget.general.yearly_text_changed.connect(
             self._program_content.update_yearly_text
         )
@@ -997,6 +1030,7 @@ class MainWindow(QWidget):
                 live_integrations=self._live_integrations,
                 zoom_settings=self._zoom_settings,
                 zoom_service=self._zoom_service,
+                meeting_provider=self._meeting_provider,
                 background_song_service=self._background_song_service,
                 media_countdown_automation=self._media_countdown_automation,
                 monitor_popup_factory=lambda: MonitorManagerPopup(self),
@@ -1038,6 +1072,7 @@ class MainWindow(QWidget):
                         self._scene_preview_egress,
                         self._scene_program_egress,
                     ),
+                    hosted_meeting=self._hosted_meeting,
                 ),
                 widget_providers=(
                     lambda: self.settings_widget,
@@ -1046,6 +1081,7 @@ class MainWindow(QWidget):
                     lambda: self._lazy_pages.wifi_receive_widget,
                     lambda: self.playlist_widget,
                     lambda: self.timer_widget,
+                    lambda: self.meeting_console_widget,
                     lambda: self.scenes_widget,
                 ),
                 conversion_threads=self._conversion_threads,
@@ -1566,6 +1602,10 @@ class MainWindow(QWidget):
             prepare=prepare if needs_preparation else None,
         )
 
+    def _open_hosted_meeting_settings(self) -> None:
+        self._navigation.switch_page(int(MainPage.SETTINGS))
+        self.settings_widget.navigation.openSection("integrations", "meetingHosting", "meetingProvider")
+
     def _open_meeting_schedule_settings(self) -> None:
         self._navigation.switch_page(int(MainPage.SETTINGS))
         self.settings_widget.navigation.openSection("meetings", "schedule", "midweekDay")
@@ -1662,6 +1702,7 @@ class MainWindow(QWidget):
         self.settings_widget = resources.settings_widget
         self.settings_widget.about.update_channel_changed.connect(self._request_update_check)
         self.timer_widget = resources.timer_widget
+        self.meeting_console_widget = resources.meeting_console_widget
         self.talk_theme_widget = resources.talk_theme_widget
         self.playlist_widget = resources.playlist_widget
         self.meetings_widget = resources.meetings_widget
@@ -1701,6 +1742,7 @@ class MainWindow(QWidget):
             getattr(self, "library_widget", None),
             getattr(self, "settings_widget", None),
             getattr(self, "timer_widget", None),
+            getattr(self, "meeting_console_widget", None),
             getattr(self, "talk_theme_widget", None),
             getattr(self, "playlist_widget", None),
             getattr(self, "meetings_widget", None),
@@ -1916,6 +1958,7 @@ class MainWindow(QWidget):
             "meetings_widget",
             "playlist_widget",
             "timer_widget",
+            "meeting_console_widget",
         ):
             self._partial_cleanup_method(
                 attribute,
@@ -1934,6 +1977,12 @@ class MainWindow(QWidget):
             "projection integrations",
             getattr(self, "_projection_integrations", None),
             "cleanup",
+        )
+        self._partial_cleanup_method(
+            "hosted meeting",
+            getattr(self, "_hosted_meeting", None),
+            "stop",
+            wait=True,
         )
         self._partial_cleanup_method(
             "program content",

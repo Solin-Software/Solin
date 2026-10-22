@@ -28,6 +28,7 @@ from ..styles.icons import (
     ICON_NAV_THEME,
     ICON_NAV_TIMER,
     ICON_NAV_WIFI,
+    ICON_PEOPLE,
     make_icon,
 )
 from ..styles.theme import PALETTE
@@ -47,6 +48,7 @@ from ..widgets.quick_access_toolbar import QuickAccessToolbar
 from ..widgets.deferred_scenes_widget import DeferredScenesWidget
 from ..widgets.deferred_talk_theme_widget import DeferredTalkThemeWidget
 from ..widgets.settings_widget import SettingsWidget
+from ..widgets.meeting_console_widget import MeetingConsoleWidget
 from ..widgets.timer_widget import TimerWidget
 from .lazy_page_controller import (
     LazyPageContext,
@@ -123,6 +125,8 @@ class MainWindowUiContext:
     projection_aspect_ratio_provider: Callable[[], Any]
     background_song_service: Any
     timer_bridge: Any
+    meeting_console_bridge: Any
+    conference_settings_factory: Any
     playlist_storage_paths: Any
     playlist_repository: Any
     meeting_tree_store: Any
@@ -177,6 +181,7 @@ class MainWindowUiResources:
     library_widget: LibraryWidget
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
+    meeting_console_widget: MeetingConsoleWidget
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
@@ -195,6 +200,7 @@ class _PageResources:
     library_widget: LibraryWidget
     settings_widget: SettingsWidget
     timer_widget: TimerWidget
+    meeting_console_widget: MeetingConsoleWidget
     talk_theme_widget: DeferredTalkThemeWidget
     playlist_widget: PlaylistWidget
     meetings_widget: MeetingsWidget
@@ -225,6 +231,7 @@ class MainWindowUiController:
         ICON_NAV_PLAYLIST,
         ICON_NAV_WIFI,
         ICON_CLAPPERBOARD,
+        ICON_PEOPLE,
     )
     _NAV_BUTTON_SPECS = tuple(
         (attr_name, icon, label, int(page))
@@ -234,6 +241,7 @@ class MainWindowUiController:
         "nav_meetings_btn",
         "nav_browser_btn",
         "nav_scenes_btn",
+        "nav_meeting_console_btn",
         "nav_timer_btn",
         "nav_playlist_btn",
         "nav_library_btn",
@@ -340,6 +348,7 @@ class MainWindowUiController:
             -2: quick_toolbar.preparation_handle,
             int(MainPage.LIBRARY): pages.library_widget.qml_load_handle,
             int(MainPage.TIMER): pages.timer_widget.qml_load_handle,
+            int(MainPage.MEETING_CONSOLE): pages.meeting_console_widget.qml_load_handle,
             int(MainPage.TALK_THEME): pages.talk_theme_widget.preparation_handle,
             int(MainPage.SETTINGS): pages.settings_widget.qml_load_handle,
             int(MainPage.PLAYLISTS): pages.playlist_widget.preparation_handle,
@@ -367,6 +376,7 @@ class MainWindowUiController:
             library_widget=pages.library_widget,
             settings_widget=pages.settings_widget,
             timer_widget=pages.timer_widget,
+            meeting_console_widget=pages.meeting_console_widget,
             talk_theme_widget=pages.talk_theme_widget,
             playlist_widget=pages.playlist_widget,
             meetings_widget=pages.meetings_widget,
@@ -450,6 +460,7 @@ class MainWindowUiController:
             ndi_service=context.ndi_service,
             app_settings=context.app_settings,
             about_settings_factory=context.about_settings_factory,
+            conference_settings_factory=context.conference_settings_factory,
             obs_settings=context.obs_settings,
             zoom_settings=context.zoom_settings,
             auto_share_settings=context.auto_share_settings,
@@ -477,6 +488,11 @@ class MainWindowUiController:
             parent=context.parent,
         )
         timeline.mark("page_timer_constructed")
+        meeting_console_widget = MeetingConsoleWidget(
+            bridge=context.meeting_console_bridge,
+            defer_qml=True,
+            parent=context.parent,
+        )
         talk_theme_widget = DeferredTalkThemeWidget(
             context.lang_manager,
             profile_paths=context.profile_paths,
@@ -574,11 +590,13 @@ class MainWindowUiController:
         stack.addWidget(playlist_widget)
         stack.addWidget(lazy_pages.placeholder())
         stack.addWidget(scenes_widget)
+        stack.addWidget(meeting_console_widget)
 
         return _PageResources(
             library_widget=library_widget,
             settings_widget=settings_widget,
             timer_widget=timer_widget,
+            meeting_console_widget=meeting_console_widget,
             talk_theme_widget=talk_theme_widget,
             playlist_widget=playlist_widget,
             meetings_widget=meetings_widget,

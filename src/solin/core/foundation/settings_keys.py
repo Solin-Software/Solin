@@ -81,6 +81,12 @@ class SettingsKey:
     ZOOM_ENABLED: Final = "zoom/enabled"
     ZOOM_BACKGROUND_SONG_LINK: Final = "zoom/background_song_link"
 
+    MEETING_PROVIDER: Final = "meeting/provider"
+    MEETING_HALL_NAME: Final = "meeting/hall_name"
+    MEETING_QUALITY: Final = "meeting/quality"
+    MEETING_E2EE: Final = "meeting/e2ee"
+    MEETING_ATTENDEE_VIDEO: Final = "meeting/attendee_video"
+
     AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"
     AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"
 

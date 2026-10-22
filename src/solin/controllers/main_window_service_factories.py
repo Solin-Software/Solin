@@ -14,6 +14,7 @@ class MainWindowServiceFactories:
     obs_websocket: Callable[[Any, QObject], Any]
     ndi_receiver: Callable[[QObject], Any]
     zoom: Callable[[QObject], Any]
+    hosted_meeting: Callable[[QObject], Any]
     background_song: Callable[[Any, Any, Any, Any, Any, QObject], Any]
     yeartext: Callable[[QObject], Any]
     congregation_lookup: Callable[[QObject], Any]

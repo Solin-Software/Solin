@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import secrets
 from collections.abc import Callable
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -38,6 +39,7 @@ from .meeting_core import (
 from .provider import POST_MEETING, PRE_MEETING, SequenceResult, StepFailure
 from .publisher_service import MeetingPublisherService, PublisherConfig, PublisherState
 from .room_api import ParticipantNotFoundError, RoomApi, RoomApiError
+from .server_binary import ServerUnavailableError, server_executable
 from .server_config import ServerSettings
 from .server_process import ConferenceServerService, ServerState
 from .tokens import AccessTokenRequest, RoomGrants, mint_access_token
@@ -124,6 +126,9 @@ class SolinMeetingService(QObject):
         super().__init__(parent)
         self._server = server
         self._publisher = publisher
+        for owned in (server, publisher):
+            if owned.parent() is None:  # adopt what nobody else owns
+                owned.setParent(self)
         self._available = available
         self._room_api_factory = room_api_factory or (
             lambda s: RoomApi(f"http://127.0.0.1:{s.http_port}", s.api_key, s.api_secret)
@@ -436,3 +441,21 @@ class SolinMeetingService(QObject):
         if busy != self._busy:
             self._busy = busy
             self.busy_changed.emit(busy)
+
+
+def _server_available() -> bool:
+    try:
+        server_executable()
+    except ServerUnavailableError:
+        return False
+    return True
+
+
+def create_hosted_meeting_service(config_dir: Path, parent: QObject | None = None) -> SolinMeetingService:
+    """The Solin-hosted provider with its own supervised server and publisher."""
+    return SolinMeetingService(
+        ConferenceServerService(config_dir),
+        MeetingPublisherService(),
+        available=_server_available,
+        parent=parent,
+    )

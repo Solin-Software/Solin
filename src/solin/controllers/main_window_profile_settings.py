@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..core.conference.settings import HostedMeetingSettingsStore
 from ..core.ingest.watched_folder_settings import WatchedFolderSettingsStore
 from ..core.integrations.automation.settings import (
     AutoKeySettingsStore,
@@ -31,6 +32,7 @@ class MainWindowProfileSettings:
     browser: BrowserSettingsStore
     obs: OBSSettingsStore
     zoom: ZoomSettingsStore
+    hosted_meeting: HostedMeetingSettingsStore
     auto_share: AutoShareSettingsStore
     auto_key: AutoKeySettingsStore
     projection_playback: ProjectionPlaybackSettingsStore

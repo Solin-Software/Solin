@@ -12,7 +12,8 @@ Item {
         general: settingsGeneral,
         integrations: settingsIntegrations,
         remote: settingsRemote,
-        about: settingsAbout
+        about: settingsAbout,
+        conference: settingsConference
     })
     property bool restoring: true
     signal choose(var row, var owner)

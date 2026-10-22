@@ -1702,6 +1702,7 @@ def test_main_window_receives_long_lived_service_factories_from_bootstrap():
         "NDIReceiverService",
         "CameraService",
         "ZoomService",
+        "SolinMeetingService",
         "BackgroundSongService",
         "YeartextService",
         "JwpubService",

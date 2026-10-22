@@ -52,6 +52,7 @@ def _bind_source_credential_resolver(scene_engine, credentials) -> None:
 
 def _build_main_window_profile_settings(profile_settings):
     from solin.controllers.main_window_profile_settings import MainWindowProfileSettings
+    from solin.core.conference.settings import HostedMeetingSettingsStore
     from solin.core.ingest.watched_folder_settings import WatchedFolderSettingsStore
     from solin.core.integrations.automation.settings import (
         AutoKeySettingsStore,
@@ -83,6 +84,7 @@ def _build_main_window_profile_settings(profile_settings):
         browser=BrowserSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
+        hosted_meeting=HostedMeetingSettingsStore.for_profile_settings(profile_settings),
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),
@@ -234,6 +236,7 @@ def _build_main_window_service_factories(
     from solin.core.foundation.thread_workers import ThreadedWorkerPool
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
+    from solin.core.conference.meeting_service import create_hosted_meeting_service
     from solin.core.integrations.automation.zoom.service import ZoomService
     from solin.core.integrations.ndi import NDIReceiverService
     from solin.core.jw.background_song_service import BackgroundSongService
@@ -351,6 +354,9 @@ def _build_main_window_service_factories(
         obs_websocket=OBSWebSocketService,
         ndi_receiver=NDIReceiverService,
         zoom=ZoomService,
+        hosted_meeting=lambda parent: create_hosted_meeting_service(
+            runtime_paths.data_dir / "conference", parent
+        ),
         background_song=BackgroundSongService,
         yeartext=lambda parent: YeartextService(
             cache_file=runtime_paths.cache_dir / "yeartext_cache.json",

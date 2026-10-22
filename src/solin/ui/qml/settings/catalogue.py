@@ -135,6 +135,13 @@ SECTIONS = (
         Group("zoom", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), "integrations", (
             Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Meeting audio and video controls.")),
         ), True, visible_when="zoomAvailable"),
+        Group("meetingHosting", QT_TRANSLATE_NOOP("SettingsWidget", "Meeting hosting"), "conference", (
+            Setting("meetingProvider", QT_TRANSLATE_NOOP("SettingsWidget", "Host meetings with"), "select", options="meetingProviderOptions", description=QT_TRANSLATE_NOOP("SettingsWidget", "Zoom, or a meeting hosted by this computer that attendees join from their browser."), enabled_when="hostingAvailable"),
+            Setting("meetingHallName", QT_TRANSLATE_NOOP("SettingsWidget", "Hall name shown to attendees"), "input", visible_when="hostedSelected"),
+            Setting("meetingQuality", QT_TRANSLATE_NOOP("SettingsWidget", "Video quality"), "select", options="meetingQualityOptions", visible_when="hostedSelected"),
+            Setting("meetingE2ee", QT_TRANSLATE_NOOP("SettingsWidget", "End-to-end encryption"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Only the hall and attendees can see and hear the meeting, not the servers that relay it."), visible_when="hostedSelected"),
+            Setting("meetingAttendeeVideo", QT_TRANSLATE_NOOP("SettingsWidget", "Attendee video"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Let attendees share their video while microphones are not locked."), visible_when="hostedSelected"),
+        ), True),
     )),
     Section("automations", QT_TRANSLATE_NOOP("SettingsWidget", "Automations"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Sharing and shortcuts"), "automations", (
