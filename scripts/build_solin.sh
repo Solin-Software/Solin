@@ -340,6 +340,12 @@ for license_source in "${license_sources[@]}"; do
         "${DIST_DIR}/licenses/$(basename "$(dirname "${license_source}")").txt"
 done
 
+# Solin-hosted meetings run the pinned LiveKit server (static Go binary, Apache-2.0) as a
+# supervised child process; it is located beside the app in bin/, never through PATH.
+"${PYTHON}" scripts/fetch_livekit_server.py --dest "${DIST_DIR}/bin" \
+    --license "${DIST_DIR}/licenses/livekit-server.txt" \
+    || fail "Could not fetch the pinned LiveKit server"
+
 while IFS= read -r plugin; do
     relative_root="$(realpath --relative-to="$(dirname "${plugin}")" "${DIST_DIR}")"
     patchelf --add-rpath "\$ORIGIN/${relative_root}" "${plugin}"

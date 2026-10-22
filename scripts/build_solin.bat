@@ -229,6 +229,14 @@ if defined RAW_QML_FOUND (
     exit /b 1
 )
 
+rem Solin-hosted meetings run the pinned LiveKit server (Apache-2.0) from bin\, never PATH.
+"%PYTHON%" scripts\fetch_livekit_server.py --dest "%DIST%\bin" --license "%DIST%\licenses\livekit-server.txt"
+if errorlevel 1 (
+    echo  [ERRO] Nao foi possivel obter o servidor LiveKit fixado.
+    pause
+    exit /b 1
+)
+
 if not exist "%DIST%\PySide6\qml\QtQuick\qmldir" (
     echo  [ERRO] Runtime QML QtQuick nao foi empacotado.
     pause

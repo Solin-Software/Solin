@@ -20,3 +20,6 @@ This notice does not relicense those components.
 
 Windows DirectShow camera notices: native/virtual-camera/share/licenses/solin-virtual-camera.
 Source notices and dependency revisions: native/virtual_camera/THIRD_PARTY.md.
+LiveKit server (bundled as bin/livekit-server for Solin-hosted meetings):
+Copyright LiveKit, Inc., Apache License 2.0; license text in licenses/livekit-server.txt.
+Source: https://github.com/livekit/livekit
