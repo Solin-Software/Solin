@@ -82,6 +82,10 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
         assert executing
         changes.append((pointer, mode))
 
+    def change_mixers(pointer, mixers):
+        assert executing
+        changes.append((pointer, "mixers", mixers))
+
     def select(name, ident):
         assert executing
         changes.append((name, ident))
@@ -91,15 +95,49 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
     runtime._native_tasks = SimpleNamespace(run=run)
     runtime._pylibobs = SimpleNamespace(set_audio_monitoring_device=select)
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
-        get_lib=lambda: SimpleNamespace(obs_source_set_monitoring_type=change_source),
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_type=change_source,
+            obs_source_set_audio_mixers=change_mixers,
+        ),
     ))
     source = SimpleNamespace(_ptr=object())
 
     runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_ONLY)
     assert runtime.set_monitoring_device("Default", "default")
 
-    assert changes == [(source._ptr, obs_runtime.MONITORING_MONITOR_ONLY), ("Default", "default")]
+    assert changes == [
+        (source._ptr, "mixers", 0),
+        (source._ptr, obs_runtime.MONITORING_MONITOR_ONLY),
+        ("Default", "default"),
+    ]
     assert runtime.monitoring_device == ("Default", "default")
+
+
+@pytest.mark.parametrize(
+    ("monitoring", "mixer_changes"),
+    [
+        # libobs builds that deprecated monitoring types treat monitor-only as
+        # "monitor and output": only clearing the tracks keeps the source out of
+        # the recording mix, where the speaker loopback already carries it.
+        (obs_runtime.MONITORING_MONITOR_ONLY, [0]),
+        # Sources that are meant to reach a mix keep the tracks they were given.
+        (obs_runtime.MONITORING_MONITOR_AND_OUTPUT, []),
+        (obs_runtime.MONITORING_NONE, []),
+    ],
+)
+def test_monitor_only_keeps_a_source_out_of_every_mix(monkeypatch, monitoring, mixer_changes):
+    mixers, modes = [], []
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_type=lambda _pointer, mode: modes.append(mode),
+            obs_source_set_audio_mixers=lambda _pointer, value: mixers.append(value),
+        ),
+    ))
+
+    obs_runtime.ObsRuntime().set_source_monitoring(SimpleNamespace(_ptr=object()), monitoring)
+
+    assert mixers == mixer_changes
+    assert modes == [monitoring]
 
 
 @pytest.mark.parametrize("matching", [False, True])
@@ -537,6 +575,9 @@ def test_failed_obs_startup_closes_the_owned_x11_display(
 # Camera capture settings and ownership are exercised without loading libobs.
 @pytest.fixture
 def camera_runtime(monkeypatch):
+    from solin.core.media.obs_camera_capture import CameraCaptureState
+    from solin.core.scenes import camera_catalog
+
     monkeypatch.setattr(sys, "platform", "linux")
     runtime = obs_runtime.ObsRuntime()
     events = []
@@ -564,6 +605,41 @@ def camera_runtime(monkeypatch):
         created.append((kind, name, source))
         return source
 
+    class Probe:
+        def __init__(self, source, *, width, height):
+            self.source = source
+            self.dimensions = (width, height)
+            self.state = CameraCaptureState(1, "starting")
+            self.updates = []
+            self.closed = False
+
+        def update(self, settings, *, width, height):
+            assert not self.closed and self.source.releases == 0
+            self.dimensions = (width, height)
+            self.updates.append((dict(settings), width, height))
+            self.state = CameraCaptureState(self.state.generation + 1, "starting")
+            try:
+                self.source.update(settings)
+            except RuntimeError:
+                self.state = CameraCaptureState(self.state.generation, "failed",
+                                                "camera_update_failed")
+                raise
+
+        def fail(self):
+            self.state = CameraCaptureState(self.state.generation, "failed", "camera_no_frames")
+
+        def reconnect(self, settings, *, expected_generation, width, height):
+            if (self.closed or self.state.generation != expected_generation
+                    or self.state.status != "failed"
+                    or self.state.error_code not in {"camera_no_frames", "camera_update_failed"}):
+                return False
+            self.update(settings, width=width, height=height)
+            return True
+
+        def close(self):
+            assert self.source.releases == 0
+            self.closed = True
+
     def automatic_mode(device, **kwargs):
         # Another thread must be able to start/use the runtime while discovery
         # waits for a catalog scan. Holding runtime._lock here deadlocks it.
@@ -585,13 +661,10 @@ def camera_runtime(monkeypatch):
         return automatic_modes[-1] if automatic_modes else None
 
     monkeypatch.setattr(runtime, "ensure_started", lambda: events.append("started"))
-    monkeypatch.setattr(runtime, "watch_camera_video", lambda source, **_kwargs: SimpleNamespace(
-        update=lambda settings, **_dimensions: source.update(settings), close=lambda: None,
-    ))
+    monkeypatch.setattr(runtime, "watch_camera_video", Probe)
     runtime._pylibobs = SimpleNamespace(Source=SimpleNamespace(create=create))
-    monkeypatch.setitem(sys.modules, "solin.core.scenes.camera_catalog", SimpleNamespace(
-        camera_catalog=lambda: SimpleNamespace(automatic_mode=automatic_mode),
-    ))
+    monkeypatch.setattr(camera_catalog, "camera_catalog",
+                        lambda: SimpleNamespace(automatic_mode=automatic_mode))
     return runtime, created, events, automatic_modes
 
 
@@ -698,6 +771,271 @@ def test_camera_empty_device_does_not_start_runtime(camera_runtime):
     runtime, created, events, _modes = camera_runtime
     assert runtime.camera_source("") is None
     assert not created and not events
+
+
+def test_camera_reconnect_does_not_restart_frames_recovered_after_policy_snapshot(
+    monkeypatch, camera_runtime,
+):
+    from unittest.mock import Mock
+
+    from solin.core.media.obs_camera_capture import ObsCameraCaptureProbe
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, _created, _events, _modes = camera_runtime
+    now = [10.0]
+    runtime.ob.add_main_render_callback = Mock(return_value="render")
+    runtime.ob.remove_main_render_callback = Mock()
+    monkeypatch.setattr(runtime, "observe_source_updates", Mock(return_value=Mock()))
+    monkeypatch.setattr(runtime, "observe_source_video", Mock(return_value=Mock()))
+    monkeypatch.setattr(runtime, "watch_camera_video", lambda source, **dimensions:
+                        ObsCameraCaptureProbe(runtime, source, monotonic=lambda: now[0], **dimensions))
+    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format="400"))
+    source.showing = True
+    tick = runtime.ob.add_main_render_callback.call_args.args[0]
+    receive = runtime.observe_source_video.call_args.args[1]
+    try:
+        tick(1920, 1080)
+        now[0] += 6
+        tick(1920, 1080)
+        snapshot = runtime.camera_capture_state("device")
+        assert snapshot.status == "failed" and snapshot.error_code == "camera_no_frames"
+
+        # The renderer publishes a fresh frame after policy reads failure but
+        # before the runtime attempts to reserve the same generation.
+        receive(1920, 1080, 100)
+        tick(1920, 1080)
+        recovered = runtime.camera_capture_state("device")
+        assert recovered.status == "ready" and recovered.generation == snapshot.generation
+
+        assert not runtime.reconnect_camera("device", expected_generation=snapshot.generation)
+        assert runtime.camera_capture_state("device") == recovered
+        assert not source.updates
+    finally:
+        runtime._release_camera_sources()
+
+
+def test_camera_reconnect_forces_unchanged_mode_and_keeps_shared_consumers(
+    monkeypatch, camera_runtime,
+):
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, created, events, _modes = camera_runtime
+    mode = _exact_camera_mode(pixel_format="400")
+    source = runtime.camera_source("Camera:USB-DEVICE", **mode)
+    consumer = runtime.camera_source("usb-device", "Renamed", **mode)
+    settings = dict(source.settings)
+    generation = runtime.camera_capture_state("usb-device").generation
+    previous_events = list(events)
+
+    for _ in range(2):
+        runtime._camera_probes["usb-device"].fail()
+        assert runtime.reconnect_camera("Renamed:USB-DEVICE", expected_generation=generation)
+        generation += 1
+        assert runtime.camera_capture_state("usb-device").generation == generation
+        assert not runtime.reconnect_camera("Renamed:USB-DEVICE", expected_generation=generation)
+        assert runtime.camera_source("usb-device", **mode) is consumer is source
+
+    assert len(created) == 1
+    assert source.updates == [settings, settings]
+    assert runtime._camera_probes["usb-device"].updates == [(settings, 1920, 1080)] * 2
+    assert events == previous_events
+    assert source.releases == 0
+
+
+@pytest.mark.parametrize("cached_mode", [False, True])
+@pytest.mark.parametrize("from_manual", [False, True])
+def test_camera_reconnect_reuses_effective_automatic_settings_without_resolving(
+    monkeypatch, camera_runtime, cached_mode, from_manual,
+):
+    from solin.core.media import camera_source
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, created, events, modes = camera_runtime
+    if from_manual:
+        runtime.camera_source("device", **_exact_camera_mode(
+            width=640, height=480, pixel_format="401",
+        ))
+    if cached_mode:
+        modes.append(SimpleNamespace(**_exact_camera_mode(pixel_format="400")))
+    source = runtime.camera_source("device")
+    settings = dict(source.settings)
+    previous_updates = list(source.updates)
+    generation = runtime.camera_capture_state("device").generation
+    previous_events = list(events)
+    modes.append(SimpleNamespace(**_exact_camera_mode(width=1280, height=720, pixel_format="401")))
+    monkeypatch.setattr(camera_source, "camera_source_spec", lambda *args, **kwargs: pytest.fail(
+        "Reconnect must reuse effective settings without resolving a mode",
+    ))
+
+    runtime._camera_probes["device"].fail()
+    assert runtime.reconnect_camera("device", expected_generation=generation)
+    assert runtime.camera_source("device") is source
+
+    dimensions = (1920, 1080) if cached_mode else (0, 0)
+    assert runtime._camera_probes["device"].updates == [(settings, *dimensions)] * (
+        2 if from_manual else 1
+    )
+    assert source.updates == previous_updates + [settings]
+    assert len(created) == 1 and events == previous_events
+
+
+def test_camera_reconnect_rejects_generation_observed_before_reconfiguration(
+    monkeypatch, camera_runtime,
+):
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, created, _events, _modes = camera_runtime
+    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format="400"))
+    observed = runtime.camera_capture_state("device").generation
+    changed = _exact_camera_mode(width=1280, height=720, pixel_format="401")
+    assert runtime.camera_source("device", **changed) is source
+    current = runtime.camera_capture_state("device").generation
+    assert current != observed
+    settings = dict(source.settings)
+
+    runtime._camera_probes["device"].fail()
+    assert not runtime.reconnect_camera("device", expected_generation=observed)
+    assert len(source.updates) == 1
+    assert runtime.camera_capture_state("device").generation == current
+    assert runtime.reconnect_camera("device", expected_generation=current)
+    assert not runtime.reconnect_camera("device", expected_generation=current)
+    assert runtime.camera_source("device", **changed) is source
+
+    assert source.updates == [settings, settings]
+    assert runtime._camera_probes["device"].updates[-1] == (settings, 1280, 720)
+    assert len(created) == 1
+
+
+def test_failed_camera_reconnect_preserves_configuration_for_explicit_retry_and_release(
+    monkeypatch, camera_runtime,
+):
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, created, events, _modes = camera_runtime
+    mode = _exact_camera_mode(pixel_format="400")
+    source = runtime.camera_source("device", **mode)
+    settings = dict(source.settings)
+    probe = runtime._camera_probes["device"]
+    probe.fail()
+    generation = probe.state.generation
+    previous_events = list(events)
+    source.reject_update = True
+
+    with pytest.raises(obs_runtime.ObsRuntimeError, match="reconnect") as error:
+        runtime.reconnect_camera("device", expected_generation=generation)
+
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert probe.state.error_code == "camera_update_failed"
+    assert probe.state.generation == generation + 1
+    assert runtime.camera_source("device", **mode) is source
+    assert source.updates == [settings]
+    assert source.settings == settings
+    assert not probe.closed and source.releases == 0
+    assert not runtime.reconnect_camera("device", expected_generation=generation)
+
+    source.reject_update = False
+    assert runtime.reconnect_camera("device", expected_generation=probe.state.generation)
+    assert runtime.camera_source("device", **mode) is source
+    assert probe.updates == [(settings, 1920, 1080)] * 2
+    assert len(created) == 1 and events == previous_events
+    runtime._release_camera_sources()
+    assert probe.closed and source.releases == 1
+    assert not runtime._camera_sources and not runtime._camera_probes
+    assert not runtime.reconnect_camera("device", expected_generation=probe.state.generation)
+
+
+def test_camera_reconnect_holds_runtime_lock_through_probe_reservation_and_native_update(
+    monkeypatch, camera_runtime,
+):
+    import threading
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    runtime, _created, _events, _modes = camera_runtime
+    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format="400"))
+    probe = runtime._camera_probes["device"]
+    probe.fail()
+    generation = probe.state.generation
+    checking, updating = threading.Event(), threading.Event()
+    allow_check, allow_update = threading.Event(), threading.Event()
+    results, errors = [], []
+
+    class BlockingProbe:
+        def reconnect(self, settings, **reservation):
+            checking.set()
+            assert allow_check.wait(5)
+            return probe.reconnect(settings, **reservation)
+
+        def close(self):
+            probe.close()
+
+    runtime._camera_probes["device"] = BlockingProbe()
+    source_update = source.update
+
+    def blocking_update(settings):
+        updating.set()
+        assert allow_update.wait(5)
+        source_update(settings)
+
+    monkeypatch.setattr(source, "update", blocking_update)
+
+    def reconnect():
+        try:
+            results.append(runtime.reconnect_camera("device", expected_generation=generation))
+        except Exception as error:  # noqa: BLE001 - report worker failures on the test thread
+            errors.append(error)
+
+    def assert_runtime_locked():
+        acquired = runtime._lock.acquire(blocking=False)
+        if acquired:
+            runtime._lock.release()
+        assert not acquired, "Mode changes and shutdown must wait for reconnect"
+
+    worker = threading.Thread(target=reconnect)
+    worker.start()
+    try:
+        assert checking.wait(5)
+        assert_runtime_locked()
+        allow_check.set()
+        assert updating.wait(5)
+        assert_runtime_locked()
+        assert not probe.closed and source.releases == 0 and not source.updates
+    finally:
+        allow_check.set()
+        allow_update.set()
+        worker.join(timeout=5)
+
+    assert not worker.is_alive() and not errors and results == [True]
+    assert len(source.updates) == 1
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_camera_reconnect_leaves_native_platform_recovery_passive(
+    monkeypatch, camera_runtime, platform,
+):
+    monkeypatch.setattr(sys, "platform", platform)
+    runtime, created, events, _modes = camera_runtime
+    source = runtime.camera_source("device")
+    generation = runtime.camera_capture_state("device").generation
+    previous_events = list(events)
+
+    assert not runtime.reconnect_camera("device", expected_generation=generation)
+
+    assert runtime.camera_capture_state("device").generation == generation
+    assert not source.updates and source.releases == 0
+    assert len(created) == 1 and events == previous_events
+
+
+@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
+@pytest.mark.parametrize("device", ["", "missing"])
+def test_camera_reconnect_without_capture_does_not_start_or_instantiate(
+    monkeypatch, camera_runtime, platform, device,
+):
+    monkeypatch.setattr(sys, "platform", platform)
+    runtime, created, events, _modes = camera_runtime
+    runtime._pylibobs = None
+
+    assert not runtime.reconnect_camera(device, expected_generation=1)
+
+    assert runtime._pylibobs is None
+    assert not runtime.started and not created and not events
+    assert not runtime._camera_sources and not runtime._camera_probes
 
 
 class _RtspSource:

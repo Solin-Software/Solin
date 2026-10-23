@@ -302,9 +302,12 @@ def test_staging_cleanup_retries_a_transient_windows_file_lock(
     assert not backup.exists()
 
 
-@pytest.mark.parametrize("run_tests", [True, False])
+@pytest.mark.parametrize("run_tests,qualify_production,excluded_label", [
+    (False, False, None), (True, False, None),
+    (True, True, None), (True, True, "^performance$"),
+])
 def test_build_configures_each_architecture_and_runs_only_requested_tests(
-    tmp_path: Path, monkeypatch, run_tests: bool
+    tmp_path: Path, monkeypatch, run_tests: bool, qualify_production: bool, excluded_label
 ) -> None:
     monkeypatch.setattr(build_virtual_camera.sys, "platform", "win32")
     monkeypatch.setattr(build_virtual_camera.platform, "machine", lambda: "AMD64")
@@ -320,6 +323,8 @@ def test_build_configures_each_architecture_and_runs_only_requested_tests(
         build_x86_directory=x86,
         run_tests=run_tests,
         jobs=2,
+        qualify_production=qualify_production,
+        exclude_test_label=excluded_label,
     )
     assert result == (
         x64 / "Release" / "solin-virtual-camera.dll",
@@ -331,8 +336,29 @@ def test_build_configures_each_architecture_and_runs_only_requested_tests(
         f"-DSOLIN_VIRTUAL_CAMERA_BUILD_TESTS={'ON' if run_tests else 'OFF'}" in command
         for command in configure
     )
-    assert sum(command[0] == "ctest" for command in commands) == (2 if run_tests else 0)
+    assert all(
+        f"-DSOLIN_VIRTUAL_CAMERA_QUALIFY_PRODUCTION={'ON' if qualify_production else 'OFF'}" in command
+        for command in configure
+    )
+    tests = [command for command in commands if command[0] == "ctest"]
+    assert len(tests) == (2 if run_tests else 0)
+    assert all(("--label-exclude" in command) == bool(excluded_label) for command in tests)
+    if excluded_label:
+        assert all(command[-2:] == ["--label-exclude", excluded_label] for command in tests)
     assert all(command[-2:] == ["--parallel", "2"] for command in commands if "--build" in command)
+
+
+@pytest.mark.parametrize("options", [
+    {"qualify_production": True}, {"exclude_test_label": "^performance$"},
+])
+def test_build_rejects_test_options_when_tests_are_disabled(tmp_path, monkeypatch, options):
+    monkeypatch.setattr(build_virtual_camera.sys, "platform", "win32")
+    monkeypatch.setattr(build_virtual_camera.platform, "machine", lambda: "AMD64")
+    with pytest.raises(build_virtual_camera.VirtualCameraBuildError, match="require tests"):
+        build_virtual_camera.build_virtual_camera(
+            configuration="Release", build_x64_directory=tmp_path / "x64",
+            build_x86_directory=tmp_path / "x86", run_tests=False, jobs=0, **options,
+        )
 
 
 def test_build_rejects_shared_build_directory_before_running_cmake(

@@ -31,6 +31,52 @@ def test_publication_requires_all_platforms_and_quality():
     assert {row["architecture"] for row in mac["strategy"]["matrix"]["include"]} == {"arm64", "x86_64"}
 
 
+def test_beta_dispatch_authorizes_before_environment_and_app_credentials():
+    configuration = workflow("prepare-beta.yml")
+    assert configuration["name"] == "Generate beta"
+    assert set(configuration["on"]) == {"workflow_dispatch"}
+    assert configuration["permissions"] == {"contents": "read"}
+    assert configuration["concurrency"] == {
+        "group": "solin-beta-preparation", "cancel-in-progress": "false",
+    }
+    assert configuration["env"] == {
+        "BETA_RELEASE_ACTORS": "${{ vars.BETA_RELEASE_ACTORS }}",
+        "BETA_RELEASE_TRIGGERING_ACTOR": "${{ github.triggering_actor }}",
+    }
+    jobs = configuration["jobs"]
+    assert set(jobs) == {"authorize", "beta"}
+    assert "environment" not in jobs["authorize"]
+    assert jobs["beta"]["needs"] == "authorize"
+    assert jobs["beta"]["environment"] == "beta-release"
+    assert jobs["beta"]["if"] == "github.ref == 'refs/heads/main'"
+    assert int(jobs["beta"]["timeout-minutes"]) < 60  # Installation token lifetime.
+    for job in jobs.values():
+        steps = job["steps"]
+        checkout = next(step for step in steps if "actions/checkout@" in step.get("uses", ""))
+        assert checkout["with"]["persist-credentials"] == "false"
+        authorization = next(i for i, step in enumerate(steps)
+                             if step.get("run") == "python scripts/prepare_beta.py authorize")
+        app = next((i for i, step in enumerate(steps) if step.get("id") == "app"), None)
+        if app is not None:
+            assert authorization < app
+            assert steps[app]["with"] == {
+                "app-id": "${{ vars.BETA_RELEASE_APP_ID }}",
+                "private-key": "${{ secrets.BETA_RELEASE_APP_PRIVATE_KEY }}",
+                "permission-contents": "write", "permission-pull-requests": "write",
+                "permission-checks": "read", "permission-statuses": "read",
+                "permission-actions": "read",
+                "permission-workflows": "write",
+            }
+            assert checkout["with"]["ref"] == "main"
+            assert checkout["with"]["fetch-depth"] == "0"
+            execution = steps[-1]
+            assert execution["run"] == "python scripts/prepare_beta.py run"
+            assert execution["env"]["GH_TOKEN"] == "${{ steps.app.outputs.token }}"
+        else:
+            assert not any("secrets." in str(step) for step in steps)
+        assert all("${{" not in step.get("run", "") for step in steps)
+
+
 def test_main_cache_builds_are_trusted_serialized_and_skip_release_preparation():
     configuration = workflow("main-build-cache.yml")
     assert set(configuration["on"]) == {"push", "workflow_dispatch"}
@@ -327,8 +373,10 @@ def test_python_suite_preserves_fatal_qt_destruction_diagnostic(tmp_path):
 
 def test_all_external_actions_are_pinned_to_commits():
     for path in (REPO_ROOT / ".github/workflows").glob("*.yml"):
-        for action in re.findall(r"uses: ([^\s#]+)", path.read_text()):
-            assert action.startswith("./") or re.search(r"@[a-f0-9]{40}$", action), action
+        for job in workflow(path.name)["jobs"].values():
+            for entry in (job, *job.get("steps", [])):
+                if action := entry.get("uses"):
+                    assert action.startswith("./") or re.search(r"@[a-f0-9]{40}$", action), action
 
 
 @pytest.mark.parametrize("failed_suite", ["contract", "integration", "unit", None])
@@ -359,6 +407,47 @@ def test_windows_quality_preserves_suite_failure_and_stops_later_suites(failed_s
     assert result.stdout.splitlines() == [f"tests/{suite}" for suite in expected]
 
 
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_windows_zoom_qualification_waits_for_process_and_propagates_failure(
+    tmp_path, monkeypatch, exit_code,
+):
+    monkeypatch.setenv("PYTHONFAULTHANDLER", "1")
+    steps = workflow("build-solin-windows.yml")["jobs"]["build"]["steps"]
+    step = next(item for item in steps if item.get("name") == "Qualify packaged Zoom automation runtime")
+    assert "if" not in step  # Both manual and release builds must qualify the artifact.
+    assert step["shell"] == "python"
+    build_dir = tmp_path / "build staging"
+    monkeypatch.setenv("BUILD_DIR", str(build_dir))
+    completed = tmp_path / "completed"
+    interpreter = (
+        Path(sys.executable).with_name("pythonw.exe") if os.name == "nt" else Path(sys.executable)
+    )
+    child = (
+        "import faulthandler; from pathlib import Path; "
+        "assert faulthandler.is_enabled(); "
+        f"Path({str(completed)!r}).touch(); "
+        f"raise SystemExit({exit_code})"
+    )
+    run_process = subprocess.run
+
+    def launch(command, **kwargs):
+        assert command == [str(build_dir / "main.dist" / "Solin.exe"), "--verify-zoom-runtime"]
+        assert kwargs["check"] is True
+        assert 0 < kwargs["timeout"] <= 60
+        # Use a real GUI-subsystem process on Windows, without opening a window.
+        # Explicit streams let pythonw initialize CI's inherited faulthandler.
+        return run_process([str(interpreter), "-c", child], capture_output=True, text=True, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", launch)
+    if exit_code:
+        with pytest.raises(subprocess.CalledProcessError) as failure:
+            exec(step["run"], {})
+        assert failure.value.returncode == exit_code, failure.value.stderr
+    else:
+        exec(step["run"], {})
+    assert completed.exists()
+
+
 def test_linux_smoke_rejects_clean_early_exit(monkeypatch):
     from tests.e2e._packaged_app import assert_process_survives_startup
 
@@ -367,6 +456,74 @@ def test_linux_smoke_rejects_clean_early_exit(monkeypatch):
     monkeypatch.setenv("SOLIN_E2E_STARTUP_SECONDS", "2")
     with pytest.raises(pytest.fail.Exception, match="exited during startup with 0"):
         assert_process_survives_startup(Path(sys.executable), args=("-c", "raise SystemExit(0)"))
+
+
+@pytest.mark.parametrize("platform", ["windows", "macos", "linux"])
+def test_packaged_smoke_selection_respects_platform_with_strict_skips(platform):
+    configuration = workflow(f"build-solin-{platform}.yml")
+    assert configuration["env"]["SOLIN_E2E_STRICT"] == "1"
+    steps = configuration["jobs"]["build"]["steps"]
+    step_name = "Run AppImage startup smoke" if platform == "linux" else "Run packaged startup smoke"
+    commands = next(step["run"] for step in steps if step.get("name") == step_name)
+    # Workflow paths must also be collectable on hosts with POSIX separators.
+    targets = [
+        target.replace("\\", "/")
+        for target in re.findall(r"tests[/\\]e2e[/\\][\w]+\.py(?:::[\w]+)?", commands)
+    ]
+    assert targets
+    # Collect the actual workflow targets. Stub artifact checks, while retaining
+    # pytest's real skip handling and the release suite's strict reporting hook.
+    script = '''
+import pytest
+
+def windows_gate(mark):
+    return mark.name == "skipif" and mark.kwargs.get("reason") == "Windows UI Automation runtime"
+
+class ArtifactChecks:
+    def pytest_collection_modifyitems(self, items):
+        windows_items = [item for item in items if any(windows_gate(m) for m in item.iter_markers())]
+        assert items
+        if PLATFORM == "windows":
+            assert windows_items, "Windows runtime qualification was not selected"
+        # Apply the target platform's guard rather than the host's guard.
+        for item in items:
+            for node in item.listchain():
+                node.own_markers[:] = [m for m in node.own_markers if not windows_gate(m)]
+            item.obj = lambda **fixtures: None
+        if PLATFORM != "windows":
+            for item in windows_items:
+                item.add_marker(pytest.mark.skip(reason="Windows UI Automation runtime"))
+
+raise SystemExit(pytest.main(TARGETS + ["-q"], plugins=[ArtifactChecks()]))
+'''
+    environment = os.environ.copy()
+    environment["SOLIN_E2E_STRICT"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-c", f"PLATFORM = {platform!r}\nTARGETS = {targets!r}\n" + script],
+        cwd=REPO_ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("outcome", ["pass", "skip", "fail"])
+def test_strict_packaged_acceptance_rejects_missing_or_failed_checks(tmp_path, outcome):
+    child = tmp_path / "test_acceptance.py"
+    body = {
+        "pass": "pass",
+        "skip": "pytest.skip('required artifact is missing')",
+        "fail": "pytest.fail('artifact qualification failed')",
+    }[outcome]
+    child.write_text(f"import pytest\ndef test_artifact():\n    {body}\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["SOLIN_E2E_STRICT"] = "1"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", str(child), "-q", "-p", "tests.e2e.conftest",
+         "-c", str(REPO_ROOT / "pyproject.toml"), f"--confcutdir={tmp_path}"],
+        cwd=REPO_ROOT, env=environment, capture_output=True, text=True, timeout=30, check=False,
+    )
+    assert result.returncode == (0 if outcome == "pass" else 1), result.stdout + result.stderr
+    if outcome == "skip":
+        assert "Required release test skipped" in result.stdout
 
 
 def test_windows_distribution_contains_only_the_full_installer():

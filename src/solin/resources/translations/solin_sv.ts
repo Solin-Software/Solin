@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Mappnamn:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>T.ex.: Särskilt evenemang</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Skapa mapp</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Ange ett mappnamn.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Namnet får inte börja eller sluta med blanktecken.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Namnet får inte innehålla / \ &lt; &gt; : &quot; | ? * eller kontrolltecken.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Det här namnet är reserverat av operativsystemet.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Namnet får inte börja med en punkt.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Namnet får inte sluta med en punkt.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Mappnamnet är för långt.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Det finns redan en fil eller mapp med det här namnet.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Det här namnet är reserverat för möten. Välj ett annat mappnamn.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Manuellt tillagt innehåll, beskärningar, bildutsnitt och expanderat läge beh�
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Stäng av mötessynkronisering</translation>
+        <source>Help</source>
+        <translation>Hjälp</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Synkronisera mötet med den länkade mappen</translation>
+        <source>Folder present</source>
+        <translation>Mappen finns</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Mappen hittades inte</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Mappen är inte tillgänglig</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Kontrollerar mappen…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synkronisering på</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synkronisering av</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synkroniserar…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Slutför…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Mötets mapp</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Mappsökväg</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Den länkade mappen är inte tillgänglig. Kontrollera dess plats och åtkomstbehörigheter.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Skapa mapp</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Öppna mapp</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Mötessynkronisering</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Den här inställningen gäller alla datorer som är länkade till mötets mapp.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Radera mapp…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Stäng av synkroniseringen för att radera den här mappen</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Skapar mapp…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Det gick inte att öppna mappen.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Det gick inte att uppdatera mötets mapp.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Radera mapp</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Radera mappen ”{name}” och allt innehåll?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Mötesobjekten som hör till dessa filer tas också bort. Den här åtgärden kan inte ångras.
+
+Tjänsten för mappsynkronisering kan också radera dessa filer på andra datorer.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Stoppa visningen innan den här mappen raderas.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Förbereder radering av mappen…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Raderar mapp…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Mötessynkronisering</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Stänga av synkroniseringen för det här mötet på länkade datorer?
+
+Mappen och dess synliga filer behålls.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Det gick inte att uppdatera mötessynkroniseringen.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Ändringarna har sparats på den här datorn. Försök igen eller öppna den länkade mappen.</translation>
     </message>
 </context>
 <context>
@@ -4375,6 +4548,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Återställa synkroniseringen för ”{name}”?
 Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidigare synkroniseringen tillämpas inte.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Skapa mapp</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Skapa en tom mapp i den länkade mappen</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5591,6 +5772,10 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Visa projektionskontroller</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5619,18 +5804,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Automatiskt byte</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediafönster</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Visa i mediafönstren</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5701,11 +5874,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Det gick inte att ändra utgångens status.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Det gick inte att ändra speglingen i mediafönstren.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5873,6 +6041,41 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Av</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>På</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fel</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Startar…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuell kamera aktiverad</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuell kamera inaktiverad</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Den virtuella kameran slutade fungera. Stäng av och slå på den igen för att försöka på nytt.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5886,21 +6089,6 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Byter</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Fel</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>På</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Av</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7024,11 +7212,6 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatiskt byte</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Visa i mediafönstren</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -12024,6 +12207,271 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>Vissa Zoom-åtgärder kunde inte slutföras. Kontrollera Zoom och försök igen.</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Öppna %1 i ett fönster</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scener</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>I sändning · virtuell kamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>I sändning · projicering</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Läser in förhandsvisning…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Scenmotorn startar…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Scenmotorn är inte tillgänglig.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuell kamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projicering</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Visa den här scenen i den virtuella kameran</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Visa den här scenen i projiceringen</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Misslyckades</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Kameran kunde inte slutföra kommandot.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Förinställningar</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Hastighet</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Spara nuvarande</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Spara kamerans nuvarande riktning som en ny förinställning</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Inga förinställningar för den här kameran ännu.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Rör sig…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Byt namn…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Ta bort</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Tidsgränsen nåddes</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Inloggningen nekades</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Kameran upptagen</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Kan inte nås</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Kameran hann inte röra sig klart.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Kameran nekade PTZ-inloggningen. Kontrollera den i kamerainställningarna.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Kameran är upptagen med ett annat kommando.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Kameran svarade inte.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Kameran har inga lediga platser för förinställningar.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Uppåt</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Nedåt</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Åt vänster</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Åt höger</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stoppa</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Zooma in</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Zooma ut</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ-styrning är inte tillgänglig i den här installationen.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>den virtuella kameran</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>projiceringen</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Förinställning %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Byt namn på förinställning</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Namn på förinställning</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>I sändning · livestyrning upplåst</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>I sändning · rörelser syns för publiken</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Kamera i sändning</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Kameran kunde inte flyttas.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Förinställningen kunde inte sparas.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Sparar ”%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Ta bort förinställning</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Förinställningen kunde inte ändras.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Även i: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Ta bort förinställningen ”%1”? Scener som använder den slutar göra det.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 är i sändning: %2. Att röra den ändrar vad publiken ser. Tillåt rörelser tills den lämnar sändningen?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 i %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 är i sändning: %2. Använd ”%3” ändå?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>”%1” sparades.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Uppdatera bild</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ta en ny bild från kamerans nuvarande riktning</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Förinställningens bild kunde inte sparas.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Tar bild…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Ingen bild</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Ingen bild av ”%1” kunde tas. Använd Uppdatera bild för att försöka igen.</translation>
     </message>
 </context>
 </TS>

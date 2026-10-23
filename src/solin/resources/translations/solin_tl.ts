@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Pangalan ng folder:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Hal.: Espesyal na okasyon</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Gumawa ng folder</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Maglagay ng pangalan ng folder.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Hindi puwedeng magsimula o magtapos sa whitespace ang pangalan.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Hindi puwedeng maglaman ang pangalan ng / \ &lt; &gt; : &quot; | ? * o mga control character.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Nakalaan ang pangalang ito para sa operating system.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Hindi puwedeng magsimula sa tuldok ang pangalan.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Hindi puwedeng magtapos sa tuldok ang pangalan.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Masyadong mahaba ang pangalan ng folder.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>May file o folder nang may ganitong pangalan.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Nakalaan ang pangalang ito para sa mga pulong. Pumili ng ibang pangalan ng folder.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Mananatili ang manual na idinagdag na nilalaman, mga trim, framing, at nakabukan
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>I-off ang pag-sync ng pulong</translation>
+        <source>Help</source>
+        <translation>Tulong</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>I-sync ang pulong sa naka-link na folder</translation>
+        <source>Folder present</source>
+        <translation>May folder</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Hindi makita ang folder</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Hindi available ang folder</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Sinusuri ang folder…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Naka-on ang pag-sync</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Naka-off ang pag-sync</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Nag-o-synchronize…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Tinatapos…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Folder ng pulong</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Path ng folder</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Hindi available ang naka-link na folder. Suriin ang lokasyon at mga pahintulot sa pag-access nito.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Gumawa ng folder</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Buksan ang folder</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Pag-sync ng pulong</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Ang setting na ito ay para sa lahat ng computer na naka-link sa folder na ito ng pulong.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>I-delete ang folder…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>I-off ang pag-sync para ma-delete ang folder na ito</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Ginagawa ang folder…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Hindi mabuksan ang folder.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Hindi ma-update ang folder ng pulong.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>I-delete ang folder</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>I-delete ang folder na &quot;{name}&quot; at ang lahat ng laman nito?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Aalisin din ang mga item ng pulong na nauugnay sa mga file na ito. Hindi na maibabalik ang mga ito pagkatapos alisin.
+
+Posible ring i-delete ng serbisyo ng pag-sync ng folder ang mga file na ito sa iba pang computer.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Ihinto ang projection bago i-delete ang folder na ito.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Inihahanda ang pag-delete ng folder…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Dine-delete ang folder…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Pag-sync ng pulong</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>I-off ang pag-sync ng pulong na ito sa mga naka-link na computer?
+
+Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Hindi ma-update ang pag-sync ng pulong.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Naka-save ang mga pagbabago sa computer na ito. Subukan ulit o buksan ang naka-link na folder.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>I-reset ang pag-sync para sa "{name}"?
 Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga nakabinbing pagbabago mula sa nakaraang pag-sync.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Gumawa ng folder</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Gumawa ng walang-lamang folder sa loob ng naka-link na folder</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5592,6 +5773,10 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Ipakita ang mga kontrol sa projection</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5620,18 +5805,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Awtomatikong paglipat</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mga window ng media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Ipakita sa mga window ng media</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5702,11 +5875,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Hindi mapalitan ang estado ng output.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Hindi mapalitan ang pag-mirror sa mga window ng media.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5874,6 +6042,41 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Naka-off</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Naka-on</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Error</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Nagsisimula…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual na camera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Naka-enable ang virtual na camera</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Naka-disable ang virtual na camera</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Nagka-error ang virtual na camera. I-off at i-on itong muli para subukan ulit.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +6090,6 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Lumilipat</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Error</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Naka-on</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Naka-off</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7025,11 +7213,6 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Awtomatikong paglipat</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Ipakita sa mga window ng media</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -12025,6 +12208,271 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>Hindi nakumpleto ang ilang pagkilos sa Zoom. Suriin ang Zoom at subukang muli.</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Buksan ang %1 sa isang window</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Mga eksena ng Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Live · virtual na camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Live · projection</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Nilo-load ang preview…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Nagsisimula ang scene engine…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Hindi available ang scene engine.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtual na camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projection</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Ipakita ang eksenang ito sa virtual na camera</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Ipakita ang eksenang ito sa projection</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Nabigo</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Hindi natapos ng camera ang utos.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Mga preset</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Bilis</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>I-save ang kasalukuyan</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>I-save ang kasalukuyang tinututukan ng camera bilang bagong preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Wala pang preset para sa camera na ito.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Gumagalaw…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Palitan ang pangalan…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Burahin</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Nag-time out</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Tinanggihan ang login</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Abala ang camera</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Hindi maabot</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Hindi natapos ng camera ang paggalaw sa oras.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Tinanggihan ng camera ang PTZ login. Suriin ito sa mga setting ng camera.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Abala ang camera sa ibang utos.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Hindi sumagot ang camera.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Wala nang bakanteng puwang para sa preset ang camera na ito.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Igalaw pataas</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Igalaw pababa</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Igalaw pakaliwa</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Igalaw pakanan</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Ihinto</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Mag-zoom in</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Mag-zoom out</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Hindi available ang kontrol ng PTZ sa installation na ito.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>ang virtual na camera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>ang projection</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Palitan ang pangalan ng preset</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Pangalan ng preset</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>Live · naka-unlock ang live na kontrol</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>Live · nakikita ng audience ang mga galaw</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Live ang camera</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Hindi maigalaw ang camera.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Hindi ma-save ang preset.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Sine-save ang “%1”…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Burahin ang preset</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Hindi mabago ang preset.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Nasa rin sa: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Burahin ang preset na “%1”? Hindi na ito tatawagin ng mga eksenang gumagamit nito.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>Live ang %1: %2. Binabago ng paggalaw ang nakikita ng audience. Payagan ang paggalaw hanggang hindi na ito live?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 sa %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>Live ang %1: %2. Tawagin pa rin ang “%3”?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>Na-save ang “%1”.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>I-refresh ang larawan</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Kumuha ng bagong larawan mula sa kasalukuyang tinututukan ng camera</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Hindi ma-save ang larawan ng preset.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Kumukuha ng larawan…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Walang larawan</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Hindi makakuha ng larawan ng “%1”. Gamitin ang I-refresh ang larawan para subukang muli.</translation>
     </message>
 </context>
 </TS>

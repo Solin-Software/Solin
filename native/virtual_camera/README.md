@@ -30,6 +30,15 @@ consumer, backpressure, cadence, frame adaptation, and the frame-adapter
 benchmark. A separate test filter uses process-local broker endpoints without
 registering COM classes or connecting to an installed application's producer.
 
+Windows CI opts into production DLL qualification with `--qualify-production`.
+The harness uses `--production-broker`, also used by installer smoke tests, to
+reserve the current user's broker endpoint before loading the filter. It fails
+if another producer owns that endpoint and does not change COM registration.
+Close Solin and other production-filter tests before opting in locally. The
+ownership integration tests additionally require `SOLIN_TEST_PRODUCTION_CAMERA=1`.
+Quality runs the functional suite; platform builds also enforce the `performance`
+benchmark budget.
+
 Output readiness requires published frames, not just an enabled setting or a
 running broker. The sidecar observes publication progress and recreates stalled
 outputs with bounded backoff. The consumer independently checks both heartbeat

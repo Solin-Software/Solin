@@ -255,7 +255,7 @@ class OnvifPtzAdapter:
         self,
         request: PtzControlRequest,
         cancellation: PtzCancellation,
-    ) -> None:
+    ) -> str | None:
         binding = request.binding
         if not isinstance(binding, OnvifPtzBinding):
             raise PtzExecutionError("ptz_binding_mismatch")
@@ -273,6 +273,26 @@ class OnvifPtzAdapter:
         elif request.kind is PtzControlKind.STOP:
             action = _ACTION_STOP
             operation = _stop_operation(binding.profile_token)
+        elif request.kind is PtzControlKind.CREATE_PRESET:
+            # Without a token SetPreset creates a new preset, and the camera
+            # answers with the token it chose for it.
+            body = self._invoke(
+                request,
+                cancellation,
+                binding,
+                credentials,
+                _ACTION_SET_PRESET,
+                _set_preset_operation(
+                    binding.profile_token,
+                    preset_name=request.preset_name,
+                    preset_token="",
+                ),
+            )
+            token = _xml_root(body).find(".//{*}SetPresetResponse/{*}PresetToken")
+            created = (token.text or "").strip() if token is not None else ""
+            if not created:
+                raise PtzExecutionError("ptz_onvif_preset_token_missing")
+            return created
         else:
             preset = request.preset
             if preset is None or not preset.remote_token:
@@ -291,6 +311,7 @@ class OnvifPtzAdapter:
             action,
             operation,
         )
+        return None
 
     def _resolve_credentials(self, credential_ref: str) -> PtzCredentials | None:
         if not credential_ref:
@@ -425,8 +446,9 @@ def _set_preset_operation(
     operation = _operation("SetPreset", profile_token=profile_token)
     name = ElementTree.SubElement(operation, _tag(_PTZ_NAMESPACE, "PresetName"))
     name.text = preset_name
-    token = ElementTree.SubElement(operation, _tag(_PTZ_NAMESPACE, "PresetToken"))
-    token.text = preset_token
+    if preset_token:
+        token = ElementTree.SubElement(operation, _tag(_PTZ_NAMESPACE, "PresetToken"))
+        token.text = preset_token
     return operation
 
 

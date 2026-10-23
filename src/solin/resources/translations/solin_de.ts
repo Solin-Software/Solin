@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Ordnername:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Z. B.: Besondere Veranstaltung</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Einen Ordnernamen eingeben.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Der Name darf nicht mit Leerraum beginnen oder enden.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Der Name darf weder / \ &lt; &gt; : &quot; | ? * noch Steuerzeichen enthalten.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Dieser Name ist vom Betriebssystem reserviert.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Der Name darf nicht mit einem Punkt beginnen.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Der Name darf nicht mit einem Punkt enden.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Dieser Ordnername ist zu lang.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Eine Datei oder ein Ordner mit diesem Namen ist bereits vorhanden.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Dieser Name ist für Zusammenkünfte reserviert. Einen anderen Ordnernamen wählen.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Manuell hinzugefügte Inhalte, Zuschnitte, Bildausschnitte und der ausgeklappte 
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Synchronisierung der Zusammenkunft deaktivieren</translation>
+        <source>Help</source>
+        <translation>Hilfe</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Zusammenkunft mit verknüpftem Ordner synchronisieren</translation>
+        <source>Folder present</source>
+        <translation>Ordner vorhanden</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Ordner nicht gefunden</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Ordner nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Ordner wird geprüft…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synchronisierung aktiviert</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synchronisierung deaktiviert</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchronisierung…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Wird abgeschlossen…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Ordner der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Ordnerpfad</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Der verknüpfte Ordner ist nicht verfügbar. Speicherort und Zugriffsberechtigungen prüfen.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Ordner öffnen</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Synchronisierung der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Diese Einstellung gilt für alle Computer, die mit diesem Ordner der Zusammenkunft verknüpft sind.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Ordner löschen…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Synchronisierung deaktivieren, um diesen Ordner zu löschen</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Ordner wird erstellt…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Der Ordner konnte nicht geöffnet werden.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Der Ordner der Zusammenkunft konnte nicht aktualisiert werden.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Ordner löschen</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Ordner „{name}“ und seinen gesamten Inhalt löschen?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Die mit diesen Dateien verknüpften Elemente der Zusammenkunft werden ebenfalls entfernt. Diese Aktion kann nicht rückgängig gemacht werden.
+
+Der Ordnersynchronisierungsdienst löscht diese Dateien möglicherweise auch auf anderen Computern.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Vor dem Löschen dieses Ordners die Projektion beenden.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Löschen des Ordners wird vorbereitet…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Ordner wird gelöscht…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Synchronisierung der Zusammenkunft</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Synchronisierung dieser Zusammenkunft auf verknüpften Computern deaktivieren?
+
+Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Die Synchronisierung der Zusammenkunft konnte nicht aktualisiert werden.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Die Änderungen sind auf diesem Computer gespeichert. Erneut versuchen oder den verknüpften Ordner öffnen.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Synchronisierung für „{name}“ zurücksetzen?
 Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen der vorherigen Synchronisierung werden nicht angewendet.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Ordner erstellen</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Einen leeren Ordner im verknüpften Ordner erstellen</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5592,6 +5773,10 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Projektionssteuerung anzeigen</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5620,18 +5805,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Automatisches Umschalten</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Medienfenster</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>In den Medienfenstern anzeigen</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5702,11 +5875,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Der Ausgabestatus konnte nicht geändert werden.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Die Spiegelung in den Medienfenstern konnte nicht geändert werden.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5874,6 +6042,41 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Aus</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>An</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fehler</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Wird gestartet…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuelle Kamera aktiviert</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuelle Kamera deaktiviert</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Die virtuelle Kamera ist ausgefallen. Schalte sie aus und wieder ein, um es erneut zu versuchen.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +6090,6 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Wird umgeschaltet</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Fehler</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>An</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Aus</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7025,11 +7213,6 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatisches Umschalten</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>In den Medienfenstern anzeigen</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -12025,6 +12208,271 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>Einige Zoom-Aktionen konnten nicht abgeschlossen werden. Prüfe Zoom und versuche es erneut.</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 in einem Fenster öffnen</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-Szenen</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>Auf Sendung · virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>Auf Sendung · Projektion</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Vorschau wird geladen…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Die Szenen-Engine startet…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Die Szenen-Engine ist nicht verfügbar.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projektion</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Diese Szene auf der virtuellen Kamera zeigen</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Diese Szene in der Projektion zeigen</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Fehlgeschlagen</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Die Kamera konnte den Befehl nicht ausführen.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Kamera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Presets</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Geschwindigkeit</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Aktuelle speichern</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Die aktuelle Ausrichtung dieser Kamera als neues Preset speichern</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Für diese Kamera gibt es noch keine Presets.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Bewegt sich…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Umbenennen…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Löschen</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Zeitüberschreitung</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Anmeldung abgelehnt</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Kamera beschäftigt</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Nicht erreichbar</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Die Kamera hat die Bewegung nicht rechtzeitig abgeschlossen.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Die Kamera hat die PTZ-Anmeldung abgelehnt. Prüfe sie in den Kameraeinstellungen.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Die Kamera ist mit einem anderen Befehl beschäftigt.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Die Kamera hat nicht geantwortet.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Diese Kamera hat keine freien Preset-Plätze.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Nach oben</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Nach unten</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Nach links</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Nach rechts</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stopp</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Heranzoomen</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Herauszoomen</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ-Steuerung ist in dieser Installation nicht verfügbar.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>die virtuelle Kamera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>die Projektion</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Preset umbenennen</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Preset-Name</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>Auf Sendung · Live-Steuerung freigegeben</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>Auf Sendung · Bewegungen sind für das Publikum sichtbar</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Kamera auf Sendung</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Die Kamera konnte nicht bewegt werden.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Das Preset konnte nicht gespeichert werden.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>„%1“ wird gespeichert…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Preset löschen</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Das Preset konnte nicht geändert werden.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Auch in: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Das Preset „%1“ löschen? Szenen, die es abrufen, tun das dann nicht mehr.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 ist auf Sendung: %2. Eine Bewegung verändert, was das Publikum sieht. Bewegen erlauben, bis sie nicht mehr auf Sendung ist?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 auf %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 ist auf Sendung: %2. „%3“ trotzdem abrufen?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>„%1“ gespeichert.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Bild aktualisieren</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Ein neues Bild von der aktuellen Kameraausrichtung aufnehmen</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Das Bild des Presets konnte nicht gespeichert werden.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Bild wird aufgenommen…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Kein Bild</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Von „%1“ konnte kein Bild aufgenommen werden. Versuche es mit „Bild aktualisieren“ erneut.</translation>
     </message>
 </context>
 </TS>

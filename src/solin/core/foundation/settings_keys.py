@@ -17,6 +17,8 @@ class SettingsKey:
     APP_THEME: Final = "theme"
     TOOLBAR_HOVER_POPUPS: Final = "toolbar/hover_popups"
     SCENES_PANEL_DOCKED: Final = "toolbar/scenes_panel_docked"
+    SCENE_WINDOW_GEOMETRY: Final = "scenes/window_geometry"
+    SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE: Final = "toolbar/scenes_panel_projection_controls_visible"
     REMOTE_CONTROL_ENABLED: Final = "remote_control/enabled"
     REMOTE_CONTROL_NETWORK_SELECTION: Final = "remote_control/network_selection"
     REMOTE_CONTROL_CREDENTIALS: Final = "remote_control/credentials"

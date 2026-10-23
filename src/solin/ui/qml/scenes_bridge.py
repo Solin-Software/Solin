@@ -15,13 +15,14 @@ from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QCoreApplication, QObject, Property, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.scenes.application import DuplicateLayerNameError
+from solin.core.scenes.composition import scene_ptz_camera_ids
 from solin.core.scenes.editor_geometry import (
     FramingRect,
     MINIMUM_LAYER_SIZE,
@@ -49,6 +50,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     BusId,
+    DELIVERY_BUSES,
     CameraMediaType,
     CameraPreset,
     Crop,
@@ -104,6 +106,7 @@ from solin.core.scenes.workspace import LocalCameraConflictError, SceneCameraApp
 from solin.core.scenes.resources import camera_credential_references
 from solin.ui.qml.scenes_models import SceneLayerListModel, SceneListModel
 from solin.ui.scene_engine_status import scene_engine_error_summary
+from solin.ui.scene_output_status import scene_output_state_label
 from solin.ui.scene_recording_status import (
     scene_recording_audio_warning,
     scene_recording_error_summary,
@@ -400,19 +403,32 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def selectedSceneLive(self) -> bool:
-        return self._controller.applied_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+        return any(
+            self._controller.applied_scene(bus_id) == self._selected_scene_id
+            for bus_id in DELIVERY_BUSES
+        )
 
     @Property(bool, notify=changed)
     def selectedSceneRequiresReplacement(self) -> bool:
         return self._controller.program_scene_is_live(self._selected_scene_id)
 
-    @Property(bool, notify=changed)
-    def selectedSceneDesired(self) -> bool:
-        return self._controller.desired_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+    @Property("QStringList", constant=True)  # type: ignore[arg-type]
+    def deliveryBusIds(self) -> list[str]:
+        return [bus_id.value for bus_id in DELIVERY_BUSES]
 
-    @Property(bool, notify=changed)
-    def canTakeLive(self) -> bool:
-        return not self.selectedSceneDesired and not self._controller.hydration_in_progress
+    @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
+    def selectedSceneOutputs(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "busId": bus_id.value,
+                "live": self._controller.applied_scene(bus_id) == self._selected_scene_id,
+                "canTake": (
+                    self._controller.desired_scene(bus_id) != self._selected_scene_id
+                    and not self._controller.hydration_in_progress
+                ),
+            }
+            for bus_id in DELIVERY_BUSES
+        ]
 
     @Property(bool, notify=changed)
     def virtualCameraEnabled(self) -> bool:
@@ -426,10 +442,6 @@ class ScenesBridge(QObject):
         )
 
     @Property(bool, notify=changed)
-    def mediaMirrorEnabled(self) -> bool:
-        return self._controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
-
-    @Property(bool, notify=changed)
     def automaticEnabled(self) -> bool:
         output = self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
         return output.mode is OutputMode.AUTO
@@ -440,14 +452,10 @@ class ScenesBridge(QObject):
 
     @Property(str, notify=changed)
     def outputStateLabel(self) -> str:
-        if not self.virtualCameraEnabled:
-            return self.tr("Off")
-        status = self._controller.output_health(BusId.VIRTUAL_CAMERA).status
-        if status is OutputHealthStatus.FAILED:
-            return self.tr("Error")
-        if status is OutputHealthStatus.READY:
-            return self.tr("On")
-        return QCoreApplication.translate("ScenesEditorView", "Starting…")
+        return scene_output_state_label(
+            self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled,
+            self._controller.output_health(BusId.VIRTUAL_CAMERA).status,
+        )
 
     @Property(str, notify=changed)
     def engineStatus(self) -> str:
@@ -903,20 +911,22 @@ class ScenesBridge(QObject):
         self._selected_layer_id = layer_id
         self.changed.emit()
 
-    @Slot()
-    def takeLive(self) -> None:
-        self._run_runtime(lambda: self._controller.take_program_scene(self._selected_scene_id))
+    @Slot(str)
+    def takeScene(self, bus_id: str) -> None:
+        if self._controller.hydration_in_progress:
+            return
+        try:
+            bus = BusId(bus_id)
+        except ValueError:
+            return
+        if bus not in DELIVERY_BUSES:
+            return
+        self._run_runtime(lambda: self._controller.select_scene(bus, self._selected_scene_id))
 
     @Slot(bool)
     def setVirtualCameraEnabled(self, enabled: bool) -> None:
         self._run_runtime(
             lambda: self._controller.set_output_enabled(BusId.VIRTUAL_CAMERA, bool(enabled))
-        )
-
-    @Slot(bool)
-    def setMediaMirrorEnabled(self, enabled: bool) -> None:
-        self._run_runtime(
-            lambda: self._controller.set_output_enabled(BusId.MEDIA_WINDOWS, bool(enabled))
         )
 
     @Slot(bool)
@@ -3176,12 +3186,7 @@ class ScenesBridge(QObject):
         return tuple(result)
 
     def _ptz_camera_ids_for_scene(self, scene_id: str) -> tuple[str, ...]:
-        result: list[str] = []
-        for layer in self._controller.document.scene(scene_id).layers:
-            for camera_id in self._ptz_camera_ids_for_layer(layer.id):
-                if camera_id not in result:
-                    result.append(camera_id)
-        return tuple(result)
+        return scene_ptz_camera_ids(self._controller.document, scene_id)
 
     def _observe_ptz_future(
         self,

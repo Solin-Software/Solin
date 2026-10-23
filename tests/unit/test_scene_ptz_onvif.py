@@ -311,3 +311,54 @@ def test_aiohttp_transport_reads_a_reply_split_across_segments() -> None:
 
     assert response.status == 200
     assert response.body == body
+
+
+def _set_preset_response(token: str) -> bytes:
+    return f"""
+        <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+                    xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl">
+          <s:Body><tptz:SetPresetResponse><tptz:PresetToken>{token}</tptz:PresetToken>
+          </tptz:SetPresetResponse></s:Body>
+        </s:Envelope>
+    """.encode()
+
+
+def test_onvif_creates_a_new_preset_and_returns_the_cameras_token() -> None:
+    transport = _Transport([OnvifHttpResponse(200, _set_preset_response("17"))])
+    adapter = OnvifPtzAdapter(transport=transport, clock=lambda: 1.0)
+
+    token = adapter.control(
+        _control(PtzControlKind.CREATE_PRESET, preset_name="Pulpit"),
+        PtzCancellation(),
+    )
+
+    assert token == "17"
+    payload = ElementTree.fromstring(transport.calls[0].payload)
+    assert payload.find(".//{*}PresetToken") is None  # the camera chooses it
+    assert _element_text(transport.calls[0].payload, "PresetName") == "Pulpit"
+
+
+def test_onvif_create_without_a_token_in_the_answer_fails() -> None:
+    transport = _Transport([OnvifHttpResponse(200, _EMPTY_SOAP)])
+    adapter = OnvifPtzAdapter(transport=transport, clock=lambda: 1.0)
+
+    with pytest.raises(PtzExecutionError) as caught:
+        adapter.control(
+            _control(PtzControlKind.CREATE_PRESET, preset_name="Pulpit"),
+            PtzCancellation(),
+        )
+
+    assert caught.value.error_code == "ptz_onvif_preset_token_missing"
+
+
+@pytest.mark.parametrize(
+    ("kind", "changes"),
+    [
+        (PtzControlKind.CREATE_PRESET, {}),
+        (PtzControlKind.CREATE_PRESET, {"preset_name": "   "}),
+        (PtzControlKind.STOP, {"preset_name": "Pulpit"}),
+    ],
+)
+def test_preset_names_belong_only_to_create_requests(kind, changes) -> None:
+    with pytest.raises(ValueError):
+        _control(kind, **changes)

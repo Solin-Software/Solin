@@ -1520,6 +1520,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>文件夹名称：</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>例如：特别活动</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>请输入文件夹名称。</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>名称不能以空白字符开头或结尾。</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>名称不能包含 / \ &lt; &gt; : &quot; | ? * 或控制字符。</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>此名称由操作系统保留。</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>名称不能以句点开头。</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>名称不能以句点结尾。</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>文件夹名称过长。</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>已存在同名文件或文件夹。</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>此名称为聚会保留。请选择其他文件夹名称。</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2777,14 +2828,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>关闭聚会同步</translation>
+        <source>Help</source>
+        <translation>帮助</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>将聚会同步到关联文件夹</translation>
+        <source>Folder present</source>
+        <translation>文件夹已存在</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>未找到文件夹</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>文件夹不可用</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>正在检查文件夹……</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>同步已开启</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>同步已关闭</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>正在同步……</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>正在完成…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>聚会文件夹</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>文件夹路径</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>关联文件夹不可用。请检查其位置和访问权限。</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>打开文件夹</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>聚会同步</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>此设置适用于关联到此聚会文件夹的所有电脑。</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>关闭同步后才能删除此文件夹</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>正在创建文件夹……</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>无法打开文件夹。</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>无法更新聚会文件夹。</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>删除文件夹</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>删除文件夹“{name}”及其所有内容？</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>与这些文件关联的聚会项目也将被移除。此操作无法撤销。
+
+文件夹同步服务也可能会删除其他电脑上的这些文件。</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>删除此文件夹前，请先停止投影。</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>正在准备删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>正在删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>聚会同步</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>关闭关联电脑上此聚会的同步？
+
+文件夹及其可见文件将被保留。</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>无法更新聚会同步。</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>更改已保存在此电脑上。请重试或打开关联文件夹。</translation>
     </message>
 </context>
 <context>
@@ -4348,6 +4521,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>是否重置“{name}”的同步？
 当前排列和文件将保留。上次同步中尚未应用的更改将不会应用。</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>在关联文件夹中创建空文件夹</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5560,6 +5741,10 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>显示投影控件</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5588,18 +5773,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>自动切换</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>媒体窗口</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5670,11 +5843,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>无法更改输出状态。</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>无法更改媒体窗口的镜像。</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5842,6 +6010,41 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>开启</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>错误</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>正在启动……</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>虚拟摄像机已启用</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>虚拟摄像机已禁用</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>虚拟摄像机出现故障。请将其关闭后重新开启以重试。</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5855,21 +6058,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>正在切换</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>错误</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>开启</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>关闭</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -6993,11 +7181,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>自动切换</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -11983,6 +12166,271 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>部分Zoom操作无法完成。请检查Zoom并重试。</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>在窗口中打开 %1</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin 场景</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>直播中 · 虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>直播中 · 投影</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>正在加载预览……</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>场景引擎正在启动……</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>场景引擎不可用。</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>在虚拟摄像机上显示此场景</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>在投影上显示此场景</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>失败</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>摄像机无法完成该命令。</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>摄像机</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>预置位</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>速度</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>保存当前位置</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>将此摄像机当前的朝向保存为新的预置位</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>此摄像机还没有预置位。</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>正在移动……</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>重命名……</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>已超时</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>登录被拒绝</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>摄像机忙</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>无法连接</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>摄像机未能及时完成移动。</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>摄像机拒绝了 PTZ 登录。请在摄像机设置中检查。</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>摄像机正在执行其他命令。</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>摄像机没有响应。</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>此摄像机没有空闲的预置位。</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>向上</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>向下</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>向左</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>向右</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>放大</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>缩小</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>此安装中无法使用 PTZ 控制。</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>虚拟摄像机</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>投影</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>预置位 %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>重命名预置位</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>预置位名称</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>直播中 · 实时控制已解锁</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>直播中 · 观众可以看到移动</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>摄像机正在直播</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>无法移动摄像机。</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>无法保存预置位。</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>正在保存“%1”……</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>删除预置位</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>无法更改预置位。</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>也用于：%1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>删除预置位“%1”？调用它的场景将不再调用。</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 正在直播：%2。移动它会改变观众看到的画面。在它离开直播之前允许移动吗？</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%2 中的 %1</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 正在直播：%2。仍要调用“%3”吗？</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>已保存“%1”。</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>刷新图片</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>从摄像机当前的朝向拍一张新图片</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>无法保存预置位的图片。</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>正在拍摄图片……</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>无图片</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>无法为“%1”拍摄图片。请使用“刷新图片”重试。</translation>
     </message>
 </context>
 </TS>

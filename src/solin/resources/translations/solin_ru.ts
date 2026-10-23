@@ -1548,6 +1548,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Имя папки:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Например: Особое мероприятие</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Введите имя папки.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Имя не может начинаться или заканчиваться пробельными символами.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Имя не может содержать / \ &lt; &gt; : &quot; | ? * или управляющие символы.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Это имя зарезервировано операционной системой.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Имя не может начинаться с точки.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Имя не может заканчиваться точкой.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Имя папки слишком длинное.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Файл или папка с таким именем уже существует.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Это имя зарезервировано для встреч. Выберите другое имя папки.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2811,14 +2862,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Отключить синхронизацию встречи</translation>
+        <source>Help</source>
+        <translation>Справка</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Синхронизировать встречу со связанной папкой</translation>
+        <source>Folder present</source>
+        <translation>Папка существует</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Папка не найдена</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Папка недоступна</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Проверка папки…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Синхронизация включена</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Синхронизация выключена</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Синхронизация…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Завершение…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Папка встречи</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Путь к папке</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Связанная папка недоступна. Проверьте её расположение и права доступа.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Открыть папку</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Синхронизация встречи</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Эта настройка применяется ко всем компьютерам, связанным с этой папкой встречи.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Удалить папку…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Отключите синхронизацию, чтобы удалить эту папку</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Создание папки…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Не удалось открыть папку.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Не удалось обновить папку встречи.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Удалить папку</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Удалить папку «{name}» и всё её содержимое?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Элементы встречи, связанные с этими файлами, также будут удалены. Это действие нельзя отменить.
+
+Служба синхронизации папок также может удалить эти файлы на других компьютерах.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Остановите проекцию перед удалением этой папки.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Подготовка к удалению папки…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Удаление папки…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Синхронизация встречи</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Отключить синхронизацию этой встречи на связанных компьютерах?
+
+Папка и её видимые файлы будут сохранены.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Не удалось обновить синхронизацию встречи.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Изменения сохранены на этом компьютере. Повторите попытку или откройте связанную папку.</translation>
     </message>
 </context>
 <context>
@@ -4403,6 +4576,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Сбросить синхронизацию для «{name}»?
 Текущее расположение и файлы будут сохранены. Ожидающие изменения предыдущей синхронизации не будут применены.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Создать папку</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Создать пустую папку в связанной папке</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5623,6 +5804,10 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Показать элементы управления проекцией</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5651,18 +5836,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Автопереключение</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Окна медиа</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Показывать в окнах медиа</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5733,11 +5906,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Не удалось изменить состояние вывода.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Не удалось изменить дублирование в окнах медиа.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5905,6 +6073,41 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Выключено</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Включено</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Запуск…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Виртуальная камера</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Виртуальная камера включена</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Виртуальная камера выключена</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>Произошёл сбой виртуальной камеры. Выключите и снова включите её, чтобы повторить попытку.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5918,21 +6121,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Переключение</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Ошибка</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Включено</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Выключено</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7056,11 +7244,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Автопереключение</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Показывать в окнах медиа</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -12066,6 +12249,271 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>Не удалось выполнить некоторые действия Zoom. Проверьте Zoom и повторите попытку.</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>Открыть %1 в окне</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Сцены Solin</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>В эфире · виртуальная камера</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>В эфире · проекция</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Загрузка предпросмотра…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>Движок сцен запускается…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>Движок сцен недоступен.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Виртуальная камера</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Проекция</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Показать эту сцену на виртуальной камере</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Показать эту сцену в проекции</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Ошибка</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>Камера не смогла выполнить команду.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Пресеты</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Скорость</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Сохранить текущее</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Сохранить текущее направление камеры как новый пресет</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Для этой камеры пока нет пресетов.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Движение…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Переименовать…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Время истекло</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Вход отклонён</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Камера занята</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Недоступна</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>Камера не успела завершить движение.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>Камера отклонила вход PTZ. Проверьте его в настройках камеры.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>Камера занята другой командой.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>Камера не ответила.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>У этой камеры нет свободных ячеек пресетов.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Вверх</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Вниз</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Влево</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Вправо</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Стоп</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Приблизить</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Отдалить</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>Управление PTZ недоступно в этой установке.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>виртуальная камера</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>проекция</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Пресет %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Переименовать пресет</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Название пресета</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>В эфире · живое управление разблокировано</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>В эфире · движения видны зрителям</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Камера в эфире</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>Не удалось переместить камеру.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>Не удалось сохранить пресет.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>Сохранение «%1»…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Удалить пресет</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>Не удалось изменить пресет.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Также в: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Удалить пресет «%1»? Сцены, которые его вызывают, перестанут это делать.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 в эфире: %2. Движение меняет то, что видят зрители. Разрешить движение, пока камера не выйдет из эфира?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 — %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 в эфире: %2. Всё равно вызвать «%3»?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>«%1» сохранён.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Обновить изображение</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Сделать новое изображение с текущего направления камеры</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>Не удалось сохранить изображение пресета.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Съёмка изображения…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Нет изображения</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Не удалось сделать изображение «%1». Используйте «Обновить изображение», чтобы повторить.</translation>
     </message>
 </context>
 </TS>

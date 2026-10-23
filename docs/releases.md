@@ -96,6 +96,105 @@ Conventional Commits and pull-request labels can organize the draft, but they do
 not choose a CalVer increment. The release intent remains an explicit reviewed
 decision.
 
+### Generate a beta from GitHub
+
+Select `main` in **Actions → Generate beta → Run workflow**. This optional
+shortcut uses the same `prepare beta` command, creates a focused preparation PR,
+waits for required checks, squash-merges through GitHub, and tags that PR's exact
+merge commit to start the [publication pipeline](#publishing). The run summary
+links to the PR.
+Stable releases use the CLI preparation and editorial review described above.
+
+GitHub permits users with repository write access, including maintainers and
+administrators, to dispatch workflows. This workflow additionally requires both
+the original actor and the actor requesting a rerun to appear in the repository
+variable `BETA_RELEASE_ACTORS`: one username or comma/newline-separated usernames,
+matched case-insensitively. An empty or invalid list, or an unlisted actor,
+rejects execution before an App token is created. Administrators control the
+allowlist and repository protections.
+
+#### One-time GitHub App setup
+
+A GitHub App supplies the automation identity and temporary repository tokens
+without a hosted service. Its credentials allow PR checks and tag-push workflows
+to start automatically; `GITHUB_TOKEN` suppresses tag-push triggers and can
+require manual approval for checks on automation-created PRs. See GitHub's
+[workflow trigger rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+1. In the repository owner's **Settings → Developer settings → GitHub Apps**,
+   register an App for this automation. For an organization-owned repository,
+   create it under that organization so it can remain private. Use the repository
+   URL as its homepage, disable webhooks, and allow installation only on that
+   account. Leave callback/redirect and setup URLs empty, and leave user OAuth
+   authorization and Device Flow disabled. Keep user-token expiration enabled;
+   it does not affect this automation's installation tokens.
+2. Grant repository permissions **Contents: write**, **Pull requests: write**,
+   **Checks: read**, **Commit statuses: read**, **Actions: read**, and
+   **Workflows: write**. Metadata read access is automatic. Workflow permission
+   allows tagging the exact merged commit even if `main` subsequently changes
+   its workflow files; preparation itself rejects workflow edits. See GitHub's
+   [reference permissions](https://docs.github.com/en/rest/git/refs#create-a-reference).
+   Do not grant administration permissions or add the App to branch/ruleset
+   bypass lists.
+3. Install the App using **Only select repositories** and select this repository.
+   Record its **App ID** (not Client ID), then generate and download a private
+   key. Preserve the PEM line breaks and its BEGIN/END delimiters when storing it.
+4. Under repository **Settings → Environments**, create `beta-release`. Configure
+   **Deployment branches and tags → Selected branches and tags** with a **branch**
+   rule for `main` only. This restriction protects the environment's credentials
+   from workflows on other refs.
+   Required environment reviewers are optional and add an approval before execution.
+5. Configure the following values. Repository variables are under **Settings →
+   Secrets and variables → Actions → Variables**; environment secrets are under
+   **Settings → Environments → beta-release → Environment secrets**.
+
+| Name | Storage | Value |
+| --- | --- | --- |
+| `BETA_RELEASE_APP_ID` | Repository variable | App ID |
+| `BETA_RELEASE_ACTORS` | Repository variable | Authorized GitHub usernames |
+| `BETA_RELEASE_APP_PRIVATE_KEY` | `beta-release` environment secret | Complete PEM contents |
+
+Repository [variables](https://docs.github.com/en/actions/concepts/workflows-and-actions/variables)
+are not masked in workflow logs. Store the private key only in the environment
+secret listed above. Installation tokens are scoped to this repository, valid
+for at most one hour, and revoked when the job ends.
+
+Keep `main` protected with squash merges, the required GitHub Actions
+`Quality Gate`, and **Require branches to be up to date before merging**.
+The workflow respects required reviews and never bypasses protections. Follow
+GitHub's [App registration](https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app)
+and [installation](https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app)
+instructions for the corresponding settings.
+
+#### Recovery and concurrent changes
+
+Each dispatch owns `automation/beta/<run-id>`. Use **Re-run jobs** on that same
+run to recover an interrupted branch push, PR creation, merge, or tag push,
+including after GitHub deletes a merged branch. A closed, unmerged preparation
+is treated as cancelled.
+
+Preparations are serialized. A different dispatch refuses to start while another
+automation branch has unfinished work or the current beta is untagged. Once the
+tag is pushed, a new dispatch can prepare the next beta from current `main`,
+regardless of the previous beta's publication status. If the latest commit on
+`main` already has a release tag, the run succeeds without creating a branch,
+PR, or tag; merge new changes before starting another preparation.
+GitHub concurrency retains only one pending run, so repeated clicks can replace
+an earlier queued run; avoid queuing multiple preparations.
+
+If `main` advances without changing its version, the workflow updates the PR
+branch and waits for fresh checks. A concurrent version change invalidates the
+preparation; close its stale PR before starting again. Failed checks, conflicts,
+missing permissions, or a 30-minute wait timeout stop preparation and preserve
+the PR for inspection. If an interruption leaves a branch without a PR and it
+must be abandoned, delete that automation branch before a new dispatch.
+
+An existing matching tag is a no-op; a tag pointing elsewhere stops preparation.
+Tags are never moved. To retry publication of the same tagged source, rerun the
+associated **Release** workflow; rerunning **Generate beta** does not push the
+same tag again. To include source fixes, merge the changes into `main` and start
+a new **Generate beta** run to create the next version and tag.
+
 ## Publishing
 
 Publication starts when the exact reviewed tag is pushed on the merged release
@@ -198,7 +297,7 @@ python scripts/release.py contributors --tag 26.32.0-beta.4
 python scripts/release.py contributors --tag 26.32.0-beta.4 --apply
 ```
 
-Or dispatch the manual workflow after it is merged into `main`:
+Or dispatch the manual workflow on `main`:
 
 ```text
 gh workflow run release-contributors.yml --ref main -f tag=26.32.0-beta.4 -f apply=false

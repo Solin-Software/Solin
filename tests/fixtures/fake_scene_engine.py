@@ -362,6 +362,8 @@ def main() -> int:
             if set(request.payload) != {"content_media_epoch"}:
                 return 73
             _ack(request)
+        elif request.message_type == "reconcile_local_cameras":
+            _ack(request)
         elif request.message_type == "cancel_preparation":
             continue  # fire-and-forget notifications — no response
         elif request.message_type == "stop":

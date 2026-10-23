@@ -225,6 +225,9 @@ def test_remote_sessions_popup_palette_change_does_not_reapply_styles_recursivel
     QCoreApplication.sendEvent(popup, QEvent(QEvent.Type.PaletteChange))
 
     assert calls == []
+    # Destroyed on the main thread by the conftest's DeferredDelete pass: left to
+    # cyclic GC, its live timers and animation are freed during a later test.
+    popup.deleteLater()
 
 
 def test_remote_control_icon_keeps_clear_pixels_at_the_right_viewbox_edge() -> None:
@@ -250,3 +253,4 @@ def test_button_confirmation_feedback_preserves_text_and_resets_state() -> None:
     assert feedback.confirmed is False
     assert button.property("confirmed") is False
     assert button.text() == "Copy address"
+    button.deleteLater()  # owns the feedback; both go on the main thread

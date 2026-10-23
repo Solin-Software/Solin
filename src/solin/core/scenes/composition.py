@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from solin.core.scenes.model import (
+    LocalCameraConfig,
+    RtspCameraConfig,
     SceneDocument,
     SceneLayer,
     SceneReferenceConfig,
@@ -96,6 +98,37 @@ class _SceneCompositionAnalyzer:
         if isinstance(configuration, SceneReferenceConfig):
             return self.analyze(configuration.target_scene_id)
         return _EMPTY_COMPOSITION
+
+
+def scene_ptz_camera_ids(document: SceneDocument, scene_id: str) -> tuple[str, ...]:
+    """The PTZ-capable cameras a scene shows, nested scenes included, in layer order.
+
+    Hidden layers count: PTZ belongs to the camera, and a layer toggled visible a
+    moment later must not find its controls missing.
+    """
+    sources = {source.id: source for source in document.sources}
+    scenes = {scene.id: scene for scene in document.scenes}
+    result: list[str] = []
+    visited: set[str] = set()
+
+    def visit_scene(target_id: str) -> None:
+        scene = scenes.get(target_id)
+        if scene is None or target_id in visited:
+            return
+        visited.add(target_id)
+        for layer in scene.layers:
+            source = sources.get(layer.source_id)
+            if source is None:
+                continue
+            configuration = source.configuration
+            if isinstance(configuration, (LocalCameraConfig, RtspCameraConfig)):
+                if configuration.ptz_binding is not None and source.id not in result:
+                    result.append(source.id)
+            elif isinstance(configuration, SceneReferenceConfig):
+                visit_scene(configuration.target_scene_id)
+
+    visit_scene(scene_id)
+    return tuple(result)
 
 
 def _layer_is_active(layer: SceneLayer, source: SourceDefinition) -> bool:

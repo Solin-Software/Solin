@@ -20,6 +20,7 @@ class CameraCaptureState:
     error_code: str = ""
     width: int = 0
     height: int = 0
+    frame_sequence: int = 0
 
 
 class ObsCameraCaptureProbe:
@@ -46,6 +47,7 @@ class ObsCameraCaptureProbe:
         self._last_tick: float | None = None
         self._without_frame = 0.0
         self._frame: tuple[int, int, int] | None = None
+        self._frame_sequence = 0
         self._disconnect_update = runtime.observe_source_updates(source, self._updated)
         try:
             self._disconnect_video = runtime.observe_source_video(source, self._received)
@@ -66,14 +68,41 @@ class ObsCameraCaptureProbe:
 
     def update(self, settings: dict[str, object], *, width: int, height: int) -> None:
         with self._lock:
-            source = self._source
-            if source is None:
-                raise RuntimeError("Cannot update a closed camera capture probe")
-            self._expected = (width, height)
-            self._state = CameraCaptureState(self._state.generation + 1, "starting")
-            self._awaiting_update = True
-            self._last_tick = None
-            self._without_frame = 0.0
+            source = self._prepare_update_locked(width=width, height=height)
+        self._apply_update(source, settings)
+
+    def reconnect(
+        self, settings: dict[str, object], *, expected_generation: int, width: int, height: int,
+    ) -> bool:
+        """Reserve a failed capture atomically with render-thread publications.
+
+        The runtime serializes source ownership and mode changes. Native updates
+        run outside the probe mutex because they can invoke its callbacks.
+        """
+        with self._lock:
+            state = self._state
+            if (self._source is None or state.generation != expected_generation
+                    or state.status != "failed"
+                    or state.error_code not in {"camera_no_frames", "camera_update_failed"}):
+                return False
+            source = self._prepare_update_locked(width=width, height=height)
+        self._apply_update(source, settings)
+        return True
+
+    def _prepare_update_locked(self, *, width: int, height: int) -> Any:
+        source = self._source
+        if source is None:
+            raise RuntimeError("Cannot update a closed camera capture probe")
+        self._expected = (width, height)
+        self._state = CameraCaptureState(
+            self._state.generation + 1, "starting", frame_sequence=self._state.frame_sequence,
+        )
+        self._awaiting_update = True
+        self._last_tick = None
+        self._without_frame = 0.0
+        return source
+
+    def _apply_update(self, source: Any, settings: dict[str, object]) -> None:
         try:
             source.update(settings)
         except Exception:  # noqa: BLE001 - record native update failure before propagating
@@ -123,8 +152,10 @@ class ObsCameraCaptureProbe:
                         self._last_timestamp = timestamp
                         expected = self._expected
                         if expected == (0, 0) or (width, height) == expected:
+                            self._frame_sequence += 1
                             self._state = CameraCaptureState(self._state.generation, "ready",
-                                                             width=width, height=height)
+                                                             width=width, height=height,
+                                                             frame_sequence=self._frame_sequence)
                             self._without_frame = 0.0
                             return
                         self._state = CameraCaptureState(self._state.generation, "starting",

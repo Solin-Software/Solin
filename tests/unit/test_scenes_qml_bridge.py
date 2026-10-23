@@ -126,7 +126,7 @@ def test_requested_virtual_camera_does_not_claim_ready_before_output_confirmatio
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
 
     assert bridge.virtualCameraEnabled
-    assert bridge.outputStateLabel != bridge.tr("On")
+    assert bridge.outputStateLabel != QCoreApplication.translate("SceneOutputStatus", "On")
     assert not bridge.virtualCameraReady
 
 
@@ -149,13 +149,16 @@ def test_output_presentation_separates_requested_activation_and_delivery_health(
     assert bridge.virtualCameraEnabled is requested
     assert bridge.virtualCameraReady is (requested and status is OutputHealthStatus.READY)
     if not requested:
-        assert bridge.outputStateLabel == bridge.tr("Off")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "Off")
     elif status is OutputHealthStatus.READY:
-        assert bridge.outputStateLabel == bridge.tr("On")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "On")
     elif status is OutputHealthStatus.FAILED:
-        assert bridge.outputStateLabel == bridge.tr("Error")
+        assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "Error")
     else:
-        assert bridge.outputStateLabel not in {bridge.tr("On"), bridge.tr("Off"), bridge.tr("Error")}
+        assert bridge.outputStateLabel not in {
+            QCoreApplication.translate("SceneOutputStatus", source)
+            for source in ("On", "Off", "Error")
+        }
 
 
 def test_output_recovery_updates_presentation_despite_previous_global_output_error(
@@ -173,7 +176,7 @@ def test_output_recovery_updates_presentation_despite_previous_global_output_err
         assert changes.count() > before
         assert bridge.virtualCameraEnabled
         assert bridge.virtualCameraReady is (status is OutputHealthStatus.READY)
-    assert bridge.outputStateLabel == bridge.tr("On")
+    assert bridge.outputStateLabel == QCoreApplication.translate("SceneOutputStatus", "On")
 
 
 def test_recording_directory_uses_a_plain_folder_icon() -> None:
@@ -682,24 +685,30 @@ def test_bridge_rejects_absolute_position_for_non_onvif_camera(scene_bridge_fact
     assert workspace.resources.camera_presets == ()
 
 
+@pytest.mark.parametrize("bus_id", [BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS])
 def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
-    scene_bridge_factory,
+    scene_bridge_factory, bus_id,
 ) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
 
     bridge.createScene("Custom")
     camera_id = workspace.configured_cameras[0].id
     bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
-    bridge.takeLive()
+    other_bus = BusId.MEDIA_WINDOWS if bus_id is BusId.VIRTUAL_CAMERA else BusId.VIRTUAL_CAMERA
+    other_before = controller.runtime.state.output(other_bus)
+    bridge.takeScene(bus_id.value)
 
     scene = controller.document.scene(bridge.selectedSceneId)
-    virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
+    output = controller.runtime.state.output(bus_id)
     # First-run ships Content + Camera; the new Custom scene makes three.
     assert bridge.scenesModel.rowCount() == 3
     assert len(scene.layers) == 1
-    assert virtual.mode is OutputMode.AUTO
-    assert virtual.base_scene_id == scene.id
-    assert bridge.selectedSceneDesired
+    assert output.mode is OutputMode.AUTO
+    assert output.base_scene_id == scene.id
+    assert controller.runtime.state.output(other_bus) == other_before
+    outputs = {item["busId"]: item for item in bridge.selectedSceneOutputs}
+    assert not outputs[bus_id.value]["canTake"]
+    assert outputs[other_bus.value]["canTake"]
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
 

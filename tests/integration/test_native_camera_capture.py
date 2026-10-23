@@ -27,7 +27,9 @@ _TIMEOUT = 6.0
 _REPORT = "CAMERA_CAPTURE_REPORT="
 
 
-@pytest.mark.parametrize("scenario", ["passive", "deferred_update"])
+@pytest.mark.parametrize("scenario", ["passive", "deferred_update", pytest.param(
+    "reconnect", marks=pytest.mark.skipif(sys.platform != "win32", reason="Windows recovery adapter"),
+)])
 def test_native_camera_capture(scenario: str) -> None:
     result = subprocess.run(
         [sys.executable, "-B", "-X", "faulthandler", str(Path(__file__).resolve()), scenario],
@@ -43,7 +45,7 @@ def test_native_camera_capture(scenario: str) -> None:
     report = json.loads(reports[0])
     assert report["observed"] >= 3
     assert report["rendered"] >= 3
-    assert report["updates"] == (2 if scenario == "deferred_update" else 0)
+    assert report["updates"] == {"passive": 0, "deferred_update": 2, "reconnect": 1}[scenario]
 
 
 @dataclass(frozen=True)
@@ -157,7 +159,7 @@ def _scenario(scenario: str) -> None:
         stack.callback(runtime.shutdown)
         runtime.ensure_started(width=128, height=96, fps=30)
         stack.callback(shutdown)
-        if scenario == "deferred_update":
+        if scenario != "passive":
             source, owners = _updating_source(runtime, applied, samples)
         else:
             source = create_frame_source(runtime, "camera-observation-fixture")
@@ -180,7 +182,7 @@ def _scenario(scenario: str) -> None:
             signals.append((applied[-1], get_ident()))
             update_received.set()
 
-        if scenario == "deferred_update":
+        if scenario != "passive":
             stack.callback(runtime.observe_source_updates(native_source, updated))
 
         def produce(_seconds: float) -> None:
@@ -204,6 +206,7 @@ def _scenario(scenario: str) -> None:
                     assert observed == downstream, "A passive filter lost or changed a frame"
                 width, height = native_source.width, native_source.height
                 if not width or not height:
+                    samples.put(_Sample((0, 0), b"", None, probe.state))
                     return
                 rendered = render_source_to_bgra(
                     native_source, width, height, canvas_width=width, canvas_height=height,
@@ -220,7 +223,8 @@ def _scenario(scenario: str) -> None:
         reader = runtime.ob.add_main_render_callback(sample)
         stack.callback(runtime.ob.remove_main_render_callback, reader)
         gc.collect()  # Registration must own callbacks beyond temporary callers.
-        producing.set()
+        if scenario != "reconnect":
+            producing.set()
 
         def matches(value: _Sample, expected: tuple, generation: int) -> bool:
             width, height, pixel = expected
@@ -229,8 +233,30 @@ def _scenario(scenario: str) -> None:
                     and value.state.status == "ready" and value.state.generation == generation
                     and (value.state.width, value.state.height) == (width, height))
 
-        for _ in range(3):
-            _wait(samples, lambda value: matches(value, mode[0], 1), "Initial frame not confirmed")
+        if scenario == "reconnect":
+            from solin.core.media.camera_identity import local_camera_device_key
+            from solin.core.media.obs_runtime import _CameraSource
+
+            # Supply a synthetic plugin to the real runtime's ownership slot;
+            # the normal Windows reactivation path must update this same source.
+            key = local_camera_device_key("synthetic-camera")
+            runtime._camera_sources[key] = _CameraSource(
+                native_source, (), {"generation": 2}, mode[0][0], mode[0][1],
+            )
+            runtime._camera_probes[key] = probe
+            _wait(samples, lambda value: value.state.error_code == "camera_no_frames",
+                  "An absent camera never reported missing frames")
+            assert runtime.reconnect_camera("synthetic-camera", expected_generation=1)
+            assert update_received.wait(_TIMEOUT), "Reactivation did not reach the native plugin"
+            _wait(samples, lambda value: value.state.generation == 2 and value.state.status == "starting",
+                  "Reactivation was confirmed without frames")
+            producing.set()
+            for _ in range(3):
+                _wait(samples, lambda value: matches(value, mode[0], 2), "Reconnected frames not confirmed")
+            assert runtime._camera_sources[key].source is native_source
+        else:
+            for _ in range(3):
+                _wait(samples, lambda value: matches(value, mode[0], 1), "Initial frame not confirmed")
 
         if scenario == "deferred_update":
             for generation, next_mode in enumerate([

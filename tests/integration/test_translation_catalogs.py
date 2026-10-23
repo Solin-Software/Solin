@@ -58,6 +58,12 @@ def test_english_catalog_resolves_qt_plural_forms(
         ("ScenesEditorView", "Resolution", None),
         ("TimerView", "Timer", None),
         ("TimerView", "Timer", "countdown mode"),
+        ("SceneOutputStatus", "On", None),
+        (
+            "SceneOutputStatus",
+            "The virtual camera failed. Turn it off and on to try again.",
+            None,
+        ),
     ],
 )
 def test_runtime_catalog_preserves_current_messages_context_and_disambiguation(

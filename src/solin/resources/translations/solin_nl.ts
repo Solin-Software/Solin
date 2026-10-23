@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Mapnaam:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Bijv.: Speciale gebeurtenis</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Voer een mapnaam in.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>De naam mag niet beginnen of eindigen met witruimte.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>De naam mag geen / \ &lt; &gt; : &quot; | ? * of besturingstekens bevatten.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Deze naam is gereserveerd door het besturingssysteem.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>De naam mag niet beginnen met een punt.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>De naam mag niet eindigen met een punt.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Deze mapnaam is te lang.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Er bestaat al een bestand of map met deze naam.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Deze naam is gereserveerd voor vergaderingen. Kies een andere mapnaam.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Vergaderingssynchronisatie uitschakelen</translation>
+        <source>Help</source>
+        <translation>Help</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Vergadering synchroniseren met gekoppelde map</translation>
+        <source>Folder present</source>
+        <translation>Map aanwezig</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Map niet gevonden</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Map niet beschikbaar</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Map controleren…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synchronisatie ingeschakeld</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synchronisatie uitgeschakeld</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchroniseren…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Afronden…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Map van de vergadering</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Mappad</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>De gekoppelde map is niet beschikbaar. Controleer de locatie en toegangsrechten.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Map openen</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Vergaderingssynchronisatie</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Deze instelling geldt voor alle computers die aan deze vergadermap zijn gekoppeld.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Map verwijderen…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Schakel synchronisatie uit om deze map te verwijderen</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Map aanmaken…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>De map kon niet worden geopend.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>De map van de vergadering kon niet worden bijgewerkt.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Map verwijderen</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Map &quot;{name}&quot; en de volledige inhoud verwijderen?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>De vergaderingsitems die aan deze bestanden zijn gekoppeld, worden ook verwijderd. Deze actie kan niet ongedaan worden gemaakt.
+
+De mapsynchronisatiedienst kan deze bestanden ook op andere computers verwijderen.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Stop de projectie voordat deze map wordt verwijderd.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Verwijderen van map voorbereiden…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Map verwijderen…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Vergaderingssynchronisatie</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Synchronisatie van deze vergadering uitschakelen op gekoppelde computers?
+
+De map en de zichtbare bestanden blijven behouden.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>De vergaderingssynchronisatie kon niet worden bijgewerkt.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>De wijzigingen zijn op deze computer opgeslagen. Probeer het opnieuw of open de gekoppelde map.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Synchronisatie voor "{name}" opnieuw instellen?
 De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van de vorige synchronisatie worden niet toegepast.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Een lege map aanmaken in de gekoppelde map</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5592,6 +5773,10 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
 <context>
     <name>SceneControlPopup</name>
     <message>
+        <source>Show projection controls</source>
+        <translation>Projectiebediening tonen</translation>
+    </message>
+    <message>
         <location filename="../../widgets/scenes/control_popup.py" line="+275"/>
         <location line="+692"/>
         <source>Solin scenes</source>
@@ -5620,18 +5805,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location line="+617"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
-    </message>
-    <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediavensters</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
         <location line="-597"/>
@@ -5702,11 +5875,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>De status van de uitvoer kon niet worden gewijzigd.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>De spiegeling in de mediavensters kon niet worden gewijzigd.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -5874,6 +6042,41 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
     </message>
 </context>
 <context>
+    <name>SceneOutputStatus</name>
+    <message>
+        <source>Off</source>
+        <translation>Uit</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Aan</translation>
+    </message>
+    <message>
+        <source>Error</source>
+        <translation>Fout</translation>
+    </message>
+    <message>
+        <source>Starting…</source>
+        <translation>Starten…</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
+    <message>
+        <source>Virtual camera enabled</source>
+        <translation>Virtuele camera ingeschakeld</translation>
+    </message>
+    <message>
+        <source>Virtual camera disabled</source>
+        <translation>Virtuele camera uitgeschakeld</translation>
+    </message>
+    <message>
+        <source>The virtual camera failed. Turn it off and on to try again.</source>
+        <translation>De virtuele camera is uitgevallen. Schakel deze uit en weer in om het opnieuw te proberen.</translation>
+    </message>
+</context>
+<context>
     <name>SceneRuntimeController</name>
     <message>
         <location filename="../../controllers/scene_runtime_controller.py" line="+1651"/>
@@ -5887,21 +6090,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location filename="../../ui/qml/scenes_bridge.py" line="+352"/>
         <source>Switching</source>
         <translation>Schakelen</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Error</source>
-        <translation>Fout</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On</source>
-        <translation>Aan</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Off</source>
-        <translation>Uit</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -7025,11 +7213,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
         <location line="+19"/>
@@ -12025,6 +12208,271 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <location filename="../../controllers/zoom_meeting_controller.py"/>
         <source>Some Zoom actions could not be completed. Check Zoom and try again.</source>
         <translation>Sommige Zoom-acties konden niet worden voltooid. Controleer Zoom en probeer opnieuw.</translation>
+    </message>
+</context>
+<context>
+    <name>_SceneCard</name>
+    <message>
+        <source>Open %1 in a window</source>
+        <translation>%1 in een venster openen</translation>
+    </message>
+</context>
+<context>
+    <name>SceneWindow</name>
+    <message>
+        <source>%1 — Solin scenes</source>
+        <translation>%1 — Solin-scènes</translation>
+    </message>
+    <message>
+        <source>On air · virtual camera</source>
+        <translation>In de uitzending · virtuele camera</translation>
+    </message>
+    <message>
+        <source>On air · projection</source>
+        <translation>In de uitzending · projectie</translation>
+    </message>
+    <message>
+        <source>Loading preview…</source>
+        <translation>Voorbeeld laden…</translation>
+    </message>
+    <message>
+        <source>The scene engine is starting…</source>
+        <translation>De scène-engine start…</translation>
+    </message>
+    <message>
+        <source>The scene engine is unavailable.</source>
+        <translation>De scène-engine is niet beschikbaar.</translation>
+    </message>
+    <message>
+        <source>Virtual camera</source>
+        <translation>Virtuele camera</translation>
+    </message>
+    <message>
+        <source>Projection</source>
+        <translation>Projectie</translation>
+    </message>
+    <message>
+        <source>Show this scene on the virtual camera</source>
+        <translation>Deze scène op de virtuele camera tonen</translation>
+    </message>
+    <message>
+        <source>Show this scene on the projection</source>
+        <translation>Deze scène in de projectie tonen</translation>
+    </message>
+</context>
+<context>
+    <name>ScenePtzPanel</name>
+    <message>
+        <source>Failed</source>
+        <translation>Mislukt</translation>
+    </message>
+    <message>
+        <source>The camera could not complete the command.</source>
+        <translation>De camera kon de opdracht niet uitvoeren.</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Presets</source>
+        <translation>Presets</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>Snelheid</translation>
+    </message>
+    <message>
+        <source>Save current</source>
+        <translation>Huidige opslaan</translation>
+    </message>
+    <message>
+        <source>Save where this camera points now as a new preset</source>
+        <translation>Sla op waar deze camera nu op gericht is als nieuwe preset</translation>
+    </message>
+    <message>
+        <source>No presets for this camera yet.</source>
+        <translation>Nog geen presets voor deze camera.</translation>
+    </message>
+    <message>
+        <source>Moving…</source>
+        <translation>Bezig met bewegen…</translation>
+    </message>
+    <message>
+        <source>Rename…</source>
+        <translation>Naam wijzigen…</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <source>Timed out</source>
+        <translation>Time-out</translation>
+    </message>
+    <message>
+        <source>Login refused</source>
+        <translation>Aanmelding geweigerd</translation>
+    </message>
+    <message>
+        <source>Camera busy</source>
+        <translation>Camera bezet</translation>
+    </message>
+    <message>
+        <source>Unreachable</source>
+        <translation>Onbereikbaar</translation>
+    </message>
+    <message>
+        <source>The camera did not finish moving in time.</source>
+        <translation>De camera was niet op tijd klaar met bewegen.</translation>
+    </message>
+    <message>
+        <source>The camera refused the PTZ login. Check it in the camera settings.</source>
+        <translation>De camera weigerde de PTZ-aanmelding. Controleer die in de camera-instellingen.</translation>
+    </message>
+    <message>
+        <source>The camera is busy with another command.</source>
+        <translation>De camera is bezig met een andere opdracht.</translation>
+    </message>
+    <message>
+        <source>The camera did not answer.</source>
+        <translation>De camera antwoordde niet.</translation>
+    </message>
+    <message>
+        <source>This camera has no free preset slots.</source>
+        <translation>Deze camera heeft geen vrije presetplaatsen.</translation>
+    </message>
+    <message>
+        <source>Move up</source>
+        <translation>Omhoog</translation>
+    </message>
+    <message>
+        <source>Move down</source>
+        <translation>Omlaag</translation>
+    </message>
+    <message>
+        <source>Move left</source>
+        <translation>Naar links</translation>
+    </message>
+    <message>
+        <source>Move right</source>
+        <translation>Naar rechts</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stoppen</translation>
+    </message>
+    <message>
+        <source>Zoom in</source>
+        <translation>Inzoomen</translation>
+    </message>
+    <message>
+        <source>Zoom out</source>
+        <translation>Uitzoomen</translation>
+    </message>
+    <message>
+        <source>PTZ control is unavailable in this installation.</source>
+        <translation>PTZ-besturing is niet beschikbaar in deze installatie.</translation>
+    </message>
+    <message>
+        <source>the virtual camera</source>
+        <translation>de virtuele camera</translation>
+    </message>
+    <message>
+        <source>the projection</source>
+        <translation>de projectie</translation>
+    </message>
+    <message>
+        <source>Preset %1</source>
+        <translation>Preset %1</translation>
+    </message>
+    <message>
+        <source>Rename preset</source>
+        <translation>Naam van preset wijzigen</translation>
+    </message>
+    <message>
+        <source>Preset name</source>
+        <translation>Presetnaam</translation>
+    </message>
+    <message>
+        <source>On air · live control unlocked</source>
+        <translation>In de uitzending · livebesturing ontgrendeld</translation>
+    </message>
+    <message>
+        <source>On air · moves are visible to the audience</source>
+        <translation>In de uitzending · bewegingen zijn zichtbaar voor het publiek</translation>
+    </message>
+    <message>
+        <source>Camera on air</source>
+        <translation>Camera in de uitzending</translation>
+    </message>
+    <message>
+        <source>The camera could not be moved.</source>
+        <translation>De camera kon niet worden bewogen.</translation>
+    </message>
+    <message>
+        <source>The preset could not be saved.</source>
+        <translation>De preset kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Saving “%1”…</source>
+        <translation>‘%1’ opslaan…</translation>
+    </message>
+    <message>
+        <source>Delete preset</source>
+        <translation>Preset verwijderen</translation>
+    </message>
+    <message>
+        <source>The preset could not be changed.</source>
+        <translation>De preset kon niet worden gewijzigd.</translation>
+    </message>
+    <message>
+        <source>Also in: %1</source>
+        <translation>Ook in: %1</translation>
+    </message>
+    <message>
+        <source>Delete the preset “%1”? Scenes that recall it stop doing so.</source>
+        <translation>Preset ‘%1’ verwijderen? Scènes die hem oproepen doen dat dan niet meer.</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Moving it changes what the audience sees. Allow moving it until it leaves the air?</source>
+        <translation>%1 is in de uitzending: %2. Bewegen verandert wat het publiek ziet. Bewegen toestaan tot hij uit de uitzending is?</translation>
+    </message>
+    <message>
+        <source>%1 on %2</source>
+        <translation>%1 op %2</translation>
+    </message>
+    <message>
+        <source>%1 is on air: %2. Recall “%3” anyway?</source>
+        <translation>%1 is in de uitzending: %2. ‘%3’ toch oproepen?</translation>
+    </message>
+    <message>
+        <source>Saved “%1”.</source>
+        <translation>‘%1’ opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Refresh picture</source>
+        <translation>Afbeelding vernieuwen</translation>
+    </message>
+    <message>
+        <source>Take a new picture from where the camera points now</source>
+        <translation>Maak een nieuwe afbeelding van waar de camera nu op gericht is</translation>
+    </message>
+    <message>
+        <source>The preset&apos;s picture could not be saved.</source>
+        <translation>De afbeelding van de preset kon niet worden opgeslagen.</translation>
+    </message>
+    <message>
+        <source>Taking picture…</source>
+        <translation>Afbeelding maken…</translation>
+    </message>
+    <message>
+        <source>No picture</source>
+        <translation>Geen afbeelding</translation>
+    </message>
+    <message>
+        <source>No picture of “%1” could be taken. Use Refresh picture to try again.</source>
+        <translation>Van ‘%1’ kon geen afbeelding worden gemaakt. Probeer het opnieuw met Afbeelding vernieuwen.</translation>
     </message>
 </context>
 </TS>

@@ -334,6 +334,9 @@ class _Engine:
         self.snapshots.append((request_id, snapshot))
         return _completed(self._ack(request_id, snapshot.sequence, snapshot.document.revision))
 
+    def reconcile_local_cameras(self, topology_revision, *, request_id, deadline_ms):
+        return _completed(self._ack(request_id, 0, 0))
+
     def list_local_cameras(
         self,
         *,
@@ -2418,9 +2421,116 @@ def camera_hotplug_runtime(request):
     return engine, controller, notifications
 
 
+def test_reconnect_notifications_start_without_opening_camera_dialog(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    assert notifications.starts == 1
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.list_local_cameras = lambda **kwargs: pytest.fail("Closed dialog must not request inventory")
+
+    def reconcile(revision, **kwargs):
+        calls.append(revision)
+        return _completed(engine._ack(kwargs["request_id"], 0, 0))
+
+    engine.reconcile_local_cameras = reconcile
+    for _ in range(5):
+        notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert not calls
+    wait_until(lambda: calls == [5], description="camera recovery with no dialog")
+    controller.close()
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert calls == [5] and notifications.closes == 1
+
+
+def test_reconnect_pending_notification_is_sent_to_restarted_engine(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.reconcile_local_cameras = lambda revision, **kwargs: (
+        calls.append(revision) or _completed(engine._ack(kwargs["request_id"], 0, 0))
+    )
+    controller._set_engine_ready(False)
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert not calls and not controller._camera_recovery_timer.isActive()
+    controller._set_engine_ready(True)
+    wait_until(lambda: calls == [1], description="camera recovery after engine readiness")
+    assert notifications.starts == 1
+
+
+def test_reconnect_acknowledged_event_is_not_replayed_on_engine_restart(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls = []
+    controller._camera_recovery_timer.setInterval(0)
+    engine.reconcile_local_cameras = lambda revision, **kwargs: (
+        calls.append(revision) or _completed(engine._ack(kwargs["request_id"], 0, 0))
+    )
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    wait_until(lambda: calls == [1], description="first physical camera change")
+    assert controller._camera_recovery_revision is None
+    controller._set_engine_ready(False)
+    controller._set_engine_ready(True)
+    assert not controller._camera_recovery_timer.isActive()
+    assert calls == [1]
+
+
+def test_older_reconnect_ack_does_not_consume_a_new_physical_change(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    pending = []
+    controller._camera_recovery_timer.setInterval(0)
+
+    def reconcile(revision, **kwargs):
+        future = Future()
+        pending.append((revision, kwargs["request_id"], future))
+        return future
+
+    engine.reconcile_local_cameras = reconcile
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    wait_until(lambda: len(pending) == 1, description="first recovery dispatch")
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    assert controller._camera_recovery_revision == 2
+    _, request_id, future = pending[0]
+    future.set_result(engine._ack(request_id, 0, 0))
+    assert controller._camera_recovery_revision == 2
+    wait_until(lambda: len(pending) == 2, description="new recovery dispatch")
+    _, request_id, future = pending[1]
+    future.set_result(engine._ack(request_id, 0, 0))
+    assert controller._camera_recovery_revision is None
+
+
+def test_dialog_reopen_orders_topology_invalidation_before_inventory(camera_hotplug_runtime):
+    engine, controller, notifications = camera_hotplug_runtime
+    calls, pending = [], Future()
+    inventory = engine.list_local_cameras
+
+    def reconcile(revision, **kwargs):
+        calls.append(("topology", revision))
+        return pending
+
+    def discover(**kwargs):
+        calls.append(("inventory", None))
+        return inventory(**kwargs)
+
+    engine.reconcile_local_cameras = reconcile
+    engine.list_local_cameras = discover
+    notifications.callback()
+    QCoreApplication.sendPostedEvents(controller, QEvent.Type.MetaCall)
+    # Reopen immediately, before either debounce timer is delivered.
+    controller.refresh_local_cameras()
+    controller.refresh_local_cameras()
+    assert calls == [("topology", 1), ("inventory", None), ("inventory", None)]
+    assert not controller._camera_recovery_timer.isActive()
+    pending.cancel()
+
+
 def test_runtime_device_events_coalesce_and_keep_the_last_snapshot(camera_hotplug_runtime):
     engine, controller, notifications = camera_hotplug_runtime
-    assert notifications.starts == 0
+    assert notifications.starts == 1
     first = controller.refresh_local_cameras().result()
     controller.set_local_camera_inventory_active(True)
     pending, calls = Future(), []
@@ -3191,11 +3301,12 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path(request) -
     assert len(engine.snapshots) == 1
     assert engine.preparations[-1][2] == CONTENT_SCENE_ID
 
-    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
     assert controller.applied_scene(BusId.EDITOR) == (
         CONTENT_CAMERA_PIP_SCENE_ID
     )
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.applied_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
     assert len(engine.snapshots) == 1
 
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
@@ -3206,7 +3317,8 @@ def test_runtime_prepares_and_takes_without_full_snapshot_on_hot_path(request) -
     assert readiness == [True, False]
 
 
-def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged(request) -> None:
+def test_selection_reconciles_when_the_saved_auto_return_scene_is_unchanged(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     engine = _Engine()
     _documents, runtime, controller = _runtime_controller(
@@ -3215,17 +3327,24 @@ def test_manual_take_reconciles_when_the_saved_auto_return_scene_is_unchanged(re
         projection,
         request_ids=(),
     )
-    runtime.select_program_scene(CAMERA_SCENE_ID)
+    runtime.select_scene(bus_id, CAMERA_SCENE_ID)
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
 
-    controller.take_program_scene(CAMERA_SCENE_ID)
+    before = runtime.state
+    after = controller.select_scene(bus_id, CAMERA_SCENE_ID)
+    assert after is before
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
-    assert controller.program_automation_suspended
+    assert controller.desired_scene(bus_id) == CAMERA_SCENE_ID
+    assert not controller.return_scene_override_available(bus_id)
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CONTENT_SCENE_ID
 
 
-def test_auto_media_returns_to_the_previous_program_base_scene(request) -> None:
+def test_auto_media_returns_to_the_chosen_output_base_scene(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
         request,
@@ -3233,16 +3352,20 @@ def test_auto_media_returns_to_the_previous_program_base_scene(request) -> None:
         projection,
         request_ids=(),
     )
-    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    runtime.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
 
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    assert controller.program_return_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
+    assert controller.runtime.state.output(bus_id).base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.desired_scene(bus_id) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CAMERA_SCENE_ID
 
 
 def test_audio_only_playback_does_not_trigger_native_scene_auto_switch(request) -> None:
@@ -3259,7 +3382,8 @@ def test_audio_only_playback_does_not_trigger_native_scene_auto_switch(request) 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
 
-def test_return_scene_override_does_not_take_program_until_media_ends(request) -> None:
+def test_return_scene_override_changes_only_the_chosen_output_after_media_ends(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
         request,
@@ -3267,18 +3391,25 @@ def test_return_scene_override_does_not_take_program_until_media_ends(request) -
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("video")
-    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
-    assert controller.program_return_override_available
+    controller._set_applied_scenes(((bus_id, CONTENT_SCENE_ID),))
+    assert controller.return_scene_override_available(bus_id)
 
-    controller.set_program_return_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    before_desired, before_applied = controller.desired_scenes, controller.applied_scenes
+    controller.set_return_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.desired_scenes == before_desired
+    assert controller.applied_scenes == before_applied
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
-    assert controller.program_return_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
+    assert controller.runtime.state.output(bus_id).base_scene_id == CONTENT_CAMERA_PIP_SCENE_ID
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.desired_scene(bus_id) == (CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CAMERA_SCENE_ID
 
 
 @pytest.mark.parametrize("bus_id", [BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA])
@@ -3379,9 +3510,6 @@ def test_failed_session_runtime_write_preserves_live_selection_and_return(
     controller.select_scene(
         bus_id, CONTENT_CAMERA_PIP_SCENE_ID if operation == "return" else NO_SIGNAL_SCENE_ID,
     )
-    # Resume must write the captured base after a whole-Program take changed it.
-    if operation == "resume":
-        controller.take_program_scene(NO_SIGNAL_SCENE_ID)
     before_state, before_desired = runtime.state, controller.desired_scenes
     monkeypatch.setattr(runtime, "_store", _FailingStore())
     with pytest.raises(OSError, match="Runtime save failed"):
@@ -3392,7 +3520,7 @@ def test_failed_session_runtime_write_preserves_live_selection_and_return(
         elif operation == "disable":
             controller.set_program_automatic(False)
         else:
-            controller.resume_program_automation()
+            controller.set_program_automatic(True)
     assert runtime.state is before_state
     assert controller.desired_scenes == before_desired
     monkeypatch.setattr(runtime, "_store", None)
@@ -3476,7 +3604,7 @@ def test_removed_session_scene_and_return_fall_back_without_invalid_references(r
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == CONTENT_SCENE_ID
     documents.delete_scene("return")
     controller.select_scene(BusId.MEDIA_WINDOWS, NO_SIGNAL_SCENE_ID)
-    controller.resume_program_automation()
+    controller.set_program_automatic(True)
     projection.set_type("idle")
     assert controller.desired_scene(BusId.MEDIA_WINDOWS) == documents.document.scenes[0].id
 
@@ -3497,7 +3625,8 @@ def test_automation_off_on_preserves_independent_return_bases(request, stop_befo
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
 
 
-def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content(request) -> None:
+def test_auto_media_does_not_return_after_operator_selects_a_scene_without_content(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
         request,
@@ -3505,21 +3634,25 @@ def test_auto_media_does_not_return_after_operator_takes_a_scene_without_content
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
 
-    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
+    controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
 
-    assert controller.program_automation_suspended
-    assert not controller.program_return_override_available
-    with pytest.raises(SceneValidationError, match="only change while"):
-        controller.set_program_return_scene(CAMERA_SCENE_ID)
+    assert not controller.return_scene_override_available(bus_id)
+    with pytest.raises(SceneValidationError, match="only change during automatic media"):
+        controller.set_return_scene(bus_id, CAMERA_SCENE_ID)
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    assert controller.desired_scene(bus_id) == NO_SIGNAL_SCENE_ID
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CAMERA_SCENE_ID
 
 
-def test_auto_media_returns_after_operator_takes_another_content_scene(request) -> None:
+def test_auto_media_returns_after_operator_selects_another_content_scene(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
         request,
@@ -3527,33 +3660,37 @@ def test_auto_media_returns_after_operator_takes_another_content_scene(request) 
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
-    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
+    return_base_before = runtime.state.output(bus_id).base_scene_id
 
-    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
-    assert not controller.program_automation_suspended
-    assert controller.program_return_scene_id == CAMERA_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == return_base_before
-    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID),))
-    assert controller.program_return_override_available
-    controller.set_program_return_scene(NO_SIGNAL_SCENE_ID)
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
-    assert controller.program_return_scene_id == NO_SIGNAL_SCENE_ID
+    assert controller.desired_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert runtime.state.output(bus_id).base_scene_id == return_base_before
+    controller._set_applied_scenes(((bus_id, CONTENT_CAMERA_PIP_SCENE_ID),))
+    assert controller.return_scene_override_available(bus_id)
+    controller.set_return_scene(bus_id, NO_SIGNAL_SCENE_ID)
+    assert controller.desired_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.runtime.state.output(bus_id).base_scene_id == NO_SIGNAL_SCENE_ID
 
-    controller.take_program_scene(CAMERA_SCENE_ID)
-    assert controller.program_automation_suspended
-    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
-    assert not controller.program_automation_suspended
-    assert controller.program_return_scene_id == NO_SIGNAL_SCENE_ID
+    controller.select_scene(bus_id, CAMERA_SCENE_ID)
+    assert not controller.return_scene_override_available(bus_id)
+    controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert controller.runtime.state.output(bus_id).base_scene_id == NO_SIGNAL_SCENE_ID
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
+    assert controller.desired_scene(bus_id) == NO_SIGNAL_SCENE_ID
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CAMERA_SCENE_ID
 
 
-def test_taking_a_content_scene_resumes_a_suspended_media_session(request) -> None:
+def test_selecting_a_content_scene_resumes_a_suspended_media_session(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
         request,
@@ -3561,26 +3698,30 @@ def test_taking_a_content_scene_resumes_a_suspended_media_session(request) -> No
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
-    return_base_before = runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id
-    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
-    assert controller.program_automation_suspended
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == NO_SIGNAL_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == NO_SIGNAL_SCENE_ID
+    return_base_before = runtime.state.output(bus_id).base_scene_id
+    controller.select_scene(bus_id, NO_SIGNAL_SCENE_ID)
+    assert not controller.return_scene_override_available(bus_id)
+    assert controller.desired_scene(bus_id) == NO_SIGNAL_SCENE_ID
+    assert runtime.state.output(bus_id).base_scene_id == NO_SIGNAL_SCENE_ID
 
-    controller.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    controller.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_CAMERA_PIP_SCENE_ID
-    assert not controller.program_automation_suspended
-    assert controller.program_return_scene_id == CAMERA_SCENE_ID
-    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == return_base_before
+    assert controller.desired_scene(bus_id) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert runtime.state.output(bus_id).base_scene_id == return_base_before
 
     projection.set_type("idle")
 
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert controller.desired_scene(bus_id) == CAMERA_SCENE_ID
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CAMERA_SCENE_ID
 
 
-def test_taking_the_live_automatic_media_scene_is_a_noop(request) -> None:
+def test_selecting_the_live_automatic_media_scene_is_a_noop(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, runtime, controller = _runtime_controller(
         request,
@@ -3588,18 +3729,23 @@ def test_taking_the_live_automatic_media_scene_is_a_noop(request) -> None:
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("image")
-    controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
+    controller._set_applied_scenes(((bus_id, CONTENT_SCENE_ID),))
     before = runtime.state
 
-    after = controller.take_program_scene(CONTENT_SCENE_ID)
+    after = controller.select_scene(bus_id, CONTENT_SCENE_ID)
 
     assert after is before
-    assert not controller.program_automation_suspended
-    assert controller.program_return_override_available
+    assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert controller.return_scene_override_available(bus_id)
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CONTENT_SCENE_ID
 
 
-def test_taking_media_again_resumes_a_suspended_automatic_media_session(request) -> None:
+def test_selecting_media_again_resumes_a_suspended_automatic_media_session(request) -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
         request,
@@ -3607,18 +3753,22 @@ def test_taking_media_again_resumes_a_suspended_automatic_media_session(request)
         projection,
         request_ids=(),
     )
+    other_bus = BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    other_before = controller.runtime.state.output(other_bus)
     projection.set_type("video")
-    controller.take_program_scene(CAMERA_SCENE_ID)
-    assert controller.program_automation_suspended
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    controller.select_scene(bus_id, CAMERA_SCENE_ID)
+    assert not controller.return_scene_override_available(bus_id)
+    assert controller.desired_scene(bus_id) == CAMERA_SCENE_ID
 
-    controller.take_program_scene(CONTENT_SCENE_ID)
+    controller.select_scene(bus_id, CONTENT_SCENE_ID)
 
-    assert not controller.program_automation_suspended
-    assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
+    assert controller.runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert controller.desired_scene(bus_id) == CONTENT_SCENE_ID
+    assert controller.runtime.state.output(other_bus) == other_before
+    assert controller.desired_scene(other_bus) == CONTENT_SCENE_ID
 
 
-def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged(request) -> None:
+def test_enabling_automation_reconciles_when_runtime_state_is_unchanged(request) -> None:
     projection = _Projection()
     _documents, _runtime, controller = _runtime_controller(
         request,
@@ -3627,12 +3777,14 @@ def test_resume_program_automation_reconciles_when_runtime_state_is_unchanged(re
         request_ids=(),
     )
     projection.set_type("image")
-    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
-    assert controller.program_automation_suspended
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
+    assert not controller.return_scene_override_available(BusId.VIRTUAL_CAMERA)
 
-    controller.resume_program_automation()
+    before = controller.runtime.state
+    after = controller.set_program_automatic(True)
+    assert after is before
 
-    assert not controller.program_automation_suspended
+    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.AUTO
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
 
     projection.set_type("idle")
@@ -3649,12 +3801,12 @@ def test_reenabling_program_automation_restores_the_session_return_base(request)
         request_ids=(),
     )
     projection.set_type("image")
-    controller.take_program_scene(NO_SIGNAL_SCENE_ID)
-    assert controller.program_automation_suspended
+    controller.select_scene(BusId.VIRTUAL_CAMERA, NO_SIGNAL_SCENE_ID)
+    assert not controller.return_scene_override_available(BusId.VIRTUAL_CAMERA)
 
     controller.set_program_automatic(True)
 
-    assert not controller.program_automation_suspended
+    assert controller.runtime.state.output(BusId.VIRTUAL_CAMERA).mode is OutputMode.AUTO
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
 
     projection.set_type("idle")
@@ -3672,7 +3824,7 @@ def test_disabling_automation_preserves_the_latest_desired_scene_during_take(req
     )
     projection.set_type("image")
     controller._set_applied_scenes(((BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID),))
-    controller.take_program_scene(CAMERA_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CONTENT_SCENE_ID
 
@@ -3727,7 +3879,7 @@ def test_transition_policy_changes_do_not_rehydrate_and_preview_always_cuts(requ
     assert len(engine.snapshots) == 1
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
-    controller.take_program_scene(CONTENT_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
 
     prepared = {
         bus_id: transition
@@ -3820,7 +3972,7 @@ def test_transition_fallback_is_reported_without_marking_engine_failed(request) 
     controller.transition_fallback.connect(fallbacks.append)
     controller.start_engine()
 
-    controller.take_program_scene(CONTENT_SCENE_ID)
+    controller.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
 
     assert fallbacks == [
         "The selected transition is unavailable. The scene was cut instead."
@@ -3884,8 +4036,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> 
         (CONTENT_SCENE_ID, TransitionSpec(TransitionKind.FADE_TO_BLACK, 700)),
         (CAMERA_SCENE_ID, TransitionSpec(TransitionKind.DISSOLVE, 350)),
     ]
-    # Raw media windows consume the content source directly. They do not pin
-    # or otherwise mutate the editor Preview scene route.
+    # Window targets preserve the editor's scene route and instant-cut policy.
     assert preview_transitions == [
         TransitionSpec(TransitionKind.CUT, 0),
         TransitionSpec(TransitionKind.CUT, 0),
@@ -4263,7 +4414,8 @@ def test_return_to_idle_commits_current_epoch_on_pinned_content_routes(
     controller.start_engine()
     projection.set_type(state_type)
     _deliver_controller_results(controller)
-    runtime.take_program_scene(CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
     engine.preparations.clear()
     engine.preparation_content_media_epochs.clear()
 
@@ -4374,7 +4526,8 @@ def test_audio_over_idle_preserves_content_epoch_without_extra_takes(request) ->
     _documents, runtime, controller = _runtime_controller(
         request, engine, projection, request_ids=(),
     )
-    runtime.take_program_scene(CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
     controller.start_engine()
     epoch = projection.presentation_session_id
     preparations = tuple(engine.preparations)
@@ -5037,7 +5190,7 @@ def test_preview_demand_is_published_when_the_media_scene_is_already_selected(re
     assert desired_changes == []
 
 
-def test_editor_preview_remains_independent_while_program_is_mirrored(request) -> None:
+def test_editor_preview_and_program_remain_independent_of_media_output_activation(request) -> None:
     engine = _Engine()
     _documents, _runtime, controller = _runtime_controller(
         request,
@@ -5046,7 +5199,6 @@ def test_editor_preview_remains_independent_while_program_is_mirrored(request) -
         request_ids=(
             "initial-hydrate",
             "enable-media-window",
-            "enable-program-render",
             "enable-preview-render",
             "preview-prepare",
             "preview-take",
@@ -5055,6 +5207,9 @@ def test_editor_preview_remains_independent_while_program_is_mirrored(request) -
     controller.start_engine()
     controller.set_output_enabled(BusId.MEDIA_WINDOWS, True)
 
+    assert controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
+    assert not controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+    assert not any(bus is BusId.VIRTUAL_CAMERA and enabled for _, bus, enabled in engine.renders)
     controller.set_preview_scene(CONTENT_SCENE_ID)
 
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID

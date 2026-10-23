@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -29,6 +30,7 @@ from ...core.foundation.resource_keys import (
     folder_resource_key,
 )
 from ...core.media.operations import (
+    MediaOperationCancelled,
     MediaOperationPresentation,
     MediaOperationSpec,
 )
@@ -45,7 +47,13 @@ from .components import (
     WatchedFolderCard,
     playlist_card_menu_stylesheet,
 )
-from .dialogs import NameDialog
+from .dialogs import LinkedFolderNameDialog, NameDialog
+
+
+@dataclass(frozen=True, slots=True)
+class _WatchedFolderCatalog:
+    folders: list[dict]
+    entry_names: tuple[str, ...]
 
 if TYPE_CHECKING:
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -122,6 +130,8 @@ class PlaylistListView(QWidget):
         self._wf_cards: list[WatchedFolderCard] = []
         self._watched_scan_generation = 0
         self._watched_scan_operation_id = ""
+        self._watched_entry_names: tuple[str, ...] = ()
+        self._watched_catalog_ready = False
         self._watched_mutation_operation_ids: set[str] = set()
         self._watched_mutation_paths: set[str] = set()
         self._cleaning_up = False
@@ -129,6 +139,8 @@ class PlaylistListView(QWidget):
 
     def set_watched_folder(self, path: str) -> None:
         self._watched_folder = path
+        self._watched_entry_names = ()
+        self._watched_catalog_ready = False
         self._rebuild_watched_section()
     def showEvent(self, e) -> None:
         self._rebuild_app_cards()
@@ -203,6 +215,18 @@ class PlaylistListView(QWidget):
         wrap_lay.addWidget(self._empty_lbl)
 
         self._wf_section = CollapsibleSection(self.tr("Link Folder"), parent=self._scroll_wrap)
+        self._create_folder_btn = QPushButton(self)
+        self._create_folder_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.text_muted))
+        self._create_folder_btn.setIconSize(QSize(14, 14))
+        self._create_folder_btn.setFixedHeight(30)
+        self._create_folder_btn.setText("  " + self.tr("Create folder"))
+        self._create_folder_btn.setAccessibleName(self.tr("Create folder"))
+        self._create_folder_btn.setToolTip(self.tr("Create an empty folder in the linked folder"))
+        self._create_folder_btn.setStyleSheet(playlist_secondary_button_stylesheet())
+        self._create_folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._create_folder_btn.setEnabled(False)
+        self._create_folder_btn.clicked.connect(self._create_watched_folder)
+        self._wf_section.add_header_action(self._create_folder_btn)
         self._wf_grid_cont = QWidget(self._scroll_wrap)
         self._wf_grid_cont.setStyleSheet("background:transparent;")
         self._wf_grid_lay = QGridLayout(self._wf_grid_cont)
@@ -240,6 +264,8 @@ class PlaylistListView(QWidget):
         )
 
     def apply_theme(self) -> None:
+        self._create_folder_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.text_muted))
+        self._create_folder_btn.setStyleSheet(playlist_secondary_button_stylesheet())
         self._import_btn.setIcon(make_icon(ICON_IMPORT, 14, PALETTE.text_muted))
         self._import_btn.setStyleSheet(playlist_secondary_button_stylesheet())
         self._new_btn.setIcon(make_icon(ICON_PLUS, 14, PALETTE.accent_text))
@@ -282,6 +308,7 @@ class PlaylistListView(QWidget):
 
     def _rebuild_watched_section(self) -> None:
         has_root = bool(self._watched_folder)
+        self._update_create_folder_enabled()
         self._wf_section.setVisible(has_root)
         self._app_section.set_header_visible(has_root)
         self._app_grid_cont.setVisible(bool(self._playlists))
@@ -300,6 +327,8 @@ class PlaylistListView(QWidget):
     def _request_watched_section_snapshot(self) -> None:
         if self._cleaning_up:
             return
+        self._watched_catalog_ready = False
+        self._update_create_folder_enabled()
         self._watched_scan_generation += 1
         generation = self._watched_scan_generation
         folder_path = self._watched_folder
@@ -309,7 +338,9 @@ class PlaylistListView(QWidget):
         self._watched_scan_operation_id = operation_id
 
         def run(_progress, _cancellation):
-            return self._watched_folder_playlist_store.scan_root(folder_path)
+            folders = self._watched_folder_playlist_store.scan_root(folder_path)
+            names = self._watched_folder_file_store.folder_entry_names(folder_path)
+            return _WatchedFolderCatalog(folders, names)
 
         def commit(value: object) -> None:
             if (
@@ -318,9 +349,12 @@ class PlaylistListView(QWidget):
             ):
                 return
             self._watched_scan_operation_id = ""
-            if not isinstance(value, list):
+            if not isinstance(value, _WatchedFolderCatalog):
                 raise TypeError("Linked-folder catalog returned an invalid result")
-            self._render_watched_section(value)
+            self._watched_entry_names = value.entry_names
+            self._watched_catalog_ready = True
+            self._update_create_folder_enabled()
+            self._render_watched_section(value.folders)
 
         def finished_without_result(*_args) -> None:
             if generation == self._watched_scan_generation:
@@ -350,8 +384,8 @@ class PlaylistListView(QWidget):
                 it.widget().deleteLater()
         self._wf_cards.clear()
         has_subs = bool(subfolders)
-        self._wf_empty_lbl.setVisible(not has_subs)
-        self._wf_grid_cont.setVisible(has_subs)
+        self._wf_empty_lbl.setVisible(bool(self._watched_folder) and not has_subs)
+        self._wf_grid_cont.setVisible(has_subs and not self._wf_section.is_collapsed())
         self._wf_section.set_count(len(subfolders))
 
         for i, sf in enumerate(subfolders):
@@ -381,6 +415,7 @@ class PlaylistListView(QWidget):
             self._media_tree_runtime.operations.cancel(operation_id)
         self._watched_mutation_operation_ids.clear()
         self._watched_mutation_paths.clear()
+        self._update_create_folder_enabled()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -388,6 +423,9 @@ class PlaylistListView(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
+        self._create_folder_btn.setText("  " + self.tr("Create folder"))
+        self._create_folder_btn.setAccessibleName(self.tr("Create folder"))
+        self._create_folder_btn.setToolTip(self.tr("Create an empty folder in the linked folder"))
         self._title_lbl.setText(self.tr("Playlists"))
         self._import_btn.setText("  " + self.tr("Import"))
         self._import_btn.setToolTip(self.tr("Import playlist"))
@@ -527,7 +565,13 @@ class PlaylistListView(QWidget):
 
     def _rename_watched_folder(self, folder_path: str) -> None:
         current_name = Path(folder_path).name
-        dlg = NameDialog(current_name, lang=self.lang, parent=self)
+        dlg = LinkedFolderNameDialog(
+            current_name,
+            existing_names=self._watched_entry_names,
+            excluding_name=current_name,
+            lang=self.lang,
+            parent=self,
+        )
         dlg.setWindowTitle(self.tr("Rename folder"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
@@ -542,6 +586,32 @@ class PlaylistListView(QWidget):
                 new_name,
                 self._watched_folder_file_store,
             ),
+        )
+
+    def _create_watched_folder(self) -> None:
+        if not self._create_folder_btn.isEnabled():
+            return
+        root_path = self._watched_folder
+        dlg = LinkedFolderNameDialog(
+            existing_names=self._watched_entry_names, lang=self.lang, parent=self
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted or root_path != self._watched_folder:
+            return
+        name = dlg.get_name()
+        self._submit_watched_folder_mutation(
+            str(Path(root_path) / name),
+            "create_linked_playlist_folder",
+            lambda: self._watched_folder_playlist_store.create_folder(
+                root_path, name, self._watched_folder_file_store
+            ),
+        )
+
+    def _update_create_folder_enabled(self) -> None:
+        self._create_folder_btn.setEnabled(
+            bool(self._watched_folder)
+            and self._watched_catalog_ready
+            and not self._watched_mutation_operation_ids
+            and not self._cleaning_up
         )
 
     def _delete_watched_folder(self, folder_path: str) -> None:
@@ -591,15 +661,20 @@ class PlaylistListView(QWidget):
         operation_type: str,
         mutate: Callable[[], object],
     ) -> None:
+        if self._cleaning_up:
+            return
         path_key = os.path.normcase(os.path.abspath(folder_path))
         if path_key in self._watched_mutation_paths:
             return
         operation_id = f"{operation_type}:{uuid.uuid4().hex}"
         self._watched_mutation_paths.add(path_key)
         self._watched_mutation_operation_ids.add(operation_id)
+        self._update_create_folder_enabled()
         self._set_watched_card_enabled(path_key, False)
 
-        def run(_progress, _cancellation):
+        def run(_progress, cancellation):
+            if cancellation.is_set():
+                raise MediaOperationCancelled("Folder operation cancelled")
             return mutate()
 
         def finish() -> None:
@@ -613,7 +688,8 @@ class PlaylistListView(QWidget):
 
         def failed(message: str, _retryable: bool) -> None:
             finish()
-            QMessageBox.critical(self, self.tr("Error"), message)
+            if not self._cleaning_up:
+                QMessageBox.critical(self, self.tr("Error"), message)
 
         submitted = self._media_tree_runtime.operations.submit(
             MediaOperationSpec(

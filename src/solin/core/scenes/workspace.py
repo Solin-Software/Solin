@@ -42,6 +42,7 @@ from solin.core.scenes.repository import (
     SceneRuntimePersistenceQueue,
     read_beta_output_selections,
 )
+from solin.core.scenes.preset_thumbnails import PresetThumbnailStore
 from solin.core.scenes.resources import (
     SceneResourceCatalog,
     camera_credential_references,
@@ -107,6 +108,7 @@ class SceneWorkspaceService:
         identity_factory: Callable[[], str] = new_identity,
     ) -> None:
         self._paths = profile_paths
+        self.preset_thumbnails = PresetThumbnailStore(profile_paths.ptz_preset_thumbnails_dir)
         self._seed_names = seed_names
         self._identity_factory = identity_factory
         self._catalog_repository = SceneCollectionCatalogRepository(
@@ -463,6 +465,7 @@ class SceneWorkspaceService:
             ),
         )
         self._save_resources(updated)
+        self.preset_thumbnails.delete(preset_id)
         self._publish(SceneWorkspaceChangeKind.RESOURCES)
 
     def activate_collection(self, collection_id: str) -> SceneCollection:

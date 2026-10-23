@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.25)
 project(solin_virtual_camera VERSION 0.1.0 LANGUAGES CXX)
 
 option(SOLIN_VIRTUAL_CAMERA_BUILD_TESTS "Build virtual-camera transport and filter tests" ON)
+option(SOLIN_VIRTUAL_CAMERA_QUALIFY_PRODUCTION
+    "Qualify the production filter using the current user's broker endpoint" OFF
+)
 
 function(solin_camera_target target)
     target_compile_features(${target} PUBLIC cxx_std_20)

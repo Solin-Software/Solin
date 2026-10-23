@@ -406,6 +406,44 @@ class LocalCameraDiscovery:
             raise ValueError("Pending local camera discovery cannot contain results")
 
 
+# Scene-render feeds the engine keeps by channel: the scenes panel's card atlas,
+# plus one per open scene window (``scene_window_channel``).
+SCENE_THUMBNAILS_CHANNEL = "scene-thumbnails"
+_SCENE_WINDOW_CHANNEL_PREFIX = "scene-window:"
+# A camera's own picture, fitted to the frame, for a preset's still image.
+_CAMERA_STILL_CHANNEL_PREFIX = "camera-still:"
+
+
+def scene_window_channel(scene_id: str) -> str:
+    """The feed channel of the floating window that shows ``scene_id``."""
+    return f"{_SCENE_WINDOW_CHANNEL_PREFIX}{scene_id}"
+
+
+def camera_still_channel(camera_source_id: str) -> str:
+    """The feed channel that renders one camera on its own."""
+    return f"{_CAMERA_STILL_CHANNEL_PREFIX}{camera_source_id}"
+
+
+def camera_still_camera_id(channel_id: object) -> str:
+    """The camera a ``camera_still_channel`` renders, or empty for any other channel."""
+    if not isinstance(channel_id, str):
+        return ""
+    camera_id = channel_id.removeprefix(_CAMERA_STILL_CHANNEL_PREFIX)
+    if camera_id == channel_id or not camera_id or not camera_id.isprintable():
+        return ""
+    return camera_id
+
+
+def is_scene_render_channel(channel_id: object) -> bool:
+    """Whether ``channel_id`` names a render feed the engine may keep."""
+    if not isinstance(channel_id, str) or not 0 < len(channel_id) <= 160:
+        return False
+    if channel_id == SCENE_THUMBNAILS_CHANNEL or camera_still_camera_id(channel_id):
+        return True
+    scene_id = channel_id.removeprefix(_SCENE_WINDOW_CHANNEL_PREFIX)
+    return scene_id != channel_id and bool(scene_id) and scene_id.isprintable()
+
+
 @dataclass(frozen=True, slots=True)
 class FrameChannelDescriptor:
     channel_id: str
@@ -810,6 +848,10 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[LocalCameraDiscovery]: ...
 
+    def reconcile_local_cameras(
+        self, topology_revision: int, *, request_id: str, deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
     def query_local_camera_modes(
         self,
         device_id: str,
@@ -939,6 +981,7 @@ class SceneEngine(Protocol):
         request_id: str,
         sequence: int,
         deadline_ms: int,
+        channel_id: str = SCENE_THUMBNAILS_CHANNEL,
     ) -> Future[SceneEngineAck]: ...
 
     def start_program_recording(

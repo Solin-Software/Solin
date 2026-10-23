@@ -14,7 +14,7 @@ from threading import RLock
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
-from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, Crop, NormalizedRect
+from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, BusId, Crop, NormalizedRect
 from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.libobs_transitions import (
     FALLBACK_TRANSITION_KIND,
@@ -26,10 +26,6 @@ log = logging.getLogger(__name__)
 
 # Neutral-gray placeholder for sources whose real pixels aren't wired yet.
 _PLACEHOLDER_COLOR = 0xFF404040
-# BusId values (see solin.core.scenes.model.BusId). VIRTUAL_CAMERA is the
-# "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
-_PROGRAM_BUS = "virtual_camera"
-_MIRROR_BUS = "media_windows"
 
 
 class _SceneTransition(Protocol):
@@ -108,6 +104,8 @@ class LibobsSceneGraph:
         self._scenes: dict[str, Any] = {}
         self._editor_preview_scene: Any | None = None
         self._editor_preview_layer: tuple[str, str] | None = None
+        # Private scenes showing one camera fitted to the frame, for preset stills.
+        self._camera_stills: dict[str, Any] = {}
         self._document_record: dict = {}
         self._presentation_scene_ids: frozenset[str] = frozenset()
         self._sources: list[Any] = []
@@ -247,6 +245,52 @@ class LibobsSceneGraph:
             scene.release()
         self._editor_preview_scene = None
         self._editor_preview_layer = None
+
+    def prepare_camera_still(self, camera_source_id: str) -> bool:
+        """Build the private scene that shows one camera on its own, fitted.
+
+        Runs on the control thread; the render callback only ever reads the
+        cache through ``camera_still_source``. The camera's source is the shared
+        runtime one, borrowed from any layer that shows it.
+        """
+        if camera_source_id in self._camera_stills:
+            return True
+        record = next(
+            (
+                candidate for candidate in self._layer_items.values()
+                if str(candidate["layer"].get("source_id") or "") == camera_source_id
+                and candidate["source_available"]
+            ),
+            None,
+        )
+        if record is None:
+            return False
+        candidate = None
+        try:
+            candidate = self._runtime.ob.Scene.create_private(
+                f"solin-camera-still-{camera_source_id}"
+            )
+            item = candidate.add(record["item"].source)
+            self._apply_item_geometry(
+                item, {"fit_mode": "contain"}, self._runtime.video, self._runtime.ob,
+            )
+        except Exception:  # noqa: BLE001 - an unavailable camera must not break the graph
+            if candidate is not None:
+                candidate.release()
+            log.warning("Could not build the camera still scene", exc_info=True)
+            return False
+        self._camera_stills[camera_source_id] = candidate
+        return True
+
+    def camera_still_source(self, camera_source_id: str) -> Any | None:
+        scene = self._camera_stills.get(camera_source_id)
+        return scene.as_source() if scene is not None else None
+
+    def release_camera_still(self, camera_source_id: str) -> None:
+        """Release after the feed rendering it has detached."""
+        scene = self._camera_stills.pop(camera_source_id, None)
+        if scene is not None:
+            scene.release()
 
     def set_editor_source_preview(self, scene_id: str, layer_id: str | None) -> SceneSourcePreview:
         """Borrow a built item's source into one private, uncropped composition.
@@ -798,7 +842,7 @@ class LibobsSceneGraph:
         )
 
     def _setup_program(self, active_scenes: dict) -> None:
-        program_scene_id = active_scenes.get(_PROGRAM_BUS) or active_scenes.get(_MIRROR_BUS)
+        program_scene_id = active_scenes.get(BusId.VIRTUAL_CAMERA.value)
         scene = self._scenes.get(program_scene_id) if program_scene_id else None
         if scene is None:
             return
@@ -817,7 +861,7 @@ class LibobsSceneGraph:
         scene_id: str,
         model_kind: str,
         duration_ms: int,
-        bus_id: str = _PROGRAM_BUS,
+        bus_id: str = BusId.VIRTUAL_CAMERA.value,
     ) -> dict | None:
         """Stage a switch to ``scene_id``. Returns a token + resolved transition,
         or None if the scene is unknown.
@@ -829,7 +873,7 @@ class LibobsSceneGraph:
             return None
         fallback_applied = model_kind not in TRANSITION_SOURCE_IDS
         effective_kind = FALLBACK_TRANSITION_KIND if fallback_applied else model_kind
-        if bus_id == _PROGRAM_BUS:
+        if bus_id == BusId.VIRTUAL_CAMERA.value:
             self._transitions.prepared(effective_kind)
         self._token_seq += 1
         token = f"prep-{self._token_seq}"
@@ -923,6 +967,10 @@ class LibobsSceneGraph:
             self._runtime.set_channel_source(self._program_channel, None)
         self._transitions.reset_sources()
         self.clear_editor_source_preview()
+        # Feeds rendering these are suspended before any rebuild; they rebuild
+        # their stills on resume.
+        for camera_source_id in tuple(self._camera_stills):
+            self.release_camera_still(camera_source_id)
         with self._crop_lock:
             self._cropped_items.clear()
         self._pending.clear()

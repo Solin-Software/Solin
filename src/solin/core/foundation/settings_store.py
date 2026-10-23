@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QByteArray, QSettings
 
 from solin.core.foundation.constants import (
     QSETTINGS_APP_APP,
@@ -209,3 +209,32 @@ class ProfileAppSettingsStore:
 
     def set_scenes_panel_docked(self, docked: bool) -> None:
         self.settings.set_value(SettingsKey.SCENES_PANEL_DOCKED, bool(docked))
+
+    def scene_window_geometry(self, scene_id: str) -> bytes:
+        """The saved ``QWidget.saveGeometry()`` of a scene's window, or empty."""
+        value = self.settings.value(_scene_window_geometry_key(scene_id), b"")
+        if isinstance(value, (bytes, bytearray)):
+            return bytes(value)
+        if isinstance(value, QByteArray):  # what some QSettings backends return
+            return bytes(value.data())
+        return b""
+
+    def set_scene_window_geometry(self, scene_id: str, geometry: bytes) -> None:
+        self.settings.set_value(_scene_window_geometry_key(scene_id), bytes(geometry))
+
+    def scenes_panel_projection_controls_visible(self) -> bool:
+        value = self.settings.value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, False)
+        if isinstance(value, bool):
+            return value
+        # QSettings round-trips booleans as strings on some backends.
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+    def set_scenes_panel_projection_controls_visible(self, visible: bool) -> None:
+        self.settings.set_value(SettingsKey.SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE, bool(visible))
+
+
+def _scene_window_geometry_key(scene_id: str) -> str:
+    # Scene ids are document identities; keep any separator out of the QSettings
+    # path so an id can never address another group.
+    safe = "".join(character if character.isalnum() or character in "-_." else "_" for character in scene_id)
+    return f"{SettingsKey.SCENE_WINDOW_GEOMETRY}/{safe}"

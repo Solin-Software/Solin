@@ -88,11 +88,15 @@ Rectangle {
         spacing: 0
 
         Item {
+            id: meetingHeader
+            objectName: "meetingDetailHeader"
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
+            Layout.preferredHeight: headerLayout.implicitHeight + 16
 
             RowLayout {
+                id: headerLayout
                 anchors.fill: parent
+                anchors.margins: 8
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 10
@@ -124,6 +128,8 @@ Rectangle {
 
                 Text {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    Layout.preferredWidth: 100
                     text: typeof meetingDate !== "undefined" ? meetingDate : ""
                     color: root.textSecondary
                     font.pixelSize: 12
@@ -146,27 +152,16 @@ Rectangle {
                     onClicked: if (root.hasController) controller.restoreCanonicalContent()
                 }
 
-                HeaderButton {
-                    id: syncBtn
-                    visible: root.hasController && controller.syncAvailable
-                    enabled: root.hasController
-                             && controller.syncAvailable
-                             && !controller.syncBusy
-                             && !controller.syncPending
-                    iconName: "folder_link"
-                    iconSize: 14
-                    colorHex: root.iconHex(controller.syncEnabled ? root.success : root.textMuted)
-                    accentButton: controller.syncEnabled
-                    toolTipText: controller.syncPending
-                                 ? qsTranslate("_PlaylistEditView", "Offline / Syncing")
-                                 : controller.syncEnabled
-                                   ? qsTranslate("MeetingSync", "Turn off meeting sync")
-                                   : qsTranslate("MeetingSync", "Sync meeting to linked folder")
-                    onClicked: if (root.hasController) controller.toggleSync()
+                MeetingFolderControl {
+                    id: folderControl
+                    visible: root.hasController && controller.folderManagementAvailable
+                    bridge: root.hasController ? controller : null
+                    accent: root.accent
                 }
 
                 HeaderButton {
                     id: plusBtn
+                    objectName: "meetingAddMedia"
                     iconName: "plus"
                     iconSize: 14
                     colorHex: root.iconHex(root.accent)
@@ -216,6 +211,7 @@ Rectangle {
         }
 
         Rectangle {
+            id: headerSeparator
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: root.border_
@@ -250,7 +246,11 @@ Rectangle {
     }
 
     Rectangle {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: meetingHeader.height + headerSeparator.height
+        anchors.bottom: parent.bottom
         z: 900
         visible: root.hasController && controller.syncBusy
         color: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.82)
@@ -293,6 +293,7 @@ Rectangle {
                 Button {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTranslate("PlaylistTransferDialog", "Cancel")
+                    enabled: root.hasController && controller.modalCancellable
                     onClicked: controller.cancelModalOperation()
                 }
             }
@@ -327,6 +328,7 @@ Rectangle {
 
     component HeaderButton: Rectangle {
         id: hdrBtn
+        enabled: !root.hasController || !controller.syncBusy
         property string iconName: ""
         property int iconSize: 14
         property string colorHex: root.iconHex(root.textMuted)
@@ -366,7 +368,7 @@ Rectangle {
             onClicked: hdrBtn.clicked()
         }
 
-        ThemedToolTip {
+        AppToolTip {
             visible: hdrBtn.enabled && hdrMa.containsMouse && hdrBtn.toolTipText !== ""
             text: hdrBtn.toolTipText
         }
@@ -374,6 +376,7 @@ Rectangle {
 
     component SmallToolButton: Rectangle {
         id: stb
+        enabled: !root.hasController || !controller.syncBusy
         property string iconName: ""
         property string label: ""
         property string toolTipText: ""
@@ -419,26 +422,9 @@ Rectangle {
             onClicked: stb.clicked()
         }
 
-        ThemedToolTip {
+        AppToolTip {
             visible: stb.enabled && stbMa.containsMouse && stb.toolTipText !== ""
             text: stb.toolTipText
-        }
-    }
-
-    component ThemedToolTip: ToolTip {
-        id: tip
-        delay: 400
-        padding: 6
-        contentItem: Text {
-            text: tip.text
-            color: root.textPrimary
-            font.pixelSize: 12
-        }
-        background: Rectangle {
-            color: root.surface
-            radius: 6
-            border.width: 1
-            border.color: root.border_
         }
     }
 

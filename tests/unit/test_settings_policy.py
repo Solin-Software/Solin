@@ -34,6 +34,8 @@ EXPECTED_SETTINGS_KEYS = {
     "APP_THEME": "theme",
     "TOOLBAR_HOVER_POPUPS": "toolbar/hover_popups",
     "SCENES_PANEL_DOCKED": "toolbar/scenes_panel_docked",
+    "SCENE_WINDOW_GEOMETRY": "scenes/window_geometry",
+    "SCENES_PANEL_PROJECTION_CONTROLS_VISIBLE": "toolbar/scenes_panel_projection_controls_visible",
     "MEDIA_LANGUAGE_CODE": "media_language_code",
     "LEGACY_JW_LANGUAGE": "jw_language",
     "WINDOW_GEOMETRY": "geometry",
