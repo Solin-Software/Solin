@@ -143,3 +143,39 @@ Galene keeps the publisher's timing: each downstream sender report is computed f
 - Old Android and Safari iOS.
 - Screen-lock test with auto-reconnect in the viewer.
 - Audio NACK / RED support in Galene and phone browsers.
+
+## G4: moderation with Galene's permissions (2026-10-22)
+
+Script: `g4/modtest` (Go, ~400 lines). It runs scripted operator, attendee and viewer clients over Galene's WebSocket protocol, with Pion media (Opus silence frames for the commenter). Groups:
+- `g4`: an `operator` user with `op`, and `wildcard-user` with `observe`;
+- `g4t`: tokens only, `authKeys` with an HS256 key and no users.
+
+Galene 1.2.1, localhost.
+
+**20 / 23 checks pass. The 3 failures are Galene limitations, confirmed in the source.**
+
+| Need | Galene mechanism | Result |
+|---|---|---|
+| No self-unmute | Attendees have `observe` (no permissions); offers get `abort` + "not authorised" | ✅ refused; nothing reaches other clients |
+| Operator calls on a commenter | `useraction present` → client gets `joined/change` with `present`, then publishes | ✅ permission event immediate; **247 ms** from grant to the commenter's audio at another client |
+| Operator ends the comment | `useraction unpresent` → server deletes the user's up-streams (`delUpConn`) | ✅ others get `close` at once; media stops within the 100 ms check window; commenter gets `abort` |
+| Commenter limited to the mic | — | ❌ `present` also accepts video and screen share; enforce audio-only in our client and let the operator `unpresent` |
+| Raised hands | `useraction setdata {raisehand: true}` on oneself, pushed as `user/change` | ✅ reaches the operator immediately; **also visible to every attendee** |
+| No recording | `"allow-recording": false` | ✅ `groupaction record` refused ("not authorised") |
+| Lock once the meeting starts | `groupaction lock` | ✅ new attendees get `fail` with the lock message; an operator (e.g. remote attendant) still joins; unlock admits again |
+| Kick | `useraction kick` | ✅ immediate |
+| Rename | — | ❌ no such action ("unknown user action"); the username is fixed at join |
+| Attendee list private | — | ❌ every client receives every user's name and data (`user add/change`) |
+| **Lobby** (hears nothing, invisible) | No waiting room. **The hub keeps people on its own lobby page and mints a signed token only on admit** | ✅ token-only group refuses password joins; a hub-minted JWT (`sub` = display name, `aud` = group URL, `permissions: []`, `exp`) joins with that name; expired and wrong-group tokens refused |
+| Part-holder | Token with `permissions: ["present", "message"]` | ✅ joins with `present` |
+
+### Interpretation
+
+- **The core meeting rules are enforced by the server**: no self-unmute, operator-controlled unmute, an immediate cut, lock, kick, no recording. They are as strong as LiveKit's (S9), and simpler: two permission names in place of per-source grants.
+- **The lobby lives on the hub, not in Galene.** That fits the plan (the hub already does directory/TLS/signaling):
+  - Attendees wait on a hub page and never touch Galene until admitted.
+  - The operator admits them from Solin; the hub mints a short-lived token with the attendee's display name.
+  - Attendance is the list of tokens issued.
+- **Rename** becomes "issue a new token and rejoin". This costs a reconnect (about 1 s), which is acceptable because the attendant renames before admitting.
+- **Audio-only commenters and the private attendee list are client-side conventions.** Our web client never offers video and never shows the attendee list or other people's hands. A modified client could do both. The operator sees any video stream and can `unpresent` or kick. The list exposes only display names the hub chose, comparable to Zoom's participant list.
+- Galene can't hide users from each other. If that matters, the options are a small Galene patch (don't push `user` messages to `observe` clients) or separate subgroups.
