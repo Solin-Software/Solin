@@ -47,6 +47,18 @@ async function sample() {
       aLost: a.packetsLost,
     });
   }
+  // Selected ICE pair: which path the media actually uses.
+  let pair = null;
+  for (const st of stats.values()) {
+    if (st.type === 'transport' && st.selectedCandidatePairId) pair = by.get(st.selectedCandidatePairId);
+  }
+  if (!pair) for (const st of stats.values()) if (st.type === 'candidate-pair' && st.nominated && st.state === 'succeeded') pair = st;
+  if (pair) {
+    const desc = c => c && `${c.candidateType}${c.relayProtocol ? '/' + c.relayProtocol : ''} ${c.protocol} ${c.address ?? c.ip}:${c.port}`;
+    r.iceLocal = desc(by.get(pair.localCandidateId));
+    r.iceRemote = desc(by.get(pair.remoteCandidateId));
+    r.rttMs = pair.currentRoundTripTime != null ? Math.round(pair.currentRoundTripTime * 1000) : null;
+  }
   prev = { now, v, a };
   reports++;
   post(r);
@@ -56,6 +68,7 @@ async function sample() {
     `<span class="${audioOk ? 'ok' : 'bad'}">audio ${audioOk ? 'OK' : 'silent?'}</span>\n` +
     `${r.vCodec} ${r.size} ${r.fps} fps, decoder ${r.decoder}${r.powerEfficient ? ' (hardware)' : ''}\n` +
     `freezes ${r.freezes}, dropped ${r.framesDropped}, lost ${r.vLost}/${r.aLost}, audio concealed ${r.concealedPct}%\n` +
+    `path: ${r.iceLocal ?? '?'} -> ${r.iceRemote ?? '?'}, rtt ${r.rttMs ?? '?'} ms\n` +
     `reports sent: ${reports} (keep open ~1 min; you may also lock the screen to test audio)`;
 }
 
@@ -64,6 +77,20 @@ async function start() {
   started = performance.now();
   statusEl.textContent = 'connecting...';
   const sc = new ServerConnection();
+  if (params.has('relay')) {
+    // Force TURN: only relay candidates, as when no direct path exists.
+    const base = sc.getRTCConfiguration.bind(sc);
+    const tcpOnly = params.get('relay') === 'tcp';   // emulate a UDP-blocked network
+    sc.getRTCConfiguration = () => {
+      const conf = { ...base(), iceTransportPolicy: 'relay' };
+      if (tcpOnly) {
+        conf.iceServers = (conf.iceServers || []).map(s => ({
+          ...s, urls: [].concat(s.urls).filter(u => u.includes('transport=tcp')),
+        })).filter(s => s.urls.length);
+      }
+      return conf;
+    };
+  }
   sc.onconnected = function () { this.join(GROUP, `${LABEL}-${Date.now() % 100000}`, 'x'); };
   sc.onjoined = function (kind, group, perms, status, data, error, message) {
     if (kind === 'join') this.request({ '': ['audio', 'video'] });

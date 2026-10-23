@@ -179,3 +179,36 @@ Galene 1.2.1, localhost.
 - **Rename** becomes "issue a new token and rejoin". This costs a reconnect (about 1 s), which is acceptable because the attendant renames before admitting.
 - **Audio-only commenters and the private attendee list are client-side conventions.** Our web client never offers video and never shows the attendee list or other people's hands. A modified client could do both. The operator sees any video stream and can `unpresent` or kick. The list exposes only display names the hub chose, comparable to Zoom's participant list.
 - Galene can't hide users from each other. If that matters, the options are a small Galene patch (don't push `user` messages to `observe` clients) or separate subgroups.
+
+## G6: reaching a hall behind CGNAT (2026-10-22)
+
+### Setup
+
+- **Hall:** this PC on the home line (IPv4 behind CGNAT, public `181.232.152.160`) running Galene, publishing the test clip with path D.
+- **Relay:** a temporary dual-stack coturn on GCP (`e2-small`, São Paulo, custom `IPV4_IPV6` subnet, `use-auth-secret`, UDP + TCP 3478, relay ports 49160–49260). Script in `g6/coturn_startup.sh`. **Deleted after the test**, with its network and firewall rules.
+- **Galene:** `data/ice-servers.json` with STUN plus the TURN URLs (IPv4 and IPv6, UDP and TCP), `credentialType: "hmac-sha1"`. Galene mints time-limited TURN credentials for every client.
+- **Viewer:** the G2 page now reports the selected ICE pair. `relay=1` forces `iceTransportPolicy: relay`; `relay=tcp` also keeps only TCP TURN URLs, emulating a UDP-blocked network.
+- **Signaling:** Cloudflare quick tunnels, as in S4/G2.
+
+### Finding: Galene's own connections use the configured ICE servers
+
+`rtpconn.go` creates every server-side PeerConnection with `ice.ICEConfiguration()`, the same STUN/TURN list handed to clients. So the hall gathers its server-reflexive address via STUN and can also take its own relay. Galene's startup self-test confirmed it: `Relay test successful in 752 ms, RTT = 19 ms`.
+
+### Results (phone: Chrome 155, Android 10, 4G carrier = IPv6-only)
+
+| Case | Selected path | Video | Loss / freezes | RTT |
+|---|---|---|---|---|
+| 4G phone, no forcing | **direct IPv6** host ↔ host (`2804:214:…` ↔ hall `2804:1354:…`) | 28–30 fps | 0 lost; 1 freeze after ~45 s | 49–67 ms |
+| 4G phone, relay forced | `relay/udp` IPv4 on the VM ↔ hall's CGNAT address (prflx) | 30 fps, 65 s | 0 lost, 0 freezes, 0.05% audio concealed | 44–58 ms |
+| Desktop, TCP-only relay (UDP-blocked emulation) | `relay/tcp` to the VM, UDP onward to the hall | 30 fps | 0 lost, 0 freezes | 40 ms |
+
+- **The home line now has native IPv6.** S4, two days earlier, found none. Galene advertised it, so an IPv6-only 4G phone reached the hall directly with no relay. Halls with IPv6 need no relay for IPv6 attendees.
+- **The dual-stack TURN fallback works with Galene exactly as with LiveKit in S4.** The IPv6-only phone got an IPv4 relay address, and the relay reached the IPv4 CGNAT hall.
+- **TURN over TCP works.** TLS on 443, for networks that only allow web traffic, needs a certificate on coturn and isn't tested.
+- In the unforced run the WebSocket closed after ~48 s (`close 1006`) with the page still visible. Cause unknown: Android, the carrier, or the user switching away. The forced-relay run (65 s) didn't drop. Together with G2's screen-lock finding, **the client must reconnect automatically**.
+
+### Still open for G6
+
+- TURN over TLS on 443.
+- Hall on mobile (IPv6-only hall) ↔ IPv4-only attendee.
+- Cause of the 4G WebSocket drop.
