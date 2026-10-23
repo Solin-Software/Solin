@@ -267,3 +267,33 @@ S3's harness with the transport swapped (`g5/run_g5.sh`):
 - **Echo cancellation behaves as in S3** (61 / 66 dB there), as expected: the canceller sits in the hall script, not the SFU.
 - **Real network:** add each attendee's one-way delay twice (typically 20–60 ms each way) plus jitter buffers. Still well inside conversational limits.
 - **Bug found while porting:** the hall stamped each 10 ms block with its send time, which jitters. whippub's PCM framing treats any jump over 5 ms as a gap and restarted, so no audio was sent. The hall now stamps blocks by sample count, like a sound-card clock; Solin's capture path must do the same. whippub also no longer sends empty RTCP.
+
+## Viewer auto-reconnect and screen lock (2026-10-22)
+
+The G2 viewer (`g2/web/viewer.js`) now:
+- **reconnects automatically:** a new `ServerConnection`, retries with backoff (0.5 s doubling to 8 s), rejoin, re-request;
+- **reconnects immediately** when the page becomes visible again;
+- **declares a media session** (title, `playing`);
+- **logs** `closed`, `reconnected` (with downtime) and `visibility` events.
+
+Galene's keepalive: `protocol.js` pings from a JavaScript timer every 15–20 s, and the server drops a client after 45 s of silence (`webclient.go`).
+
+**Desktop check:** Galene and the publisher restarted under a running viewer. It reconnected on its own and was playing again **8.0 s** after the drop, mostly server/publisher restart time.
+
+**Phone, Chrome 155 / Android 10, home Wi-Fi, screen locked** (page clock):
+
+| t | Event |
+|---|---|
+| 11 s | screen locked (page `hidden`), still connected |
+| 15–25 s | stats keep arriving while hidden; audio energy present. The user heard the program continue |
+| **28 s** | **WebSocket closed (`1006`), ~17 s after locking**: Galene closes the streams, audio stops. Reconnect attempts are throttled while hidden |
+| 33 s | unlocked → immediate reconnect |
+| ~33.2 s | **playing again ~0.2 s after unlock** (5.2 s after the close) |
+
+- **Auto-reconnect fixes the "never comes back" problem.** After unlock the page resumes in a fraction of a second, with no user action.
+- **Listening with the screen off still stops after ~15–20 s.** The client-side close comes well before Galene's 45 s timeout, so Android/Chrome cut the background page's WebSocket, not the server.
+- **Options, not yet tested:**
+  1. a Screen Wake Lock option in the viewer (screen stays on during the meeting; costs battery);
+  2. a Galene patch that keeps downstream media alive for a grace period after the WebSocket drops, which helps only if the media path survives;
+  3. an installed app (PWA/TWA or native) with an Android foreground service, which is how meeting apps keep audio with the screen off.
+- The same test should be run against LiveKit's SDK, which has its own reconnect logic, before comparing the two on this point.

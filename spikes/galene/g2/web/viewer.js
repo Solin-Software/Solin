@@ -69,14 +69,15 @@ async function sample() {
     `${r.vCodec} ${r.size} ${r.fps} fps, decoder ${r.decoder}${r.powerEfficient ? ' (hardware)' : ''}\n` +
     `freezes ${r.freezes}, dropped ${r.framesDropped}, lost ${r.vLost}/${r.aLost}, audio concealed ${r.concealedPct}%\n` +
     `path: ${r.iceLocal ?? '?'} -> ${r.iceRemote ?? '?'}, rtt ${r.rttMs ?? '?'} ms\n` +
-    `reports sent: ${reports} (keep open ~1 min; you may also lock the screen to test audio)`;
+    `reports sent: ${reports}, reconnects: ${reconnects}`;
 }
 
-async function start() {
-  document.getElementById('start')?.remove();
-  started = performance.now();
-  statusEl.textContent = 'connecting...';
-  const sc = new ServerConnection();
+// Connection state for automatic reconnection.
+let sc = null, closedAt = null, attempt = 0, reconnects = 0, retryTimer = null;
+
+function connect() {
+  retryTimer = null;
+  sc = new ServerConnection();
   if (params.has('relay')) {
     // Force TURN: only relay candidates, as when no direct path exists.
     const base = sc.getRTCConfiguration.bind(sc);
@@ -91,6 +92,7 @@ async function start() {
       return conf;
     };
   }
+  const me = sc;
   sc.onconnected = function () { this.join(GROUP, `${LABEL}-${Date.now() % 100000}`, 'x'); };
   sc.onjoined = function (kind, group, perms, status, data, error, message) {
     if (kind === 'join') this.request({ '': ['audio', 'video'] });
@@ -98,18 +100,56 @@ async function start() {
   };
   sc.ondownstream = function (stream) {
     pc = stream.pc;
+    prev = null;   // new connection: counters restart
     stream.ondowntrack = (track, transceiver, ms) => {
       if (video.srcObject !== ms) { video.srcObject = ms; video.play().catch(err => post({ label: LABEL, playError: String(err) })); }
+      if (closedAt !== null) {
+        post({ label: LABEL, event: 'reconnected', downtime_ms: Math.round(performance.now() - closedAt), attempt, visibility: document.visibilityState });
+        closedAt = null; attempt = 0; reconnects++;
+      }
     };
   };
-  sc.onclose = () => post({ label: LABEL, closed: true });
-  setInterval(sample, 5000);
+  sc.onclose = function (code, reason) {
+    if (me !== sc) return;   // a stale connection
+    pc = null;
+    if (closedAt === null) closedAt = performance.now();
+    post({ label: LABEL, event: 'closed', code, reason, visibility: document.visibilityState, t: Math.round((performance.now() - started) / 1000) });
+    scheduleReconnect();
+  };
   try {
-    await sc.connect(WS);
+    sc.connect(WS);
   } catch (err) {
-    statusEl.textContent = `connect failed: ${err}`;
     post({ label: LABEL, error: String(err) });
+    scheduleReconnect();
   }
+}
+
+function scheduleReconnect(now = false) {
+  if (retryTimer) return;
+  const delay = now ? 0 : Math.min(8000, 500 * 2 ** attempt);
+  attempt++;
+  statusEl.textContent = `connection lost; reconnecting in ${delay / 1000} s (attempt ${attempt})...`;
+  retryTimer = setTimeout(connect, delay);
+}
+
+async function start() {
+  document.getElementById('start')?.remove();
+  started = performance.now();
+  statusEl.textContent = 'connecting...';
+  // Tell the OS this page is playing media, which may keep it running in the background.
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: 'Meeting', artist: 'Solin' });
+    navigator.mediaSession.playbackState = 'playing';
+  }
+  document.addEventListener('visibilitychange', () => {
+    post({ label: LABEL, event: 'visibility', state: document.visibilityState, connected: !!pc, t: Math.round((performance.now() - started) / 1000) });
+    if (document.visibilityState === 'visible' && closedAt !== null) {
+      clearTimeout(retryTimer); retryTimer = null;
+      scheduleReconnect(true);
+    }
+  });
+  setInterval(sample, 5000);
+  connect();
 }
 
 document.getElementById('start').onclick = start;
