@@ -146,6 +146,7 @@ class MainWindowUiContext:
     jw_songs_store: Any
     jwpub_service_factory: Callable[[QObject], Any]
     memorial_service_factory: Callable[[QObject], Any]
+    hosted_meeting_settings: Any = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -466,6 +467,7 @@ class MainWindowUiController:
             congregation_lookup_factory=context.congregation_lookup_factory,
             auto_share_accessibility_trusted=context.auto_share_accessibility_trusted,
             background_song_settings=context.background_song_settings,
+            hosted_meeting_settings=context.hosted_meeting_settings,
             defer_build=True,
             parent=context.parent,
         )

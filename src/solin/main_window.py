@@ -571,6 +571,7 @@ class MainWindow(QWidget):
             self,
         )
         self._zoom_meetings.event_triggered.connect(self._auto_keys.dispatch)
+        self._init_hosted_meeting(profile_settings_bundle)
 
         self._window_host.setWindowTitle(self.tr("Solin"))
         self._window_state = WindowStateController(
@@ -628,6 +629,7 @@ class MainWindow(QWidget):
                 about_settings_factory=service_factories.about_settings,
                 obs_settings=self._obs_settings,
                 zoom_settings=self._zoom_settings,
+                hosted_meeting_settings=self._hosted_meeting_settings,
                 auto_share_settings=self._auto_share_settings,
                 auto_key_settings=self._auto_key_settings,
                 media_settings=self._media_settings,
@@ -1625,6 +1627,49 @@ class MainWindow(QWidget):
         # The content widget is installed by now, so the scenes panel can claim
         # the bottom dock strip without tripping the install-once guard.
         self._quick_toolbar.restore_docked_scene_panel()
+        self._wire_hosted_meeting_ui()
+
+    # ── Hosted meetings (Solin hosts the meeting itself on Galene) ────────────
+
+    def _init_hosted_meeting(self, profile_settings_bundle) -> None:
+        from .core.hosted_meeting.service import HostedMeetingService
+        from .core.hosted_meeting.settings import HostedMeetingSettingsStore
+
+        store = getattr(profile_settings_bundle, "hosted_meeting", None)
+        if store is None:
+            store = HostedMeetingSettingsStore(self._zoom_settings.settings)
+        self._hosted_meeting_settings = store
+        self._hosted_meeting = HostedMeetingService(
+            store, self.runtime_paths.data_dir, scene_runtime=self.scene_runtime, parent=self,
+        )
+        self._meeting_console = None
+
+    def _wire_hosted_meeting_ui(self) -> None:
+        from .core.hosted_meeting.service import MeetingState
+        from .core.hosted_meeting.settings import MeetingProvider
+
+        toolbar = getattr(self, "_quick_toolbar", None)
+        service = getattr(self, "_hosted_meeting", None)
+        if toolbar is None or service is None or not hasattr(toolbar, "set_hosted_meeting"):
+            return
+
+        def sync(*_args) -> None:
+            mode = self._hosted_meeting_settings.provider() is MeetingProvider.SOLIN
+            toolbar.set_hosted_meeting(mode, service.state is MeetingState.LIVE)
+
+        service.info_changed.connect(sync)
+        domain = getattr(getattr(self, "settings_widget", None), "meeting_hosting", None)
+        if domain is not None:
+            domain.provider_changed.connect(sync)
+        toolbar.hosted_meeting_requested.connect(self._open_meeting_console)
+        sync()
+
+    def _open_meeting_console(self) -> None:
+        if self._meeting_console is None:
+            from .widgets.meeting_console_window import MeetingConsoleWindow
+
+            self._meeting_console = MeetingConsoleWindow(self._hosted_meeting, self._window_host)
+        self._meeting_console.present()
 
     def _apply_global_stylesheet(self, stylesheet: str) -> None:
         app = QApplication.instance()
@@ -1776,6 +1821,12 @@ class MainWindow(QWidget):
         if getattr(self, "_closing", False):
             return
         self._closing = True
+        hosted_meeting = getattr(self, "_hosted_meeting", None)
+        if hosted_meeting is not None:
+            try:
+                hosted_meeting.shutdown()  # before the scene engine stops
+            except Exception:  # noqa: BLE001 - shutdown must continue
+                log.warning("hosted meeting shutdown failed", exc_info=True)
 
         if self._shutdown_controller is not None:
             self._shutdown_controller.shutdown()
@@ -1803,6 +1854,7 @@ class MainWindow(QWidget):
 
         ui_preparation = getattr(self, "_ui_preparation", None)
         self._partial_cleanup_method("UI preparation", ui_preparation, "cancel")
+        self._partial_cleanup_method("hosted meeting", getattr(self, "_hosted_meeting", None), "shutdown")
         self._partial_cleanup_method(
             "remote control",
             getattr(self, "_remote_control", None),

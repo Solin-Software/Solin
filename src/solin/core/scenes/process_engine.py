@@ -50,6 +50,8 @@ from solin.core.scenes.engine import (
     ScenePreparation,
     SceneSourcePreview,
     ProgramRecordingEvent,
+    MeetingOutputEvent,
+    MeetingOutputSettings,
     SourceHealthEvent,
     SourceHealthStatus,
     scene_engine_document_record,
@@ -1022,6 +1024,47 @@ class SubprocessSceneEngine:
             converter=_ack_from_envelope,
         )
 
+    def start_meeting_output(
+        self,
+        settings: MeetingOutputSettings,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if not isinstance(settings, MeetingOutputSettings):
+            return _failed_future(TypeError("Invalid meeting output settings"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="start_meeting_output",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload=settings.to_engine_record(),
+            converter=_ack_from_envelope,
+        )
+
+    def stop_meeting_output(
+        self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="stop_meeting_output",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={},
+            converter=_ack_from_envelope,
+        )
+
     def open_media(
         self,
         path: str,
@@ -1341,6 +1384,7 @@ class SubprocessSceneEngine:
                 "output_health",
                 "frame_egress_ready",
                 "program_recording_state",
+                "meeting_output_state",
                 "media_playback_state",
                 "media_video_ready",
             }:
@@ -1358,6 +1402,9 @@ class SubprocessSceneEngine:
             return
         if envelope.message_type == "program_recording_state":
             self._emit_event(_program_recording_event_from_envelope(envelope))
+            return
+        if envelope.message_type == "meeting_output_state":
+            self._emit_event(_meeting_output_event_from_envelope(envelope))
             return
         if envelope.message_type == "media_playback_state":
             self._emit_event(_media_playback_event_from_envelope(envelope))
@@ -2172,6 +2219,17 @@ def _audio_device_discovery_from_envelope(
             maximum=128,
         ),
     )
+
+
+def _meeting_output_event_from_envelope(envelope: SceneIpcEnvelope) -> MeetingOutputEvent:
+    payload = require_payload_fields(
+        envelope.payload, frozenset({"state", "detail"}), message_type="meeting output state",
+    )
+    state = require_text(payload["state"], "meeting output state", maximum=32)
+    if state not in {"idle", "starting", "live", "reconnecting", "failed"}:
+        raise SceneIpcMessageError("Invalid meeting output state")
+    return MeetingOutputEvent(state=state, detail=require_text(payload["detail"], "meeting output detail",
+                                                                  maximum=512))
 
 
 def _program_recording_event_from_envelope(

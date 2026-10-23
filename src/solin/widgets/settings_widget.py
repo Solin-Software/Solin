@@ -12,6 +12,7 @@ from solin.styles.theme import PALETTE
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
 from solin.ui.qml.settings.about import AboutSettings
 from solin.ui.qml.settings.general import GeneralSettings
+from solin.ui.qml.settings.hosted_meeting import HostedMeetingSettings
 from solin.ui.qml.settings.integrations import IntegrationSettings
 from solin.ui.qml.settings.navigation import SettingsNavigation
 from solin.ui.qml.settings.remote import RemoteSettings
@@ -31,6 +32,7 @@ class SettingsWidget(QWidget):
         yeartext_service_factory, congregation_lookup_factory,
         auto_share_accessibility_trusted,
         about_settings_factory: Callable[[QObject], AboutSettings],
+        hosted_meeting_settings=None,
         defer_build=False, parent=None,
     ):
         super().__init__(parent)
@@ -58,9 +60,15 @@ class SettingsWidget(QWidget):
             remote_control_settings, remote_control_credentials,
             qr_generation_session_factory, dialog_parent=self, parent=self,
         )
+        if hosted_meeting_settings is None:
+            from solin.core.foundation.settings_store import SettingsStore
+            from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore
+
+            hosted_meeting_settings = HostedMeetingSettingsStore(SettingsStore.for_namespace("Solin", "HostedMeeting"))
+        self.meeting_hosting = HostedMeetingSettings(hosted_meeting_settings, parent=self)
         self.navigation = SettingsNavigation({
             "general": self.general, "integrations": self.integrations, "remote": self.remote,
-            "about": self.about,
+            "meetingHosting": self.meeting_hosting, "about": self.about,
         }, self)
         self._qml = QQuickWidget(self)
         self.qml_load_handle = configure_qml_host(
@@ -68,6 +76,7 @@ class SettingsWidget(QWidget):
             context_properties={"settingsGeneral": self.general,
                                 "settingsIntegrations": self.integrations,
                                 "settingsRemote": self.remote,
+                                "settingsMeetingHosting": self.meeting_hosting,
                                 "settingsAbout": self.about,
                                 "settingsNavigation": self.navigation},
             image_providers={"settingsicons": SvgIconProvider({
@@ -94,6 +103,7 @@ class SettingsWidget(QWidget):
         self.general.refresh_runtime()
         self.integrations.refresh_runtime()
         self.remote.refresh_runtime()
+        self.meeting_hosting.refresh_runtime()
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -103,7 +113,7 @@ class SettingsWidget(QWidget):
     def retranslateUi(self):  # noqa: N802 - application language host contract
         if self._closed:
             return
-        for domain in (self.general, self.integrations, self.remote, self.about):
+        for domain in (self.general, self.integrations, self.remote, self.meeting_hosting, self.about):
             domain.refresh_language()
         self.navigation.refresh_language()
         self._qml.engine().retranslate()
@@ -119,5 +129,5 @@ class SettingsWidget(QWidget):
         self._closed = True
         self.qml_load_handle.cancel()
         self._qml.setSource(QUrl())
-        for domain in (self.general, self.integrations, self.remote, self.about):
+        for domain in (self.general, self.integrations, self.remote, self.meeting_hosting, self.about):
             domain.cleanup()

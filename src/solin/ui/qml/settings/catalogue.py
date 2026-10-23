@@ -135,6 +135,24 @@ SECTIONS = (
         Group("zoom", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), "integrations", (
             Setting("zoomEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Zoom Meetings"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Meeting audio and video controls.")),
         ), True, visible_when="zoomAvailable"),
+        Group("meetingHosting", QT_TRANSLATE_NOOP("SettingsWidget", "Hosted meetings"), "meetingHosting", (
+            Setting("meetingProvider", QT_TRANSLATE_NOOP("SettingsWidget", "Host meetings with"), "select", options="providerOptions",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Solin can host the hybrid meeting itself: attendees join from a browser link, without Zoom.")),
+            Setting("hallName", QT_TRANSLATE_NOOP("SettingsWidget", "Meeting name"), "input", visible_when="solinHosting"),
+            Setting("quality", QT_TRANSLATE_NOOP("SettingsWidget", "Video quality"), "select", options="qualityOptions", visible_when="solinHosting"),
+            Setting("hallFeed", QT_TRANSLATE_NOOP("SettingsWidget", "Hall audio feed"), "select", options="hallFeedOptions", visible_when="solinHosting",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "The input that carries the hall's sound from the mixer to attendees.")),
+            Setting("hallFeedDelay", QT_TRANSLATE_NOOP("SettingsWidget", "Hall feed delay (ms)"), "input", visible_when="solinHosting",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Delays the hall's sound to match the camera's picture (about 100 ms for USB webcams).")),
+            Setting("remoteAudioDevice", QT_TRANSLATE_NOOP("SettingsWidget", "Commenters' audio output"), "select", options="remoteAudioOptions", visible_when="solinHosting",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "The output connected to the mixer channel for remote audio (as with Zoom).")),
+            Setting("webPort", QT_TRANSLATE_NOOP("SettingsWidget", "Local port"), "input", visible_when="solinHosting"),
+            Setting("hubStatus", QT_TRANSLATE_NOOP("SettingsWidget", "Disconnect hub"), "action", action="disconnectHub", visible_when="hubConnected"),
+            Setting("hubCode", QT_TRANSLATE_NOOP("SettingsWidget", "Hub connection code"), "password", visible_when="solinHosting",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Paste the code from your hub operator so attendees can join from the internet.")),
+            Setting("connectHub", QT_TRANSLATE_NOOP("SettingsWidget", "Save hub connection"), "action", action="connectHub", visible_when="solinHosting"),
+            Setting("helpersStatus", QT_TRANSLATE_NOOP("SettingsWidget", "Refresh devices"), "action", action="refreshDevices", visible_when="solinHosting"),
+        ), True, "hubStatus"),
     )),
     Section("automations", QT_TRANSLATE_NOOP("SettingsWidget", "Automations"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Sharing and shortcuts"), "automations", (
@@ -184,7 +202,9 @@ def translated_catalogue(capabilities: dict[str, dict[str, Any]]) -> list[dict[s
         return QCoreApplication.translate("SettingsWidget", source) if source else ""
 
     def translate_group(group: Group) -> dict[str, Any] | None:
-        state = capabilities[group.domain]
+        state = capabilities.get(group.domain)
+        if state is None:
+            return None  # a domain this host does not provide
         if group.visible_when and not state.get(group.visible_when):
             return None
         rows = [{

@@ -11,6 +11,7 @@ Item {
     readonly property var domains: ({
         general: settingsGeneral,
         integrations: settingsIntegrations,
+        meetingHosting: settingsMeetingHosting,
         remote: settingsRemote,
         about: settingsAbout
     })

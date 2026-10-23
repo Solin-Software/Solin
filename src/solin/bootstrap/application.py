@@ -74,6 +74,7 @@ def _build_main_window_profile_settings(profile_settings):
     from solin.core.remote.notification_settings import NotificationSettingsStore
     from solin.core.remote_control.security import RemoteControlCredentialsStore
     from solin.core.remote_control.settings import RemoteControlSettingsStore
+    from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore
     from solin.core.talk_theme.settings import TalkThemeSettingsStore
     from solin.core.windowing.settings import WindowGeometrySettingsStore
 
@@ -83,6 +84,7 @@ def _build_main_window_profile_settings(profile_settings):
         browser=BrowserSettingsStore.for_profile_settings(profile_settings),
         obs=OBSSettingsStore.for_profile_settings(profile_settings),
         zoom=ZoomSettingsStore.for_profile_settings(profile_settings),
+        hosted_meeting=HostedMeetingSettingsStore.for_profile_settings(profile_settings),
         auto_share=AutoShareSettingsStore.for_profile_settings(profile_settings),
         auto_key=AutoKeySettingsStore.for_profile_settings(profile_settings),
         projection_playback=ProjectionPlaybackSettingsStore.for_profile_settings(profile_settings),

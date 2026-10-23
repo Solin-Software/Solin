@@ -177,6 +177,7 @@ class QuickAccessToolbar(QQuickWidget):
     remote_session_disconnect_requested = Signal(str)
     remote_sessions_disconnect_all_requested = Signal()
     zoom_before_meeting_requested = Signal()
+    hosted_meeting_requested = Signal()
     zoom_meeting_start_requested = Signal()
     zoom_after_meeting_requested = Signal()
     zoom_background_song_link_toggled = Signal(bool)
@@ -332,6 +333,8 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── Zoom Panel (native QWidget popup) ─────────────────────────────
         self._zoom_panel = None
+        self._hosted_meeting_mode = False
+        self._hosted_meeting_live = False
         self._bridge.set_zoom_visible(self._zoom_enabled)
         if self._zoom is not None:
             self._zoom.enabled_changed.connect(self.set_zoom_enabled)
@@ -561,13 +564,27 @@ class QuickAccessToolbar(QQuickWidget):
         self._zoom_connected = connected
         if self._zoom_panel is not None:
             self._zoom_panel.set_connected(connected)
-        self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.accent if connected else PALETTE.text_muted))
+        if not getattr(self, "_hosted_meeting_mode", False):
+            self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.accent if connected else PALETTE.text_muted))
         self._update_separator()
         self._reposition()
 
+    def set_hosted_meeting(self, mode: bool, live: bool) -> None:
+        """With Solin hosting the meeting, the meeting button opens the Live meeting console."""
+        self._hosted_meeting_mode = bool(mode)
+        self._hosted_meeting_live = bool(live)
+        self._bridge.set_zoom_visible(self._zoom_enabled or self._hosted_meeting_mode)
+        if self._hosted_meeting_mode:
+            color = PALETTE.accent if self._hosted_meeting_live else PALETTE.text_muted
+            self._bridge.set_zoom_icon_color(_icon_hex(color))
+        else:
+            self._bridge.set_zoom_icon_color(_icon_hex(PALETTE.accent if self._zoom_connected else PALETTE.text_muted))
+        self._update_separator()
+        self.reposition()
+
     def set_zoom_enabled(self, enabled: bool) -> None:
         self._zoom_enabled = enabled
-        self._bridge.set_zoom_visible(enabled)
+        self._bridge.set_zoom_visible(enabled or getattr(self, "_hosted_meeting_mode", False))
         if not enabled and self._zoom_panel is not None:
             self._zoom_panel.close()
         self._update_separator()
@@ -1162,6 +1179,9 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _on_zoom_clicked(self):
         hide_themed_tooltip()
+        if self._hosted_meeting_mode:
+            self.hosted_meeting_requested.emit()
+            return
         if not self._zoom or not self._zoom_enabled:
             return
         panel = self._ensure_zoom_panel()

@@ -50,6 +50,8 @@ MONITORING_MONITOR_AND_OUTPUT = 2
 # recording encodes track 1; track 6 is reserved for the hosted-meeting mix.
 RECORDING_MIX_INDEX = 0
 RECORDING_AUDIO_MIXERS = 1 << RECORDING_MIX_INDEX
+MEETING_MIX_INDEX = 5
+MEETING_AUDIO_MIXERS = 1 << MEETING_MIX_INDEX
 NO_AUDIO_MIXERS = 0
 
 # Highest usable global output channel index in libobs (0..63).
@@ -267,6 +269,9 @@ class ObsRuntime:
         self._video = ObsVideoConfig()
         self._used_channels: set[int] = set()
         self._monitoring_device: tuple[str, str] | None = None
+        # While a hosted meeting is live, media sources are also output on the
+        # meeting track (track 6) so remote attendees hear them directly.
+        self.meeting_mix_enabled = False
         self._owned_x11_display: _OwnedX11Display | None = None
         # ONE shared capture source per camera device — a V4L2 device can't be
         # opened twice, so the projector and the virtual camera reference the same
@@ -918,7 +923,7 @@ class ObsRuntime:
 
     # ── Source helpers ────────────────────────────────────────────────────
 
-    def set_source_monitoring(self, source: Any, monitoring_type: int) -> None:
+    def set_source_monitoring(self, source: Any, monitoring_type: int, *, keep_mixers: bool = False) -> None:
         """Set a source's monitoring type (route its audio to the speakers).
 
         ``MONITORING_MONITOR_ONLY`` also clears the source's mixer tracks. Stock
@@ -928,12 +933,13 @@ class ObsRuntime:
         mixes. Without this, media would land directly in the recording track
         on those builds — on top of the speaker loopback that the system-audio
         capture already records. A caller that later wants the source in a mix
-        sets its tracks explicitly.
+        sets its tracks explicitly (``keep_mixers`` leaves them untouched, e.g. for
+        "monitor and output" on the hosted-meeting track).
         """
         from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
         lib: Any = get_lib()
-        monitor_only = int(monitoring_type) == MONITORING_MONITOR_ONLY
+        monitor_only = int(monitoring_type) == MONITORING_MONITOR_ONLY and not keep_mixers
 
         def apply() -> None:
             if monitor_only:
@@ -972,6 +978,8 @@ __all__ = [
     "MONITORING_NONE",
     "MONITORING_MONITOR_ONLY",
     "MONITORING_MONITOR_AND_OUTPUT",
+    "MEETING_AUDIO_MIXERS",
+    "MEETING_MIX_INDEX",
     "NO_AUDIO_MIXERS",
     "RECORDING_AUDIO_MIXERS",
     "RECORDING_MIX_INDEX",

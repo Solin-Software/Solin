@@ -19,6 +19,7 @@ from ..core.projection.monitor_allocation import MonitorAllocationStore
 from ..core.remote.notification_settings import NotificationSettingsStore
 from ..core.remote_control.security import RemoteControlCredentialsStore
 from ..core.remote_control.settings import RemoteControlSettingsStore
+from ..core.hosted_meeting.settings import HostedMeetingSettingsStore
 from ..core.foundation.settings_store import ProfileAppSettingsStore
 from ..core.talk_theme.settings import TalkThemeSettingsStore
 from ..core.windowing.settings import WindowGeometrySettingsStore
@@ -45,3 +46,4 @@ class MainWindowProfileSettings:
     talk_theme: TalkThemeSettingsStore
     remote_control: RemoteControlSettingsStore
     remote_control_credentials: RemoteControlCredentialsStore
+    hosted_meeting: HostedMeetingSettingsStore | None = None

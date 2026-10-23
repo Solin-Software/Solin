@@ -372,6 +372,7 @@ class LibobsSidecarEngine:
         self._output_health: OutputHealth | None = None
         self._next_output_poll_at = 0.0
         self._recorder: Any | None = None
+        self._meeting_output: Any | None = None
         self._audio_mixer: Any | None = None
         self._camera_generation = 0
         self._camera_health_bindings: tuple[_CameraHealthBinding, ...] = ()
@@ -520,6 +521,13 @@ class LibobsSidecarEngine:
         self._media_source = LibobsMediaSource(runtime)
         # Background audio slot: monitored, but not composited into the scene.
         self._bg_media_source = LibobsMediaSource(runtime)
+        from solin.core.scenes.libobs_meeting_output import LibobsMeetingOutput
+
+        self._meeting_output = LibobsMeetingOutput(
+            runtime,
+            media_sources=self._playing_media_sources,
+            on_state=self._emit_meeting_output_state,
+        )
 
     def handle(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope | None:
         if request.message_type == "set_editor_source_preview":
@@ -542,6 +550,10 @@ class LibobsSidecarEngine:
             return build_response(request)
         if message_type == "reconcile_local_cameras":
             return self._reconcile_local_cameras(request)
+        if message_type == "start_meeting_output":
+            return self._handle_start_meeting_output(request)
+        if message_type == "stop_meeting_output":
+            return self._handle_stop_meeting_output(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
         if message_type == "stop_program_recording":
@@ -842,6 +854,52 @@ class LibobsSidecarEngine:
         except Exception:  # noqa: BLE001 - native editing failure is a typed preview error
             log.warning("Could not update editor source preview", exc_info=True)
             return reply(SceneSourcePreview(error_code="source_unavailable"))
+
+    def _playing_media_sources(self) -> list[Any]:
+        sources = []
+        for media in (getattr(self, "_media_source", None), getattr(self, "_bg_media_source", None)):
+            source = getattr(media, "source", None) if media is not None else None
+            if source is not None:
+                sources.append(source)
+        return sources
+
+    def _handle_start_meeting_output(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        from solin.core.scenes.libobs_meeting_output import MeetingOutputRequest
+
+        output = self._meeting_output
+        if not self._runtime_started or output is None:
+            return _ack(request, applied=False, error_code="runtime_unavailable",
+                        error_message="the libobs runtime is not running")
+        try:
+            settings = MeetingOutputRequest.from_payload(request.payload)
+        except (TypeError, ValueError):
+            return _ack(request, applied=False, error_code="invalid_settings",
+                        error_message="invalid meeting output settings")
+        if output.start(settings):
+            return _ack(request, applied=True)
+        return _ack(request, applied=False, error_code="meeting_output_failed",
+                    error_message="could not start the meeting output")
+
+    def _handle_stop_meeting_output(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        output = self._meeting_output
+        if output is not None:
+            output.stop()
+        return _ack(request, applied=True)
+
+    def _emit_meeting_output_state(self, state: str, detail: str = "") -> None:
+        sink = self._event_sink
+        if sink is None:
+            return
+        sink(SceneIpcEnvelope(
+            message_type="meeting_output_state",
+            request_id="event-meeting-output",
+            session_id=self._session_id,
+            process_generation=self._process_generation,
+            sequence=0,
+            document_revision=0,
+            deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
+            payload={"state": state, "detail": str(detail)[:512].replace("\n", " ")},
+        ))
 
     def _handle_start_recording(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
         recorder = self._recorder
@@ -2349,6 +2407,12 @@ class LibobsSidecarEngine:
         # Release in reverse dependency order: virtual-camera output → window
         # displays (they hold GL surfaces on the context) → scene graph → the
         # content consumer → the runtime/context itself.
+        meeting, self._meeting_output = self._meeting_output, None
+        if meeting is not None:
+            try:
+                meeting.stop()
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("meeting output stop errored", exc_info=True)
         recorder, self._recorder = self._recorder, None
         if recorder is not None:
             try:

@@ -296,6 +296,10 @@ class LibobsMediaSource:
             # Route decoded audio to the monitoring device so it is audible on the
             # host (libobs → PipeWire/Pulse), not only mixed into program output.
             self._runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
+            if getattr(self._runtime, "meeting_mix_enabled", False):
+                from solin.core.scenes.libobs_meeting_output import route_media_to_meeting
+
+                route_media_to_meeting(self._runtime, source, True)
         except Exception:  # noqa: BLE001 - monitoring is best-effort
             log.warning("Could not set media source monitoring", exc_info=True)
         self._set_active(source, True)

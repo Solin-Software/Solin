@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import Future
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from fractions import Fraction
 from math import gcd, isfinite
@@ -789,6 +789,41 @@ class ProgramRecordingEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class MeetingOutputSettings:
+    """The hosted-meeting program output (see ``libobs_meeting_output``)."""
+
+    bridge: str
+    whip_url: str
+    token: str
+    width: int = 640
+    height: int = 360
+    video_kbps: int = 450
+    audio_only: bool = False
+    fec: bool = True
+    hall_feed: AudioDeviceSelection = field(default_factory=AudioDeviceSelection)
+    hall_feed_delay_ms: int = 0
+
+    def to_engine_record(self) -> dict[str, object]:
+        feed = self.hall_feed.to_record()
+        return {
+            "bridge": self.bridge, "whip_url": self.whip_url, "token": self.token,
+            "width": int(self.width), "height": int(self.height), "video_kbps": int(self.video_kbps),
+            "audio_only": bool(self.audio_only), "fec": bool(self.fec),
+            "hall_feed_mode": str(feed.get("mode", "system_default")),
+            "hall_feed_device": str(feed.get("device_id", "")),
+            "hall_feed_delay_ms": max(0, min(500, int(self.hall_feed_delay_ms))),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class MeetingOutputEvent:
+    """``state``: idle | starting | live | reconnecting | failed."""
+
+    state: str
+    detail: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class MediaPlaybackEvent:
     state: MediaPlaybackNativeState
 
@@ -1002,6 +1037,21 @@ class SceneEngine(Protocol):
     ) -> Future[SceneEngineAck]: ...
 
     def stop_program_recording(
+        self,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def start_meeting_output(
+        self,
+        settings: MeetingOutputSettings,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]: ...
+
+    def stop_meeting_output(
         self,
         *,
         request_id: str,

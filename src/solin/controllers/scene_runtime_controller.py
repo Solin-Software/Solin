@@ -28,6 +28,7 @@ from solin.core.scenes.engine import (
     OutputHealthEvent,
     OutputWindowTarget,
     ProgramRecordingEvent,
+    MeetingOutputEvent,
     SceneEngine,
     SceneEngineAck,
     SceneEngineCapabilities,
@@ -293,6 +294,7 @@ class SceneRuntimeController(QObject):
         self._preview_egress: FrameChannelDescriptor | None = None
         self._program_egress: FrameChannelDescriptor | None = None
         self._program_recording_required = False
+        self._meeting_output_required = False
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
         # A standalone MEDIA_WINDOWS target for the editor's direct-GPU preview,
@@ -716,6 +718,7 @@ class SceneRuntimeController(QObject):
             activation.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
             or self._program_egress is not None
             or self._program_recording_required
+            or self._meeting_output_required
             or any(target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets)
         )
         snapshot = SceneEngineSnapshot(
@@ -1125,6 +1128,19 @@ class SceneRuntimeController(QObject):
         self._last_render_enabled = self._render_enabled()
         self._reconcile_content_ingress_demand()
         self._hydrate_if_ready()
+
+    def set_meeting_output_required(self, required: bool) -> None:
+        """Keep the Program mix rendering while a hosted meeting publishes it."""
+        if type(required) is not bool:
+            raise TypeError("Meeting output render demand must be a boolean")
+        if required == self._meeting_output_required:
+            return
+        self._meeting_output_required = required
+        self._reconcile_engine_outputs()
+
+    @property
+    def scene_engine(self) -> SceneEngine | None:
+        return self._engine
 
     def set_program_recording_required(self, required: bool) -> None:
         if type(required) is not bool:
@@ -1807,6 +1823,7 @@ class SceneRuntimeController(QObject):
                 OutputHealthEvent,
                 FrameEgressReadyEvent,
                 ProgramRecordingEvent,
+                MeetingOutputEvent,
                 MediaPlaybackEvent,
                 MediaVideoReadyEvent,
             ),
@@ -1839,7 +1856,8 @@ class SceneRuntimeController(QObject):
                 if not self._discard_superseded_take(preparation.bus_id, pending):
                     self._run_ptz_entry_actions(preparation, pending)
             return
-        if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MediaPlaybackEvent)):
+        if isinstance(event, (FrameEgressReadyEvent, ProgramRecordingEvent, MeetingOutputEvent,
+                              MediaPlaybackEvent)):
             return
         if isinstance(event, SourceHealthEvent):
             if event.configuration_id:
@@ -3245,6 +3263,7 @@ class SceneRuntimeController(QObject):
             destination.output(BusId.VIRTUAL_CAMERA).enabled
             or self._program_egress is not None
             or self._program_recording_required
+            or self._meeting_output_required
             or any(
                 target.bus_id is BusId.VIRTUAL_CAMERA for target in self._window_targets
             )

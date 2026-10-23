@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Meeting</title>
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<main id="app">
+  <header>
+    <h1 id="title">Meeting</h1>
+    <p id="connection" class="muted" hidden></p>
+  </header>
+
+  <section id="view-name" class="card" hidden>
+    <form id="name-form">
+      <label for="name" data-t="yourName">Your name</label>
+      <input id="name" autocomplete="name" maxlength="60" required>
+      <p class="muted" data-t="nameHint">The hall sees this name. Use your full name, or the names of everyone watching with you.</p>
+      <button type="submit" data-t="join">Join</button>
+    </form>
+  </section>
+
+  <section id="view-lobby" class="card" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="big" data-t="waiting">Waiting to be admitted…</p>
+    <p class="muted" data-t="waitingHint">The attendant will let you in shortly. Keep this page open.</p>
+  </section>
+
+  <section id="view-meeting" hidden>
+    <div class="stage">
+      <video id="program" playsinline autoplay></video>
+      <button id="unmute" class="overlay" hidden data-t="tapForSound">Tap for sound</button>
+    </div>
+    <div id="live-banner" class="banner live" hidden>
+      <span data-t="youAreLive">You can speak now</span>
+      <button id="done" data-t="done">Done</button>
+    </div>
+    <div class="controls">
+      <button id="hand" class="primary" data-t="raiseHand">Raise hand</button>
+      <button id="part-mic" hidden data-t="micOn">Microphone on</button>
+      <button id="part-cam" hidden data-t="cameraOn">Camera on</button>
+    </div>
+    <details class="options">
+      <summary data-t="options">Options</summary>
+      <label><input type="checkbox" id="audio-only"> <span data-t="audioOnly">Audio only (saves data)</span></label>
+      <label><input type="checkbox" id="wake-lock"> <span data-t="keepAwake">Keep the screen on</span></label>
+      <p class="muted" id="status-line"></p>
+    </details>
+  </section>
+
+  <section id="view-message" class="card" hidden>
+    <p class="big" id="message-text"></p>
+    <button id="rejoin" hidden data-t="rejoin">Join again</button>
+  </section>
+</main>
+<script src="/assets/protocol.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

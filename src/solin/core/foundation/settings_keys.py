@@ -82,6 +82,14 @@ class SettingsKey:
 
     ZOOM_ENABLED: Final = "zoom/enabled"
     ZOOM_BACKGROUND_SONG_LINK: Final = "zoom/background_song_link"
+    HOSTED_MEETING_PROVIDER: Final = "hosted_meeting/provider"
+    HOSTED_MEETING_HALL_NAME: Final = "hosted_meeting/hall_name"
+    HOSTED_MEETING_QUALITY: Final = "hosted_meeting/quality"
+    HOSTED_MEETING_HALL_FEED: Final = "hosted_meeting/hall_feed"
+    HOSTED_MEETING_REMOTE_AUDIO_DEVICE: Final = "hosted_meeting/remote_audio_device"
+    HOSTED_MEETING_WEB_PORT: Final = "hosted_meeting/web_port"
+    HOSTED_MEETING_HUB: Final = "hosted_meeting/hub"
+    HOSTED_MEETING_HALL_FEED_DELAY: Final = "hosted_meeting/hall_feed_delay_ms"
 
     AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"
     AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"
