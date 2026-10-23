@@ -42,6 +42,9 @@ def _run(*command: str, cwd: Path | None = None, env: dict[str, str] | None = No
 def build(dest: Path, goos: str, goarch: str, license_path: Path | None = None) -> Path:
     if goos == "darwin" and sys.platform != "darwin":
         raise SystemExit("The macOS server needs cgo: build it on macOS")
+    # go build runs inside the clone, so relative paths must be resolved first.
+    dest = dest.resolve()
+    license_path = license_path.resolve() if license_path is not None else None
     with tempfile.TemporaryDirectory(prefix="livekit-src-") as work:
         source = Path(work) / "livekit"
         _run("git", "clone", "--quiet", "--depth", "1", "--branch",

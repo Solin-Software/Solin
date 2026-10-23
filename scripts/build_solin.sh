@@ -199,7 +199,8 @@ SIDEVIEW_NATIVE="${SIDEVIEW_PACKAGE_DIR}/libsideview_native.so"
     "The installed SideView package is missing its Linux native backend: ${SIDEVIEW_NATIVE}"
 "${PYTHON}" -c "from sideview._backend import NativeBackend; NativeBackend()"
 
-# LiveKit's WebRTC core is a ctypes library Nuitka cannot discover on its own.
+# LiveKit's WebRTC core: on Linux Nuitka packages it with --include-package=livekit (an
+# explicit data file would collide); this check and the post-build one make sure it is there.
 LIVEKIT_FFI="$(
     "${PYTHON}" -c \
         'from pathlib import Path; import livekit.rtc; print(Path(livekit.rtc.__file__).resolve().parent / "resources" / "liblivekit_ffi.so")'
@@ -265,7 +266,6 @@ fi
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
     --include-data-files="${TRANSLATIONS_DIR}/*.qm=solin/resources/translations/" \
-    --include-data-files="${LIVEKIT_FFI}=livekit/rtc/resources/liblivekit_ffi.so" \
     --enable-plugin=pyside6 \
     --include-qt-plugins=platforms,platformthemes,imageformats,position,xcbglintegrations \
     main.py
