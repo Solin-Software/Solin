@@ -15,6 +15,7 @@ class _Service(QObject):
     attendance_changed = Signal(int)
     participants_changed = Signal(object)
     hands_changed = Signal(object)
+    hall_audio_available_changed = Signal(bool)
     error = Signal(str)
 
     def __init__(self):
@@ -27,6 +28,7 @@ class _Service(QObject):
         self.locked = False
         self.join_url = "http://192.168.1.20:7890/join#k=secret-key"
         self.stage_url = "http://192.168.1.20:7890/stage/abc"
+        self.hall_audio_available = True
         self.calls = []
 
     def attendance(self):
@@ -116,3 +118,14 @@ def test_links_are_copied_and_the_key_is_never_displayed():
     assert QGuiApplication.clipboard().text() == "http://192.168.1.20:7890/join#k=secret-key"
     bridge.copyStageLink()
     assert QGuiApplication.clipboard().text() == "http://192.168.1.20:7890/stage/abc"
+
+
+def test_spotlight_commands_and_rows():
+    service = _Service()
+    bridge = MeetingConsoleBridge(service, _Switch("solin"), _Store())
+    shown = MeetingParticipant("att:a", "Ann", ParticipantStatus.ADMITTED, 1, 0, spotlight=True)
+    service.participants_changed.emit([shown])
+    assert bridge.property("participants")[0]["spotlight"] is True
+    bridge.spotlight("att:a")
+    bridge.clearSpotlight()
+    assert ("spotlight", "att:a") in service.calls and ("clear_spotlight",) in service.calls

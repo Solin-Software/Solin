@@ -15,6 +15,7 @@ class MainWindowServiceFactories:
     ndi_receiver: Callable[[QObject], Any]
     zoom: Callable[[QObject], Any]
     hosted_meeting: Callable[[QObject], Any]
+    meeting_audio_devices: Callable[[QObject], Any]
     background_song: Callable[[Any, Any, Any, Any, Any, QObject], Any]
     yeartext: Callable[[QObject], Any]
     congregation_lookup: Callable[[QObject], Any]

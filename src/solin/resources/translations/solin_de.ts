@@ -6281,6 +6281,10 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Die Antwort der Kamera konnte nicht gelesen werden.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Remote-Teilnehmer</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7548,6 +7552,10 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Kameras finden…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Remote-Teilnehmer (Zusammenkunft)</translation>
     </message>
 </context>
 <context>

@@ -53,6 +53,7 @@ CAPABILITIES: dict[str, bool] = {
     "audio_input_capture": False,
     "system_audio_capture": False,
     "meeting_egress": False,
+    "participant_ingress": False,
 }
 
 # Control messages the client sends fire-and-forget (no response is expected).
@@ -352,6 +353,7 @@ class LibobsSidecarEngine:
         self._preview_egress: Any | None = None
         self._program_egress: Any | None = None
         self._meeting_egress: Any | None = None
+        self._participant_video: Any | None = None
         self._virtual_camera: Any | None = None
         self._output_health_request: SceneIpcEnvelope | None = None
         self._output_health: OutputHealth | None = None
@@ -414,6 +416,7 @@ class LibobsSidecarEngine:
         capabilities["virtual_camera"] = self._runtime_started
         capabilities["program_recording"] = self._runtime_started
         capabilities["meeting_egress"] = self._runtime_started
+        capabilities["participant_ingress"] = self._runtime_started
         if self._runtime_started and self._audio_mixer is not None:
             microphone, system_audio = self._audio_mixer.available()
             capabilities["audio_input_capture"] = microphone
@@ -444,7 +447,15 @@ class LibobsSidecarEngine:
 
         idle_source = LibobsIdleSource(runtime)
         self._idle_source = idle_source
-        self._scene_graph = LibobsSceneGraph(runtime)
+        from solin.core.scenes.libobs_participant_source import LibobsParticipantVideo
+
+        # One long-lived source for every "Remote participant (meeting)" layer.
+        self._participant_video = LibobsParticipantVideo(runtime)
+        self._scene_graph = LibobsSceneGraph(
+            runtime,
+            participant_source=lambda: self._participant_video.source
+            if self._participant_video is not None else None,
+        )
         self._window_output = LibobsWindowOutput(runtime)
         # The projection output owns its own transition, outside the scene graph so
         # a structural-edit rebuild cannot black the room's screen out.
@@ -1631,6 +1642,8 @@ class LibobsSidecarEngine:
                     self._program_egress.configure(payload.get("program_egress"))
                 if self._meeting_egress is not None:
                     self._meeting_egress.configure(payload.get("meeting_egress"))
+                if self._participant_video is not None:
+                    self._participant_video.configure(payload.get("participant_ingress"))
                 if self._preview_egress is not None:
                     self._preview_egress.configure(payload.get("preview_egress"))
 
@@ -2288,6 +2301,12 @@ class LibobsSidecarEngine:
                 graph.shutdown()
             except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
                 log.warning("libobs scene graph shutdown errored", exc_info=True)
+        participant_video, self._participant_video = self._participant_video, None
+        if participant_video is not None:
+            try:
+                participant_video.shutdown()  # after the scenes that borrowed its source
+            except Exception:  # noqa: BLE001 - shutdown must not raise out of the sidecar
+                log.warning("participant video shutdown errored", exc_info=True)
         # Stop the content pump + release its source only after the scenes that
         # referenced it are gone.
         for source in tuple(self._retired_media_sources):

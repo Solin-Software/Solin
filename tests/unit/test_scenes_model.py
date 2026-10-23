@@ -494,7 +494,7 @@ def test_schema_twelve_removes_legacy_camera_flag_without_mutating_input(kind, f
 
     restored = SceneDocument.from_record(record)
 
-    assert restored.schema_version == 13
+    assert restored.schema_version == 15
     assert restored.source(DEFAULT_CAMERA_SOURCE_ID).configuration == config
     assert (
         "keep_active" not in restored.source(DEFAULT_CAMERA_SOURCE_ID).to_record()["configuration"]

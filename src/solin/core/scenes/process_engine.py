@@ -106,6 +106,7 @@ _HELLO_FIELDS = frozenset(
         "audio_input_capture",
         "system_audio_capture",
         "meeting_egress",
+        "participant_ingress",
     }
 )
 _ACK_FIELDS = frozenset({"applied", "error_code", "error_message"})
@@ -539,6 +540,9 @@ class SubprocessSceneEngine:
             "content_ingress": _frame_channel_record(snapshot.content_ingress),
             "preview_egress": _frame_channel_record(snapshot.preview_egress),
             "program_egress": _frame_channel_record(snapshot.program_egress),
+            "participant_ingress": (
+                snapshot.participant_ingress.to_record() if snapshot.participant_ingress else None
+            ),
             "meeting_egress": (
                 snapshot.meeting_egress.to_record() if snapshot.meeting_egress else None
             ),
@@ -1717,6 +1721,9 @@ def _capabilities_from_envelope(envelope: SceneIpcEnvelope) -> SceneEngineCapabi
             "system audio capture capability",
         ),
         meeting_egress=require_bool(payload["meeting_egress"], "meeting egress capability"),
+        participant_ingress=require_bool(
+            payload["participant_ingress"], "participant ingress capability"
+        ),
     )
 
 

@@ -29,6 +29,12 @@ FAKE_WORKER = textwrap.dedent(
     start = json.loads(sys.stdin.readline())
     with open(log, "a") as handle:
         handle.write(json.dumps(start) + "\\n")
+    if mode == "warn":
+        print(json.dumps({"warning": "hall_audio_unavailable"}), flush=True)
+    if mode == "devices":
+        print(json.dumps({"devices": {"recording": [{"id": "{1}", "name": "Mixer In"}, 5],
+                                      "playout": [{"name": "Mixer Out"}]}}), flush=True)
+        time.sleep(30)
     if mode == "crash":
         print(json.dumps({"error": "connect_failed"}), flush=True)
         sys.exit(2)
@@ -132,3 +138,52 @@ def test_invalid_config_creates_nothing(make_service):
     with pytest.raises(ValueError):
         service.start(PublisherConfig(url="http://nope", api_key="k", api_secret="s", room="r"))
     assert egress == [] and service.state is PublisherState.STOPPED
+
+
+def test_a_warning_is_reported_without_restarting(make_service):
+    service = make_service("warn")
+    warnings = []
+    service.warning.connect(warnings.append)
+    service.start(CONFIG)
+    wait_until(lambda: service.state is PublisherState.PUBLISHING, description="publishing",
+               timeout_ms=10000)
+    assert warnings == ["hall_audio_unavailable"]
+    assert len(make_service.starts()) == 1
+
+
+def test_the_hall_audio_settings_reach_the_worker(make_service):
+    from dataclasses import replace
+
+    service = make_service("ok")
+    service.start(replace(CONFIG, hall_audio=True, recording_device="{in}", auto_gain_control=True))
+    wait_until(lambda: make_service.starts(), description="start", timeout_ms=10000)
+    (start,) = make_service.starts()
+    assert start["hall_audio"] and start["recording_device"] == "{in}"
+    assert start["auto_gain_control"] and start["echo_cancellation"]
+
+
+def test_device_lister_cleans_the_reply(tmp_path):
+    from solin.core.conference.publisher_service import AudioDeviceLister
+
+    script = tmp_path / "fake_worker.py"
+    script.write_text(FAKE_WORKER)
+    lister = AudioDeviceLister(command=lambda: (sys.executable, [str(script), "devices", str(tmp_path / "log")]))
+    results = []
+    lister.finished.connect(results.append)
+    lister.start()
+    wait_until(lambda: results, description="device list", timeout_ms=10000)
+    assert results == [{"recording": [{"id": "{1}", "name": "Mixer In"}],
+                        "playout": [{"id": "", "name": "Mixer Out"}]}]
+    lister.deleteLater()
+
+
+def test_device_lister_gives_empty_lists_when_the_worker_fails(tmp_path):
+    from solin.core.conference.publisher_service import AudioDeviceLister
+
+    lister = AudioDeviceLister(command=lambda: (sys.executable, ["-c", "raise SystemExit(3)"]))
+    results = []
+    lister.finished.connect(results.append)
+    lister.start()
+    wait_until(lambda: results, description="device list", timeout_ms=10000)
+    assert results == [{"recording": [], "playout": []}]
+    lister.deleteLater()

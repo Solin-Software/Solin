@@ -6281,6 +6281,10 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Hindi mabasa ang sagot ng camera.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Remote na kalahok</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7548,6 +7552,10 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Humanap ng mga camera…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Remote na kalahok (pulong)</translation>
     </message>
 </context>
 <context>

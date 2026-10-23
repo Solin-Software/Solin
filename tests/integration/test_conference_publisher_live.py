@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -147,3 +148,145 @@ def test_service_drives_the_real_publisher(livekit_server):
         service.stop()
         service.deleteLater()
     assert egress[-1] is None
+
+
+def test_hall_audio_publishes_the_feed_and_plays_attendees(livekit_server):
+    """WebRTC's device module: the hall feed goes out, attendees' voices come in."""
+    url, key, secret = livekit_server
+    video = MediaRingWriter(None, 4, W * H * 3 // 2, create=True)
+    audio = MediaRingWriter(None, 64, 16384, create=True)
+    environment = {**os.environ, "SOLIN_PUBLISHER_STATS_S": "0.5"}
+    publisher = subprocess.Popen(
+        [sys.executable, "-m", "solin.core.conference.publisher_worker"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        env=environment,
+    )
+    try:
+        assert json.loads(publisher.stdout.readline()) == {"ready": 1}
+        publisher.stdin.write(json.dumps({
+            "command": "start", "url": url, "token": _token(key, secret, "hall"),
+            "video_ring": video.name, "audio_ring": audio.name, "width": W, "height": H,
+            "fps": FPS, "audio_only": True, "hall_audio": True,
+        }) + "\n")
+        publisher.stdin.flush()
+        first = [json.loads(publisher.stdout.readline()) for _ in range(2)]
+        if {"warning": "hall_audio_unavailable"} in first:
+            pytest.skip("no audio devices for WebRTC's device module here")
+        assert first == [{"state": "connecting"}, {"state": "publishing"}]
+
+        async def attendee_speaks():
+            room = rtc.Room()
+            await room.connect(url, _token(key, secret, "att:phone-0001"))
+            source = rtc.AudioSource(48000, 1)
+            track = rtc.LocalAudioTrack.create_audio_track("microphone", source)
+            await room.local_participant.publish_track(
+                track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE))
+            hall = room.remote_participants.get("hall")
+            for _ in range(50):
+                hall = room.remote_participants.get("hall")
+                if hall and len(hall.track_publications) >= 2:
+                    break
+                await asyncio.sleep(0.1)
+            names = sorted(p.name for p in hall.track_publications.values())
+            for _ in range(20):  # keep talking while the hall subscribes
+                await source.capture_frame(rtc.AudioFrame(b"\0" * 960, 48000, 1, 480))
+                await asyncio.sleep(0.05)
+            return room, names
+
+        loop = asyncio.new_event_loop()
+        room, names = loop.run_until_complete(attendee_speaks())
+        assert names == ["hall-feed", "program-audio"]
+        deadline = time.monotonic() + 10
+        stats = {}
+        while time.monotonic() < deadline and stats.get("hall_playout_tracks", 0) < 1:
+            message = json.loads(publisher.stdout.readline())
+            stats = message.get("stats", stats)
+        assert stats.get("hall_playout_tracks") == 1
+        loop.run_until_complete(room.disconnect())
+        loop.close()
+        publisher.stdin.write('{"command":"stop"}\n')
+        publisher.stdin.flush()
+        assert publisher.wait(15) == 0
+    finally:
+        if publisher.poll() is None:
+            publisher.kill()
+            publisher.wait()
+        for ring in (video, audio):
+            ring.close()
+            ring.unlink()
+
+
+def test_the_spotlighted_camera_reaches_the_participant_ring(livekit_server):
+    """Remote part-holder's camera -> publisher -> ring the scene engine reads."""
+    from solin.core.conference.media_ring import MediaRingReader
+
+    url, key, secret = livekit_server
+    video = MediaRingWriter(None, 4, W * H * 3 // 2, create=True)
+    audio = MediaRingWriter(None, 64, 16384, create=True)
+    participant = MediaRingReader(None, 3, 1920 * 1080 * 3 // 2, create=True)
+    environment = {**os.environ, "SOLIN_PUBLISHER_STATS_S": "0.5"}
+    publisher = subprocess.Popen(
+        [sys.executable, "-m", "solin.core.conference.publisher_worker"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        env=environment,
+    )
+    loop = asyncio.new_event_loop()
+    stop = threading.Event()
+    try:
+        assert json.loads(publisher.stdout.readline()) == {"ready": 1}
+        publisher.stdin.write(json.dumps({
+            "command": "start", "url": url, "token": _token(key, secret, "hall"),
+            "video_ring": video.name, "audio_ring": audio.name, "width": W, "height": H,
+            "fps": FPS, "audio_only": True, "participant_ring": participant.name,
+        }) + "\n")
+        publisher.stdin.flush()
+        assert [json.loads(publisher.stdout.readline()) for _ in range(2)] == [
+            {"state": "connecting"}, {"state": "publishing"}]
+
+        async def part_holder():
+            room = rtc.Room()
+            await room.connect(url, _token(key, secret, "att:speaker-01"))
+            source = rtc.VideoSource(640, 360)
+            track = rtc.LocalVideoTrack.create_video_track("camera", source)
+            await room.local_participant.publish_track(
+                track, rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_CAMERA))
+            return room, source
+
+        room, source = loop.run_until_complete(part_holder())
+
+        def camera():  # a flat mid-grey 640x360 picture
+            frame = rtc.VideoFrame(640, 360, rtc.VideoBufferType.I420,
+                                   bytes([128]) * (640 * 360) + bytes([128]) * (640 * 360 // 2))
+            while not stop.is_set():
+                source.capture_frame(frame)
+                time.sleep(1 / 15)
+
+        threading.Thread(target=camera, daemon=True).start()
+        publisher.stdin.write('{"command":"spotlight","identity":"att:speaker-01"}\n')
+        publisher.stdin.flush()
+
+        item, deadline = None, time.monotonic() + 15
+        while item is None and time.monotonic() < deadline:
+            loop.run_until_complete(asyncio.sleep(0.1))
+            item = participant.read_next()
+        assert item is not None, "no participant frame reached the ring"
+        width, height = item.meta >> 16, item.meta & 0xFFFF
+        assert (width, height) == (640, 360)
+        assert len(item.payload) == width * height * 3 // 2
+        luma = item.payload[: width * height]
+        assert 100 < sum(luma[::997]) / len(luma[::997]) < 156  # decoded grey stays grey
+
+        publisher.stdin.write('{"command":"spotlight","identity":""}\n')
+        publisher.stdin.write('{"command":"stop"}\n')
+        publisher.stdin.flush()
+        assert publisher.wait(15) == 0
+        loop.run_until_complete(room.disconnect())
+    finally:
+        stop.set()
+        loop.close()
+        if publisher.poll() is None:
+            publisher.kill()
+            publisher.wait()
+        for ring in (video, audio, participant):
+            ring.close()
+            ring.unlink()

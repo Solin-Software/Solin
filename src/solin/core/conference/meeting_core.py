@@ -76,6 +76,7 @@ class MeetingParticipant:
     joined_at_ms: int
     hand_order: int | None = None  # position key while the hand is up
     microphone_live: bool = False
+    spotlight: bool = False  # a remote part-holder shown in the hall and the program
 
     @property
     def hand_raised(self) -> bool:
@@ -127,6 +128,7 @@ class MeetingCore:
     _names: dict[str, str] = field(default_factory=dict)
     _hands: dict[str, _Hand] = field(default_factory=dict)
     _hand_counter: int = 0
+    _spotlight: str = ""
     _snapshot: dict[str, ParticipantInfo] = field(default_factory=dict)
     _sent: dict[tuple[str, str], _Sent] = field(default_factory=dict)
 
@@ -163,7 +165,23 @@ class MeetingCore:
     def to_lobby(self, identity: str) -> list[MeetingAction]:
         self._admitted.discard(identity)
         self._speaking.discard(identity)
+        if self._spotlight == identity:
+            self._spotlight = ""
         return self._reconcile()
+
+    def spotlight(self, identity: str) -> list[MeetingAction]:
+        """Show one admitted remote part-holder: camera and microphone, even when locked."""
+        if identity in self._admitted and identity not in self._removed:
+            self._spotlight = identity
+        return self._reconcile()
+
+    def clear_spotlight(self) -> list[MeetingAction]:
+        self._spotlight = ""
+        return self._reconcile()
+
+    @property
+    def spotlighted(self) -> str:
+        return self._spotlight
 
     def call_on(self, identity: str) -> list[MeetingAction]:
         """Give one admitted attendee the microphone while the meeting is locked."""
@@ -193,6 +211,8 @@ class MeetingCore:
         self._removed.add(identity)
         self._admitted.discard(identity)
         self._speaking.discard(identity)
+        if self._spotlight == identity:
+            self._spotlight = ""
         return self._reconcile()
 
     def set_locked(self, locked: bool) -> list[MeetingAction]:
@@ -236,12 +256,17 @@ class MeetingCore:
             joined_at_ms=participant.joined_at_ms,
             hand_order=hand.order if hand else None,
             microphone_live=participant.publishing(TrackSource.MICROPHONE),
+            spotlight=participant.identity == self._spotlight,
         )
 
     def _desired_permission(self, identity: str) -> Permission:
         status = self._status(identity)
         if status is ParticipantStatus.LOBBY:
             return lobby_permission()
+        if identity == self._spotlight:
+            return Permission(can_subscribe=True, can_publish=True,
+                              can_publish_sources=(TrackSource.CAMERA, TrackSource.MICROPHONE),
+                              can_update_metadata=True)
         if self.locked and status is not ParticipantStatus.SPEAKING:
             return Permission(can_subscribe=True, can_update_metadata=True)
         sources = (TrackSource.MICROPHONE,)

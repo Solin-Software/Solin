@@ -2970,3 +2970,18 @@ def test_onvif_address_search_explains_an_unusable_target(scene_bridge_factory, 
     _wait_for(lambda: not bridge.onvifDiscoveryRunning)
 
     assert bridge.onvifDiscoveryStatus.startswith(status)
+
+
+def test_bridge_adds_the_remote_participant_and_lists_its_layer(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    bridge.createScene("Remote talk")
+    bridge.addMeetingParticipantSource()
+    first = controller.document.scene(bridge.selectedSceneId).layers[0]
+    source = controller.document.source(first.source_id)
+    assert source.kind is SourceKind.MEETING_PARTICIPANT
+    # The editor's layer list renders it (it needs a colour for the kind).
+    assert bridge._layer_record(first)["color"] == "#EC4899"
+    bridge.createScene("Another")
+    bridge.addMeetingParticipantSource()
+    second = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert second.source_id == source.id  # one shared source

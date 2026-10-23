@@ -6281,6 +6281,10 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <source>The camera&apos;s reply could not be read.</source>
         <translation>No se pudo leer la respuesta de la cámara.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Participante remoto</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7548,6 +7552,10 @@ Añada contenido, una cámara u otra escena.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Buscar cámaras en la red…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Participante remoto (reunión)</translation>
     </message>
 </context>
 <context>

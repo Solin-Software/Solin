@@ -19,6 +19,7 @@ class _Service(QObject):
     attendance_changed = Signal(int)
     participants_changed = Signal(object)
     hands_changed = Signal(object)
+    hall_audio_available_changed = Signal(bool)
     error = Signal(str)
 
     def __init__(self):
@@ -31,6 +32,7 @@ class _Service(QObject):
         self.locked = True
         self.join_url = "http://192.168.1.20:7890/join#k=secret-key"
         self.stage_url = "http://192.168.1.20:7890/stage/abc"
+        self.hall_audio_available = True
         self.calls = []
 
     def attendance(self):
@@ -95,11 +97,17 @@ def test_console_renders_every_state_without_qml_errors(width, qml_warnings):
         _p("att:ann", ParticipantStatus.LOBBY),
         _p("att:ben", ParticipantStatus.SPEAKING, hand=1, live=True),
         _p("att:cy", ParticipantStatus.ADMITTED, hand=2),
+        MeetingParticipant("att:dee", "Dee", ParticipantStatus.ADMITTED, 1, 0, spotlight=True),
     ]
     service.participants_changed.emit(participants)
     service.hands_changed.emit(participants[1:])
     QTest.qWait(30)
     assert bridge.property("lobbyCount") == 1
+
+    service.hall_audio_available = False
+    service.hall_audio_available_changed.emit(False)
+    QTest.qWait(10)
+    assert bridge.property("hallAudioAvailable") is False
 
     service.error.emit("server keeps failing")
     QTest.qWait(10)

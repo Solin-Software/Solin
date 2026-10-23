@@ -6249,6 +6249,10 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Balasan kamera tidak dapat dibaca.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Peserta jarak jauh</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7516,6 +7520,10 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Temukan kamera…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Peserta jarak jauh (perhimpunan)</translation>
     </message>
 </context>
 <context>

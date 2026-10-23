@@ -6281,6 +6281,10 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Kameran vastausta ei voitu lukea.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Etäosallistuja</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7548,6 +7552,10 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Etsi kameroita…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Etäosallistuja (kokous)</translation>
     </message>
 </context>
 <context>

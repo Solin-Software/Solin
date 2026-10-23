@@ -137,6 +137,7 @@ class SceneEngineCapabilities:
     audio_input_capture: bool
     system_audio_capture: bool
     meeting_egress: bool = False
+    participant_ingress: bool = False
 
     def __post_init__(self) -> None:
         _positive_int(self.protocol_version, "protocol_version")
@@ -150,6 +151,7 @@ class SceneEngineCapabilities:
             self.audio_input_capture,
             self.system_audio_capture,
             self.meeting_egress,
+            self.participant_ingress,
         )
 
 
@@ -445,6 +447,28 @@ MEETING_AUDIO_MIX_INDEX = 5  # libobs mixer track 6: media + hall feed, no loopb
 
 
 @dataclass(frozen=True, slots=True)
+class ParticipantIngressDescriptor:
+    """A shared-memory ring of the spotlighted remote participant's video (packed I420).
+
+    The meeting publisher writes it, the sidecar reads it into the source behind every
+    "Remote participant (meeting)" layer; the app creates and owns the ring.
+    """
+
+    channel_id: str
+    generation: int
+    video_ring: str
+
+    def __post_init__(self) -> None:
+        _identity(self.channel_id, "participant ingress channel id")
+        _non_negative_int(self.generation, "participant ingress generation")
+        _identity(self.video_ring, "participant video ring")
+
+    def to_record(self) -> dict[str, object]:
+        return {"channel_id": self.channel_id, "generation": self.generation,
+                "video_ring": self.video_ring}
+
+
+@dataclass(frozen=True, slots=True)
 class MeetingEgressDescriptor:
     """Shared-memory rings the sidecar fills for the meeting publisher process.
 
@@ -536,6 +560,7 @@ class SceneEngineSnapshot:
     window_targets: tuple[OutputWindowTarget, ...] = ()
     idle_screen: IdleScreenState = IdleScreenState()
     meeting_egress: MeetingEgressDescriptor | None = None
+    participant_ingress: ParticipantIngressDescriptor | None = None
 
     def __post_init__(self) -> None:
         _identity(self.session_id, "engine session id")
@@ -576,6 +601,10 @@ class SceneEngineSnapshot:
             self.meeting_egress, MeetingEgressDescriptor
         ):
             raise ValueError("Invalid meeting egress descriptor")
+        if self.participant_ingress is not None and not isinstance(
+            self.participant_ingress, ParticipantIngressDescriptor
+        ):
+            raise ValueError("Invalid participant ingress descriptor")
         if (
             not isinstance(self.window_targets, tuple)
             or len(self.window_targets) > MAXIMUM_OUTPUT_WINDOW_TARGETS

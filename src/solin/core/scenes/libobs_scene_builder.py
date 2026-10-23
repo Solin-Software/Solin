@@ -26,6 +26,9 @@ log = logging.getLogger(__name__)
 
 # Neutral-gray placeholder for sources whose real pixels aren't wired yet.
 _PLACEHOLDER_COLOR = 0xFF404040
+# A participant layer with no meeting running must not show a grey box on the hall
+# monitors: it stands in fully transparent (0xAABBGGRR, alpha 0).
+_TRANSPARENT_COLOR = 0x00000000
 # BusId values (see solin.core.scenes.model.BusId). VIRTUAL_CAMERA is the
 # "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
 _PROGRAM_BUS = "virtual_camera"
@@ -103,8 +106,11 @@ def _layer_fit_mode(layer: dict) -> str:
 class LibobsSceneGraph:
     """Owns the libobs scenes/sources built for one hydrate snapshot."""
 
-    def __init__(self, runtime: Any) -> None:
+    def __init__(self, runtime: Any, *,
+                 participant_source: Callable[[], Any | None] | None = None) -> None:
         self._runtime = runtime
+        # The remote meeting participant's frame source, owned by the sidecar.
+        self._participant_source = participant_source or (lambda: None)
         self._scenes: dict[str, Any] = {}
         self._editor_preview_scene: Any | None = None
         self._editor_preview_layer: tuple[str, str] | None = None
@@ -376,7 +382,10 @@ class LibobsSceneGraph:
         is_content = self._is_content_layer(layer, sources_by_id)
         placeholder = None
         if source is None:
-            source = self._create_color(ob, layer, canvas, _PLACEHOLDER_COLOR)
+            definition = sources_by_id.get(layer.get("source_id")) or {}
+            stand_in = (_TRANSPARENT_COLOR if definition.get("type") == "meeting_participant"
+                        else _PLACEHOLDER_COLOR)
+            source = self._create_color(ob, layer, canvas, stand_in)
             owned = True
             if is_content:
                 placeholder = source  # owned stand-in until content arrives
@@ -589,6 +598,10 @@ class LibobsSceneGraph:
                 ),
                 False,  # runtime-owned, like the shared local capture sources
             )
+        if kind == "meeting_participant":
+            # Borrowed: one source behind every participant layer, owned by the sidecar.
+            source = self._participant_source()
+            return (source, False) if source is not None else (None, False)
         if kind == "scene_reference":
             target = str(config.get("target_scene_id", ""))
             scene = self._scenes.get(target)

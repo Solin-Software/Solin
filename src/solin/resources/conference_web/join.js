@@ -42,6 +42,9 @@
   let videoTrack = null;
   let micOn = false;
   let micRefused = false; // the browser refused it; do not keep asking until the call ends
+  let cameraOn = false;
+  let cameraRefused = false;
+  const CAMERA_SOURCE = 1; // livekit TrackSource.CAMERA
   let wakeLock = null;
 
   // ── Screens ──────────────────────────────────────────────────────────────
@@ -138,6 +141,8 @@
       attendance: String(count), hand: handUp ? String(Date.now()) : "",
     }).catch(() => {});
     micOn = false;
+    cameraOn = false;
+    $("self").classList.add("hidden");
     banner("");
     render();
   }
@@ -227,9 +232,41 @@
     $("micGap").classList.toggle("hidden", !mayTalk || calledOn);
     $("mic").textContent = T.t(micOn ? "mute" : "unmute");
     $("mic").classList.toggle("live", micOn);
+    // The camera follows the same rule: allowed while locked means the operator is
+    // showing this person in the hall (a remote part-holder), so it switches on.
+    const sources = (permissions && permissions.canPublishSources) || [];
+    const mayCamera = mayTalk && sources.some((s) => s === CAMERA_SOURCE || s === "CAMERA");
+    const shown = mayCamera && roomLocked();
+    if (!shown && cameraRefused) { cameraRefused = false; banner(""); }
+    if (shown && !cameraOn && !cameraRefused) setCamera(true);
+    if (!mayCamera && cameraOn) setCamera(false);
+    $("camera").classList.toggle("hidden", !mayCamera || shown);
+    $("cameraGap").classList.toggle("hidden", !mayCamera || shown);
+    $("camera").textContent = T.t(cameraOn ? "cameraOff" : "cameraOn");
+    $("camera").classList.toggle("live", cameraOn);
     $("meetingCard").classList.toggle("speaking", calledOn);
-    $("status").textContent = calledOn ? T.t("speakNow") : "";
+    $("status").textContent = shown ? T.t("shownInHall") : calledOn ? T.t("speakNow") : "";
   }
+
+  async function setCamera(enabled) {
+    cameraOn = enabled;
+    try {
+      const publication = await room.localParticipant.setCameraEnabled(enabled);
+      const track = publication?.track;
+      if (enabled && track) track.attach($("self"));
+      $("self").classList.toggle("hidden", !enabled);
+    } catch {
+      cameraOn = false;
+      if (enabled) {
+        cameraRefused = true;
+        banner(T.t("cameraBlocked"), true);
+      }
+      $("self").classList.add("hidden");
+    }
+    render();
+  }
+
+  $("camera").addEventListener("click", () => setCamera(!cameraOn));
 
   async function setMicrophone(enabled) {
     micOn = enabled;

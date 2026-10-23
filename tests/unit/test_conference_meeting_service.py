@@ -48,11 +48,18 @@ class _FakeServer(QObject):
 class _FakePublisher(QObject):
     state_changed = Signal(str)
     egress_changed = Signal(object)
+    participant_ingress_changed = Signal(object)
+    warning = Signal(str)
     error = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.configs = []
+        self.spotlights = []
+
+    def set_spotlight(self, identity):
+        if not self.spotlights or self.spotlights[-1] != identity:
+            self.spotlights.append(identity)
 
     def start(self, config):
         self.configs.append(config)
@@ -284,3 +291,42 @@ def test_an_attendee_page_that_cannot_start_fails_the_meeting(parts):
     server.become(ServerState.RUNNING)
     wait_until(lambda: service.state is MeetingState.FAILED, description="failed", timeout_ms=3000)
     assert publisher.configs == []
+
+
+def test_hall_audio_settings_reach_the_publisher_and_its_warning_is_surfaced(parts):
+    from dataclasses import replace
+
+    from solin.core.conference.meeting_service import HallAudioSettings
+
+    service, server, publisher, _api = parts
+    hall = HallAudioSettings(recording_device="{mixer-in}", playout_device="{mixer-out}",
+                             noise_suppression=False)
+    service.configure(replace(SETTINGS, hall_audio=hall))
+    service.start()
+    server.become(ServerState.RUNNING)
+    wait_until(lambda: publisher.configs, description="publisher started", timeout_ms=3000)
+    (config,) = publisher.configs
+    assert config.hall_audio and config.recording_device == "{mixer-in}"
+    assert config.playout_device == "{mixer-out}" and not config.noise_suppression
+    changes = []
+    service.hall_audio_available_changed.connect(changes.append)
+    publisher.warning.emit("hall_audio_unavailable")
+    publisher.warning.emit("hall_audio_unavailable")
+    assert not service.hall_audio_available and changes == [False]
+    service.stop()
+    assert service.hall_audio_available and changes == [False, True]
+
+
+def test_the_publisher_follows_the_spotlight(parts):
+    service, server, publisher, api = parts
+    _open(service, server)
+    ingress = []
+    service.participant_ingress_changed.connect(ingress.append)
+    publisher.participant_ingress_changed.emit("descriptor")
+    assert ingress == ["descriptor"]
+    api.participants = [ParticipantInfo("att:phone-001", "Ann")]
+    service.admit("att:phone-001")
+    service.spotlight("att:phone-001")
+    assert service.spotlighted == "att:phone-001" and publisher.spotlights[-1] == "att:phone-001"
+    service.to_lobby("att:phone-001")  # leaving the meeting ends the spotlight
+    assert publisher.spotlights[-1] == "" and service.spotlighted == ""

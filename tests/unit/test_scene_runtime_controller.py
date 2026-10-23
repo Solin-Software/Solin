@@ -6244,3 +6244,24 @@ def test_meeting_egress_rehydrates_once_per_descriptor_change(request) -> None:
     assert engine.snapshots[-1][1].meeting_egress is None
     with pytest.raises(TypeError):
         controller.set_meeting_egress({"channel_id": "solin-meeting"})
+
+
+def test_participant_ingress_rehydrates_once_per_descriptor_change(request) -> None:
+    from solin.core.scenes.engine import ParticipantIngressDescriptor
+
+    engine = _Engine()
+    _documents, _runtime, controller = _runtime_controller(
+        request, engine, _Projection(), request_ids=(),
+    )
+    controller.start_engine()
+    descriptor = ParticipantIngressDescriptor("solin-participant", 1, "participant-ring")
+
+    controller.set_participant_ingress(descriptor)
+    assert engine.snapshots[-1][1].participant_ingress == descriptor
+    count = len(engine.snapshots)
+    controller.set_participant_ingress(descriptor)
+    assert len(engine.snapshots) == count
+    controller.set_participant_ingress(None)
+    assert engine.snapshots[-1][1].participant_ingress is None
+    with pytest.raises(TypeError):
+        controller.set_participant_ingress("ring")

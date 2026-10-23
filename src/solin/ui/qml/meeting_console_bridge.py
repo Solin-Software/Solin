@@ -21,6 +21,7 @@ def participant_row(participant: MeetingParticipant, hand_position: int = 0) -> 
         "handRaised": participant.hand_raised,
         "handPosition": hand_position,
         "microphoneLive": participant.microphone_live,
+        "spotlight": participant.spotlight,
     }
 
 
@@ -49,6 +50,7 @@ class MeetingConsoleBridge(QObject):
         service.hands_changed.connect(self._on_hands)
         service.error.connect(lambda _message: self._set_failed(True))
         provider_switch.active_changed.connect(self.stateChanged)
+        service.hall_audio_available_changed.connect(self.stateChanged)
 
     # -- state ----------------------------------------------------------------------------
     def _get_hosted(self) -> bool:
@@ -88,6 +90,9 @@ class MeetingConsoleBridge(QObject):
         # The address only: the full link carries the encryption key and is copied, not shown.
         return str(self._service.join_url).split("#", 1)[0]
 
+    def _get_hall_audio_available(self) -> bool:
+        return bool(self._service.hall_audio_available)
+
     def _get_lobby_count(self) -> int:
         return sum(1 for row in self._participants if row["status"] == ParticipantStatus.LOBBY)
 
@@ -104,6 +109,7 @@ class MeetingConsoleBridge(QObject):
     hands = Property("QVariantList", _get_hands, notify=participantsChanged)
     lobbyCount = Property(int, _get_lobby_count, notify=participantsChanged)
     attendeeAddress = Property(str, _get_attendee_address, notify=stateChanged)
+    hallAudioAvailable = Property(bool, _get_hall_audio_available, notify=stateChanged)
 
     # -- commands ---------------------------------------------------------------------------
     @Slot()
@@ -156,6 +162,14 @@ class MeetingConsoleBridge(QObject):
     @Slot(str, str)
     def rename(self, identity: str, name: str) -> None:
         self._service.rename(identity, name)
+
+    @Slot(str)
+    def spotlight(self, identity: str) -> None:
+        self._service.spotlight(identity)
+
+    @Slot()
+    def clearSpotlight(self) -> None:
+        self._service.clear_spotlight()
 
     @Slot(str)
     def remove(self, identity: str) -> None:

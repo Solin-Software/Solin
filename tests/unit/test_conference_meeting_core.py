@@ -177,3 +177,39 @@ def test_attendee_video_is_a_policy_and_only_while_unlocked(clock):
     clock.now += 10
     (action,) = core.observe([_p("att:a")])
     assert action.permission.can_publish_sources == (TrackSource.MICROPHONE,)
+
+
+CAMERA_AND_MICROPHONE = Permission(
+    can_subscribe=True, can_publish=True,
+    can_publish_sources=(TrackSource.CAMERA, TrackSource.MICROPHONE), can_update_metadata=True)
+
+
+def test_the_spotlight_gives_one_part_holder_camera_and_microphone_even_locked(core, clock):
+    core.observe([_p("att:a"), _p("att:b")])
+    core.admit_all()
+    core.set_locked(True)
+    clock.now += 10
+    core.observe([_p("att:a", LISTENER), _p("att:b", LISTENER)])
+    assert core.spotlight("att:a") == [SetPermission("att:a", CAMERA_AND_MICROPHONE)]
+    assert core.spotlighted == "att:a" and core.participants()[0].spotlight
+    clock.now += 10
+    core.observe([_p("att:a", CAMERA_AND_MICROPHONE), _p("att:b", LISTENER)])
+    assert set(core.spotlight("att:b")) == {SetPermission("att:a", LISTENER),
+                                            SetPermission("att:b", CAMERA_AND_MICROPHONE)}
+    clock.now += 10
+    core.observe([_p("att:a", LISTENER), _p("att:b", CAMERA_AND_MICROPHONE)])
+    assert core.clear_spotlight() == [SetPermission("att:b", LISTENER)]
+    assert core.spotlighted == ""
+
+
+def test_only_admitted_attendees_can_be_spotlighted_and_leaving_ends_it(core, clock):
+    core.observe([_p("att:a")])
+    assert core.spotlight("att:a") == [] and core.spotlighted == ""
+    core.admit("att:a")
+    core.spotlight("att:a")
+    core.to_lobby("att:a")
+    assert core.spotlighted == ""
+    core.admit("att:a")
+    core.spotlight("att:a")
+    core.remove("att:a")
+    assert core.spotlighted == ""

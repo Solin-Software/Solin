@@ -118,6 +118,18 @@ Rectangle {
             }
         }
 
+        Text {
+            visible: meetingConsole.open && !meetingConsole.hallAudioAvailable
+            Layout.fillWidth: true
+            Layout.leftMargin: root.sideMargin
+            Layout.rightMargin: root.sideMargin
+            Layout.bottomMargin: 10
+            wrapMode: Text.WordWrap
+            color: appTheme.warning
+            font.pixelSize: 13
+            text: qsTr("The meeting microphone and speaker could not be opened: attendees hear only the program, and their comments do not play in the hall. Check the devices in Settings.")
+        }
+
         Rectangle { Layout.fillWidth: true; height: 1; color: appTheme.border_ }
 
         // ── Not hosted here / not available ─────────────────────────────────
@@ -236,6 +248,7 @@ Rectangle {
                         leading: waiting ? "…" : "×" + modelData.attendance
                         name: modelData.name
                         detail: waiting ? qsTr("Waiting in the lobby")
+                                        : modelData.spotlight ? qsTr("In the hall")
                                         : modelData.status === "speaking" ? qsTr("Speaking") : ""
                         live: modelData.microphoneLive
                         highlighted: waiting
@@ -244,6 +257,11 @@ Rectangle {
                             primary: true
                             text: qsTr("Admit")
                             onClicked: meetingConsole.admit(modelData.identity)
+                        }
+                        SettingsButton {
+                            visible: modelData.spotlight
+                            text: qsTr("Stop showing")
+                            onClicked: meetingConsole.clearSpotlight()
                         }
                         SettingsButton {
                             text: "⋯"
@@ -258,6 +276,14 @@ Rectangle {
                                         renameField.text = modelData.name
                                         renameDialog.open()
                                     }
+                                }
+                                MenuItem {
+                                    // A remote part-holder: camera and microphone, shown in
+                                    // "Remote participant (meeting)" scene layers.
+                                    visible: !waiting && !modelData.spotlight
+                                    height: visible ? implicitHeight : 0
+                                    text: qsTr("Show in the hall")
+                                    onTriggered: meetingConsole.spotlight(modelData.identity)
                                 }
                                 MenuItem {
                                     visible: !waiting

@@ -981,6 +981,12 @@ Item {
             text: qsTr("Scene")
             onTriggered: sceneReferenceDialog.openForScene()
         }
+        ScenesMenuItem {
+            objectName: "scenesAddMeetingParticipantMenuItem"
+            theme: root.theme
+            text: qsTr("Remote participant (meeting)")
+            onTriggered: root.bridge.addMeetingParticipantSource()
+        }
     }
 
     Menu {

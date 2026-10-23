@@ -237,6 +237,7 @@ def _build_main_window_service_factories(
     from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.integrations.automation.shortcuts import AutoKeyDispatcher
     from solin.core.conference.meeting_service import create_hosted_meeting_service
+    from solin.core.conference.publisher_service import AudioDeviceLister
     from solin.core.integrations.automation.zoom.service import ZoomService
     from solin.core.integrations.ndi import NDIReceiverService
     from solin.core.jw.background_song_service import BackgroundSongService
@@ -357,6 +358,7 @@ def _build_main_window_service_factories(
         hosted_meeting=lambda parent: create_hosted_meeting_service(
             runtime_paths.data_dir / "conference", parent
         ),
+        meeting_audio_devices=lambda parent: AudioDeviceLister(parent=parent),
         background_song=BackgroundSongService,
         yeartext=lambda parent: YeartextService(
             cache_file=runtime_paths.cache_dir / "yeartext_cache.json",

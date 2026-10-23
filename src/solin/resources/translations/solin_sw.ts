@@ -6281,6 +6281,10 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Jibu la kamera halikuweza kusomwa.</translation>
     </message>
+    <message>
+        <source>Remote participant</source>
+        <translation>Mshiriki wa mbali</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7548,6 +7552,10 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Tafuta kamera kwenye mtandao…</translation>
+    </message>
+    <message>
+        <source>Remote participant (meeting)</source>
+        <translation>Mshiriki wa mbali (mkutano)</translation>
     </message>
 </context>
 <context>

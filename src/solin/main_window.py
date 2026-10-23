@@ -577,6 +577,10 @@ class MainWindow(QWidget):
         # through the scene engine's meeting egress.
         self._hosted_meeting = service_factories.hosted_meeting(self)
         self._hosted_meeting.egress_changed.connect(self.scene_runtime.set_meeting_egress)
+        # The spotlighted remote part-holder feeds "Remote participant (meeting)" layers.
+        self._hosted_meeting.participant_ingress_changed.connect(
+            self.scene_runtime.set_participant_ingress
+        )
         # The meeting workflow and toolbar talk to whichever provider is chosen.
         self._meeting_provider = MeetingProviderSwitch(
             {
@@ -698,6 +702,7 @@ class MainWindow(QWidget):
                     self._hosted_meeting_settings,
                     self._meeting_provider,
                     hosting_available=self._hosted_meeting.is_available,
+                    device_lister_factory=service_factories.meeting_audio_devices,
                     parent=parent,
                 ),
                 playlist_storage_paths=self.playlist_storage_paths,

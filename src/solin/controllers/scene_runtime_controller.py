@@ -23,6 +23,7 @@ from solin.core.scenes.engine import (
     MediaPlaybackEvent,
     MediaVideoReadyEvent,
     MeetingEgressDescriptor,
+    ParticipantIngressDescriptor,
     OutputHealthEvent,
     OutputWindowTarget,
     ProgramRecordingEvent,
@@ -283,6 +284,7 @@ class SceneRuntimeController(QObject):
         self._preview_egress: FrameChannelDescriptor | None = None
         self._program_egress: FrameChannelDescriptor | None = None
         self._meeting_egress: MeetingEgressDescriptor | None = None
+        self._participant_ingress: ParticipantIngressDescriptor | None = None
         self._program_recording_required = False
         self._preview_scene_id: str | None = None
         self._window_targets: tuple[OutputWindowTarget, ...] = ()
@@ -776,6 +778,7 @@ class SceneRuntimeController(QObject):
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
             meeting_egress=self._meeting_egress,
+            participant_ingress=self._participant_ingress,
             window_targets=self._combined_window_targets(),
             idle_screen=self._idle_screen,
         )
@@ -1173,6 +1176,16 @@ class SceneRuntimeController(QObject):
             raise TypeError("Invalid meeting egress descriptor")
         self._meeting_egress = descriptor
         self._last_render_enabled = self._render_enabled()
+        self._hydrate_if_ready()
+
+    @Slot(object)
+    def set_participant_ingress(self, descriptor: ParticipantIngressDescriptor | None) -> None:
+        """Feed (or stop feeding) "Remote participant (meeting)" layers from the publisher."""
+        if descriptor == self._participant_ingress:
+            return
+        if descriptor is not None and not isinstance(descriptor, ParticipantIngressDescriptor):
+            raise TypeError("Invalid participant ingress descriptor")
+        self._participant_ingress = descriptor
         self._hydrate_if_ready()
 
     def set_program_recording_required(self, required: bool) -> None:
@@ -2065,6 +2078,7 @@ class SceneRuntimeController(QObject):
                 or self._preview_egress != snapshot.preview_egress
                 or self._program_egress != snapshot.program_egress
                 or self._meeting_egress != snapshot.meeting_egress
+                or self._participant_ingress != snapshot.participant_ingress
                 or self._combined_window_targets() != snapshot.window_targets
             ):
                 self._hydrate_dirty = True
@@ -2082,6 +2096,7 @@ class SceneRuntimeController(QObject):
             preview_egress=self._preview_egress,
             program_egress=self._program_egress,
             meeting_egress=self._meeting_egress,
+            participant_ingress=self._participant_ingress,
             window_targets=self._combined_window_targets(),
             idle_screen=self._idle_screen,
         )

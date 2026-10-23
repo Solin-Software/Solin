@@ -39,6 +39,7 @@ input {
 .big.up { background: var(--warn); color: #222; }
 .big.live { background: var(--ok); color: #10251a; }
 video { width: 100%; border-radius: 12px; background: #000; display: block; aspect-ratio: 16 / 9; }
+video.self { width: 34%; aspect-ratio: 4 / 3; margin-top: 10px; border: 2px solid var(--ok); }
 .banner { background: var(--warn); color: #222; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; font-weight: 600; }
 .banner.error { background: var(--danger); color: #fff; }
 .waiting { text-align: center; padding: 28px 16px; }

@@ -86,6 +86,7 @@ def main() -> int:
                     "audio_input_capture": True,
                     "system_audio_capture": True,
                     "meeting_egress": False,
+                    "participant_ingress": False,
                 },
             )
             if mode == "crash_after_hello":

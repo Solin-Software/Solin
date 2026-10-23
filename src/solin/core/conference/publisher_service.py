@@ -16,13 +16,17 @@ import sys
 import time
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
 
 from solin.core.foundation.constants import IS_COMPILED, MEETING_PUBLISHER_ARGUMENT
-from solin.core.scenes.engine import MEETING_AUDIO_MIX_INDEX, MeetingEgressDescriptor
+from solin.core.scenes.engine import (
+    MEETING_AUDIO_MIX_INDEX,
+    MeetingEgressDescriptor,
+    ParticipantIngressDescriptor,
+)
 
 from .media_ring import MediaRingReader
 from .publisher_worker import MAX_MESSAGE_BYTES, PROTOCOL_VERSION, PublishRequest
@@ -31,6 +35,8 @@ from .tokens import AccessTokenRequest, RoomGrants, mint_access_token
 log = logging.getLogger(__name__)
 
 VIDEO_RING_SLOTS = 4
+PARTICIPANT_RING_SLOTS = 3
+PARTICIPANT_RING_PAYLOAD = 1920 * 1080 * 3 // 2  # the largest remote camera frame shown
 AUDIO_RING_SLOTS = 64
 AUDIO_RING_PAYLOAD = 16 * 1024  # 1024 stereo float32 frames is 8 KiB; leave headroom
 HALL_IDENTITY = "hall"
@@ -67,12 +73,21 @@ class PublisherConfig:
     simulcast: bool = True
     audio_only: bool = False
     e2ee_key: str = ""
+    hall_audio: bool = False
+    recording_device: str = ""
+    playout_device: str = ""
+    echo_cancellation: bool = True
+    noise_suppression: bool = True
+    auto_gain_control: bool = False
 
     def publish_request(self, token: str, video_ring: str, audio_ring: str) -> PublishRequest:
         return PublishRequest(
             url=self.url, token=token, video_ring=video_ring, audio_ring=audio_ring,
             width=self.width, height=self.height, fps=self.fps, max_bitrate=self.max_bitrate,
             simulcast=self.simulcast, audio_only=self.audio_only, e2ee_key=self.e2ee_key,
+            hall_audio=self.hall_audio, recording_device=self.recording_device,
+            playout_device=self.playout_device, echo_cancellation=self.echo_cancellation,
+            noise_suppression=self.noise_suppression, auto_gain_control=self.auto_gain_control,
         )
 
 
@@ -87,7 +102,9 @@ class MeetingPublisherService(QObject):
 
     state_changed = Signal(str)
     egress_changed = Signal(object)  # MeetingEgressDescriptor | None
+    participant_ingress_changed = Signal(object)  # ParticipantIngressDescriptor | None
     stats_changed = Signal(object)
+    warning = Signal(str)  # e.g. "hall_audio_unavailable": the meeting goes on without it
     error = Signal(str)
 
     def __init__(
@@ -107,6 +124,9 @@ class MeetingPublisherService(QObject):
         self._config: PublisherConfig | None = None
         self._rings: tuple[MediaRingReader, MediaRingReader] | None = None
         self._descriptor: MeetingEgressDescriptor | None = None
+        self._participant_ring: MediaRingReader | None = None
+        self._participant_descriptor: ParticipantIngressDescriptor | None = None
+        self._spotlight = ""
         self._generation = 0
         self._process: QProcess | None = None
         self._ready = False
@@ -148,10 +168,33 @@ class MeetingPublisherService(QObject):
             width=config.width, height=config.height, fps=config.fps,
             audio_mix=MEETING_AUDIO_MIX_INDEX,
         )
+        participant = MediaRingReader(None, PARTICIPANT_RING_SLOTS, PARTICIPANT_RING_PAYLOAD,
+                                      create=True)
+        self._participant_ring = participant
+        self._participant_descriptor = ParticipantIngressDescriptor(
+            channel_id="solin-participant", generation=self._generation,
+            video_ring=participant.name,
+        )
+        self._spotlight = ""
         self._restarts.clear()
         self._restart_delay_ms = 1000
         self.egress_changed.emit(self._descriptor)
+        self.participant_ingress_changed.emit(self._participant_descriptor)
         self._launch()
+
+    @property
+    def participant_descriptor(self) -> ParticipantIngressDescriptor | None:
+        return self._participant_descriptor
+
+    def set_spotlight(self, identity: str) -> None:
+        """Have the publisher follow this remote participant's camera (empty: nobody)."""
+        if identity == self._spotlight:
+            return
+        self._spotlight = identity
+        process = self._process
+        if process is not None and self._ready:
+            payload = json.dumps({"command": "spotlight", "identity": identity}).encode() + b"\n"
+            process.write(payload)
 
     def stop(self, *, timeout_ms: int = 3000) -> None:
         self._restart_timer.stop()
@@ -159,8 +202,13 @@ class MeetingPublisherService(QObject):
         if self._descriptor is not None:
             self._descriptor = None
             self.egress_changed.emit(None)
+        if self._participant_descriptor is not None:
+            self._participant_descriptor = None
+            self.participant_ingress_changed.emit(None)
         rings, self._rings = self._rings, None
-        for ring in rings or ():
+        participant, self._participant_ring = self._participant_ring, None
+        self._spotlight = ""
+        for ring in (*(rings or ()), *((participant,) if participant else ())):
             try:
                 ring.close()
                 ring.unlink()
@@ -200,7 +248,11 @@ class MeetingPublisherService(QObject):
             grants=RoomGrants(config.room, can_subscribe=True, can_update_own_metadata=True),
             attributes={"role": "hall"},
         ))
-        request = config.publish_request(token, rings[0].name, rings[1].name)
+        request = replace(
+            config.publish_request(token, rings[0].name, rings[1].name),
+            participant_ring=self._participant_ring.name if self._participant_ring else "",
+            spotlight=self._spotlight,  # a restarted worker resumes following them
+        )
         message = {"command": "start", **{
             name: getattr(request, name) for name in PublishRequest.__dataclass_fields__
         }}
@@ -261,6 +313,10 @@ class MeetingPublisherService(QObject):
             if not isinstance(message["stats"], dict):
                 raise ValueError("Invalid publisher stats")
             self.stats_changed.emit(message["stats"])
+        elif "warning" in message:
+            code = str(message["warning"])[:64]
+            log.warning("Meeting publisher: %s", code)
+            self.warning.emit(code)
         elif "error" in message:
             self._last_error = str(message["error"])[:64]
         else:
@@ -312,3 +368,72 @@ class MeetingPublisherService(QObject):
         if state != self._state:
             self._state = state
             self.state_changed.emit(state.value)
+
+
+class AudioDeviceLister(QObject):
+    """Asks a short-lived publisher process which meeting microphones and speakers exist.
+
+    The device list comes from the same WebRTC device module the meeting will use, so the
+    ids match what the publisher can open.
+    """
+
+    finished = Signal(object)  # {"recording": [...], "playout": [...]}, empty lists on failure
+
+    def __init__(self, *, command: Callable[[], tuple[str, list[str]]] = _default_command,
+                 timeout_ms: int = 15000, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._command = command
+        self._timeout_ms = timeout_ms
+        self._process: QProcess | None = None
+        self._buffer = bytearray()
+        self._deadline = QTimer(self)
+        self._deadline.setSingleShot(True)
+        self._deadline.timeout.connect(lambda: self._finish(None))
+
+    def start(self) -> None:
+        if self._process is not None:
+            return
+        program, arguments = self._command()
+        process = QProcess(self)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+        process.readyReadStandardOutput.connect(lambda: self._read(process))
+        process.finished.connect(lambda *_: self._finish(None) if process is self._process else None)
+        process.errorOccurred.connect(lambda _: self._finish(None) if process is self._process else None)
+        self._process = process
+        self._buffer.clear()
+        self._deadline.start(self._timeout_ms)
+        process.start(program, arguments)
+        process.write(b'{"command":"list_devices"}\n')
+
+    def _read(self, process: QProcess) -> None:
+        self._buffer.extend(process.readAllStandardOutput().data())
+        while b"\n" in self._buffer:
+            line, _, rest = self._buffer.partition(b"\n")
+            self._buffer = bytearray(rest)
+            try:
+                message = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(message, dict) and isinstance(message.get("devices"), dict):
+                self._finish(message["devices"])
+                return
+
+    def _finish(self, devices: dict | None) -> None:
+        process, self._process = self._process, None
+        if process is None:
+            return
+        self._deadline.stop()
+        if process.state() != QProcess.ProcessState.NotRunning:
+            process.kill()
+            process.waitForFinished(1000)
+        process.deleteLater()
+        self.finished.emit(_clean_devices(devices))
+
+
+def _clean_devices(devices: dict | None) -> dict[str, list[dict[str, str]]]:
+    result: dict[str, list[dict[str, str]]] = {"recording": [], "playout": []}
+    for kind in result:
+        for device in (devices or {}).get(kind) or ():
+            if isinstance(device, dict) and isinstance(device.get("name"), str):
+                result[kind].append({"id": str(device.get("id") or ""), "name": device["name"][:200]})
+    return result

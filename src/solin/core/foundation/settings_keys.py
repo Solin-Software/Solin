@@ -86,6 +86,11 @@ class SettingsKey:
     MEETING_QUALITY: Final = "meeting/quality"
     MEETING_E2EE: Final = "meeting/e2ee"
     MEETING_ATTENDEE_VIDEO: Final = "meeting/attendee_video"
+    MEETING_HALL_AUDIO: Final = "meeting/hall_audio"
+    MEETING_RECORDING_DEVICE: Final = "meeting/recording_device"
+    MEETING_PLAYOUT_DEVICE: Final = "meeting/playout_device"
+    MEETING_ECHO_CANCELLATION: Final = "meeting/echo_cancellation"
+    MEETING_NOISE_SUPPRESSION: Final = "meeting/noise_suppression"
 
     AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"
     AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"

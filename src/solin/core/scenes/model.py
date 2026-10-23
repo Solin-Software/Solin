@@ -13,7 +13,7 @@ from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 from solin.core.media.camera_identity import local_camera_device_key
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 15
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -77,6 +77,7 @@ class SourceKind(StrEnum):
     IMAGE = "image"
     COLOR = "color"
     SCENE_REFERENCE = "scene_reference"
+    MEETING_PARTICIPANT = "meeting_participant"
 
 
 
@@ -1108,6 +1109,22 @@ class SceneReferenceConfig:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class MeetingParticipantConfig:
+    """The remote part-holder the operator spotlights in a Solin-hosted meeting.
+
+    Nothing to configure: whoever is spotlighted appears; nothing is shown otherwise.
+    """
+
+    def to_record(self) -> dict[str, object]:
+        return {}
+
+    @classmethod
+    def from_record(cls, raw: object) -> MeetingParticipantConfig:
+        _mapping(raw, field_name="source.configuration", allowed_keys=set())
+        return cls()
+
+
 SourceConfig: TypeAlias = (
     SolinContentConfig
     | LocalCameraConfig
@@ -1115,6 +1132,7 @@ SourceConfig: TypeAlias = (
     | ImageSourceConfig
     | ColorSourceConfig
     | SceneReferenceConfig
+    | MeetingParticipantConfig
 )
 
 _CONFIG_BY_SOURCE_KIND = {
@@ -1124,6 +1142,7 @@ _CONFIG_BY_SOURCE_KIND = {
     SourceKind.IMAGE: ImageSourceConfig,
     SourceKind.COLOR: ColorSourceConfig,
     SourceKind.SCENE_REFERENCE: SceneReferenceConfig,
+    SourceKind.MEETING_PARTICIPANT: MeetingParticipantConfig,
 }
 
 
@@ -2451,6 +2470,20 @@ def _migrate_scene_document_record(
                 for source in sources
             ]
             current_version = 13
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 13:
+            # Scenes may now be kept off individual outputs. A v13 scene allows
+            # every output, which is a valid v14 scene; the bump exists so an
+            # older build rejects the new field instead of treating the profile
+            # as corrupt and silently restoring its backup.
+            current_version = 14
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 14:
+            # A "Remote participant (meeting)" source kind exists. Nothing to
+            # transform; the bump makes an older build reject a document using it.
+            current_version = 15
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

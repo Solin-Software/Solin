@@ -59,6 +59,17 @@ class MeetingState(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class HallAudioSettings:
+    """The meeting microphone (hall feed) and speaker, through WebRTC's device module."""
+
+    enabled: bool = True
+    recording_device: str = ""  # device id; empty = system default
+    playout_device: str = ""
+    echo_cancellation: bool = True
+    noise_suppression: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class MeetingSettings:
     server: ServerSettings
     room: str = "solin-meeting"
@@ -70,6 +81,7 @@ class MeetingSettings:
     e2ee: bool = True
     policy: MeetingPolicy = field(default_factory=MeetingPolicy)
     web_port: int = DEFAULT_WEB_PORT
+    hall_audio: HallAudioSettings = field(default_factory=HallAudioSettings)
     web_bind: str = "0.0.0.0"
 
 
@@ -114,6 +126,8 @@ class SolinMeetingService(QObject):
     hands_changed = Signal(object)  # list[MeetingParticipant]
     attendance_changed = Signal(int)
     egress_changed = Signal(object)  # MeetingEgressDescriptor | None
+    hall_audio_available_changed = Signal(bool)
+    participant_ingress_changed = Signal(object)  # ParticipantIngressDescriptor | None
     _api_result = Signal(object)
 
     def __init__(
@@ -162,7 +176,10 @@ class SolinMeetingService(QObject):
         server.error.connect(self._on_failure)
         publisher.state_changed.connect(self._on_publisher_state)
         publisher.egress_changed.connect(self.egress_changed)
+        publisher.participant_ingress_changed.connect(self.participant_ingress_changed)
         publisher.error.connect(self._on_failure)
+        publisher.warning.connect(self._on_publisher_warning)
+        self._hall_audio_available = True
 
     # -- MeetingProvider ----------------------------------------------------------------
     @property
@@ -215,6 +232,9 @@ class SolinMeetingService(QObject):
         # The room lives only in this server, so stopping it ends the room too.
         self._server.stop(wait=wait, timeout_ms=int(timeout * 1000))
         self._api = None
+        if not self._hall_audio_available:
+            self._hall_audio_available = True
+            self.hall_audio_available_changed.emit(True)
         self._poll_in_flight = False
         self._set_connected(False)
         self._set_busy(False)
@@ -293,6 +313,17 @@ class SolinMeetingService(QObject):
 
     def admit(self, identity: str) -> None:
         self._command(self._core.admit(identity))
+
+    def spotlight(self, identity: str) -> None:
+        """Show this remote part-holder in "Remote participant (meeting)" layers."""
+        self._command(self._core.spotlight(identity))
+
+    def clear_spotlight(self) -> None:
+        self._command(self._core.clear_spotlight())
+
+    @property
+    def spotlighted(self) -> str:
+        return self._core.spotlighted
 
     def admit_all(self) -> None:
         self._command(self._core.admit_all())
@@ -390,7 +421,21 @@ class SolinMeetingService(QObject):
             display_name=settings.display_name, width=settings.width,
             height=settings.height, fps=settings.fps, audio_only=settings.audio_only,
             e2ee_key=self._e2ee_key,
+            hall_audio=settings.hall_audio.enabled,
+            recording_device=settings.hall_audio.recording_device,
+            playout_device=settings.hall_audio.playout_device,
+            echo_cancellation=settings.hall_audio.echo_cancellation,
+            noise_suppression=settings.hall_audio.noise_suppression,
         ))
+
+    @property
+    def hall_audio_available(self) -> bool:
+        return self._hall_audio_available
+
+    def _on_publisher_warning(self, code: str) -> None:
+        if code == "hall_audio_unavailable" and self._hall_audio_available:
+            self._hall_audio_available = False
+            self.hall_audio_available_changed.emit(False)
 
     def _on_publisher_state(self, state: str) -> None:
         self._set_connected(state == PublisherState.PUBLISHING)
@@ -429,6 +474,8 @@ class SolinMeetingService(QObject):
         return True
 
     def _command(self, actions: list[MeetingAction]) -> None:
+        # The publisher follows the core's spotlight (it may end by lobby or removal).
+        self._publisher.set_spotlight(self._core.spotlighted)
         self._emit_views()
         api = self._api
         if not actions or api is None or self._state is not MeetingState.OPEN:

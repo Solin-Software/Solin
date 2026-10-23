@@ -48,6 +48,7 @@ from solin.core.scenes.engine import (
     SceneSourcePreview,
 )
 from solin.core.scenes.model import (
+    MeetingParticipantConfig,
     BusId,
     CameraMediaType,
     CameraPreset,
@@ -119,6 +120,7 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
+    SourceKind.MEETING_PARTICIPANT: "#EC4899",
 }
 
 
@@ -1172,6 +1174,28 @@ class ScenesBridge(QObject):
                 kind=SourceKind.SOLIN_CONTENT,
                 name=self.tr("Solin Content"),
                 configuration=SolinContentConfig(mode=SolinContentMode.PRESENTATION),
+            )
+        name = self._controller.documents.suggest_layer_name(self._selected_scene_id, source.name)
+        layer = self._new_source_layer(source, name)
+        if self._run_edit(lambda: self._controller.documents.add_source_layer(self._selected_scene_id, source, layer)):
+            self._selected_layer_id = layer.id
+            self._refresh_models()
+
+    @Slot()
+    def addMeetingParticipantSource(self) -> None:
+        """Add the remote part-holder spotlighted in a Solin-hosted meeting."""
+        document = self._controller.document
+        source = next(
+            (candidate for candidate in document.sources
+             if candidate.kind is SourceKind.MEETING_PARTICIPANT and candidate.enabled),
+            None,
+        )
+        if source is None:
+            source = SourceDefinition(
+                id=new_identity(),
+                kind=SourceKind.MEETING_PARTICIPANT,
+                name=self.tr("Remote participant"),
+                configuration=MeetingParticipantConfig(),
             )
         name = self._controller.documents.suggest_layer_name(self._selected_scene_id, source.name)
         layer = self._new_source_layer(source, name)

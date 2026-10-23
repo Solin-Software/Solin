@@ -33,6 +33,17 @@ from cffi import FFI
 log = logging.getLogger(__name__)
 
 _VIDEO_FORMAT_BGRA = 7  # enum video_format (matches pylibobs VideoFormat.BGRA)
+_VIDEO_FORMAT_I420 = 1
+# BT.709 limited range, as libobs' video_format_get_parameters() computes it (pylibobs does
+# not expose that function): YUV->RGB matrix (row-major 4x4) and the range bounds.
+_BT709_LIMITED_MATRIX = (
+    1.164384, 0.000000, 1.792741, -0.972945,
+    1.164384, -0.213249, -0.532909, 0.301483,
+    1.164384, 2.112402, 0.000000, -1.133402,
+    0.000000, 0.000000, 0.000000, 1.000000,
+)
+_LIMITED_RANGE_MIN = (16 / 255, 16 / 255, 16 / 255)
+_LIMITED_RANGE_MAX = (235 / 255, 240 / 255, 240 / 255)
 _OBS_SOURCE_VIDEO = 1 << 0  # obs_source_info.output_flags bit
 _OBS_SOURCE_FRAME_LINEAR_ALPHA = 1 << 0
 _FRAME_SOURCE_ID = "solin_frame_source"
@@ -324,6 +335,61 @@ class ObsFrameSource:
         except Exception:  # noqa: BLE001 - libobs boundary
             log.debug("obs_source_output_video failed", exc_info=True)
             return False
+
+    def push_i420(self, data: bytes, width: int, height: int) -> bool:
+        """Output one tightly packed I420 frame (BT.709, limited range), e.g. decoded
+        WebRTC video. No Qt. libobs copies the planes."""
+        source = self._source
+        if source is None or width <= 0 or height <= 0 or width % 2 or height % 2:
+            return False
+        luma, chroma = width * height, (width // 2) * (height // 2)
+        if len(data) < luma + 2 * chroma:
+            return False
+        from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
+
+        if not is_alive():
+            return False
+        frame: Any = _frame_ffi.new("struct obs_source_frame *")
+        base = _frame_ffi.cast("uint8_t *", _frame_ffi.from_buffer(data))
+        frame.data[0] = base
+        frame.data[1] = base + luma
+        frame.data[2] = base + luma + chroma
+        frame.linesize[0] = width
+        frame.linesize[1] = width // 2
+        frame.linesize[2] = width // 2
+        frame.width = width
+        frame.height = height
+        frame.format = _VIDEO_FORMAT_I420
+        frame.full_range = False
+        for index, value in enumerate(_BT709_LIMITED_MATRIX):
+            frame.color_matrix[index] = value
+        for index in range(3):
+            frame.color_range_min[index] = _LIMITED_RANGE_MIN[index]
+            frame.color_range_max[index] = _LIMITED_RANGE_MAX[index]
+        frame.timestamp = time.monotonic_ns()
+        frame.flags = _OBS_SOURCE_FRAME_LINEAR_ALPHA  # video is opaque
+        frame_ptr = ffi.cast("struct obs_source_frame *", int(_frame_ffi.cast("uintptr_t", frame)))
+        try:
+            out_lib: Any = get_lib()
+            out_lib.obs_source_output_video(source._ptr, frame_ptr)
+            return True
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("obs_source_output_video failed", exc_info=True)
+            return False
+
+    def clear(self) -> None:
+        """Stop showing the last frame (the source renders nothing until the next one)."""
+        source = self._source
+        if source is None:
+            return
+        from pylibobs._ffi import ffi, get_lib, is_alive  # type: ignore[import-not-found]
+
+        if not is_alive():
+            return
+        try:
+            get_lib().obs_source_output_video(source._ptr, ffi.NULL)
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.debug("could not clear the frame source", exc_info=True)
 
     def release(self) -> None:
         if self._close_uploads is not None:

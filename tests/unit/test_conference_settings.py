@@ -60,3 +60,15 @@ def test_meeting_settings_follow_preferences_with_fresh_credentials(store):
     assert first.server.api_secret != second.server.api_secret
     store.set_quality(MeetingQuality.AUDIO_ONLY)
     assert store.meeting_settings().audio_only
+
+
+def test_hall_audio_preferences_round_trip(store):
+    hall = store.hall_audio()
+    assert hall.enabled and hall.echo_cancellation and hall.noise_suppression
+    assert hall.recording_device == "" and hall.playout_device == ""
+    store.set_hall_audio(enabled=False, recording_device="{in}", noise_suppression=False)
+    hall = store.hall_audio()
+    assert not hall.enabled and hall.recording_device == "{in}" and not hall.noise_suppression
+    assert store.meeting_settings().hall_audio == hall
+    with pytest.raises(ValueError):
+        store.set_hall_audio(volume=3)

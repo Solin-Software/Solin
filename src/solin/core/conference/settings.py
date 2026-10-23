@@ -16,7 +16,7 @@ from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
 from .meeting_core import MeetingPolicy
-from .meeting_service import MeetingSettings
+from .meeting_service import HallAudioSettings, MeetingSettings
 from .server_config import ServerRole, ServerSettings, generate_credentials
 
 DEFAULT_HALL_NAME = "Kingdom Hall"
@@ -91,6 +91,33 @@ class HostedMeetingSettingsStore:
     def set_attendee_video(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.MEETING_ATTENDEE_VIDEO, bool(enabled))
 
+    def hall_audio(self) -> HallAudioSettings:
+        value = self.settings.value
+        return HallAudioSettings(
+            enabled=bool(value(SettingsKey.MEETING_HALL_AUDIO, True, bool)),
+            recording_device=self.settings.string(SettingsKey.MEETING_RECORDING_DEVICE, "")[:256],
+            playout_device=self.settings.string(SettingsKey.MEETING_PLAYOUT_DEVICE, "")[:256],
+            echo_cancellation=bool(value(SettingsKey.MEETING_ECHO_CANCELLATION, True, bool)),
+            noise_suppression=bool(value(SettingsKey.MEETING_NOISE_SUPPRESSION, True, bool)),
+        )
+
+    def set_hall_audio(self, **changes: object) -> None:
+        keys = {
+            "enabled": SettingsKey.MEETING_HALL_AUDIO,
+            "recording_device": SettingsKey.MEETING_RECORDING_DEVICE,
+            "playout_device": SettingsKey.MEETING_PLAYOUT_DEVICE,
+            "echo_cancellation": SettingsKey.MEETING_ECHO_CANCELLATION,
+            "noise_suppression": SettingsKey.MEETING_NOISE_SUPPRESSION,
+        }
+        for name, value in changes.items():
+            if name not in keys:
+                raise ValueError(f"Unknown hall audio setting {name!r}")
+            if name.endswith("_device"):
+                value = str(value)[:256]
+            else:
+                value = bool(value)
+            self.settings.set_value(keys[name], value)
+
     def meeting_settings(self) -> MeetingSettings:
         """Everything a new meeting needs, with fresh server credentials."""
         key, secret = generate_credentials()
@@ -104,4 +131,5 @@ class HostedMeetingSettingsStore:
             audio_only=quality is MeetingQuality.AUDIO_ONLY,
             e2ee=self.e2ee(),
             policy=MeetingPolicy(attendee_video=self.attendee_video()),
+            hall_audio=self.hall_audio(),
         )

@@ -213,3 +213,23 @@ def test_worker_reports_connect_failure(rings, monkeypatch):
     monkeypatch.setattr(_FakeSession, "fail", True)
     code, messages = _run(stdin, monkeypatch)
     assert code == 2 and messages[-1] == {"error": "connect_failed"}
+
+
+def test_hall_audio_fields_are_validated():
+    request = PublishRequest.from_message(_request(hall_audio=True, recording_device="{abc}",
+                                                   auto_gain_control=True))
+    assert request.hall_audio and request.recording_device == "{abc}"
+    assert request.echo_cancellation and request.noise_suppression
+    for overrides in ({"hall_audio": 1}, {"playout_device": None}, {"recording_device": "x" * 257},
+                      {"echo_cancellation": "yes"}):
+        with pytest.raises(ValueError):
+            PublishRequest.from_message(_request(**overrides))
+
+
+def test_worker_lists_audio_devices_and_exits(monkeypatch):
+    devices = {"recording": [{"id": "", "name": "Mixer"}], "playout": []}
+    monkeypatch.setattr(worker, "list_audio_devices", lambda: devices)
+    stdin = _Stdin()
+    stdin.push({"command": "list_devices"})
+    code, messages = _run(stdin, monkeypatch)
+    assert code == 0 and messages == [{"ready": 1}, {"devices": devices}]

@@ -5552,6 +5552,38 @@ def test_scene_reference_unknown_target_uses_placeholder():
     assert getattr(scene_a.items[0].source, "kind", None) == "color_source_v3"  # placeholder
 
 
+def _participant_doc():
+    return {
+        "sources": [{"id": "p", "type": "meeting_participant", "name": "Remote",
+                     "configuration": {}}],
+        "scenes": [{"id": "s", "layers": [{"id": "l", "source_id": "p", "visible": True,
+                                           "rect": {"x": 0, "y": 0, "width": 1.0, "height": 1.0}}]}],
+    }
+
+
+def test_participant_layers_borrow_the_participant_source():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    shared = runtime.ob.Source.create("solin_frame_source", "solin-meeting-participant", {})
+    graph = LibobsSceneGraph(runtime, participant_source=lambda: shared)
+    graph.hydrate(_participant_doc(), {"virtual_camera": "s"})
+    scene = _scene_by_name(runtime, "solin-scene-s")
+    assert scene.items[0].source is shared
+    graph.shutdown()
+    assert getattr(shared, "released", 0) == 0  # borrowed, never released by the graph
+
+
+def test_participant_layers_without_a_meeting_stay_transparent():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    LibobsSceneGraph(runtime, participant_source=lambda: None).hydrate(
+        _participant_doc(), {"virtual_camera": "s"})
+    (stand_in,) = [s for s in runtime.sources if s.kind == "color_source_v3"]
+    assert stand_in.settings["color"] == 0  # alpha 0: no grey box on the hall monitors
+
+
 def _image_doc(asset_id):
     return {
         "sources": [{"id": "im", "type": "image", "name": "I",
