@@ -76,6 +76,7 @@ class LibobsWindowOutput:
         self._scene_resolver: Callable[[str], Any] | None = None
         self._projection_resolver: Callable[[], Any] | None = None
         self._lock = threading.RLock()
+        self._surfaces: Any = None
 
     @property
     def handles(self) -> tuple[int, ...]:
@@ -86,7 +87,8 @@ class LibobsWindowOutput:
         """Live display routes, read without blocking the graphics thread."""
         routes = self._routes
         scenes = self._scene_ids
-        return tuple((route, scenes.get(handle, "")) for handle, route in routes.items())
+        native = tuple((route, scenes.get(handle, "")) for handle, route in routes.items())
+        return native + (self._surfaces.render_targets if self._surfaces is not None else ())
 
     @property
     def hydrate_lock(self) -> "threading.RLock":
@@ -106,10 +108,20 @@ class LibobsWindowOutput:
 
     def set_targets(self, targets: list) -> None:
         """Reconcile the live displays against the requested window targets."""
+        surface_targets = [target for target in targets
+                           if isinstance(target, dict) and target.get("surface_endpoint")]
+        if surface_targets and self._surfaces is None:
+            from .libobs_surface_output import LibobsSurfaceOutput
+
+            self._surfaces = LibobsSurfaceOutput(self._runtime, self._lock, self._surface_source)
+        if self._surfaces is not None:
+            self._surfaces.set_targets(surface_targets)
         canvas = self._runtime.video
         wanted: dict[int, tuple[int, int, str, str]] = {}
         for target in targets:
             if not isinstance(target, dict) or not target.get("visible", True):
+                continue
+            if target.get("surface_endpoint"):
                 continue
             handle = int(target.get("native_handle") or 0)
             if not handle:
@@ -142,6 +154,12 @@ class LibobsWindowOutput:
             self._routes = {
                 handle: routes[handle] for handle in wanted if handle in self._displays
             }
+
+    def _surface_source(self, target: dict) -> Any:
+        scene_id = target.get("scene_id")
+        if scene_id:
+            return self._scene_resolver(scene_id) if self._scene_resolver is not None else None
+        return self._projection_resolver() if self._projection_resolver is not None else None
 
     def _create(self, handle: int, width: int, height: int, canvas: Any) -> None:
         try:
@@ -221,6 +239,9 @@ class LibobsWindowOutput:
             log.debug("display release errored for handle %d", handle, exc_info=True)
 
     def shutdown(self) -> None:
+        if self._surfaces is not None:
+            self._surfaces.shutdown()
+            self._surfaces = None
         with self._lock:
             for handle in list(self._displays):
                 self._release_one(handle)

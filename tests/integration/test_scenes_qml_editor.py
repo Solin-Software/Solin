@@ -153,7 +153,10 @@ def _seed_names() -> SceneSeedNames:
 
 
 @pytest.fixture
-def scene_editor_factory(request, scene_workspace_factory):
+def scene_editor_factory(request, scene_workspace_factory, monkeypatch):
+    # Synthetic camera workflows must never trigger OS permission dialogs.
+    from solin.ui.qml.scenes_bridge import ScenesBridge
+    monkeypatch.setattr(ScenesBridge, "requestLocalCameraAccess", lambda self: "granted")
     def create(paths: ProfilePaths, *, recording=None, engine_ready=False, source_preview=None,
                camera_device_notifications=None):
         cleanup = ExitStack()
@@ -213,6 +216,71 @@ def _wait_until(predicate, timeout_ms: int = 1000) -> bool:
         QTest.qWait(10)
         elapsed += 10
     return bool(predicate())
+
+
+def test_native_editor_preview_accepts_cocoa_when_enabled(monkeypatch):
+    from solin.ui.qml.scenes import native_editor_preview_enabled
+
+    monkeypatch.setenv("SOLIN_NATIVE_EDITOR_PREVIEW", "1")
+    monkeypatch.setattr("PySide6.QtGui.QGuiApplication.platformName", lambda: "cocoa")
+    assert native_editor_preview_enabled()
+
+
+def test_native_editor_routes_endpoint_and_reconnects_after_presenter_replacement(
+    scene_editor_factory, tmp_path, monkeypatch,
+):
+    from solin.widgets.projection.native_surface import NativeVideoSurface
+
+    endpoint = "org.pylibobs.surfaces.editor-first"
+    monkeypatch.setattr("solin.ui.qml.scenes.native_editor_preview_enabled", lambda: True)
+    monkeypatch.setattr(NativeVideoSurface, "surface_endpoint", property(lambda self: endpoint))
+    _, controller, widget, _ = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1280, 760)
+    widget.show()
+    widget._on_preview_canvas_rect(30, 40, 640, 360)
+    widget._on_preview_scene(CAMERA_SCENE_ID)
+    surface = widget._preview_surface
+    assert surface is not None
+    target = controller._editor_preview_target
+    assert target is not None and target.surface_endpoint == endpoint
+    assert target.native_handle == 0
+    assert target.scene_id == CAMERA_SCENE_ID
+
+    endpoint = "org.pylibobs.surfaces.editor-replacement"
+    surface.geometry_changed.emit()
+    target = controller._editor_preview_target
+    assert target is not None and target.surface_endpoint == endpoint
+    widget.hide()
+    assert controller._editor_preview_target is None
+
+
+def test_native_editor_allocation_failure_keeps_image_preview_and_allows_recovery(
+    scene_editor_factory, tmp_path, monkeypatch,
+):
+    from solin.widgets.projection.native_surface import NativeVideoSurface
+
+    unavailable = True
+
+    def endpoint(_surface):
+        if unavailable:
+            raise RuntimeError("Cannot allocate native presenter")
+        return "org.pylibobs.surfaces.editor-recovered"
+
+    monkeypatch.setattr("solin.ui.qml.scenes.native_editor_preview_enabled", lambda: True)
+    monkeypatch.setattr(NativeVideoSurface, "surface_endpoint", property(endpoint))
+    _, controller, widget, _ = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1280, 760)
+    widget.show()
+    widget._on_preview_canvas_rect(30, 40, 640, 360)
+    widget._on_preview_scene(CAMERA_SCENE_ID)
+    assert controller._editor_preview_target is None
+    assert not widget._preview_surface.isVisible()
+    assert widget._qml.isVisible()
+
+    unavailable = False
+    widget._on_preview_canvas_rect(30, 40, 640, 360)
+    target = controller._editor_preview_target
+    assert target is not None and target.surface_endpoint.endswith("editor-recovered")
 
 
 def test_output_button_tracks_delivery_health_while_toggle_remains_requested(

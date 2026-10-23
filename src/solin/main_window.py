@@ -165,17 +165,15 @@ def _use_native_media_presentation(
 
 
 def _native_scene_routing_supported() -> bool:
-    """Whether the sidecar can paint scene video into shared native window handles.
+    """Whether authored scenes can reach the application's projection surfaces.
 
-    Supported on platforms whose top-level window handles can be shared
-    cross-process with the libobs sidecar so it can bind an ``obs_display`` to them: X11/XWayland (``xcb``) or Windows.
-    Native Wayland cannot share a window handle, so those sessions use the
-    application's Qt presentation widgets instead of direct native painting.
-    These widgets do not reproduce the authored scene composition.
+    Windows and X11/XWayland use direct native displays. Cocoa presents the
+    sidecar's composition through the binding's shared GPU surface transport.
+    Native Wayland remains outside the declared Linux support.
     """
     from PySide6.QtGui import QGuiApplication
 
-    return QGuiApplication.platformName() in ("xcb", "windows")
+    return QGuiApplication.platformName() in ("xcb", "windows", "cocoa")
 
 
 log = logging.getLogger(__name__)
@@ -1103,11 +1101,13 @@ class MainWindow(QWidget):
         self._watch_surface_geometry(surface)
         screen = surface.screen() or QApplication.primaryScreen()
         origin = surface.mapToGlobal(QPoint(0, 0))
+        endpoint = surface.surface_endpoint
         return OutputWindowTarget(
             bus_id=bus_id,
             target_id=target_id,
             screen_id=(screen.name() or "primary") if screen is not None else "primary",
-            native_handle=surface.native_handle,
+            native_handle=0 if endpoint else surface.native_handle,
+            surface_endpoint=endpoint,
             x=origin.x(),
             y=origin.y(),
             width=max(1, surface.width()),
@@ -1156,6 +1156,22 @@ class MainWindow(QWidget):
         targets: list[OutputWindowTarget] = []
         raw_fallback_windows: list[object] = []
 
+        def add_target(surface, target_id: str) -> bool:
+            try:
+                target = self._native_window_target(surface, target_id, BusId.MEDIA_WINDOWS)
+            except (OSError, RuntimeError):
+                # A native view/context can become unavailable while windows
+                # are changing. Keep the failure local to its receiving host.
+                log.exception("Could not create native video presenter for %s", target_id)
+                self.notifications.error(
+                    scene_engine_error_summary("native_window_output_failed"),
+                    title=self.tr("Scenes"),
+                    dedupe_key=f"native-presenter-failed-{target_id}",
+                )
+                return False
+            targets.append(target)
+            return True
+
         for index, window in enumerate(physical_windows):
             set_native_active = getattr(window, "set_native_output_active", None)
             if callable(set_native_active):
@@ -1165,13 +1181,10 @@ class MainWindow(QWidget):
                     raw_fallback_windows.append(window)
             if native_presentation:
                 surface = window.native_video_surface
-                targets.append(
-                    self._native_window_target(
-                        surface,
-                        f"media-window-{index}",
-                        BusId.MEDIA_WINDOWS,
-                    )
-                )
+                if not add_target(surface, f"media-window-{index}"):
+                    if callable(set_native_active):
+                        set_native_active(False)
+                    raw_fallback_windows.append(window)
         for window in self.projection_session.all_windows():
             if window in physical_windows:
                 continue
@@ -1186,13 +1199,9 @@ class MainWindow(QWidget):
                 if was_native and not auxiliary_native:
                     raw_fallback_windows.append(window)
                 if auxiliary_native:
-                    targets.append(
-                        self._native_window_target(
-                            window.native_video_surface,
-                            "media-floating-preview",
-                            BusId.MEDIA_WINDOWS,
-                        )
-                    )
+                    if not add_target(window.native_video_surface, "media-floating-preview"):
+                        set_native_active(False)
+                        raw_fallback_windows.append(window)
 
         projection_bar = getattr(self, "proj_bar", None)
         if projection_bar is not None:
@@ -1208,13 +1217,8 @@ class MainWindow(QWidget):
                 projection_bar.native_video_output_surface
             )
             if operator_video_native and operator_video_surface is not None:
-                targets.append(
-                    self._native_window_target(
-                        operator_video_surface,
-                        _OPERATOR_VIDEO_OUTPUT_TARGET_ID,
-                        BusId.MEDIA_WINDOWS,
-                    )
-                )
+                if not add_target(operator_video_surface, _OPERATOR_VIDEO_OUTPUT_TARGET_ID):
+                    projection_bar.set_native_video_output_active(False)
 
         if targets:
             self.scene_runtime.set_window_targets(tuple(targets))

@@ -14,7 +14,7 @@ from solin.core.scenes.model import (
 )
 
 
-SCENE_RESOURCE_SCHEMA_VERSION = 2
+SCENE_RESOURCE_SCHEMA_VERSION = 3
 MAX_SHARED_CAMERAS = 128
 
 
@@ -119,7 +119,7 @@ class SceneResourceCatalog:
         schema_version = raw.get("schema_version")
         if isinstance(schema_version, bool) or not isinstance(schema_version, int):
             raise SceneValidationError("Shared scene-resource schema version must be an integer")
-        if schema_version not in {1, SCENE_RESOURCE_SCHEMA_VERSION}:
+        if schema_version not in {1, 2, SCENE_RESOURCE_SCHEMA_VERSION}:
             raise UnsupportedSceneResourceSchemaError(schema_version)
         data = _strict_mapping(
             raw,

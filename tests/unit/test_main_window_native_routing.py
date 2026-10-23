@@ -17,9 +17,9 @@ from solin.main_window import (
 
 @pytest.mark.parametrize(
     ("platform", "supported"),
-    [("windows", True), ("xcb", True), ("wayland", False), ("cocoa", False), ("offscreen", False)],
+    [("windows", True), ("xcb", True), ("wayland", False), ("cocoa", True), ("offscreen", False)],
 )
-def test_native_routing_depends_on_shared_window_handles(monkeypatch, platform, supported):
+def test_scene_routing_accepts_direct_displays_and_cocoa_surface_delivery(monkeypatch, platform, supported):
     monkeypatch.setattr(
         "PySide6.QtGui.QGuiApplication.platformName", staticmethod(lambda: platform)
     )
@@ -109,6 +109,61 @@ def test_operator_video_output_keeps_qt_fallback_without_native_routing(
 
     assert projection_bar.active_states == [False]
     assert runtime.targets == ()
+
+
+@pytest.mark.parametrize("failed_host", ["physical", "auxiliary", "operator"])
+def test_unavailable_native_presenter_isolated_to_its_host(monkeypatch, caplog, failed_host):
+    monkeypatch.setattr(main_window, "_native_scene_routing_supported", lambda: True)
+    host, projection_bar, runtime = _native_preview_host(requested=True)
+
+    class Window:
+        def __init__(self):
+            self.native_output_active = False
+            self.native_video_surface = object()
+
+        def set_native_output_active(self, active):
+            self.native_output_active = active
+
+    physical, healthy, auxiliary = Window(), Window(), Window()
+    windows = {"physical": physical, "auxiliary": auxiliary}
+    failed_surface = (projection_bar.native_video_output_surface if failed_host == "operator"
+                      else windows[failed_host].native_video_surface)
+    restored = []
+    host.notifications = Mock()
+    host.tr = lambda value: value
+    host.projection_session.projection_windows = (physical, healthy)
+    host.projection_session.all_windows = lambda: (physical, healthy, auxiliary)
+    host._projection_targets.restore_state_to_window = restored.append
+
+    def target(surface, target_id, bus_id):
+        if surface is failed_surface:
+            raise RuntimeError("Cocoa graphics allocation failed")
+        return surface, target_id, bus_id
+
+    host._native_window_target = target
+
+    MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
+
+    assert len(runtime.targets) == 3
+    assert all(target[0] is not failed_surface for target in runtime.targets)
+    assert any(target[0] is healthy.native_video_surface for target in runtime.targets)
+    if failed_host == "operator":
+        assert projection_bar.active_states[-1] is False
+        assert restored == []
+    else:
+        assert not windows[failed_host].native_output_active
+        assert restored == [windows[failed_host]]
+    host.notifications.error.assert_called_once()
+    assert "Cocoa graphics allocation failed" in caplog.text
+
+    # A later topology update can restore the host without suppressing native
+    # routing for the rest of the session.
+    failed_surface = None
+    MainWindow._reconcile_native_scene_surfaces(cast(MainWindow, host))
+    assert len(runtime.targets) == 4
+    assert physical.native_output_active and auxiliary.native_output_active
+    assert projection_bar.active_states[-1] is True
+    host.notifications.error.assert_called_once()
 
 
 def test_losing_native_routing_restores_the_existing_window_in_place(monkeypatch) -> None:

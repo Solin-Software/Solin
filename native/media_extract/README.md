@@ -30,7 +30,7 @@ The required SDK/runtime versions, in library order above, are:
 
 | Platform | Minimum public versions | Required majors |
 | --- | --- | --- |
-| Windows, macOS | 61.7.100 / 61.19.100 / 59.39.100 / 8.3.100 | 61 / 61 / 59 / 8 |
+| Windows, macOS | 62.12.102 / 62.28.102 / 60.26.102 / 9.5.102 | 62 / 62 / 60 / 9 |
 | Linux | 60.16.100 / 60.31.102 / 58.29.100 / 7.5.100 | 60 / 60 / 58 / 7 |
 
 Compilation rejects a different major or older SDK. Runtime validation happens

@@ -2979,3 +2979,32 @@ def test_onvif_address_search_explains_an_unusable_target(scene_bridge_factory, 
     _wait_for(lambda: not bridge.onvifDiscoveryRunning)
 
     assert bridge.onvifDiscoveryStatus.startswith(status)
+
+
+@pytest.mark.parametrize("status,expected", [
+    (Qt.PermissionStatus.Granted, "granted"), (Qt.PermissionStatus.Denied, "denied"),
+])
+def test_local_camera_access_only_requests_undetermined_permission(monkeypatch, status, expected):
+    from solin.ui.qml import scenes_bridge as module
+    app = SimpleNamespace(checkPermission=lambda _: status)
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module, "QCoreApplication", SimpleNamespace(instance=lambda: app))
+    assert module.ScenesBridge.requestLocalCameraAccess(SimpleNamespace()) == expected
+
+
+def test_local_camera_permission_is_single_pending_user_action(monkeypatch):
+    from solin.ui.qml import scenes_bridge as module
+    delivered, queued, requested = [], [], []
+    owner = SimpleNamespace(localCameraAccessResolved=SimpleNamespace(emit=delivered.append))
+    app = SimpleNamespace(checkPermission=lambda _: Qt.PermissionStatus.Undetermined,
+        requestPermission=lambda permission, context, callback: requested.append(callback))
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module, "QCoreApplication", SimpleNamespace(instance=lambda: app))
+    monkeypatch.setattr(module, "QTimer", SimpleNamespace(singleShot=lambda _, context, callback: queued.append(callback)))
+    assert module.ScenesBridge.requestLocalCameraAccess(owner) == "pending"
+    assert module.ScenesBridge.requestLocalCameraAccess(owner) == "pending"
+    assert len(queued) == 1 and not requested
+    queued[0]()
+    assert len(requested) == 1 and not delivered
+    requested[0](SimpleNamespace(status=lambda: Qt.PermissionStatus.Granted))
+    assert delivered == [True] and not owner._camera_permission_pending

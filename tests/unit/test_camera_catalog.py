@@ -398,3 +398,12 @@ def test_windows_custom_modes_use_inventory_selector_and_share_alias_cache(monke
     assert catalog.modes(LocalCameraModeQuery("USB-DEVICE", 800, 600)) == queried
     assert queries == [LocalCameraModeQuery(device.device_id, 800, 600)]
     assert _mode(800, 600) in catalog.devices()[0].formats
+
+
+def test_automatic_preserves_native_clock_rate_slightly_above_thirty():
+    from solin.core.scenes.camera_catalog import select_automatic_mode
+    from solin.core.scenes.engine import LocalVideoFormat
+    from solin.core.scenes.model import CameraMediaType
+    mode = LocalVideoFormat(CameraMediaType.RAW, "420v", 1920, 1080, 3000003, 100000,
+        native_format="native-format-identity")
+    assert select_automatic_mode([mode]) is mode

@@ -1,4 +1,4 @@
-"""Live OBS camera metadata, without constructing or activating capture sources.
+"""DirectShow metadata, without constructing or activating capture sources.
 
 Property lists are rebuilt by native modified callbacks. Never use pylibobs's
 cached property snapshots for dependent modes. Native values are persisted
@@ -10,7 +10,6 @@ On Windows, COM must be initialized on the thread running these queries.
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
 from fractions import Fraction
@@ -20,7 +19,7 @@ from typing import Any
 from solin.core.scenes.engine import (
     MAXIMUM_LOCAL_CAMERA_CAPABILITIES, MAXIMUM_LOCAL_CAMERA_DEVICES,
     LocalCameraDevice, LocalCameraModeQuery, LocalCameraProbe, LocalCameraProbeStatus,
-    LocalVideoFormat, LocalVideoFrameInterval, LocalVideoFrameRateRange,
+    LocalVideoFormat,
 )
 from solin.core.scenes.model import CameraMediaType
 
@@ -55,9 +54,6 @@ class _NativeProperties:
     def __init__(self, source_id: str) -> None:
         from pylibobs._ffi import ffi, get_lib
 
-        from .pylibobs_compat import complete_frame_rate_type_compat
-
-        complete_frame_rate_type_compat(ffi)
         self.ffi: Any = ffi
         self.lib: Any = get_lib()
         self.properties: Any = self.ffi.NULL
@@ -149,10 +145,6 @@ class _NativeProperties:
             self.lib.obs_data_set_int(self.settings, key, value)
         elif isinstance(value, str):
             self.lib.obs_data_set_string(self.settings, key, value.encode())
-        elif isinstance(value, Fraction):
-            fps = self.ffi.new("struct media_frames_per_second *")
-            fps.numerator, fps.denominator = value.numerator, value.denominator
-            self.lib.obs_data_set_frames_per_second(self.settings, key, fps[0], self.ffi.NULL)
         else:
             raise TypeError("Unsupported camera metadata setting")
         self._callbacks += 1
@@ -160,23 +152,6 @@ class _NativeProperties:
             raise CameraPropertiesError("capability_overflow")
         self.lib.obs_property_modified(prop, self.settings)
 
-    def fps_ranges(self) -> tuple[tuple[Fraction, Fraction], ...]:
-        prop = self._property("frame_rate")
-        if self.lib.obs_property_get_type(prop) != 11:
-            raise CameraPropertiesError("capability_property_type")
-        count = self.lib.obs_property_frame_rate_fps_ranges_count(prop)
-        if count > _LIMIT:
-            raise CameraPropertiesError("capability_overflow")
-        result = []
-        for index in range(count):
-            lower = self.lib.obs_property_frame_rate_fps_range_min(prop, index)
-            upper = self.lib.obs_property_frame_rate_fps_range_max(prop, index)
-            low = Fraction(int(lower.numerator), int(lower.denominator))
-            high = Fraction(int(upper.numerator), int(upper.denominator))
-            if low <= 0 or high < low:
-                raise CameraPropertiesError("invalid_frame_rate_range")
-            result.append((low, high))
-        return tuple(result)
 
 
 def _dshow_media_type(value: int) -> CameraMediaType | None:
@@ -232,89 +207,10 @@ def _dshow_modes(props: _NativeProperties, device_id: str, *, requested_size: tu
     return tuple(modes), ()
 
 
-def _avcapture_media_type(value: int) -> CameraMediaType | None:
-    if value <= 0 or value > 0xFFFFFFFF:
-        return None
-    fourcc = value.to_bytes(4, "big")
-    if not fourcc.isascii() or not all(32 <= char < 127 for char in fourcc):
-        return None
-    if fourcc in (b"hvc1", b"hev1"):
-        return None
-    if fourcc in (b"jpeg", b"mjpa", b"mjpb", b"MJPG"):
-        return CameraMediaType.JPEG
-    if fourcc in (b"avc1", b"H264"):
-        return CameraMediaType.H264
-    return CameraMediaType.RAW
-
-
-def _avcapture_modes(props: _NativeProperties, device_id: str, *, requested_size: tuple[int, int] | None = None):
-    modes: dict[LocalVideoFormat, None] = {}
-    ranges: dict[LocalVideoFrameRateRange, None] = {}
-    props.set("device", device_id)
-    props.set("use_preset", False)
-    for _label, resolution in props.choices("resolution"):
-        if not isinstance(resolution, str):
-            continue
-        try:
-            dimensions = json.loads(resolution)
-            width, height = dimensions["width"], dimensions["height"]
-            LocalVideoFormat(CameraMediaType.RAW, "validation", width, height, 1, 1)
-        except (ValueError, TypeError, KeyError):
-            continue
-        if requested_size is not None and (width, height) != requested_size:
-            continue
-        props.set("resolution", resolution)
-        native_ranges = props.fps_ranges()
-        # OBS 32.1.2 enumerate_frame_rates() includes EVERY format's interval
-        # endpoints; find_formats() uses inclusive continuous interval tests.
-        # Thus format membership cannot change between adjacent endpoints.
-        # Query each segment and its endpoints via the FPS modified callback;
-        # never assign the aggregate range to every pixel format. This relies
-        # specifically on that plugin contract, not a generic sampling heuristic.
-        boundaries = sorted({fps for low, high in native_ranges for fps in (low, min(high, Fraction(60)))
-                             if 0 < fps <= 60})
-        candidates = set(boundaries)
-        candidates.update(fps for fps in _USUAL_FPS if any(low <= fps <= high for low, high in native_ranges))
-        candidates.update((low + high) / 2 for low, high in zip(boundaries, boundaries[1:], strict=False))
-        supported: dict[Fraction, set[int]] = {}
-        for fps in sorted(candidates):
-            if not any(low <= fps <= high for low, high in native_ranges):
-                continue
-            props.set("frame_rate", fps)
-            formats = {value for _label, value in props.choices("input_format")
-                       if isinstance(value, int) and _avcapture_media_type(value) is not None}
-            supported[fps] = formats
-            for native_format in sorted(formats):
-                media_type = _avcapture_media_type(native_format)
-                assert media_type is not None
-                mode = LocalVideoFormat(media_type, native_format.to_bytes(4, "big").decode("ascii"), width, height,
-                                        fps.numerator, fps.denominator)
-                modes[mode] = None
-                if len(modes) > _LIMIT:
-                    raise CameraPropertiesError("capability_overflow")
-        for low, high in zip(boundaries, boundaries[1:], strict=False):
-            common = supported.get(low, set()) & supported.get(high, set()) & supported.get((low + high) / 2, set())
-            for native_format in sorted(common):
-                media_type = _avcapture_media_type(native_format)
-                assert media_type is not None
-                minimum, maximum = 1 / high, 1 / low
-                item = LocalVideoFrameRateRange(
-                    media_type, native_format.to_bytes(4, "big").decode("ascii"), width, height,
-                    LocalVideoFrameInterval(minimum.numerator, minimum.denominator),
-                    LocalVideoFrameInterval(maximum.numerator, maximum.denominator),
-                )
-                ranges[item] = None
-                if len(ranges) > _LIMIT:
-                    raise CameraPropertiesError("capability_overflow")
-    return tuple(modes), tuple(ranges)
-
-
 def _backend():
     platform = sys.platform
     if platform == "win32":
         return "dshow_input", "video_device_id", "dshow", _dshow_modes
-    elif platform == "darwin":
-        return "av_capture_input", "device", "avcapture", _avcapture_modes
     else:
         raise RuntimeError("No OBS camera metadata backend for this platform")
 

@@ -152,10 +152,10 @@ done
 
 "${PYTHON}" scripts/build_media_extract.py --build-dir "${WORK_ROOT}/native/media-extract"
 
-# The published Linux wheel omits usr/local/bin/obs-ffmpeg-mux. Extract the
+# The Linux runtime excludes usr/local/bin/obs-ffmpeg-mux. Extract the
 # matching official release without installing OBS or changing apt sources.
-OBS_RUNTIME_VERSION="32.1.2"
-OBS_RUNTIME_SHA256="a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8"
+OBS_RUNTIME_VERSION="32.2.2"
+OBS_RUNTIME_SHA256="b6557ca2059287210332accc94c267094050489cffffc5c832e746e3a418dab0"
 OBS_RUNTIME_NAME="OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-24.04-x86_64.deb"
 OBS_RUNTIME_URL="https://github.com/obsproject/obs-studio/releases/download/${OBS_RUNTIME_VERSION}/${OBS_RUNTIME_NAME}"
 OBS_CACHE_ROOT="${WORK_ROOT}/dependencies/libobs"

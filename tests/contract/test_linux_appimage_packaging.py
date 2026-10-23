@@ -164,8 +164,8 @@ def test_linux_ci_bounds_package_mirror_failures():
 
 def test_linux_mux_comes_from_the_checksum_pinned_official_release():
     script = _read("scripts/build_solin.sh")
-    assert 'OBS_RUNTIME_VERSION="32.1.2"' in script
-    assert 'OBS_RUNTIME_SHA256="a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8"' in script
+    assert 'OBS_RUNTIME_VERSION="32.2.2"' in script
+    assert 'OBS_RUNTIME_SHA256="b6557ca2059287210332accc94c267094050489cffffc5c832e746e3a418dab0"' in script
     assert 'OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-24.04-x86_64.deb' in script
     assert "https://github.com/obsproject/obs-studio/releases/download/" in script
     assert "sha256sum --check --status" in script

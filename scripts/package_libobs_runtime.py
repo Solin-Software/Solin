@@ -62,15 +62,15 @@ _LINUX_HOST_LIBRARIES = frozenset({
     "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1",
 })
 _LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
-# Effects loaded by OBS 32.1.2's graphics initialization, including OpenGL.
+# Effects loaded by OBS 32.x graphics initialization, including OpenGL.
 _MACOS_LIBOBS_EFFECTS = (
     "default", "default_rect", "opaque", "solid", "repeat", "format_conversion",
     "bicubic_scale", "lanczos_scale", "area", "bilinear_lowres_scale", "premultiplied_alpha",
 )
 _MEDIA_EXTRACT_ABI = {
-    "windows": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
+    "windows": {"avcodec": 62, "avformat": 62, "avutil": 60, "swscale": 9},
     "linux": {"avcodec": 60, "avformat": 60, "avutil": 58, "swscale": 7},
-    "macos": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
+    "macos": {"avcodec": 62, "avformat": 62, "avutil": 60, "swscale": 9},
 }
 _MEDIA_EXTRACT_MANIFEST = "media-extract-manifest.json"
 _WINDOWS_REDISTRIBUTABLES = frozenset({

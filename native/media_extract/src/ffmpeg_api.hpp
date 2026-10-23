@@ -22,8 +22,8 @@ constexpr std::array<unsigned, 4> minimum_versions = {
     AV_VERSION_INT(7, 5, 100)};
 #else
 constexpr std::array<unsigned, 4> minimum_versions = {
-    AV_VERSION_INT(61, 7, 100), AV_VERSION_INT(61, 19, 100), AV_VERSION_INT(59, 39, 100),
-    AV_VERSION_INT(8, 3, 100)};
+    AV_VERSION_INT(62, 12, 102), AV_VERSION_INT(62, 28, 102), AV_VERSION_INT(60, 26, 102),
+    AV_VERSION_INT(9, 5, 102)};
 #endif
 constexpr std::array<unsigned, 4> compiled_versions = {
     LIBAVFORMAT_VERSION_INT, LIBAVCODEC_VERSION_INT, LIBAVUTIL_VERSION_INT, LIBSWSCALE_VERSION_INT};
@@ -37,7 +37,7 @@ constexpr bool valid_sdk() {
 }
 static_assert(
     valid_sdk(),
-    "FFmpeg SDK must match platform ABI and minimum FFmpeg 6.1 (Linux) / 7.1 (Windows/macOS)");
+    "FFmpeg SDK must match platform ABI and minimum FFmpeg 6.1 (Linux) / 8.x (Windows/macOS)");
 
 // Function pointer types come exclusively from the public SDK declarations.
 #define SOLIN_FORMAT_FUNCTIONS(X)                                                                  \

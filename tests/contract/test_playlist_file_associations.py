@@ -159,6 +159,8 @@ def test_macos_bundle_configuration_preserves_other_document_types(tmp_path: Pat
     assert plist["CFBundleShortVersionString"] == "26.32.0"
     assert plist["CFBundleVersion"] == "26.32.1"
     assert plist["LSMinimumSystemVersion"] == "13.0"
+    assert plist["NSCameraUsageDescription"].strip()
+    assert plist["NSMicrophoneUsageDescription"].strip()
     assert plist["CFBundleDocumentTypes"][0]["CFBundleTypeName"] == "Existing"
     playlist_document = plist["CFBundleDocumentTypes"][-1]
     assert playlist_document["LSItemContentTypes"] == ["com.solin.playlist"]

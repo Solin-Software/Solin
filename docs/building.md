@@ -50,14 +50,32 @@ the private libobs runtime. No external `ffprobe` or `ffmpeg` executable is
 required. Extraction does not initialize OBS, a graphics session, or a render
 context.
 
-Install the Python dependencies before invoking a build. On Intel macOS, use the
-[macOS binding bootstrap](#macos) below. On other platforms:
+## Pinned media binding
+
+All supported hosts build `pylibobs==32.2.2` from an audited immutable Git
+revision. Runtime extraction, dependency relocation, signing and the native
+surface bridge belong to the binding. Solin's helper verifies the committed
+source, delegates to that recipe, qualifies the wheel and records its source
+revision, SHA-256 and official OBS asset provenance beside the wheel.
+
+For a local, unpublished binding checkout:
 
 ```text
-python -m pip install -r requirements-dev.txt
-python -m pip install -r requirements-build.txt
-python -m pip install -e .
+python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0 requests==2.32.5
+python scripts/build_pylibobs.py --source-dir ../pylibobs --source-ref <full-commit-sha> --output-dir .pip-wheels
+python -m pip install --no-index --find-links .pip-wheels --no-deps --force-reinstall pylibobs==32.2.2
+python -m pip install -r requirements-dev.txt -r requirements-build.txt
+python -m pip install --no-deps -e .
 ```
+
+Commit the binding's tracked changes before building. To enable remote CI,
+publish the audited revision to the configured fork and set the repository
+variable `PYLIBOBS_SOURCE_REF` to its full commit SHA. Until publication, CI
+cannot resolve a local-only commit; it fails explicitly instead of substituting
+an upstream wheel. The helper also accepts `--source-ref` directly and
+`--source-repository` for a published upstream revision. It never patches source
+or edits an installed package. The CFFI ownership and callback fixes require
+the audited fork on every supported host until they are released upstream.
 
 Before running from source or executing the Python suites, install CMake 3.25+
 and a C++17 toolchain (MSVC on Windows, Clang on macOS, the Ubuntu build tools on
@@ -75,9 +93,9 @@ Ubuntu packages without overwriting existing wheel libraries; macOS adds relativ
 FFmpeg library aliases when necessary. Release recipes run this bootstrap
 automatically. Python dependency installation alone does not compile the helper.
 
-Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
-SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
-libavcodec/libavformat 61, libavutil 59 and libswscale 8. SDK binaries are build
+Windows x64 and both macOS architectures use the official `obs-deps 2026-07-15`
+SDK, verified against fixed SHA-256 values. Its FFmpeg public headers match
+libavcodec/libavformat 62, libavutil 60 and libswscale 9. SDK binaries are build
 inputs only and are never substituted for the installed runtime. Ubuntu 24.04
 uses the same archive's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
 `libswscale-dev`, matching runtime majors 60/60/58/7. The helper checks header
@@ -242,23 +260,23 @@ Intel and Apple Silicon jobs build with Nuitka, apply ad-hoc signatures, create
 architecture-specific DMGs, verify the bundle architecture, and validate
 packaged startup and application replacement.
 
-Published `pylibobs` wheels provide the runtime on Windows and Linux. On both
-macOS architectures, bootstrap a local `pylibobs==0.1.2` wheel against the official
-OBS 32.1.2 runtime before installing requirements. The helper preserves the
-`libobs.framework` identity required for Cocoa resource lookup and relocates its
-native dependencies before signing and validating them:
+The binding preserves `libobs.framework` for Cocoa shader lookup and owns
+relocation, signing and the native surface bridge. OBS 32.2.2 requires macOS 13
+or newer. Use the [pinned binding bootstrap](#pinned-media-binding) before
+installing dependencies.
 
-```text
-python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
-python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
-python -m pip install -r requirements-dev.txt
-python -m pip install --no-deps -e .
-```
+Cocoa projection windows and their previews receive the independent projection
+transition through the binding's bounded IOSurface/Mach transport. Qt owns the
+receiving views; only the supervised sidecar initializes libobs. Native view
+addresses never cross the process boundary. A failed receiving presenter falls
+back locally without disabling healthy windows. Windows and X11 retain their
+direct native displays; native Wayland presentation is unsupported.
 
-The helper verifies the downloads, target architecture and native initialization.
-It leaves other hosts unchanged. The workflow uses the local wheel during its
-binary dependency download and runs the same packaged runtime qualification.
+The experimental GPU editor preview remains opt-in through
+`SOLIN_NATIVE_EDITOR_PREVIEW=1`, including on Cocoa. It follows the selected
+editor scene independently of projection and program; otherwise the editor uses
+the existing image preview.
+
 Release replacement tests resolve the previous DMG for the same architecture.
 The first Apple Silicon release runs clean-install and startup checks because no
 native predecessor exists. Ad-hoc signing does not provide a Developer ID or
@@ -268,11 +286,10 @@ notarization.
 
 Ubuntu 24.04 x86_64 is the reference Linux platform for development, CI and
 AppImage builds. Ubuntu 22.04 is unsupported by this delivery recipe. The pinned
-`pylibobs==0.1.2` Linux wheel is tagged `manylinux_2_31_x86_64`, but its ELF
-version requirements reach `GLIBC_2.34`. Its native dependency set from Ubuntu
-24.04 raises the minimum further: `libsrt.so.1.5`, `librist.so.4`,
-`libx264.so.164` and `libvpl.so.2` require `GLIBC_2.38`. Ubuntu 24.04 provides
-glibc 2.39. The wheel tag alone does not establish distribution compatibility.
+`pylibobs==32.2.2` runtime comes from the official OBS Ubuntu 24.04 release.
+Use the project's runtime qualification before advertising support for another
+distribution; the wheel tag alone does not establish native dependency or glibc
+compatibility.
 
 The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
 `pkg-config`. The libobs runtime needs the host's graphics and audio support.
@@ -316,9 +333,9 @@ xvfb-run --auto-servernum bash scripts/build_solin.sh
 Set `SOLIN_PYTHON` only when the desired interpreter is not discoverable through
 the environment or repository-local environment.
 
-The script downloads the official `OBS-Studio-32.1.2-Ubuntu-24.04-x86_64.deb`,
+The script downloads the official `OBS-Studio-32.2.2-Ubuntu-24.04-x86_64.deb`,
 verifies SHA-256
-`a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8`,
+`b6557ca2059287210332accc94c267094050489cffffc5c832e746e3a418dab0`,
 and reuses only a verified archive in the build's dependency cache. It extracts
 the missing `usr/local/bin/obs-ffmpeg-mux` with `dpkg-deb` and passes it to runtime
 staging. This supplies the wheel's matching recording helper without installing

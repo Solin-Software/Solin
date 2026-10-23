@@ -11,11 +11,12 @@ import logging
 from urllib.parse import unquote, urlsplit, urlunsplit
 import math
 import re
+import sys
 from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, Property, Qt, Signal, Slot
+from PySide6.QtCore import QCameraPermission, QCoreApplication, QObject, Property, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
@@ -184,6 +185,7 @@ class ScenesBridge(QObject):
     pointerOverrideEnded = Signal(str)
     ptzResult = Signal(str, bool, str)
     localCameraModesReady = Signal(str, int, int, bool)
+    localCameraAccessResolved = Signal(bool)
     _camera_modes_result = Signal(object)
     onvifDiscoveryChanged = Signal()
     onvifCameraQueried = Signal(int, dict)
@@ -2143,6 +2145,39 @@ class ScenesBridge(QObject):
         except SceneValidationError:
             return {}
 
+    @Slot(result=str)
+    def requestLocalCameraAccess(self) -> str:
+        """Request access only from an explicit capture action on the GUI thread."""
+        if sys.platform != "darwin":
+            return "granted"
+        app = QCoreApplication.instance()
+        if app is None:
+            return "denied"
+        permission = QCameraPermission()
+        status = app.checkPermission(permission)
+        if status == Qt.PermissionStatus.Granted:
+            return "granted"
+        if status == Qt.PermissionStatus.Denied:
+            return "denied"
+        if not getattr(self, "_camera_permission_pending", False):
+            self._camera_permission_pending = True
+
+            def completed(result) -> None:
+                self._camera_permission_pending = False
+                self.localCameraAccessResolved.emit(result.status() == Qt.PermissionStatus.Granted)
+
+            # Return the pending state before delivering a possibly synchronous
+            # platform failure. The dialog owns the pending submission context.
+            QTimer.singleShot(0, self, lambda: app.requestPermission(permission, self, completed))
+        return "pending"
+
+    @Slot(result=str)
+    def localCameraAccessError(self) -> str:
+        return self.tr(
+            "Camera unavailable. Check its connection, privacy permissions, "
+            "or whether another application is using it."
+        )
+
     @Slot(str, result=str)
     def cameraCurrentStatus(self, camera_id: str) -> str:
         health = self._controller.source_health(camera_id)
@@ -2171,10 +2206,7 @@ class ScenesBridge(QObject):
                 "The camera capture could not be checked. Reconnect the device."
             ),
         }
-        return messages.get(health.error_code, self.tr(
-            "Camera unavailable. Check its connection, privacy permissions, "
-            "or whether another application is using it."
-        ))
+        return messages.get(health.error_code, self.localCameraAccessError())
 
     @Slot(str, float, float, float, float)
     def movePtz(
@@ -2863,6 +2895,7 @@ class ScenesBridge(QObject):
             fps_denominator=selected_format.fps_denominator if selected_format is not None else 1,
             media_type=selected_format.media_type if selected_format is not None else None,
             pixel_format=selected_format.pixel_format if selected_format is not None else "",
+            native_format=selected_format.native_format if selected_format is not None else "",
             ptz_binding=ptz_binding,
         )
 
@@ -2871,6 +2904,7 @@ class ScenesBridge(QObject):
         return (
             video_format.media_type is item.media_type
             and video_format.pixel_format == item.pixel_format
+            and video_format.native_format == item.native_format
             and video_format.width == item.width and video_format.height == item.height
             and item.supports(video_format.fps_numerator, video_format.fps_denominator)
         )
@@ -2889,7 +2923,7 @@ class ScenesBridge(QObject):
                 if item.supports(rate.numerator, rate.denominator):
                     modes[LocalVideoFormat(
                         item.media_type, item.pixel_format, item.width, item.height,
-                        rate.numerator, rate.denominator,
+                        rate.numerator, rate.denominator, item.native_format,
                     )] = None
         return tuple(modes)
 
@@ -2899,7 +2933,7 @@ class ScenesBridge(QObject):
         return json.dumps([
             video_format.media_type.value, video_format.pixel_format,
             video_format.width, video_format.height,
-            video_format.fps_numerator, video_format.fps_denominator,
+            video_format.fps_numerator, video_format.fps_denominator, video_format.native_format,
         ], separators=(",", ":"))
 
     def _local_format_record(
@@ -2937,12 +2971,13 @@ class ScenesBridge(QObject):
         if device is None:
             raise SceneValidationError("Local camera format is unavailable")
         try:
-            if len(format_id) > 512:
+            if len(format_id) > 8192:
                 raise ValueError("Mode identifier is too long")
             parts = json.loads(format_id)
             if (
-                not isinstance(parts, list) or len(parts) != 6
-                or not all(type(part) is int for part in parts[2:])
+                not isinstance(parts, list) or len(parts) != 7
+                or not all(type(part) is int for part in parts[2:6])
+                or not isinstance(parts[6], str)
             ):
                 raise ValueError("Invalid camera mode tuple")
             candidate = LocalVideoFormat(CameraMediaType(parts[0]), *parts[1:])
@@ -3023,7 +3058,7 @@ class ScenesBridge(QObject):
                 video_format = LocalVideoFormat(
                     configuration.media_type, configuration.pixel_format,
                     configuration.width, configuration.height,
-                    configuration.fps_numerator, configuration.fps_denominator,
+                    configuration.fps_numerator, configuration.fps_denominator, configuration.native_format,
                 )
                 values["format"] = self._local_format_record(
                     video_format, available=device is not None and (

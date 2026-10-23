@@ -48,6 +48,9 @@ def configure_bundle(
     plist["CFBundleShortVersionString"] = short_version
     plist["CFBundleVersion"] = bundle_version
     plist["LSMinimumSystemVersion"] = minimum_system_version
+    plist["NSCameraUseContinuityCameraDeviceType"] = True
+    plist["NSCameraUsageDescription"] = "Solin uses your camera as a video source in scenes."
+    plist["NSMicrophoneUsageDescription"] = "Solin uses your microphone for audio capture and recording."
 
     document_type = {
         "CFBundleTypeName": "Solin Playlist",

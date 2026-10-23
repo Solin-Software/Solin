@@ -761,11 +761,11 @@ class _CompositingRuntime:
 
     # shared camera source (runtime-owned)
     def camera_source(self, device_id: str, name: str = "", *,
-                      pixel_format: str = "", width: int = 0, height: int = 0,
+                      pixel_format: str = "", native_format: str = "", width: int = 0, height: int = 0,
                       fps_numerator: int = 0, fps_denominator: int = 1,
                       media_type: str = ""):
         self.camera_sources.append((device_id, name))
-        self.camera_modes.append(dict(pixel_format=pixel_format, width=width, height=height,
+        self.camera_modes.append(dict(pixel_format=pixel_format, native_format=native_format, width=width, height=height,
                                       fps_numerator=fps_numerator, fps_denominator=fps_denominator,
                                       media_type=media_type))
         return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
@@ -1191,9 +1191,9 @@ def test_camera_layer_uses_the_shared_runtime_source_and_is_not_released():
 
 @pytest.mark.parametrize("mode", [
     {"width": 1920, "height": 1080, "fps_numerator": 30000, "fps_denominator": 1001,
-     "media_type": "image/jpeg", "pixel_format": "400"},
+     "media_type": "image/jpeg", "pixel_format": "400", "native_format": ""},
     {"width": 0, "height": 0, "fps_numerator": 0, "fps_denominator": 1,
-     "media_type": "", "pixel_format": ""},
+     "media_type": "", "pixel_format": "", "native_format": ""},
 ])
 def test_camera_document_forwards_full_capture_mode_to_runtime(mode):
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
@@ -1612,10 +1612,10 @@ def test_readback_prepares_geometry_inside_the_graphics_context(monkeypatch, pre
     library = types.SimpleNamespace(
         obs_enter_graphics=lambda: calls.append("enter"),
         obs_leave_graphics=lambda: calls.append("leave"),
+        gs_texrender_create=fail_allocation,
     )
     monkeypatch.setattr(obs_source_render, "_bind", lambda: (None, library))
     monkeypatch.setattr(obs_source_render, "_texrender", None)
-    monkeypatch.setattr(obs_source_render, "_casts", {"texrender_create": fail_allocation})
     render = obs_source_render.resolve_render_source_to_bgra(before_render=prepare)
     assert render(types.SimpleNamespace(_ptr=object()), 640, 360,
                   canvas_width=1920, canvas_height=1080) is None
@@ -1645,10 +1645,10 @@ def test_readback_cannot_invert_a_native_callback_and_competing_graphics_owner()
                 contender.set()
             graphics.acquire()
 
-        library = SimpleNamespace(obs_enter_graphics=enter, obs_leave_graphics=graphics.release)
+        library = SimpleNamespace(obs_enter_graphics=enter, obs_leave_graphics=graphics.release,
+                                  gs_texrender_create=lambda *_args: None)
         rendering._bind = lambda: (None, library)
         rendering._texrender = None
-        rendering._casts = {'texrender_create': lambda *_args: None}
         source = SimpleNamespace(_ptr=object())
 
         def render():

@@ -7,7 +7,8 @@ instance can be reused rather than opening the device twice.
 
 from __future__ import annotations
 
-import json
+import base64
+import binascii
 import logging
 import sys
 
@@ -19,7 +20,6 @@ log = logging.getLogger(__name__)
 #: key :func:`camera_source_spec` writes.
 _ENUM_SOURCE_ID = {
     "win32": ("dshow_input", "video_device_id"),
-    "darwin": ("av_capture_input", "device"),
     "linux": ("v4l2_input", "device_id"),
 }
 
@@ -40,11 +40,12 @@ def camera_source_spec(
     fps_numerator: int = 0,
     fps_denominator: int = 1,
     media_type: str = "",
+    native_format: str = "",
 ) -> tuple[str, dict]:
-    """Encode an exact mode or explicit defaults for the OBS 32.1.2 plugin.
+    """Encode an exact mode or explicit defaults for the OBS 32.2.2 plugin.
 
     Pixel tokens are native: decimal DShow VideoFormat (not OBS VideoFormat),
-    four ASCII characters for AVFoundation, and a V4L2 FourCC on Linux.
+    an AVFoundation subtype plus its native format identity, and a V4L2 FourCC on Linux.
     Every controlled mode key is present so ``Source.update`` can reset a
     previous manual selection without inheriting stale user settings.
     """
@@ -56,7 +57,7 @@ def camera_source_spec(
         raise ValueError("Invalid camera dimensions or frame rate")
     automatic = (
         width == height == fps_numerator == 0 and fps_denominator == 1
-        and not media_type and not pixel_format
+        and not media_type and not pixel_format and not native_format
     )
     if not automatic and not (
         width > 0 and height > 0 and fps_numerator > 0 and fps_denominator > 0
@@ -88,19 +89,26 @@ def camera_source_spec(
         return "dshow_input", settings
     if sys.platform == "darwin":
         settings = {
-            "device": device_path, "use_preset": True, "resolution": "", "input_format": -1,
+            "device": device_path, "use_preset": True,
+            "preset": "AVCaptureSessionPresetHigh", "supported_format": "",
             "frame_rate": {"numerator": 0, "denominator": 1},
         }
         if not automatic:
-            if len(pixel_format) != 4 or not pixel_format.isascii():
-                raise ValueError("AVFoundation camera format must be a native four-character code")
-            settings.update(
-                use_preset=False,
-                resolution=json.dumps({"width": width, "height": height}, separators=(",", ":")),
-                input_format=int.from_bytes(pixel_format.encode("ascii"), "big"),
-                frame_rate={"numerator": fps_numerator, "denominator": fps_denominator},
-            )
-        return "av_capture_input", settings
+            try:
+                decoded = base64.b64decode(native_format, validate=True).decode("ascii")
+                size, ranges, colorspace, subtype = decoded.split(" ")
+                subtype_bytes = (int(subtype) & 0xffffffff).to_bytes(4, "big")
+                expected_pixel = (subtype_bytes.decode("ascii") if all(32 <= byte < 127 for byte in subtype_bytes)
+                                  else f"0x{int(subtype) & 0xffffffff:08x}")
+                if (len(native_format) > 4096 or size != f"{width}x{height}" or not ranges
+                        or int(colorspace) not in {0, 1, 2, 3, 4, 5}
+                        or pixel_format != expected_pixel):
+                    raise ValueError("Mismatched native format")
+            except (TypeError, ValueError, UnicodeError, binascii.Error) as error:
+                raise ValueError("AVFoundation requires an advertised native format identity") from error
+            settings.update(use_preset=False, supported_format=native_format,
+                frame_rate={"numerator": fps_numerator, "denominator": fps_denominator})
+        return "macos-avcapture", settings
     if not sys.platform.startswith("linux"):
         raise ValueError(f"Unsupported camera platform: {sys.platform}")
     settings = {"device_id": device_path, "pixelformat": -1, "resolution": -1, "framerate": -1}
@@ -122,6 +130,10 @@ def libobs_cameras() -> list[tuple[str, str]]:
     An unavailable backend raises; an empty list means a successful inventory
     with no devices. Discovery of Linux devices uses the separate V4L2 adapter.
     """
+    if sys.platform == "darwin":
+        from solin.core.scenes.avfoundation_camera_discovery import discover_avfoundation_cameras
+
+        return [(device.display_name, device.device_id) for device in discover_avfoundation_cameras()]
     entry = next(
         (v for prefix, v in _ENUM_SOURCE_ID.items() if sys.platform.startswith(prefix)),
         None,

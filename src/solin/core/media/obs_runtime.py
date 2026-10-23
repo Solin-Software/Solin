@@ -10,7 +10,7 @@ This module is deliberately framework-free (no PySide6) so it can be unit- and
 smoke-tested headlessly.  Qt-side concerns (attaching a ``Display`` to a window
 handle) live in the projection layer.
 
-Key libobs facts encoded here (validated against pylibobs 0.0.1 / libobs 32.1.2):
+Key libobs facts encoded here (validated against libobs 32.x):
 
 * ``set_video`` must be given an **absolute** ``graphics_module`` path, otherwise
   libobs' internal loader fails to find ``libobs-opengl.so`` unless the bundled
@@ -31,7 +31,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .pylibobs_compat import set_video_compat
 from .camera_identity import local_camera_device_key
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -135,14 +134,8 @@ def _graphics_module_path() -> str | None:
     if sys.platform.startswith("linux"):
         candidates = ["linux/x86_64/libobs-opengl.so", "linux/x86_64/libobs-opengl.so.0"]
     elif sys.platform == "darwin":
-        # pylibobs keeps the macOS bundle in a .app-style layout —
-        # macos/<arch>/Frameworks/ — so the module is NOT at the arch root. Without
-        # the Frameworks/ component this never matched and the absolute-path
-        # guarantee silently degraded to libobs' bare default name.
-        candidates = [
-            f"macos/{arch}/Frameworks/libobs-opengl.dylib"
-            for arch in ("arm64", "universal", "x86_64")
-        ]
+        # The binding resolves the renderer relative to its loaded framework.
+        return None
     elif sys.platform == "win32":
         # D3D11 first: it is OBS's default Windows renderer. OpenGL stays as a
         # last resort for the rare box where D3D11 is unavailable.
@@ -261,7 +254,6 @@ class ObsRuntime:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._context: Any | None = None
-        self._graphics_module_owner: Any | None = None
         self._native_tasks: ObsTaskDispatcher | None = None
         self._pylibobs: Any | None = None
         self._video = ObsVideoConfig()
@@ -310,6 +302,7 @@ class ObsRuntime:
         device_name: str = "",
         *,
         pixel_format: str = "",
+        native_format: str = "",
         width: int = 0,
         height: int = 0,
         fps_numerator: int = 0,
@@ -332,7 +325,7 @@ class ObsRuntime:
         # DShow names may change, but the device path identifies the capture.
         # AVFoundation IDs and Linux paths retain their native case sensitivity.
         device_key = local_camera_device_key(device_path)
-        signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator)
+        signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator, native_format)
         with self._lock:
             existing = self._camera_sources.get(device_key)
             if existing is not None and existing.signature == signature:
@@ -342,6 +335,7 @@ class ObsRuntime:
         kind, settings = camera_source_spec(
             device_path, device_name, pixel_format=pixel_format, width=width, height=height,
             fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
+            native_format=native_format,
         )
         self.ensure_started()
         capture_width, capture_height = width, height
@@ -362,7 +356,7 @@ class ObsRuntime:
                     device_path, device_name,
                     pixel_format=selected.pixel_format, width=selected.width, height=selected.height,
                     fps_numerator=selected.fps_numerator, fps_denominator=selected.fps_denominator,
-                    media_type=selected.media_type,
+                    media_type=selected.media_type, native_format=selected.native_format,
                 )
             else:
                 log.info("No cached automatic camera mode; using the native preference")
@@ -531,12 +525,7 @@ class ObsRuntime:
         from pylibobs._ffi import ffi, get_lib
 
         lib: Any = get_lib()
-        # The generated binding declares this pointer-returning API as void(void).
-        # Use the public libobs signature at this native boundary.
-        get_frame = ffi.cast(
-            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
-        )
-        frame = get_frame(source._ptr)
+        frame = lib.obs_source_get_frame(source._ptr)
         if frame != ffi.NULL:
             try:
                 lib.obs_source_set_video_frame(source._ptr, frame)
@@ -582,7 +571,7 @@ class ObsRuntime:
 
         errors: list[BaseException] = []
 
-        @ffi.callback("void(void *, obs_scene_t *)")
+        @ffi.callback("obs_scene_atomic_update_func")
         def apply(_data, _scene):
             try:
                 update()
@@ -590,11 +579,7 @@ class ObsRuntime:
                 errors.append(exc)
 
         lib: Any = get_lib()
-        atomic = ffi.cast(
-            "void(*)(obs_scene_t *, void(*)(void *, obs_scene_t *), void *)",
-            lib.obs_scene_atomic_update,
-        )
-        atomic(scene._ptr, apply, ffi.NULL)
+        lib.obs_scene_atomic_update(scene._ptr, apply, ffi.NULL)
         if errors:
             raise errors[0]
 
@@ -603,10 +588,7 @@ class ObsRuntime:
         from pylibobs._ffi import ffi, get_lib
 
         lib: Any = get_lib()
-        get_frame = ffi.cast(
-            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
-        )
-        frame = get_frame(source._ptr)
+        frame = lib.obs_source_get_frame(source._ptr)
         if frame != ffi.NULL:
             lib.obs_source_release_frame(source._ptr, frame)
 
@@ -672,9 +654,7 @@ class ObsRuntime:
                 graphics_module = _graphics_module_path()
 
                 def _init_video(ctx=context, gm=graphics_module):
-                    self._graphics_module_owner = set_video_compat(
-                        ctx,
-                        binding=ob,
+                    ctx.set_video(
                         width=width,
                         height=height,
                         fps_num=fps,
@@ -701,7 +681,6 @@ class ObsRuntime:
                         ctx.shutdown()
                 except Exception:  # noqa: BLE001 - teardown must not mask the root cause
                     log.warning("libobs teardown after failed startup errored", exc_info=True)
-                self._graphics_module_owner = None
                 self._close_native_tasks()
                 self._release_owned_x11_display()
                 raise ObsRuntimeError(f"Failed to start libobs runtime: {exc}") from exc
@@ -739,7 +718,6 @@ class ObsRuntime:
             finally:
                 self._context = None
                 self._video_observers = None
-                self._graphics_module_owner = None
                 self._close_native_tasks()
                 self._release_owned_x11_display()
 

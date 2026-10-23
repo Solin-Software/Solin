@@ -20,7 +20,7 @@ from tests._paths import REPO_ROOT
 SIDEVIEW_REQUIREMENT = "sideview==0.4.1"
 # The release carrying every entry point the libobs engine calls, plus the NV12
 # chroma-plane over-read fix the Windows virtual camera trips over.
-PYLIBOBS_VERSION = Version("0.1.2")
+PYLIBOBS_VERSION = Version("32.2.2")
 
 
 def _project_metadata() -> dict:
@@ -133,15 +133,15 @@ def test_installed_sideview_distribution_provides_the_native_backend():
 def test_pylibobs_is_a_pinned_runtime_dependency():
     """libobs is the only media engine on this branch, so pin its binding.
 
-    Keep the manifests and the macOS wheel bootstrap on the same binding release.
+    Keep the manifests and the wheel bootstrap on the same binding release.
     """
     pinned = _locked_requirements().get(canonicalize_name("pylibobs"))
 
     assert pinned is not None, "pylibobs is missing from requirements.txt"
     assert str(pinned.specifier) == f"=={PYLIBOBS_VERSION}"
-    from scripts.build_pylibobs_macos import PYLIBOBS_VERSION as macos_binding_version
+    from scripts.build_pylibobs import PYLIBOBS_VERSION as bootstrap_binding_version
 
-    assert Version(macos_binding_version) == PYLIBOBS_VERSION
+    assert Version(bootstrap_binding_version) == PYLIBOBS_VERSION
 
 
 @pytest.mark.parametrize(
@@ -170,11 +170,11 @@ def test_macos_installation_contains_the_native_media_backend():
     assert (root / "Frameworks" / "libobs-opengl.dylib").is_file()
     assert (root / "data" / "libobs" / "default.effect").is_file()
     modules = {name: (Path(binary), Path(data)) for name, binary, data in get_bundled_modules()}
-    for name in ("obs-ffmpeg", "image-source", "mac-capture", "mac-avcapture", "mac-virtualcam"):
+    for name in ("obs-ffmpeg", "image-source", "mac-capture", "mac-avcapture"):
         assert name in modules
         assert modules[name][0].is_file()
         assert modules[name][1].is_dir()
-    assert ffi.string(get_lib().obs_get_version_string()).decode("utf-8") == "32.1.2"
+    assert ffi.string(get_lib().obs_get_version_string()).decode("utf-8") == "32.2.2"
 
 
 def test_installed_pylibobs_provides_the_scene_engine_entry_points():
@@ -197,3 +197,16 @@ def test_installed_pylibobs_provides_the_scene_engine_entry_points():
 
     assert callable(render_main_texture_letterboxed)
     assert callable(render_source_letterboxed)
+
+
+def test_binding_exposes_the_native_task_and_rational_frame_rate_abi():
+    """Reject an unpatched binding before native scheduling or camera discovery."""
+    from pylibobs._ffi import ffi, get_lib
+
+    assert ffi.typeof("obs_task_t").kind == "function"
+    assert ffi.typeof("obs_task_handler_t").kind == "function"
+    assert ffi.typeof("obs_scene_atomic_update_func").kind == "function"
+    frame_getter = ffi.typeof(get_lib().obs_source_get_frame)
+    assert frame_getter.args == (ffi.typeof("obs_source_t *"),)
+    assert frame_getter.result == ffi.typeof("struct obs_source_frame *")
+    assert ffi.sizeof("struct media_frames_per_second") == 8

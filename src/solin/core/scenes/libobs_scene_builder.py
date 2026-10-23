@@ -592,6 +592,7 @@ class LibobsSceneGraph:
                 self._runtime.camera_source(
                     device, name,
                     pixel_format=str(config.get("pixel_format", "")),
+                    native_format=str(config.get("native_format", "")),
                     width=int(config.get("width", 0) or 0),
                     height=int(config.get("height", 0) or 0),
                     fps_numerator=int(config.get("fps_numerator", 0) or 0),

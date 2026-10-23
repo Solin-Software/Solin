@@ -1,7 +1,7 @@
 """OBS 32.1.2 capture plugin contracts, without hardware."""
 from __future__ import annotations
 
-import json
+import base64
 import sys
 from types import SimpleNamespace
 
@@ -20,9 +20,9 @@ def test_v4l2_fourcc_packs_little_endian():
     ("win32", "400", "image/jpeg", "dshow_input", {
         "res_type": 1, "resolution": "1920x1080", "frame_interval": 333667, "video_format": 400,
     }),
-    ("darwin", "420v", "video/x-raw", "av_capture_input", {
-        "use_preset": False, "resolution": '{"width":1920,"height":1080}',
-        "input_format": 0x34323076, "frame_rate": {"numerator": 30000, "denominator": 1001},
+    ("darwin", "420v", "video/x-raw", "macos-avcapture", {
+        "use_preset": False,
+        "supported_format": base64.b64encode(b"1920x1080 29.970-30.000 2 875704438").decode(), "frame_rate": {"numerator": 30000, "denominator": 1001},
     }),
     ("linux", "MJPG", "image/jpeg", "v4l2_input", {
         "pixelformat": 1196444237, "resolution": (1920 << 32) | 1080,
@@ -37,6 +37,7 @@ def test_exact_mode_preserves_native_format_and_rational_rate(
         "device", "Camera", width=1920, height=1080,
         fps_numerator=30000, fps_denominator=1001,
         media_type=media_type, pixel_format=pixel_format,
+        native_format=expected.get("supported_format", ""),
     )
     assert actual_kind == kind
     assert {key: settings[key] for key in expected} == expected
@@ -44,7 +45,7 @@ def test_exact_mode_preserves_native_format_and_rational_rate(
 
 @pytest.mark.parametrize(("platform", "expected"), [
     ("win32", {"res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0}),
-    ("darwin", {"use_preset": True, "resolution": "", "input_format": -1,
+    ("darwin", {"use_preset": True, "supported_format": "",
                 "frame_rate": {"numerator": 0, "denominator": 1}}),
     ("linux", {"pixelformat": -1, "resolution": -1, "framerate": -1}),
 ])
@@ -60,14 +61,19 @@ def test_windows_device_identifier_is_not_prefixed_twice(monkeypatch):
     assert settings["video_device_id"] == settings["last_video_device_id"] == "Camera:device"
 
 
-def test_mac_resolution_is_json_and_fourcc_is_big_endian(monkeypatch):
+def test_mac_exact_mode_requires_matching_advertised_native_identity(monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
+    native = base64.b64encode(b"1280x720 30.000-30.000 1 846624121").decode()
     _, settings = camera_source_spec(
-        "device", width=1280, height=720, fps_numerator=30,
-        media_type="video/x-raw", pixel_format="2vuy",
+        "native-device", width=1280, height=720, fps_numerator=30,
+        media_type="video/x-raw", pixel_format="2vuy", native_format=native,
     )
-    assert json.loads(settings["resolution"]) == {"width": 1280, "height": 720}
-    assert settings["input_format"] == 0x32767579
+    assert settings["supported_format"] == native
+    assert settings["device"] == "native-device"
+    assert "resolution" not in settings and "input_format" not in settings
+    with pytest.raises(ValueError, match="native format identity"):
+        camera_source_spec("native-device", width=1920, height=1080, fps_numerator=30,
+            media_type="video/x-raw", pixel_format="2vuy", native_format=native)
 
 
 @pytest.mark.parametrize("partial", [

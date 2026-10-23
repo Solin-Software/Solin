@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import sys
-import weakref
+import base64
 
 import pytest
 
@@ -266,16 +266,12 @@ def test_native_frame_priming_releases_the_frame_after_upload(monkeypatch, failu
         assert pointer is source._ptr and selected is frame
         events.append("release")
 
-    def cast(signature, function):
-        assert signature == "struct obs_source_frame *(*)(obs_source_t *)"
-        return function
-
     lib = SimpleNamespace(
         obs_source_get_frame=get_frame, obs_source_set_video_frame=upload,
         obs_source_release_frame=release, obs_source_show_preloaded_video=show,
     )
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
-        ffi=SimpleNamespace(NULL=None, cast=cast), get_lib=lambda: lib,
+        ffi=SimpleNamespace(NULL=None), get_lib=lambda: lib,
     ))
     runtime = obs_runtime.ObsRuntime()
     if failure:
@@ -362,47 +358,6 @@ def test_prepared_decoder_showing_reference_is_balanced_and_released_only_once(m
     release()
     assert events == [("retain", source._ptr), ("release", source._ptr)]
 
-
-@pytest.mark.parametrize("audio_failure", [False, True])
-def test_graphics_buffer_is_retained_through_context_shutdown(monkeypatch, audio_failure):
-    events = []
-    runtime = _runtime_with_fake_libobs(monkeypatch, events)
-    context = runtime.ob.OBSContext()
-    owner_ref = None
-
-    class GraphicsBuffer:
-        pass
-
-    def initialize_video(*args, **kwargs):
-        nonlocal owner_ref
-        owner = GraphicsBuffer()
-        owner_ref = weakref.ref(owner)
-        return owner
-
-    def audio():
-        assert owner_ref is not None and owner_ref() is not None
-        if audio_failure:
-            raise RuntimeError("audio failed")
-
-    def shutdown():
-        assert owner_ref is not None and owner_ref() is not None
-        events.append("shutdown-with-buffer")
-
-    monkeypatch.setattr(obs_runtime, "set_video_compat", initialize_video)
-    monkeypatch.setattr(runtime, "_configure_nix_platform", lambda: False)
-    monkeypatch.setattr(context, "set_audio", audio)
-    monkeypatch.setattr(context, "shutdown", shutdown)
-    if audio_failure:
-        with pytest.raises(obs_runtime.ObsRuntimeError, match="audio failed"):
-            runtime.ensure_started(width=320, height=180, fps=30)
-    else:
-        runtime.ensure_started(width=320, height=180, fps=30)
-        assert runtime._graphics_module_owner is owner_ref()
-        runtime.shutdown()
-
-    assert events[-1] == "shutdown-with-buffer"
-    assert runtime._graphics_module_owner is None
-    assert owner_ref is not None and owner_ref() is None
 
 
 class _FakeContext:
@@ -670,7 +625,7 @@ def camera_runtime(monkeypatch):
 
 def _exact_camera_mode(**changes):
     return dict(width=1920, height=1080, fps_numerator=30000, fps_denominator=1001,
-                media_type="image/jpeg", pixel_format="MJPG") | changes
+                media_type="image/jpeg", pixel_format="MJPG", native_format="") | changes
 
 
 def test_camera_rate_only_change_updates_existing_shared_source(camera_runtime):
@@ -723,7 +678,7 @@ def test_camera_automatic_with_cold_catalog_does_not_discover(camera_runtime, mo
 
 @pytest.mark.parametrize(("platform", "token", "expected"), [
     ("win32", "400", {"res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0}),
-    ("darwin", "420v", {"use_preset": True, "resolution": "", "input_format": -1,
+    ("darwin", "420v", {"use_preset": True, "supported_format": "",
                         "frame_rate": {"numerator": 0, "denominator": 1}}),
     ("linux", "MJPG", {"pixelformat": -1, "resolution": -1, "framerate": -1}),
 ])
@@ -732,7 +687,11 @@ def test_camera_manual_to_automatic_clears_pinned_settings(
 ):
     monkeypatch.setattr(sys, "platform", platform)
     runtime, created, _events, _modes = camera_runtime
-    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format=token))
+    mode = _exact_camera_mode(pixel_format=token)
+    if platform == "darwin":
+        mode.update(media_type="video/x-raw", native_format=base64.b64encode(
+            b"1920x1080 29.970-30.000 2 875704438").decode())
+    source = runtime.camera_source("device", **mode)
     assert runtime.camera_source("device") is source
     assert len(created) == 1
     assert {key: source.settings[key] for key in expected} == expected
@@ -1085,3 +1044,15 @@ def test_shared_rtsp_source_is_not_rebuilt_for_unchanged_settings(monkeypatch) -
 
     assert len(created) == 1
     assert [update["input"] for update in source.updates] == ["rtsp://camera/other"]
+
+
+def test_camera_native_identity_change_updates_shared_source(monkeypatch, camera_runtime):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    runtime, created, _events, _modes = camera_runtime
+    token = lambda colorspace: base64.b64encode(
+        f"1920x1080 29.970-30.000 {colorspace} 875704438".encode()).decode()
+    mode = _exact_camera_mode(media_type="video/x-raw", pixel_format="420v", native_format=token(2))
+    source = runtime.camera_source("device", **mode)
+    assert runtime.camera_source("device", **(mode | {"native_format": token(1)})) is source
+    assert len(created) == 1 and len(source.updates) == 1
+    assert source.settings["supported_format"] == token(1)

@@ -90,7 +90,7 @@ def test_every_build_and_quality_environment_bootstraps_media_extraction_before_
 
 def test_macos_resolves_pylibobs_from_the_custom_wheel_during_dependency_download():
     workflow = _read(".github/workflows/build-solin-macos.yml")
-    assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")
+    assert workflow.index("python scripts/build_pylibobs.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")
     assert "setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0" in workflow
     download = workflow.split("python -m pip download", 1)[1].split("python -m pip install", 1)[0]
     assert "--find-links .pylibobs-wheel" in download
@@ -130,3 +130,12 @@ def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
     assert "            xauth" in quality and "            xvfb" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/unit" in quality
+
+
+def test_all_delivery_and_quality_recipes_build_the_same_immutable_binding():
+    for relative in (".github/workflows/quality.yml", ".github/workflows/build-solin-windows.yml",
+                     ".github/workflows/build-solin-linux.yml", ".github/workflows/build-solin-macos.yml"):
+        recipe = _read(relative)
+        assert "PYLIBOBS_SOURCE_REF: ${{ vars.PYLIBOBS_SOURCE_REF }}" in recipe
+        assert recipe.index("scripts/build_pylibobs.py") < recipe.index("requirements-dev.txt", recipe.index("scripts/build_pylibobs.py"))
+        assert "--no-index" in recipe and "--no-deps" in recipe

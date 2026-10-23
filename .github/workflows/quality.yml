@@ -12,6 +12,7 @@ permissions:
   contents: read
 
 env:
+  PYLIBOBS_SOURCE_REF: ${{ vars.PYLIBOBS_SOURCE_REF }}
   PYTHON_VERSION: "3.13.12"
   QT_QPA_PLATFORM: offscreen
   PYTHONFAULTHANDLER: "1"
@@ -143,22 +144,17 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Build macOS pylibobs wheel
-        if: runner.os == 'macOS'
+      - name: Build pinned pylibobs wheel
         shell: bash
         run: |
-          python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-          python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
-
-      - name: Install dependencies on macOS
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
-          python -m pip install -r requirements-dev.txt -e .
+          python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0 requests==2.32.5
+          python scripts/build_pylibobs.py --output-dir .pylibobs-wheel
 
       - name: Install dependencies
-        if: runner.os != 'macOS'
-        run: python -m pip install -r requirements-dev.txt -e .
+        shell: bash
+        run: |
+          python -m pip install --no-index --find-links .pylibobs-wheel --no-deps --force-reinstall pylibobs==32.2.2
+          python -m pip install -r requirements-dev.txt -e .
 
       - name: Build and qualify bundled media extraction
         run: python scripts/build_media_extract.py

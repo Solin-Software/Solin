@@ -164,11 +164,32 @@ class NativeVideoSurface(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setStyleSheet(f"background: {PALETTE.bg0};")
         self._input_overlay: _NativeVideoInputOverlay | None = None
+        self._cocoa_presenter = None
         self.hide()
 
     @property
     def native_handle(self) -> int:
         return int(self.winId())
+
+    @property
+    def surface_endpoint(self) -> str:
+        if sys.platform != "darwin" or QApplication.platformName() != "cocoa":
+            return ""
+        if self._cocoa_presenter is None:
+            from solin.controllers.cocoa_surface_presenter import CocoaSurfacePresenterController
+
+            self._cocoa_presenter = CocoaSurfacePresenterController(self)
+        return self._cocoa_presenter.endpoint
+
+    def hideEvent(self, event) -> None:
+        if self._cocoa_presenter is not None:
+            self._cocoa_presenter.set_visible(False)
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        if self._cocoa_presenter is not None:
+            self._cocoa_presenter.close()
+        super().closeEvent(event)
 
     @property
     def input_overlay(self) -> QWidget | None:
@@ -207,6 +228,8 @@ class NativeVideoSurface(QWidget):
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
+        if self._cocoa_presenter is not None:
+            self._cocoa_presenter.set_visible(True)
         if self._input_overlay is not None:
             self._input_overlay.setGeometry(self.rect())
             self._input_overlay.raise_()

@@ -819,16 +819,7 @@ def test_native_atomic_scene_boundary_uses_public_callback_and_propagates_errors
         calls.append(scene)
         callback(data, scene)
 
-    native = Mock()
-    monkeypatch.setattr(_ffi, "get_lib", lambda: SimpleNamespace(obs_scene_atomic_update=native))
-    original_cast = _ffi.ffi.cast
-
-    def cast(signature, value):
-        if value is native:
-            return atomic
-        return original_cast(signature, value)
-
-    monkeypatch.setattr(_ffi.ffi, "cast", cast)
+    monkeypatch.setattr(_ffi, "get_lib", lambda: SimpleNamespace(obs_scene_atomic_update=atomic))
 
     def update():
         if exception is not None:
