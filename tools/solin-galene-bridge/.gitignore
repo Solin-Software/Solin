@@ -1,0 +1,4 @@
+# Built binaries (scripts/build_galene_bridge.py writes to build/hosted-meeting/ instead)
+/solin-galene-bridge
+/solin-galene-bridge.exe
+*.test
