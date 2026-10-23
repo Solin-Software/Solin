@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>G5 remote commenter</title>
+<style>body { background: #111; color: #aaa; font: 13px ui-monospace, monospace; white-space: pre; padding: 8px; }</style>
+</head>
+<body>
+<div id="log">starting…</div>
+<script src="vendor/protocol.js"></script>
+<script>
+// Remote commenter: publishes a synthetic 1 kHz beep every 2.5 s as its "microphone"
+// and detects the beep coming back in the hall program audio.
+// G5: the S3 page on Galene's protocol.js. Usage: g5.html?group=g5&label=aec-off
+const p = new URLSearchParams(location.search);
+const GROUP = p.get('group') || 'g5', LABEL = p.get('label') || '';
+const WS = p.get('ws') || 'ws://127.0.0.1:8443/ws';
+const logEl = document.getElementById('log');
+const epoch = perf => performance.timeOrigin + perf;   // same clock as the hall's time.time()
+const sent = [];       // {k, epoch_ms}
+let k = 0;
+
+const post = rec => fetch('/log', { method: 'POST', body: JSON.stringify({ test: 'g5', label: LABEL, ...rec }) }).catch(() => {});
+
+(async () => {
+  const ctx = new AudioContext({ latencyHint: 'interactive' });
+  await ctx.resume();
+  const dest = ctx.createMediaStreamDestination();
+  const micTrack = dest.stream.getAudioTracks()[0];
+
+  // Timestamp each beep when it is seen entering the outgoing stream (the computed
+  // render-clock time runs late in headless Chromium), with the same 5 ms detector
+  // that times the return.
+  {
+    const src = ctx.createMediaStreamSource(dest.stream);
+    const an = ctx.createAnalyser(); an.fftSize = 512;
+    src.connect(an);
+    const buf = new Float32Array(an.fftSize);
+    let last = 0;
+    setInterval(() => {
+      an.getFloatTimeDomainData(buf);
+      let s = 0; for (const x of buf) s += x * x;
+      const t = performance.now();
+      if (Math.sqrt(s / buf.length) > 0.05 && t - last > 1500) {
+        last = t;
+        const s0 = sent[sent.length - 1];
+        if (s0 && !s0.seen) { s0.seen = epoch(t); s0.epoch_ms = s0.seen; post({ event: 'sent_seen', k: s0.k, epoch_ms: s0.seen }); }
+      }
+    }, 5);
+  }
+
+  const sc = new ServerConnection();
+  const program = track => {
+    const el = document.createElement('audio'); el.srcObject = new MediaStream([track]); el.muted = true; el.play();
+    document.body.appendChild(el);
+    const src = ctx.createMediaStreamSource(new MediaStream([track]));
+    const band = ctx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 1000; band.Q.value = 8;
+    const an = ctx.createAnalyser(); an.fftSize = 512;
+    src.connect(band).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    let floor = 0.001, last = 0, peak = 0, peakUntil = 0, pendingK = null;
+    setInterval(() => {
+      an.getFloatTimeDomainData(buf);
+      let s = 0; for (const x of buf) s += x * x;
+      const rms = Math.sqrt(s / buf.length), t = performance.now();
+      if (pendingK !== null) { peak = Math.max(peak, rms); if (t > peakUntil) { post({ event: 'return_peak', k: pendingK, rms: +peak.toFixed(4), floor: +floor.toFixed(5) }); pendingK = null; } }
+      const thr = Math.max(floor * 6, 0.004);
+      if (rms > thr && t - last > 1500) {
+        last = t;
+        const s0 = [...sent].reverse().find(x => epoch(t) - x.epoch_ms < 2000 && epoch(t) > x.epoch_ms);
+        if (s0) { post({ event: 'returned', k: s0.k, epoch_ms: epoch(t), rtt_ms: Math.round(epoch(t) - s0.epoch_ms) }); pendingK = s0.k; peak = rms; peakUntil = t + 300; }
+      } else if (rms < thr) floor = floor * 0.99 + rms * 0.01;
+    }, 5);
+    setInterval(() => post({ event: 'level', floor: +floor.toFixed(5) }), 5000);
+  };
+  sc.onconnected = function () { this.join(GROUP, `remote-${LABEL}`, 'x'); };
+  sc.onjoined = function (kind) {
+    if (kind !== 'join') return;
+    this.request({ '': ['audio'] });
+    const up = this.newUpStream();
+    up.label = 'camera';
+    up.setStream(dest.stream);
+    up.pc.addTransceiver(micTrack, { direction: 'sendonly', streams: [dest.stream] });
+  };
+  sc.ondownstream = function (stream) {
+    post({ event: 'down', username: stream.username, label: stream.label });
+    stream.ondowntrack = track => {
+      post({ event: 'downtrack', kind: track.kind, username: stream.username });
+      if (track.kind === 'audio') program(track);
+    };
+  };
+  await sc.connect(WS);
+
+  setInterval(() => {
+    const t = ctx.currentTime + 0.05;
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.frequency.value = 1000; g.gain.value = 0.5;
+    osc.connect(g).connect(dest);
+    osc.start(t); osc.stop(t + 0.15);
+    // Map the scheduled context time to wall time via the render clock (not the output clock:
+    // the beep goes into a MediaStreamDestination, not to the speakers).
+    const rec = { k: k++, epoch_ms: epoch(performance.now() + (t - ctx.currentTime) * 1000) };
+    sent.push(rec); post({ event: 'sent', ...rec });
+    logEl.textContent = `G5 ${LABEL} group=${GROUP} sent=${k}`;
+  }, 2500);
+})().catch(e => { logEl.textContent = 'error ' + e; post({ event: 'error', error: String(e) }); });
+</script>
+</body>
+</html>

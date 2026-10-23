@@ -245,3 +245,25 @@ Method as S2 (loopback, one machine). Script: `g3/run_g3.sh`; viewers from `g3/l
   - Loopback has no loss, so no retransmission overhead and no congestion response.
   - One layer only: viewers on weak links can't drop to a lower layer unless the publisher sends Galene's two-layer simulcast (not yet implemented in whippub).
   - The publisher's libobs CPU includes decoding the clip.
+
+## G5: comment audio round trip and echo (2026-10-22)
+
+S3's harness with the transport swapped (`g5/run_g5.sh`):
+- **Hall program out:** `g5/hall_galene.py` (S3's `hall.py`) sends the processed program to Galene through `whippub -stdin` as PCM, so Opus with in-band FEC.
+- **Commenter in:** a new `g5/hallrx` (Go, Pion + libopus) joins the group, refuses the hall's own stream, decodes the commenter's Opus with PLC for lost packets, and writes 48 kHz PCM to the hall script. Solin needs the same piece in the product.
+- **Commenter:** `g5/web/g5.html` (S3's page on Galene's `protocol.js`), headless Chromium.
+- **Echo:** emulated as in S3 (40 ms, gain 0.5). Echo cancellation is the same WebRTC APM from the livekit Python SDK, used locally with no LiveKit server.
+- 90 s per phase, local Galene.
+
+**Timing method change.** The page now timestamps each beep when its own detector sees it entering the outgoing stream. The computed render-clock time ran late in headless Chromium. Round trips are timed entirely on the page (one clock, one detector). Legs that cross from the page to the hall script are not used: the page's `performance.timeOrigin` clock and Python's `time.time()` differed by ~50 ms, the "page timestamp bias" S3 also saw. Hall legs use the hall's clock only.
+
+| Phase | Beeps returned to the commenter | Round trip (commenter → Galene → hall → hall feed → program → Galene → commenter) | Hall: received → in the hall feed | Echo attenuation in the program (1 kHz band) |
+|---|---|---|---|---|
+| No echo cancellation | 34 / 35 | **96 ms** median (p10 86, p90 106), including the 40 ms emulated path | 50 ms (40 ms emulated + playback chunking) | 0 dB |
+| Echo cancellation | 4 / 35 (residual) | — | 51 ms | **60 dB** |
+| Echo cancellation + noise suppression | 3 / 35 | — | 46 ms | **69 dB** |
+
+- **Software round trip through Galene ≈ 56 ms** (96 − 40 ms emulated), locally. S3 reported ≈110 ms through LiveKit, but its page timing had the bias described above, so compare loosely: Galene is at least not slower.
+- **Echo cancellation behaves as in S3** (61 / 66 dB there), as expected: the canceller sits in the hall script, not the SFU.
+- **Real network:** add each attendee's one-way delay twice (typically 20–60 ms each way) plus jitter buffers. Still well inside conversational limits.
+- **Bug found while porting:** the hall stamped each 10 ms block with its send time, which jitters. whippub's PCM framing treats any jump over 5 ms as a gap and restarted, so no audio was sent. The hall now stamps blocks by sample count, like a sound-card clock; Solin's capture path must do the same. whippub also no longer sends empty RTCP.

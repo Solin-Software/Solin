@@ -216,6 +216,9 @@ func readFrames(pc *webrtc.PeerConnection, video, audio *ptsTrack, pcmEnc *pcmEn
 					reports = append(reports, sr)
 				}
 			}
+			if len(reports) == 0 {
+				continue
+			}
 			if err := pc.WriteRTCP(reports); err != nil {
 				log.Printf("rtcp: %v", err)
 			}
