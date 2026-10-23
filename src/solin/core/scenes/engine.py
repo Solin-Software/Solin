@@ -852,6 +852,7 @@ SceneEngineEvent: TypeAlias = (
     | EngineHealthEvent
     | FrameEgressReadyEvent
     | ProgramRecordingEvent
+    | MeetingOutputEvent
     | MediaPlaybackEvent
     | MediaVideoReadyEvent
 )

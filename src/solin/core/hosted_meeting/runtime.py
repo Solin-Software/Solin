@@ -262,7 +262,8 @@ class MeetingRuntime:
                                permissions=OPERATOR)
             closed = asyncio.Event()
             client = GaleneClient(self.config.galene_ws, self.config.slug, token,
-                                  on_user=self._on_galene_user, on_closed=lambda _r: closed.set())
+                                  on_user=self._on_galene_user,
+                                  on_closed=lambda _r, event=closed: event.set())
             try:
                 await client.connect()
             except Exception as error:  # noqa: BLE001 - Galene may still be starting

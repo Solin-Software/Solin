@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+from array import array
 import queue
 import struct
 import subprocess
@@ -25,7 +26,7 @@ import sys
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from solin.core.media.obs_runtime import (
     MEETING_AUDIO_MIXERS,
@@ -84,11 +85,16 @@ def frame(kind: int, pts_ns: int, data: bytes) -> bytes:
 
 
 def interleave_stereo(planes: list[bytes], frames: int) -> bytes:
-    import numpy as np
+    """Planar float32 (libobs) → interleaved little-endian stereo float32 (the bridge)."""
 
-    left = np.frombuffer(planes[0], np.float32)[:frames]
-    right = np.frombuffer(planes[1], np.float32)[:frames] if len(planes) > 1 and planes[1] else left
-    return np.column_stack((left, right)).astype("<f4").tobytes()
+    left = array("f", planes[0][:frames * 4])
+    right = array("f", planes[1][:frames * 4]) if len(planes) > 1 and planes[1] else left
+    out = array("f", bytes(8 * len(left)))
+    out[0::2] = left
+    out[1::2] = right[:len(left)]
+    if sys.byteorder != "little":
+        out.byteswap()
+    return out.tobytes()
 
 
 class LibobsMeetingOutput:
@@ -202,7 +208,7 @@ class LibobsMeetingOutput:
                 log.debug("meeting null output stop failed", exc_info=True)
             if self._packet_cb is not None:
                 try:
-                    get_lib().obs_output_remove_packet_callback(output._ptr, self._packet_cb, ffi.NULL)
+                    cast(Any, get_lib()).obs_output_remove_packet_callback(output._ptr, self._packet_cb, ffi.NULL)
                 except Exception:  # noqa: BLE001 - libobs boundary during teardown
                     log.debug("packet callback removal failed", exc_info=True)
             self._release(output)
@@ -305,7 +311,7 @@ class LibobsMeetingOutput:
                 log.debug("meeting packet callback failed", exc_info=True)
 
         self._packet_cb = on_packet
-        get_lib().obs_output_add_packet_callback(output._ptr, on_packet, ffi.NULL)
+        cast(Any, get_lib()).obs_output_add_packet_callback(output._ptr, on_packet, ffi.NULL)
         if not output.start():
             raise RuntimeError("the meeting video output did not start")
         self._output = output
@@ -371,7 +377,7 @@ def route_media_to_meeting(runtime: Any, source: Any, enabled: bool) -> None:
         if enabled:
             from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
-            get_lib().obs_source_set_audio_mixers(source._ptr, MEETING_AUDIO_MIXERS)
+            cast(Any, get_lib()).obs_source_set_audio_mixers(source._ptr, MEETING_AUDIO_MIXERS)
             runtime.set_source_monitoring(source, MONITORING_MONITOR_AND_OUTPUT, keep_mixers=True)
         else:
             runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
@@ -385,7 +391,7 @@ def set_sync_offset(source: Any, delay_ms: int) -> None:
     from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
     try:
-        get_lib().obs_source_set_sync_offset(source._ptr, int(delay_ms) * 1_000_000)
+        cast(Any, get_lib()).obs_source_set_sync_offset(source._ptr, int(delay_ms) * 1_000_000)
     except Exception:  # noqa: BLE001 - libobs boundary
         log.warning("could not delay the hall feed by %d ms", delay_ms, exc_info=True)
 
@@ -396,7 +402,7 @@ def set_scaled_size(encoder: Any, width: int, height: int) -> None:
     from pylibobs._ffi import ffi, get_lib  # type: ignore[import-not-found]
 
     try:
-        lib = get_lib()
+        lib: Any = get_lib()
         fn = getattr(lib, "obs_encoder_set_scaled_size", None)
         if fn is None:
             ffi.cdef("void obs_encoder_set_scaled_size(obs_encoder_t *encoder, uint32_t width, uint32_t height);",

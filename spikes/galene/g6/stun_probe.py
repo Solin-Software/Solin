@@ -23,8 +23,8 @@ while i < len(data):
         fam, xport = struct.unpack(">xBH", v[:4])
         p = xport ^ 0x2112
         if fam == 1:
-            ip = socket.inet_ntoa(bytes(a ^ b for a, b in zip(v[4:8], struct.pack(">I", 0x2112A442))))
+            ip = socket.inet_ntoa(bytes(a ^ b for a, b in zip(v[4:8], struct.pack(">I", 0x2112A442), strict=True)))
         else:
-            ip = socket.inet_ntop(socket.AF_INET6, bytes(a ^ b for a, b in zip(v[4:20], struct.pack(">I", 0x2112A442) + tid)))
+            ip = socket.inet_ntop(socket.AF_INET6, bytes(a ^ b for a, b in zip(v[4:20], struct.pack(">I", 0x2112A442) + tid, strict=True)))
         print(f"reflexive address: {ip}:{p}")
     i += 4 + n + (-n % 4)

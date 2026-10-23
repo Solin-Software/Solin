@@ -125,7 +125,7 @@ def main() -> None:
             else:
                 counts["audio"] += 1
             send(1 if is_video else 0, pts_ns, bytes(ffi.buffer(pkt.data, pkt.size)))
-        except Exception as e:  # never raise into libobs
+        except Exception as e:  # noqa: BLE001 - never raise into libobs
             print(f"packet callback: {e}", flush=True)
 
     def on_pcm(_mix, planes, frames, ts_ns) -> None:

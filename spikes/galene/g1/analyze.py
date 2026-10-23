@@ -25,7 +25,8 @@ def latency(path):
         windows[r["t"] // 300].append(r)
     print("  per 5 min (video / audio / sync medians):")
     for w, rs in sorted(windows.items()):
-        med = lambda k: statistics.median(r[k] for r in rs)
+        def med(k, rows=rs):
+            return statistics.median(r[k] for r in rows)
         print(f"    {w * 5:3}-{w * 5 + 5:<3} min  {med('vLat'):4.0f} / {med('aLat'):4.0f} / {med('sync'):5.0f}  (n={len(rs)})")
 
 
