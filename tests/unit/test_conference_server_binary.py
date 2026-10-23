@@ -18,13 +18,15 @@ from solin.core.conference.server_binary import (
         ("linux", "aarch64", "linux-arm64"),
         ("win32", "AMD64", "windows-amd64"),
         ("win32", "ARM64", "windows-arm64"),
+        ("darwin", "arm64", "darwin-arm64"),
+        ("darwin", "x86_64", "darwin-amd64"),
     ],
 )
 def test_platform_key(system, machine, expected):
     assert platform_key(system, machine) == expected
 
 
-@pytest.mark.parametrize(("system", "machine"), [("darwin", "arm64"), ("linux", "riscv64")])
+@pytest.mark.parametrize(("system", "machine"), [("freebsd14", "amd64"), ("linux", "riscv64")])
 def test_unsupported_platforms_are_reported(system, machine):
     with pytest.raises(ServerUnavailableError):
         platform_key(system, machine)

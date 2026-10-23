@@ -4,7 +4,8 @@ Lookup order:
 1. ``SOLIN_LIVEKIT_SERVER`` (an explicit path, for development and diagnostics).
 2. Compiled builds: ``<app dir>/bin/livekit-server[.exe]``, staged by the build scripts.
 3. Development checkouts: ``build/livekit/<platform>/``, fetched by
-   ``scripts/fetch_livekit_server.py``.
+   ``scripts/fetch_livekit_server.py`` (Linux, Windows) or built by
+   ``scripts/build_livekit_server.py`` (macOS).
 
 Never resolved through PATH: Solin always runs the version it was qualified with.
 """
@@ -27,8 +28,14 @@ class ServerUnavailableError(RuntimeError):
 
 
 def platform_key(system: str | None = None, machine: str | None = None) -> str:
-    """LiveKit release platform for this machine, e.g. ``linux-amd64``."""
-    operating_system = {"win32": "windows", "linux": "linux"}.get(system or sys.platform)
+    """LiveKit server platform for this machine, e.g. ``linux-amd64``.
+
+    LiveKit publishes Linux and Windows builds; macOS builds are compiled from the same
+    pinned source by ``scripts/build_livekit_server.py``.
+    """
+    operating_system = {"win32": "windows", "linux": "linux", "darwin": "darwin"}.get(
+        system or sys.platform
+    )
     architecture = {
         "amd64": "amd64",
         "x86_64": "amd64",

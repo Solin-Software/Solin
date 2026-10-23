@@ -453,6 +453,29 @@ jobs:
             --application-dir "$BUNDLE/Contents/MacOS" \
             --executable "$BUNDLE/Contents/MacOS/main"
 
+      - name: Set up Go for the LiveKit server
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.0"
+          cache: false
+
+      - name: Stage LiveKit server and browser client
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
+          MACOS_DIR="$BUNDLE/Contents/MacOS"
+          LICENSES="$BUNDLE/Contents/Resources/licenses"
+          # LiveKit publishes no macOS server: build the pinned source natively (cgo).
+          python scripts/build_livekit_server.py --dest "$MACOS_DIR/bin" \
+            --license "$LICENSES/livekit-server.txt"
+          python scripts/fetch_livekit_client.py --dest "$MACOS_DIR/web/livekit-client" \
+            --license "$LICENSES/livekit-client.txt"
+          test -x "$MACOS_DIR/bin/livekit-server"
+          test -f "$MACOS_DIR/web/livekit-client/livekit-client.umd.js"
+          test -f "$MACOS_DIR/web/livekit-client/livekit-client.e2ee.worker.mjs"
+          "$MACOS_DIR/bin/livekit-server" --version
+
       - name: Validate architecture
         shell: bash
         env:

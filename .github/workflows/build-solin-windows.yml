@@ -232,6 +232,22 @@ jobs:
             throw "The LiveKit native core was not packaged."
           }
 
+          # Solin-hosted meetings: the pinned LiveKit server (bin\, never PATH) and the
+          # browser client served to attendees (web\livekit-client), with their licences.
+          python scripts/fetch_livekit_server.py --dest "$dist\bin" --license "$dist\licenses\livekit-server.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch the pinned LiveKit server." }
+          python scripts/fetch_livekit_client.py --dest "$dist\web\livekit-client" --license "$dist\licenses\livekit-client.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Could not fetch the pinned LiveKit browser client." }
+          foreach ($required in @(
+            "$dist\bin\livekit-server.exe",
+            "$dist\web\livekit-client\livekit-client.umd.js",
+            "$dist\web\livekit-client\livekit-client.e2ee.worker.mjs"
+          )) {
+            if (-not (Test-Path -LiteralPath $required)) { throw "Hosted meetings: $required was not packaged." }
+          }
+          & "$dist\bin\livekit-server.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "The packaged LiveKit server does not run." }
+
           $remove = @(
             "$dist\qtwebengine_devtools_resources.debug.pak"
             "$dist\PIL\_avif.pyd"

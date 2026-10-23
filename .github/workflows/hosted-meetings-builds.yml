@@ -1,0 +1,36 @@
+name: Hosted meetings builds
+
+# The platform builders only run from main (cache) or release tags. This branch adds
+# bundled LiveKit pieces (server binary, browser client) to every package, so build all
+# three platforms on its pushes too. Nothing is released; artifacts expire quickly.
+# Remove this workflow when the branch merges.
+
+on:
+  push:
+    branches: [spike/solin-hosted-meetings]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-meetings-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    uses: ./.github/workflows/build-solin-windows.yml
+    with:
+      release: false
+      retention_days: 3
+
+  macos:
+    uses: ./.github/workflows/build-solin-macos.yml
+    with:
+      release: false
+      retention_days: 3
+
+  linux:
+    uses: ./.github/workflows/build-solin-linux.yml
+    with:
+      release: false
+      retention_days: 3
