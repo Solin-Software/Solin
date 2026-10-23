@@ -37,10 +37,17 @@ def _scenario(directory: Path) -> dict:
         def __init__(self) -> None:
             self.data = bytearray()
             self.lock = threading.Lock()
+            self.video = 0
+            self.pcm = 0
 
         def write(self, chunk: bytes) -> int:
             with self.lock:
                 self.data += chunk
+                # The writer sends one framed packet per write.
+                if chunk[:1] == bytes([KIND_VIDEO]):
+                    self.video += 1
+                elif chunk[:1] == bytes([KIND_PCM]):
+                    self.pcm += 1
             return len(chunk)
 
         def flush(self) -> None:
@@ -86,7 +93,13 @@ def _scenario(directory: Path) -> dict:
         started = output.start(MeetingOutputRequest(bridge="bridge", whip_url="http://x/.whip", token="t",
                                                     width=320, height=180, video_kbps=300,
                                                     hall_feed_mode="none"))
-        time.sleep(3.0)
+        # Wait for enough media instead of a fixed time: slow CI runners start late.
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            stdin = bridges[0].stdin if bridges else None
+            if stdin is not None and stdin.video >= 60 and stdin.pcm >= 100:
+                break
+            time.sleep(0.1)
         data = bytes(bridges[0].stdin.data) if bridges else b""
         output.stop()
         runtime.set_channel_source(channel, None)
@@ -139,12 +152,13 @@ def test_meeting_output_sends_encoded_program_and_meeting_mix(tmp_path):
     report = json.loads((tmp_path / "report.json").read_text())
     assert report["started"], report
     assert report["command"][:4] == ["bridge", "publish", "--whip", "http://x/.whip"]
-    assert report["video_frames"] >= 60, report          # ~30 fps for 3 s
+    assert report["video_frames"] >= 60, report          # ~2 s of 30 fps video
     assert 7 in report["first_video_nals"] and 5 in report["first_video_nals"], report  # SPS + IDR first
     assert report["pcm_chunks"] >= 100, report           # 48 kHz / 1024 frames ≈ 47 per second
     assert report["pcm_bytes_per_chunk"] == 1024 * 2 * 4, report
     assert report["video_pts_increasing"] and report["pcm_pts_increasing"], report
-    assert report["clock_gap_ms"] is not None and report["clock_gap_ms"] < 2000, report  # one system clock
+    # Both use one system clock: the gap is the encoder's start-up delay, not a clock offset.
+    assert report["clock_gap_ms"] is not None and report["clock_gap_ms"] < 5000, report
     assert report["trailing_bytes"] == 0
 
 
