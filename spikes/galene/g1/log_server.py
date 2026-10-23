@@ -1,6 +1,6 @@
-"""Serves web/ (the probe page) and stores the measurements it posts (port 8091).
+"""Serves a web directory and stores the JSON lines its pages post to /log.
 
-Usage: LOG_NAME=g1_ffmpeg python3 log_server.py
+Usage: LOG_NAME=g1_ffmpeg [WEB=../g2/web] [PORT=8091] python3 log_server.py
 """
 
 import os
@@ -9,7 +9,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-WEB = HERE / "web"
+WEB = Path(os.environ.get("WEB", HERE / "web")).resolve()
 RESULTS = HERE.parent / "results"
 LOG = RESULTS / f"{os.environ.get('LOG_NAME', 'g1_probe')}_{time.strftime('%Y%m%d_%H%M%S')}.jsonl"
 
@@ -42,4 +42,4 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"log: {LOG}", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", 8091), Handler).serve_forever()
+    ThreadingHTTPServer(("127.0.0.1", int(os.environ.get("PORT", 8091))), Handler).serve_forever()

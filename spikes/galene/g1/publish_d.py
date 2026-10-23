@@ -1,8 +1,14 @@
-"""G1 path D: libobs encodes (x264 + Opus), whippub sends to Galene over WHIP.
+"""G1 path D: libobs encodes video (x264), whippub sends to Galene over WHIP.
 
 Spike code, not product code. Headless libobs renders the program on a 1080p
-canvas, outputs 720p, and encodes it with its own encoders into a null output.
-pylibobs' packet callback hands every encoded packet to `whippub -stdin`.
+canvas, outputs 720p, and encodes it with x264 into a null output. A packet
+callback hands every encoded video packet to `whippub -stdin`.
+
+Audio, `--audio pcm` (default): libobs' raw program mix goes to whippub as PCM,
+and whippub encodes it with libopus with in-band FEC (libobs' Opus encoder has
+no FEC setting). Video is then stamped with the packet's system time
+(`sys_dts_usec`), the same clock as the raw audio timestamps. `--audio libobs`
+sends libobs' own Opus packets with encoder pts instead.
 
     .venv/bin/python spikes/galene/g1/publish_d.py --webcam /dev/video0 \
         --mic alsa_input.usb-046d_Brio_105_2445ZBE4ARA8-02.mono-fallback
@@ -20,10 +26,12 @@ import threading
 import time
 from pathlib import Path
 
+import numpy as np
 import psutil
 
+import pylibobs as ob
 from pylibobs import AudioEncoder, OBSContext, OBSData, Output, Scene, Source, VideoEncoder
-from pylibobs._ffi import get_lib
+from pylibobs._ffi import ffi, get_lib
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CLIP = HERE.parent.parent / "hosted-meetings" / "s1_publish" / "media" / "testclip.mp4"
@@ -35,6 +43,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--url", default="http://127.0.0.1:8443/group/g1/.whip")
     p.add_argument("--token", default="")
     p.add_argument("--sr", choices=("pts", "send"), default="pts", help="whippub sender-report clock")
+    p.add_argument("--audio", choices=("pcm", "libobs"), default="pcm",
+                   help="pcm: whippub encodes Opus with FEC; libobs: libobs' Opus packets")
+    p.add_argument("--opus-loss", type=int, default=10, help="pcm: expected loss %% for Opus FEC")
+    p.add_argument("--no-fec", action="store_true", help="pcm: disable Opus in-band FEC")
     p.add_argument("--clip", type=Path, default=DEFAULT_CLIP)
     p.add_argument("--webcam", default="", help="V4L2 device (e.g. /dev/video0) instead of the clip")
     p.add_argument("--mic", default="", help="PulseAudio/PipeWire source name for the program audio")
@@ -74,7 +86,9 @@ def build_program(args: argparse.Namespace) -> tuple:
 def main() -> None:
     args = parse_args()
     pub = subprocess.Popen(
-        [str(WHIPPUB), "-stdin", "-sr", args.sr, "-url", args.url] + (["-token", args.token] if args.token else []),
+        [str(WHIPPUB), "-stdin", "-sr", args.sr, "-url", args.url,
+         f"-opus-loss={args.opus_loss}", f"-opus-fec={'false' if args.no_fec else 'true'}"]
+        + (["-token", args.token] if args.token else []),
         stdin=subprocess.PIPE,
     )
     pipe = pub.stdin
@@ -82,27 +96,43 @@ def main() -> None:
     first_pts: dict[int, int] = {}
     counts = {"video": 0, "audio": 0, "video_bytes": 0, "keyframes": 0, "write_errors": 0}
 
-    def on_packet(pkt: dict) -> None:
-        num, den = pkt["timebase"]
-        pts_ns = pkt["pts"] * num * 1_000_000_000 // den
-        if pkt["type"] not in first_pts:
-            first_pts[pkt["type"]] = pts_ns
-            print(f"first {'video' if pkt['type'] == 1 else 'audio'} pts {pts_ns / 1e6:.1f} ms "
-                  f"(timebase {num}/{den})", flush=True)
-        if pkt["type"] == 1:
-            kind = 1
-            counts["video"] += 1
-            counts["video_bytes"] += pkt["size"]
-            counts["keyframes"] += pkt["keyframe"]
-        else:
-            kind = 0
-            counts["audio"] += 1
+    def send(kind: int, pts_ns: int, data: bytes) -> None:
         try:
             with lock:
-                pipe.write(struct.pack(">BqI", kind, pts_ns, len(pkt["data"])) + pkt["data"])
+                pipe.write(struct.pack(">BqI", kind, pts_ns, len(data)) + data)
                 pipe.flush()
         except OSError:
             counts["write_errors"] += 1
+
+    @ffi.callback("void(void *, struct encoder_packet *)")
+    def on_packet(_param, pkt) -> None:
+        try:
+            is_video = pkt.type == 1
+            if args.audio == "pcm":
+                if not is_video:
+                    return          # libobs' Opus packets are unused in pcm mode
+                # sys_dts_usec keeps system time (the output rebases dts_usec); bframes=0 so dts == pts
+                pts_ns = pkt.sys_dts_usec * 1000
+            else:
+                pts_ns = pkt.pts * pkt.timebase_num * 1_000_000_000 // pkt.timebase_den
+            if pkt.type not in first_pts:
+                first_pts[pkt.type] = pts_ns
+                print(f"first {'video' if is_video else 'audio'} pts {pts_ns / 1e6:.1f} ms", flush=True)
+            if is_video:
+                counts["video"] += 1
+                counts["video_bytes"] += pkt.size
+                counts["keyframes"] += pkt.keyframe
+            else:
+                counts["audio"] += 1
+            send(1 if is_video else 0, pts_ns, bytes(ffi.buffer(pkt.data, pkt.size)))
+        except Exception as e:  # never raise into libobs
+            print(f"packet callback: {e}", flush=True)
+
+    def on_pcm(_mix, planes, frames, ts_ns) -> None:
+        left = np.frombuffer(planes[0], np.float32)[:frames]
+        right = np.frombuffer(planes[1], np.float32)[:frames] if planes[1] else left
+        counts["audio"] += 1
+        send(2, ts_ns, np.column_stack((left, right)).astype("<f4").tobytes())
 
     with OBSContext(locale="en-US") as ctx:
         ctx.set_video(width=1920, height=1080, fps_num=args.fps, fps_den=1,
@@ -120,7 +150,8 @@ def main() -> None:
         out = Output.create("null_output", "whip_feed")
         out.set_video_encoder(venc)
         out.set_audio_encoder(aenc, 0)
-        cb = out.add_packet_callback(on_packet)
+        get_lib().obs_output_add_packet_callback(out._ptr, on_packet, ffi.NULL)
+        pcm_cb = ob.add_raw_audio_callback(on_pcm, channels=2) if args.audio == "pcm" else None
         if not out.start():
             raise SystemExit(f"null_output failed to start: {out.last_error}")
 
@@ -156,7 +187,9 @@ def main() -> None:
                 break
 
         out.stop()
-        out.remove_packet_callback(cb)
+        if pcm_cb is not None:
+            ob.remove_raw_audio_callback(pcm_cb)
+        get_lib().obs_output_remove_packet_callback(out._ptr, on_packet, ffi.NULL)
         del keep
     pipe.close()
     pub.send_signal(signal.SIGINT)

@@ -1,3 +1,5 @@
 results/
 g1/web/vendor/
+g2/web/vendor/
 __pycache__/
+run/

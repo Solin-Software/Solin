@@ -1,0 +1,5 @@
+html, body { margin: 0; background: #111; color: #ddd; font: 15px/1.4 system-ui, sans-serif; }
+video { display: block; width: 100%; max-height: 60vh; background: #000; }
+#start { display: block; margin: 16px auto; font-size: 22px; padding: 12px 32px; }
+#status { margin: 8px 16px; white-space: pre-wrap; font: 13px/1.4 ui-monospace, monospace; }
+.ok { color: #6d6; } .bad { color: #f66; }

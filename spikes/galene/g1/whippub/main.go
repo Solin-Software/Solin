@@ -3,11 +3,14 @@
 // Default mode (G1 option 1): FFmpeg encodes and sends RTP to 127.0.0.1:5004
 // (video) and :5006 (audio); both are forwarded as-is.
 //
-// -stdin mode (G1 path D): reads encoded frames from stdin, each framed as
-// 1 byte kind (0 audio, 1 video), 8 bytes pts in ns, 4 bytes length (big
-// endian), then the frame (Annex-B H.264 access unit or one Opus packet).
+// -stdin mode (G1 path D): reads frames from stdin, each framed as 1 byte
+// kind, 8 bytes pts in ns, 4 bytes length (big endian), then the payload:
+// kind 0 = one Opus packet, 1 = one Annex-B H.264 access unit, 2 = raw PCM
+// (float32, interleaved stereo, 48 kHz) that whippub encodes with libopus
+// itself so it can enable in-band FEC (libobs' Opus encoder can't).
 // RTP timestamps follow the pts, and sender reports map them to the capture
 // clock (not the send time), so the browser can lip-sync audio and video.
+// Build: go build -tags nolibopusfile -o whippub .   (cgo + libopus-dev)
 package main
 
 import (
@@ -18,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,7 +36,70 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v4"
+	"gopkg.in/hraban/opus.v2"
 )
+
+const (
+	opusRate  = 48000
+	opusFrame = opusRate / 50 // 20 ms
+)
+
+// pcmEncoder buffers raw PCM into 20 ms frames and encodes them with libopus.
+type pcmEncoder struct {
+	enc    *opus.Encoder
+	buf    []float32
+	bufPTS time.Duration
+	out    []byte
+	modes  [3]atomic.Int64 // packets per Opus mode: SILK, hybrid, CELT (FEC needs SILK or hybrid)
+}
+
+// modeCounts returns and resets the per-mode packet counts.
+func (p *pcmEncoder) modeCounts() [3]int64 {
+	var c [3]int64
+	for i := range c {
+		c[i] = p.modes[i].Swap(0)
+	}
+	return c
+}
+
+func newPCMEncoder(bitrate, lossPerc int, fec bool, app opus.Application) *pcmEncoder {
+	enc, err := opus.NewEncoder(opusRate, 2, app)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, err := range []error{enc.SetBitrate(bitrate), enc.SetInBandFEC(fec), enc.SetPacketLossPerc(lossPerc)} {
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	return &pcmEncoder{enc: enc, out: make([]byte, 4000)}
+}
+
+// push appends PCM starting at pts and writes every complete 20 ms frame.
+func (p *pcmEncoder) push(pcm []float32, pts time.Duration, track *ptsTrack) {
+	expected := p.bufPTS + time.Duration(len(p.buf)/2)*time.Second/opusRate
+	if len(p.buf) == 0 || (pts-expected).Abs() > 5*time.Millisecond {
+		p.buf, p.bufPTS = p.buf[:0], pts // first chunk or a gap: restart framing
+	}
+	p.buf = append(p.buf, pcm...)
+	for len(p.buf) >= 2*opusFrame {
+		n, err := p.enc.EncodeFloat32(p.buf[:2*opusFrame], p.out)
+		if err != nil {
+			log.Fatalf("opus: %v", err)
+		}
+		switch config := p.out[0] >> 3; {
+		case config < 12:
+			p.modes[0].Add(1)
+		case config < 16:
+			p.modes[1].Add(1)
+		default:
+			p.modes[2].Add(1)
+		}
+		track.write(append([]byte(nil), p.out[:n]...), p.bufPTS)
+		p.buf = p.buf[2*opusFrame:]
+		p.bufPTS += time.Second / 50
+	}
+}
 
 // ptsTrack packetizes frames with RTP timestamps derived from their pts.
 type ptsTrack struct {
@@ -80,6 +147,12 @@ func (t *ptsTrack) write(data []byte, pts time.Duration) {
 	t.mu.Unlock()
 }
 
+func (t *ptsTrack) octetCount() uint32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.octets
+}
+
 // senderReport maps the last packet's RTP timestamp to wall0 + its pts.
 func (t *ptsTrack) senderReport(wall0 time.Time) *rtcp.SenderReport {
 	t.mu.Lock()
@@ -101,7 +174,7 @@ func ntpTime(t time.Time) uint64 {
 
 // readFrames feeds framed samples from stdin to the pts tracks and sends
 // sender reports every second.
-func readFrames(pc *webrtc.PeerConnection, video, audio *ptsTrack, ptsSR bool, vbytes, abytes *atomic.Int64) {
+func readFrames(pc *webrtc.PeerConnection, video, audio *ptsTrack, pcmEnc *pcmEncoder, ptsSR bool, vbytes, abytes *atomic.Int64) {
 	r := bufio.NewReaderSize(os.Stdin, 1<<20)
 	var hdr [13]byte
 	var wall0 time.Time
@@ -119,12 +192,22 @@ func readFrames(pc *webrtc.PeerConnection, video, audio *ptsTrack, ptsSR bool, v
 			// Audio and video pts share libobs' clock; anchor it once.
 			wall0 = time.Now().Add(-pts)
 		}
-		t, counter := audio, abytes
-		if hdr[0] == 1 {
-			t, counter = video, vbytes
+		switch hdr[0] {
+		case 0:
+			audio.write(data, pts)
+			abytes.Add(int64(len(data)))
+		case 1:
+			video.write(data, pts)
+			vbytes.Add(int64(len(data)))
+		case 2:
+			pcm := make([]float32, len(data)/4)
+			for i := range pcm {
+				pcm[i] = math.Float32frombits(binary.LittleEndian.Uint32(data[4*i:]))
+			}
+			before := audio.octetCount()
+			pcmEnc.push(pcm, pts, audio)
+			abytes.Add(int64(audio.octetCount() - before))
 		}
-		t.write(data, pts)
-		counter.Add(int64(len(data)))
 		if ptsSR && time.Since(lastSR) >= time.Second {
 			lastSR = time.Now()
 			var reports []rtcp.Packet
@@ -163,6 +246,10 @@ func main() {
 	token := flag.String("token", "", "bearer token")
 	stdin := flag.Bool("stdin", false, "read framed encoded samples from stdin instead of RTP")
 	srMode := flag.String("sr", "pts", "-stdin sender reports: pts (capture clock) or send (Pion, send time)")
+	opusBitrate := flag.Int("opus-bitrate", 64000, "PCM input: Opus bitrate, bps")
+	opusLoss := flag.Int("opus-loss", 10, "PCM input: expected packet loss %% (drives FEC)")
+	opusFEC := flag.Bool("opus-fec", true, "PCM input: Opus in-band FEC")
+	opusVoIP := flag.Bool("opus-voip", false, "PCM input: OPUS_APPLICATION_VOIP instead of AUDIO")
 	flag.Parse()
 
 	m := &webrtc.MediaEngine{}
@@ -266,8 +353,14 @@ func main() {
 	}
 
 	var vbytes, abytes atomic.Int64
+	var pcmEnc *pcmEncoder
 	if *stdin {
-		go readFrames(pc, videoPTS, audioPTS, *srMode == "pts", &vbytes, &abytes)
+		app := opus.AppAudio
+		if *opusVoIP {
+			app = opus.AppVoIP
+		}
+		pcmEnc = newPCMEncoder(*opusBitrate, *opusLoss, *opusFEC, app)
+		go readFrames(pc, videoPTS, audioPTS, pcmEnc, *srMode == "pts", &vbytes, &abytes)
 	} else {
 		go forward(5004, videoRTP, &vbytes)
 		go forward(5006, audioRTP, &abytes)
@@ -281,7 +374,12 @@ func main() {
 		select {
 		case <-tick.C:
 			v, a := vbytes.Load(), abytes.Load()
-			fmt.Printf("video %.0f kbps, audio %.0f kbps\n", float64(v-lastV)*8/5000, float64(a-lastA)*8/5000)
+			fmt.Printf("video %.0f kbps, audio %.0f kbps", float64(v-lastV)*8/5000, float64(a-lastA)*8/5000)
+			if pcmEnc != nil {
+				m := pcmEnc.modeCounts()
+				fmt.Printf(", opus packets SILK/hybrid/CELT %d/%d/%d", m[0], m[1], m[2])
+			}
+			fmt.Println()
 			lastV, lastA = v, a
 		case <-sig:
 			del, _ := http.NewRequest("DELETE", resource.String(), nil)

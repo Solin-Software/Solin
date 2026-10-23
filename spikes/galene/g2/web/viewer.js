@@ -1,0 +1,92 @@
+// G2 viewer: plays the Galene program and reports decode/playback stats to /log.
+'use strict';
+
+const params = new URLSearchParams(location.search);
+const GROUP = params.get('group') || 'g2';
+const LABEL = params.get('label') || 'device';
+const WS = params.get('ws') || 'ws://127.0.0.1:8443/ws';
+const statusEl = document.getElementById('status');
+const video = document.getElementById('video');
+let pc = null, prev = null, reports = 0, started = 0;
+
+function post(obj) {
+  fetch('log', { method: 'POST', body: JSON.stringify(obj) }).catch(() => {});
+}
+
+async function sample() {
+  if (!pc) return;
+  const stats = await pc.getStats();
+  const by = new Map([...stats.values()].map(s => [s.id, s]));
+  let v = null, a = null;
+  for (const s of stats.values()) {
+    if (s.type === 'inbound-rtp' && s.kind === 'video') v = s;
+    if (s.type === 'inbound-rtp' && s.kind === 'audio') a = s;
+  }
+  const now = performance.now();
+  const r = {
+    label: LABEL, ua: navigator.userAgent, t: Math.round((now - started) / 1000),
+    visibility: document.visibilityState, paused: video.paused, muted: video.muted,
+  };
+  if (v) {
+    const dt = prev ? (now - prev.now) / 1000 : 0;
+    Object.assign(r, {
+      vCodec: by.get(v.codecId)?.mimeType, vFmtp: by.get(v.codecId)?.sdpFmtpLine,
+      decoder: v.decoderImplementation, powerEfficient: v.powerEfficientDecoder,
+      size: `${v.frameWidth}x${v.frameHeight}`,
+      fps: prev && dt ? +((v.framesDecoded - prev.v.framesDecoded) / dt).toFixed(1) : v.framesPerSecond,
+      framesDecoded: v.framesDecoded, framesDropped: v.framesDropped, freezes: v.freezeCount,
+      freezeSec: v.totalFreezesDuration, vLost: v.packetsLost,
+      vJitterBufMs: v.jitterBufferEmittedCount ? Math.round(1000 * v.jitterBufferDelay / v.jitterBufferEmittedCount) : null,
+    });
+  }
+  if (a) {
+    Object.assign(r, {
+      aCodec: by.get(a.codecId)?.mimeType,
+      audioEnergy: prev?.a ? +(a.totalAudioEnergy - prev.a.totalAudioEnergy).toFixed(4) : 0,
+      concealedPct: a.totalSamplesReceived ? +(100 * a.concealedSamples / a.totalSamplesReceived).toFixed(2) : null,
+      aLost: a.packetsLost,
+    });
+  }
+  prev = { now, v, a };
+  reports++;
+  post(r);
+  const videoOk = r.fps >= 20, audioOk = r.audioEnergy > 0;
+  statusEl.innerHTML =
+    `<span class="${videoOk ? 'ok' : 'bad'}">video ${videoOk ? 'OK' : 'NOT PLAYING'}</span>  ` +
+    `<span class="${audioOk ? 'ok' : 'bad'}">audio ${audioOk ? 'OK' : 'silent?'}</span>\n` +
+    `${r.vCodec} ${r.size} ${r.fps} fps, decoder ${r.decoder}${r.powerEfficient ? ' (hardware)' : ''}\n` +
+    `freezes ${r.freezes}, dropped ${r.framesDropped}, lost ${r.vLost}/${r.aLost}, audio concealed ${r.concealedPct}%\n` +
+    `reports sent: ${reports} (keep open ~1 min; you may also lock the screen to test audio)`;
+}
+
+async function start() {
+  document.getElementById('start')?.remove();
+  started = performance.now();
+  statusEl.textContent = 'connecting...';
+  const sc = new ServerConnection();
+  sc.onconnected = function () { this.join(GROUP, `${LABEL}-${Date.now() % 100000}`, 'x'); };
+  sc.onjoined = function (kind, group, perms, status, data, error, message) {
+    if (kind === 'join') this.request({ '': ['audio', 'video'] });
+    if (kind === 'fail') { statusEl.textContent = `join failed: ${message}`; post({ label: LABEL, error: message }); }
+  };
+  sc.ondownstream = function (stream) {
+    pc = stream.pc;
+    stream.ondowntrack = (track, transceiver, ms) => {
+      if (video.srcObject !== ms) { video.srcObject = ms; video.play().catch(err => post({ label: LABEL, playError: String(err) })); }
+    };
+  };
+  sc.onclose = () => post({ label: LABEL, closed: true });
+  setInterval(sample, 5000);
+  try {
+    await sc.connect(WS);
+  } catch (err) {
+    statusEl.textContent = `connect failed: ${err}`;
+    post({ label: LABEL, error: String(err) });
+  }
+}
+
+document.getElementById('start').onclick = start;
+if (params.has('auto')) {
+  video.muted = true;   // autoplay without a gesture; audio stats still count
+  start();
+}

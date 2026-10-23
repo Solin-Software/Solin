@@ -97,3 +97,49 @@ Galene keeps the publisher's timing: each downstream sender report is computed f
 - 2 h soak of path D (memory, audio drops).
 - Windows: path A (pylibobs ships `obs-webrtc.dll`) and path D.
 - Simulcast: Galene accepts two layers; path D currently sends one.
+
+## G2: codec and device compatibility (partial, 2026-10-22)
+
+### Setup
+
+- **Publisher:** path D with the test clip into H.264 + Opus groups.
+- **Viewer:** `g2/web/viewer.html` plays the program and posts `getStats()` every 5 s to `/log`: codec, fps, freezes, packets lost, audio concealment, visibility.
+- **Access:** phones reached it through two Cloudflare quick tunnels, one for the page and one for Galene's WebSocket, with the tunnel origin in Galene's `allowOrigin`. Media went direct over the home LAN; there was no TURN, so 4G is out of scope here.
+- **Firefox:** ran headless with a fresh profile and was closed via WebDriver BiDi (`g2/bidi_close.py`).
+
+### Results (H.264 constrained baseline 720p30 + Opus)
+
+| Device / browser | Plays | Notes |
+|---|---|---|
+| Chromium desktop (built-in browser) | ✅ 30 fps | 0 freezes, 0 lost, audio OK |
+| Firefox 158 snap, fresh profile, headless | ✅ 30 fps | H.264 decodes without OpenH264 being downloaded first; 0 freezes, 0 lost |
+| Chrome 155, Android 10 phone (home Wi-Fi) | ✅ 29.4–30.2 fps | see the Wi-Fi loss and screen-lock findings below |
+| Old Android, Safari iOS | not tested | skipped for now |
+
+**So far no device needed VP8.** H.264 from libobs plays on every browser tested.
+
+### Finding: audio suffers from Wi-Fi loss that video recovers from
+
+- On the phone, video showed 0 lost packets after retransmission (NACK), while audio lost ~3% and concealed 3–9%. Galene and browsers don't retransmit Opus.
+- **Opus in-band FEC:** libobs' `ffmpeg_opus` only exposes a bitrate. So `--audio pcm` (now the default) sends libobs' raw mix to whippub, which encodes with libopus (`gopkg.in/hraban/opus.v2`, cgo, build tag `nolibopusfile`) with in-band FEC and a 10% loss target.
+  - Video is then stamped with the packet's `sys_dts_usec`, the same system clock as the raw audio; the output rebases `dts_usec`.
+  - Per-packet TOC counts confirm the effect: with FEC every packet is **hybrid** (FEC-capable); without it the encoder picks **CELT**, which can't carry FEC. So FEC also changes the coding mode at 64 kbps.
+  - Galene already advertises `useinbandfec=1` to receivers.
+- **Phone A/B, one run each (inconclusive):**
+  - FEC run: 0.7% audio loss, 0.7% concealed, 0 video loss.
+  - No-FEC run: ~10% audio loss, 10–20% concealed, 3,925 video packets lost, 13 freezes.
+  - The Wi-Fi was far worse during the second run, so the difference is mostly the network.
+  - Within the FEC run, concealed audio after warm-up (~0.47 s) roughly equals lost audio (~0.5 s): FEC recovered little, which fits burst loss.
+- **Next options for bursts:** audio NACK or RED (redundant earlier packets); support in Galene and mobile browsers not yet checked. A controlled-loss test (netem) needs root, which the spike didn't have.
+
+### Finding: locking an Android phone drops the session
+
+- Chrome on Android 10, screen locked: ~10 s later Galene logged `websocket: close 1006 (abnormal closure)`. The downstream closed and the page never recovered after unlock.
+- **Any viewer client needs automatic reconnection**, and likely something that keeps the page alive in the background (a playing media session, Wake Lock).
+- This overlaps S8. LiveKit's SDK should get the same screen-lock test before comparing.
+
+### Still open for G2
+
+- Old Android and Safari iOS.
+- Screen-lock test with auto-reconnect in the viewer.
+- Audio NACK / RED support in Galene and phone browsers.
