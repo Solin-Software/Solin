@@ -251,6 +251,7 @@ fi
     --include-package-data=pyqttoast \
     --include-data-dir=src/solin/resources/assets=solin/resources/assets \
     --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
+    --include-data-dir=src/solin/resources/hosted_meeting_web=solin/resources/hosted_meeting_web \
     --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
     --include-data-dir="${QML_APP_DIR}=solin/qml/Solin" \
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
@@ -362,6 +363,10 @@ for library_name in "${xdotool_libraries[@]}"; do
     [[ "$(realpath "${packaged_library}")" == "$(realpath "${DIST_DIR}/${library_name}")" ]] \
         || fail "Bundled xdotool resolved ${library_name} outside the private payload."
 done
+
+# Hosted meetings: Galene (media server), frpc (hub tunnel) and solin-galene-bridge
+# (program publisher / commenter audio), found in "$APP_DIR/bin" by binaries.py.
+"${PYTHON}" scripts/stage_hosted_meeting_helpers.py --application-dir "${DIST_DIR}"
 
 cat > "${DIST_DIR}/run-solin" <<'LAUNCHER'
 #!/bin/sh

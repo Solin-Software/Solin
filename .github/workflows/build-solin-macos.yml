@@ -56,6 +56,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Set up Go (hosted-meeting helpers)
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/solin-galene-bridge/go.mod
+          cache-dependency-path: tools/solin-galene-bridge/go.sum
+
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -199,6 +205,7 @@ jobs:
             --include-package-data=pyqttoast \
             --include-data-dir=src/solin/resources/assets=solin/resources/assets \
             --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
+            --include-data-dir=src/solin/resources/hosted_meeting_web=solin/resources/hosted_meeting_web \
             --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
             --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
             --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
@@ -218,6 +225,15 @@ jobs:
             mv "${BUILD_DIR}/main.app" "${BUILD_DIR}/${APP_NAME}.app"
           fi
           test -d "${BUILD_DIR}/${APP_NAME}.app"
+
+      - name: Stage hosted-meeting helpers (Galene, frpc, bridge)
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install opus pkg-config
+          case "$(uname -m)" in arm64) platform=darwin-arm64 ;; *) platform=darwin-amd64 ;; esac
+          python scripts/stage_hosted_meeting_helpers.py \
+            --application-dir "${BUILD_DIR}/${APP_NAME}.app/Contents/MacOS" --platform "$platform"
 
       - name: Configure macOS bundle metadata and playlist type
         shell: bash

@@ -154,6 +154,7 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --include-package-data=pyqttoast ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\assets=solin/resources/assets" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\remote_control=solin/resources/remote_control" ^
+    --include-data-dir="%PROJECT_ROOT%src\solin\resources\hosted_meeting_web=solin/resources/hosted_meeting_web" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\translations\locales=solin/resources/translations/locales" ^
     --include-data-dir="%QML_CACHE_DIR%=solin/qml/Solin" ^
     --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
@@ -177,6 +178,12 @@ echo.
 echo  Removendo arquivos desnecessarios...
  
 set DIST=%OUTPUT_DIR%\main.dist
+
+"%PYTHON%" "%PROJECT_ROOT%scripts\stage_hosted_meeting_helpers.py" --application-dir "%DIST%" --platform windows-amd64
+if %ERRORLEVEL% NEQ 0 (
+    echo  [ERRO] Os componentes de reuniao hospedada nao foram empacotados.
+    exit /b %ERRORLEVEL%
+)
 
 "%DIST%\Solin.exe" --verify-zoom-runtime
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
