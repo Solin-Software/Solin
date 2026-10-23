@@ -1,0 +1,38 @@
+# Site routing shared by the production and local Caddyfiles.
+
+# The hub itself: status page and hall directory (served by the ask service).
+{$HUB_DOMAIN} {
+	@internal path /internal/*
+	respond @internal 404
+	reverse_proxy 127.0.0.1:{$ASK_PORT:7400}
+}
+
+# Every hall: https://<hall>.HUB_DOMAIN -> that hall's frp tunnel -> its meeting web server.
+*.{$HUB_DOMAIN} {
+	tls {
+		on_demand
+	}
+
+	# Ask maps Host -> the hall's tunnel port (127.0.0.1:<port>, bound by frps). If the hall is
+	# unknown (404) or offline (503), ask's response goes straight to the visitor. copy_headers
+	# first deletes any client-supplied X-Solin-Hall-Port, so it cannot be spoofed.
+	forward_auth 127.0.0.1:{$ASK_PORT:7400} {
+		uri /internal/route
+		copy_headers X-Solin-Hall-Port
+	}
+
+	reverse_proxy 127.0.0.1:{http.request.header.X-Solin-Hall-Port} {
+		header_up -X-Solin-Hall-Port
+		# Stream responses as they come (lobby long-poll / server-sent updates).
+		flush_interval -1
+		# On a Caddy config reload, keep existing WebSockets (meetings) open instead of
+		# closing them immediately; they finish on their own.
+		stream_close_delay 8h
+	}
+
+	# The tunnel dropped between the route check and the connection.
+	handle_errors 502 {
+		header Retry-After 5
+		respond "The hall's connection to the hub dropped for a moment. Please retry in a few seconds." 503
+	}
+}

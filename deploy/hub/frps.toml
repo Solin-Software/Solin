@@ -1,0 +1,32 @@
+# frps: hall PCs (frpc) dial out to bindPort. Each hall publishes ONE raw TCP proxy (its meeting
+# web server); the hub's "ask" plugin checks the hall's key and pins the proxy to the hall's
+# registered port on 127.0.0.1, where only Caddy can reach it. Values come from hub.env.
+bindPort = {{ .Envs.FRP_BIND_PORT }}
+proxyBindAddr = "127.0.0.1"
+allowPorts = [{ start = {{ .Envs.HALL_PORT_MIN }}, end = {{ .Envs.HALL_PORT_MAX }} }]
+maxPortsPerClient = 1
+
+auth.method = "token"
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+
+# Keep tcpMux (the default) and do NOT set transport.heartbeatTimeout: with tcpMux, frpc relies on
+# the mux keepalive and sends no app heartbeats, so a server-side heartbeatTimeout drops every
+# tunnel each timeout period (seen in the S5 spike: all attendees reconnected every 90 s).
+transport.tcpMux = true
+
+# Admin API, used by the ask service to see which halls are online. Loopback only.
+webServer.addr = "127.0.0.1"
+webServer.port = {{ .Envs.FRP_ADMIN_PORT }}
+webServer.user = "admin"
+webServer.password = "{{ .Envs.FRP_ADMIN_PASSWORD }}"
+
+log.to = "console"
+log.level = "info"
+
+# Per-hall authorization (halls.json): Login checks the hall name + key sent in frpc metadatas,
+# NewProxy additionally forces proxy name = hall name, type = tcp and remotePort = registered port.
+[[httpPlugins]]
+name = "solin-halls"
+addr = "127.0.0.1:{{ .Envs.ASK_PORT }}"
+path = "/internal/frps-plugin"
+ops = ["Login", "NewProxy"]

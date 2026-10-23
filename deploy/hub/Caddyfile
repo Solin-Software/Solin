@@ -1,0 +1,20 @@
+# Solin hub, production: real certificates from Let's Encrypt / ZeroSSL.
+# HUB_DOMAIN, ACME_EMAIL and ASK_PORT come from hub.env.
+{
+	email {$ACME_EMAIL}
+	# A certificate for <hall>.HUB_DOMAIN is obtained on the first visit, only if the ask service
+	# says that hall is registered and its tunnel is connected right now.
+	on_demand_tls {
+		ask http://127.0.0.1:{$ASK_PORT:7400}/internal/caddy-ask
+	}
+	servers {
+		# Long-lived WebSockets: no read/write timeouts on proxied streams (Caddy's defaults
+		# already have none; idle_timeout only applies to idle keep-alive connections).
+		timeouts {
+			read_header 30s
+			idle 5m
+		}
+	}
+}
+
+import /etc/caddy/sites.caddy

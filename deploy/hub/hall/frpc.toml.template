@@ -1,0 +1,33 @@
+# frpc configuration for a Solin hall. Solin writes this file (substituting the ${...} values)
+# and supervises `frpc -c frpc.toml`. The hall dials OUT to the hub, so it works behind CGNAT.
+#
+#   ${HUB_ADDR}      hub host name or IP (e.g. hub.example.org or 203-0-113-10.sslip.io)
+#   ${HUB_FRP_PORT}  frps bind port on the hub (FRP_BIND_PORT in hub.env, default 7000)
+#   ${FRP_TOKEN}     shared frps token (FRP_TOKEN in hub.env)
+#   ${HALL_NAME}     the hall's registered name; its public address is https://${HALL_NAME}.<HUB_DOMAIN>/
+#   ${HALL_KEY}      the hall's secret key (the hub stores only its sha256 in halls.json)
+#   ${LOCAL_PORT}    the port of Solin's meeting web server on this PC (plain HTTP)
+serverAddr = "${HUB_ADDR}"
+serverPort = ${HUB_FRP_PORT}
+auth.method = "token"
+auth.token = "${FRP_TOKEN}"
+# Keep retrying forever if the hub is unreachable or refuses us (e.g. key not registered yet).
+loginFailExit = false
+# Leave `user` unset: frp would prefix the proxy name with it and the hub would refuse the proxy.
+transport.tcpMux = true
+transport.protocol = "tcp"
+log.to = "console"
+log.level = "info"
+
+# Identifies the hall to the hub's plugin (checked on Login and on NewProxy).
+metadatas.hall = "${HALL_NAME}"
+metadatas.hall_key = "${HALL_KEY}"
+
+[[proxies]]
+# Must be exactly the hall name, type "tcp" (raw TCP: no HTTP proxy timeouts on long WebSockets).
+name = "${HALL_NAME}"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = ${LOCAL_PORT}
+# 0 = let the hub choose; the hub always replaces it with the hall's registered port.
+remotePort = 0

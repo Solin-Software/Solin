@@ -1,0 +1,14 @@
+{
+  "halls": {
+    "hall-a": {
+      "key_sha256": "11f73c8c8c07f2222f5e3bce72d10ce67b0008ab165a07119c657dc691d366ec",
+      "port": 20001,
+      "note": "smoke test: key hall-a-test-key"
+    },
+    "hall-b": {
+      "key_sha256": "cd4ab8a2b4dbb8c056ed2812eac8e367f1ffbf6cbe2b468746aba7b601e495ee",
+      "port": 20002,
+      "note": "smoke test: key hall-b-test-key"
+    }
+  }
+}

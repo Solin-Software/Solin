@@ -1,0 +1,67 @@
+# Solin meeting hub: Caddy (HTTPS per hall, on-demand TLS) -> frps (reverse tunnels from hall PCs)
+# + coturn (TURN relay) + ask (hall registry, TLS gate, frps plugin, status page).
+#
+#   cp hub.env.example hub.env && cp halls.json.example halls.json   # then edit both
+#   docker compose up -d
+#
+# Every service uses host networking: coturn needs a large UDP port range, and the internal
+# services (ask, frps admin API, per-hall tunnel ports) bind to 127.0.0.1 only.
+# The local development variant: see local/hub.env.local and README.md.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2.11.7-alpine
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    depends_on: [ask]
+    volumes:
+      - ${CADDYFILE:-./Caddyfile}:/etc/caddy/Caddyfile:ro
+      - ./sites.caddy:/etc/caddy/sites.caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *logging
+
+  frps:
+    image: fatedier/frps:v0.71.1
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    depends_on: [ask]
+    command: ["-c", "/etc/frp/frps.toml"]
+    volumes:
+      - ./frps.toml:/etc/frp/frps.toml:ro
+    logging: *logging
+
+  ask:
+    build: ./ask
+    image: solin-hub-ask:1
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    # The whole bundle directory, read-only, so edits to halls.json (even ones that replace the
+    # file) are picked up without a restart.
+    volumes:
+      - ./:/hub:ro
+    logging: *logging
+
+  coturn:
+    image: coturn/coturn:4.18.0
+    network_mode: host
+    restart: unless-stopped
+    env_file: ${HUB_ENV_FILE:-hub.env}
+    entrypoint: ["/bin/sh", "/etc/coturn/entrypoint.sh"]
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf.template:ro
+      - ./coturn-entrypoint.sh:/etc/coturn/entrypoint.sh:ro
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:

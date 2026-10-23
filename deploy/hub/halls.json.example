@@ -1,0 +1,9 @@
+{
+  "halls": {
+    "hall-abc123": {
+      "key_sha256": "1f1b9e5f2a8f3a3d0b7f3e6f3f7a6b2c9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b",
+      "port": 20001,
+      "note": "Example congregation, contact: secretary@example.org"
+    }
+  }
+}

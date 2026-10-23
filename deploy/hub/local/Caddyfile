@@ -1,0 +1,14 @@
+# Local development hub: same routing as production, certificates from Caddy's internal CA
+# (root: /data/caddy/pki/authorities/local/root.crt in the caddy-data volume), and unprivileged
+# ports so it does not clash with anything on :80/:443.
+{
+	local_certs
+	skip_install_trust
+	http_port {$HTTP_PORT:8880}
+	https_port {$HTTPS_PORT:8443}
+	on_demand_tls {
+		ask http://127.0.0.1:{$ASK_PORT:7400}/internal/caddy-ask
+	}
+}
+
+import /etc/caddy/sites.caddy
