@@ -43,10 +43,7 @@ from solin.core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
 )
-from solin.core.projection.image_framing import (
-    IDENTITY_IMAGE_TRANSFORM,
-    ImageTransform,
-)
+from solin.core.projection.image_framing import ImageTransform
 from solin.core.rendering.fonts import FontManager
 from solin.core.timer.models import MediaCountdownPresentation
 from solin.core.timer.render import format_fixed_countdown
@@ -1759,9 +1756,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self,
         *,
         reset: bool,
-    ) -> ImageTransform:
+    ) -> None:
         ratio = self._resolve_projection_aspect_ratio()
-        return self.preview_content.configure_framing(
+        self.preview_content.configure_framing(
             match_projection_aspect=self._image_match_projection_aspect,
             constrain_to_frame=self._image_constrain_to_frame,
             aspect_ratio=ratio.value,
@@ -1769,36 +1766,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             reset=reset,
         )
 
-    def _emit_image_transform(
-        self,
-        transform: ImageTransform,
-        *,
-        instant: bool = False,
-    ) -> None:
-        if instant:
-            self.image_apply_transform_instant.emit(
-                transform.zoom,
-                transform.norm_x,
-                transform.norm_y,
-            )
-            return
-        if transform == IDENTITY_IMAGE_TRANSFORM:
-            self.image_reset_transform.emit()
-        else:
-            self.image_apply_transform.emit(
-                transform.zoom,
-                transform.norm_x,
-                transform.norm_y,
-            )
-
     @Slot(bool)
     def _on_image_match_projection_aspect_changed(self, enabled: bool) -> None:
         self._image_match_projection_aspect = bool(enabled)
         self._playback_settings.set_image_match_projection_aspect(
             self._image_match_projection_aspect
         )
-        transform = self._configure_image_preview_framing(reset=True)
-        self._emit_image_transform(transform)
+        self._configure_image_preview_framing(reset=True)
 
     @Slot(bool)
     def _on_image_constrain_to_frame_changed(self, enabled: bool) -> None:
@@ -1806,8 +1780,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._playback_settings.set_image_constrain_to_frame(
             self._image_constrain_to_frame
         )
-        transform = self._configure_image_preview_framing(reset=False)
-        self._emit_image_transform(transform)
+        self._configure_image_preview_framing(reset=False)
 
     @Slot(float, float, float)
     def _on_image_apply_transform(self, zoom: float, norm_x: float, norm_y: float):

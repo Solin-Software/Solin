@@ -5,7 +5,8 @@ import uuid
 
 import pytest
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.playback_protection_controller import PlaybackProtectionController
 from solin.core.foundation.runtime_paths import ProfilePaths
@@ -13,6 +14,7 @@ from solin.core.foundation.settings_store import SettingsStore
 from solin.core.media.playback_state import SolinPlaybackState
 from solin.core.media.profile_store import ProfileMediaStore
 from solin.core.media.settings import MediaSettingsStore, ProjectionPlaybackSettingsStore
+from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM, ImageTransform
 from solin.core.rendering.fonts import FontManager
 from solin.ui.incremental_load import IncrementalLoadState
 import solin.widgets.projection.bar as projection_bar
@@ -191,6 +193,66 @@ def test_projection_bar_uses_playlist_mixin():
         projection_bar.ProjectionBar._resolve_idle_path
         is ProjectionPlaylistMixin._resolve_idle_path
     )
+
+
+@pytest.mark.parametrize("option", ["aspect", "bounds"])
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize(
+    ("draft", "constrained"),
+    [
+        (IDENTITY_IMAGE_TRANSFORM, IDENTITY_IMAGE_TRANSFORM),
+        (ImageTransform(2.0, 1.5, -1.5), ImageTransform(2.0, 0.5, -0.5)),
+        (ImageTransform(0.5, 0.2, -0.2), ImageTransform(0.5, 0.0, 0.0)),
+    ],
+    ids=["identity", "out-of-bounds-pan", "zoomed-out"],
+)
+def test_image_framing_options_only_update_preview_until_apply(
+    projection_controls, option, enabled, draft, constrained,
+):
+    bar = projection_controls.bar
+    bar._ensure_overlay_ready()
+    preview = bar.preview_content
+    preview.resize(1600, 900)
+    preview.set_image_mode(True)
+    pixmap = QPixmap(1600, 900)
+    pixmap.fill(QColor("white"))
+    preview.set_image_pixmap_fresh(pixmap)
+    bar._on_image_match_projection_aspect_changed(not enabled if option == "aspect" else True)
+    bar._on_image_constrain_to_frame_changed(not enabled if option == "bounds" else True)
+    previous = preview.set_current_transform(draft)
+    applied = QSignalSpy(bar.image_apply_transform)
+    applied_instantly = QSignalSpy(bar.image_apply_transform_instant)
+    reset = QSignalSpy(bar.image_reset_transform)
+
+    button = preview._aspect_btn if option == "aspect" else preview._bounds_btn
+    button.click()
+
+    assert button.isChecked() is enabled
+    settings = bar._playback_settings
+    saved = (
+        settings.image_match_projection_aspect()
+        if option == "aspect"
+        else settings.image_constrain_to_frame()
+    )
+    assert saved is enabled
+    current = preview.current_transform()
+    if option == "aspect":
+        assert current == IDENTITY_IMAGE_TRANSFORM
+    elif enabled:
+        assert current == constrained
+    else:
+        assert current == previous
+    assert applied.count() == 0
+    assert applied_instantly.count() == 0
+    assert reset.count() == 0
+
+    preview._apply_btn.click()
+
+    assert applied.count() == 1
+    assert applied.at(0) == [current.zoom, current.norm_x, current.norm_y]
+    assert applied_instantly.count() == 0
+    assert reset.count() == 0
+    assert projection_controls.errors == []
 
 
 def test_set_playlist_materializes_overlay_before_using_playlist_controls():
