@@ -212,3 +212,36 @@ Galene 1.2.1, localhost.
 - TURN over TLS on 443.
 - Hall on mobile (IPv6-only hall) ↔ IPv4-only attendee.
 - Cause of the 4G WebSocket drop.
+
+## G3: hall capacity, 50 and 100 viewers (2026-10-22)
+
+Method as S2 (loopback, one machine). Script: `g3/run_g3.sh`; viewers from `g3/loadgen` (Go/Pion: N listen-only clients, counts received bytes and RTP sequence gaps).
+- **Cores:** publisher 0–7, Galene 8–15, loadgen 16–23.
+- **Publisher:** path D, test clip, single layer (x264 CBR), Opus with FEC.
+- **Sampling:** 120 s per variant, first 10 s interval dropped. Received total = what the hall would upload.
+
+| Variant | Hall upload | Per viewer | Galene CPU | Galene RSS | Publisher CPU (libobs + whippub) | Lost packets |
+|---|---|---|---|---|---|---|
+| Audio only, 50 | **3.2 Mbps** | 64 kbps | **0.08** | 45 MB | 0.82 + 0.06 | 0 / 275 k |
+| 720p (1.7 Mbps), 50 | **89.2 Mbps** | 1.78 Mbps | **0.26** | 47 MB | 0.73 + 0.05 | 0 / 2.1 M |
+| 720p, 100 | **178.3 Mbps** | 1.78 Mbps | **0.57** | 74 MB | 0.90 + 0.06 | 0 / 4.3 M |
+| 360p (450 kbps), 50 | **26.1 Mbps** | 0.52 Mbps | **0.18** | 73 MB | 0.55 + 0.05 | 0 / 1.1 M |
+| 360p, 100 | **51.6 Mbps** | 0.52 Mbps | **0.34** | 76 MB | 0.53 + 0.05 | 0 / 2.3 M |
+
+- **Joining:** 50 viewers joined and received media in 2.6 s; 100 in 5.1 s (50 ms ramp).
+- **Publisher health:** libobs held 30 fps with 0 lagged frames throughout.
+
+**Compared with LiveKit (S2, same machine and method)**
+
+| | LiveKit | Galene |
+|---|---|---|
+| Server CPU, 720p, 50 / 100 viewers | 0.58 / 0.93 cores | **0.26 / 0.57 cores** |
+| Server memory, 50 / 100 viewers | 298 / 487 MB | **47 / 74 MB** |
+| Hall upload, 720p, 50 viewers | 88.5 Mbps | 89.2 Mbps (same bitrate) |
+
+- **Galene needs about half the CPU and a sixth of the memory of LiveKit for the same audience.** The hall-PC budget for 50 viewers at 720p becomes publisher ~0.8 + Galene ~0.3 ≈ **1.1 cores** (S2: ~1.4).
+- **Upload is still the limit, and it's set by the bitrate, not the SFU:** ~90 Mbps for 50 at 720p, ~26 Mbps at 360p, ~3 Mbps audio-only. S2's conclusions carry over: default to 360p for hall-direct mode, 720p only on fast lines. Without community relays (out of scope for the Galene variant), weak lines must lower quality or offer audio-only.
+- **Caveats:**
+  - Loopback has no loss, so no retransmission overhead and no congestion response.
+  - One layer only: viewers on weak links can't drop to a lower layer unless the publisher sends Galene's two-layer simulcast (not yet implemented in whippub).
+  - The publisher's libobs CPU includes decoding the clip.
