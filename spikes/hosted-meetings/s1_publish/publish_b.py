@@ -18,7 +18,6 @@ import asyncio
 import json
 import os
 import queue
-import threading
 import time
 from pathlib import Path
 

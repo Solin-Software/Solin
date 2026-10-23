@@ -143,7 +143,7 @@ SECTIONS = (
             Setting("hallFeed", QT_TRANSLATE_NOOP("SettingsWidget", "Hall audio feed"), "select", options="hallFeedOptions", visible_when="solinHosting",
                     description=QT_TRANSLATE_NOOP("SettingsWidget", "The input that carries the hall's sound from the mixer to attendees.")),
             Setting("hallFeedDelay", QT_TRANSLATE_NOOP("SettingsWidget", "Hall feed delay (ms)"), "input", visible_when="solinHosting",
-                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Delays the hall's sound to match the camera's picture (about 100 ms for USB webcams).")),
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Delays the hall's sound so it matches the video (about 100 ms with USB webcams).")),
             Setting("remoteAudioDevice", QT_TRANSLATE_NOOP("SettingsWidget", "Commenters' audio output"), "select", options="remoteAudioOptions", visible_when="solinHosting",
                     description=QT_TRANSLATE_NOOP("SettingsWidget", "The output connected to the mixer channel for remote audio (as with Zoom).")),
             Setting("webPort", QT_TRANSLATE_NOOP("SettingsWidget", "Local port"), "input", visible_when="solinHosting"),

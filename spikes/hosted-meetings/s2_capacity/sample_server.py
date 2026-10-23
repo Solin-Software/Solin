@@ -44,7 +44,8 @@ def main() -> None:
         time.sleep(a.interval)
         now, t = counters(), time.monotonic()
         dt = t - prev_t
-        rate = lambda *parts: sum(v - prev.get(k, 0) for k, v in now.items() if all(x in k for x in parts)) / dt  # noqa: E731
+        def rate(*parts, now=now, prev=prev, dt=dt):
+            return sum(v - prev.get(k, 0) for k, v in now.items() if all(x in k for x in parts)) / dt
         rec = {"label": a.label, "t": round(t - start), "server_cpu_cores": round(proc.cpu_percent(None) / 100, 2),
                "server_rss_mb": proc.memory_info().rss // 1_000_000,
                "out_mbps": round(rate("livekit_packet_bytes", 'direction="outgoing"') * 8 / 1e6, 2),

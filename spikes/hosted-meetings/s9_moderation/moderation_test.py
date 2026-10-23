@@ -248,7 +248,7 @@ async def main() -> None:
     try:
         await asyncio.wait_for(h.room.local_participant.set_attributes({"hand": ts}), 4)
         ok_lobby_hand = await until(lambda: hall.saw("attrs", "att-hidden"), 3)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         ok_lobby_hand = False
     check("T7b participant with can_update_metadata can set own attributes", ok_lobby_hand, f"seen by hall={ok_lobby_hand}")
 
@@ -307,8 +307,8 @@ async def main() -> None:
     for c in (hall, a, h, b, b2, b3):
         try:
             await c.room.disconnect()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:  # noqa: BLE001 - spike teardown
+            continue
     await lk.aclose()
     passed = sum(r["ok"] for r in results)
     print(f"\n{passed}/{len(results)} checks passed", flush=True)

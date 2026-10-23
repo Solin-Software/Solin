@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import threading
@@ -19,6 +20,11 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(importlib.util.find_spec("pylibobs") is None or sys.platform == "win32",
                        reason="Native libobs on a POSIX host required"),
+    # Hosted CI runners boot the sidecar without a rendering desktop session, so the
+    # program never produces frames there; the encoder path itself is covered in CI by
+    # test_native_hosted_meeting_output.py. Run locally or with SOLIN_TEST_NATIVE_SIDECAR=1.
+    pytest.mark.skipif(bool(os.environ.get("CI")) and not os.environ.get("SOLIN_TEST_NATIVE_SIDECAR"),
+                       reason="needs a desktop session for the sidecar's program output"),
 ]
 
 _BRIDGE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_galene_bridge.py"

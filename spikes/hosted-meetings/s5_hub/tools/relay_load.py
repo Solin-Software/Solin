@@ -63,7 +63,7 @@ class Attendee:
                         else:
                             ab += r.inbound.bytes_received
             except Exception:  # noqa: BLE001 - track may be gone
-                pass
+                continue
         return vb, vf, ab
 
 
@@ -138,7 +138,7 @@ async def main() -> None:
         for x in attendees:
             cur = await x.counters()
             pv = prev[id(x)]
-            dvb, dvf, dab = (c - q for c, q in zip(cur, pv))
+            dvb, dvf, dab = (c - q for c, q in zip(cur, pv, strict=False))
             recv_v += dvf > 0
             recv_a += dab > 0
             v_kbps += dvb * 8 / a.interval / 1000

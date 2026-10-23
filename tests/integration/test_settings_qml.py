@@ -104,7 +104,7 @@ class RecordingDomain(SettingsDomain):
 
 
 def _domain_states():
-    states = {name: {} for name in ("general", "integrations", "remote", "about")}
+    states = {name: {} for name in ("general", "integrations", "meetingHosting", "remote", "about")}
     for section in SECTIONS:
         for group in _catalogue_groups(section.groups):
             state = states[group.domain]
@@ -246,6 +246,7 @@ def create_view(request):
             context_properties={"settingsGeneral": domains["general"],
                                 "settingsIntegrations": domains["integrations"],
                                 "settingsRemote": domains["remote"],
+                                "settingsMeetingHosting": domains["meetingHosting"],
                                 "settingsAbout": domains["about"],
                                 "settingsNavigation": navigation},
             image_providers={"settingsicons": SvgIconProvider(icons, default_icon="settings")},
