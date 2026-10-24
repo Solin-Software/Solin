@@ -367,3 +367,27 @@ def test_failed_connection_reports_error_and_can_retry_without_losing_healthy_ta
     healthy.render.assert_called_once()
     assert backend.producers.count(healthy) == 1
     manager.shutdown()
+
+
+def test_unchanged_targets_preserve_native_callback_and_owned_producer(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    tokens = tuple(backend.callbacks)
+    manager.set_targets([_target()])
+    assert tuple(backend.callbacks) == tokens
+    backend.runtime.ob.remove_main_render_callback.assert_not_called()
+    assert len(backend.producers) == 1
+    manager.shutdown()
+
+
+def test_withdrawal_after_retirement_releases_the_failed_identity(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    backend.producers[0].render.side_effect = ConnectionError("window closed")
+    next(iter(backend.callbacks.values()))()
+    manager.poll()
+    manager.set_targets([])
+    manager.set_targets([_target()])
+    assert len(manager.render_targets) == 1
+    assert len(backend.producers) == 2
+    manager.shutdown()

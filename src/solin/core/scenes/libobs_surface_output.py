@@ -41,6 +41,11 @@ class LibobsSurfaceOutput:
                   if target.get("visible", True)}
         failures: list[str] = []
         with self._guard:
+            if not self._retired and not self._failed_endpoints and len(self._outputs) == len(wanted) and all(
+                endpoint in self._outputs and self._outputs[endpoint][1:] == (target, size)
+                for endpoint, target in wanted.items()
+            ):
+                return
             # Removal synchronizes with the native render callback before any
             # producer/borrowed source is released. Never remove under a callback.
             self._remove_callback()
