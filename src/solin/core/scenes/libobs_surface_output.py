@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from typing import Any, Callable
 
 log = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ class LibobsSurfaceOutput:
         self._failed_endpoints: set[str] = set()
         self._closed = False
         self._callback: Any = None
-        self._next_frame_at = 0.0
 
     @property
     def render_targets(self) -> tuple[tuple[str, str], ...]:
@@ -41,6 +39,7 @@ class LibobsSurfaceOutput:
         size = self._runtime.video.width, self._runtime.video.height
         wanted = {str(target["surface_endpoint"]): target for target in targets
                   if target.get("visible", True)}
+        failures: list[str] = []
         with self._guard:
             # Removal synchronizes with the native render callback before any
             # producer/borrowed source is released. Never remove under a callback.
@@ -65,7 +64,7 @@ class LibobsSurfaceOutput:
                     try:
                         producer = current[0] if current is not None else SurfaceProducer(endpoint, *size)
                     except Exception as error:  # noqa: BLE001 - each receiving window is independent
-                        self._failed_endpoints.add(endpoint)
+                        failures.append(str(target.get("target_id", endpoint)))
                         if isinstance(error, ConnectionError):
                             log.debug("Surface receiver unavailable (%s)", target.get("target_id"))
                         else:
@@ -76,6 +75,12 @@ class LibobsSurfaceOutput:
                 if self._outputs:
                     self._callback = self._runtime.ob.add_main_render_callback(self._render)
 
+        if failures:
+            # Healthy windows remain active, but the control request must not
+            # acknowledge failed targets as applied. Unlike a disconnected
+            # established receiver, a failed connection may be retried.
+            raise RuntimeError("Cannot connect surface targets: " + ", ".join(failures))
+
     def _remove_callback(self) -> None:
         callback, self._callback = self._callback, None
         if callback is not None:
@@ -84,11 +89,11 @@ class LibobsSurfaceOutput:
     def _render(self, *_canvas: int) -> None:
         if not self._outputs:
             return
-        now = time.monotonic()
-        if now < self._next_frame_at or not self._guard.acquire(blocking=False):
+        # libobs invokes this callback once per video frame. A second wall-clock
+        # limiter drops valid frames when native scheduling has slight jitter.
+        if not self._guard.acquire(blocking=False):
             return
         try:
-            self._next_frame_at = now + 1.0 / max(1, self._runtime.video.fps)
             for endpoint, (producer, target, size) in tuple(self._outputs.items()):
                 try:
                     source = self._resolve(target)

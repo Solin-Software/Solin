@@ -43,9 +43,6 @@ def backend(monkeypatch):
     runtime = SimpleNamespace(video=SimpleNamespace(width=1280, height=720, fps=30),
                               ob=SimpleNamespace(add_main_render_callback=Mock(side_effect=add),
                                                  remove_main_render_callback=Mock(side_effect=remove)))
-    # Avoid wall-clock sleeps and make every requested render eligible.
-    counter = iter(range(100, 10000))
-    monkeypatch.setattr("solin.core.scenes.libobs_surface_output.time.monotonic", lambda: next(counter))
     return SimpleNamespace(runtime=runtime, producers=producers, callbacks=callbacks, factory=native.SurfaceProducer)
 
 
@@ -325,7 +322,8 @@ def test_unavailable_endpoint_does_not_prevent_healthy_window_connection(backend
         return create(endpoint, width, height)
 
     backend.factory.side_effect = connect
-    manager.set_targets([_target("unavailable"), _target("healthy")])
+    with pytest.raises(RuntimeError, match="unavailable"):
+        manager.set_targets([_target("unavailable"), _target("healthy")])
     assert len(backend.producers) == 1
     assert backend.producers[0].endpoint.endswith(".healthy")
     next(iter(backend.callbacks.values()))()
@@ -333,12 +331,39 @@ def test_unavailable_endpoint_does_not_prevent_healthy_window_connection(backend
     manager.shutdown()
 
 
-def test_render_cadence_limits_gpu_work_without_polling_consumer(backend, monkeypatch):
-    monkeypatch.setattr("solin.core.scenes.libobs_surface_output.time.monotonic", lambda: 100.0)
+def test_native_render_cadence_does_not_drop_frames_under_clock_jitter(backend, monkeypatch):
+    import time
+    ticks = iter(100 + i / 30 + (0.0001 if i % 2 else 0) for i in range(300))
+    monkeypatch.setattr(time, "monotonic", lambda: next(ticks))
     manager = _manager(backend)
     manager.set_targets([_target()])
     render = next(iter(backend.callbacks.values()))
-    render()
-    render()
-    backend.producers[0].render.assert_called_once()
+    for _ in range(300):
+        render()
+    assert backend.producers[0].render.call_count == 300
+    manager.shutdown()
+
+
+def test_failed_connection_reports_error_and_can_retry_without_losing_healthy_target(backend):
+    manager = _manager(backend)
+    create = backend.factory.side_effect
+    failed = True
+
+    def connect(endpoint, width, height):
+        if endpoint.endswith(".unavailable") and failed:
+            raise RuntimeError("native allocation failed")
+        return create(endpoint, width, height)
+
+    backend.factory.side_effect = connect
+    targets = [_target("unavailable"), _target("healthy")]
+    with pytest.raises(RuntimeError, match="unavailable"):
+        manager.set_targets(targets)
+    assert len(manager.render_targets) == 1
+    healthy = backend.producers[0]
+    failed = False
+    manager.set_targets(targets)
+    assert len(manager.render_targets) == 2
+    next(iter(backend.callbacks.values()))()
+    healthy.render.assert_called_once()
+    assert backend.producers.count(healthy) == 1
     manager.shutdown()

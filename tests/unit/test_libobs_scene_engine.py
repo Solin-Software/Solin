@@ -8,6 +8,8 @@ the full handshake end-to-end.
 
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 import io
 import os
 import sys
@@ -1150,6 +1152,21 @@ def test_engine_set_window_targets_routes_to_the_window_output_and_acks():
     assert response is not None and response.message_type == "ack"
     assert response.payload["applied"] is True
     assert recorder.calls == [[_window_target(101)]]
+
+
+def test_engine_failed_window_connection_is_not_acknowledged_as_applied():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    recorder = _RecordingWindowOutput()
+    engine._window_output = recorder
+    recorder.set_targets = Mock(side_effect=RuntimeError("Cannot connect surface targets: projection"))
+
+    response = engine.handle(_request("set_window_targets", {"window_targets": [_window_target(101)]}))
+
+    assert response is not None and response.message_type == "ack"
+    assert response.payload["applied"] is False
+    assert response.payload["error_code"] == "window_targets_failed"
 
 
 def test_engine_set_window_targets_without_runtime_acks_not_applied():
