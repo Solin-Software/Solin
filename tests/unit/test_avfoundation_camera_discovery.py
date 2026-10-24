@@ -54,6 +54,81 @@ def native(monkeypatch):
     return state
 
 
+@pytest.fixture
+def legacy_capture(monkeypatch):
+    from solin.core.media.camera_source import camera_source_spec
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def capture(**changes):
+        request = dict(width=1920, height=1080, fps_numerator=30, fps_denominator=1,
+                       media_type="video/x-raw", pixel_format="420v")
+        request.update(changes)
+        return camera_source_spec("native-ID", **request)
+
+    return capture
+
+
+@pytest.mark.parametrize("fps", [Fraction(25), Fraction(30), Fraction(27), Fraction(30000, 1001)])
+def test_saved_mode_resolves_unique_native_format_without_changing_rate(native, legacy_capture, fps):
+    chosen = native_format([bounds(25, 30)])
+    native.devices = [
+        device([native_format([bounds(25, 30)], "ITU_R_601_4")], "another-device"),
+        device([
+            native_format([bounds(25, 30)], width=1280, height=720),
+            native_format([bounds(50, 60)], "ITU_R_601_4"),
+            chosen, chosen,  # Duplicate native metadata represents one identity.
+        ]),
+    ]
+    kind, settings = legacy_capture(fps_numerator=fps.numerator, fps_denominator=fps.denominator)
+    expected = metadata.discover_avfoundation_cameras(LocalCameraModeQuery("native-ID", 1920, 1080))[0]
+    identity = next(item.native_format for item in expected.frame_rate_ranges
+                    if item.supports(fps.numerator, fps.denominator))
+    assert kind == "macos-avcapture"
+    assert settings["device"] == "native-ID"
+    assert settings["supported_format"] == identity
+    assert settings["use_preset"] is False
+    assert settings["frame_rate"] == {"numerator": fps.numerator, "denominator": fps.denominator}
+
+
+@pytest.mark.parametrize("changes", [
+    {"width": 1280, "height": 720}, {"fps_numerator": 31},
+    {"pixel_format": "2vuy"}, {"media_type": "image/jpeg"},
+])
+def test_saved_mode_never_substitutes_an_unrelated_advertised_mode(native, legacy_capture, changes):
+    native.devices = [device([native_format([bounds(25, 30)])])]
+    with pytest.raises(metadata.AVFoundationDiscoveryError) as error:
+        legacy_capture(**changes)
+    assert error.value.error_code in {"format_unavailable", "no_formats"}
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("difference", ["colorspace", "rate_ranges"])
+def test_saved_mode_rejects_ambiguous_native_identities_regardless_of_order(
+    native, legacy_capture, reverse, difference,
+):
+    other = (native_format([bounds(25, 30)], "ITU_R_601_4") if difference == "colorspace"
+             else native_format([bounds(15, 30)]))
+    formats = [native_format([bounds(25, 30)]),
+               other]
+    native.devices = [device(list(reversed(formats)) if reverse else formats)]
+    with pytest.raises(metadata.AVFoundationDiscoveryError) as error:
+        legacy_capture()
+    assert error.value.error_code == "ambiguous_format"
+
+
+@pytest.mark.parametrize("failure", ["device_unavailable", "permission_denied", "capability_query_failed"])
+def test_saved_mode_preserves_metadata_failure_instead_of_falling_back(native, legacy_capture, failure):
+    if failure == "permission_denied":
+        native.status = 2
+        native.devices = [device([native_format([bounds(30, 30)])])]
+    elif failure == "capability_query_failed":
+        native.devices = [device([NS()])]
+    with pytest.raises(metadata.AVFoundationDiscoveryError) as error:
+        legacy_capture()
+    assert error.value.error_code == failure
+
+
 def test_native_identity_preserves_colorspace_ranges_and_fractional_rates(native):
     native.devices = [device([
         native_format([bounds(25, 30), bounds(15, 20)]),

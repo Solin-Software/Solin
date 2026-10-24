@@ -1,4 +1,4 @@
-"""OBS 32.1.2 capture plugin contracts, without hardware."""
+"""OBS capture plugin contracts, without hardware."""
 from __future__ import annotations
 
 import base64
@@ -74,6 +74,28 @@ def test_mac_exact_mode_requires_matching_advertised_native_identity(monkeypatch
     with pytest.raises(ValueError, match="native format identity"):
         camera_source_spec("native-device", width=1920, height=1080, fps_numerator=30,
             media_type="video/x-raw", pixel_format="2vuy", native_format=native)
+
+
+@pytest.mark.parametrize("mode", ["automatic", "native", "invalid_native"])
+def test_only_saved_modes_without_native_identity_start_metadata_resolution(monkeypatch, mode):
+    from solin.core.scenes import avfoundation_camera_discovery as metadata
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(metadata, "resolve_avfoundation_format",
+                        lambda *_: pytest.fail("unexpected legacy mode resolution"))
+    if mode == "automatic":
+        _, settings = camera_source_spec("native-device")
+        assert settings["use_preset"] is True
+        return
+    request = dict(width=1920, height=1080, fps_numerator=30,
+                   media_type="video/x-raw", pixel_format="420v")
+    if mode == "invalid_native":
+        with pytest.raises(ValueError, match="native format identity"):
+            camera_source_spec("native-device", **request, native_format="invalid")
+    else:
+        native = base64.b64encode(b"1920x1080 30.000-30.000 2 875704438").decode()
+        _, settings = camera_source_spec("native-device", **request, native_format=native)
+        assert settings["supported_format"] == native
 
 
 @pytest.mark.parametrize("partial", [

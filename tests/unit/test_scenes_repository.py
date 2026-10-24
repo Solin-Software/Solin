@@ -34,6 +34,62 @@ from solin.core.scenes.repository import (
 from solin.core.scenes.resources import SceneResourceCatalog, UnsupportedSceneResourceSchemaError
 
 
+@pytest.mark.parametrize("container", ["document", "resources"])
+def test_saved_manual_macos_camera_resolves_native_identity_after_migration(monkeypatch, container):
+    import base64
+    import sys
+
+    from solin.core.media.camera_source import camera_source_spec
+    from solin.core.scenes import avfoundation_camera_discovery as metadata
+    from solin.core.scenes.engine import (
+        LocalCameraDevice, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat,
+    )
+    from solin.core.scenes.model import CameraMediaType
+
+    camera = SourceDefinition(
+        id="saved-camera", name="Camera", kind=SourceKind.LOCAL_CAMERA,
+        configuration=LocalCameraConfig(
+            "native-ID", 1920, 1080, 30, 1, CameraMediaType.RAW, "420v",
+        ),
+    )
+    if container == "document":
+        record = replace(_document(), sources=(*_document().sources, camera)).to_record()
+        record["schema_version"] = 13
+        sources = record["sources"]
+        load = SceneDocument.from_record
+    else:
+        record = SceneResourceCatalog(revision=0, cameras=(camera,)).to_record()
+        record["schema_version"] = 2
+        sources = record["cameras"]
+        load = SceneResourceCatalog.from_record
+    saved = next(source for source in sources if source["id"] == camera.id)
+    del saved["configuration"]["native_format"]
+    loaded = load(record)
+    # Saving again without editing the mode must remain usable too.
+    loaded = load(loaded.to_record())
+    cameras = loaded.sources if isinstance(loaded, SceneDocument) else loaded.cameras
+    config = next(source.configuration for source in cameras if source.id == camera.id)
+    assert config == camera.configuration
+
+    native = base64.b64encode(b"1920x1080 30.000-30.000 2 875704438").decode()
+    mode = LocalVideoFormat(CameraMediaType.RAW, "420v", 1920, 1080, 30, 1, native)
+    monkeypatch.setattr(metadata, "discover_avfoundation_cameras", lambda query: [
+        LocalCameraDevice(query.device_id, "Camera", False, (mode,),
+                          LocalCameraProbe(LocalCameraProbeStatus.READY, "avfoundation")),
+    ])
+    monkeypatch.setattr(sys, "platform", "darwin")
+    kind, settings = camera_source_spec(
+        config.device_id, width=config.width, height=config.height,
+        fps_numerator=config.fps_numerator, fps_denominator=config.fps_denominator,
+        media_type=config.media_type.value, pixel_format=config.pixel_format,
+        native_format=config.native_format,
+    )
+    assert kind == "macos-avcapture"
+    assert settings["supported_format"] == native
+    assert settings["frame_rate"] == {"numerator": 30, "denominator": 1}
+    assert settings["use_preset"] is False
+
+
 def _document() -> SceneDocument:
     return create_default_scene_document(
         SceneSeedNames(

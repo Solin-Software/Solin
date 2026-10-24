@@ -48,6 +48,8 @@ def camera_source_spec(
     an AVFoundation subtype plus its native format identity, and a V4L2 FourCC on Linux.
     Every controlled mode key is present so ``Source.update`` can reset a
     previous manual selection without inheriting stale user settings.
+    Saved macOS modes without a native identity are resolved from device
+    metadata; missing or ambiguous matches never select a different mode.
     """
     components = (width, height, fps_numerator, fps_denominator)
     if any(
@@ -77,15 +79,15 @@ def camera_source_spec(
         if not automatic:
             if not pixel_format.isascii() or not pixel_format.isdecimal():
                 raise ValueError("DirectShow camera format must be a native enum value")
-            native_format = int(pixel_format)
-            if not 1 < native_format <= 0x7FFFFFFF:
+            video_format = int(pixel_format)
+            if not 1 < video_format <= 0x7FFFFFFF:
                 raise ValueError("DirectShow camera format must be explicit")
             # Round rational seconds to the nearest DirectShow 100 ns unit.
             interval = (10_000_000 * fps_denominator + fps_numerator // 2) // fps_numerator
             if interval <= 0:
                 raise ValueError("Camera frame interval is below DirectShow precision")
             settings.update(res_type=1, resolution=f"{width}x{height}",
-                            frame_interval=interval, video_format=native_format)
+                            frame_interval=interval, video_format=video_format)
         return "dshow_input", settings
     if sys.platform == "darwin":
         settings = {
@@ -94,6 +96,17 @@ def camera_source_spec(
             "frame_rate": {"numerator": 0, "denominator": 1},
         }
         if not automatic:
+            if not native_format:
+                if len(pixel_format) != 4 or not pixel_format.isascii():
+                    raise ValueError("AVFoundation camera format must be a native four-character code")
+                from solin.core.scenes.avfoundation_camera_discovery import resolve_avfoundation_format
+                from solin.core.scenes.engine import LocalVideoFormat
+                from solin.core.scenes.model import CameraMediaType
+
+                native_format = resolve_avfoundation_format(device_path, LocalVideoFormat(
+                    CameraMediaType(media_type), pixel_format, width, height,
+                    fps_numerator, fps_denominator,
+                ))
             try:
                 decoded = base64.b64decode(native_format, validate=True).decode("ascii")
                 size, ranges, colorspace, subtype = decoded.split(" ")

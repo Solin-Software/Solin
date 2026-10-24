@@ -154,3 +154,37 @@ def discover_avfoundation_cameras(query: LocalCameraModeQuery | None = None) -> 
                 raise AVFoundationDiscoveryError("device_unavailable")
         return [_device_metadata(device, core_media, permission,
                 None if query is None else (query.width, query.height)) for device in devices]
+
+
+def resolve_avfoundation_format(device_id: str, mode: LocalVideoFormat) -> str:
+    """Adapt a saved mode lacking the native identity using current metadata.
+
+    Older records cannot distinguish colorspaces or native rate-range sets.
+    Only a unique advertised identity is safe; enumeration order is not a
+    preference and a different mode must never stand in for the saved request.
+    This reads metadata without opening or configuring a capture session.
+    """
+    device, = discover_avfoundation_cameras(LocalCameraModeQuery(device_id, mode.width, mode.height))
+    if device.probe.error_code:
+        raise AVFoundationDiscoveryError(device.probe.error_code)
+
+    def matches(item: LocalVideoFormat | LocalVideoFrameRateRange) -> bool:
+        return (item.media_type, item.pixel_format, item.width, item.height) == (
+            mode.media_type, mode.pixel_format, mode.width, mode.height,
+        )
+
+    fps = Fraction(mode.fps_numerator, mode.fps_denominator)
+    identities = {
+        item.native_format for item in device.formats
+        if matches(item) and Fraction(item.fps_numerator, item.fps_denominator) == fps
+    }
+    identities.update(
+        item.native_format for item in device.frame_rate_ranges
+        if matches(item) and item.supports(mode.fps_numerator, mode.fps_denominator)
+    )
+    identities.discard("")
+    if not identities:
+        raise AVFoundationDiscoveryError("format_unavailable")
+    if len(identities) != 1:
+        raise AVFoundationDiscoveryError("ambiguous_format")
+    return identities.pop()
