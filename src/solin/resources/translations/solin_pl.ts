@@ -6501,6 +6501,10 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Nie udało się odczytać odpowiedzi kamery.</translation>
     </message>
+    <message>
+        <source>Remote participant %1</source>
+        <translation>Uczestnik zdalny %1</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7763,6 +7767,18 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Znajdź kamery…</translation>
+    </message>
+    <message>
+        <source>Remote participant 1</source>
+        <translation>Uczestnik zdalny 1</translation>
+    </message>
+    <message>
+        <source>Remote participant 2</source>
+        <translation>Uczestnik zdalny 2</translation>
+    </message>
+    <message>
+        <source>Two remote participants</source>
+        <translation>Dwóch uczestników zdalnych</translation>
     </message>
 </context>
 <context>

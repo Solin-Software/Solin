@@ -77,7 +77,7 @@ class SourceKind(StrEnum):
     IMAGE = "image"
     COLOR = "color"
     SCENE_REFERENCE = "scene_reference"
-
+    REMOTE_PARTICIPANT = "remote_participant"
 
 
 class CameraMediaType(StrEnum):
@@ -1108,6 +1108,45 @@ class SceneReferenceConfig:
         )
 
 
+# Slots of solin.core.hosted_meeting.participant_video (kept here so the model has
+# no dependency on the meeting code).
+REMOTE_PARTICIPANT_SLOTS = 2
+
+
+@dataclass(frozen=True, slots=True)
+class RemoteParticipantConfig:
+    """A remote part-holder's camera in a hosted meeting, by video slot (1-based)."""
+
+    slot: int = 1
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.slot, bool)
+            or not isinstance(self.slot, int)
+            or not 1 <= self.slot <= REMOTE_PARTICIPANT_SLOTS
+        ):
+            raise SceneValidationError("Invalid remote participant slot")
+
+    def to_record(self) -> dict[str, object]:
+        return {"slot": self.slot}
+
+    @classmethod
+    def from_record(cls, raw: object) -> RemoteParticipantConfig:
+        data = _mapping(
+            raw,
+            field_name="source.configuration",
+            allowed_keys={"slot"},
+        )
+        return cls(
+            slot=_integer(
+                data.get("slot", 1),
+                field_name="source.configuration.slot",
+                minimum=1,
+                maximum=REMOTE_PARTICIPANT_SLOTS,
+            )
+        )
+
+
 SourceConfig: TypeAlias = (
     SolinContentConfig
     | LocalCameraConfig
@@ -1115,6 +1154,7 @@ SourceConfig: TypeAlias = (
     | ImageSourceConfig
     | ColorSourceConfig
     | SceneReferenceConfig
+    | RemoteParticipantConfig
 )
 
 _CONFIG_BY_SOURCE_KIND = {
@@ -1124,6 +1164,7 @@ _CONFIG_BY_SOURCE_KIND = {
     SourceKind.IMAGE: ImageSourceConfig,
     SourceKind.COLOR: ColorSourceConfig,
     SourceKind.SCENE_REFERENCE: SceneReferenceConfig,
+    SourceKind.REMOTE_PARTICIPANT: RemoteParticipantConfig,
 }
 
 

@@ -6468,6 +6468,10 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Kamerans svar kunde inte läsas.</translation>
     </message>
+    <message>
+        <source>Remote participant %1</source>
+        <translation>Fjärrdeltagare %1</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7730,6 +7734,18 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Hitta kameror…</translation>
+    </message>
+    <message>
+        <source>Remote participant 1</source>
+        <translation>Fjärrdeltagare 1</translation>
+    </message>
+    <message>
+        <source>Remote participant 2</source>
+        <translation>Fjärrdeltagare 2</translation>
+    </message>
+    <message>
+        <source>Two remote participants</source>
+        <translation>Två fjärrdeltagare</translation>
     </message>
 </context>
 <context>

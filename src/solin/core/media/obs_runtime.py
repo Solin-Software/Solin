@@ -65,6 +65,10 @@ _DEFAULT_CANVAS = (1920, 1080)
 _DEFAULT_FPS = 30
 
 
+def _participant_key(slot: int) -> str:
+    return f"solin-meeting-video-{slot}"
+
+
 class ObsRuntimeError(RuntimeError):
     """Raised when the libobs runtime cannot be started or is unavailable."""
 
@@ -510,6 +514,33 @@ class ObsRuntime:
                 return None
             self._rtsp_sources[camera_id] = (source, dict(settings))
             return source
+
+    def participant_video_source(self, slot: int) -> Any:
+        """The ONE shared source showing remote part-holder video ``slot``.
+
+        Shared like an IP camera's: the slot is one RTP stream on a fixed port, and
+        only one reader can bind it.
+        """
+        from solin.core.hosted_meeting import participant_video
+
+        try:
+            sdp = participant_video.ensure_sdp_file(slot)
+        except (OSError, ValueError):
+            log.warning("Could not prepare remote participant video slot %s", slot, exc_info=True)
+            return None
+        return self.rtsp_source(_participant_key(slot), str(sdp), participant_video.source_settings(sdp))
+
+    def stop_participant_video(self, slot: int) -> None:
+        """Clear a slot whose part-holder left, instead of freezing on the last
+        frame. ffmpeg_source starts listening again on its own a second later."""
+        with self._lock:
+            existing = self._rtsp_sources.get(_participant_key(slot))
+        if existing is None:
+            return
+        try:
+            existing[0].media_stop()
+        except Exception:  # noqa: BLE001 - plugin boundary
+            log.debug("Could not clear remote participant video slot %s", slot, exc_info=True)
 
     def _release_rtsp_sources(self) -> None:
         for source, _settings in self._rtsp_sources.values():

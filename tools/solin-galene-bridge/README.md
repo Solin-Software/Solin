@@ -44,12 +44,13 @@ stdout events:
 {"event":"keyframe_request"}                // a receiver sent PLI/FIR (at most 1/s)
 ```
 
-### `receive` — remote participants' audio on a hall output
+### `receive` — remote participants' audio on a hall output, part-holders' video to local slots
 
 ```
 solin-galene-bridge receive --ws wss://HOST/ws --group NAME --token JWT \
     [--token-file PATH] [--ignore-user hall-program] [--device ID|NAME] [--gain 1.0] \
-    [--channels 2] [--period-ms 10] [--periods 3] [--jitter-ms 40] [--max-delay-ms 200]
+    [--channels 2] [--period-ms 10] [--periods 3] [--jitter-ms 40] [--max-delay-ms 200] \
+    [--video-ports 47110,47112]
 ```
 
 Joins the group over Galene's WebSocket protocol with the token
@@ -68,12 +69,23 @@ from Galene's `joined` message; local ICE candidates are trickled.
 - `--device` takes an `id` from `devices` or an exact device name; default is the
   system default device.
 - The WebSocket is reconnected with backoff 1 s → 10 s.
+- Video (only with `--video-ports`): the request becomes `{"": ["audio", "video"]}` and
+  each remote H.264 track takes a free *slot*, one per port, in order. Its RTP is
+  forwarded undecoded to `127.0.0.1:<port>`, rewritten to payload type 96, one fixed
+  SSRC per slot and continuous sequence numbers and timestamps, so a new part-holder in
+  a slot is just a new keyframe for the reader (Solin's libobs `ffmpeg_source` on an SDP
+  file, see `solin.core.hosted_meeting.participant_video`). A user who comes back gets
+  their previous slot when it is free. Keyframes (PLI) are requested at 0, 0.5, 1.5 and
+  4 s after a slot starts or resumes from a 2 s pause, because `ffmpeg_source` drops the
+  first keyframe after it opens, and then every 10 s, for a reader that reopens. Tracks
+  beyond the last slot are not forwarded.
 
 stdout events:
 
 ```json
 {"event":"state","state":"connected"}       // connecting | connected | reconnecting | failed
 {"event":"stream","id":"…","user":"Ana Souza","state":"started"}   // or "stopped"
+{"event":"video","slot":1,"id":"…","user":"Ana Souza","state":"started"}   // or "stopped"
 ```
 
 ### `devices`

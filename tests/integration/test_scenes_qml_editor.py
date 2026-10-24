@@ -1157,14 +1157,19 @@ def test_new_local_camera_requires_a_physical_device_and_preserves_legacy_edit(
     assert workspace.configured_cameras[0].configuration.device_id == ""
 
 
-def test_source_menu_has_four_stable_choices(scene_editor_factory, tmp_path) -> None:
+def test_source_menu_has_stable_choices(scene_editor_factory, tmp_path) -> None:
     _workspace, _controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
     root = widget._qml.rootObject()
     menu = root.findChild(QObject, "scenesAddSourceMenu")
-    assert menu.property("count") == 4
+    # Camera, network camera, Solin Content, scene, a separator, and the hosted
+    # meeting's remote participants (1, 2, both).
+    assert menu.property("count") == 8
     assert [root.findChild(QObject, name).property("text") for name in (
         "scenesAddCameraMenuItem", "scenesAddNetworkCameraMenuItem", "scenesAddSceneMenuItem",
-    )] == ["Camera", "Network camera", "Scene"]
+        "scenesAddRemoteParticipant1MenuItem", "scenesAddRemoteParticipant2MenuItem",
+        "scenesAddRemoteParticipantPairMenuItem",
+    )] == ["Camera", "Network camera", "Scene", "Remote participant 1", "Remote participant 2",
+           "Two remote participants"]
     assert root.findChild(QObject, "scenesRenameLayerMenuItem").property("text") == "Rename…"
     assert root.findChild(QObject, "scenesConfigureCameraMenuItem").property("text") == "Configure camera…"
 

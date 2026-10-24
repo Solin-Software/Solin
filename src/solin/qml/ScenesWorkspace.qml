@@ -982,6 +982,25 @@ Item {
             text: qsTr("Scene")
             onTriggered: sceneReferenceDialog.openForScene()
         }
+        ScenesMenuSeparator { theme: root.theme }
+        ScenesMenuItem {
+            objectName: "scenesAddRemoteParticipant1MenuItem"
+            theme: root.theme
+            text: qsTr("Remote participant 1")
+            onTriggered: root.bridge.addRemoteParticipant(1)
+        }
+        ScenesMenuItem {
+            objectName: "scenesAddRemoteParticipant2MenuItem"
+            theme: root.theme
+            text: qsTr("Remote participant 2")
+            onTriggered: root.bridge.addRemoteParticipant(2)
+        }
+        ScenesMenuItem {
+            objectName: "scenesAddRemoteParticipantPairMenuItem"
+            theme: root.theme
+            text: qsTr("Two remote participants")
+            onTriggered: root.bridge.addRemoteParticipantPair()
+        }
     }
 
     Menu {

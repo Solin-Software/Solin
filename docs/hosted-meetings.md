@@ -37,7 +37,8 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
  │ Operator client (Python, Galene `op`): admit, lock, call on/off, kick, hands  │
  │ libobs sidecar: "meeting" output — x264 (scenecut=0) + Opus, packets →        │
  │   solin-galene-bridge publish ──WHIP──► Galene                                │
- │ solin-galene-bridge receive ◄── Galene: commenter audio → hall output device  │
+ │ solin-galene-bridge receive ◄── Galene: commenter audio → hall output device, │
+ │   part-holders' H.264 → loopback RTP slots → "Remote participant" sources    │
  │ Qt: Live meeting page (console), Meeting hosting settings                     │
  └───────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -81,6 +82,14 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
 - `publish`: WHIP into Galene, capture-clock RTP timestamps and sender reports, NACK.
 - `receive`: joins as the hall, decodes the commenter's Opus with PLC, writes PCM.
 - The hall plays that PCM on the selected output device, the one wired to the mixer as the remote-audio channel (mix-minus, as with Zoom today).
+- `receive --video-ports`: also forwards remote part-holders' H.264, undecoded, to two loopback RTP **video slots** (below).
+
+**Remote part-holders' video** (`core/hosted_meeting/participant_video.py`):
+- Two slots on fixed loopback ports (47110, 47112). The bridge gives each part-holder's camera track the first free slot (a returning user gets their old slot back), and rewrites it to one continuous RTP stream per slot: payload type 96, a fixed SSRC, continuous sequence numbers and timestamps. A new part-holder in a slot is just a new keyframe for the reader.
+- Scenes show a slot with a **Remote participant** source (`SourceKind.REMOTE_PARTICIPANT`, slot 1 or 2): one shared libobs `ffmpeg_source` per slot, reading the slot's SDP file. The Scenes "+ Source" menu adds participant 1, participant 2, or both side by side. The operator makes a one-person and a two-person scene and routes them to the program and the hall projection like any scene.
+- Keyframes: `ffmpeg_source` drops the first keyframe after it opens, so the bridge sends PLI at 0, 0.5, 1.5 and 4 s after a slot starts (or resumes after 2 s of silence), then every 10 s.
+- Leaving: the bridge's `video … stopped` event goes through `HostedMeetingService` to the sidecar (`set_participant_video`), which stops the slot's source. The source clears instead of freezing on the last frame, and starts listening again a second later. The Live meeting page shows who holds each slot.
+- Attendees see part-holders inside the program. Their page shows only the program's video and plays every other stream (commenters, part-holders) as audio. Part-holders' cameras go up under the label `participant`, which attendees request with no tracks, so they never download them separately.
 
 **UI.**
 - **Live meeting page:** status, attendance, lobby admit / admit all, lock mics, raised-hands queue (call on / done / lower), rename / remove, share invitation (link + QR).
@@ -174,6 +183,6 @@ The second command prints the hall's connection code.
 - **Android, screen locked:** audio stops about 17 s after locking, because the browser drops the page's connection. It resumes on unlock. The fix is an installed app or Galene keeping media alive for a grace period.
 - **Lossy Wi-Fi:** Galene has no audio NACK or RED. The bridge sends Opus with in-band FEC, which helps only with isolated losses. A small Galene patch could add audio NACK.
 - **Program quality:** a single quality layer. Galene's two-layer simulcast is not sent yet.
-- **Remote part-holders on the hall monitors:** their video is not yet shown (a libobs source for a Galene stream is needed).
+- **Remote part-holders' video:** at most two at a time, and the layout is chosen by the operator's scene (no automatic one/two-person switch). A third camera is not forwarded.
 - **Not yet tested on real devices:** Safari/iOS and old Android.
 - **Not yet built or run:** TURN over TLS (5349) on the hub; Windows/macOS builds; CI.

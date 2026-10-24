@@ -633,6 +633,14 @@ class LibobsSceneGraph:
                 ),
                 False,  # runtime-owned, like the shared local capture sources
             )
+        if kind == "remote_participant":
+            # A remote part-holder's camera in a hosted meeting: shared per slot,
+            # since the slot is one RTP stream on a fixed port (participant_video).
+            try:
+                slot = int(config.get("slot", 1))
+            except (TypeError, ValueError):
+                return (None, False)
+            return (self._runtime.participant_video_source(slot), False)
         if kind == "scene_reference":
             target = str(config.get("target_scene_id", ""))
             scene = self._scenes.get(target)

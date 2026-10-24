@@ -6437,6 +6437,10 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera&apos;s reply could not be read.</source>
         <translation>无法读取摄像机的响应。</translation>
     </message>
+    <message>
+        <source>Remote participant %1</source>
+        <translation>远程参与者 %1</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7699,6 +7703,18 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Find cameras…</source>
         <translation>查找摄像机……</translation>
+    </message>
+    <message>
+        <source>Remote participant 1</source>
+        <translation>远程参与者 1</translation>
+    </message>
+    <message>
+        <source>Remote participant 2</source>
+        <translation>远程参与者 2</translation>
+    </message>
+    <message>
+        <source>Two remote participants</source>
+        <translation>两位远程参与者</translation>
     </message>
 </context>
 <context>

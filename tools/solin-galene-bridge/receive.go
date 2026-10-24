@@ -41,6 +41,7 @@ type receiveConfig struct {
 	periods    int
 	jitterMs   int
 	maxDelayMs int
+	videoPorts []int
 }
 
 func runReceive(args []string) error {
@@ -58,7 +59,13 @@ func runReceive(args []string) error {
 	fs.IntVar(&cfg.periods, "periods", 3, "audio device periods (buffer = periods x period)")
 	fs.IntVar(&cfg.jitterMs, "jitter-ms", 40, "audio buffered per stream before playback starts, ms")
 	fs.IntVar(&cfg.maxDelayMs, "max-delay-ms", 200, "per-stream buffer above which old audio is dropped, ms")
+	videoPorts := fs.String("video-ports", "", "comma-separated local UDP ports, one per video slot: part-holders' H.264 is forwarded there as RTP")
 	fs.Parse(args)
+	ports, err := parseVideoPorts(*videoPorts)
+	if err != nil {
+		return withCode(exitUsage, fmt.Errorf("receive: %w", err))
+	}
+	cfg.videoPorts = ports
 	switch {
 	case cfg.ws == "" || cfg.group == "":
 		return withCode(exitUsage, errors.New("receive: --ws and --group are required"))
@@ -87,6 +94,7 @@ func runReceive(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer r.close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	ctx, cancel := context.WithCancel(ctx)
@@ -174,6 +182,7 @@ type receiver struct {
 	mix    *Mixer
 	api    *webrtc.API
 	gain   float32
+	video  *videoSlots // nil without --video-ports
 
 	rtc atomic.Pointer[webrtc.Configuration]
 }
@@ -189,6 +198,26 @@ func newReceiver(cfg receiveConfig, events *emitter, mix *Mixer) (*receiver, err
 	}, webrtc.RTPCodecTypeAudio); err != nil {
 		return nil, err
 	}
+	if len(cfg.videoPorts) > 0 {
+		feedback := []webrtc.RTCPFeedback{{Type: "nack"}, {Type: "nack", Parameter: "pli"}, {Type: "ccm", Parameter: "fir"}}
+		for _, h := range []struct {
+			pt   webrtc.PayloadType
+			fmtp string
+		}{
+			{102, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"},
+			{108, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"},
+			{112, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f"},
+		} {
+			if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+				RTPCodecCapability: webrtc.RTPCodecCapability{
+					MimeType: webrtc.MimeTypeH264, ClockRate: 90000, SDPFmtpLine: h.fmtp, RTCPFeedback: feedback,
+				},
+				PayloadType: h.pt,
+			}, webrtc.RTPCodecTypeVideo); err != nil {
+				return nil, err
+			}
+		}
+	}
 	ir := &interceptor.Registry{}
 	if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
 		return nil, err
@@ -198,7 +227,20 @@ func newReceiver(cfg receiveConfig, events *emitter, mix *Mixer) (*receiver, err
 		api: webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir)),
 	}
 	r.rtc.Store(&webrtc.Configuration{})
+	if len(cfg.videoPorts) > 0 {
+		v, err := newVideoSlots(cfg.videoPorts, events)
+		if err != nil {
+			return nil, err
+		}
+		r.video = v
+	}
 	return r, nil
+}
+
+func (r *receiver) close() {
+	if r.video != nil {
+		r.video.close()
+	}
 }
 
 func (r *receiver) run(ctx context.Context) error {
@@ -321,7 +363,11 @@ func (r *receiver) session(ctx context.Context) (joined bool, err error) {
 				if m.Kind == "join" {
 					joined = true
 					log.Printf("joined %s as %q", r.cfg.group, m.username())
-					if err := conn.send(map[string]any{"type": "request", "request": map[string][]string{"": {"audio"}}}); err != nil {
+					request := []string{"audio"}
+					if r.video != nil {
+						request = append(request, "video")
+					}
+					if err := conn.send(map[string]any{"type": "request", "request": map[string][]string{"": request}}); err != nil {
 						return joined, err
 					}
 					r.events.state("connected")
@@ -414,10 +460,12 @@ func (r *receiver) newDownStream(conn *wsConn, id, user, sdp string) (*downStrea
 		}
 	})
 	pc.OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
-		if t.Kind() != webrtc.RTPCodecTypeAudio {
-			return
+		switch t.Kind() {
+		case webrtc.RTPCodecTypeAudio:
+			go s.play(t)
+		case webrtc.RTPCodecTypeVideo:
+			go s.forwardVideo(t)
 		}
-		go s.play(t)
 	})
 	if err := s.answer(sdp); err != nil {
 		pc.Close()

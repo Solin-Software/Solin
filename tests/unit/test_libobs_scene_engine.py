@@ -770,6 +770,10 @@ class _CompositingRuntime:
                                       media_type=media_type))
         return types.SimpleNamespace(kind="camera", device_id=device_id, name=name)
 
+    # shared remote part-holder slot source (runtime-owned) — one per slot
+    def participant_video_source(self, slot: int):
+        return self.rtsp_source(f"meeting-video-{slot}", f"slot{slot}.sdp", {"slot": slot})
+
     # shared IP camera source (runtime-owned) — one per camera, not per layer
     def rtsp_source(self, camera_id: str, uri: str, settings: dict):
         self.rtsp_requests.append((camera_id, uri))
@@ -1267,6 +1271,32 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     # Shown in the preview or a projection without being on an output channel,
     # the camera must still play: activation never comes there.
     assert source.settings["restart_on_activate"] is False
+
+
+def test_remote_participant_layers_share_one_source_per_slot():
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    graph = LibobsSceneGraph(runtime)
+    layer = {"visible": True, "rect": {"x": 0.0, "y": 0.0, "width": 0.5, "height": 0.5}}
+    graph.hydrate({
+        "sources": [
+            {"id": "p1", "type": "remote_participant", "name": "Remote participant 1",
+             "configuration": {"slot": 1}},
+            {"id": "p2", "type": "remote_participant", "name": "Remote participant 2",
+             "configuration": {"slot": 2}},
+        ],
+        "scenes": [
+            {"id": "solo", "layers": [{"id": "A", "source_id": "p1", **layer}]},
+            {"id": "pair", "layers": [{"id": "B", "source_id": "p1", **layer},
+                                      {"id": "C", "source_id": "p2", **layer}]},
+        ],
+    }, {"virtual_camera": "pair"})
+
+    assert [request[0] for request in runtime.rtsp_requests] == ["meeting-video-1", "meeting-video-1", "meeting-video-2"]
+    assert set(runtime.rtsp_sources) == {"meeting-video-1", "meeting-video-2"}
+    graph.clear()
+    assert all(source.released == 0 for source in runtime.rtsp_sources.values())  # runtime-owned
 
 
 @pytest.mark.parametrize(

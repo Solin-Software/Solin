@@ -6,9 +6,11 @@ import (
 	"errors"
 	"io"
 	"math"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 )
 
@@ -421,5 +423,126 @@ func TestBackoff(t *testing.T) {
 	b.Reset()
 	if b.Next() != time.Second {
 		t.Fatal("reset did not restart at min")
+	}
+}
+
+func TestParseVideoPorts(t *testing.T) {
+	ports, err := parseVideoPorts(" 47110, 47112 ")
+	if err != nil || len(ports) != 2 || ports[0] != 47110 || ports[1] != 47112 {
+		t.Fatalf("got %v, %v", ports, err)
+	}
+	if ports, err := parseVideoPorts(""); err != nil || ports != nil {
+		t.Fatalf("empty: %v, %v", ports, err)
+	}
+	for _, bad := range []string{"x", "0", "70000", "47110,"} {
+		if _, err := parseVideoPorts(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func TestSlotRewriterContinuesAcrossSenders(t *testing.T) {
+	w := slotRewriter{ssrc: 0xabc}
+	pkt := func(seq uint16, ts uint32) *rtp.Packet {
+		return &rtp.Packet{Header: rtp.Header{SequenceNumber: seq, Timestamp: ts, SSRC: 1, PayloadType: 102}}
+	}
+	// The first sender passes through, with the slot's SSRC and payload type.
+	a := pkt(65534, 1000)
+	w.rewrite("a", a)
+	if a.SequenceNumber != 65534 || a.Timestamp != 1000 || a.SSRC != 0xabc || a.PayloadType != slotPayloadType {
+		t.Fatalf("first: %+v", a.Header)
+	}
+	w.rewrite("a", pkt(65535, 4000))
+	w.rewrite("a", pkt(0, 7000)) // sequence wraps
+	late := pkt(65535, 4000)     // a late duplicate does not move the stream's end
+	w.rewrite("a", late)
+	// The next sender continues right after the last packet.
+	b := pkt(100, 900000)
+	w.rewrite("b", b)
+	if b.SequenceNumber != 1 || b.Timestamp != 7000+slotTSStep {
+		t.Fatalf("hand-over: seq %d ts %d", b.SequenceNumber, b.Timestamp)
+	}
+	b2 := pkt(101, 903000)
+	w.rewrite("b", b2)
+	if b2.SequenceNumber != 2 || b2.Timestamp != 7000+slotTSStep+3000 {
+		t.Fatalf("second packet: seq %d ts %d", b2.SequenceNumber, b2.Timestamp)
+	}
+}
+
+func TestVideoSlotsAssignment(t *testing.T) {
+	var out bytes.Buffer
+	ev := &emitter{enc: json.NewEncoder(&out)}
+	v, err := newVideoSlots([]int{47990, 47992}, ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.close()
+	s1 := v.acquire("s1", "Ana")
+	s2 := v.acquire("s2", "Bruno")
+	if s1 == nil || s2 == nil || s1.index != 1 || s2.index != 2 {
+		t.Fatalf("slots %v %v", s1, s2)
+	}
+	if v.acquire("s3", "Carla") != nil {
+		t.Fatal("a third track got a slot")
+	}
+	// Ana leaves and Bruno reconnects: Bruno keeps slot 2, slot 1 stays free for Ana.
+	v.release(s1, "s1")
+	v.release(s2, "s2")
+	v.release(s2, "s2") // twice is harmless
+	if got := v.acquire("s4", "Bruno"); got == nil || got.index != 2 {
+		t.Fatalf("Bruno got %v", got)
+	}
+	if got := v.acquire("s5", "Ana"); got == nil || got.index != 1 {
+		t.Fatalf("Ana got %v", got)
+	}
+	var events []map[string]any
+	dec := json.NewDecoder(&out)
+	for dec.More() {
+		var e map[string]any
+		if err := dec.Decode(&e); err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, e)
+	}
+	if len(events) != 6 || events[0]["slot"] != float64(1) || events[0]["user"] != "Ana" || events[2]["state"] != "stopped" {
+		t.Fatalf("events %v", events)
+	}
+}
+
+func TestVideoSlotForwardsOnlyTheHolder(t *testing.T) {
+	ln, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	v, err := newVideoSlots([]int{ln.LocalAddr().(*net.UDPAddr).Port}, &emitter{enc: json.NewEncoder(io.Discard)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer v.close()
+	s := v.acquire("s1", "Ana")
+	p := &rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: 7, Timestamp: 9, SSRC: 1, PayloadType: 102}, Payload: []byte{0x65, 1, 2}}
+	if err := s.write("other", p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.write("s1", p); err != nil {
+		t.Fatal(err)
+	}
+	_ = ln.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 1500)
+	n, err := ln.Read(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got rtp.Packet
+	if err := got.Unmarshal(buf[:n]); err != nil {
+		t.Fatal(err)
+	}
+	if got.PayloadType != slotPayloadType || got.SSRC != s.rw.ssrc || !bytes.Equal(got.Payload, []byte{0x65, 1, 2}) {
+		t.Fatalf("got %+v", got.Header)
+	}
+	_ = ln.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, err := ln.Read(buf); err == nil {
+		t.Fatal("a packet from a non-holder was forwarded")
 	}
 }

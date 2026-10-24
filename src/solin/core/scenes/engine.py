@@ -1059,6 +1059,18 @@ class SceneEngine(Protocol):
         deadline_ms: int,
     ) -> Future[SceneEngineAck]: ...
 
+    def set_participant_video(
+        self,
+        slot: int,
+        active: bool,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        """Tell the engine whether a remote part-holder holds video ``slot``; an
+        inactive slot's sources are cleared instead of freezing on the last frame."""
+        ...
+
     def open_media(
         self,
         path: str,

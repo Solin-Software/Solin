@@ -554,6 +554,8 @@ class LibobsSidecarEngine:
             return self._handle_start_meeting_output(request)
         if message_type == "stop_meeting_output":
             return self._handle_stop_meeting_output(request)
+        if message_type == "set_participant_video":
+            return self._handle_set_participant_video(request)
         if message_type == "start_program_recording":
             return self._handle_start_recording(request)
         if message_type == "stop_program_recording":
@@ -884,6 +886,19 @@ class LibobsSidecarEngine:
         output = self._meeting_output
         if output is not None:
             output.stop()
+        return _ack(request, applied=True)
+
+    def _handle_set_participant_video(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
+        from solin.core.hosted_meeting.participant_video import valid_slot
+
+        slot = request.payload.get("slot")
+        active = request.payload.get("active")
+        if not valid_slot(slot) or not isinstance(active, bool):
+            return _ack(request, applied=False, error_code="invalid_settings",
+                        error_message="invalid participant video slot")
+        runtime = cast(Any, self._runtime) if self._runtime_started else None
+        if runtime is not None and not active:
+            runtime.stop_participant_video(int(cast(int, slot)))
         return _ack(request, applied=True)
 
     def _emit_meeting_output_state(self, state: str, detail: str = "") -> None:

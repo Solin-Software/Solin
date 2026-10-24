@@ -850,6 +850,30 @@ def test_bridge_new_scene_reference_uses_generic_fit_and_allows_explicit_cover(
     assert controller.document.scene(bridge.selectedSceneId).layers[0] == layer
 
 
+def test_bridge_adds_remote_participants_sharing_one_source_per_slot(scene_bridge_factory) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    bridge.createScene("Remote part")
+    bridge.addRemoteParticipantPair()
+
+    layers = controller.document.scene(bridge.selectedSceneId).layers
+    sources = [controller.document.source(layer.source_id) for layer in layers]
+    assert [source.kind for source in sources] == [SourceKind.REMOTE_PARTICIPANT] * 2
+    assert [source.configuration.slot for source in sources] == [1, 2]
+    assert [layer.name for layer in layers] == ["Remote participant 1", "Remote participant 2"]
+    # Side by side, each half keeping the canvas shape, with a gutter between them.
+    left, right = (layer.rect for layer in layers)
+    assert left.width == left.height == right.width == right.height
+    assert left.x + left.width < right.x and left.y == right.y
+    assert bridge.selectedLayerId == layers[1].id
+
+    bridge.createScene("Remote part, solo")
+    bridge.addRemoteParticipant(1)
+    solo = controller.document.scene(bridge.selectedSceneId).layers[0]
+    assert solo.source_id == layers[0].source_id  # the slot's source is reused
+    assert solo.rect == NormalizedRect()
+    assert [s.id for s in controller.document.sources].count(solo.source_id) == 1
+
+
 def test_bridge_preserves_enums_and_transform_contracts(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     layer_id = controller.document.scene(bridge.selectedSceneId).layers[0].id

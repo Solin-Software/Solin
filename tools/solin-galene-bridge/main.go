@@ -1,8 +1,9 @@
 // solin-galene-bridge connects Solin to a Galene SFU.
 //
 //	publish   reads framed H.264/Opus/PCM from stdin and publishes it over WHIP
-//	receive   joins a group over Galene's WebSocket protocol and plays the
-//	          remote participants' audio on an output device
+//	receive   joins a group over Galene's WebSocket protocol, plays the
+//	          remote participants' audio on an output device and forwards
+//	          part-holders' video to local RTP slots
 //	devices   lists playback devices as JSON
 //	version   prints the version
 //

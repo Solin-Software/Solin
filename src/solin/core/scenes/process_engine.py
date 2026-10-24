@@ -1065,6 +1065,29 @@ class SubprocessSceneEngine:
             converter=_ack_from_envelope,
         )
 
+    def set_participant_video(
+        self,
+        slot: int,
+        active: bool,
+        *,
+        request_id: str,
+        deadline_ms: int,
+    ) -> Future[SceneEngineAck]:
+        if isinstance(slot, bool) or not isinstance(slot, int) or not isinstance(active, bool):
+            return _failed_future(TypeError("Invalid participant video slot"))
+        with self._lock:
+            document_revision = self._document_revision
+        return self._request(
+            message_type="set_participant_video",
+            expected_message_type="ack",
+            request_id=request_id,
+            sequence=0,
+            document_revision=document_revision,
+            deadline_ms=deadline_ms,
+            payload={"slot": slot, "active": active},
+            converter=_ack_from_envelope,
+        )
+
     def open_media(
         self,
         path: str,

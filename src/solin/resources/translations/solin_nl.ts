@@ -6469,6 +6469,10 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Het antwoord van de camera kon niet worden gelezen.</translation>
     </message>
+    <message>
+        <source>Remote participant %1</source>
+        <translation>Deelnemer op afstand %1</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7731,6 +7735,18 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
     <message>
         <source>Find cameras…</source>
         <translation>Camera’s vinden…</translation>
+    </message>
+    <message>
+        <source>Remote participant 1</source>
+        <translation>Deelnemer op afstand 1</translation>
+    </message>
+    <message>
+        <source>Remote participant 2</source>
+        <translation>Deelnemer op afstand 2</translation>
+    </message>
+    <message>
+        <source>Two remote participants</source>
+        <translation>Twee deelnemers op afstand</translation>
     </message>
 </context>
 <context>

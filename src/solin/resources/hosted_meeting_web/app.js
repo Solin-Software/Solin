@@ -220,7 +220,8 @@ function connectGalene(token) {
     setPresent((perms || []).includes('present'));
   };
   conn.ondownstream = function (stream) {
-    stream.ondowntrack = (track, transceiver, ms) => attachProgram(ms);
+    stream.ondowntrack = (track, transceiver, ms) => attachDown(stream, ms);
+    stream.onclose = () => detachDown(stream);
   };
   conn.onusermessage = function (id, dest, username, time, privileged, kind) {
     if (kind === 'kicked' && privileged) finish(T.removed);
@@ -235,9 +236,14 @@ function connectGalene(token) {
   try { conn.connect(galeneUrl()); } catch (e) { scheduleReconnect(); }
 }
 
+// Part-holders' cameras go up under their own label: the hall puts them in the
+// program, so attendees never download them separately (Galene matches a stream's
+// label first, then '').
+const PARTICIPANT_LABEL = 'participant';
+
 function requestMedia() {
   if (!sc) return;
-  sc.request({ '': $('audio-only').checked ? ['audio'] : ['audio', 'video'] });
+  sc.request({ '': $('audio-only').checked ? ['audio'] : ['audio', 'video'], [PARTICIPANT_LABEL]: [] });
 }
 
 async function scheduleReconnect(now = false) {
@@ -265,19 +271,57 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ── program playback ──────────────────────────────────────────────────────
-function attachProgram(ms) {
-  const v = $('program');
-  if (v.srcObject !== ms) v.srcObject = ms;
-  v.play().then(() => { $('unmute').hidden = true; }).catch(() => {
+// The hall's program (published as PROGRAM_USER) is the only stream shown. Every
+// other stream is a commenter or a remote part-holder: their voices play here
+// directly (the hall feed is mix-minus), and part-holders' video already reaches
+// attendees inside the program.
+const PROGRAM_USER = 'Solin program';
+const voices = new Map();
+
+function attachDown(stream, ms) {
+  if (stream.username === PROGRAM_USER) { attachProgram(ms); return; }
+  let a = voices.get(stream.id);
+  if (!a) {
+    a = document.createElement('audio');
+    a.autoplay = true;
+    a.hidden = true;
+    document.body.appendChild(a);
+    voices.set(stream.id, a);
+  }
+  if (a.srcObject !== ms) a.srcObject = ms;
+  play(a);
+}
+
+function detachDown(stream) {
+  const a = voices.get(stream.id);
+  if (!a) return;
+  voices.delete(stream.id);
+  a.srcObject = null;
+  a.remove();
+}
+
+function play(el) {
+  el.play().catch(() => {
     // Autoplay with sound needs a gesture on some browsers.
     $('unmute').hidden = false;
   });
+}
+
+function attachProgram(ms) {
+  const v = $('program');
+  if (v.srcObject !== ms) v.srcObject = ms;
+  v.play().then(() => { $('unmute').hidden = true; }).catch(() => { $('unmute').hidden = false; });
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: document.title, artist: 'Solin' });
     navigator.mediaSession.playbackState = 'playing';
   }
 }
-$('unmute').addEventListener('click', () => { $('program').muted = false; $('program').play(); $('unmute').hidden = true; });
+$('unmute').addEventListener('click', () => {
+  $('program').muted = false;
+  $('program').play();
+  for (const a of voices.values()) a.play().catch(() => {});
+  $('unmute').hidden = true;
+});
 $('audio-only').addEventListener('change', requestMedia);
 
 // ── hand, microphone, camera ──────────────────────────────────────────────
@@ -343,7 +387,7 @@ async function startCam() {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
   } catch (e) { return; }
   upCam = sc.newUpStream();
-  upCam.label = 'camera';
+  upCam.label = PARTICIPANT_LABEL;
   upCam.setStream(camStream);
   upCam.onclose = () => { upCam = null; };
   for (const t of camStream.getVideoTracks()) upCam.pc.addTransceiver(t, { direction: 'sendonly', streams: [camStream] });

@@ -7,7 +7,10 @@ Start (on a worker thread, so the UI never blocks):
 2. the meeting runtime: web server + operator client + rules;
 3. the hub tunnel (frpc), giving the hall its public HTTPS address — optional: without
    a hub the meeting is reachable on the LAN only;
-4. the commenter-audio player (``solin-galene-bridge receive`` → remote-audio device);
+4. the commenter-audio player (``solin-galene-bridge receive`` → remote-audio device),
+   which also forwards remote part-holders' video to the scenes' video slots
+   (``participant_video``); its slot events reach the scene engine so a slot whose
+   part-holder left is cleared;
 5. the program output in the libobs sidecar (``start_meeting_output``), on the Qt thread.
 
 End reverses the order. Operator actions are forwarded to the runtime's meeting rules.
@@ -15,6 +18,7 @@ End reverses the order. Operator actions are forwarded to the runtime's meeting 
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -32,6 +36,7 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from .binaries import Helper, find_helper
 from .galene_config import TurnServer
 from .galene_server import GaleneServer, GaleneUnavailable
+from .participant_video import bridge_ports_argument, valid_slot
 from .processes import ProcessState, SupervisedProcess
 from .runtime import MeetingRuntime, MeetingRuntimeConfig
 from .settings import HostedMeetingSettingsStore, HubConnection, MeetingQuality
@@ -64,6 +69,7 @@ class MeetingInfo:
     tunnel: str = "off"            # off/connecting/online/failed
     galene: str = "stopped"
     commenter_audio: str = "stopped"
+    participant_video: dict[int, str] = field(default_factory=dict)  # slot → part-holder name
     error: str = ""
     warnings: list[str] = field(default_factory=list)
 
@@ -72,6 +78,7 @@ class MeetingInfo:
             "state": self.state.value, "slug": self.slug, "invitationUrl": self.invitation_url,
             "lanUrl": self.lan_url, "stageUrl": self.stage_url, "output": self.output,
             "tunnel": self.tunnel, "galene": self.galene, "commenterAudio": self.commenter_audio,
+            "participantVideo": {str(slot): user for slot, user in sorted(self.participant_video.items())},
             "error": self.error, "warnings": list(self.warnings),
         }
 
@@ -240,14 +247,63 @@ class HostedMeetingService(QObject):
                            permissions=OBSERVE, ttl_seconds=_LONG_TOKEN_TTL)
         device = self._settings.remote_audio_device()
         command: list[str | Path] = [binary, "receive", "--ws", f"ws://127.0.0.1:{self._galene.port}/ws",
-                                     "--group", slug, "--token", token, "--ignore-user", PROGRAM_USERNAME]
+                                     "--group", slug, "--token", token, "--ignore-user", PROGRAM_USERNAME,
+                                     "--video-ports", bridge_ports_argument()]
         if device.get("id"):
             command += ["--device", device["id"]]
+
+        def on_state(state: ProcessState, _detail: str) -> None:
+            self._update(commenter_audio=state.value)
+            if state is not ProcessState.RUNNING:
+                self._main(self._clear_participant_video)  # the slots' streams stopped with it
+
         self._receiver = SupervisedProcess(
-            "commenter-audio", command, max_restarts=20,
-            on_state=lambda state, _detail: self._update(commenter_audio=state.value),
+            "commenter-audio", command, max_restarts=20, on_state=on_state, on_line=self._on_receiver_line,
         )
         self._receiver.start(wait=False)
+
+    def _on_receiver_line(self, line: str) -> None:
+        """Bridge stdout events (supervisor thread); only video slot changes matter here."""
+        if not line.startswith("{"):
+            return
+        try:
+            event = json.loads(line)
+        except ValueError:
+            return
+        if not isinstance(event, dict) or event.get("event") != "video":
+            return
+        slot, state = event.get("slot"), event.get("state")
+        if not valid_slot(slot) or state not in ("started", "stopped"):
+            return
+        active = state == "started"
+        with self._lock:
+            slots = dict(self._info.participant_video)
+        if active:
+            slots[slot] = str(event.get("user") or "")
+        else:
+            slots.pop(slot, None)
+        self._update(participant_video=slots)
+        self._main(lambda: self._send_participant_video(slot, active))
+
+    def _send_participant_video(self, slot: int, active: bool) -> None:
+        runtime = self._scene_runtime
+        engine = getattr(runtime, "scene_engine", None) if runtime is not None else None
+        if engine is None or not hasattr(engine, "set_participant_video"):
+            return
+        try:
+            engine.set_participant_video(slot, active, request_id=f"meeting-video-{secrets.token_hex(4)}",
+                                         deadline_ms=5_000)
+        except Exception:  # noqa: BLE001 - engine boundary
+            log.debug("set_participant_video failed", exc_info=True)
+
+    def _clear_participant_video(self) -> None:
+        with self._lock:
+            slots = list(self._info.participant_video)
+        if not slots:
+            return
+        self._update(participant_video={})
+        for slot in slots:
+            self._send_participant_video(slot, False)
 
     def _audience(self, slug: str) -> str:
         return f"https://solin.invalid/group/{slug}/"
@@ -322,6 +378,7 @@ class HostedMeetingService(QObject):
                      commenter_audio="stopped")
 
     def _stop_output(self) -> None:
+        self._clear_participant_video()
         runtime = self._scene_runtime
         engine = getattr(runtime, "scene_engine", None) if runtime is not None else None
         if engine is not None:

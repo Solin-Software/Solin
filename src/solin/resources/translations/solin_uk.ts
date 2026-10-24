@@ -6501,6 +6501,10 @@ The current organization and files will be preserved. Pending changes from the p
         <source>The camera&apos;s reply could not be read.</source>
         <translation>Не вдалося прочитати відповідь камери.</translation>
     </message>
+    <message>
+        <source>Remote participant %1</source>
+        <translation>Віддалений учасник %1</translation>
+    </message>
 </context>
 <context>
     <name>ScenesEditorView</name>
@@ -7763,6 +7767,18 @@ Add content, a camera, or another scene.</source>
     <message>
         <source>Find cameras…</source>
         <translation>Знайти камери…</translation>
+    </message>
+    <message>
+        <source>Remote participant 1</source>
+        <translation>Віддалений учасник 1</translation>
+    </message>
+    <message>
+        <source>Remote participant 2</source>
+        <translation>Віддалений учасник 2</translation>
+    </message>
+    <message>
+        <source>Two remote participants</source>
+        <translation>Два віддалені учасники</translation>
     </message>
 </context>
 <context>

@@ -64,6 +64,7 @@ from solin.core.scenes.model import (
     PtzProtocol,
     PtzTimeoutPolicy,
     RecallPtzPresetAction,
+    RemoteParticipantConfig,
     RtspCameraConfig,
     RtspTransport,
     SceneLayer,
@@ -122,7 +123,15 @@ _SOURCE_COLORS = {
     SourceKind.IMAGE: "#8B5CF6",
     SourceKind.COLOR: "#64748B",
     SourceKind.SCENE_REFERENCE: "#F59E0B",
+    SourceKind.REMOTE_PARTICIPANT: "#EC4899",
 }
+
+# Two remote part-holders side by side: each half keeps the canvas' 16:9 shape,
+# with a small gutter between them.
+_REMOTE_PAIR_RECTS = (
+    NormalizedRect(x=0.01, y=0.255, width=0.485, height=0.485),
+    NormalizedRect(x=0.505, y=0.255, width=0.485, height=0.485),
+)
 
 
 def _qml_float(value: object) -> float:
@@ -1203,6 +1212,37 @@ class ScenesBridge(QObject):
         self._selected_layer_id = created[0].id
         self._refresh_models()
         return created[0].id
+
+    def _remote_participant_source(self, slot: int) -> SourceDefinition:
+        document = self._controller.document
+        return next((candidate for candidate in document.sources
+                     if isinstance(candidate.configuration, RemoteParticipantConfig)
+                     and candidate.configuration.slot == slot), None) or SourceDefinition(
+            id=new_identity(), kind=SourceKind.REMOTE_PARTICIPANT,
+            name=self.tr("Remote participant %1").replace("%1", str(slot)),
+            configuration=RemoteParticipantConfig(slot=slot),
+        )
+
+    @Slot(int)
+    def addRemoteParticipant(self, slot: int) -> None:
+        """Add a hosted meeting's remote part-holder (video slot 1 or 2), full frame."""
+        self._add_remote_participants(((int(slot), NormalizedRect()),))
+
+    @Slot()
+    def addRemoteParticipantPair(self) -> None:
+        """Add both remote part-holder slots side by side."""
+        self._add_remote_participants(tuple(zip((1, 2), _REMOTE_PAIR_RECTS, strict=True)))
+
+    def _add_remote_participants(self, placements: tuple[tuple[int, NormalizedRect], ...]) -> None:
+        def add() -> None:
+            for slot, rect in placements:
+                source = self._remote_participant_source(slot)
+                name = self._controller.documents.suggest_layer_name(self._selected_scene_id, source.name)
+                layer = SceneLayer(id=new_identity(), source_id=source.id, name=name, rect=rect)
+                self._controller.documents.add_source_layer(self._selected_scene_id, source, layer)
+                self._selected_layer_id = layer.id
+
+        self._run_edit(add)
 
     def _scene_reference_source(self, scene_id: str) -> SourceDefinition:
         document = self._controller.document

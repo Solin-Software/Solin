@@ -157,6 +157,16 @@ Rectangle {
                     Chip { label: qsTr("Media server"); value: info.galene || "stopped" }
                     Chip { label: qsTr("Commenters' audio"); value: info.commenterAudio || "stopped" }
                 }
+                Text {
+                    // Which remote part-holder is in each scene video slot ("Remote participant N").
+                    readonly property var slots: info.participantVideo || ({})
+                    Layout.fillWidth: true
+                    visible: Object.keys(slots).length > 0
+                    text: Object.keys(slots).sort().map(function(slot) {
+                        return qsTr("Remote participant %1: %2").arg(slot).arg(slots[slot] || qsTr("unnamed"))
+                    }).join("   ·   ")
+                    color: appTheme.textSecondary; font.pixelSize: 12; wrapMode: Text.Wrap
+                }
                 Repeater {
                     model: info.warnings || []
                     Text { Layout.fillWidth: true; text: "⚠ " + modelData; color: "#c9a227"; font.pixelSize: 12; wrapMode: Text.Wrap }
