@@ -189,3 +189,23 @@ def test_attendance_report_lists_everyone_admitted(core):
     report = core.attendance_report()
     assert [row["name"] for row in report] == ["Ana", "Bia"]
     assert [row["removed"] for row in report] == [False, True]
+
+
+def test_a_lowered_hand_does_not_come_back_from_stale_galene_data(core):
+    admit(core, "d1", "Ana")
+    connect(core, "d1", "g1", raisehand=111)
+    assert core.call_on("d1")
+    assert core.done("d1")
+    # Galene re-sends the user (permissions changed) with the old raisehand value.
+    core.on_galene_user("change", GaleneUser(id="g1", username="Ana", data={"device": "d1", "raisehand": 111}))
+    assert core.snapshot()["hands"] == []
+    # The operator lowers a hand; the stale value is ignored the same way.
+    core.on_galene_user("change", GaleneUser(id="g1", username="Ana", data={"device": "d1", "raisehand": 222}))
+    assert [h["name"] for h in core.snapshot()["hands"]] == ["Ana"]
+    assert core.lower_hand("d1")
+    core.on_galene_user("change", GaleneUser(id="g1", username="Ana", data={"device": "d1", "raisehand": 222}))
+    assert core.snapshot()["hands"] == []
+    # A new raise (a new value) counts again, as does clearing and raising.
+    core.on_galene_user("change", GaleneUser(id="g1", username="Ana", data={"device": "d1", "raisehand": None}))
+    core.on_galene_user("change", GaleneUser(id="g1", username="Ana", data={"device": "d1", "raisehand": 333}))
+    assert [h["name"] for h in core.snapshot()["hands"]] == ["Ana"]

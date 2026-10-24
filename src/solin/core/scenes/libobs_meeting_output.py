@@ -163,6 +163,12 @@ class LibobsMeetingOutput:
         self._reader = threading.Thread(target=self._read_loop, name="solin-meeting-bridge", daemon=True)
         self._reader.start()
         self._set_state("starting")
+        rate = audio_sample_rate()
+        if rate not in (None, 48000):
+            # The bridge encodes 48 kHz Opus; any other mix rate plays back with gaps.
+            self.stop()
+            self._set_state("failed", f"libobs mixes audio at {rate} Hz; the meeting needs 48000 Hz")
+            return False
         try:
             self._route_audio(request)
             self._attach_audio()
@@ -383,6 +389,20 @@ def route_media_to_meeting(runtime: Any, source: Any, enabled: bool) -> None:
             runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
     except Exception:  # noqa: BLE001 - libobs boundary
         log.warning("could not route media audio to the meeting mix", exc_info=True)
+
+
+def audio_sample_rate() -> int | None:
+    """libobs' current mix sample rate, or None when it cannot be read."""
+
+    try:
+        from pylibobs._ffi import ffi, get_lib  # type: ignore[import-not-found]
+
+        info = ffi.new("struct obs_audio_info *")
+        if not cast(Any, get_lib()).obs_get_audio_info(info):
+            return None
+        return int(info.samples_per_sec)
+    except Exception:  # noqa: BLE001 - libobs boundary; the check is advisory
+        return None
 
 
 def set_sync_offset(source: Any, delay_ms: int) -> None:

@@ -6,6 +6,7 @@
   :root { --bg: #111418; --fg: #e8eaed; --muted: #9aa3ad; --card: #1b1f24; --line: #2c323a;
           --accent: #7c9be0; --accent-fg: #0d1117; --live: #3fae62; --live-fg: #0d1117; --warn: #f2938c; }
 }
+[hidden] { display: none !important; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }

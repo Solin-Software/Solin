@@ -138,9 +138,9 @@ function onHallEvent(m) {
     case 'renamed': me.name = m.name; saveDevice(); restartGalene(m.token); break;
     case 'removed': finish(T.removed); break;
     case 'ended': finish(T.ended); break;
-    case 'called_on': setLive(true); setHand(false, false); break;
+    case 'called_on': setLive(true); setHand(false); break;
     case 'done': setLive(false); break;
-    case 'hand_lowered': setHand(false, false); break;
+    case 'hand_lowered': setHand(false); break;
     case 'part_holder': partHolder = !!m.value; updatePartControls(); break;
   }
 }
@@ -214,7 +214,7 @@ function connectGalene(token) {
     if (kind === 'join') {
       attempt = 0;
       connectionNote('');
-      this.userAction('setdata', this.id, { device: me.device, raisehand: handRaised || null });
+      this.userAction('setdata', this.id, { device: me.device, raisehand: handToken });
       requestMedia();
     }
     setPresent((perms || []).includes('present'));
@@ -281,12 +281,16 @@ $('unmute').addEventListener('click', () => { $('program').muted = false; $('pro
 $('audio-only').addEventListener('change', requestMedia);
 
 // ── hand, microphone, camera ──────────────────────────────────────────────
-function setHand(raised, publish = true) {
+// A raised hand carries the time it was raised, so the hall can tell a new raise
+// from a stale value it already lowered. Lowering always clears it in Galene too.
+let handToken = null;
+function setHand(raised) {
   handRaised = raised;
+  handToken = raised ? Date.now() : null;
   const b = $('hand');
   b.textContent = raised ? T.lowerHand : T.raiseHand;
   b.classList.toggle('raised', raised);
-  if (publish && sc) sc.userAction('setdata', sc.id, { raisehand: raised || null });
+  if (sc) sc.userAction('setdata', sc.id, { raisehand: handToken });
 }
 $('hand').addEventListener('click', () => setHand(!handRaised));
 

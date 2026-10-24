@@ -76,6 +76,8 @@ class Attendee:
     part_holder: bool = False
     galene_ids: set[str] = field(default_factory=set)
     hand_raised_at: float | None = None
+    hand_value: Any = None      # the client's raisehand value currently counted as raised
+    hand_lowered: Any = None    # a value the hall lowered: ignored until the client sends a new one
     live: bool = False  # the operator called on them (microphone open)
 
     @property
@@ -239,7 +241,7 @@ class MeetingCore:
             if other.live and other.device_id != device_id:
                 self.done(other.device_id)
         attendee.live = True
-        attendee.hand_raised_at = None
+        self._lower(attendee)
         for galene_id in attendee.galene_ids:
             self._effects.present(galene_id)
         self._effects.notify(device_id, {"type": "called_on"})
@@ -262,7 +264,7 @@ class MeetingCore:
         attendee = self.attendees.get(device_id)
         if attendee is None or attendee.hand_raised_at is None:
             return False
-        attendee.hand_raised_at = None
+        self._lower(attendee)
         self._effects.notify(device_id, {"type": "hand_lowered"})
         self._effects.changed()
         return True
@@ -305,12 +307,24 @@ class MeetingCore:
         elif not should_present and user.present:
             # Never let a client keep a microphone it was not given.
             self._effects.unpresent(user.id)
-        hand = user.data.get("raisehand")
-        if hand and attendee.hand_raised_at is None and not attendee.live:
-            attendee.hand_raised_at = self._clock()
-        elif not hand and attendee.hand_raised_at is not None:
-            attendee.hand_raised_at = None
+        self._track_hand(attendee, user.data.get("raisehand"))
         self._effects.changed()
+
+    def _track_hand(self, attendee: Attendee, value: Any) -> None:
+        if not value:
+            attendee.hand_raised_at = attendee.hand_value = attendee.hand_lowered = None
+            return
+        if value == attendee.hand_lowered or attendee.live:
+            return  # stale: the hall already lowered this raise (or called on them)
+        if attendee.hand_raised_at is None or value != attendee.hand_value:
+            if attendee.hand_raised_at is None:
+                attendee.hand_raised_at = self._clock()
+            attendee.hand_value = value
+
+    def _lower(self, attendee: Attendee) -> None:
+        if attendee.hand_value is not None:
+            attendee.hand_lowered = attendee.hand_value
+        attendee.hand_raised_at = attendee.hand_value = None
 
     # ── views ─────────────────────────────────────────────────────────────
 

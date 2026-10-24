@@ -379,7 +379,7 @@ def test_graphics_buffer_is_retained_through_context_shutdown(monkeypatch, audio
         owner_ref = weakref.ref(owner)
         return owner
 
-    def audio():
+    def audio(**_kwargs):
         assert owner_ref is not None and owner_ref() is not None
         if audio_failure:
             raise RuntimeError("audio failed")
@@ -419,7 +419,8 @@ class _FakeContext:
     def set_video(self, *_args, **_kwargs) -> None:
         self._events.append("video")
 
-    def set_audio(self) -> None:
+    def set_audio(self, samples_per_sec: int = 44100) -> None:
+        assert samples_per_sec == 48000  # the meeting's Opus encoder needs a 48 kHz mix
         self._events.append("audio")
 
     def load_modules(self) -> None:
@@ -485,7 +486,7 @@ def test_windows_native_tasks_are_drained_before_shutdown_and_retained_through_m
         ObsTaskDispatcher=lambda: tasks,
     ))
     monkeypatch.setattr(context, "set_video", lambda *_args, **_kwargs: step("video"))
-    monkeypatch.setattr(context, "set_audio", lambda: step("audio"))
+    monkeypatch.setattr(context, "set_audio", lambda **_kwargs: step("audio"))
     monkeypatch.setattr(context, "load_modules", lambda: step("modules"))
 
     def source_types():

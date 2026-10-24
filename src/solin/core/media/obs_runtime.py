@@ -54,6 +54,10 @@ MEETING_MIX_INDEX = 5
 MEETING_AUDIO_MIXERS = 1 << MEETING_MIX_INDEX
 NO_AUDIO_MIXERS = 0
 
+# libobs mixes at 48 kHz: the hosted-meeting Opus encoder (and WebRTC) only takes
+# 8/12/16/24/48 kHz, and 48 kHz is the norm for video recordings too.
+AUDIO_SAMPLE_RATE = 48000
+
 # Highest usable global output channel index in libobs (0..63).
 _MAX_CHANNELS = 64
 
@@ -692,7 +696,7 @@ class ObsRuntime:
                     # Fallback (no shared display): release any current Qt GL
                     # context so libobs' eglMakeCurrent does not hit EGL_BAD_ACCESS.
                     _run_with_gl_context_released(_init_video)
-                context.set_audio()
+                context.set_audio(samples_per_sec=AUDIO_SAMPLE_RATE)
                 context.load_modules()
                 if sys.platform == "win32" and "wasapi_output_capture" not in ob.enum_source_types():
                     raise ObsRuntimeError("The Windows audio device notification module is unavailable")
@@ -978,6 +982,7 @@ __all__ = [
     "MONITORING_NONE",
     "MONITORING_MONITOR_ONLY",
     "MONITORING_MONITOR_AND_OUTPUT",
+    "AUDIO_SAMPLE_RATE",
     "MEETING_AUDIO_MIXERS",
     "MEETING_MIX_INDEX",
     "NO_AUDIO_MIXERS",
