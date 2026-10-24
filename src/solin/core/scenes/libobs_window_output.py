@@ -238,6 +238,11 @@ class LibobsWindowOutput:
         except Exception:  # noqa: BLE001 - libobs boundary
             log.debug("display release errored for handle %d", handle, exc_info=True)
 
+    def poll(self) -> None:
+        """Collect disconnected surface owners outside the render callback."""
+        if self._surfaces is not None:
+            self._surfaces.poll()
+
     def shutdown(self) -> None:
         if self._surfaces is not None:
             self._surfaces.shutdown()

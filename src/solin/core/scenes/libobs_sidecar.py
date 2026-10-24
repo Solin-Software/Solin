@@ -1589,6 +1589,8 @@ class LibobsSidecarEngine:
         The client suppresses heartbeats while commands are pending. Sampling
         after command dispatch keeps output recovery live in that case too.
         """
+        if self._window_output is not None:
+            self._window_output.poll()
         self._poll_camera_recovery()
         if time.monotonic() >= self._next_output_poll_at:
             self._publish_output_health(poll=True)

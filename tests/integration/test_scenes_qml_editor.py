@@ -27,7 +27,7 @@ from solin.core.scenes.onvif_discovery import (
     OnvifMediaProfile,
 )
 from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
-from solin.core.scenes.presets import CAMERA_SCENE_ID, SceneSeedNames
+from solin.core.scenes.presets import CAMERA_SCENE_ID, CONTENT_SCENE_ID, SceneSeedNames
 from solin.core.scenes.workspace import LocalCameraConflictError
 from solin.core.scenes.recording import (
     AudioDevice,
@@ -310,6 +310,16 @@ def test_output_button_tracks_delivery_health_while_toggle_remains_requested(
     assert not widget.bridge.virtualCameraEnabled
     assert not button.property("active")
     assert button.property("stateLabel") == widget.bridge.tr("Off")
+
+
+def test_macos_output_menu_names_the_existing_obs_camera(
+    scene_editor_factory, tmp_path, monkeypatch,
+):
+    monkeypatch.setattr("solin.ui.qml.scenes_bridge.sys.platform", "darwin")
+    _, _, widget, _ = scene_editor_factory(_profile_paths(tmp_path))
+    menu = widget._qml.rootObject().findChild(QObject, "scenesVirtualCameraMenuItem")
+    assert menu is not None
+    assert menu.property("text") == "OBS Virtual Camera"
 
 
 def test_scenes_qml_editor_loads_with_the_real_workspace(
@@ -1180,6 +1190,51 @@ def _set_edited_text(field, text: str) -> None:
     field.setProperty("text", text)
     assert QMetaObject.invokeMethod(field, "textEdited")
     QCoreApplication.processEvents()
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_new_local_camera_waits_for_permission_before_saving(
+    scene_editor_factory, tmp_path, monkeypatch, allowed,
+):
+    from solin.ui.qml.scenes_bridge import ScenesBridge
+
+    workspace, controller, widget, _ = scene_editor_factory(_profile_paths(tmp_path))
+    access = {"granted": False}
+    monkeypatch.setattr(ScenesBridge, "requestLocalCameraAccess",
+                        lambda self: "granted" if access["granted"] else "pending")
+    camera = LocalCameraDevice(
+        "native-pc-camera-id", "PC Camera", False,
+        (LocalVideoFormat(CameraMediaType.RAW, "NV12", 640, 480, 30, 1),),
+        LocalCameraProbe(LocalCameraProbeStatus.READY, "avfoundation"),
+    )
+    controller._set_local_cameras(LocalCameraDiscovery(
+        supported=True, ready=True, generation=1, devices=(camera,),
+    ))
+    monkeypatch.setattr(controller, "refresh_local_cameras", lambda force=True: None)
+    widget.bridge.selectScene(CONTENT_SCENE_ID)
+    widget.resize(1100, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesCameraDialog")
+    assert QMetaObject.invokeMethod(dialog, "openForCamera", Q_ARG("QVariant", "local_camera"))
+    _choose_local_device(dialog, camera.device_id)
+    before = workspace.configured_cameras
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert dialog.property("visible") and dialog.property("cameraAccessPending")
+    assert workspace.configured_cameras == before
+
+    access["granted"] = allowed
+    widget.bridge.localCameraAccessResolved.emit(allowed)
+    QCoreApplication.processEvents()
+    assert not dialog.property("cameraAccessPending")
+    if allowed:
+        assert not dialog.property("visible")
+        saved = next(item for item in workspace.configured_cameras
+                     if item.configuration.device_id == camera.device_id)
+        assert saved.name == camera.display_name
+    else:
+        assert dialog.property("visible") and dialog.property("validationError")
+        assert workspace.configured_cameras == before
 
 
 @pytest.mark.parametrize("physical_device", [False, True])

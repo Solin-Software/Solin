@@ -8,8 +8,12 @@ from pathlib import Path
 import plistlib
 import stat
 import tempfile
+import sys
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from solin.bootstrap.macos_bundle import capture_usage_metadata
 
 PLAYLIST_UTI = "com.solin.playlist"
 PLAYLIST_MIME = "application/vnd.solin.playlist+zip"
@@ -48,9 +52,7 @@ def configure_bundle(
     plist["CFBundleShortVersionString"] = short_version
     plist["CFBundleVersion"] = bundle_version
     plist["LSMinimumSystemVersion"] = minimum_system_version
-    plist["NSCameraUseContinuityCameraDeviceType"] = True
-    plist["NSCameraUsageDescription"] = "Solin uses your camera as a video source in scenes."
-    plist["NSMicrophoneUsageDescription"] = "Solin uses your microphone for audio capture and recording."
+    plist.update(capture_usage_metadata())
 
     document_type = {
         "CFBundleTypeName": "Solin Playlist",

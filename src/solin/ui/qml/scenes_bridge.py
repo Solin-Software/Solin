@@ -16,7 +16,7 @@ from pathlib import Path
 import time
 from typing import Any, Protocol
 
-from PySide6.QtCore import QCameraPermission, QCoreApplication, QObject, Property, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QCameraPermission, QCoreApplication, QObject, Property, QPermission, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QImage
 
 from solin.controllers.program_recording_controller import ProgramRecordingController
@@ -221,6 +221,7 @@ class ScenesBridge(QObject):
         self._layers = SceneLayerListModel(self)
         self._active = False
         self._closed = False
+        self._camera_permission_pending = False
         self._selected_scene_id = controller.document.scenes[0].id
         self._selected_layer_id = ""
         self._preview_url = preview_store.clear()
@@ -435,6 +436,13 @@ class ScenesBridge(QObject):
     @Property(bool, notify=changed)
     def virtualCameraEnabled(self) -> bool:
         return self._controller.runtime.state.output(BusId.VIRTUAL_CAMERA).enabled
+
+    @Property(str, constant=True)
+    def virtualCameraDeviceName(self) -> str:
+        if sys.platform == "darwin":
+            # Match the installed vendor device's name in meeting apps.
+            return "OBS Virtual Camera"
+        return QCoreApplication.translate("ScenesWorkspace", "Solin Virtual Camera")
 
     @Property(bool, notify=changed)
     def virtualCameraReady(self) -> bool:
@@ -2148,6 +2156,8 @@ class ScenesBridge(QObject):
     @Slot(result=str)
     def requestLocalCameraAccess(self) -> str:
         """Request access only from an explicit capture action on the GUI thread."""
+        if self._closed:
+            return "denied"
         if sys.platform != "darwin":
             return "granted"
         app = QCoreApplication.instance()
@@ -2159,17 +2169,37 @@ class ScenesBridge(QObject):
             return "granted"
         if status == Qt.PermissionStatus.Denied:
             return "denied"
-        if not getattr(self, "_camera_permission_pending", False):
+        if not self._camera_permission_pending:
             self._camera_permission_pending = True
-
-            def completed(result) -> None:
-                self._camera_permission_pending = False
-                self.localCameraAccessResolved.emit(result.status() == Qt.PermissionStatus.Granted)
-
             # Return the pending state before delivering a possibly synchronous
             # platform failure. The dialog owns the pending submission context.
-            QTimer.singleShot(0, self, lambda: app.requestPermission(permission, self, completed))
+            QTimer.singleShot(0, self, self._request_local_camera_permission)
         return "pending"
+
+    @Slot()
+    def _request_local_camera_permission(self) -> None:
+        if self._closed or not self._camera_permission_pending:
+            return
+        app = QCoreApplication.instance()
+        if app is None:
+            self._camera_permission_pending = False
+            self.localCameraAccessResolved.emit(False)
+            return
+        try:
+            # PySide's context overload requires a bound QObject method. Keep
+            # its receiver alive through the same context as the native request.
+            app.requestPermission(QCameraPermission(), self, self._local_camera_permission_resolved)
+        except Exception:  # noqa: BLE001 - native permission/event-loop boundary
+            log.exception("Could not request camera permission")
+            self._camera_permission_pending = False
+            self.localCameraAccessResolved.emit(False)
+
+    @Slot(QPermission)
+    def _local_camera_permission_resolved(self, permission: QPermission) -> None:
+        if self._closed or not self._camera_permission_pending:
+            return
+        self._camera_permission_pending = False
+        self.localCameraAccessResolved.emit(permission.status() == Qt.PermissionStatus.Granted)
 
     @Slot(result=str)
     def localCameraAccessError(self) -> str:
@@ -2460,6 +2490,7 @@ class ScenesBridge(QObject):
         if self._closed:
             return
         self._closed = True
+        self._camera_permission_pending = False
         self._onvif_cancellation.cancel()
         if self._onvif_executor is not None:
             self._onvif_executor.shutdown(wait=False, cancel_futures=True)

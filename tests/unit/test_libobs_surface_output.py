@@ -140,8 +140,113 @@ def test_disconnected_consumer_does_not_prevent_other_targets_rendering(backend,
     backend.producers[0].render.side_effect = ConnectionError("receiver exited")
     next(iter(backend.callbacks.values()))()
     backend.producers[1].render.assert_called_once()
-    assert "Surface output failed" in caplog.text
+    assert not caplog.records
+    assert len(manager.render_targets) == 1
     manager.shutdown()
+
+
+def test_closed_receiver_is_retired_once_before_control_thread_cleanup(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    producer = backend.producers[0]
+    producer.render.side_effect = ConnectionError("receiver exited")
+    callback = next(iter(backend.callbacks.values()))
+
+    callback()
+    callback()
+
+    assert producer.render.call_count == 1
+    assert not manager.render_targets
+    producer.close.assert_not_called()
+    backend.runtime.ob.remove_main_render_callback.assert_not_called()
+    manager.shutdown()
+
+
+def test_control_poll_closes_retired_owner_and_removes_last_callback(backend, caplog):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    producer = backend.producers[0]
+    producer.render.side_effect = ConnectionError("window closed")
+    next(iter(backend.callbacks.values()))()
+
+    manager.poll()
+    manager.poll()
+    manager.shutdown()
+
+    producer.close.assert_called_once()
+    assert not backend.callbacks
+    assert not caplog.records
+
+
+def test_unexpected_native_failure_is_reported_once_and_retired(backend, caplog):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    producer = backend.producers[0]
+    producer.render.side_effect = RuntimeError("native render failed")
+    callback = next(iter(backend.callbacks.values()))
+    callback()
+    callback()
+    manager.poll()
+
+    assert producer.render.call_count == 1
+    producer.close.assert_called_once()
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+    assert caplog.records[0].exc_info is not None
+    manager.shutdown()
+
+
+def test_poll_synchronizes_callback_without_blocking_the_graphics_thread(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target(), _target("healthy")])
+    backend.producers[0].render.side_effect = ConnectionError("window closed")
+    next(iter(backend.callbacks.values()))()
+    original_remove = backend.runtime.ob.remove_main_render_callback.side_effect
+
+    def synchronize(token):
+        worker = threading.Thread(target=backend.callbacks[token])
+        worker.start()
+        worker.join(timeout=1)
+        assert not worker.is_alive(), "control cleanup blocked the graphics callback"
+        original_remove(token)
+
+    backend.runtime.ob.remove_main_render_callback.side_effect = synchronize
+    manager.poll()
+    next(iter(backend.callbacks.values()))()
+
+    backend.producers[0].close.assert_called_once()
+    assert backend.producers[0].render.call_count == 1
+    assert backend.producers[1].render.call_count == 2
+    assert len(manager.render_targets) == 1
+    manager.shutdown()
+
+
+def test_failed_identity_waits_for_withdrawal_or_replacement(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    backend.producers[0].render.side_effect = ConnectionError("window closed")
+    next(iter(backend.callbacks.values()))()
+
+    manager.set_targets([_target()])
+    assert len(backend.producers) == 1 and not backend.callbacks
+    manager.set_targets([_target("replacement")])
+    assert len(backend.producers) == 2 and len(backend.callbacks) == 1
+    manager.set_targets([])
+    manager.set_targets([_target()])
+    assert len(backend.producers) == 3
+    manager.shutdown()
+    assert all(producer.close.call_count == 1 for producer in backend.producers)
+
+
+def test_shutdown_and_late_poll_do_not_repeat_native_cleanup(backend):
+    manager = _manager(backend)
+    manager.set_targets([_target()])
+    producer = backend.producers[0]
+    manager.shutdown()
+    manager.poll()
+    manager.shutdown()
+    producer.close.assert_called_once()
+    assert not backend.callbacks
 
 
 def test_failed_scene_resolution_is_isolated_to_its_target(backend):

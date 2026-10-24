@@ -265,12 +265,28 @@ relocation, signing and the native surface bridge. OBS 32.2.2 requires macOS 13
 or newer. Use the [pinned binding bootstrap](#pinned-media-binding) before
 installing dependencies.
 
+For editable development, use a framework build of Python and install the
+Xcode Command Line Tools (`xcode-select --install`). Running `python main.py`
+or the editable `solin` command builds an ad-hoc signed `build/dev/SolinDev.app`
+host before starting the Cocoa UI. The host retains the active Python
+environment and gives development camera/microphone requests their own bundle
+identity and usage declarations. It does not alter Python's installed app
+bundle. Headless helpers and runtime verification commands bypass this bootstrap.
+
 Cocoa projection windows and their previews receive the independent projection
 transition through the binding's bounded IOSurface/Mach transport. Qt owns the
 receiving views; only the supervised sidecar initializes libobs. Native view
 addresses never cross the process boundary. A failed receiving presenter falls
 back locally without disabling healthy windows. Windows and X11 retain their
 direct native displays; native Wayland presentation is unsupported.
+
+macOS virtual-camera output uses an installed and enabled OBS camera extension.
+Solin reads the vendor's native camera UID from its installed bundle metadata;
+the binding feeds its CoreMediaIO sink from the program mix. The OBS frontend
+plugin is not loaded. No Solin camera is installed. Stop other producers for
+that camera before enabling the Solin output; the OBS extension does not
+arbitrate competing writers. Output readiness requires camera-service frame
+consumption, with the normal bounded recovery policy for stalls/disconnection.
 
 The experimental GPU editor preview remains opt-in through
 `SOLIN_NATIVE_EDITOR_PREVIEW=1`, including on Cocoa. It follows the selected
@@ -376,9 +392,9 @@ available on a particular machine.
 
 - Virtual-camera output on Windows requires registered Solin DirectShow
   filters; the installer supplies them. Linux requires a configured
-  `v4l2loopback` device and the libobs `virtualcam_output` plugin. The macOS
-  runtime includes `mac-virtualcam`; validate camera-extension availability,
-  permissions, and camera output on the target Mac before distributing a build.
+  `v4l2loopback` device and the libobs `virtualcam_output` plugin. macOS uses
+  the camera extension installed by OBS; validate extension availability and
+  actual camera-source pixels on the target Mac before distributing a build.
 - Zoom meeting audio/video automation requires Windows and `comtypes`. A
   supervised, persistent helper uses native UI Automation with bounded requests.
   `scripts/prepare_zoom_bindings.py` generates `comtypes.gen.UIAutomationClient`

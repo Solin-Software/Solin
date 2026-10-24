@@ -2984,18 +2984,22 @@ def test_onvif_address_search_explains_an_unusable_target(scene_bridge_factory, 
 @pytest.mark.parametrize("status,expected", [
     (Qt.PermissionStatus.Granted, "granted"), (Qt.PermissionStatus.Denied, "denied"),
 ])
-def test_local_camera_access_only_requests_undetermined_permission(monkeypatch, status, expected):
+def test_local_camera_access_only_requests_undetermined_permission(
+    monkeypatch, scene_bridge_factory, status, expected,
+):
     from solin.ui.qml import scenes_bridge as module
+    _, _, bridge, _ = scene_bridge_factory()
     app = SimpleNamespace(checkPermission=lambda _: status)
     monkeypatch.setattr(module.sys, "platform", "darwin")
     monkeypatch.setattr(module, "QCoreApplication", SimpleNamespace(instance=lambda: app))
-    assert module.ScenesBridge.requestLocalCameraAccess(SimpleNamespace()) == expected
+    assert bridge.requestLocalCameraAccess() == expected
 
 
-def test_local_camera_permission_is_single_pending_user_action(monkeypatch):
+def test_local_camera_permission_is_single_pending_user_action(monkeypatch, scene_bridge_factory):
     from solin.ui.qml import scenes_bridge as module
     delivered, queued, requested = [], [], []
-    owner = SimpleNamespace(localCameraAccessResolved=SimpleNamespace(emit=delivered.append))
+    _, _, owner, _ = scene_bridge_factory()
+    owner.localCameraAccessResolved.connect(delivered.append)
     app = SimpleNamespace(checkPermission=lambda _: Qt.PermissionStatus.Undetermined,
         requestPermission=lambda permission, context, callback: requested.append(callback))
     monkeypatch.setattr(module.sys, "platform", "darwin")
@@ -3008,3 +3012,57 @@ def test_local_camera_permission_is_single_pending_user_action(monkeypatch):
     assert len(requested) == 1 and not delivered
     requested[0](SimpleNamespace(status=lambda: Qt.PermissionStatus.Granted))
     assert delivered == [True] and not owner._camera_permission_pending
+
+
+def test_camera_permission_callback_uses_the_real_pyside_overload(
+    monkeypatch, scene_bridge_factory,
+):
+    from PySide6.QtCore import QCameraPermission
+    from solin.ui.qml import scenes_bridge as module
+
+    qt_app = QCoreApplication.instance()
+    if qt_app.checkPermission(QCameraPermission()) == Qt.PermissionStatus.Undetermined:
+        pytest.skip("This binding regression must not trigger an interactive OS permission dialog")
+    _, _, bridge, _ = scene_bridge_factory()
+    resolved = QSignalSpy(bridge.localCameraAccessResolved)
+    # Force the user-action branch while keeping the real PySide callback
+    # conversion. A Python-only mock cannot expose its bound-method contract.
+    app = SimpleNamespace(
+        checkPermission=lambda _: Qt.PermissionStatus.Undetermined,
+        requestPermission=qt_app.requestPermission,
+    )
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module, "QCoreApplication", SimpleNamespace(instance=lambda: app))
+    assert bridge.requestLocalCameraAccess() == "pending"
+    _wait_for(lambda: resolved.count() == 1)
+    assert not bridge._camera_permission_pending
+
+
+@pytest.mark.parametrize("closed", [False, True])
+def test_camera_permission_queue_handles_closed_editor_and_native_failure(
+    monkeypatch, scene_bridge_factory, closed,
+):
+    from solin.ui.qml import scenes_bridge as module
+
+    _, _, bridge, _ = scene_bridge_factory()
+    queued, requested, delivered = [], [], []
+    bridge.localCameraAccessResolved.connect(delivered.append)
+
+    def request(*args):
+        requested.append(args)
+        raise RuntimeError("Native permission service failed")
+
+    app = SimpleNamespace(checkPermission=lambda _: Qt.PermissionStatus.Undetermined,
+                          requestPermission=request)
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module, "QCoreApplication", SimpleNamespace(instance=lambda: app))
+    monkeypatch.setattr(module, "QTimer", SimpleNamespace(
+        singleShot=lambda _, context, callback: queued.append(callback),
+    ))
+    assert bridge.requestLocalCameraAccess() == "pending"
+    if closed:
+        bridge.close()
+    queued[0]()
+    assert len(requested) == (0 if closed else 1)
+    assert delivered == ([] if closed else [False])
+    assert not bridge._camera_permission_pending

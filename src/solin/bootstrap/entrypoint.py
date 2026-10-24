@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from solin.core.foundation.constants import (
-    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
+    CAMERA_DISCOVERY_ARGUMENT, IS_DEV, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
 )
 
 from .startup_timeline import startup_timeline
@@ -50,6 +50,11 @@ def run() -> None:
         from solin.core.scenes.libobs_sidecar import main as run_sidecar
 
         raise SystemExit(run_sidecar())
+
+    if IS_DEV and sys.platform == "darwin":
+        from .macos_dev_host import ensure_development_bundle
+
+        ensure_development_bundle()
 
     from .application import run as run_application
 

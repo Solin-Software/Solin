@@ -37,6 +37,11 @@ the message using your distribution's package manager.
 
 - Install LibreOffice to import Office documents and presentations as static
   pages. Animations and embedded-media playback are not preserved.
+- On macOS, virtual-camera output uses **OBS Virtual Camera**. Install OBS and
+  enable its camera extension through OBS and the macOS approval flow once.
+  Stop OBS's virtual-camera output before enabling Solin's output, then select
+  **OBS Virtual Camera** in your meeting application. Solin does not install a
+  separate camera device.
 
 ## macOS first launch
 

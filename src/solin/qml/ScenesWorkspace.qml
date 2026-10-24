@@ -933,7 +933,8 @@ Item {
         }
         ScenesMenuItem {
             theme: root.theme
-            text: qsTr("Solin Virtual Camera")
+            objectName: "scenesVirtualCameraMenuItem"
+            text: root.bridge ? root.bridge.virtualCameraDeviceName : ""
             checkable: true
             checked: root.bridge && root.bridge.virtualCameraEnabled
             onTriggered: root.bridge.setVirtualCameraEnabled(checked)
