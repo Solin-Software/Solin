@@ -339,7 +339,7 @@ def _playback(directory: Path, deadline: float) -> dict:
         assert restarts == 1, "A second live consumer restarted the shared decoder"
         recorder = LibobsRecorder(runtime)
         stack.callback(recorder.stop)
-        assert recorder.start(str(recording), video_bitrate=1200), "Native recording did not start"
+        assert recorder.start(str(recording)), "Native recording did not start"
         positions = []
         hashes = set()
         stop = time.monotonic() + _remaining(deadline, 3.0)

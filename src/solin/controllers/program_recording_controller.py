@@ -198,8 +198,8 @@ class ProgramRecordingController(QObject):
         try:
             recording = ProgramRecordingRequest(
                 path=output_path,
-                width=video.width,
-                height=video.height,
+                width=configuration.resolution * 16 // 9,
+                height=configuration.resolution,
                 fps_numerator=video.fps_numerator,
                 fps_denominator=video.fps_denominator,
                 microphone=configuration.microphone,
@@ -303,6 +303,14 @@ class ProgramRecordingController(QObject):
         if not isinstance(selection, AudioDeviceSelection):
             raise TypeError("Invalid recording system-audio selection")
         self._set_configuration(replace(self.configuration, system_audio=selection))
+
+    def set_resolution(self, resolution: int) -> None:
+        if self.busy:
+            raise ProgramRecordingError(
+                "recording_busy",
+                "The recording resolution cannot change while Program is recording",
+            )
+        self._set_configuration(replace(self.configuration, resolution=resolution))
 
     def set_output_directory(self, directory: str | Path | None) -> None:
         if self.busy:

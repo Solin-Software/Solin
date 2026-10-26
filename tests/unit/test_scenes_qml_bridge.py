@@ -254,6 +254,10 @@ class _Recording(QObject):
         )
         self.configuration_changed.emit(self.configuration)
 
+    def set_resolution(self, resolution: int) -> None:
+        self.configuration = replace(self.configuration, resolution=resolution)
+        self.configuration_changed.emit(self.configuration)
+
     def effective_output_directory(self) -> Path:
         return (
             Path(self.configuration.output_directory)
@@ -557,6 +561,24 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
     assert recording.refresh_count == 1
 
     del workspace
+
+
+def test_recording_resolution_choices_selection_and_busy_guard(scene_bridge_factory, tmp_path) -> None:
+    recording = _Recording(tmp_path / "recordings")
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(recording=recording)
+    assert [choice["value"] for choice in bridge.recordingResolutionChoices] == [360, 540, 720, 1080]
+    assert bridge.recordingResolution == 720
+    changed = QSignalSpy(bridge.changed)
+    bridge.setRecordingResolution(1080)
+    assert recording.configuration.resolution == 1080
+    assert bridge.recordingResolution == 1080
+    assert changed.count() > 0
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(360)
+    assert bridge.recordingResolution == 1080
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(540)
+    assert bridge.recordingResolution == 540
 
 
 def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_factory) -> None:

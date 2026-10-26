@@ -385,6 +385,11 @@ available on a particular machine.
 - Recording microphone capture uses WASAPI on Windows and PulseAudio or ALSA
   on Linux. System-audio capture uses WASAPI on Windows and PulseAudio on Linux.
   The selector does not support macOS microphone or system-audio capture types.
+- Scene recordings use H.264/AAC MP4 at 360p, 540p, 720p (default), or 1080p,
+  independently of the virtual-camera resolution. Hardware encoders use bounded
+  VBR; the x264 fallback uses CRF 23 with a resolution-dependent VBV ceiling.
+  AAC audio uses 128 kb/s. Resolution is saved per scene collection and can be
+  changed when recording is stopped; file size varies with content and frame rate.
 - Office documents and presentations require LibreOffice and are converted
   through PDF to static images. Animations and embedded-media playback are not
   preserved.

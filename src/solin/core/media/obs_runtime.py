@@ -304,6 +304,19 @@ class ObsRuntime:
     def video(self) -> ObsVideoConfig:
         return self._video
 
+    def scale_video_encoder(self, encoder: Any, *, width: int, height: int) -> None:
+        """Scale one inactive encoder on the GPU without resetting the video mix."""
+        from pylibobs._ffi import get_lib
+
+        lib: Any = get_lib()
+        lib.obs_encoder_set_scaled_size(encoder._ptr, width, height)
+        lib.obs_encoder_set_gpu_scale_type(encoder._ptr, int(self.ob.ScaleType.LANCZOS))
+        if (
+            lib.obs_encoder_get_width(encoder._ptr) != width
+            or lib.obs_encoder_get_height(encoder._ptr) != height
+        ):
+            raise ObsRuntimeError("The recording encoder did not accept its output size")
+
     def camera_source(
         self,
         device_path: str,

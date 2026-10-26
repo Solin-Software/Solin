@@ -480,6 +480,7 @@ class _FakeEncoder:
         # virtual camera outputs.
         self.attach_global = attach_global
         self.mixer_idx: int | None = None  # audio encoders only: the mix track encoded
+        self.scaled_size: tuple[int, int] | None = None
         self.released = 0
 
     def release(self) -> None:
@@ -796,6 +797,9 @@ class _CompositingRuntime:
             self.channels.pop(channel, None)
         else:
             self.channels[channel] = source
+
+    def scale_video_encoder(self, encoder, *, width: int, height: int) -> None:
+        encoder.scaled_size = (width, height)
 
     def release_channel(self, channel: int) -> None:
         self.released_channels.append(channel)
@@ -2607,6 +2611,129 @@ def test_recorder_encodes_the_recording_track_not_the_meeting_track():
     assert audio.mixer_idx != 5  # track 6 carries the hosted-meeting mix
 
 
+def test_recorder_uses_bounded_quality_instead_of_fixed_streaming_bitrate():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("compact.mp4"))
+    settings = runtime.outputs[-1].video_encoder.settings
+    assert settings["rate_control"] == "CRF"
+    assert 20 <= settings["crf"] <= 23
+    assert "vbv-maxrate=" in settings["x264opts"]
+    assert "vbv-bufsize=" in settings["x264opts"]
+    assert runtime.outputs[-1].audio_encoder.settings["bitrate"] <= 160
+
+
+@pytest.mark.parametrize("height", [360, 540, 720, 1080])
+def test_engine_applies_recording_resolution_without_changing_program_canvas(height):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    width = height * 16 // 9
+    response = engine.handle(_request("start_program_recording", {
+        "path": _recording_path("scaled.mp4"), "width": width, "height": height,
+        "fps_numerator": 30, "fps_denominator": 1,
+        "microphone": {}, "system_audio": {},
+    }))
+    assert _ack_from_envelope(response).applied
+    assert runtime.outputs[-1].video_encoder.scaled_size == (width, height)
+    assert (runtime.video.width, runtime.video.height) == (1920, 1080)
+
+
+@pytest.mark.parametrize("width,height", [
+    (None, None), (True, 360), (1280, "720"), (1280, 720.0),
+    (1920, 720), (640, 0), (3840, 2160),
+])
+def test_engine_rejects_invalid_recording_size_before_opening_audio(width, height):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    response = engine.handle(_request("start_program_recording", {
+        "path": _recording_path("invalid.mp4"), "width": width, "height": height,
+        "microphone": {"mode": "system_default"},
+        "system_audio": {"mode": "system_default"},
+    }))
+    ack = _ack_from_envelope(response)
+    assert not ack.applied and ack.error_code == "recording_video_format_unsupported"
+    assert not runtime.outputs and not runtime.encoders
+    assert not _audio_sources(runtime, "pulse_input_capture")
+
+
+@pytest.mark.parametrize("encoder_id", [
+    "obs_nvenc_h264_tex", "jim_nvenc", "obs_qsv11", "h264_texture_amf", "ffmpeg_vaapi",
+])
+@pytest.mark.parametrize("height", [360, 540, 720, 1080])
+def test_hardware_recording_profiles_have_bounded_variable_bitrate(encoder_id, height):
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = [encoder_id, "obs_x264"]
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("hw.mp4"), width=height * 16 // 9, height=height)
+    encoder = runtime.outputs[-1].video_encoder
+    assert encoder.kind == encoder_id
+    assert encoder.scaled_size == (height * 16 // 9, height)
+    settings = encoder.settings
+    assert settings["rate_control"] == "VBR"
+    if encoder_id == "h264_texture_amf":
+        maximum = settings["bitrate"] * 1.5
+    else:
+        maximum = settings["maxrate" if encoder_id == "ffmpeg_vaapi" else "max_bitrate"]
+    assert 0 < settings["bitrate"] <= maximum < 6000
+
+
+def test_recording_scaling_failure_releases_encoder_before_software_fallback():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_nvenc_h264_tex", "obs_x264"]
+    scale = runtime.scale_video_encoder
+
+    def scale_software_only(encoder, *, width, height):
+        if encoder.kind == "obs_nvenc_h264_tex":
+            raise RuntimeError("hardware scaling unavailable")
+        scale(encoder, width=width, height=height)
+
+    runtime.scale_video_encoder = scale_software_only
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("fallback.mp4"), width=960, height=540)
+    assert runtime.encoders[0].released == 1
+    assert runtime.outputs[-1].video_encoder.kind == "obs_x264"
+    assert runtime.outputs[-1].video_encoder.scaled_size == (960, 540)
+
+
+def test_recording_bitrate_budget_scales_with_frame_rate():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    settings = []
+    for fps in (30, 60):
+        runtime = _CompositingRuntime()
+        runtime.video.fps = fps
+        runtime.encoder_types = ["obs_nvenc_h264_tex", "obs_x264"]
+        recorder = LibobsRecorder(runtime)
+        assert recorder.start(_recording_path(f"{fps}fps.mp4"))
+        settings.append(runtime.outputs[-1].video_encoder.settings)
+    assert settings[1]["bitrate"] == settings[0]["bitrate"] * 2
+    assert settings[1]["max_bitrate"] == settings[0]["max_bitrate"] * 2
+
+
+def test_duplicate_recording_start_preserves_live_output_and_audio():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    payload = {
+        "path": _recording_path("active.mp4"), "width": 1280, "height": 720,
+        "microphone": {"mode": "system_default"}, "system_audio": {"mode": "none"},
+    }
+    assert _ack_from_envelope(engine.handle(_request("start_program_recording", payload))).applied
+    microphone = _audio_sources(runtime, "pulse_input_capture")[0]
+    response = engine.handle(_request("start_program_recording", payload))
+    assert not _ack_from_envelope(response).applied
+    assert microphone.released == 0
+    assert runtime.outputs[-1].active
+
+
 def test_recorder_double_start_is_rejected():
     from solin.core.scenes.libobs_recorder import LibobsRecorder
 
@@ -2744,7 +2871,7 @@ def test_engine_start_recording_failure_emits_failed_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
 
-    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     assert _ack_from_envelope(response).applied is False
     failed = _program_recording_event_from_envelope(events[-1])
     assert failed.state.status is ProgramRecordingStatus.FAILED
@@ -2754,7 +2881,7 @@ def test_engine_start_recording_failure_emits_failed_state():
 def test_engine_start_recording_without_runtime_fails():
     engine = LibobsSidecarEngine()  # protocol-only, no runtime
     engine.handle(_request("hello"))
-    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     ack = _ack_from_envelope(response)
     assert ack.applied is False and ack.error_code == "runtime_unavailable"
 
@@ -2830,7 +2957,7 @@ def test_shutdown_stops_an_active_recording():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
-    engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     output = runtime.outputs[-1]
 
     engine.shutdown()
@@ -3015,7 +3142,7 @@ def test_engine_start_recording_applies_audio_before_start():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3031,7 +3158,7 @@ def test_engine_stop_recording_clears_audio_sources():
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "system_default"},
     }))
@@ -3049,7 +3176,7 @@ def test_engine_failed_recording_start_clears_audio_sources():
     engine.handle(_request("hello"))
 
     response = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3161,7 +3288,7 @@ def test_engine_start_recording_with_missing_device_warns_but_records():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "ghost-mic"},
         "system_audio": {"mode": "none"},
     }))
@@ -3179,7 +3306,7 @@ def test_engine_live_device_switch_replaces_source_and_emits_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3206,7 +3333,7 @@ def test_engine_set_recording_audio_missing_device_emits_warning():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "system_default"},
         "system_audio": {"mode": "none"},
     }))

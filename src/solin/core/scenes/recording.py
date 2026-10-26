@@ -15,6 +15,8 @@ MAXIMUM_RECORDING_PATH_LENGTH = 4096
 MAXIMUM_RECORDING_DIMENSION = 3840
 MAXIMUM_RECORDING_PIXELS = 3840 * 2160
 MAXIMUM_RECORDING_FRAMES_PER_SECOND = 60
+RECORDING_RESOLUTIONS = (360, 540, 720, 1080)
+DEFAULT_RECORDING_RESOLUTION = 720
 
 
 class AudioSelectionMode(StrEnum):
@@ -90,8 +92,11 @@ class SceneRecordingConfig:
     microphone: AudioDeviceSelection = field(default_factory=AudioDeviceSelection)
     system_audio: AudioDeviceSelection = field(default_factory=AudioDeviceSelection)
     output_directory: str = ""
+    resolution: int = DEFAULT_RECORDING_RESOLUTION
 
     def __post_init__(self) -> None:
+        if type(self.resolution) is not int or self.resolution not in RECORDING_RESOLUTIONS:
+            raise SceneValidationError("Invalid recording resolution")
         if not isinstance(self.microphone, AudioDeviceSelection):
             raise SceneValidationError("Invalid recording microphone selection")
         if not isinstance(self.system_audio, AudioDeviceSelection):
@@ -109,6 +114,7 @@ class SceneRecordingConfig:
             "microphone": self.microphone.to_record(),
             "system_audio": self.system_audio.to_record(),
             "output_directory": self.output_directory,
+            "resolution": self.resolution,
         }
 
     @classmethod
@@ -116,7 +122,7 @@ class SceneRecordingConfig:
         data = _strict_mapping(
             raw,
             field_name="Scene recording configuration",
-            allowed_keys={"microphone", "system_audio", "output_directory"},
+            allowed_keys={"microphone", "system_audio", "output_directory", "resolution"},
         )
         output_directory = data.get("output_directory")
         if not isinstance(output_directory, str):
@@ -125,6 +131,7 @@ class SceneRecordingConfig:
             microphone=AudioDeviceSelection.from_record(data.get("microphone")),
             system_audio=AudioDeviceSelection.from_record(data.get("system_audio")),
             output_directory=output_directory,
+            resolution=data["resolution"],
         )
 
 
