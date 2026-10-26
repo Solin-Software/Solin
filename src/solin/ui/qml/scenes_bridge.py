@@ -81,6 +81,8 @@ from solin.core.scenes.model import (
     new_identity,
 )
 from solin.core.scenes.recording import (
+    DEFAULT_RECORDING_RESOLUTION,
+    RECORDING_RESOLUTIONS,
     AudioDeviceDirection,
     AudioDeviceSelection,
     AudioSelectionMode,
@@ -638,6 +640,18 @@ class ScenesBridge(QObject):
             return ""
         return self._recording_selection_key(self._recording.configuration.system_audio)
 
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def recordingResolutionChoices(self) -> list[dict[str, object]]:
+        return [{"value": resolution, "name": f"{resolution}p"} for resolution in RECORDING_RESOLUTIONS]
+
+    @Property(int, notify=changed)
+    def recordingResolution(self) -> int:
+        return (
+            self._recording.configuration.resolution
+            if self._recording is not None
+            else DEFAULT_RECORDING_RESOLUTION
+        )
+
     @Property(str, notify=changed)
     def recordingOutputDirectory(self) -> str:
         if self._recording is None:
@@ -969,6 +983,13 @@ class ScenesBridge(QObject):
             recording.configuration.system_audio,
         )
         self._run_recording(lambda: recording.set_system_audio_selection(selection))
+
+    @Slot(int)
+    def setRecordingResolution(self, resolution: int) -> None:
+        recording = self._recording
+        if recording is None or recording.busy:
+            return
+        self._run_recording(lambda: recording.set_resolution(resolution))
 
     @Slot()
     def chooseRecordingDirectory(self) -> None:

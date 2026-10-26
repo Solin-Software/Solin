@@ -36,6 +36,7 @@ from solin.core.scenes.ipc_protocol import (
     write_envelope,
 )
 from solin.core.scenes.model import SceneValidationError
+from solin.core.scenes.recording import RECORDING_RESOLUTIONS
 from solin.core.scenes.engine import (
     SCENE_THUMBNAILS_CHANNEL,
     LocalCameraModeQuery,
@@ -848,16 +849,26 @@ class LibobsSidecarEngine:
         if not self._runtime_started or recorder is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
+        if recorder.active:
+            return _ack(request, applied=False, error_code="recording_busy",
+                        error_message="Program is already recording")
         path = str(request.payload.get("path") or "")
         if not path:
             return _ack(request, applied=False, error_code="invalid_path",
                         error_message="a recording path is required")
+        width, height = request.payload.get("width"), request.payload.get("height")
+        if (
+            type(width) is not int or type(height) is not int
+            or height not in RECORDING_RESOLUTIONS or width != height * 16 // 9
+        ):
+            return _ack(request, applied=False, error_code="recording_video_format_unsupported",
+                        error_message="unsupported recording resolution")
         # Bind the selected microphone + system audio into the mix BEFORE the
         # recorder starts, so the file carries them from the first frame. An
         # audio-selection failure must not block the recording itself — it is
         # surfaced as a warning on the recording-state event instead.
         warnings = self._apply_recording_audio(request.payload)
-        if recorder.start(path):
+        if recorder.start(path, width=width, height=height):
             self._emit_recording_state("recording", path=path, warnings=warnings)
             return _ack(request, applied=True)
         # The recording never began, so drop the capture sources we just bound —

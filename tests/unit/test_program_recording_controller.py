@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, Signal
 
 from solin.controllers.program_recording_controller import (
     ProgramRecordingController,
+    ProgramRecordingError,
     next_program_recording_path,
     select_default_recording_directory,
 )
@@ -25,6 +26,8 @@ from solin.core.scenes.engine import (
     SceneEngineStatus,
 )
 from solin.core.scenes.ipc_protocol import PROTOCOL_VERSION
+from solin.core.scenes.collections import SCENE_COLLECTION_CATALOG_SCHEMA_VERSION
+from solin.core.scenes.model import BusId, SceneValidationError
 from solin.core.scenes.presets import SceneSeedNames, create_default_scene_document
 from solin.core.scenes.recording import (
     AudioDevice,
@@ -35,6 +38,7 @@ from solin.core.scenes.recording import (
     ProgramRecordingNativeState,
     ProgramRecordingRequest,
     ProgramRecordingStatus,
+    SceneRecordingConfig,
 )
 from solin.core.scenes.repository import SceneCollectionCatalogRepository
 from solin.core.scenes.workspace import SceneWorkspaceBusyError
@@ -271,27 +275,57 @@ def test_controller_rejects_start_when_native_recording_is_unsupported(
     assert not paths.scene_recording_journal_file.exists()
 
 
-def test_controller_rejects_video_format_beyond_native_encoder_budget(
+@pytest.mark.parametrize("resolution", [360, 540, 720, 1080])
+def test_controller_records_selected_resolution_independently_of_virtual_camera(
     recording_controller_factory,
+    resolution: int,
 ) -> None:
     controller, _workspace, runtime, engine, paths = recording_controller_factory()
+    controller.set_resolution(resolution)
     document = runtime.document
-    output = document.output(document.outputs[1].bus_id)
     runtime.document = replace(
         document,
         outputs=tuple(
             replace(
                 candidate,
-                video_format=replace(candidate.video_format, width=7680, height=4320),
+                video_format=replace(
+                    candidate.video_format, width=7680, height=4320,
+                    fps_numerator=30000, fps_denominator=1001,
+                ),
             )
-            if candidate.bus_id is output.bus_id
+            if candidate.bus_id is BusId.VIRTUAL_CAMERA
             else candidate
             for candidate in document.outputs
         ),
     )
 
+    controller.start()
+
+    assert controller.state.status is ProgramRecordingStatus.RECORDING
+    recording = next(value for operation, value in engine.requests if operation == "start")
+    assert (recording.width, recording.height) == (resolution * 16 // 9, resolution)
+    assert (recording.fps_numerator, recording.fps_denominator) == (30000, 1001)
+    assert runtime.document.output(BusId.VIRTUAL_CAMERA).video_format.width == 7680
+    assert controller.state.active_config.resolution == resolution
+
+
+def test_controller_still_rejects_virtual_camera_fps_beyond_recording_budget(
+    recording_controller_factory,
+) -> None:
+    controller, _workspace, runtime, engine, paths = recording_controller_factory()
+    runtime.document = replace(
+        runtime.document,
+        outputs=tuple(
+            replace(
+                output,
+                video_format=replace(output.video_format, fps_numerator=120, fps_denominator=1),
+            )
+            if output.bus_id is BusId.VIRTUAL_CAMERA else output
+            for output in runtime.document.outputs
+        ),
+    )
+
     assert controller.start() is None
-    assert controller.state.status is ProgramRecordingStatus.FAILED
     assert controller.state.error_code == "recording_video_format_unsupported"
     assert runtime.demands == []
     assert not any(operation == "start" for operation, _value in engine.requests)
@@ -507,13 +541,14 @@ def test_recording_configuration_is_independent_per_scene_profile(scene_workspac
     first_directory = str((tmp_path / "first-recordings").resolve())
     second_directory = str((tmp_path / "second-recordings").resolve())
     workspace.update_active_recording_config(
-        replace(workspace.active_collection.recording, output_directory=first_directory)
+        replace(workspace.active_collection.recording, output_directory=first_directory, resolution=360)
     )
     second = workspace.create_collection("Auditorium")
     workspace.activate_collection(second.id)
     assert workspace.active_collection.recording.output_directory == ""
+    assert workspace.active_collection.recording.resolution == 720
     workspace.update_active_recording_config(
-        replace(workspace.active_collection.recording, output_directory=second_directory)
+        replace(workspace.active_collection.recording, output_directory=second_directory, resolution=1080)
     )
 
     workspace.activate_collection(first_id)
@@ -522,6 +557,8 @@ def test_recording_configuration_is_independent_per_scene_profile(scene_workspac
     reloaded = scene_workspace_factory(paths, seed_names=_names())
     assert reloaded.catalog.collection(first_id).recording.output_directory == first_directory
     assert reloaded.catalog.collection(second.id).recording.output_directory == second_directory
+    assert reloaded.catalog.collection(first_id).recording.resolution == 360
+    assert reloaded.catalog.collection(second.id).recording.resolution == 1080
 
 
 def test_scene_profile_catalog_v1_migrates_to_recording_defaults(tmp_path: Path) -> None:
@@ -545,9 +582,105 @@ def test_scene_profile_catalog_v1_migrates_to_recording_defaults(tmp_path: Path)
     assert catalog.active.recording.system_audio == AudioDeviceSelection()
     assert catalog.active.recording.output_directory == ""
     persisted = json.loads(paths.scene_profiles_catalog_file.read_text(encoding="utf-8"))
-    assert persisted["schema_version"] == 2
+    assert persisted["schema_version"] == SCENE_COLLECTION_CATALOG_SCHEMA_VERSION
     assert persisted["revision"] == 7
     assert persisted["collections"][0]["recording"]["output_directory"] == ""
+    assert catalog.active.recording.resolution == 720
+    assert persisted["collections"][0]["recording"]["resolution"] == 720
+
+
+@pytest.mark.parametrize("resolution", [360, 540, 720, 1080])
+def test_recording_resolution_round_trips(resolution: int) -> None:
+    configuration = SceneRecordingConfig(resolution=resolution)
+    assert SceneRecordingConfig.from_record(configuration.to_record()) == configuration
+
+
+@pytest.mark.parametrize("resolution", [True, False, 720.0, "720", None, 0, 480, 2160])
+def test_recording_resolution_requires_a_supported_integer(resolution) -> None:
+    with pytest.raises(SceneValidationError):
+        SceneRecordingConfig(resolution=resolution)
+    record = SceneRecordingConfig().to_record()
+    record["resolution"] = resolution
+    with pytest.raises(SceneValidationError):
+        SceneRecordingConfig.from_record(record)
+
+
+@pytest.mark.parametrize("resolution", [True, 720.0, "720", 480])
+def test_invalid_resolution_does_not_change_persisted_configuration(
+    recording_controller_factory, resolution,
+) -> None:
+    controller, _workspace, _runtime, engine, paths = recording_controller_factory()
+    previous = paths.scene_profiles_catalog_file.read_bytes()
+    requests = list(engine.requests)
+    with pytest.raises(SceneValidationError):
+        controller.set_resolution(resolution)
+    assert controller.configuration.resolution == 720
+    assert paths.scene_profiles_catalog_file.read_bytes() == previous
+    assert engine.requests == requests
+
+
+def test_current_recording_config_requires_resolution() -> None:
+    record = SceneRecordingConfig().to_record()
+    record.pop("resolution", None)
+    with pytest.raises(SceneValidationError):
+        SceneRecordingConfig.from_record(record)
+
+
+def test_scene_profile_catalog_v2_migrates_resolution_without_losing_settings(tmp_path: Path) -> None:
+    paths = _paths(tmp_path)
+    configuration = SceneRecordingConfig(
+        microphone=AudioDeviceSelection(AudioSelectionMode.NONE),
+        output_directory=str(tmp_path / "custom"),
+    )
+    record = configuration.to_record()
+    record.pop("resolution", None)
+    paths.scene_profiles_catalog_file.write_text(json.dumps({
+        "schema_version": 2, "revision": 9,
+        "active_collection_id": "profile-1", "pending_collection_id": "",
+        "collections": [{"id": "profile-1", "name": "Auditorium", "recording": record}],
+    }), encoding="utf-8")
+
+    repository = SceneCollectionCatalogRepository(paths.scene_profiles_catalog_file)
+    catalog = repository.load()
+
+    assert catalog.active.recording == configuration
+    assert catalog.active.recording.resolution == 720
+    persisted = json.loads(paths.scene_profiles_catalog_file.read_text(encoding="utf-8"))
+    assert persisted == catalog.to_record()
+    assert persisted["schema_version"] == SCENE_COLLECTION_CATALOG_SCHEMA_VERSION
+    assert persisted["revision"] == 9
+    assert repository.load() == catalog
+
+
+@pytest.mark.parametrize("status", [
+    ProgramRecordingStatus.STARTING,
+    ProgramRecordingStatus.RECORDING,
+    ProgramRecordingStatus.STOPPING,
+])
+def test_resolution_cannot_change_while_recording_is_busy(recording_controller_factory, status) -> None:
+    controller, workspace, _runtime, engine, _paths = recording_controller_factory()
+    controller.start()
+    controller._set_state(replace(controller.state, status=status))
+    requests = list(engine.requests)
+    with pytest.raises(ProgramRecordingError) as error:
+        controller.set_resolution(1080)
+    assert error.value.error_code == "recording_busy"
+    assert workspace.active_collection.recording.resolution == 720
+    assert controller.state.active_config.resolution == 720
+    assert engine.requests == requests
+
+
+def test_resolution_changes_notify_and_persist_without_audio_requests(recording_controller_factory) -> None:
+    controller, workspace, _runtime, engine, paths = recording_controller_factory()
+    observed = []
+    controller.configuration_changed.connect(observed.append)
+    controller.set_resolution(540)
+    controller.set_resolution(540)
+    assert len(observed) == 1
+    assert observed[0].resolution == 540
+    assert workspace.active_collection.recording.resolution == 540
+    assert SceneCollectionCatalogRepository(paths.scene_profiles_catalog_file).load().active.recording.resolution == 540
+    assert not any(operation == "audio" for operation, _value in engine.requests)
 
 
 def test_disabling_the_virtual_camera_stops_and_saves_the_recording(
