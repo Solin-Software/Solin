@@ -73,14 +73,16 @@ libobs_runtime_packages=(
     libxkbcommon0
     zlib1g
 )
-media_extract_build_packages=(
+media_build_packages=(
     libavcodec-dev
+    libavdevice-dev
     libavformat-dev
     libavutil-dev
     libswscale-dev
+    libsimde-dev
 )
 if [[ "${1:-}" == "--print-native-packages" && "$#" == 1 ]]; then
-    printf '%s\n' "${libobs_runtime_packages[@]}" "${media_extract_build_packages[@]}"
+    printf '%s\n' "${libobs_runtime_packages[@]}" "${media_build_packages[@]}"
     exit 0
 fi
 [[ "$#" == 0 ]] || fail "Usage: $0 [--print-native-packages]"
@@ -151,6 +153,7 @@ for command_name in cmake curl dpkg-deb gcc patchelf pkg-config readelf sha256su
 done
 
 "${PYTHON}" scripts/build_media_extract.py --build-dir "${WORK_ROOT}/native/media-extract"
+"${PYTHON}" scripts/build_media_playback.py --build-dir "${WORK_ROOT}/native/media-playback"
 
 # The published Linux wheel omits usr/local/bin/obs-ffmpeg-mux. Extract the
 # matching official release without installing OBS or changing apt sources.

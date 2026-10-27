@@ -81,8 +81,10 @@ def test_every_build_and_quality_environment_bootstraps_media_extraction_before_
     ):
         recipe = _read(relative)
         assert "build_media_extract.py" in recipe
+        assert "build_media_playback.py" in recipe
         consumer = "python scripts/typecheck.py" if relative.endswith("quality.yml") else "--include-package=pylibobs"
         assert recipe.index("build_media_extract.py") < recipe.index(consumer)
+        assert recipe.index("build_media_playback.py") < recipe.index(consumer)
     script = _read("scripts/build_solin.sh")
     for component in ("avcodec", "avformat", "avutil", "swscale"):
         assert f"lib{component}-dev" in script

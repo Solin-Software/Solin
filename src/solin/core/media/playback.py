@@ -255,8 +255,7 @@ class MediaController(QObject):
             self.state_changed.emit(
                 ENGINE_STATE_TO_SOLIN.get(raw_state, SolinPlaybackState.STOPPED)
             )
-        # The sidecar reports a dropped stream as buffering rather than ended, so
-        # this is the operator's cue that it is coming back rather than stuck.
+        # Reflect the decoder's recovery state in the transport UI.
         recovering = raw_state == ENGINE_STATE_BUFFERING
         if recovering != self._engine_recovering:
             self._engine_recovering = recovering

@@ -65,6 +65,7 @@ Linux), then run with the application's Python interpreter:
 
 ```text
 python scripts/build_media_extract.py
+python scripts/build_media_playback.py
 ```
 
 The build uses `native/media_extract`, writes compiler output under
@@ -74,6 +75,18 @@ Solin's own helper. Linux fills missing dependency files from the same installed
 Ubuntu packages without overwriting existing wheel libraries; macOS adds relative
 FFmpeg library aliases when necessary. Release recipes run this bootstrap
 automatically. Python dependency installation alone does not compile the helper.
+
+The playback build installs `obs-plugins/solin-media-source` in that runtime.
+It compiles a verified subset of OBS 32.1.2 with focused playback corrections:
+attached cover images are metadata rather than timed video, and successful seeks
+clear the demuxer's read-ahead EOF. Local files and progressive HTTP media share
+the finite playback lifecycle; HTTP read retries preserve the byte offset and
+natural EOF remains terminal. Live transports retain OBS's reconnect lifecycle.
+Finite inputs retain native cancellation so Stop and shutdown interrupt pending
+network reads and retries. Native failures report an error rather than completion;
+an explicit retry creates a fresh decoder.
+The playback build recipe records its source checksum and installed binary in
+`media-playback-manifest.json`; packaging requires this module.
 
 Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
 SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match

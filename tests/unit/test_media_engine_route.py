@@ -283,6 +283,20 @@ def test_engine_state_ignored_when_not_routed(tmp_path):
     assert ended == []
 
 
+def test_engine_failure_does_not_emit_media_ended(tmp_path):
+    controller, _played = _controller(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4"))
+    ended: list[bool] = []
+    controller.media_ended.connect(lambda: ended.append(True))
+
+    for state in (MediaPlaybackState.PLAYING, MediaPlaybackState.BUFFERING, MediaPlaybackState.ERROR):
+        controller.on_engine_media_state(MediaPlaybackNativeState(state, 1200, 5000))
+
+    assert ended == []
+    assert not controller.is_playing
+
+
 # ── SceneEngineMediaRoute adapter ────────────────────────────────────────────
 
 

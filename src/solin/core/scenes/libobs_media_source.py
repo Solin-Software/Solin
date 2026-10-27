@@ -1,16 +1,4 @@
-"""Qt-free libobs media source (``ffmpeg_source``) for the scene-engine sidecar.
-
-Under Fork A, media files are decoded by libobs — not pushed as frames — so a
-media content item is an ``ffmpeg_source`` created in the sidecar. This wraps one
-with transport (open / play / pause / stop / seek) and state polling, with **no
-Qt dependency** (the sidecar has no event loop). Its ``source`` drops straight
-into the scene builder's ``content_source`` slot, so it composites like any other
-source.
-
-The richer behaviours the in-process ``obs_playback`` engine grew (trim, speed
-persistence, stream reconnect, download handoff, tag metadata) are follow-ups;
-this is the decode + basic transport core.
-"""
+"""Qt-free native media transport for files, progressive HTTP and live inputs."""
 
 from __future__ import annotations
 
@@ -28,6 +16,8 @@ from solin.core.scenes.audio_tempo import (
 )
 
 log = logging.getLogger(__name__)
+
+MEDIA_SOURCE_ID = "solin_media_source"
 
 
 def _hw_decode_enabled() -> bool:
@@ -57,15 +47,11 @@ STATE_ERROR = 7
 _REMOTE_SCHEMES = ("http://", "https://", "rtsp://", "rtmp://", "srt://")
 # Progressive downloads can be seeked with byte ranges; live transports cannot.
 _SEEKABLE_REMOTE_SCHEMES = ("http://", "https://")
-# Options for a progressive HTTP input. media-playback has no notion of a
-# recoverable read: any error out of av_read_frame ends its decode thread, which
-# ffmpeg_source reports as ENDED — so one dropped packet looked like the end of the
-# video. Letting ffmpeg's own http layer re-issue the request with a Range header
-# keeps the failure below av_read_frame, where nothing upstream ever sees it.
-#
-# reconnect_at_eof stays off so a real end of file still ends. rw_timeout also caps
-# how long teardown can block: marking a stream seekable drops the interrupt
-# callback media-playback would otherwise install.
+# Recover HTTP reads within the same input, preserving byte position. Finite
+# inputs use OBS's file lifecycle even when the bytes arrive over HTTP: its live
+# lifecycle reconnects from zero after every EOF, independently of looping.
+# Keep EOF terminal and bound individual reads; native cancellation interrupts
+# pending reads and retries when the source stops or closes.
 _PROGRESSIVE_FFMPEG_OPTIONS = (
     "reconnect=1 "
     "reconnect_streamed=1 "
@@ -115,7 +101,7 @@ class _StartupTransport:
 
 
 class LibobsMediaSource:
-    """An ``ffmpeg_source`` wrapper with Qt-free transport + state."""
+    """A native media source with Qt-free transport and state."""
 
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
@@ -220,7 +206,7 @@ class LibobsMediaSource:
         volume_percent: int = 100,
         speed_percent: int = 100,
     ) -> bool:
-        """Create an ffmpeg_source for ``path`` (local file or remote URL).
+        """Create a native decoder for ``path`` (local file or remote URL).
 
         ``is_local_file`` overrides the scheme-based guess (the app knows which);
         ``volume_percent`` / ``speed_percent`` set the initial volume and playback
@@ -230,26 +216,12 @@ class LibobsMediaSource:
         if not path:
             return False
         local = (not _is_remote(path)) if is_local_file is None else bool(is_local_file)
-        settings: dict[str, object] = (
-            {"is_local_file": True, "local_file": path}
-            if local
-            else {"is_local_file": False, "input": path}
-        )
-        if not local and _is_seekable_remote(path):
-            # media-playback wraps av_seek_frame in `if (m->is_local_file)`, and
-            # ffmpeg_source composes that flag as `is_local_file || seekable`. With
-            # neither set, a seek is accepted, queued, and then silently dropped —
-            # the position keeps running and the slider snaps back. HTTP origins
-            # serve byte ranges, so mark them seekable and pay the network options
-            # back through ffmpeg_options. A origin that refuses ranges just logs
-            # "MP: Failed to seek" and behaves as before. Live transports are left
-            # alone: they cannot seek and do need the interrupt callback.
-            settings["seekable"] = True
+        progressive = not local and _is_seekable_remote(path)
+        finite = local or progressive
+        input_key = "local_file" if finite else "input"
+        settings: dict[str, object] = {"is_local_file": finite, input_key: path}
+        if progressive:
             settings["ffmpeg_options"] = _PROGRESSIVE_FFMPEG_OPTIONS
-            # If ffmpeg's own reconnect does give up, ffmpeg_source rebuilds the
-            # media after this delay. Its default is 10 s, which reads as a dead
-            # video in the middle of a meeting.
-            settings["reconnect_delay_sec"] = 2
         # Ask libobs to decode on the GPU when hardware is available; it falls
         # back to software per stream (see _hw_decode_enabled).
         settings["hw_decode"] = _hw_decode_enabled()
@@ -263,10 +235,13 @@ class LibobsMediaSource:
         if speed_percent and speed_percent != 100:
             settings["speed_percent"] = int(speed_percent)
         try:
+            if MEDIA_SOURCE_ID not in self._runtime.ob.enum_source_types():
+                log.error("The bundled Solin media source is unavailable")
+                return False
             initial_settings = dict(settings)
-            initial_settings["local_file" if local else "input"] = ""
+            initial_settings[input_key] = ""
             source = self._runtime.ob.Source.create(
-                "ffmpeg_source", "solin-content-media", initial_settings,
+                MEDIA_SOURCE_ID, "solin-content-media", initial_settings,
             )
         except Exception:  # noqa: BLE001 - source creation boundary
             log.warning("Could not create ffmpeg_source for %r", path, exc_info=True)

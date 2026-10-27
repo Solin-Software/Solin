@@ -73,6 +73,7 @@ _MEDIA_EXTRACT_ABI = {
     "macos": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
 }
 _MEDIA_EXTRACT_MANIFEST = "media-extract-manifest.json"
+_MEDIA_PLAYBACK_MANIFEST = "media-playback-manifest.json"
 _WINDOWS_REDISTRIBUTABLES = frozenset({
     "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll",
 })
@@ -478,6 +479,32 @@ def _normalize_macos_frameworks(root: Path) -> None:
         alias.symlink_to(relative, target_is_directory=canonical.is_dir())
 
 
+def _media_playback_receipt(root: Path, suffix: str, *, rehash: bool = False) -> None:
+    """Verify the installed playback build; reseal only after owned relocation."""
+    manifest = root / _MEDIA_PLAYBACK_MANIFEST
+    _require_file(manifest)
+    plugin = root / "obs-plugins" / f"solin-media-source{suffix}"
+    _require_file(plugin)
+    try:
+        receipt = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise LibobsPackagingError("Invalid native media playback receipt") from error
+    if (
+        not isinstance(receipt, dict)
+        or type(receipt.get("schema")) is not int or receipt["schema"] != 1
+        or receipt.get("source_id") != "solin_media_source"
+        or not isinstance(receipt.get("plugin"), dict)
+        or receipt["plugin"].get("path") != plugin.relative_to(root).as_posix()
+    ):
+        raise LibobsPackagingError("Native media playback receipt does not identify the module")
+    digest = hashlib.sha256(plugin.read_bytes()).hexdigest()
+    if rehash:
+        receipt["plugin"]["sha256"] = digest
+        manifest.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+    elif receipt["plugin"].get("sha256") != digest:
+        raise LibobsPackagingError("Native media playback module differs from its build receipt")
+
+
 def validate_runtime(
     root: Path, target_platform: str, *, linux_mux_helper: Path | None = None,
 ) -> None:
@@ -504,8 +531,9 @@ def validate_runtime(
     _require_file(linux_mux_helper if linux_mux_helper is not None else _mux_helper(root, target_platform))
     for name in libraries:
         _require_file(root / name)
-    for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
+    for name in ("obs-ffmpeg", "image-source", "obs-transitions", "solin-media-source"):
         _require_file(root / "obs-plugins" / f"{name}{suffix}")
+    _media_playback_receipt(root, suffix)
     if target_platform == "windows":
         _require_file(root / "obs-plugins" / "win-wasapi.dll")
     _require_file(root / "data" / "libobs" / "default.effect")
@@ -901,6 +929,12 @@ def stage_runtime(
         else:
             _stage_windows_redists(staging, application_dir)
             _audit_windows_media_extract(staging, staging / media_extract_name(target_platform), architecture)
+        # The source receipt was verified before copying. Relocation can alter
+        # Mach-O/ELF bytes while preserving the same qualified native code.
+        _media_playback_receipt(
+            staging, {"windows": ".dll", "linux": ".so", "macos": ".dylib"}[target_platform],
+            rehash=True,
+        )
         validate_runtime(staging, target_platform)
         receipt = verify_media_extract(
             staging / media_extract_name(target_platform), target_platform=target_platform,

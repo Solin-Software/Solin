@@ -109,7 +109,9 @@ class _Runtime:
                 runtime.created.append(source)
                 return source
 
-        self.ob = types.SimpleNamespace(Source=_SourceNS)
+        self.ob = types.SimpleNamespace(
+            Source=_SourceNS, enum_source_types=lambda: [libobs_media_source.MEDIA_SOURCE_ID],
+        )
 
     def watch_source_video(self, source):
         watch = _FakeVideoReadiness(source)
@@ -210,7 +212,7 @@ def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
     assert media.open("/tmp/clip.mp4", autoplay=True) is True
 
     source = runtime.created[-1]
-    assert source.kind == "ffmpeg_source"
+    assert source.kind == "solin_media_source"
     assert source.settings == {
         "is_local_file": True, "local_file": "/tmp/clip.mp4", "hw_decode": True,
         "restart_on_activate": False,
@@ -225,7 +227,15 @@ def test_open_local_file_creates_ffmpeg_source_and_autoplays(monkeypatch):
     assert source.updates == [source.settings]
 
 
-def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch):
+def test_missing_native_decoder_rejects_open_without_an_inert_source():
+    runtime = _Runtime()
+    runtime.ob.enum_source_types = lambda: ["ffmpeg_source"]
+    media = LibobsMediaSource(runtime)
+    assert not media.open("/song.mp3")
+    assert media.source is None and not runtime.created
+
+
+def test_open_http_file_uses_finite_transport_and_can_start_paused(monkeypatch):
     monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)  # default: HW on
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
@@ -234,24 +244,21 @@ def test_open_remote_url_uses_the_input_setting_and_can_start_paused(monkeypatch
 
     source = runtime.created[-1]
     assert source.settings == {
-        "is_local_file": False, "input": "https://cdn.example/v.mp4", "hw_decode": True,
+        "is_local_file": True, "local_file": "https://cdn.example/v.mp4", "hw_decode": True,
         "restart_on_activate": False,
-        # http(s) origins serve byte ranges, so the stream is seekable
-        "seekable": True,
         "ffmpeg_options": _PROGRESSIVE_FFMPEG_OPTIONS,
-        "reconnect_delay_sec": 2,
     }
     assert source.play_pause == []  # Pause must wait for the decoder's initial reset.
     assert source.seeks == []
     assert source.volume == 0.0
     assert media.state == STATE_PAUSED and source.media_state == STATE_PLAYING
-    assert source.initial_settings == {**source.settings, "input": ""}
+    assert source.initial_settings == {**source.settings, "local_file": ""}
     assert source.updates == [source.settings]
 
 
 @pytest.mark.parametrize("path, input_key", [
     ("/clip.mp4", "local_file"),
-    ("https://cdn.example/clip.mp4", "input"),
+    ("https://cdn.example/clip.mp4", "local_file"),
 ])
 def test_readiness_observer_is_installed_before_the_input_can_decode(path, input_key, monkeypatch):
     runtime = _Runtime()
@@ -779,29 +786,23 @@ def test_a_wrapper_without_a_raw_pointer_does_not_break_playback(monkeypatch):
     media.close()
 
 
-def test_progressive_http_media_is_marked_seekable(monkeypatch):
-    """Without this the seek is accepted, queued, and silently dropped.
-
-    ffmpeg_source composes media-playback's is_local_file as
-    ``is_local_file || seekable``, and media-playback wraps av_seek_frame in
-    ``if (m->is_local_file)``. A streamed URL with neither flag therefore ignores
-    every seek while the position keeps running, so the slider snaps back.
-    """
+def test_progressive_http_uses_file_lifecycle_and_position_preserving_recovery(monkeypatch):
+    """Network location must not turn finite EOF into a live reconnection."""
     monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
     runtime = _Runtime()
 
     LibobsMediaSource(runtime).open("https://cdn.example/song.mp3")
 
     settings = runtime.created[-1].settings
-    assert settings["seekable"] is True
+    assert settings["is_local_file"] is True
+    assert settings["local_file"] == "https://cdn.example/song.mp3"
     # A dropped packet must be recovered below av_read_frame: media-playback ends
     # its decode thread on any read error, which surfaces as end-of-media.
     assert "reconnect=1" in settings["ffmpeg_options"]
     assert "reconnect_on_network_error=1" in settings["ffmpeg_options"]
-    # Marking it seekable drops the socket interrupt callback, so cap the read.
+    # Bound stalled HTTP reads as well as retry backoff.
     assert "rw_timeout=" in settings["ffmpeg_options"]
-    # And if ffmpeg gives up, obs rebuilds far sooner than its 10 s default.
-    assert settings["reconnect_delay_sec"] == 2
+    assert "reconnect_delay_sec" not in settings
 
 
 def test_live_transports_are_not_marked_seekable(monkeypatch):
@@ -812,6 +813,8 @@ def test_live_transports_are_not_marked_seekable(monkeypatch):
         runtime = _Runtime()
         LibobsMediaSource(runtime).open(url)
         settings = runtime.created[-1].settings
+        assert settings["is_local_file"] is False
+        assert settings["input"] == url
         assert "seekable" not in settings, url
         assert "ffmpeg_options" not in settings, url
 
@@ -975,75 +978,6 @@ def test_the_resume_is_applied_only_once():
     media.apply_pending_resume()
 
     assert source.media_time == 500, "a second poll must not seek again"
-
-
-# ── a dropped stream must not look like the end of the video ─────────────────
-
-
-def _sidecar():
-    from solin.core.scenes.libobs_sidecar import LibobsSidecarEngine
-
-    sidecar = LibobsSidecarEngine.__new__(LibobsSidecarEngine)
-    sidecar._media_last_progress = {}
-    sidecar._media_trim_ended = False
-    return sidecar
-
-
-def test_a_stream_ending_far_from_the_end_is_reported_as_buffering():
-    """media-playback reports any read error as ENDED, like a finished video.
-
-    Taken at face value the app advances the playlist, so a moment of bad wifi
-    skipped to the next item in the middle of a meeting.
-    """
-    from solin.core.scenes.libobs_media_source import STATE_BUFFERING, STATE_ENDED, STATE_PLAYING
-
-    sidecar = _sidecar()
-    sidecar._survive_disconnect(0, STATE_PLAYING, 30_000, 140_000, "https://cdn/x.mp4")
-
-    state, position, duration = sidecar._survive_disconnect(
-        0, STATE_ENDED, 0, 0, "https://cdn/x.mp4"
-    )
-
-    assert state == STATE_BUFFERING
-    assert (position, duration) == (30_000, 140_000), "hold the last known position"
-
-
-def test_a_stream_that_really_finished_still_ends():
-    from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_PLAYING
-
-    sidecar = _sidecar()
-    sidecar._survive_disconnect(0, STATE_PLAYING, 139_000, 140_000, "https://cdn/x.mp4")
-
-    state, _position, _duration = sidecar._survive_disconnect(
-        0, STATE_ENDED, 139_500, 140_000, "https://cdn/x.mp4"
-    )
-
-    assert state == STATE_ENDED
-
-
-def test_a_local_file_ending_early_is_left_alone():
-    """Only a network read can drop; a local file ending early means something else."""
-    from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_PLAYING
-
-    sidecar = _sidecar()
-    sidecar._survive_disconnect(0, STATE_PLAYING, 10_000, 140_000, "/tmp/clip.mp4")
-
-    state, _p, _d = sidecar._survive_disconnect(0, STATE_ENDED, 0, 0, "/tmp/clip.mp4")
-
-    assert state == STATE_ENDED
-
-
-def test_a_trimmed_end_still_ends():
-    """The trim window latches ENDED deliberately; do not second-guess it."""
-    from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_PLAYING
-
-    sidecar = _sidecar()
-    sidecar._survive_disconnect(0, STATE_PLAYING, 5_000, 140_000, "https://cdn/x.mp4")
-    sidecar._media_trim_ended = True
-
-    state, _p, _d = sidecar._survive_disconnect(0, STATE_ENDED, 5_000, 140_000, "https://cdn/x.mp4")
-
-    assert state == STATE_ENDED
 
 
 # ── pitch-preserving speed changes ───────────────────────────────────────────

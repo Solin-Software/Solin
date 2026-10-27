@@ -611,7 +611,7 @@ class _CompositingRuntime:
         self.fail_encoder_kinds: set[str] = set()
         self.failing_video_encoders: set[str] = set()
         self.source_types = [
-            "color_source_v3", "ffmpeg_source", "solin_frame_source",
+            "color_source_v3", "ffmpeg_source", "solin_media_source", "solin_frame_source",
             "pulse_input_capture", "pulse_output_capture",
         ]
         # Failure-injection hooks for the audio-mixer tests.
@@ -648,7 +648,7 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict):
                 if kind in runtime.fail_source_kinds:
                     return None  # simulate a plugin refusing the device
-                if kind == "ffmpeg_source":
+                if kind == "solin_media_source":
                     source = _FakeMediaSource(kind, name, settings)
                 else:
                     source = _FakeColorSource(kind, name, settings)
@@ -3386,7 +3386,7 @@ _MEDIA_DOC = {
 
 
 def _media_sources(runtime):
-    return [s for s in runtime.sources if s.kind == "ffmpeg_source"]
+    return [s for s in runtime.sources if s.kind == "solin_media_source"]
 
 
 def _hydrate_media_graph(engine, content_source):
@@ -4071,6 +4071,34 @@ def test_engine_control_media_drives_transport_with_trim_offset():
     engine.handle(_request("control_media", {"action": "restart"}))
     assert media.restarts == 1 and media.media_time == 2000  # restart re-seeks trim start
     engine.shutdown()
+
+
+@pytest.mark.parametrize("slot", [0, 1])
+@pytest.mark.parametrize("duration", [0, 140_000])
+@pytest.mark.parametrize("terminal_state", [MediaPlaybackState.ENDED, MediaPlaybackState.ERROR])
+def test_native_terminal_state_survives_a_decoder_position_reset(slot, duration, terminal_state):
+    """Completion and failure come from the decoder, not a duration estimate."""
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    try:
+        response = engine.handle(_request("open_media", {
+            "path": "https://cdn.example/media.mp3", "is_local_file": False, "slot": slot,
+        }))
+        assert _ack_from_envelope(response).applied
+        engine._stop_media_poller()
+        media = _media_sources(runtime)[-1]
+        media.media_time = 30_000
+        media._duration = duration
+        engine._sample_media(slot)
+        media._state = terminal_state
+        media.media_time = 0
+        snapshot = engine._sample_media(slot)
+        assert snapshot == (
+            terminal_state, 0, duration, "https://cdn.example/media.mp3",
+        )
+    finally:
+        engine.shutdown()
 
 
 def test_engine_control_media_close_retires_a_silent_picture_and_stops_poller():

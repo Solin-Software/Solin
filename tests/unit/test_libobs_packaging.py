@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import plistlib
@@ -138,13 +139,39 @@ def _runtime(package: Path, target: str) -> Path:
     _touch(root / packaging.media_extract_name(target))
     if target == "macos":
         _framework(root)
-    for name in ("obs-ffmpeg", "image-source", "obs-transitions"):
+    for name in ("obs-ffmpeg", "image-source", "obs-transitions", "solin-media-source"):
         _touch(root / "obs-plugins" / f"{name}{suffix}")
     if target == "windows":
         _touch(root / "obs-plugins" / "win-wasapi.dll")
     _touch(root / "data/libobs/default.effect")
     _touch(root / "data/obs-plugins/obs-ffmpeg/locale/en-US.ini")
+    plugin = root / "obs-plugins" / f"solin-media-source{suffix}"
+    (root / "media-playback-manifest.json").write_text(json.dumps({
+        "schema": 1, "source_id": "solin_media_source",
+        "plugin": {"path": plugin.relative_to(root).as_posix(),
+                   "sha256": hashlib.sha256(plugin.read_bytes()).hexdigest()},
+    }))
     return root
+
+
+@pytest.mark.parametrize("failure", ["corrupt_json", "wrong_source", "escaping_path", "changed_binary"])
+def test_playback_receipt_rejects_unqualified_modules_before_staging(tmp_path, failure):
+    package = tmp_path / "installed"
+    root = _runtime(package, "windows")
+    manifest = root / "media-playback-manifest.json"
+    receipt = json.loads(manifest.read_text())
+    if failure == "corrupt_json":
+        manifest.write_text("{")
+    elif failure == "changed_binary":
+        (root / "obs-plugins/solin-media-source.dll").write_bytes(b"different build")
+    else:
+        if failure == "wrong_source":
+            receipt["source_id"] = "ffmpeg_source"
+        else:
+            receipt["plugin"]["path"] = "../solin-media-source.dll"
+        manifest.write_text(json.dumps(receipt))
+    with pytest.raises(packaging.LibobsPackagingError, match="playback"):
+        packaging.validate_runtime(root, "windows")
 
 
 @pytest.mark.parametrize("missing", [
@@ -566,6 +593,8 @@ def test_runtime_publish_retries_transient_windows_sharing_violation(tmp_path, m
         "solin-media-extract.exe",
         "obs-ffmpeg-mux.exe",
         "obs-plugins/obs-ffmpeg.dll",
+        "obs-plugins/solin-media-source.dll",
+        "media-playback-manifest.json",
         "obs-plugins/win-wasapi.dll",
         "data/libobs/default.effect",
         "data/obs-plugins/obs-ffmpeg/locale/en-US.ini",

@@ -34,14 +34,15 @@ Runtime mode is defined in [constants.py](src/solin/core/foundation/constants.py
 local services. Wheels and standalone executables use production settings.
 `IS_COMPILED` identifies Nuitka executables for process launching.
 
-Build the metadata and thumbnail helper after installing Python and native
+Build the metadata helper and native playback module after installing Python and native
 dependencies, using the same interpreter as the application:
 
 ```text
 python scripts/build_media_extract.py
+python scripts/build_media_playback.py
 ```
 
-The script compiles and qualifies `solin-media-extract`, then installs only that
+The extraction script compiles and qualifies `solin-media-extract`, then installs only that
 executable beside the installed `pylibobs` runtime. Windows and macOS use
 checksum-pinned OBS FFmpeg SDK headers; Linux uses matching Ubuntu development
 packages and stages missing native dependencies without replacing wheel libraries.
@@ -49,6 +50,10 @@ Rebuild after changing the helper or upgrading native dependencies. Media
 extraction requires no `ffmpeg` or `ffprobe` executable. Playback and scene
 composition use the supervised libobs process. See
 [Building and platform requirements](docs/building.md) for toolchains and packaging.
+
+The playback script builds `solin-media-source` from pinned OBS sources with
+corrected seek and attached-picture handling. It installs the module into the
+same private runtime; rebuild it after changing its patches or native dependencies.
 
 ## Change workflow
 

@@ -83,6 +83,9 @@ echo.
 "%PYTHON%" "%PROJECT_ROOT%scripts\build_media_extract.py" --configuration Release
 if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
 
+"%PYTHON%" "%PROJECT_ROOT%scripts\build_media_playback.py" --configuration Release
+if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
+
 "%PYTHON%" "%PROJECT_ROOT%scripts\build_virtual_camera.py" --configuration Release
 if %ERRORLEVEL% NEQ 0 (
     echo.
