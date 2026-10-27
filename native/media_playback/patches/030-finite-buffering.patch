@@ -1,0 +1,307 @@
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -198,7 +198,13 @@
+ 		pkt = av_packet_alloc();
+ 	}
+ 
++	pthread_mutex_lock(&media->mutex);
++	bool finite_playback = media->is_local_file && !media->full_decode && media->active &&
++	                       !media->pause && !media->stopping && !media->kill && media->next_ns;
++	pthread_mutex_unlock(&media->mutex);
++	solin_read_begin(&media->read_clock, os_gettime_ns(), finite_playback);
+ 	int ret = av_read_frame(media->fmt, pkt);
++	solin_read_end(&media->read_clock);
+ 	/* Demuxers can mask an exhausted transport as EOF (for example WAV). */
+ 	if (ret == AVERROR_EOF && media->fmt->pb && media->fmt->pb->error < 0 &&
+ 	    media->fmt->pb->error != AVERROR_EOF)
+@@ -210,6 +216,7 @@
+ 	if (ret < 0) {
+ 		if (ret != AVERROR_EOF && ret != AVERROR_EXIT)
+ 			blog(LOG_WARNING, "MP: av_read_frame failed: %s (%d)", av_err2str(ret), ret);
++		mp_media_free_packet(media, pkt);
+ 		return ret;
+ 	}
+ 
+@@ -1233,6 +1240,7 @@
+ 	}
+ 
+ 	m->next_ns += playback_time(delta, m->speed);
++	m->next_ns = solin_read_deadline(&m->read_clock, m->next_ns, os_gettime_ns());
+ 	m->next_pts_ns = min_next_ns;
+ }
+ 
+@@ -1257,6 +1265,13 @@
+ 			blog(LOG_WARNING, "MP: Failed to seek: %s", av_err2str(ret));
+ 			m->seek_next_ts = false;
+ 			return;
++		}
++		/* AVIO may satisfy a seek from its existing buffer without clearing
++		 * the interrupted read's sticky error. The accepted seek starts a new
++		 * read operation; rejected seeks retain the existing I/O state. */
++		if (m->fmt->pb) {
++			m->fmt->pb->error = 0;
++			m->fmt->pb->eof_reached = 0;
+ 		}
+ 		/* A seek can recover after the demuxer has read ahead to EOF. */
+ 		m->eof = false;
+@@ -1286,7 +1301,6 @@
+ 
+ bool mp_media_reset(mp_media_t *m)
+ {
+-	bool stopping;
+ 	bool active;
+ 
+ 	int64_t next_ts = mp_media_get_base_pts(m);
+@@ -1298,13 +1312,12 @@
+ 	m->eof = false;
+ 	m->seek_next_ts = false;
+ 
+-	seek_to(m, start_time);
+-
+ 	pthread_mutex_lock(&m->mutex);
+-	stopping = m->stopping;
+ 	active = m->active;
+ 	m->stopping = false;
+ 	pthread_mutex_unlock(&m->mutex);
++
++	seek_to(m, start_time);
+ 
+ 	if (!mp_media_prepare_frames(m))
+ 		return false;
+@@ -1322,8 +1335,8 @@
+ 
+ 	if (!active && m->is_local_file && m->v_preload_cb)
+ 		mp_media_next_video(m, true);
+-	if (stopping && m->stop_cb)
+-		m->stop_cb(m->opaque, false);
++	/* Explicit stop is acknowledged by the source owner when requested.
++	 * A deferred reset must not publish a stale completion after a new Play. */
+ 	return true;
+ }
+ 
+@@ -1388,6 +1401,8 @@
+ 		stop = m->kill || m->stopping;
+ 		pthread_mutex_unlock(&m->mutex);
+ 
++		if (!stop && m->buffer_cb && solin_read_waiting(&m->read_clock, ts))
++			m->buffer_cb(m->opaque, true);
+ 		m->interrupt_poll_ts = ts;
+ 	}
+ 
+@@ -1567,12 +1582,22 @@
+ 			if (m->has_audio)
+ 				mp_media_next_audio(m);
+ 
+-			if (m->tempo_failed || !mp_media_prepare_frames(m))
++			if (m->tempo_failed || !mp_media_prepare_frames(m)) {
++				/* A cancelled read leaves transport commands for this worker.
++				 * Keep it alive to process stop/reset or destruction. */
++				pthread_mutex_lock(&m->mutex);
++				bool cancelled = m->stopping || m->kill;
++				pthread_mutex_unlock(&m->mutex);
++				if (cancelled)
++					continue;
+ 				return false;
++			}
+ 			int64_t reported_pts = mp_media_get_base_pts(m);
+ 			pthread_mutex_lock(&m->mutex);
+ 			m->reported_pts = reported_pts;
+ 			pthread_mutex_unlock(&m->mutex);
++			if (m->buffer_cb)
++				m->buffer_cb(m->opaque, false);
+ 			if (mp_media_eof(m))
+ 				continue;
+ 			if (m->tempo_failed)
+@@ -1635,6 +1660,7 @@
+ 	media->v_cb = info->v_cb;
+ 	media->a_cb = info->a_cb;
+ 	media->stop_cb = info->stop_cb;
++	media->buffer_cb = info->buffer_cb;
+ 	media->ffmpeg_options = info->ffmpeg_options;
+ 	media->v_seek_cb = info->v_seek_cb;
+ 	media->v_preload_cb = info->v_preload_cb;
+--- a/shared/media-playback/media-playback/media.h
++++ b/shared/media-playback/media-playback/media.h
+@@ -18,6 +18,7 @@
+ 
+ #include <obs.h>
+ #include "decode.h"
++#include "read_clock.h"
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -46,6 +47,7 @@
+ 	mp_video_cb v_preload_cb;
+ 	mp_video_cb v_seek_cb;
+ 	mp_stop_cb stop_cb;
++	mp_buffer_cb buffer_cb;
+ 	mp_video_cb v_cb;
+ 	mp_audio_cb a_cb;
+ 	void *opaque;
+@@ -116,6 +118,7 @@
+ 	bool full_decode;
+ 
+ 	uint64_t interrupt_poll_ts;
++	struct solin_read_clock read_clock;
+ 
+ 	pthread_mutex_t mutex;
+ 	os_event_t *wake_event;
+--- a/shared/media-playback/media-playback/media-playback.h
++++ b/shared/media-playback/media-playback/media-playback.h
+@@ -24,6 +24,7 @@
+ typedef void (*mp_video_cb)(void *opaque, struct obs_source_frame *frame);
+ typedef void (*mp_audio_cb)(void *opaque, struct obs_source_audio *audio);
+ typedef void (*mp_stop_cb)(void *opaque, bool error);
++typedef void (*mp_buffer_cb)(void *opaque, bool waiting);
+ 
+ #define MEDIA_PLAYBACK_SPEED_MIN 1
+ #define MEDIA_PLAYBACK_SPEED_MAX 200
+@@ -36,6 +37,7 @@
+ 	mp_video_cb v_seek_cb;
+ 	mp_audio_cb a_cb;
+ 	mp_stop_cb stop_cb;
++	mp_buffer_cb buffer_cb;
+ 
+ 	const char *path;
+ 	const char *format;
+--- a/plugins/obs-ffmpeg/obs-ffmpeg-source.c
++++ b/plugins/obs-ffmpeg/obs-ffmpeg-source.c
+@@ -61,7 +61,7 @@
+ 	volatile bool reconnecting;
+ 	int reconnect_delay_sec;
+ 
+-	enum obs_media_state state;
++	volatile long state;
+ 	obs_hotkey_pair_id play_pause_hotkey;
+ 	obs_hotkey_id stop_hotkey;
+ };
+@@ -83,10 +83,15 @@
+ 	pthread_mutex_unlock(&s->reconnect_mutex);
+ }
+ 
++static enum obs_media_state get_media_state(struct ffmpeg_source *s)
++{
++	return (enum obs_media_state)os_atomic_load_long(&s->state);
++}
++
+ static void set_media_state(void *data, enum obs_media_state state)
+ {
+ 	struct ffmpeg_source *s = data;
+-	s->state = state;
++	os_atomic_set_long(&s->state, state);
+ }
+ 
+ static bool is_local_file_modified(obs_properties_t *props, obs_property_t *prop, obs_data_t *settings)
+@@ -272,6 +277,15 @@
+ 		FF_BLOG(LOG_INFO, "Reconnected.");
+ }
+ 
++static void media_buffering(void *opaque, bool waiting)
++{
++	struct ffmpeg_source *s = opaque;
++	/* Never override explicit pause/stop, an initialization failure or completion. */
++	os_atomic_compare_swap_long(&s->state,
++		waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING,
++		waiting ? OBS_MEDIA_STATE_BUFFERING : OBS_MEDIA_STATE_PLAYING);
++}
++
+ static void media_stopped(void *opaque, bool error)
+ {
+ 	struct ffmpeg_source *s = opaque;
+@@ -283,11 +297,17 @@
+ 	if (error || ((s->close_when_inactive || !s->is_local_file) && s->media))
+ 		s->destroy_media = true;
+ 
+-	if (s->state != OBS_MEDIA_STATE_STOPPED) {
+-		set_media_state(s, error ? OBS_MEDIA_STATE_ERROR : OBS_MEDIA_STATE_ENDED);
+-		if (!error)
+-			obs_source_media_ended(s->source);
+-	}
++	long state = os_atomic_load_long(&s->state);
++	do {
++		if (state == OBS_MEDIA_STATE_STOPPED)
++			return;
++		if (os_atomic_compare_swap_long(&s->state, state,
++					 error ? OBS_MEDIA_STATE_ERROR : OBS_MEDIA_STATE_ENDED))
++			break;
++		state = os_atomic_load_long(&s->state);
++	} while (true);
++	if (!error)
++		obs_source_media_ended(s->source);
+ }
+ 
+ static void ffmpeg_source_open(struct ffmpeg_source *s)
+@@ -300,6 +320,7 @@
+ 			.v_seek_cb = seek_frame,
+ 			.a_cb = get_audio,
+ 			.stop_cb = media_stopped,
++			.buffer_cb = media_buffering,
+ 			.path = s->input,
+ 			.format = s->input_format,
+ 			.buffering = s->buffering_mb * 1024 * 1024,
+@@ -342,7 +363,7 @@
+ 		obs_source_show_preloaded_video(s->source);
+ 	else
+ 		obs_source_output_video(s->source, NULL);
+-	if (s->state == OBS_MEDIA_STATE_PLAYING)
++	if (get_media_state(s) == OBS_MEDIA_STATE_PLAYING)
+ 		obs_source_media_started(s->source);
+ }
+ 
+@@ -467,7 +488,7 @@
+ 	/* If media has ended and user enables looping, user expects that it restarts.
+ 	 * Should still check if is_looping was changed, because users may stop them
+ 	 * intentionally, which is why we only check for ENDED and not STOPPED. */
+-	if (active && s->state == OBS_MEDIA_STATE_ENDED && is_looping == true && s->is_looping == false) {
++	if (active && get_media_state(s) == OBS_MEDIA_STATE_ENDED && is_looping == true && s->is_looping == false) {
+ 		should_restart_media = true;
+ 	}
+ 	if (should_restart_media)
+@@ -584,7 +605,7 @@
+ 
+ 	struct ffmpeg_source *s = data;
+ 
+-	if (s->state == OBS_MEDIA_STATE_PLAYING || !obs_source_showing(s->source))
++	if (get_media_state(s) == OBS_MEDIA_STATE_PLAYING || !obs_source_showing(s->source))
+ 		return false;
+ 
+ 	obs_source_media_play_pause(s->source, false);
+@@ -601,7 +622,7 @@
+ 
+ 	struct ffmpeg_source *s = data;
+ 
+-	if (s->state != OBS_MEDIA_STATE_PLAYING || !obs_source_showing(s->source))
++	if (get_media_state(s) != OBS_MEDIA_STATE_PLAYING || !obs_source_showing(s->source))
+ 		return false;
+ 
+ 	obs_source_media_play_pause(s->source, true);
+@@ -707,8 +728,9 @@
+ {
+ 	struct ffmpeg_source *s = data;
+ 
+-	if (!pause && (!s->media || s->destroy_media || s->state == OBS_MEDIA_STATE_ERROR ||
+-	               s->state == OBS_MEDIA_STATE_ENDED)) {
++	if (!pause && (!s->media || s->destroy_media || get_media_state(s) == OBS_MEDIA_STATE_ERROR ||
++	               get_media_state(s) == OBS_MEDIA_STATE_ENDED ||
++	               get_media_state(s) == OBS_MEDIA_STATE_STOPPED)) {
+ 		ffmpeg_source_start(s);
+ 		return;
+ 	}
+@@ -717,7 +739,7 @@
+ 
+ 	set_media_state(s, pause ? OBS_MEDIA_STATE_PAUSED : OBS_MEDIA_STATE_PLAYING);
+ 	media_playback_play_pause(s->media, pause);
+-	if (!pause && s->state == OBS_MEDIA_STATE_PLAYING)
++	if (!pause && get_media_state(s) == OBS_MEDIA_STATE_PLAYING)
+ 		obs_source_media_started(s->source);
+ }
+ 
+@@ -775,7 +797,7 @@
+ {
+ 	struct ffmpeg_source *s = data;
+ 
+-	return s->state;
++	return get_media_state(s);
+ }
+ 
+ static void missing_file_callback(void *src, const char *new_path, void *data)

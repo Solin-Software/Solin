@@ -16,7 +16,7 @@ Solin's license does not replace dependency licenses. In particular:
 - [pylibobs](https://github.com/jonata/pylibobs), the Python binding used by
   Solin, declares `GPL-2.0-or-later`.
 - The native playback module builds a pinned OBS source subset with the changes
-  recorded in `scripts/build_media_playback.py`. Upstream file notices are
+  recorded in `native/media_playback/patches/series.json`. Upstream file notices are
   preserved, and its data directory includes the OBS license.
 - Qt, PySide6, native codecs, browser components, and other dependencies retain
   their upstream terms and notices. Check the exact versions and components

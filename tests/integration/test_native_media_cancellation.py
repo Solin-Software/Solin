@@ -52,7 +52,7 @@ def _assert_stalled_input_closes(*, stop_first: bool = False) -> None:
             media.stop()
             deadline = time.monotonic() + 1
             while time.monotonic() < deadline:
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 assert media.state == STATE_STOPPED, "Cancellation became an error or natural completion"
                 time.sleep(0.02)
         started = time.monotonic()

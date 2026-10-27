@@ -30,6 +30,7 @@ libobs_runtime_packages=(
     libasound2t64
     libavcodec60
     libavdevice60
+    libavfilter9
     libavformat60
     libavutil58
     libc6
@@ -76,6 +77,7 @@ libobs_runtime_packages=(
 media_build_packages=(
     libavcodec-dev
     libavdevice-dev
+    libavfilter-dev
     libavformat-dev
     libavutil-dev
     libswscale-dev

@@ -1,0 +1,16 @@
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -702,10 +702,11 @@
+ 	if (m->buffering == 0) {
+ 		m->fmt->flags |= AVFMT_FLAG_NOBUFFER;
+ 	}
++	/* Finite URL inputs also need cancellation during FFmpeg retries. */
++	m->fmt->interrupt_callback.callback = interrupt_callback;
++	m->fmt->interrupt_callback.opaque = m;
+ 	if (!m->is_local_file) {
+ 		av_dict_set(&opts, "stimeout", "30000000", 0);
+-		m->fmt->interrupt_callback.callback = interrupt_callback;
+-		m->fmt->interrupt_callback.opaque = m;
+ 	}
+ 
+ 	int ret = avformat_open_input(&m->fmt, m->path, format, opts ? &opts : NULL);

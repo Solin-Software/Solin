@@ -1,0 +1,11 @@
+--- a/plugins/obs-ffmpeg/obs-ffmpeg-source.c
++++ b/plugins/obs-ffmpeg/obs-ffmpeg-source.c
+@@ -782,7 +782,7 @@
+ }
+ 
+ struct obs_source_info ffmpeg_source = {
+-	.id = "ffmpeg_source",
++	.id = "solin_media_source",
+ 	.type = OBS_SOURCE_TYPE_INPUT,
+ 	.output_flags = OBS_SOURCE_ASYNC_VIDEO | OBS_SOURCE_AUDIO | OBS_SOURCE_DO_NOT_DUPLICATE |
+ 			OBS_SOURCE_CONTROLLABLE_MEDIA,

@@ -59,7 +59,7 @@ python -m pip install -r requirements-build.txt
 python -m pip install -e .
 ```
 
-Before running from source or executing the Python suites, install CMake 3.25+
+Before running from source or executing the Python suites, install Git, CMake 3.25+
 and a C++17 toolchain (MSVC on Windows, Clang on macOS, the Ubuntu build tools on
 Linux), then run with the application's Python interpreter:
 
@@ -82,15 +82,21 @@ attached cover images are metadata rather than timed video, and successful seeks
 clear the demuxer's read-ahead EOF. Local files and progressive HTTP media share
 the finite playback lifecycle; HTTP read retries preserve the byte offset and
 natural EOF remains terminal. Live transports retain OBS's reconnect lifecycle.
+Finite read starvation reports native buffering and suspends presentation time;
+recovery resumes the media timeline without catching up to wall-clock time.
+Speed changes retain the decoder, and native FFmpeg tempo filtering preserves
+audio pitch through the same audio output path used at normal speed.
 Finite inputs retain native cancellation so Stop and shutdown interrupt pending
 network reads and retries. Native failures report an error rather than completion;
 an explicit retry creates a fresh decoder.
-The playback build recipe records its source checksum and installed binary in
+Ordered diffs and prerequisites live in `native/media_playback/patches/series.json`;
+see the native module README for the upstream retirement procedure.
+The playback build recipe records its source checksum, patch hashes and installed binary in
 `media-playback-manifest.json`; packaging requires this module.
 
 Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
 SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
-libavcodec/libavformat 61, libavutil 59 and libswscale 8. SDK binaries are build
+libavcodec/libavformat 61, libavfilter 10, libavutil 59 and libswscale 8. SDK binaries are build
 inputs only and are never substituted for the installed runtime. Ubuntu 24.04
 uses the same archive's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
 `libswscale-dev`, matching runtime majors 60/60/58/7. The helper checks header

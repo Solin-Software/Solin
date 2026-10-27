@@ -44,351 +44,64 @@ class MediaPlaybackBuildError(RuntimeError):
     """Pinned sources, toolchain, or installed playback module failed validation."""
 
 
-def _replace_once(source: str, old: str, new: str, *, patch: str) -> str:
-    if source.count(old) != 1:
-        raise MediaPlaybackBuildError(f"Pinned OBS source no longer matches audited patch: {patch}")
-    return source.replace(old, new, 1)
+def patch_series() -> list[dict]:
+    """Read the ordered downstream changes from their single manifest."""
+    manifest = SOURCE_DIRECTORY / "patches" / "series.json"
+    try:
+        entries = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise MediaPlaybackBuildError("Invalid playback patch series") from error
+    if not isinstance(entries, list) or not entries:
+        raise MediaPlaybackBuildError("Playback patch series must not be empty")
+    names: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not all(
+            isinstance(entry.get(key), str) and entry[key]
+            for key in ("file", "purpose", "upstream")
+        ):
+            raise MediaPlaybackBuildError("Invalid playback patch description")
+        name = entry["file"]
+        if (
+            PurePosixPath(name).name != name or "\\" in name
+            or not name.endswith(".patch") or name in names
+        ):
+            raise MediaPlaybackBuildError("Invalid or duplicate playback patch path")
+        prerequisites = entry.get("requires", [])
+        if (
+            not isinstance(prerequisites, list)
+            or any(not isinstance(required, str) or required not in names for required in prerequisites)
+        ):
+            raise MediaPlaybackBuildError(f"Playback patch prerequisites are out of order: {name}")
+        names.add(name)
+    return entries
 
 
-def _patch_terminal_source(source: str) -> str:
-    old = """static void media_stopped(void *opaque)
-{
-\tstruct ffmpeg_source *s = opaque;
-\tif (s->is_clear_on_media_end && !s->is_track_matte) {
-\t\tobs_source_output_video(s->source, NULL);
-\t}
-
-\tif ((s->close_when_inactive || !s->is_local_file) && s->media)
-\t\ts->destroy_media = true;
-
-\tif (s->state != OBS_MEDIA_STATE_STOPPED) {
-\t\tset_media_state(s, OBS_MEDIA_STATE_ENDED);
-\t\tobs_source_media_ended(s->source);
-\t}
-}
-"""
-    new = """static void media_stopped(void *opaque, bool error)
-{
-\tstruct ffmpeg_source *s = opaque;
-\tif (s->is_clear_on_media_end && !s->is_track_matte) {
-\t\tobs_source_output_video(s->source, NULL);
-\t}
-
-\t/* Destruction belongs to the source owner, never the decoder thread. */
-\tif (error || ((s->close_when_inactive || !s->is_local_file) && s->media))
-\t\ts->destroy_media = true;
-
-\tif (s->state != OBS_MEDIA_STATE_STOPPED) {
-\t\tset_media_state(s, error ? OBS_MEDIA_STATE_ERROR : OBS_MEDIA_STATE_ENDED);
-\t\tif (!error)
-\t\t\tobs_source_media_ended(s->source);
-\t}
-}
-"""
-    source = _replace_once(source, old, new, patch="terminal error state")
-    source = _replace_once(
-        source,
-        "\t\ts->media = media_playback_create(&info);",
-        "\t\ts->media = media_playback_create(&info);\n"
-        "\t\tif (!s->media)\n\t\t\tmedia_stopped(s, true);",
-        patch="synchronous media creation failure",
-    )
-    source = _replace_once(
-        source,
-        "static void ffmpeg_source_start(struct ffmpeg_source *s)\n{\n",
-        """static void ffmpeg_source_start(struct ffmpeg_source *s)
-{
-\t/* Explicit retry must not reuse a failed thread before the next tick. */
-\tif (s->destroy_media) {
-\t\tif (s->media)
-\t\t\tmedia_playback_destroy(s->media);
-\t\ts->media = NULL;
-\t\ts->destroy_media = false;
-\t}
-\t/* Publish intent before opening: initialization can fail asynchronously. */
-\tset_media_state(s, OBS_MEDIA_STATE_PLAYING);
-""",
-        patch="explicit retry rebuild",
-    )
-    source = _replace_once(
-        source,
-        "\tset_media_state(s, OBS_MEDIA_STATE_PLAYING);\n\tobs_source_media_started(s->source);",
-        "\tif (s->state == OBS_MEDIA_STATE_PLAYING)\n\t\tobs_source_media_started(s->source);",
-        patch="preserve asynchronous startup error",
-    )
-    source = _replace_once(
-        source,
-        """static void ffmpeg_source_play_pause(void *data, bool pause)
-{
-\tstruct ffmpeg_source *s = data;
-
-\tif (!s->media)
-\t\tffmpeg_source_open(s);
-
-\tif (!s->media)
-\t\treturn;
-
-\tmedia_playback_play_pause(s->media, pause);
-
-\tif (pause) {
-
-\t\tset_media_state(s, OBS_MEDIA_STATE_PAUSED);
-\t} else {
-
-\t\tset_media_state(s, OBS_MEDIA_STATE_PLAYING);
-\t\tobs_source_media_started(s->source);
-\t}
-}
-""",
-        """static void ffmpeg_source_play_pause(void *data, bool pause)
-{
-\tstruct ffmpeg_source *s = data;
-
-\tif (!pause && (!s->media || s->destroy_media || s->state == OBS_MEDIA_STATE_ERROR ||
-\t               s->state == OBS_MEDIA_STATE_ENDED)) {
-\t\tffmpeg_source_start(s);
-\t\treturn;
-\t}
-\tif (!s->media)
-\t\treturn;
-
-\tset_media_state(s, pause ? OBS_MEDIA_STATE_PAUSED : OBS_MEDIA_STATE_PLAYING);
-\tmedia_playback_play_pause(s->media, pause);
-\tif (!pause && s->state == OBS_MEDIA_STATE_PLAYING)
-\t\tobs_source_media_started(s->source);
-}
-""",
-        patch="play retries failed decoder through shared start",
-    )
-    source = _replace_once(
-        source,
-        """\tif (s->media && should_restart_media) {
-\t\tmedia_playback_destroy(s->media);
-\t\ts->media = NULL;
-\t}
-""",
-        """\tif (s->media && should_restart_media) {
-\t\tmedia_playback_destroy(s->media);
-\t\ts->media = NULL;
-\t\ts->destroy_media = false;
-\t}
-""",
-        patch="replacement consumes pending destruction",
-    )
-    source = _replace_once(
-        source,
-        """\tif (s->media) {
-\t\tmedia_playback_stop(s->media);
-\t\tobs_source_output_video(s->source, NULL);
-\t\tset_media_state(s, OBS_MEDIA_STATE_STOPPED);
-\t}
-""",
-        """\tif (s->media) {
-\t\t/* Stop wins over callbacks triggered by cancellation. */
-\t\tset_media_state(s, OBS_MEDIA_STATE_STOPPED);
-\t\tmedia_playback_stop(s->media);
-\t\tobs_source_output_video(s->source, NULL);
-\t}
-""",
-        patch="explicit stop precedence",
-    )
-    return _replace_once(
-        source,
-        """\tif (obs_source_showing(s->source))
-\t\tffmpeg_source_start(s);
-
-\tset_media_state(s, OBS_MEDIA_STATE_PLAYING);
-""",
-        """\tif (obs_source_showing(s->source))
-\t\tffmpeg_source_start(s);
-\telse
-\t\tset_media_state(s, OBS_MEDIA_STATE_PLAYING);
-""",
-        patch="restart preserves initialization error",
-    )
-
-
-def _patch_terminal_callbacks(source: str, kind: str, variable: str) -> str:
-    source = _replace_once(
-        source,
-        f"\tif (stopping && {variable}->stop_cb)\n\t\t{variable}->stop_cb({variable}->opaque);",
-        f"\tif (stopping && {variable}->stop_cb)\n\t\t{variable}->stop_cb({variable}->opaque, false);",
-        patch=f"{kind} normal stop callback",
-    )
-    old = f"""\tif (!mp_{kind}_thread({variable})) {{
-\t\tif ({variable}->stop_cb) {{
-\t\t\t{variable}->stop_cb({variable}->opaque);
-\t\t}}
-\t}}
-"""
-    new = f"""\tif (!mp_{kind}_thread({variable})) {{
-\t\tpthread_mutex_lock(&{variable}->mutex);
-\t\tbool cancelled = {variable}->kill || {variable}->stopping;
-\t\tpthread_mutex_unlock(&{variable}->mutex);
-\t\tif (!cancelled && {variable}->stop_cb)
-\t\t\t{variable}->stop_cb({variable}->opaque, true);
-\t}}
-"""
-    return _replace_once(source, old, new, patch=f"{kind} failure callback and cancellation")
-
-
-def patch_source(name: str, source: str) -> str:
-    """Apply the bounded playback changes; all upstream license headers remain."""
-    if name == "plugins/obs-ffmpeg/obs-ffmpeg-source.c":
-        source = _replace_once(
-            source, '.id = "ffmpeg_source",', f'.id = "{SOURCE_ID}",', patch="source identifier"
-        )
-        return _patch_terminal_source(source)
-    if name == f"{_PLAYBACK}/media-playback.h":
-        return _replace_once(
-            source,
-            "typedef void (*mp_stop_cb)(void *opaque);",
-            "typedef void (*mp_stop_cb)(void *opaque, bool error);",
-            patch="private terminal callback contract",
-        )
-    if name == f"{_PLAYBACK}/cache.c":
-        return _patch_terminal_callbacks(source, "cache", "c")
-    if name == f"{_PLAYBACK}/media.h":
-        return _replace_once(
-            source,
-            "\tbool eof;",
-            "\tbool eof;\n\tbool terminal_packet_corrupt;\n\tbool completed;",
-            patch="terminal demux packet status",
-        )
-    if name == f"{_PLAYBACK}/decode.c":
-        old = "\tstream = d->stream = m->fmt->streams[ret];\n\tid = stream->codecpar->codec_id;"
-        new = """\t/* Attached pictures belong to metadata, not the playback clock. */
-\tif (type == AVMEDIA_TYPE_VIDEO &&
-\t    (m->fmt->streams[ret]->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
-\t\tret = AVERROR_STREAM_NOT_FOUND;
-\t\tfor (unsigned int i = 0; i < m->fmt->nb_streams; i++) {
-\t\t\tAVStream *candidate = m->fmt->streams[i];
-\t\t\tif (candidate->codecpar->codec_type != type ||
-\t\t\t    (candidate->disposition & AV_DISPOSITION_ATTACHED_PIC))
-\t\t\t\tcontinue;
-\t\t\tret = av_find_best_stream(m->fmt, type, (int)i, -1, NULL, 0);
-\t\t\tif (ret >= 0)
-\t\t\t\tbreak;
-\t\t}
-\t\tif (ret < 0)
-\t\t\treturn false;
-\t}
-\tstream = d->stream = m->fmt->streams[ret];
-\tid = stream->codecpar->codec_id;"""
-        return _replace_once(source, old, new, patch="attached-picture video selection")
-    if name == f"{_PLAYBACK}/media.c":
-        source = _patch_terminal_callbacks(source, "media", "m")
-        source = _replace_once(
-            source,
-            "\tint ret = av_read_frame(media->fmt, pkt);\n\tif (ret < 0) {",
-            """\tint ret = av_read_frame(media->fmt, pkt);
-\t/* Demuxers can mask an exhausted transport as EOF (for example WAV). */
-\tif (ret == AVERROR_EOF && media->fmt->pb && media->fmt->pb->error < 0 &&
-\t    media->fmt->pb->error != AVERROR_EOF)
-\t\tret = media->fmt->pb->error;
-\tif (ret == AVERROR_EOF && media->terminal_packet_corrupt)
-\t\tret = AVERROR_INVALIDDATA;
-\tif (ret >= 0)
-\t\tmedia->terminal_packet_corrupt = (pkt->flags & AV_PKT_FLAG_CORRUPT) != 0;
-\tif (ret < 0) {""",
-            patch="demux EOF retains terminal I/O error",
-        )
-        source = _replace_once(
-            source,
-            "\t\t\tif (ret == AVERROR_EOF || ret == AVERROR_EXIT) {",
-            "\t\t\tif (ret == AVERROR_EOF) {",
-            patch="interrupted read is not natural EOF",
-        )
-        source = _replace_once(
-            source,
-            "\tAVStream *stream = m->fmt->streams[0];",
-            "\tAVStream *stream = m->has_video ? m->v.stream : m->a.stream;",
-            patch="primary playback stream for seek",
-        )
-        old = """\t\tint ret = av_seek_frame(m->fmt, 0, seek_target, seek_flags);
-\t\tif (ret < 0) {
-\t\t\tblog(LOG_WARNING, "MP: Failed to seek: %s", av_err2str(ret));
-\t\t}
-"""
-        new = """\t\tint ret = av_seek_frame(m->fmt, stream->index, seek_target, seek_flags);
-\t\tif (ret < 0) {
-\t\t\tblog(LOG_WARNING, "MP: Failed to seek: %s", av_err2str(ret));
-\t\t\tm->seek_next_ts = false;
-\t\t\treturn;
-\t\t}
-\t\t/* A seek can recover after the demuxer has read ahead to EOF. */
-\t\tm->eof = false;
-\t\tm->terminal_packet_corrupt = false;
-\t\tpthread_mutex_lock(&m->mutex);
-\t\tm->completed = false;
-\t\tpthread_mutex_unlock(&m->mutex);
-"""
-        source = _replace_once(source, old, new, patch="seek demux EOF reset")
-        source = _replace_once(
-            source,
-            """\t\tbool looping;
-
-\t\tpthread_mutex_lock(&m->mutex);
-\t\tlooping = m->looping;
-\t\tif (!looping) {
-\t\t\tm->active = false;
-\t\t\tm->stopping = true;
-\t\t}
-\t\tpthread_mutex_unlock(&m->mutex);
-
-\t\tmp_media_reset(m);
-""",
-            """\t\tbool looping, notify;
-
-\t\tpthread_mutex_lock(&m->mutex);
-\t\tlooping = m->looping;
-\t\tnotify = !looping && !m->completed;
-\t\tif (!looping) {
-\t\t\tm->active = false;
-\t\t\tm->completed = true;
-\t\t}
-\t\tpthread_mutex_unlock(&m->mutex);
-
-\t\t/* Drained playback is complete; optional rewind must not veto it. */
-\t\tif (looping)
-\t\t\tmp_media_reset(m);
-\t\telse if (notify && m->stop_cb)
-\t\t\tm->stop_cb(m->opaque, false);
-""",
-            patch="completion defers optional rewind",
-        )
-        source = _replace_once(
-            source,
-            "\tif (m->active)\n\t\tm->reset = true;\n\n\tm->looping = loop;",
-            "\tif (m->active || m->completed)\n\t\tm->reset = true;\n"
-            "\tif (m->completed)\n\t\tm->reset_ts = true;\n"
-            "\tm->completed = false;\n\n\tm->looping = loop;",
-            patch="explicit play resets completed decoder",
-        )
-        source = _replace_once(
-            source,
-            "\t\tif (reset) {\n\t\t\tmp_media_reset(m);\n\t\t\tcontinue;\n\t\t}",
-            "\t\tif (reset) {\n\t\t\tmp_media_reset(m);\n"
-            "\t\t\t/* Reactivation needs a fresh clock after the deferred rewind. */\n"
-            "\t\t\tif (reset_time)\n\t\t\t\treset_ts(m);\n"
-            "\t\t\tcontinue;\n\t\t}",
-            patch="reactivation rebases the playback clock",
-        )
-        old = """\tif (!m->is_local_file) {
-\t\tav_dict_set(&opts, "stimeout", "30000000", 0);
-\t\tm->fmt->interrupt_callback.callback = interrupt_callback;
-\t\tm->fmt->interrupt_callback.opaque = m;
-\t}
-"""
-        new = """\t/* Finite URL inputs also need cancellation during FFmpeg retries. */
-\tm->fmt->interrupt_callback.callback = interrupt_callback;
-\tm->fmt->interrupt_callback.opaque = m;
-\tif (!m->is_local_file) {
-\t\tav_dict_set(&opts, "stimeout", "30000000", 0);
-\t}
-"""
-        return _replace_once(source, old, new, patch="finite input cancellation")
-    return source
+def apply_patches(sources: Path) -> None:
+    """Apply explicit unified diffs, rejecting any upstream context mismatch."""
+    git = shutil.which("git")
+    if git is None:
+        raise MediaPlaybackBuildError("Git is required to apply the audited playback patches")
+    # A source cache lives inside the Solin checkout. Git-format diffs otherwise
+    # inherit that repository's prefix and may silently skip every target file.
+    environment = os.environ.copy()
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"):
+        environment.pop(name, None)
+    environment["GIT_CEILING_DIRECTORIES"] = str(sources.resolve().parent)
+    for entry in patch_series():
+        patch = SOURCE_DIRECTORY / "patches" / entry["file"]
+        if not patch.is_file():
+            raise MediaPlaybackBuildError(f"Missing playback patch: {entry['file']}")
+        command = [git, "apply", "--no-index", "--whitespace=nowarn"]
+        for flags in (["--check"], []):
+            result = subprocess.run(
+                [*command, *flags, str(patch.resolve())], cwd=sources,
+                capture_output=True, text=True, check=False,
+                env=environment,
+            )
+            if result.returncode:
+                raise MediaPlaybackBuildError(
+                    f"Playback patch {entry['file']} no longer applies: {result.stderr.strip()}"
+                )
 
 
 def download_sources(cache: Path) -> Path:
@@ -459,7 +172,7 @@ def prepare_sources(cache: Path) -> Path:
                 path = staging / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 text = source.read().decode("utf-8")
-                path.write_text(patch_source(name, text), encoding="utf-8", newline="\n")
+                path.write_text(text, encoding="utf-8", newline="\n")
         for required in (
             "plugins/obs-ffmpeg/obs-ffmpeg-source.c",
             f"{_PLAYBACK}/media.c",
@@ -471,6 +184,7 @@ def prepare_sources(cache: Path) -> Path:
         ):
             if not (staging / required).is_file():
                 raise MediaPlaybackBuildError(f"OBS archive is missing required source: {required}")
+        apply_patches(staging)
         _publish_runtime(staging, destination)
     return destination
 
@@ -599,14 +313,13 @@ def install_module(binary: Path, sources: Path, runtime: Path, platform: str) ->
                 "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
             },
             "patches": [
-                "attached-picture-video-selection",
-                "seek-demux-eof-reset",
-                "rejected-seek-queue-preservation",
-                "primary-timed-stream-seek",
-                "finite-input-cancellation",
-                "terminal-error-state",
-                "completion-defers-rewind",
-                "reactivation-playback-clock",
+                {
+                    **entry,
+                    "sha256": hashlib.sha256(
+                        (SOURCE_DIRECTORY / "patches" / entry["file"]).read_bytes()
+                    ).hexdigest(),
+                }
+                for entry in patch_series()
             ],
         }
         manifest = staging / MANIFEST_NAME

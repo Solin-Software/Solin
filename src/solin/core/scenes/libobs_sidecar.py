@@ -1372,9 +1372,7 @@ class LibobsSidecarEngine:
             media = self._media_for_slot(slot)
             if media is None or media.source is None:
                 return None
-            # A rate change rebuilds the decoder on a later tick, so the position
-            # it threw away can only be restored once that has happened.
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             position = media.position_ms
             state = media.state
             duration = media.duration_ms

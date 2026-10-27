@@ -6,13 +6,17 @@
 
 typedef struct { int num; int den; } AVRational;
 typedef struct { int index; AVRational time_base; } AVStream;
-typedef struct { int64_t duration; AVStream **streams; } AVFormatContext;
+typedef struct { int error, eof_reached; } AVIOContext;
+typedef struct { int64_t duration; AVStream **streams; AVIOContext *pb; } AVFormatContext;
 typedef struct { AVStream *stream; unsigned packets; unsigned flushes; } decoder;
 typedef struct {
 	AVFormatContext *fmt;
 	decoder v, a;
 	bool has_video, has_audio, is_local_file, seek_next_ts, pause, eof;
 	bool terminal_packet_corrupt, completed;
+	bool tempo_rate_pending;
+	int tempo_pending_speed;
+	int64_t reported_pts;
 	int mutex;
 	void *v_preload_cb;
 } mp_media_t;
@@ -58,6 +62,8 @@ static void mp_media_next_video(mp_media_t *m, bool preload)
 	(void)preload;
 	video_calls++;
 }
+static void mp_media_tempo_reset(mp_media_t *m) { (void)m; }
+static void apply_speed(mp_media_t *m, int speed) { (void)m; (void)speed; }
 
 #include "seek-under-test.h"
 
@@ -75,7 +81,8 @@ int main(void)
 	AVStream audio = {1, {1, 48000}};
 	AVStream video = {2, {1, 1000}};
 	AVStream *streams[] = {&artwork, &audio, &video};
-	AVFormatContext format = {8000000, streams};
+	AVIOContext io = {-123, 1};
+	AVFormatContext format = {8000000, streams, &io};
 	mp_media_t media = {
 		.fmt = &format, .a = {&audio, 7, 0}, .v = {&video, 9, 0},
 		.has_audio = true, .has_video = true, .is_local_file = true,
@@ -91,11 +98,13 @@ int main(void)
 	REQUIRE(media.a.flushes == 0 && media.v.flushes == 0);
 	REQUIRE(!media.seek_next_ts && media.eof && media.terminal_packet_corrupt && media.completed);
 	REQUIRE(prepare_calls == 0 && video_calls == 0);
+	REQUIRE(io.error == -123 && io.eof_reached == 1);
 
 	seek_result = 0;
 	media.seek_next_ts = true;
 	seek_to(&media, 4000000);
 	REQUIRE(!media.eof && !media.terminal_packet_corrupt && !media.completed);
+	REQUIRE(io.error == 0 && io.eof_reached == 0);
 	REQUIRE(media.mutex == 0 && lock_calls == 1);
 	REQUIRE(media.a.packets == 0 && media.v.packets == 0);
 	REQUIRE(media.a.flushes == 1 && media.v.flushes == 1);

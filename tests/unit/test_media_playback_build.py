@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import subprocess
 import zipfile
 
 import pytest
@@ -31,34 +32,71 @@ def test_existing_source_archive_is_verified_before_reuse(tmp_path, monkeypatch)
         builder.download_sources(tmp_path)
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "plugins/obs-ffmpeg/obs-ffmpeg-source.c",
-        "shared/media-playback/media-playback/decode.c",
-        "shared/media-playback/media-playback/media.c",
-        "shared/media-playback/media-playback/cache.c",
-        "shared/media-playback/media-playback/media-playback.h",
-        "shared/media-playback/media-playback/media.h",
-    ],
-)
-def test_audited_patches_fail_closed_when_upstream_shape_changes(name):
-    with pytest.raises(builder.MediaPlaybackBuildError, match="audited patch"):
-        builder.patch_source(name, "/* New upstream implementation */")
-
-
-def test_private_callback_patch_preserves_license_and_rejects_duplicate_declarations():
-    license_text = "/* Original upstream copyright and permission notice */\n"
-    declaration = "typedef void (*mp_stop_cb)(void *opaque);"
-    result = builder.patch_source(
-        "shared/media-playback/media-playback/media-playback.h", license_text + declaration
+@pytest.fixture
+def patch_project(tmp_path, monkeypatch):
+    directory = tmp_path / "native"
+    patches = directory / "patches"
+    patches.mkdir(parents=True)
+    (patches / "series.json").write_text(json.dumps([
+        {"file": "fix.patch", "purpose": "Correct the fixture", "upstream": "candidate"}
+    ]))
+    (patches / "fix.patch").write_text(
+        "--- a/media.c\n+++ b/media.c\n@@ -1 +1 @@\n-old\n+corrected\n"
     )
-    assert result.startswith(license_text)
-    assert "void *opaque, bool error" in result
-    with pytest.raises(builder.MediaPlaybackBuildError, match="audited patch"):
-        builder.patch_source(
-            "shared/media-playback/media-playback/media-playback.h", declaration * 2
-        )
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    (sources / "media.c").write_text("old\n")
+    monkeypatch.setattr(builder, "SOURCE_DIRECTORY", directory)
+    return sources, patches
+
+
+def test_unified_patch_applies_to_the_expected_upstream_context(patch_project):
+    sources, _patches = patch_project
+    builder.apply_patches(sources)
+    assert (sources / "media.c").read_text() == "corrected\n"
+
+
+def test_git_format_patch_inside_checkout_cannot_silently_skip_files(patch_project):
+    sources, patches = patch_project
+    subprocess.run(["git", "init", "--quiet", str(sources.parent)], check=True)
+    patch = patches / "fix.patch"
+    patch.write_text("diff --git a/media.c b/media.c\n" + patch.read_text())
+    builder.apply_patches(sources)
+    assert (sources / "media.c").read_text() == "corrected\n"
+
+
+def test_patch_context_mismatch_fails_without_changing_sources(patch_project):
+    sources, _patches = patch_project
+    (sources / "media.c").write_text("upstream changed\n")
+    with pytest.raises(builder.MediaPlaybackBuildError, match="no longer applies"):
+        builder.apply_patches(sources)
+    assert (sources / "media.c").read_text() == "upstream changed\n"
+
+
+@pytest.mark.parametrize("name", ["../fix.patch", "nested/fix.patch", "C:\\fix.patch", "fix.txt"])
+def test_patch_series_rejects_invalid_paths(patch_project, name):
+    _sources, patches = patch_project
+    entry = {"file": name, "purpose": "fix", "upstream": "candidate"}
+    (patches / "series.json").write_text(json.dumps([entry]))
+    with pytest.raises(builder.MediaPlaybackBuildError, match="patch path"):
+        builder.patch_series()
+
+
+def test_patch_series_requires_unique_files(patch_project):
+    _sources, patches = patch_project
+    entry = {"file": "fix.patch", "purpose": "fix", "upstream": "candidate"}
+    (patches / "series.json").write_text(json.dumps([entry, entry]))
+    with pytest.raises(builder.MediaPlaybackBuildError, match="duplicate"):
+        builder.patch_series()
+
+
+def test_patch_series_requires_prerequisites_before_dependents(patch_project):
+    _sources, patches = patch_project
+    entry = {"file": "fix.patch", "purpose": "fix", "upstream": "candidate",
+             "requires": ["missing.patch"]}
+    (patches / "series.json").write_text(json.dumps([entry]))
+    with pytest.raises(builder.MediaPlaybackBuildError, match="out of order"):
+        builder.patch_series()
 
 
 @pytest.mark.parametrize("corrupted", [False, True])

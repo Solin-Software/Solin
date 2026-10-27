@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
+from types import SimpleNamespace
+
+import pytest
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QImage, QPixmap
@@ -10,6 +13,7 @@ from solin.controllers.media_engine_route import SceneEngineMediaRoute
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 from solin.core.media.playback_request import MediaPlaybackRequest, MediaTrim
+from solin.core.scenes.engine import SceneEngineStatus
 from solin.core.scenes.media_control import (
     MediaControlAction,
     MediaPlaybackNativeState,
@@ -315,6 +319,34 @@ class _FakeEngine:
     def set_media_properties(self, **kwargs):
         self.calls.append(("set_media_properties", kwargs))
         return Future()
+
+
+@pytest.mark.parametrize(
+    ("autoplay", "expected"),
+    [
+        (True, [MediaControlAction.PAUSE, MediaControlAction.PLAY]),
+        (False, [MediaControlAction.PLAY, MediaControlAction.PAUSE]),
+    ],
+)
+def test_toggle_during_buffering_uses_latest_requested_intent_through_engine_route(
+    tmp_path, autoplay, expected,
+):
+    controller, _extractor = _controller_with_extractor(tmp_path)
+    engine = _FakeEngine()
+    engine.health = SimpleNamespace(status=SceneEngineStatus.READY)
+    controller.set_engine_media_route(SceneEngineMediaRoute(engine))
+    controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4", autoplay=autoplay))
+    assert engine.calls[0][0] == "open_media"
+    engine.calls.clear()
+
+    controller.on_engine_media_state(
+        MediaPlaybackNativeState(MediaPlaybackState.BUFFERING, 1200, 5000)
+    )
+    controller.toggle_play_pause()
+    # The next toggle can precede a native state acknowledgement.
+    controller.toggle_play_pause()
+
+    assert [call[1] for call in engine.calls] == expected
 
 
 def test_scene_engine_route_translates_to_engine_calls():

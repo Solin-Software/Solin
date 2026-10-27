@@ -11,8 +11,9 @@ foreach(required SOLIN_OBS_ROOT SOLIN_OBS_RUNTIME SOLIN_FFMPEG_ROOT)
 endforeach()
 
 set(playback "${SOLIN_OBS_ROOT}/shared/media-playback/media-playback")
+add_library(solin-media-runtime INTERFACE)
 add_library(solin-media-source MODULE
-    module.c
+    module.c rate_tempo.c
     "${SOLIN_OBS_ROOT}/plugins/obs-ffmpeg/obs-ffmpeg-source.c"
     "${playback}/media-playback.c" "${playback}/media.c"
     "${playback}/decode.c" "${playback}/cache.c")
@@ -21,7 +22,8 @@ set_target_properties(solin-media-source PROPERTIES PREFIX "" C_STANDARD 17
 if(APPLE)
     set_target_properties(solin-media-source PROPERTIES SUFFIX ".dylib")
 endif()
-target_include_directories(solin-media-source SYSTEM PRIVATE
+target_include_directories(solin-media-runtime SYSTEM INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
     "${SOLIN_OBS_ROOT}/libobs" "${SOLIN_OBS_ROOT}/generated"
     "${SOLIN_OBS_ROOT}/shared/media-playback"
     "${SOLIN_FFMPEG_ROOT}/include")
@@ -59,9 +61,9 @@ function(runtime_library target filename)
         execute_process(COMMAND "${CMAKE_AR}" /nologo /machine:x64
             "/def:${CMAKE_CURRENT_BINARY_DIR}/${target}.def" "/out:${import}"
             COMMAND_ERROR_IS_FATAL ANY OUTPUT_QUIET)
-        target_link_libraries(solin-media-source PRIVATE "${import}")
+        target_link_libraries(solin-media-runtime INTERFACE "${import}")
     else()
-        target_link_libraries(solin-media-source PRIVATE "${binary}")
+        target_link_libraries(solin-media-runtime INTERFACE "${binary}")
     endif()
 endfunction()
 
@@ -69,21 +71,21 @@ if(WIN32)
     if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
         message(FATAL_ERROR "Windows playback builds require the MSVC x64 toolchain")
     endif()
-    target_include_directories(solin-media-source SYSTEM PRIVATE "${SOLIN_OBS_ROOT}/deps/w32-pthreads")
-    target_compile_options(solin-media-source PRIVATE /utf-8 /W3)
+    target_include_directories(solin-media-runtime SYSTEM INTERFACE "${SOLIN_OBS_ROOT}/deps/w32-pthreads")
+    target_compile_options(solin-media-runtime INTERFACE /utf-8 /W3)
     target_link_options(solin-media-source PRIVATE /Brepro)
-    target_compile_definitions(solin-media-source PRIVATE
+    target_compile_definitions(solin-media-runtime INTERFACE
         WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
     set_property(TARGET solin-media-source PROPERTY MSVC_RUNTIME_LIBRARY
         "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     runtime_library(obs obs.dll)
     runtime_library(pthreads w32-pthreads.dll)
-    foreach(pair avcodec-61 avdevice-61 avformat-61 avutil-59 swscale-8)
+    foreach(pair avcodec-61 avdevice-61 avfilter-10 avformat-61 avutil-59 swscale-8)
         runtime_library(${pair} "${pair}.dll")
     endforeach()
 elseif(APPLE)
     runtime_library(obs "Frameworks/libobs.framework/Versions/A/libobs")
-    foreach(pair avcodec.61 avdevice.61 avformat.61 avutil.59 swscale.8)
+    foreach(pair avcodec.61 avdevice.61 avfilter.10 avformat.61 avutil.59 swscale.8)
         runtime_library(${pair} "Frameworks/lib${pair}.dylib")
     endforeach()
     set_target_properties(solin-media-source PROPERTIES
@@ -92,21 +94,22 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(AVDEVICE REQUIRED libavdevice>=60.1.100)
     find_path(SIMDE_INCLUDE_DIR simde/x86/sse2.h REQUIRED)
-    target_include_directories(solin-media-source SYSTEM PRIVATE
+    target_include_directories(solin-media-runtime SYSTEM INTERFACE
         ${AVDEVICE_INCLUDE_DIRS} "${SIMDE_INCLUDE_DIR}")
     runtime_library(obs libobs.so.0)
     # The pinned Linux wheel obtains FFmpeg from the Ubuntu 24.04 runtime.
     # Reuse its installed providers; packaging stages/relocates the same graph.
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-        libavcodec>=60.31.102 libavdevice>=60.1.100 libavformat>=60.16.100
+        libavcodec>=60.31.102 libavdevice>=60.1.100 libavfilter>=9.12.100 libavformat>=60.16.100
         libavutil>=58.29.100 libswscale>=7.5.100)
-    target_link_libraries(solin-media-source PRIVATE PkgConfig::FFMPEG m)
+    target_link_libraries(solin-media-runtime INTERFACE PkgConfig::FFMPEG m)
     target_link_options(solin-media-source PRIVATE "LINKER:--no-undefined")
     set_target_properties(solin-media-source PROPERTIES BUILD_RPATH "$ORIGIN/.."
         INSTALL_RPATH "$ORIGIN/..")
 endif()
 find_package(Threads REQUIRED)
-target_link_libraries(solin-media-source PRIVATE Threads::Threads)
+target_link_libraries(solin-media-runtime INTERFACE Threads::Threads)
+target_link_libraries(solin-media-source PRIVATE solin-media-runtime)
 install(TARGETS solin-media-source LIBRARY DESTINATION obs-plugins RUNTIME DESTINATION obs-plugins)
 
 # Compile the actual patched seek function with controlled FFmpeg/decoder
@@ -121,6 +124,15 @@ math(EXPR seek_length "${seek_end}-${seek_start}")
 string(SUBSTRING "${media_source}" ${seek_start} ${seek_length} seek_function)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/seek-under-test.h" "${seek_function}")
 enable_testing()
+add_executable(solin-media-tempo-tests tests/rate_tempo_tests.c rate_tempo.c)
+target_link_libraries(solin-media-tempo-tests PRIVATE solin-media-runtime)
+set_target_properties(solin-media-tempo-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES
+    BUILD_RPATH "${SOLIN_OBS_RUNTIME};${SOLIN_OBS_RUNTIME}/Frameworks")
+add_test(NAME media_tempo_contract COMMAND solin-media-tempo-tests)
+if(WIN32)
+    set_tests_properties(media_tempo_contract PROPERTIES
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${SOLIN_OBS_RUNTIME}")
+endif()
 add_executable(solin-media-seek-tests tests/seek_contract_tests.c)
 target_include_directories(solin-media-seek-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(solin-media-seek-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES)
@@ -154,7 +166,7 @@ endfunction()
 set(terminal_header "${CMAKE_CURRENT_BINARY_DIR}/terminal-under-test.h")
 file(WRITE "${terminal_header}" "")
 set(source "${SOLIN_OBS_ROOT}/plugins/obs-ffmpeg/obs-ffmpeg-source.c")
-append_test_span("${source}" "static void media_stopped(" "static void ffmpeg_source_open(" "${terminal_header}")
+append_test_span("${source}" "static void media_buffering(" "static void ffmpeg_source_open(" "${terminal_header}")
 append_test_span("${source}" "static void ffmpeg_source_start(" "static void *ffmpeg_source_reconnect(" "${terminal_header}")
 append_test_span("${source}" "static void ffmpeg_source_play_pause(" "static int64_t ffmpeg_source_get_duration(" "${terminal_header}")
 append_test_span("${playback}/media.c" "static int mp_media_next_packet(" "static inline bool mp_media_ready_to_start(" "${terminal_header}")

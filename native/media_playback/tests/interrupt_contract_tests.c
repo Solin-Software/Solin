@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../read_clock.h"
 
 #define REQUIRE(condition) do { \
 	if (!(condition)) { \
@@ -24,6 +25,9 @@ typedef struct {
 	int buffering, mutex;
 	uint64_t interrupt_poll_ts;
 	bool is_local_file, reconnecting, hw, has_audio, has_video, kill, stopping;
+	struct solin_read_clock read_clock;
+	void (*buffer_cb)(void *, bool);
+	void *opaque;
 } mp_media_t;
 
 #define LOG_INFO 0
@@ -34,6 +38,13 @@ typedef struct {
 #define blog(...) ((void)0)
 
 static uint64_t clock_ns;
+static int buffering_notifications;
+static void buffer_wait(void *opaque, bool waiting)
+{
+	(void)opaque;
+	REQUIRE(waiting);
+	buffering_notifications++;
+}
 static int timeout_options, cancellation, probes;
 static AVFormatContext format_context;
 static uint64_t os_gettime_ns(void) { return clock_ns; }
@@ -103,6 +114,35 @@ static bool mp_decode_init(mp_media_t *m, int type, bool hw)
 
 int main(void)
 {
+	/* Normal I/O does not suspend presentation. Real starvation suspends the
+	 * full blocked interval; live/preload reads do not participate. */
+	struct solin_read_clock read_clock = {0};
+	solin_read_begin(&read_clock, 100, true);
+	REQUIRE(!solin_read_waiting(&read_clock, SOLIN_READ_WAIT_NS));
+	solin_read_end(&read_clock);
+	REQUIRE(solin_read_deadline(&read_clock, 1000, 500) == 1000);
+	solin_read_begin(&read_clock, 100, true);
+	REQUIRE(solin_read_waiting(&read_clock, SOLIN_READ_WAIT_NS + 100));
+	solin_read_end(&read_clock);
+	REQUIRE(solin_read_deadline(&read_clock, 1000, 5000) == 5000);
+	REQUIRE(solin_read_deadline(&read_clock, 1000, 5000) == 1000);
+	REQUIRE(!solin_read_waiting(&read_clock, UINT64_C(9000000000)));
+	solin_read_begin(&read_clock, 100, false);
+	solin_read_end(&read_clock);
+	REQUIRE(solin_read_deadline(&read_clock, 1000, UINT64_C(9000000000)) == 1000);
+	solin_read_begin(&read_clock, 100, true);
+	solin_read_end(&read_clock);
+	REQUIRE(solin_read_deadline(&read_clock, 200, 300) == 300);
+	mp_media_t blocked = {.buffer_cb = buffer_wait};
+	solin_read_begin(&blocked.read_clock, 100, true);
+	clock_ns = SOLIN_READ_WAIT_NS + 100;
+	REQUIRE(!interrupt_callback(&blocked));
+	REQUIRE(buffering_notifications == 1);
+	blocked.stopping = true;
+	clock_ns += 21000000;
+	REQUIRE(interrupt_callback(&blocked));
+	REQUIRE(buffering_notifications == 1);
+
 	for (int local = 0; local <= 1; local++) {
 		for (int request = 0; request <= 2; request++) {
 			mp_media_t media = {

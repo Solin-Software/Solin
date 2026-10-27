@@ -2388,7 +2388,7 @@ def _assert_native_audio_only_initial_pause() -> None:
         assert media.open(str(path), autoplay=False)
 
         def paused():
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             return (
                 media.source.media_state == STATE_PAUSED
                 and media.state == STATE_PAUSED

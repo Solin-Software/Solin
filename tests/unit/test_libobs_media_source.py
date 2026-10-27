@@ -10,9 +10,7 @@ import pytest
 from solin.core.scenes import libobs_media_source
 from solin.core.scenes.libobs_media_source import (
     _PROGRESSIVE_FFMPEG_OPTIONS,
-    _RESUME_REBUILD_TICKS,
     STATE_NONE,
-    STATE_OPENING,
     STATE_PAUSED,
     STATE_PLAYING,
     LibobsMediaSource,
@@ -178,7 +176,7 @@ def test_visual_readiness_waits_for_gpu_priming_and_reuses_the_primed_source():
         media.close()
 
 
-@pytest.mark.parametrize("change", ["stop", "restart", "speed"])
+@pytest.mark.parametrize("change", ["stop", "restart"])
 def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_unchanged(change):
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
@@ -189,15 +187,12 @@ def test_decoder_reset_invalidates_priming_even_when_the_source_pointer_is_uncha
     watch.ready = True
     try:
         assert media.wait_for_video_frame(deadline=time.monotonic())
-        if change == "speed":
-            media.set_speed(150)
-        else:
-            getattr(media, change)()
+        getattr(media, change)()
         source.media_state = STATE_PLAYING
         assert media.source is source
         assert not media.wait_for_video_frame(deadline=time.monotonic())
         assert watch.invalidations == 1 and not watch.ready
-        assert source.lifecycle[-2:] == ["invalidate", "update" if change == "speed" else change]
+        assert source.lifecycle[-2:] == ["invalidate", change]
         watch.ready = True
         assert media.wait_for_video_frame(deadline=time.monotonic())
     finally:
@@ -323,7 +318,7 @@ def test_initial_pause_waits_for_native_readiness_and_pause_acknowledgement(poll
 
     def tick():
         if poll == "resume":
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             return None
         return media.wait_for_video_frame(deadline=time.monotonic())
 
@@ -358,11 +353,11 @@ def test_visual_preparation_requires_a_frame_and_recovers_an_audio_first_pause(e
     source._media_time = 1100  # Audio advanced; video has not published a frame.
     try:
         if early_pause != "none":
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert source.play_pause == [True]
         if early_pause == "acknowledged":
             source.media_state = STATE_PAUSED
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert source.volume == 0.6
 
         assert not media.wait_for_video_frame(deadline=time.monotonic())
@@ -390,10 +385,10 @@ def test_visual_rearm_preserves_the_latest_explicit_seek_after_audio_first_pause
         media.seek(2000)
         media.seek(1000)
         source._media_time = 1100  # Audio progress, not an operator seek.
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.seeks == [1000] and source.play_pause == [True]
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert media._startup is None and not watch.ready
 
         assert not media.wait_for_video_frame(deadline=time.monotonic())
@@ -421,14 +416,14 @@ def test_nonblocking_visual_demand_arms_before_decoder_update_and_waits_for_paus
         watch.updating = False
         source.media_state = STATE_PLAYING
         source._media_time = 100  # Audio alone cannot satisfy visual preparation.
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == []
         watch.ready = True
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == [True]
         assert not media.video_frame_ready
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert media.video_frame_ready
         media.stop()
         assert not media.video_frame_ready
@@ -444,16 +439,16 @@ def test_audio_only_initial_pause_uses_position_without_a_video_frame():
     source = media.source
     source.width = source.height = 0
     try:
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == [] and source.volume == 0.0
         source.media_time = 40
         source.seeks.clear()  # Decoder progress is not a transport seek.
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert not runtime.watches[-1].ready
         assert source.play_pause == [True] and source.seeks == [0]
         assert source.volume == 0.0
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.volume == 0.6 and media.state == STATE_PAUSED
         assert not media.wait_for_video_frame(deadline=time.monotonic())
     finally:
@@ -469,12 +464,12 @@ def test_play_cancels_initial_pause_and_restores_volume(pause_queued):
     try:
         if pause_queued:
             runtime.watches[-1].ready = True
-            media.apply_pending_resume()
+            media.apply_startup_transport()
         media.play()
         assert source.volume == 0.65 and media.state == STATE_PLAYING
         assert source.play_pause == ([True, False] if pause_queued else [False])
         runtime.watches[-1].ready = True
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause[-1] is False
         assert source.seeks == ([0] if pause_queued else [])
     finally:
@@ -491,10 +486,10 @@ def test_pause_requested_before_startup_is_deferred_and_muted():
         assert source.play_pause == [] and source.seeks == []
         assert source.volume == 0.0 and media.state == STATE_PAUSED
         runtime.watches[-1].ready = True
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == [True] and source.seeks == [0]
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.volume == 0.8
     finally:
         media.close()
@@ -510,7 +505,7 @@ def test_stop_and_restart_cancel_startup_pause(command, pause_queued):
     try:
         if pause_queued:
             runtime.watches[-1].ready = True
-            media.apply_pending_resume()
+            media.apply_startup_transport()
         getattr(media, command)()
         source.play_pause.clear()
         source.seeks.clear()
@@ -518,13 +513,13 @@ def test_stop_and_restart_cancel_startup_pause(command, pause_queued):
         source.media_state = STATE_PLAYING
         source.media_time = 40
         source.seeks.clear()
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == source.seeks == []
         if command == "stop":
             assert media.state == libobs_media_source.STATE_STOPPED
             assert source.stops == 1 and source.volume == 0.0
             source.media_state = libobs_media_source.STATE_STOPPED
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert media._startup is None and source.volume == 1.0
         else:
             assert media.state == STATE_PLAYING
@@ -533,22 +528,22 @@ def test_stop_and_restart_cancel_startup_pause(command, pause_queued):
         media.close()
 
 
-def test_speed_change_preserves_initial_pause_until_the_new_decoder_is_ready():
+def test_speed_change_preserves_initial_pause_until_the_decoder_is_ready():
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
     assert media.open("https://cdn.example/clip.mp4", autoplay=False, volume_percent=70)
     source = media.source
     try:
         media.set_speed(150)
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == source.seeks == []
         assert media.state == STATE_PAUSED and source.volume == 0.0
-        assert runtime.watches[-1].invalidations == 1
+        assert runtime.watches[-1].invalidations == 0
         runtime.watches[-1].ready = True
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == [True] and source.seeks == [0]
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.volume == 0.7
     finally:
         media.close()
@@ -575,7 +570,7 @@ def test_transport_and_state():
     media.open("/tmp/clip.mp4")
     source = runtime.created[-1]
     runtime.watches[-1].ready = True
-    media.apply_pending_resume()
+    media.apply_startup_transport()
     source.play_pause.clear()
 
     media.pause()
@@ -712,8 +707,6 @@ def test_detach_presentation_unloads_transport_without_discarding_video(path, mo
     media = LibobsMediaSource(runtime)
     media.open(path)
     source = runtime.created[-1]
-    tempo_stops = []
-    media._tempo_audio.stop = lambda: tempo_stops.append(True)
 
     assert media.detach_presentation() is source
     assert source.volume == 0.0
@@ -725,7 +718,6 @@ def test_detach_presentation_unloads_transport_without_discarding_video(path, mo
     assert media.source is None and media.path == ""
     assert runtime.watches[-1].closed
     assert source.lifecycle[-1] == "unwatch"
-    assert tempo_stops == [True]
     assert [kind for kind, _ in recorder.calls] == ["inc", "dec"]
     assert media.detach_presentation() is None
     media.close()
@@ -831,535 +823,63 @@ def test_local_files_are_left_alone(monkeypatch):
     assert "ffmpeg_options" not in settings
 
 
-def test_an_unchanged_rate_never_reaches_the_source(monkeypatch):
-    """Volume travels on the same message, and a stream restarts on any update.
-
-    ffmpeg_source sets should_restart_media unconditionally for a non-local input,
-    so re-sending the rate the source already has was enough to send a streamed
-    video back to the beginning every time the volume slider moved.
-    """
-    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
-    _with_activation(monkeypatch)
+@pytest.mark.parametrize("path", ["/tmp/clip.mp4", "https://cdn.example/video.mp4", "rtsp://camera/live"])
+@pytest.mark.parametrize("state", [STATE_PLAYING, STATE_PAUSED])
+def test_rate_changes_preserve_source_transport_and_visual_readiness(path, state):
     runtime = _Runtime()
     media = LibobsMediaSource(runtime)
-    media.open("https://cdn.example/v.mp4", speed_percent=100)
-    source = runtime.created[-1]
+    assert media.open(path, volume_percent=70)
+    source = media.source
+    watch = runtime.watches[-1]
+    watch.ready = True
+    media.apply_startup_transport()
+    source.media_state = state
+    source.media_time = 42_000
+    source.seeks.clear()
     source.updates.clear()
-
-    media.set_speed(100)  # what a volume change re-sends
-
-    assert source.updates == []
-
-
-def test_a_real_rate_change_is_applied(monkeypatch):
-    monkeypatch.delenv("SOLIN_MEDIA_HW_DECODE", raising=False)
-    _with_activation(monkeypatch)
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.updates.clear()
-
-    _change_speed(media, 150)
-
-    assert source.updates == [{"speed_percent": 150}]
-    # …and asking for it twice does not update twice.
-    media.set_speed(150)
-    assert source.updates == [{"speed_percent": 150}]
-
-
-def test_a_rate_change_restores_the_position_once_the_decoder_is_back():
-    """The rate is baked into the media object, so a change replays from zero.
-
-    The seek cannot ride along with the update: ffmpeg_source is an async source,
-    so obs_source_update only defers, and a seek issued straight away would land on
-    the media object that is about to be destroyed.
-    """
-    for url in ("https://cdn.example/v.mp4", "/tmp/clip.mp4"):
-        runtime = _Runtime()
-        media = LibobsMediaSource(runtime)
-        media.open(url)
-        source = runtime.created[-1]
-        source.media_time = 42_000
-
+    try:
+        assert media.video_frame_ready
         media.set_speed(150)
-
-        assert source.media_time == 42_000, f"{url}: not seeked yet"
-        source.media_time = 0  # what the rebuilt decoder reports
-        media.apply_pending_resume()
-        assert source.media_time == 42_000, f"{url}: position not restored"
-
-
-def test_the_resume_waits_while_the_decoder_is_still_opening():
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.media_time = 30_000
-    media.set_speed(150)
-    source.media_time = 0
-    source.media_state = STATE_OPENING
-
-    media.apply_pending_resume()
-    assert source.media_time == 0, "must not seek a decoder that is still opening"
-
-    source.media_state = STATE_PLAYING
-    media.apply_pending_resume()
-    assert source.media_time == 30_000
-
-
-def test_a_paused_source_stays_paused_across_a_rate_change():
-    """ffmpeg_source force-resumes on restart; the operator did not ask for that."""
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.media_time = 5_000
-    source.media_state = STATE_PAUSED
-
-    media.set_speed(150)
-    source.media_state = STATE_PLAYING  # the restart resumed it
-    source.media_time = 0
-    media.apply_pending_resume()
-
-    assert source.play_pause[-1] is True, "must be paused again"
-
-
-def test_a_poll_before_the_rebuild_does_not_spend_the_restore():
-    """The media poll runs four times a second, so it lands in the gap.
-
-    ffmpeg_source does not swap its media object on the tick that asks for a new
-    rate: for a moment the old one still answers, reporting the very position being
-    preserved. Seeking then is a no-op that the restart goes on to undo, so a
-    restore counted as done there leaves playback at the start of the item.
-    """
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.media_time = 42_000
-
-    media.set_speed(150)
-    media.apply_pending_resume()  # the old media object is still answering
-    source.media_time = 0  # now the rebuilt decoder appears
-    media.apply_pending_resume()
-
-    assert source.media_time == 42_000
-
-
-def test_a_decoder_that_keeps_its_place_is_not_waited_on_for_ever():
-    """Nothing guarantees a restart; the restore has to settle either way."""
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.media_time = 8_000
-
-    media.set_speed(150)
-    for _ in range(_RESUME_REBUILD_TICKS + 2):
-        source.media_time += 400  # it carried on from where it was
-        media.apply_pending_resume()
-
-    assert media._resume_ms == 0, "the restore must not stay armed for ever"
-    assert source.media_time > 8_000, "and must not drag playback backwards"
-
-
-def test_the_resume_is_applied_only_once():
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    media.open("/tmp/clip.mp4")
-    source = runtime.created[-1]
-    source.media_time = 9_000
-    media.set_speed(150)
-    source.media_time = 0
-
-    media.apply_pending_resume()
-    source.media_time = 500  # playback moved on
-    media.apply_pending_resume()
-
-    assert source.media_time == 500, "a second poll must not seek again"
-
-
-# ── pitch-preserving speed changes ───────────────────────────────────────────
-
-
-class _FakeCompanion:
-    """Records what the media source asks of the stretched-audio companion."""
-
-    def __init__(self) -> None:
-        self.starts: list[dict] = []
-        self.stops = 0
-        self.volumes: list[int] = []
-        self.paused: list[bool] = []
-        self.available = True
-        self.running = False
-        self.flow_delay_ms = 0  # how much audio plays before obs emits it
-
-    def start(self, path, *, position_ms, rate, volume_percent=100, paused=False) -> bool:
-        self.starts.append(
-            {"path": path, "position_ms": position_ms, "rate": rate,
-             "volume_percent": volume_percent, "paused": paused}
-        )
-        self.running = self.available
-        return self.available
-
-    def await_audio(self, timeout_s: float = 3.0) -> int:
-        return self.flow_delay_ms
-
-    @property
-    def elapsed_ms(self) -> int:
-        return self.flow_delay_ms
-
-    def stop(self) -> None:
-        self.stops += 1
-        self.running = False
-
-    def set_volume(self, volume_percent: int) -> None:
-        self.volumes.append(volume_percent)
-
-    def set_paused(self, paused: bool) -> None:
-        self.paused.append(paused)
-
-
-def _opened(path="/tmp/clip.mp4", **kwargs):
-    """A media source open on ``path`` with a fake companion in place."""
-    runtime = _Runtime()
-    media = LibobsMediaSource(runtime)
-    companion = _FakeCompanion()
-    media._tempo_audio = companion
-    assert media.open(path, **kwargs) is True
-    runtime.watches[-1].ready = True
-    media.apply_pending_resume()
-    if not kwargs.get("autoplay", True):
-        runtime.created[-1].media_state = STATE_PAUSED
-        media.apply_pending_resume()
-    return media, runtime, companion
-
-
-# What the rebuilt decoder's position moves by once it really starts running.
-_RESUME_STEP_MS = 40
-
-
-@pytest.fixture(autouse=True)
-def _dont_wait_for_a_fake_decoder(monkeypatch):
-    """These fakes never advance on their own; waiting only slows the suite down.
-
-    The wait itself is covered by test_the_audio_is_released_when_the_picture_moves.
-    """
-    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 0.0)
-
-
-def _change_speed(media, percent: int, *, restarts: bool = True) -> None:
-    """Change the rate and run the poll ticks the sidecar would run next.
-
-    ffmpeg_source rebuilds its media object for a new rate and the rebuilt one
-    starts from zero — but not on the tick that asked for it, so the first tick
-    still sees the old position.
-    """
-    media.set_speed(percent)
-    source = media._source
-    media.apply_pending_resume()  # the old media object is still answering
-    if source is None:
-        return
-    if restarts:
-        source.media_time = 0  # the rebuilt decoder appears...
-        media.apply_pending_resume()  # ...and is put back where it was
-    source.media_time += _RESUME_STEP_MS  # it starts running again
-    media.apply_pending_resume()  # the stretch can be opened now
-
-
-def test_a_speed_change_stretches_the_audio_instead_of_raising_its_pitch():
-    media, runtime, companion = _opened()
-    runtime.created[-1].media_time = 42_000
-
-    _change_speed(media, 150)
-
-    assert companion.starts[-1]["rate"] == 1.5
-    assert companion.starts[-1]["path"] == "/tmp/clip.mp4"
-
-
-def test_the_stretch_picks_up_from_where_playback_had_reached():
-    media, runtime, companion = _opened()
-    runtime.created[-1].media_time = 42_000
-
-    _change_speed(media, 150)
-
-    assert companion.starts[-1]["position_ms"] == pytest.approx(42_000, abs=100)
-
-
-def test_the_source_is_muted_while_the_companion_carries_the_audio():
-    """Otherwise both the varispeeded and the stretched audio would be heard."""
-    media, runtime, _companion = _opened()
-
-    _change_speed(media, 150)
-
-    assert runtime.created[-1].volume == 0.0
-
-
-def test_returning_to_normal_speed_stops_the_stretch_and_unmutes():
-    media, runtime, companion = _opened(volume_percent=80)
-    _change_speed(media, 150)
-
-    _change_speed(media, 100)
-
-    assert companion.stops >= 1
-    assert companion.running is False
-    assert runtime.created[-1].volume == 0.8
-
-
-def test_a_companion_that_cannot_start_leaves_the_audio_audible():
-    """Falling back to varispeed is worse than pitch-perfect, better than silence."""
-    media, runtime, companion = _opened(volume_percent=60)
-    companion.available = False
-
-    _change_speed(media, 150)
-
-    assert runtime.created[-1].volume == 0.6
-
-
-def test_volume_changes_reach_the_companion_and_keep_the_source_muted():
-    media, runtime, companion = _opened()
-    _change_speed(media, 150)
-
-    media.set_volume(30)
-
-    assert companion.volumes[-1] == 30
-    assert runtime.created[-1].volume == 0.0
-
-
-def test_pausing_and_resuming_carry_the_stretched_audio_with_them():
-    media, _runtime, companion = _opened()
-    _change_speed(media, 150)
-
-    media.pause()
-    media.play()
-
-    assert companion.paused[-2:] == [True, False]
-
-
-def test_seeking_restarts_the_stretch_at_the_new_position():
-    """The stretch is a separate decode, so it has to be re-cut at the seek point."""
-    media, _runtime, companion = _opened()
-    _change_speed(media, 150)
-
-    media.seek(90_000)
-
-    assert companion.starts[-1]["position_ms"] == 90_000
-
-
-def test_closing_the_media_takes_the_stretch_down_with_it():
-    media, _runtime, companion = _opened()
-    _change_speed(media, 150)
-
-    media.close()
-
-    assert companion.stops >= 1
-    assert companion.running is False
-
-
-def test_media_opened_at_a_faster_rate_is_stretched_from_the_start():
-    _media, _runtime, companion = _opened(speed_percent=150)
-
-    assert companion.starts[-1]["rate"] == 1.5
-    assert companion.starts[-1]["position_ms"] == 0
-
-
-def test_remote_media_keeps_varispeed_rather_than_downloading_it_twice():
-    media, runtime, companion = _opened("https://example.org/talk.mp4", volume_percent=70)
-
-    _change_speed(media, 150)
-
-    assert companion.starts == []
-    assert runtime.created[-1].volume == 0.7  # audible, just varispeeded
-
-
-def test_setting_the_same_speed_again_does_not_restart_the_stretch():
-    media, _runtime, companion = _opened()
-    _change_speed(media, 150)
-
-    _change_speed(media, 150)
-
-    assert len(companion.starts) == 1
-
-
-def test_the_stretch_waits_for_the_rebuilt_decoder_before_it_starts():
-    """Started at set_speed time, the audio would run ahead of the winding-back picture."""
-    media, _runtime, companion = _opened()
-
-    media.set_speed(150)
-
-    assert companion.starts == []
-
-
-def test_the_source_stays_silent_over_the_gap_rather_than_blipping_in_pitch():
-    media, runtime, _companion = _opened(volume_percent=90)
-
-    media.set_speed(150)
-
-    assert runtime.created[-1].volume == 0.0
-
-
-def test_the_stretch_waits_for_the_decoder_to_actually_start_moving():
-    """It reports PLAYING for a second or two first; audio opened then runs ahead."""
-    media, runtime, companion = _opened()
-    source = runtime.created[-1]
-    source.media_time = 42_000
-
-    media.set_speed(150)
-    media.apply_pending_resume()  # PLAYING, but the position has not budged
-    assert companion.starts == []
-
-    source.media_time = 0  # the rebuilt decoder appears
-    media.apply_pending_resume()  # and is put back to 42_000
-    assert companion.starts == []
-
-    source.media_time = 42_040  # now it is really running
-    media.apply_pending_resume()
-
-    assert companion.starts[-1]["position_ms"] == 42_040
-
-
-def test_a_stretch_that_never_starts_gives_the_audio_straight_back():
-    media, runtime, companion = _opened(volume_percent=90)
-    companion.available = False
-
-    media.set_speed(150)
-    assert runtime.created[-1].volume == 0.0  # silent while it is being tried
-    _change_speed(media, 150)  # the decoder comes back and the attempt is made
-
-    assert runtime.created[-1].volume == 0.9
-
-
-def test_a_rate_change_while_the_decoder_rebuilds_is_retried_next_tick():
-    media, runtime, companion = _opened()
-    source = runtime.created[-1]
-    media.set_speed(150)
-    source.media_state = STATE_OPENING
-
-    media.apply_pending_resume()
-    assert companion.starts == []
-
-    source.media_state = STATE_PLAYING
-    source.media_time = 0
-    media.apply_pending_resume()
-    source.media_time += _RESUME_STEP_MS
-    media.apply_pending_resume()
-    assert len(companion.starts) == 1
-
-
-def test_the_picture_is_held_still_while_the_stretch_is_opened():
-    """Left running, the video would end up seconds ahead of the audio for good."""
-    media, runtime, _companion = _opened()
-    source = runtime.created[-1]
-    source.play_pause.clear()
-
-    _change_speed(media, 150)
-
-    assert source.play_pause == [True, False]
-
-
-def test_the_picture_skips_the_audio_that_played_before_it_was_audible():
-    media, runtime, companion = _opened()
-    source = runtime.created[-1]
-    source.media_time = 20_000
-    companion.flow_delay_ms = 400  # obs buffered for 400 ms before emitting
-
-    _change_speed(media, 150)
-
-    resumed_at = 20_000 + _RESUME_STEP_MS
-    assert source.media_time == resumed_at + int(400 * 1.5)
-
-
-def test_a_paused_media_gets_a_paused_stretch_and_stays_paused():
-    media, runtime, companion = _opened(autoplay=False)
-    source = runtime.created[-1]
-    source.media_state = STATE_PAUSED
-    source.play_pause.clear()
-
-    _change_speed(media, 150)
-
-    assert companion.running
-    assert companion.starts[-1]["paused"] is True
-    assert all(companion.paused)  # Never resume the companion opened in a held state.
-    assert source.media_state == STATE_PAUSED
-    assert False not in source.play_pause  # never nudged back into playing
-
-
-def test_the_audio_is_held_until_the_picture_actually_moves(monkeypatch):
-    """Released earlier, it would run on alone while the decoder is still resuming."""
-    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 2.0)
-    monkeypatch.setattr(libobs_media_source, "_MOTION_STEP_S", 0.001)
-    media, _runtime, _companion = _opened()
-    reads = {"n": 0}
-
-    def position(_self):
-        reads["n"] += 1
-        return 10_000 if reads["n"] < 5 else 10_400
-
-    monkeypatch.setattr(type(media), "position_ms", property(position))
-
-    media._await_motion(10_000)
-
-    assert reads["n"] >= 5  # it waited for movement rather than assuming it
-
-
-def test_it_gives_up_on_a_picture_that_never_moves(monkeypatch):
-    """A stalled decoder must not leave the audio held for ever."""
-    monkeypatch.setattr(libobs_media_source, "_MOTION_TIMEOUT_S", 0.05)
-    monkeypatch.setattr(libobs_media_source, "_MOTION_STEP_S", 0.001)
-    media, _runtime, _companion = _opened()
-    monkeypatch.setattr(type(media), "position_ms", property(lambda _s: 10_000))
-
-    media._await_motion(10_000)  # returns instead of hanging
-
-
-def test_resuming_lets_the_picture_lead_before_the_audio_follows():
-    """Released together, the audio would win by the decoder's resume delay."""
-    media, runtime, companion = _opened()
-    source = runtime.created[-1]
-    _change_speed(media, 150)
-    source.media_state = STATE_PAUSED
-    companion.paused.clear()
-
-    media.play()
-
-    assert companion.paused == [False]
-    assert source.play_pause[-1] is False
+        media.set_speed(150)
+        for _ in range(12):
+            media.apply_startup_transport()
+        assert media.source is source and len(runtime.created) == 1
+        assert source.updates == [{"speed_percent": 150}]
+        assert source.media_time == 42_000 and source.seeks == []
+        assert source.media_state == state and source.play_pause == []
+        assert source.stops == source.restarts == source.released == 0
+        assert media.video_frame_ready and watch.invalidations == 0
+        assert source.volume == 0.7
+    finally:
+        media.close()
 
 
 @pytest.mark.parametrize("startup_phase", ["complete", "decoding", "pause_queued"])
-def test_rejected_rate_update_preserves_metadata_startup_intent_and_companion(monkeypatch, startup_phase):
-    startup_pending = startup_phase != "complete"
-    if startup_pending:
-        runtime = _Runtime()
-        media = LibobsMediaSource(runtime)
-        companion = _FakeCompanion()
-        media._tempo_audio = companion
-        assert media.open("/clip.mp4", autoplay=False, volume_percent=70)
-        if startup_phase == "pause_queued":
-            runtime.watches[-1].ready = True
-            media.apply_pending_resume()
-            assert media.source.play_pause == [True]
-            assert media.source.media_state == STATE_PLAYING
-    else:
-        media, runtime, companion = _opened(autoplay=False, volume_percent=70)
+def test_rejected_rate_update_preserves_transport_and_can_be_retried(monkeypatch, startup_phase):
+    runtime = _Runtime()
+    media = LibobsMediaSource(runtime)
+    assert media.open("/clip.mp4", autoplay=False, volume_percent=70)
     source = media.source
-    previous_intent = media._startup
-    previous_stops = companion.stops
-    previous_updates = len(source.updates)
-
+    watch = runtime.watches[-1]
+    if startup_phase != "decoding":
+        watch.ready = True
+        media.apply_startup_transport()
+        if startup_phase == "complete":
+            source.media_state = STATE_PAUSED
+            media.apply_startup_transport()
+    original_update = source.update
     def reject(_settings):
         raise RuntimeError("queue rejected")
-
     monkeypatch.setattr(source, "update", reject)
     media.set_speed(150)
-    assert media._speed_percent == 100
     assert source.settings.get("speed_percent", 100) == 100
-    assert media._startup is previous_intent
-    assert len(source.updates) == previous_updates
-    assert companion.stops == previous_stops
     assert media.state == STATE_PAUSED
-    assert source.volume == (0.0 if startup_pending else 0.7)
+    assert source.volume == (0.7 if startup_phase == "complete" else 0.0)
+    assert watch.ready is (startup_phase != "decoding")
+    monkeypatch.setattr(source, "update", original_update)
+    media.set_speed(150)
+    assert source.settings["speed_percent"] == 150
+    media.close()
 
 
 @pytest.mark.parametrize("command", ["close", "detach_presentation"])
@@ -1401,10 +921,10 @@ def test_nonseekable_startup_ignores_trim_without_stranding_requested_pause(url)
         media.seek(2000)
         assert media._requested_seek_ms == 0
         runtime.watches[-1].ready = True
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert source.play_pause == [True] and source.seeks == [0]
         source.media_state = STATE_PAUSED
-        media.apply_pending_resume()
+        media.apply_startup_transport()
         assert media._startup is None and media.state == STATE_PAUSED
         assert media.wait_for_video_frame(deadline=time.monotonic())
     finally:

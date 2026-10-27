@@ -4060,7 +4060,7 @@ def test_engine_control_media_drives_transport_with_trim_offset():
     assert media.media_time == 2000  # opened → seeked to trim start
     # Model the requested trim frame arriving after the queued seek.
     media.readiness.ready = True
-    engine._media_source.apply_pending_resume()
+    engine._media_source.apply_startup_transport()
 
     engine.handle(_request("control_media", {"action": "pause"}))
     assert media.play_pause_calls[-1] is True
@@ -4573,8 +4573,7 @@ def test_engine_set_media_properties_updates_volume_and_speed():
     engine.shutdown()
 
 
-def test_engine_off_normal_speed_moves_the_audio_off_the_media_source():
-    """The rate change is carried by a pitch-preserving stretch playing alongside."""
+def test_engine_off_normal_speed_keeps_audio_on_the_media_source():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.set_event_sink(lambda _e: None)
@@ -4588,7 +4587,7 @@ def test_engine_off_normal_speed_moves_the_audio_off_the_media_source():
 
     assert ack.applied is True
     assert media.settings["speed_percent"] == 150
-    assert media.volume == 0.0  # silenced; the stretch is heard instead
+    assert media.volume == 0.5
     engine.shutdown()
 
 

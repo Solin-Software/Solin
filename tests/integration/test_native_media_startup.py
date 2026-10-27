@@ -71,6 +71,9 @@ def _serve_clip(
     disconnect_offsets: list[int] | None = None,
     reject_reconnections: Event | None = None,
     abort_requests: Event | None = None,
+    stall_after: Event | None = None,
+    stalled: Event | None = None,
+    release_read: Event | None = None,
 ) -> Iterator[str]:
     from tests._http import ThreadingLoopbackHTTPServer
 
@@ -117,7 +120,7 @@ def _serve_clip(
                 self.close_connection = True
                 return
             try:
-                if disconnect_once and not disconnected.is_set():
+                if (disconnect_once and not disconnected.is_set()) or stall_after is not None:
                     # Feed probing normally. Once playback moves, interrupt its
                     # current read at an exact byte offset, not a discarded probe.
                     for offset in range(start, end + 1, 4096):
@@ -125,12 +128,21 @@ def _serve_clip(
                         self.wfile.write(data[offset:cut])
                         self.wfile.flush()
                         with request_lock:
+                            stall_this_read = (
+                                stall_after is not None and stall_after.is_set()
+                                and request_number == latest_request
+                            )
                             interrupt_this_read = (
                                 disconnect_after is not None and disconnect_after.is_set()
                                 and request_number == latest_request and not disconnected.is_set()
                             )
                             if interrupt_this_read:
                                 disconnected.set()
+                        if stall_this_read:
+                            assert stalled is not None and release_read is not None
+                            stalled.set()
+                            if not release_read.wait(15):
+                                return
                         if interrupt_this_read:
                             if disconnect_offsets is not None:
                                 disconnect_offsets.append(cut)
@@ -152,6 +164,8 @@ def _serve_clip(
     try:
         yield f"http://127.0.0.1:{server.server_port}/{path.name}"
     finally:
+        if release_read is not None:
+            release_read.set()
         if disconnect_after is not None:
             disconnect_after.set()
         server.shutdown()
@@ -286,7 +300,7 @@ def _assert_stop_before_first_input_update() -> None:
             media.stop()
 
         def stopped() -> bool:
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             return media.source.media_state == STATE_STOPPED
 
         acknowledged = _wait_for(stopped)
@@ -341,7 +355,7 @@ def _assert_visual_wait_does_not_pause_before_the_first_video(*, poll_before_wai
         assert media.open(str(offset_path), autoplay=False)
         if poll_before_wait:
             def initially_paused():
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 return media.source.media_state == STATE_PAUSED
 
             assert _wait_for(initially_paused), _observation(media)
@@ -363,7 +377,7 @@ def _assert_speed_before_initial_pause_acknowledgement() -> None:
         # Watch the native upload directly; wait_for_video_frame would also queue the pause.
         assert _wait_for(lambda: media._video_readiness.ready), _observation(media)
         with _hold_tick(runtime):
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert media.source.media_state != STATE_PAUSED, "Tick barrier did not precede pause ack"
             media.set_speed(150)
         ready = media.wait_for_video_frame(deadline=time.monotonic() + 4)
@@ -404,7 +418,7 @@ def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
                 media.seek(target)
 
                 def audio_first_pause_acknowledged():
-                    media.apply_pending_resume()
+                    media.apply_startup_transport()
                     return media.source.media_state == STATE_PAUSED and media._startup is None
 
                 assert _wait_for(audio_first_pause_acknowledged), _observation(media)
@@ -414,15 +428,15 @@ def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
                 if scenario == "delayed":
                     assert _wait_for(lambda: media.position_ms >= 400), _observation(media)
                 if scenario == "pause-ack":
-                    media.apply_pending_resume()
+                    media.apply_startup_transport()
                     assert _wait_for(lambda: media.source.media_state == STATE_PAUSED), _observation(media)
                 if scenario == "latest":
                     target = 1000
                     with _hold_tick(runtime):
                         media.seek(2000)
-                        media.apply_pending_resume()
+                        media.apply_startup_transport()
                         media.seek(target)
-                        media.apply_pending_resume()
+                        media.apply_startup_transport()
                 else:
                     media.seek(target)
 
@@ -498,7 +512,7 @@ def _assert_finite_media_transport(scenario: str) -> None:
             assert media.open(location, autoplay=operation != "paused", volume_percent=0)
 
             def poll():
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 return media.state
 
             def assert_replay():
@@ -635,7 +649,7 @@ def _assert_invalid_media_reports_error() -> None:
         assert media.open(str(path.with_suffix(".missing")), autoplay=True)
 
         def failed():
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert media.state != STATE_ENDED, _observation(media)
             return media.state == STATE_ERROR
 
@@ -662,7 +676,7 @@ def _assert_system_default_audio_monitoring() -> None:
             assert media.open(str(media_path), autoplay=False, volume_percent=0)
 
             def paused():
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 return (
                     media.source.media_state == STATE_PAUSED
                     and media._startup is None

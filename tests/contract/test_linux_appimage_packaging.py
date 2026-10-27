@@ -122,10 +122,10 @@ def test_linux_ci_installs_all_pinned_obs_direct_dependency_providers():
     packages = re.search(r"libobs_runtime_packages=\(\n(.*?)\n\)", script, re.DOTALL)
     assert packages is not None
     declared = packages[1].split()
-    # The 47 external DT_NEEDED SONAMEs map to these 45 Noble packages.
+    # Direct runtime providers for the wheel and Solin's native modules.
     # libc6 supplies the loader, libc and libm; apt resolves transitive providers.
     required = {
-        "libasound2t64", "libavcodec60", "libavdevice60", "libavformat60", "libavutil58",
+        "libasound2t64", "libavcodec60", "libavdevice60", "libavfilter9", "libavformat60", "libavutil58",
         "libc6", "libcurl4t64", "libdrm2", "libegl1", "libfontconfig1", "libfreetype6",
         "libgcc-s1", "libglib2.0-0t64", "libjansson4", "libmbedcrypto7t64",
         "libmbedtls14t64", "libmbedx509-1t64", "libpci3", "libpipewire-0.3-0t64",

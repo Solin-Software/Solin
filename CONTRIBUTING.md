@@ -52,7 +52,7 @@ composition use the supervised libobs process. See
 [Building and platform requirements](docs/building.md) for toolchains and packaging.
 
 The playback script builds `solin-media-source` from pinned OBS sources with
-corrected seek and attached-picture handling. It installs the module into the
+corrections listed in `native/media_playback/patches/series.json`. It installs the module into the
 same private runtime; rebuild it after changing its patches or native dependencies.
 
 ## Change workflow

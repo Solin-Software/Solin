@@ -1,0 +1,51 @@
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -639,17 +639,22 @@
+ 	bool eof = v_ended && a_ended;
+ 
+ 	if (eof) {
+-		bool looping;
++		bool looping, notify;
+ 
+ 		pthread_mutex_lock(&m->mutex);
+ 		looping = m->looping;
++		notify = !looping && !m->completed;
+ 		if (!looping) {
+ 			m->active = false;
+-			m->stopping = true;
++			m->completed = true;
+ 		}
+ 		pthread_mutex_unlock(&m->mutex);
+ 
+-		mp_media_reset(m);
++		/* Drained playback is complete; optional rewind must not veto it. */
++		if (looping)
++			mp_media_reset(m);
++		else if (notify && m->stop_cb)
++			m->stop_cb(m->opaque, false);
+ 	}
+ 
+ 	return eof;
+@@ -807,6 +812,9 @@
+ 		}
+ 		if (reset) {
+ 			mp_media_reset(m);
++			/* Reactivation needs a fresh clock after the deferred rewind. */
++			if (reset_time)
++				reset_ts(m);
+ 			continue;
+ 		}
+ 
+@@ -970,8 +978,11 @@
+ {
+ 	pthread_mutex_lock(&m->mutex);
+ 
+-	if (m->active)
++	if (m->active || m->completed)
+ 		m->reset = true;
++	if (m->completed)
++		m->reset_ts = true;
++	m->completed = false;
+ 
+ 	m->looping = loop;
+ 	m->active = true;

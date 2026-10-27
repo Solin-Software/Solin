@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "../read_clock.h"
 
 #define REQUIRE(condition) do { \
 	if (!(condition)) { \
@@ -21,20 +22,27 @@
 
 enum obs_media_state {
 	OBS_MEDIA_STATE_PLAYING, OBS_MEDIA_STATE_PAUSED, OBS_MEDIA_STATE_STOPPED,
-	OBS_MEDIA_STATE_ENDED, OBS_MEDIA_STATE_ERROR,
+	OBS_MEDIA_STATE_ENDED, OBS_MEDIA_STATE_ERROR, OBS_MEDIA_STATE_BUFFERING,
 };
 typedef struct { int size, flags; } AVPacket;
 typedef struct { int error; } AVIOContext;
 typedef struct { AVIOContext *pb; } AVFormatContext;
-typedef struct mp_decode { bool frame_ready; } decoder;
+typedef struct mp_decode { bool frame_ready, eof; } decoder;
 typedef void (*mp_stop_cb)(void *, bool);
 typedef struct {
 	AVFormatContext *fmt;
 	struct { AVPacket **array; unsigned num; } packet_pool;
 	bool kill, stopping, terminal_packet_corrupt;
 	bool has_audio, has_video, looping, active, completed, reset, reset_ts, reconnecting;
+	bool is_local_file, full_decode, pause;
+	bool tempo_failed, tempo_rate_pending;
+	struct { unsigned size; } tempo_queue;
+	uint64_t next_ns;
+	int64_t play_sys_ts;
+	struct solin_read_clock read_clock;
 	decoder v, a;
 	void *sem;
+	void *wake_event;
 	int mutex;
 	mp_stop_cb stop_cb;
 	void *opaque;
@@ -46,12 +54,13 @@ struct ffmpeg_source {
 	bool destroy_media, is_clear_on_media_end, is_track_matte;
 	bool close_when_inactive, is_local_file, is_looping, reconnecting;
 	void *source;
-	enum obs_media_state state;
+	volatile long state;
 };
 
 static int read_result, callbacks, ended, started, destroyed, opened, locked;
 static int open_failure;
 static int resets, wakes;
+static uint64_t os_gettime_ns(void) { return 0; }
 static bool thread_result, stop_callback;
 static media_playback_t initial_media = {1}, replacement_media = {2};
 static AVPacket packet;
@@ -79,6 +88,26 @@ static bool mp_media_thread(mp_media_t *m) { (void)m; return thread_result; }
 static bool mp_cache_thread(mp_cache_t *c) { (void)c; return thread_result; }
 static bool mp_media_reset(mp_media_t *m) { (void)m; resets++; return false; }
 static void os_sem_post(void *sem) { (void)sem; wakes++; }
+static void os_event_signal(void *event) { (void)event; wakes++; }
+static enum obs_media_state get_media_state(struct ffmpeg_source *s)
+{
+	return (enum obs_media_state)s->state;
+}
+static long os_atomic_load_long(const volatile long *state) { return *state; }
+static int interleaved_state = -1;
+static bool os_atomic_compare_swap_long(volatile long *state, long expected, long desired)
+{
+	/* An explicit transport command can arrive immediately before the CAS. */
+	if (interleaved_state >= 0) {
+		*state = interleaved_state;
+		interleaved_state = -1;
+	}
+	if (*state != expected)
+		return false;
+	*state = desired;
+	return true;
+}
+static void mp_media_tempo_drain(mp_media_t *m) { (void)m; }
 static void set_media_state(void *data, enum obs_media_state state)
 {
 	((struct ffmpeg_source *)data)->state = state;
@@ -140,6 +169,22 @@ static struct ffmpeg_source fresh_source(void)
 
 int main(void)
 {
+	for (int waiting = 0; waiting <= 1; waiting++) {
+		struct ffmpeg_source buffering = fresh_source();
+		buffering.state = waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING;
+		media_buffering(&buffering, waiting != 0);
+		REQUIRE(buffering.state == (waiting ? OBS_MEDIA_STATE_BUFFERING : OBS_MEDIA_STATE_PLAYING));
+		for (int intent = OBS_MEDIA_STATE_PAUSED; intent <= OBS_MEDIA_STATE_ERROR; intent++) {
+			buffering.state = waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING;
+			interleaved_state = intent;
+			media_buffering(&buffering, waiting != 0);
+			REQUIRE(buffering.state == intent);
+		}
+	}
+	struct ffmpeg_source completing = fresh_source();
+	interleaved_state = OBS_MEDIA_STATE_STOPPED;
+	media_stopped(&completing, false);
+	REQUIRE(completing.state == OBS_MEDIA_STATE_STOPPED && ended == 0);
 	AVIOContext io = {0};
 	AVFormatContext format = {&io};
 	mp_media_t media = {.fmt = &format};

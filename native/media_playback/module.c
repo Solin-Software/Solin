@@ -2,6 +2,7 @@
 #include <obs-module.h>
 #include <libavcodec/avcodec.h>
 #include <libavdevice/avdevice.h>
+#include <libavfilter/avfilter.h>
 #include <libavformat/avformat.h>
 #include <libavutil/avutil.h>
 #include <libswscale/swscale.h>
@@ -21,6 +22,7 @@ bool obs_module_load(void)
 	if (obs_get_version() != LIBOBS_API_VER ||
 	    !compatible_library(avcodec_version(), LIBAVCODEC_VERSION_INT) ||
 	    !compatible_library(avdevice_version(), LIBAVDEVICE_VERSION_INT) ||
+	    !compatible_library(avfilter_version(), LIBAVFILTER_VERSION_INT) ||
 	    !compatible_library(avformat_version(), LIBAVFORMAT_VERSION_INT) ||
 	    !compatible_library(avutil_version(), LIBAVUTIL_VERSION_INT) ||
 	    !compatible_library(swscale_version(), LIBSWSCALE_VERSION_INT)) {
@@ -38,5 +40,5 @@ MODULE_EXPORT const char *obs_module_name(void)
 
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return "OBS 32.1.2 playback with attached-picture selection and seek EOF fixes";
+	return "OBS 32.1.2 media playback with finite transport and live playback-rate corrections";
 }
