@@ -88,13 +88,25 @@ def _change_rate_and_measure(runtime, media, speed, previous_speed, duration):
         after_ack = _measure_progress(media, duration)
         samples.extend(after_ack)
         latency = ack_at - requested_at
-        print("rate update acknowledgment", {"speed": speed, "latency": latency}, flush=True)
         assert latency <= 0.25, latency
         # Playback continues if the observer is descheduled around the update.
-        # Bound the actual observation interval at the faster of the two rates;
-        # one media frame accounts for quantized native position reporting.
+        # Bound the actual observation interval at the faster of the two rates.
+        # Allow one video period of worker lateness at the old rate, plus one
+        # media frame for quantized reporting. Acknowledgement on the video
+        # thread does not imply that the decoder worker was running on time.
         observation_seconds = after_ack[0][0] - observed_at
-        max_initial_advance = max(previous_speed, speed) / 100 * 1000 * observation_seconds + 1000 / _FPS
+        max_initial_advance = (
+            max(previous_speed, speed) / 100 * 1000 * observation_seconds
+            + previous_speed / 100 * 1000 / _FPS
+            + 1000 / _FPS
+        )
+        print(
+            "rate update acknowledgment",
+            {"speed": speed, "latency": latency, "before": before,
+             "initial_position": after_ack[0][1], "observation_seconds": observation_seconds,
+             "max_initial_advance": max_initial_advance},
+            flush=True,
+        )
         assert after_ack[0][1] - before <= max_initial_advance, (
             before,
             after_ack[0],
