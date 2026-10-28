@@ -45,7 +45,8 @@ def _measure_progress(media, seconds=0.8):
     samples = []
     start = time.monotonic()
     while time.monotonic() - start < seconds:
-        samples.append((time.monotonic(), _poll(media)))
+        position = _poll(media)
+        samples.append((time.monotonic(), position))
         time.sleep(0.02)
     return samples
 
@@ -73,6 +74,7 @@ def _change_rate_and_measure(runtime, media, speed, previous_speed, duration):
 
     disconnect = runtime.observe_source_updates(media.source, updated)
     try:
+        observed_at = time.monotonic()
         before = _poll(media)
         requested_at = time.monotonic()
         media.set_speed(speed)
@@ -88,13 +90,16 @@ def _change_rate_and_measure(runtime, media, speed, previous_speed, duration):
         latency = ack_at - requested_at
         print("rate update acknowledgment", {"speed": speed, "latency": latency}, flush=True)
         assert latency <= 0.25, latency
-        # One video tick can still use the old rate; one frame accounts for
-        # the quantized native media position at the observation boundary.
-        max_initial_advance = previous_speed / 100 * 1000 / _FPS + 100
+        # Playback continues if the observer is descheduled around the update.
+        # Bound the actual observation interval at the faster of the two rates;
+        # one media frame accounts for quantized native position reporting.
+        observation_seconds = after_ack[0][0] - observed_at
+        max_initial_advance = max(previous_speed, speed) / 100 * 1000 * observation_seconds + 1000 / _FPS
         assert after_ack[0][1] - before <= max_initial_advance, (
             before,
             after_ack[0],
             latency,
+            observation_seconds,
             max_initial_advance,
         )
         assert min(position for _, position in samples) >= before - 100, (before, samples)
@@ -376,7 +381,11 @@ def _av_sync():
 
     with _native_media() as (runtime, media, path):
         _write_av_clip(path)
+        # Establish a rendered starting frame before measuring a transition.
+        # First-use graphics setup must not consume the observation window.
         assert media.open(str(path))
+        assert media.wait_for_video_frame(deadline=time.monotonic() + 4)
+        assert _capture_prepared_source(runtime, media)["center_bgra"] == _RED_BGRA.hex()
         info = ffi.new("struct obs_audio_info *")
         assert get_lib().obs_get_audio_info(info)
         high_tone = []

@@ -123,6 +123,8 @@ def _serve_clip(
                 if (disconnect_once and not disconnected.is_set()) or stall_after is not None:
                     # Feed probing normally. Once playback moves, interrupt its
                     # current read at an exact byte offset, not a discarded probe.
+                    pacing_started = time.monotonic()
+                    paced_from = start
                     for offset in range(start, end + 1, 4096):
                         cut = min(offset + 4096, end + 1)
                         self.wfile.write(data[offset:cut])
@@ -141,14 +143,25 @@ def _serve_clip(
                         if stall_this_read:
                             assert stalled is not None and release_read is not None
                             stalled.set()
+                            waiting_for_release = not release_read.is_set()
                             if not release_read.wait(15):
                                 return
+                            # Deliberate starvation must not buy a catch-up burst.
+                            if waiting_for_release:
+                                pacing_started = time.monotonic()
+                                paced_from = offset
                         if interrupt_this_read:
                             if disconnect_offsets is not None:
                                 disconnect_offsets.append(cut)
                             self.close_connection = True
                             return
-                        time.sleep(0.01)
+                        if cut <= end:
+                            # Account for send overhead and delayed wakeups instead
+                            # of adding them to every block's nominal 10 ms budget.
+                            deadline = pacing_started + (cut - paced_from) / 409600
+                            remaining = deadline - time.monotonic()
+                            if remaining > 0:
+                                time.sleep(remaining)
                     return
                 self.wfile.write(data[start:end + 1])
             except ConnectionError:
@@ -563,7 +576,9 @@ def _assert_finite_media_transport(scenario: str) -> None:
                     frame = _capture_prepared_source(_runtime, media)
                     assert frame["center_bgra"] == _RED_BGRA.hex(), frame
 
-            assert _wait_for(lambda: poll() in (STATE_PLAYING, STATE_PAUSED) and media._startup is None)
+            assert _wait_for(lambda: poll() in (STATE_PLAYING, STATE_PAUSED) and media._startup is None), (
+                {"requests": requests, **_observation(media)}
+            )
             if operation == "end-rewind":
                 assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100)
                 interrupt.set()
