@@ -55,6 +55,10 @@ The playback script builds `solin-media-source` from pinned OBS sources with
 corrections listed in `native/media_playback/patches/series.json`. It installs the module into the
 same private runtime; rebuild it after changing its patches or native dependencies.
 
+On Windows, also run `python scripts/build_obs_runtime.py`. It builds the matching
+OBS core with the WASAPI monitoring correction described in
+[`native/obs_runtime`](native/obs_runtime/README.md), using CMake 3.28+ and MSVC x64.
+
 ## Change workflow
 
 1. Create a focused branch from `main`.

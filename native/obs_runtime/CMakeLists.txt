@@ -1,0 +1,23 @@
+# Included by the pinned upstream core build after libobs is configured.
+enable_testing()
+file(READ "${CMAKE_SOURCE_DIR}/libobs/audio-monitoring/win32/wasapi-output.c" monitor_source)
+string(FIND "${monitor_source}" "static uint32_t monitor_preroll_frames(uint32_t sample_rate, REFERENCE_TIME period)\n{" begin)
+string(FIND "${monitor_source}" "static void on_audio_playback" end)
+if(begin LESS 0 OR end LESS begin)
+    message(FATAL_ERROR "The monitor contract no longer matches the patched upstream functions")
+endif()
+math(EXPR length "${end}-${begin}")
+string(SUBSTRING "${monitor_source}" ${begin} ${length} contract)
+file(STRINGS "${CMAKE_SOURCE_DIR}/libobs/audio-monitoring/win32/wasapi-output.c"
+    latency_limit REGEX "^#define MAX_AV_DELAY_NS ")
+if(NOT latency_limit)
+    message(FATAL_ERROR "The monitor A/V latency allowance is missing")
+endif()
+file(WRITE "${CMAKE_BINARY_DIR}/monitor-contract.h" "${latency_limit}\n${contract}")
+add_executable(solin-obs-monitor-tests
+    "${SOLIN_OBS_CONTRACT_ROOT}/tests/monitor_contract_tests.c")
+target_include_directories(solin-obs-monitor-tests PRIVATE
+    "${CMAKE_BINARY_DIR}" "${CMAKE_SOURCE_DIR}/libobs")
+set_target_properties(solin-obs-monitor-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES)
+target_compile_options(solin-obs-monitor-tests PRIVATE /utf-8 /W3)
+add_test(NAME windows_monitor_contract COMMAND solin-obs-monitor-tests)

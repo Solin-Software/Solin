@@ -26,9 +26,10 @@ from pathlib import Path
 from xml.parsers.expat import ExpatError
 
 if __package__:
-    from . import _windows_pe
+    from . import _windows_pe, obs_sources
 else:
     import _windows_pe
+    import obs_sources
 
 from solin.core.foundation.constants import LIBOBS_SIDECAR_ARGUMENT
 from solin.core.scenes.content_frame_channel import SharedFrameChannelReader
@@ -74,6 +75,9 @@ _MEDIA_EXTRACT_ABI = {
 }
 _MEDIA_EXTRACT_MANIFEST = "media-extract-manifest.json"
 _MEDIA_PLAYBACK_MANIFEST = "media-playback-manifest.json"
+_OBS_RUNTIME_MANIFEST = "obs-runtime-manifest.json"
+_OBS_RUNTIME_PATCHES = Path(__file__).resolve().parents[1] / "native/obs_runtime/patches"
+_MEDIA_PLAYBACK_PATCHES = Path(__file__).resolve().parents[1] / "native/media_playback/patches"
 _WINDOWS_REDISTRIBUTABLES = frozenset({
     "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll",
 })
@@ -479,30 +483,46 @@ def _normalize_macos_frameworks(root: Path) -> None:
         alias.symlink_to(relative, target_is_directory=canonical.is_dir())
 
 
-def _media_playback_receipt(root: Path, suffix: str, *, rehash: bool = False) -> None:
-    """Verify the installed playback build; reseal only after owned relocation."""
-    manifest = root / _MEDIA_PLAYBACK_MANIFEST
+def _native_build_receipt(
+    root: Path, manifest_name: str, binary: Path, artifact: str, identity: dict,
+    label: str, *, rehash: bool = False,
+) -> None:
+    """Verify a built native artifact; reseal only after owned relocation."""
+    manifest = root / manifest_name
     _require_file(manifest)
-    plugin = root / "obs-plugins" / f"solin-media-source{suffix}"
-    _require_file(plugin)
+    _require_file(binary)
     try:
         receipt = json.loads(manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise LibobsPackagingError("Invalid native media playback receipt") from error
+        raise LibobsPackagingError(f"Invalid native {label} receipt") from error
     if (
         not isinstance(receipt, dict)
         or type(receipt.get("schema")) is not int or receipt["schema"] != 1
-        or receipt.get("source_id") != "solin_media_source"
-        or not isinstance(receipt.get("plugin"), dict)
-        or receipt["plugin"].get("path") != plugin.relative_to(root).as_posix()
+        or any(receipt.get(key) != expected for key, expected in identity.items())
+        or not isinstance(receipt.get(artifact), dict)
+        or receipt[artifact].get("path") != binary.relative_to(root).as_posix()
     ):
-        raise LibobsPackagingError("Native media playback receipt does not identify the module")
-    digest = hashlib.sha256(plugin.read_bytes()).hexdigest()
+        raise LibobsPackagingError(f"Native {label} receipt does not identify the binary")
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
     if rehash:
-        receipt["plugin"]["sha256"] = digest
+        receipt[artifact]["sha256"] = digest
         manifest.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
-    elif receipt["plugin"].get("sha256") != digest:
-        raise LibobsPackagingError("Native media playback module differs from its build receipt")
+    elif receipt[artifact].get("sha256") != digest:
+        raise LibobsPackagingError(f"Native {label} binary differs from its build receipt")
+
+
+def _media_playback_receipt(root: Path, suffix: str, *, rehash: bool = False) -> None:
+    _native_build_receipt(
+        root, _MEDIA_PLAYBACK_MANIFEST, root / "obs-plugins" / f"solin-media-source{suffix}",
+        "plugin",
+        {
+            "source_id": "solin_media_source",
+            "obs_version": obs_sources.OBS_VERSION,
+            "source_sha256": obs_sources.SOURCE_SHA256,
+            "patches": obs_sources.patch_receipts(_MEDIA_PLAYBACK_PATCHES),
+        },
+        "media playback", rehash=rehash,
+    )
 
 
 def validate_runtime(
@@ -536,6 +556,13 @@ def validate_runtime(
     _media_playback_receipt(root, suffix)
     if target_platform == "windows":
         _require_file(root / "obs-plugins" / "win-wasapi.dll")
+        _native_build_receipt(
+            root, _OBS_RUNTIME_MANIFEST, root / "obs.dll", "library",
+            {"obs_version": obs_sources.OBS_VERSION, "source_sha256": obs_sources.SOURCE_SHA256,
+             "patches": obs_sources.patch_receipts(_OBS_RUNTIME_PATCHES)},
+            "OBS core",
+        )
+        _require_file(root / "data/solin-obs-runtime/COPYING")
     _require_file(root / "data" / "libobs" / "default.effect")
     _require_file(root / "data" / "obs-plugins" / "obs-ffmpeg" / "locale" / "en-US.ini")
 

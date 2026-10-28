@@ -274,8 +274,8 @@ def _native_audio():
                 runtime.shutdown()
 
 
-def _write_av_clip(path, *, duration=5, periodic=False):
-    """Interleave uncompressed video and PCM, changing both signals at 2 s."""
+def _write_av_clip(path, *, duration=5, periodic=False, constant_frequency=None):
+    """Interleave uncompressed video and PCM, optionally keeping one audio tone."""
     width, fps, rate = 64, 10, 48000
     frame_size = width * width * 3
     frame_count = duration * fps
@@ -350,7 +350,9 @@ def _write_av_clip(path, *, duration=5, periodic=False):
     for frame in range(frame_count):
         blue = bool((frame // fps) % 2) if periodic else frame >= 2 * fps
         pixel = b"\xff\0\0" if blue else b"\0\0\xff"
-        frequency = 1000 if blue else 400
+        frequency = (
+            constant_frequency if constant_frequency is not None else (1000 if blue else 400)
+        )
         pcm = b"".join(
             struct.pack("<h", round(16000 * math.sin(2 * math.pi * frequency * i / rate)))
             for i in range(samples_per_frame)

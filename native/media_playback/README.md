@@ -42,6 +42,8 @@ media timestamps with scaled presentation intervals. Non-unity audio passes
 through FFmpeg `atempo` at its original sample rate; unity playback bypasses the
 filter. Graph creation, lookahead bounds and drain are isolated in `rate_tempo.c`;
 the worker schedules its queued output through one native audio path.
+Queued output is due at audio sample precision, retaining its original timestamp;
+sub-sample rescaling differences do not defer it across video wake-ups.
 
 The native range remains the upstream 1–200%; Solin settings and controls use
 50–200%. Video source settings are acknowledged on the next libobs video tick.
@@ -49,15 +51,19 @@ The private source rejects `full_decode`, which Solin does not request. Upstream
 `ffmpeg_source` remains available for other OBS consumers, including stingers.
 
 Finite input starvation publishes `BUFFERING` from FFmpeg's interrupt callback.
-When the next frame becomes available, only an overdue presentation deadline is
-rebased; original media timestamps stay unchanged. The UI notification debounce
-does not control the media clock. Pause/stop/error/completion take precedence over
-buffering callbacks. Live inputs retain their existing timing policy.
+Read service time shares the remaining presentation interval, bounded below by
+decoder cadence rather than gaps between interleaved events; only its excess
+suspends the clock. Decode/filter work and late worker wake-ups do not accumulate
+gaps in audio timestamps. Internal filter-feed events do not set the read budget.
+The UI notification debounce is independent of clock accounting. Accepted seeks
+and clock resets discard pending read accounting. Pause/stop/error/completion take
+precedence over buffering callbacks. Live inputs retain their existing timing policy.
 
 Installation qualifies a candidate in a separate process before publishing
 `obs-plugins/solin-media-source.{dll,so,dylib}` and its matching data directory.
 `media-playback-manifest.json` records the relative plugin path, plugin SHA-256,
-upstream version, source archive SHA-256 and each applied patch with its SHA-256. A failed load or ABI
+upstream version, source archive SHA-256 and each applied patch with its SHA-256.
+Packaging requires the current patch receipts. A failed load or ABI
 check does not install the candidate; there is no decoder fallback.
 
 CTest exercises the patched upstream seek function with controlled decoder and
@@ -72,5 +78,5 @@ failure. Native integration tests cover local/HTTP transport, output pitch,
 audio continuity, A/V synchronization, non-unity EOF drain and finite starvation:
 
 ```text
-python -m pytest tests/integration/test_native_media_startup.py tests/integration/test_native_media_rate.py tests/integration/test_native_media_buffering.py tests/integration/test_native_media_cancellation.py
+python -m pytest tests/integration/test_native_media_startup.py tests/integration/test_native_media_rate.py tests/integration/test_native_media_buffering.py tests/integration/test_native_media_cancellation.py tests/integration/test_native_audio_monitoring.py
 ```

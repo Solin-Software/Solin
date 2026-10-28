@@ -94,6 +94,13 @@ see the native module README for the upstream retirement procedure.
 The playback build recipe records its source checksum, patch hashes and installed binary in
 `media-playback-manifest.json`; packaging requires this module.
 
+Windows additionally requires `python scripts/build_obs_runtime.py` with CMake
+3.28+ and MSVC x64. This builds the ABI-matched OBS core with the WASAPI monitoring
+reserve from [`native/obs_runtime`](../native/obs_runtime/README.md). Original
+plugins and dependency DLLs remain supplied by pylibobs. Packaging verifies the
+core against `obs-runtime-manifest.json`. Linux and macOS keep their distributed
+cores and platform monitoring backends.
+
 Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
 SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
 libavcodec/libavformat 61, libavfilter 10, libavutil 59 and libswscale 8. SDK binaries are build

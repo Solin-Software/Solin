@@ -10,7 +10,7 @@
 +	pthread_mutex_unlock(&media->mutex);
 +	solin_read_begin(&media->read_clock, os_gettime_ns(), finite_playback);
  	int ret = av_read_frame(media->fmt, pkt);
-+	solin_read_end(&media->read_clock);
++	solin_read_end(&media->read_clock, os_gettime_ns());
  	/* Demuxers can mask an exhausted transport as EOF (for example WAV). */
  	if (ret == AVERROR_EOF && media->fmt->pb && media->fmt->pb->error < 0 &&
  	    media->fmt->pb->error != AVERROR_EOF)
@@ -22,15 +22,63 @@
  		return ret;
  	}
  
-@@ -1233,6 +1240,7 @@
+@@ -474,6 +481,39 @@
+ 	}
+ 
+ 	return false;
++}
++
++/* Read service may use the remaining interval before the next presentation.
++ * Keep that budget in media time: scheduler lateness is allowed to catch up,
++ * whereas a read exceeding this budget suspends finite playback. */
++static uint64_t mp_media_read_budget(mp_media_t *m)
++{
++	if (!m->next_ns || m->seek_next_ts)
++		return UINT64_MAX;
++	int64_t pts = INT64_MAX;
++	int64_t cadence = INT64_MAX;
++	if (m->has_video && !m->v.eof) {
++		pts = m->v.frame_ready ? m->v.frame_pts : m->v.next_pts;
++		if (m->v.last_duration > 0)
++			cadence = m->v.last_duration;
++	}
++	if (m->has_audio && (!m->a.eof || m->tempo_queue.size)) {
++		int64_t audio_pts = m->a.frame_ready ? mp_media_audio_frame_pts(m) : m->a.next_pts;
++		/* Only actual queued output contributes; the filter's hypothetical
++		 * output position does not describe available presentation. */
++		if (m->tempo_queue.size)
++			mp_media_audio_pending_pts(m, &audio_pts);
++		pts = FFMIN(pts, audio_pts);
++		if (m->a.last_duration > 0)
++			cadence = FFMIN(cadence, m->a.last_duration);
++	}
++	if (pts == INT64_MAX)
++		return UINT64_MAX;
++	/* Demuxing runs at decoded-frame cadence, not at the arbitrarily short
++	 * gap between interleaved audio/video events. Ordinary sub-frame work
++	 * must catch up without creating a permanent hole in the media clock. */
++	int64_t interval = cadence == INT64_MAX ? 0 : cadence;
++	return playback_time(FFMAX(pts - m->next_pts_ns, interval), m->speed);
+ }
+ 
+ /* ------------------------------------------------------------------------- */
+@@ -774,6 +814,7 @@
+ 
+ static void mp_media_calc_next_ns(mp_media_t *m)
+ {
++	uint64_t read_delay = solin_read_take_delay(&m->read_clock, mp_media_read_budget(m));
+ 	int64_t min_next_ns;
+ 	int64_t delta;
+ 
+@@ -795,6 +836,7 @@
  	}
  
  	m->next_ns += playback_time(delta, m->speed);
-+	m->next_ns = solin_read_deadline(&m->read_clock, m->next_ns, os_gettime_ns());
++	m->next_ns += read_delay;
  	m->next_pts_ns = min_next_ns;
  }
  
-@@ -1257,6 +1265,13 @@
+@@ -819,6 +861,13 @@
  			blog(LOG_WARNING, "MP: Failed to seek: %s", av_err2str(ret));
  			m->seek_next_ts = false;
  			return;
@@ -44,7 +92,15 @@
  		}
  		/* A seek can recover after the demuxer has read ahead to EOF. */
  		m->eof = false;
-@@ -1286,7 +1301,6 @@
+@@ -831,6 +880,7 @@
+ 
+ 	if (m->is_local_file) {
+ 		/* A rejected seek returned above without disturbing queued playback. */
++		m->read_clock = (struct solin_read_clock){0};
+ 		mp_media_tempo_reset(m);
+ 		if (m->tempo_rate_pending) {
+ 			apply_speed(m, m->tempo_pending_speed);
+@@ -848,7 +898,6 @@
  
  bool mp_media_reset(mp_media_t *m)
  {
@@ -52,7 +108,7 @@
  	bool active;
  
  	int64_t next_ts = mp_media_get_base_pts(m);
-@@ -1298,13 +1312,12 @@
+@@ -860,13 +909,12 @@
  	m->eof = false;
  	m->seek_next_ts = false;
  
@@ -68,7 +124,7 @@
  
  	if (!mp_media_prepare_frames(m))
  		return false;
-@@ -1322,8 +1335,8 @@
+@@ -884,8 +932,8 @@
  
  	if (!active && m->is_local_file && m->v_preload_cb)
  		mp_media_next_video(m, true);
@@ -79,7 +135,7 @@
  	return true;
  }
  
-@@ -1388,6 +1401,8 @@
+@@ -950,6 +998,8 @@
  		stop = m->kill || m->stopping;
  		pthread_mutex_unlock(&m->mutex);
  
@@ -88,7 +144,15 @@
  		m->interrupt_poll_ts = ts;
  	}
  
-@@ -1567,12 +1582,22 @@
+@@ -1024,6 +1074,7 @@
+ 
+ static void reset_ts(mp_media_t *m)
+ {
++	m->read_clock = (struct solin_read_clock){0};
+ 	m->next_ns = 0;
+ }
+ 
+@@ -1129,12 +1180,22 @@
  			if (m->has_audio)
  				mp_media_next_audio(m);
  
@@ -112,7 +176,7 @@
  			if (mp_media_eof(m))
  				continue;
  			if (m->tempo_failed)
-@@ -1635,6 +1660,7 @@
+@@ -1197,6 +1258,7 @@
  	media->v_cb = info->v_cb;
  	media->a_cb = info->a_cb;
  	media->stop_cb = info->stop_cb;
@@ -138,7 +202,7 @@
  	mp_video_cb v_cb;
  	mp_audio_cb a_cb;
  	void *opaque;
-@@ -116,6 +118,7 @@
+@@ -117,6 +119,7 @@
  	bool full_decode;
  
  	uint64_t interrupt_poll_ts;

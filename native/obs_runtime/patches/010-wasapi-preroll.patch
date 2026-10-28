@@ -1,0 +1,217 @@
+--- a/libobs/audio-monitoring/win32/wasapi-output.c
++++ b/libobs/audio-monitoring/win32/wasapi-output.c
+@@ -25,6 +25,10 @@
+ ACTUALLY_DEFINE_GUID(IID_IAudioRenderClient, 0xF294ACFC, 0x3146, 0x4483, 0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60,
+ 		     0xE2);
+ 
++#define MAX_AV_DELAY_NS 75000000LL
++
++static uint32_t monitor_preroll_frames(uint32_t sample_rate, REFERENCE_TIME period);
++
+ struct audio_monitor {
+ 	obs_source_t *source;
+ 	IAudioClient *client;
+@@ -36,6 +40,11 @@
+ 	audio_resampler_t *resampler;
+ 	uint32_t sample_rate;
+ 	uint32_t channels;
++	uint32_t buffer_frames;
++	uint32_t preroll_frames;
++	bool started;
++	uint64_t last_submit_time;
++	uint64_t last_submit_duration;
+ 	bool source_has_video;
+ 	bool ignore;
+ 
+@@ -90,7 +99,7 @@
+ 		bad_diff = !last_frame_ts || llabs(diff) > 5000000000 || monitor->time_since_prev > 100000000ULL;
+ 
+ 		/* delay audio if rushing */
+-		if (!bad_diff && diff > 75000000) {
++		if (!bad_diff && diff > MAX_AV_DELAY_NS) {
+ #ifdef DEBUG_AUDIO
+ 			blog(LOG_INFO,
+ 			     "audio rushing, cutting audio, "
+@@ -109,7 +118,7 @@
+ 		deque_pop_front(&monitor->delay_buffer, monitor->buf.array, size);
+ 
+ 		/* cut audio if dragging */
+-		if (!bad_diff && diff < -75000000 && monitor->delay_buffer.size > 0) {
++		if (!bad_diff && diff < -MAX_AV_DELAY_NS && monitor->delay_buffer.size > 0) {
+ #ifdef DEBUG_AUDIO
+ 			blog(LOG_INFO,
+ 			     "audio dragging, cutting audio, "
+@@ -151,6 +160,7 @@
+ 	IMMDeviceEnumerator *immde = NULL;
+ 	WAVEFORMATEX *wfex = NULL;
+ 	UINT32 frames;
++	REFERENCE_TIME period;
+ 	HRESULT hr;
+ 
+ 	/* ------------------------------------------ *
+@@ -238,11 +248,13 @@
+ 		goto fail;
+ 	}
+ 
+-	hr = monitor->client->lpVtbl->Start(monitor->client);
+-	if (FAILED(hr)) {
+-		warn("%s: Failed to start audio: %08lX", __FUNCTION__, hr);
+-		goto fail;
+-	}
++	monitor->buffer_frames = frames;
++	hr = monitor->client->lpVtbl->GetDevicePeriod(monitor->client, &period, NULL);
++	if (FAILED(hr)) {
++		warn("%s: Failed to get device period: %08lX", __FUNCTION__, hr);
++		goto fail;
++	}
++	monitor->preroll_frames = monitor_preroll_frames(monitor->sample_rate, period);
+ 
+ 	success = true;
+ 
+@@ -271,9 +283,90 @@
+ 
+ 	audio_resampler_destroy(monitor->resampler);
+ 	monitor->resampler = NULL;
++	monitor->started = false;
++	monitor->last_submit_time = 0;
++	monitor->last_submit_duration = 0;
+ 
+ 	deque_free(&monitor->delay_buffer);
+ 	da_free(monitor->buf);
++}
++
++/* Keep one endpoint period inside the existing A/V latency allowance. The
++ * remaining window is scheduling headroom, independent of source packet size:
++ * small tempo packets need the same jitter margin as large decoded packets. */
++static uint32_t monitor_preroll_frames(uint32_t sample_rate, REFERENCE_TIME period)
++{
++	if (period <= 0 || period >= MAX_AV_DELAY_NS / 100)
++		return 0;
++	uint64_t reserve_ns = MAX_AV_DELAY_NS - (uint64_t)period * 100;
++	return (uint32_t)util_mul_div64(reserve_ns, sample_rate, 1000000000ULL);
++}
++
++/* The caller holds playback_mutex. EOF deliberately does not reset the endpoint. */
++static HRESULT reset_playback(struct audio_monitor *monitor)
++{
++	HRESULT hr = monitor->client->lpVtbl->Stop(monitor->client);
++	if (FAILED(hr)) {
++		warn("%s: Stop failed: %08lX", __FUNCTION__, hr);
++		return hr;
++	}
++	hr = monitor->client->lpVtbl->Reset(monitor->client);
++	if (FAILED(hr)) {
++		warn("%s: Reset failed: %08lX", __FUNCTION__, hr);
++		return hr;
++	}
++	monitor->started = false;
++	monitor->last_submit_time = 0;
++	monitor->last_submit_duration = 0;
++	return S_OK;
++}
++
++/* A drained endpoint after a real pause/starvation needs a fresh reserve.
++ * Padding alone is quantized and is not evidence of an underrun. */
++static HRESULT reset_if_idle(struct audio_monitor *monitor, uint32_t pad, uint64_t now)
++{
++	if (monitor->started && !pad && monitor->last_submit_time &&
++	    now - monitor->last_submit_time >
++		    monitor->last_submit_duration +
++			    util_mul_div64(monitor->preroll_frames, 1000000000ULL, monitor->sample_rate))
++		return reset_playback(monitor);
++	return S_OK;
++}
++
++/* Submit once: the startup reserve precedes PCM, never replaces active samples.
++ * A very large packet may leave less room for the reserve; never overrun the
++ * actual endpoint capacity. */
++static HRESULT write_audio(struct audio_monitor *monitor, const float *data, uint32_t frames, uint32_t pad, bool muted)
++{
++	BYTE *output;
++	if (!frames)
++		return S_OK;
++	if (frames > monitor->buffer_frames || pad > monitor->buffer_frames - frames)
++		return AUDCLNT_E_BUFFER_TOO_LARGE;
++	uint32_t reserve = monitor->started ? 0 : min(monitor->preroll_frames, monitor->buffer_frames - frames - pad);
++	uint32_t total = frames + reserve;
++	HRESULT hr = monitor->render->lpVtbl->GetBuffer(monitor->render, total, &output);
++	if (FAILED(hr))
++		return hr;
++	if (!muted) {
++		memset(output, 0, (size_t)reserve * monitor->channels * sizeof(float));
++		memcpy(output + (size_t)reserve * monitor->channels * sizeof(float), data,
++		       (size_t)frames * monitor->channels * sizeof(float));
++	}
++	hr = monitor->render->lpVtbl->ReleaseBuffer(monitor->render, total, muted ? AUDCLNT_BUFFERFLAGS_SILENT : 0);
++	if (FAILED(hr))
++		return hr;
++	if (!monitor->started) {
++		hr = monitor->client->lpVtbl->Start(monitor->client);
++		if (FAILED(hr)) {
++			warn("%s: Start failed: %08lX", __FUNCTION__, hr);
++			return hr;
++		}
++		monitor->started = true;
++	}
++	monitor->last_submit_time = os_gettime_ns();
++	monitor->last_submit_duration = util_mul_div64(total, 1000000000ULL, monitor->sample_rate);
++	return S_OK;
+ }
+ 
+ static void on_audio_playback(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted)
+@@ -284,7 +377,6 @@
+ 	uint32_t resample_frames;
+ 	uint64_t ts_offset;
+ 	bool success;
+-	BYTE *output;
+ 
+ 	if (!TryAcquireSRWLockExclusive(&monitor->playback_mutex)) {
+ 		return;
+@@ -309,6 +401,10 @@
+ 		goto free_for_reconnect;
+ 	}
+ 
++	hr = reset_if_idle(monitor, pad, os_gettime_ns());
++	if (FAILED(hr))
++		goto free_for_reconnect;
++
+ 	bool decouple_audio = source->async_unbuffered && source->async_decoupled;
+ 
+ 	if (monitor->source_has_video && !decouple_audio) {
+@@ -319,28 +415,15 @@
+ 		}
+ 	}
+ 
+-	IAudioRenderClient *const render = monitor->render;
+-	hr = render->lpVtbl->GetBuffer(render, resample_frames, &output);
+-	if (FAILED(hr)) {
++	if (!muted && !close_float(vol, 1.0f, EPSILON)) {
++		float *cur = (float *)resample_data[0];
++		float *end = cur + (size_t)resample_frames * monitor->channels;
++		while (cur < end)
++			*(cur++) *= vol;
++	}
++	hr = write_audio(monitor, (const float *)resample_data[0], resample_frames, pad, muted);
++	if (FAILED(hr))
+ 		goto free_for_reconnect;
+-	}
+-
+-	if (!muted) {
+-		/* apply volume */
+-		if (!close_float(vol, 1.0f, EPSILON)) {
+-			register float *cur = (float *)resample_data[0];
+-			register float *end = cur + resample_frames * monitor->channels;
+-
+-			while (cur < end)
+-				*(cur++) *= vol;
+-		}
+-		memcpy(output, resample_data[0], resample_frames * monitor->channels * sizeof(float));
+-	}
+-
+-	hr = render->lpVtbl->ReleaseBuffer(render, resample_frames, muted ? AUDCLNT_BUFFERFLAGS_SILENT : 0);
+-	if (FAILED(hr)) {
+-		goto free_for_reconnect;
+-	}
+ 
+ 	goto unlock;
+ 

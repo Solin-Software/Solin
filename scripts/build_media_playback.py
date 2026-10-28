@@ -11,11 +11,11 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
 if __package__:
+    from . import obs_sources
     from .build_media_extract import (
         SDK_SPECS,
         _download_sdk,
@@ -25,14 +25,12 @@ if __package__:
     )
     from .package_libobs_runtime import _publish_runtime, _relocate_macos, _retry_windows_sharing
 else:
+    import obs_sources
     from build_media_extract import SDK_SPECS, _download_sdk, installed_runtime, prepare_sdk, target
     from package_libobs_runtime import _publish_runtime, _relocate_macos, _retry_windows_sharing
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRECTORY = ROOT / "native" / "media_playback"
-OBS_VERSION = "32.1.2"
-SOURCE_URL = f"https://codeload.github.com/obsproject/obs-studio/tar.gz/refs/tags/{OBS_VERSION}"
-SOURCE_SHA256 = "b4a59410cddb46d0e31df1ee13b8ec66f30862d7e980c1a8c4e3b5d16fae6053"
 MODULE_NAME = "solin-media-source"
 SOURCE_ID = "solin_media_source"
 MANIFEST_NAME = "media-playback-manifest.json"
@@ -44,107 +42,16 @@ class MediaPlaybackBuildError(RuntimeError):
     """Pinned sources, toolchain, or installed playback module failed validation."""
 
 
-def patch_series() -> list[dict]:
-    """Read the ordered downstream changes from their single manifest."""
-    manifest = SOURCE_DIRECTORY / "patches" / "series.json"
-    try:
-        entries = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise MediaPlaybackBuildError("Invalid playback patch series") from error
-    if not isinstance(entries, list) or not entries:
-        raise MediaPlaybackBuildError("Playback patch series must not be empty")
-    names: set[str] = set()
-    for entry in entries:
-        if not isinstance(entry, dict) or not all(
-            isinstance(entry.get(key), str) and entry[key]
-            for key in ("file", "purpose", "upstream")
-        ):
-            raise MediaPlaybackBuildError("Invalid playback patch description")
-        name = entry["file"]
-        if (
-            PurePosixPath(name).name != name or "\\" in name
-            or not name.endswith(".patch") or name in names
-        ):
-            raise MediaPlaybackBuildError("Invalid or duplicate playback patch path")
-        prerequisites = entry.get("requires", [])
-        if (
-            not isinstance(prerequisites, list)
-            or any(not isinstance(required, str) or required not in names for required in prerequisites)
-        ):
-            raise MediaPlaybackBuildError(f"Playback patch prerequisites are out of order: {name}")
-        names.add(name)
-    return entries
-
-
-def apply_patches(sources: Path) -> None:
-    """Apply explicit unified diffs, rejecting any upstream context mismatch."""
-    git = shutil.which("git")
-    if git is None:
-        raise MediaPlaybackBuildError("Git is required to apply the audited playback patches")
-    # A source cache lives inside the Solin checkout. Git-format diffs otherwise
-    # inherit that repository's prefix and may silently skip every target file.
-    environment = os.environ.copy()
-    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"):
-        environment.pop(name, None)
-    environment["GIT_CEILING_DIRECTORIES"] = str(sources.resolve().parent)
-    for entry in patch_series():
-        patch = SOURCE_DIRECTORY / "patches" / entry["file"]
-        if not patch.is_file():
-            raise MediaPlaybackBuildError(f"Missing playback patch: {entry['file']}")
-        command = [git, "apply", "--no-index", "--whitespace=nowarn"]
-        for flags in (["--check"], []):
-            result = subprocess.run(
-                [*command, *flags, str(patch.resolve())], cwd=sources,
-                capture_output=True, text=True, check=False,
-                env=environment,
-            )
-            if result.returncode:
-                raise MediaPlaybackBuildError(
-                    f"Playback patch {entry['file']} no longer applies: {result.stderr.strip()}"
-                )
-
-
-def download_sources(cache: Path) -> Path:
-    cache.mkdir(parents=True, exist_ok=True)
-    archive = cache / f"obs-studio-{OBS_VERSION}.tar.gz"
-    if archive.is_symlink():
-        raise MediaPlaybackBuildError("OBS source archive must not be a symbolic link")
-    if not archive.exists():
-        with tempfile.NamedTemporaryFile(dir=cache, delete=False) as output:
-            temporary = Path(output.name)
-            try:
-                with urllib.request.urlopen(SOURCE_URL, timeout=120) as response:
-                    shutil.copyfileobj(response, output)
-            except BaseException:  # noqa: BLE001 - remove partial downloads even on cancellation
-                output.close()
-                temporary.unlink(missing_ok=True)
-                raise
-        try:
-            _verify_archive(temporary)
-            temporary.replace(archive)
-        finally:
-            temporary.unlink(missing_ok=True)
-    _verify_archive(archive)
-    return archive
-
-
-def _verify_archive(archive: Path) -> None:
-    with archive.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    if digest != SOURCE_SHA256:
-        raise MediaPlaybackBuildError(f"OBS source archive failed SHA-256 verification: {archive}")
-
-
 def prepare_sources(cache: Path) -> Path:
-    archive = download_sources(cache)
-    destination = cache.resolve() / f"obs-{OBS_VERSION}"
+    archive = obs_sources.download_sources(cache)
+    destination = cache.resolve() / f"obs-{obs_sources.OBS_VERSION}"
     if destination.is_symlink():
         raise MediaPlaybackBuildError("OBS source destination must not be a symbolic link")
     with tempfile.TemporaryDirectory(prefix=".obs-", dir=cache) as directory:
         staging = Path(directory) / "sources"
         staging.mkdir()
         with tarfile.open(archive, "r:gz") as bundle:
-            prefix = f"obs-studio-{OBS_VERSION}/"
+            prefix = f"obs-studio-{obs_sources.OBS_VERSION}/"
             for member in bundle:
                 if not member.name.startswith(prefix):
                     continue
@@ -184,7 +91,7 @@ def prepare_sources(cache: Path) -> Path:
         ):
             if not (staging / required).is_file():
                 raise MediaPlaybackBuildError(f"OBS archive is missing required source: {required}")
-        apply_patches(staging)
+        obs_sources.apply_patches(staging, SOURCE_DIRECTORY / "patches")
         _publish_runtime(staging, destination)
     return destination
 
@@ -306,21 +213,13 @@ def install_module(binary: Path, sources: Path, runtime: Path, platform: str) ->
         receipt = {
             "schema": 1,
             "source_id": SOURCE_ID,
-            "obs_version": OBS_VERSION,
-            "source_sha256": SOURCE_SHA256,
+            "obs_version": obs_sources.OBS_VERSION,
+            "source_sha256": obs_sources.SOURCE_SHA256,
             "plugin": {
                 "path": destination.relative_to(runtime).as_posix(),
                 "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
             },
-            "patches": [
-                {
-                    **entry,
-                    "sha256": hashlib.sha256(
-                        (SOURCE_DIRECTORY / "patches" / entry["file"]).read_bytes()
-                    ).hexdigest(),
-                }
-                for entry in patch_series()
-            ],
+            "patches": obs_sources.patch_receipts(SOURCE_DIRECTORY / "patches"),
         }
         manifest = staging / MANIFEST_NAME
         manifest.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

@@ -163,6 +163,9 @@ function(append_test_span source begin end output)
     file(APPEND "${output}" "${body}\n")
 endfunction()
 
+append_test_span("${playback}/media.c" "static uint64_t mp_media_read_budget(mp_media_t *m)\n{"
+    "static inline int64_t mp_media_get_next_min_pts(" "${CMAKE_CURRENT_BINARY_DIR}/interrupt-under-test.h")
+
 set(terminal_header "${CMAKE_CURRENT_BINARY_DIR}/terminal-under-test.h")
 file(WRITE "${terminal_header}" "")
 set(source "${SOLIN_OBS_ROOT}/plugins/obs-ffmpeg/obs-ffmpeg-source.c")

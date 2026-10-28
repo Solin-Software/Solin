@@ -10,15 +10,14 @@
 
 struct solin_read_clock {
 	uint64_t started_ns;
+	uint64_t elapsed_ns;
 	bool tracking;
-	bool pending;
 };
 
 static inline void solin_read_begin(struct solin_read_clock *clock, uint64_t now, bool tracking)
 {
 	clock->started_ns = now;
 	clock->tracking = tracking;
-	clock->pending |= tracking;
 }
 
 static inline bool solin_read_waiting(const struct solin_read_clock *clock, uint64_t now)
@@ -26,17 +25,19 @@ static inline bool solin_read_waiting(const struct solin_read_clock *clock, uint
 	return clock->tracking && now - clock->started_ns >= SOLIN_READ_WAIT_NS;
 }
 
-static inline void solin_read_end(struct solin_read_clock *clock)
+static inline void solin_read_end(struct solin_read_clock *clock, uint64_t now)
 {
+	if (clock->tracking)
+		clock->elapsed_ns += now - clock->started_ns;
 	clock->tracking = false;
 }
 
-/* A successful read may fit entirely inside the next frame's normal budget.
- * Rebase only an overdue deadline, independently of the UI debounce. */
-static inline uint64_t solin_read_deadline(struct solin_read_clock *clock,
-					 uint64_t deadline, uint64_t now)
+/* Settle once the next presentation is known. Per-packet estimates can change
+ * while decoding; they must not leave an irreversible clock adjustment behind.
+ * Decode/filter/scheduler work never contributes to the measured read time. */
+static inline uint64_t solin_read_take_delay(struct solin_read_clock *clock, uint64_t budget)
 {
-	bool pending = clock->pending;
-	clock->pending = false;
-	return pending && deadline && deadline < now ? now : deadline;
+	uint64_t elapsed = clock->elapsed_ns;
+	clock->elapsed_ns = 0;
+	return elapsed > budget ? elapsed - budget : 0;
 }

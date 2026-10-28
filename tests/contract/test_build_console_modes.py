@@ -90,6 +90,16 @@ def test_every_build_and_quality_environment_bootstraps_media_extraction_before_
         assert f"lib{component}-dev" in script
 
 
+def test_windows_builds_qualify_the_corrected_core_before_packaging_or_tests():
+    for relative in (
+        "scripts/build_solin.bat", ".github/workflows/build-solin-windows.yml",
+        ".github/workflows/quality.yml",
+    ):
+        recipe = _read(relative)
+        consumer = "python scripts/typecheck.py" if relative.endswith("quality.yml") else "--include-package=pylibobs"
+        assert recipe.index("build_obs_runtime.py") < recipe.index(consumer)
+
+
 def test_macos_resolves_pylibobs_from_the_custom_wheel_during_dependency_download():
     workflow = _read(".github/workflows/build-solin-macos.yml")
     assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")

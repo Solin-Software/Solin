@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "../read_clock.h"
 
 typedef struct { int num; int den; } AVRational;
 typedef struct { int index; AVRational time_base; } AVStream;
@@ -18,6 +19,7 @@ typedef struct {
 	int tempo_pending_speed;
 	int64_t reported_pts;
 	int mutex;
+	struct solin_read_clock read_clock;
 	void *v_preload_cb;
 } mp_media_t;
 
@@ -89,6 +91,7 @@ int main(void)
 		.seek_next_ts = true, .pause = true, .eof = true,
 		.terminal_packet_corrupt = true,
 		.completed = true,
+		.read_clock = {.elapsed_ns = 3000},
 		.v_preload_cb = &format,
 	};
 
@@ -99,12 +102,14 @@ int main(void)
 	REQUIRE(!media.seek_next_ts && media.eof && media.terminal_packet_corrupt && media.completed);
 	REQUIRE(prepare_calls == 0 && video_calls == 0);
 	REQUIRE(io.error == -123 && io.eof_reached == 1);
+	REQUIRE(media.read_clock.elapsed_ns == 3000);
 
 	seek_result = 0;
 	media.seek_next_ts = true;
 	seek_to(&media, 4000000);
 	REQUIRE(!media.eof && !media.terminal_packet_corrupt && !media.completed);
 	REQUIRE(io.error == 0 && io.eof_reached == 0);
+	REQUIRE(solin_read_take_delay(&media.read_clock, 0) == 0);
 	REQUIRE(media.mutex == 0 && lock_calls == 1);
 	REQUIRE(media.a.packets == 0 && media.v.packets == 0);
 	REQUIRE(media.a.flushes == 1 && media.v.flushes == 1);

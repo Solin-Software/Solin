@@ -18,6 +18,9 @@ Solin's license does not replace dependency licenses. In particular:
 - The native playback module builds a pinned OBS source subset with the changes
   recorded in `native/media_playback/patches/series.json`. Upstream file notices are
   preserved, and its data directory includes the OBS license.
+- The Windows OBS core uses the same pinned source with the changes recorded in
+  `native/obs_runtime/patches/series.json`. Its build receipt identifies the source
+  and patches; the runtime includes the OBS license under `data/solin-obs-runtime`.
 - Qt, PySide6, native codecs, browser components, and other dependencies retain
   their upstream terms and notices. Check the exact versions and components
   included in a distribution.
