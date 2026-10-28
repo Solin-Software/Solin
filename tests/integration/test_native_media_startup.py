@@ -74,6 +74,7 @@ def _serve_clip(
     stall_after: Event | None = None,
     stalled: Event | None = None,
     release_read: Event | None = None,
+    chunk_origin: int | None = None,
 ) -> Iterator[str]:
     from tests._http import ThreadingLoopbackHTTPServer
 
@@ -125,8 +126,13 @@ def _serve_clip(
                     # current read at an exact byte offset, not a discarded probe.
                     pacing_started = time.monotonic()
                     paced_from = start
-                    for offset in range(start, end + 1, 4096):
-                        cut = min(offset + 4096, end + 1)
+                    origin = start if chunk_origin is None else chunk_origin
+                    offset = start
+                    while offset <= end:
+                        # An explicit payload origin can put disconnects between
+                        # complete codec packets, without relying on corruption.
+                        boundary = origin + ((offset - origin) // 4096 + 1) * 4096
+                        cut = min(boundary, end + 1)
                         self.wfile.write(data[offset:cut])
                         self.wfile.flush()
                         with request_lock:
@@ -162,6 +168,7 @@ def _serve_clip(
                             remaining = deadline - time.monotonic()
                             if remaining > 0:
                                 time.sleep(remaining)
+                        offset = cut
                     return
                 self.wfile.write(data[start:end + 1])
             except ConnectionError:
@@ -552,6 +559,7 @@ def _assert_finite_media_transport(scenario: str) -> None:
                     disconnect_after=interrupt, requests=requests, disconnect_offsets=disconnect_offsets,
                     reject_reconnections=reject_reconnections,
                     abort_requests=interrupt if operation == "end-rewind" else None,
+                    chunk_origin=44 if failure else None,
                 ))
                 if origin == "remote" else str(path)
             )
@@ -599,6 +607,7 @@ def _assert_finite_media_transport(scenario: str) -> None:
 
                 assert _wait_for(failed, timeout=5), _observation(media)
                 assert len(disconnect_offsets) == 1 and disconnect_offsets[0] in requests
+                assert (disconnect_offsets[0] - 44) % 4096 == 0, disconnect_offsets
                 # A user can explicitly retry the same media after the origin
                 # recovers; a failed decoder thread must not strand playback.
                 reject_reconnections.clear()

@@ -30,8 +30,10 @@ not establish that a runtime contains the corrections.
 
 Initialization/decode failures report `ERROR` without an end-of-media signal.
 Terminal I/O errors and a final packet marked corrupt remain failures when the
-demuxer returns EOF. Explicit stop/destruction takes precedence over cancellation;
-Play and Restart rebuild a failed decoder on the OBS source owner thread.
+demuxer returns EOF. Finite inputs with a known byte length also reject physical
+EOF before that length once the input buffer is empty. Explicit stop/destruction
+takes precedence over cancellation. Play and Restart rebuild a failed decoder on
+the OBS source owner thread.
 Non-looping completion retains the decoder and duration without rewinding or
 preloading; explicit Play/Restart resets it and rebases the playback clock.
 Looping continues to reset immediately.

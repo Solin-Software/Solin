@@ -160,7 +160,7 @@
  	void *opaque;
 --- a/shared/media-playback/media-playback/media.c
 +++ b/shared/media-playback/media-playback/media.c
-@@ -176,6 +176,14 @@
+@@ -176,6 +176,22 @@
  	}
  
  	int ret = av_read_frame(media->fmt, pkt);
@@ -170,12 +170,20 @@
 +		ret = media->fmt->pb->error;
 +	if (ret == AVERROR_EOF && media->terminal_packet_corrupt)
 +		ret = AVERROR_INVALIDDATA;
++	if (ret == AVERROR_EOF && media->is_local_file && media->known_input_size > 0) {
++		AVIOContext *io = media->fmt->pb;
++		/* A failed reconnect can lose its error at a complete packet boundary.
++		 * Only physical EOF with no buffered bytes proves a short input. */
++		if (io && io->eof_reached && io->buf_ptr == io->buf_end && io->pos >= 0 &&
++		    io->pos < media->known_input_size)
++			ret = AVERROR(EIO);
++	}
 +	if (ret >= 0)
 +		media->terminal_packet_corrupt = (pkt->flags & AV_PKT_FLAG_CORRUPT) != 0;
  	if (ret < 0) {
  		if (ret != AVERROR_EOF && ret != AVERROR_EXIT)
  			blog(LOG_WARNING, "MP: av_read_frame failed: %s (%d)", av_err2str(ret), ret);
-@@ -268,7 +276,7 @@
+@@ -268,7 +284,7 @@
  	while (!mp_media_ready_to_start(m)) {
  		if (!m->eof) {
  			int ret = mp_media_next_packet(m);
@@ -184,7 +192,7 @@
  				if (!actively_seeking) {
  					m->eof = true;
  				} else {
-@@ -591,7 +599,7 @@
+@@ -591,7 +607,7 @@
  	if (!active && m->is_local_file && m->v_preload_cb)
  		mp_media_next_video(m, true);
  	if (stopping && m->stop_cb)
@@ -193,7 +201,23 @@
  	return true;
  }
  
-@@ -837,9 +845,11 @@
+@@ -701,6 +717,15 @@
+ 		return false;
+ 	}
+ 
++	/* Keep the successful input's size before probing or reconnects can
++	 * change protocol state. AVSEEK_SIZE never falls back to a real seek. */
++	m->known_input_size = 0;
++	if (m->is_local_file && m->fmt->pb) {
++		int64_t size = avio_seek(m->fmt->pb, 0, AVSEEK_SIZE);
++		if (size > 0)
++			m->known_input_size = size;
++	}
++
+ 	if (avformat_find_stream_info(m->fmt, NULL) < 0) {
+ 		blog(LOG_WARNING, "MP: Failed to find stream info for '%s'", m->path);
+ 		return false;
+@@ -837,9 +862,11 @@
  	mp_media_t *m = opaque;
  
  	if (!mp_media_thread(m)) {
@@ -210,12 +234,13 @@
  	return NULL;
 --- a/shared/media-playback/media-playback/media.h
 +++ b/shared/media-playback/media-playback/media.h
-@@ -69,6 +69,8 @@
+@@ -69,6 +69,9 @@
  	bool has_audio;
  	bool is_file;
  	bool eof;
 +	bool terminal_packet_corrupt;
 +	bool completed;
++	int64_t known_input_size;
  	bool hw;
  
  	struct obs_source_frame obsframe;

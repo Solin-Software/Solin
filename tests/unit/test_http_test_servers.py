@@ -152,7 +152,10 @@ def test_media_http_pacing_excludes_the_deliberate_stall(tmp_path, paced_clip_cl
     assert duration - 0.01 - 1e-9 <= clock.now - began - 1.5 <= duration + clock.oversleep + 1e-9
 
 
-def test_media_http_pacing_preserves_disconnect_offset_and_range_resume(tmp_path, paced_clip_clock):
+@pytest.mark.parametrize("start, chunk_origin, cutoff", [(77, None, 4173), (0, 44, 44), (77, 44, 4140)])
+def test_media_http_pacing_preserves_disconnect_offset_and_range_resume(
+    tmp_path, paced_clip_clock, start, chunk_origin, cutoff,
+):
     clock, completed = paced_clip_clock
     data = bytes(range(256)) * 128
     path = tmp_path / "clip.bin"
@@ -160,10 +163,10 @@ def test_media_http_pacing_preserves_disconnect_offset_and_range_resume(tmp_path
     interrupt = threading.Event()
     interrupt.set()
     requests, offsets = [], []
-    start = 77
     with media_fixture._serve_clip(
         path, disconnect_once=True, disconnect_after=interrupt,
         requests=requests, disconnect_offsets=offsets,
+        chunk_origin=chunk_origin,
     ) as url:
         host, route = url.removeprefix("http://").split("/", 1)
         with closing(HTTPConnection(host, timeout=2)) as client:
@@ -171,9 +174,9 @@ def test_media_http_pacing_preserves_disconnect_offset_and_range_resume(tmp_path
             response = client.getresponse()
             with pytest.raises(IncompleteRead) as failed:
                 response.read()
-            assert failed.value.partial == data[start:start + 4096]
+            assert failed.value.partial == data[start:cutoff]
             assert completed.wait(2)
-        assert offsets == [start + 4096]
+        assert offsets == [cutoff]
         completed.clear()
         with closing(HTTPConnection(host, timeout=2)) as client:
             client.request("GET", f"/{route}", headers={"Range": f"bytes={offsets[0]}-"})

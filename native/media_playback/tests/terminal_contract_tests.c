@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <stdbool.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,6 +18,7 @@
 #define AVERROR_INVALIDDATA (-1002)
 #define AV_PKT_FLAG_CORRUPT 2
 #define IO_ERROR (-5)
+#define AVERROR(error) (-(error))
 #define LOG_WARNING 0
 #define blog(...) ((void)0)
 
@@ -25,7 +27,11 @@ enum obs_media_state {
 	OBS_MEDIA_STATE_ENDED, OBS_MEDIA_STATE_ERROR, OBS_MEDIA_STATE_BUFFERING,
 };
 typedef struct { int size, flags; } AVPacket;
-typedef struct { int error; } AVIOContext;
+typedef struct {
+	int error, eof_reached;
+	int64_t pos, bytes_read;
+	unsigned char *buf_ptr, *buf_end;
+} AVIOContext;
 typedef struct { AVIOContext *pb; } AVFormatContext;
 typedef struct mp_decode { bool frame_ready, eof; } decoder;
 typedef void (*mp_stop_cb)(void *, bool);
@@ -39,6 +45,7 @@ typedef struct {
 	struct { unsigned size; } tempo_queue;
 	uint64_t next_ns;
 	int64_t play_sys_ts;
+	int64_t known_input_size;
 	struct solin_read_clock read_clock;
 	decoder v, a;
 	void *sem;
@@ -167,8 +174,73 @@ static struct ffmpeg_source fresh_source(void)
 	};
 }
 
+static void test_physical_eof(void)
+{
+	unsigned char buffer[2] = {0};
+	AVIOContext io = {.eof_reached = 1, .buf_ptr = buffer, .buf_end = buffer};
+	AVFormatContext format = {&io};
+	mp_media_t media = {.fmt = &format, .is_local_file = true, .known_input_size = 768044};
+	read_result = AVERROR_EOF;
+	packet.flags = 0;
+	/* macOS returned complete PCM packets, then physical EOF without an error.
+	 * Probe/seek rereads make bytes_read larger than the physical position. */
+	const int64_t positions[] = {24620, 32812};
+	const int64_t bytes_read[] = {503808, 516096};
+	for (unsigned i = 0; i < 2; i++) {
+		io.pos = positions[i];
+		io.bytes_read = bytes_read[i];
+		for (int stored_eof = 0; stored_eof <= 1; stored_eof++) {
+			io.error = stored_eof ? AVERROR_EOF : 0;
+			REQUIRE(mp_media_next_packet(&media) == AVERROR(EIO));
+		}
+	}
+	io.error = 0;
+	/* Delivered packet data is still accepted before a terminal read. */
+	read_result = 0;
+	REQUIRE(mp_media_next_packet(&media) == 0);
+	read_result = AVERROR_EOF;
+	io.bytes_read = 2000000;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR(EIO));
+	/* Preserve the more specific transport/cancellation/corruption evidence. */
+	const int transport_error = -1234;
+	io.error = transport_error;
+	REQUIRE(mp_media_next_packet(&media) == transport_error);
+	io.error = AVERROR_EXIT;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EXIT);
+	io.error = 0;
+	media.terminal_packet_corrupt = true;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_INVALIDDATA);
+	media.terminal_packet_corrupt = false;
+
+	/* A demuxer may finish while more physical input is available or buffered. */
+	io.eof_reached = 0;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.eof_reached = 1;
+	io.buf_end = buffer + 1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.buf_end = buffer;
+	io.pos = 768044;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos++;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos = -1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos = 24620;
+	media.known_input_size = 0;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.known_input_size = -1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.known_input_size = 768044;
+	media.is_local_file = false;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.is_local_file = true;
+	format.pb = NULL;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+}
+
 int main(void)
 {
+	test_physical_eof();
 	for (int waiting = 0; waiting <= 1; waiting++) {
 		struct ffmpeg_source buffering = fresh_source();
 		buffering.state = waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING;

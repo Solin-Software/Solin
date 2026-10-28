@@ -15,8 +15,10 @@
 
 typedef struct { int unused; } AVInputFormat;
 typedef struct { int unused; } AVDictionary;
+typedef struct { int unused; } AVIOContext;
 typedef struct {
 	int flags;
+	AVIOContext *pb;
 	struct { int (*callback)(void *); void *opaque; } interrupt_callback;
 } AVFormatContext;
 typedef struct {
@@ -33,6 +35,7 @@ typedef struct {
 	int speed;
 	uint64_t next_ns;
 	int64_t next_pts_ns, pending_audio_pts;
+	int64_t known_input_size;
 	mock_decode_t a, v;
 	struct { size_t size; } tempo_queue;
 	struct solin_read_clock read_clock;
@@ -45,6 +48,7 @@ typedef struct {
 #define AVFMT_FLAG_NOBUFFER 1
 #define AVMEDIA_TYPE_VIDEO 0
 #define AVMEDIA_TYPE_AUDIO 1
+#define AVSEEK_SIZE 0x10000
 #define FFMAX(a, b) ((a) > (b) ? (a) : (b))
 #define FFMIN(a, b) ((a) < (b) ? (a) : (b))
 #define blog(...) ((void)0)
@@ -58,6 +62,10 @@ static void buffer_wait(void *opaque, bool waiting)
 	buffering_notifications++;
 }
 static int timeout_options, cancellation, probes;
+static int size_queries;
+static int64_t input_size;
+static bool input_has_io = true;
+static AVIOContext input_io;
 static AVFormatContext format_context;
 static uint64_t os_gettime_ns(void) { return clock_ns; }
 static void pthread_mutex_lock(int *mutex) { (void)mutex; }
@@ -85,7 +93,14 @@ static void av_dict_free(AVDictionary **opts) { (void)opts; }
 static AVFormatContext *avformat_alloc_context(void)
 {
 	memset(&format_context, 0, sizeof(format_context));
+	format_context.pb = input_has_io ? &input_io : NULL;
 	return &format_context;
+}
+static int64_t avio_seek(AVIOContext *io, int64_t offset, int whence)
+{
+	REQUIRE(io == &input_io && offset == 0 && whence == AVSEEK_SIZE);
+	size_queries++;
+	return input_size;
 }
 static int avformat_open_input(AVFormatContext **context, const char *path,
 			      const AVInputFormat *format, AVDictionary **opts)
@@ -113,7 +128,13 @@ static int avformat_open_input(AVFormatContext **context, const char *path,
 }
 static int avformat_find_stream_info(AVFormatContext *fmt, void *opts)
 {
-	(void)fmt; (void)opts;
+	(void)opts;
+	mp_media_t *media = fmt->interrupt_callback.opaque;
+	bool query = media->is_local_file && fmt->pb;
+	REQUIRE(size_queries == (query ? 1 : 0));
+	REQUIRE(media->known_input_size == (query && input_size > 0 ? input_size : 0));
+	/* Probe/reconnect state must not replace the successful input's size. */
+	input_size = 19;
 	return 0;
 }
 static bool mp_decode_init(mp_media_t *m, int type, bool hw)
@@ -288,13 +309,35 @@ int main(void)
 			};
 			clock_ns = 0;
 			timeout_options = probes = 0;
+			size_queries = 0;
+			input_size = 768044;
 			cancellation = request;
 			REQUIRE(init_avformat(&media) == (request == 0));
 			REQUIRE(timeout_options == (local ? 0 : 1));
+			REQUIRE(size_queries == (local && !request ? 1 : 0));
 			if (request)
 				REQUIRE(probes <= 24);
-			else
+			else {
 				REQUIRE(media.has_audio && !media.has_video);
+				REQUIRE(media.known_input_size == (local ? 768044 : 0));
+			}
+		}
+	}
+	/* Unknown sizes do not trigger a seek-to-end fallback; missing AVIO skips
+	 * the query. A fresh successful open clears an earlier input's size. */
+	const int64_t sizes[] = {-1, 0, 768044};
+	for (int has_io = 0; has_io <= 1; has_io++) {
+		for (unsigned i = 0; i < 3; i++) {
+			mp_media_t media = {
+				.path = "http://127.0.0.1/finite-input",
+				.is_local_file = true, .known_input_size = 999999,
+			};
+			input_has_io = has_io != 0;
+			input_size = sizes[i];
+			size_queries = cancellation = 0;
+			REQUIRE(init_avformat(&media));
+			REQUIRE(size_queries == has_io);
+			REQUIRE(media.known_input_size == (has_io && sizes[i] > 0 ? sizes[i] : 0));
 		}
 	}
 	puts("Finite and live input cancellation qualified");
