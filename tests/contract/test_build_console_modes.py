@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shlex
+
+import yaml
 
 from tests._paths import REPO_ROOT
 
@@ -142,3 +145,15 @@ def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
     assert "            xauth" in quality and "            xvfb" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/unit" in quality
+
+    configuration = yaml.load(quality, Loader=yaml.BaseLoader)
+    playback_steps = [
+        step for step in configuration["jobs"]["platforms"]["steps"]
+        if "scripts/build_media_playback.py" in step.get("run", "")
+    ]
+    commands = {step.get("if"): shlex.split(step["run"]) for step in playback_steps}
+    assert len(playback_steps) == len(commands) == 2
+    assert commands["runner.os == 'Linux'"] == [
+        "xvfb-run", "--auto-servernum", "python", "scripts/build_media_playback.py",
+    ]
+    assert commands["runner.os != 'Linux'"] == ["python", "scripts/build_media_playback.py"]

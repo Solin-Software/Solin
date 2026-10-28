@@ -85,7 +85,7 @@ if(WIN32)
     endforeach()
 elseif(APPLE)
     runtime_library(obs "Frameworks/libobs.framework/Versions/A/libobs")
-    foreach(pair avcodec.61 avdevice.61 avfilter.10 avformat.61 avutil.59 swscale.8)
+    foreach(pair avcodec avdevice avfilter avformat avutil swscale)
         runtime_library(${pair} "Frameworks/lib${pair}.dylib")
     endforeach()
     set_target_properties(solin-media-source PROPERTIES

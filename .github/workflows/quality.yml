@@ -167,7 +167,12 @@ jobs:
         if: runner.os == 'Windows'
         run: python scripts/build_obs_runtime.py
 
+      - name: Build corrected native media playback on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum python scripts/build_media_playback.py
+
       - name: Build corrected native media playback
+        if: runner.os != 'Linux'
         run: python scripts/build_media_playback.py
 
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
