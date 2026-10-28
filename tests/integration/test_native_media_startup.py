@@ -230,6 +230,25 @@ def _wait_for(predicate: Callable[[], bool], *, timeout: float = 4.0) -> bool:
 
 
 @contextmanager
+def _defer_video_preparation(runtime, media) -> Iterator[Event]:
+    """Order native transport acknowledgement before the first texture upload."""
+    allowed = Event()
+    original_prime = runtime.prime_source_video
+
+    def prime(source):
+        if source is media.source and not allowed.is_set():
+            return False
+        return original_prime(source)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(runtime, "prime_source_video", prime)
+        try:
+            yield allowed
+        finally:
+            allowed.set()
+
+
+@contextmanager
 def _open_before_first_input_tick(runtime, media, path: Path) -> Iterator[None]:
     """Gate only the native input update; source/callback registration must run first."""
     original_update = runtime.ob.Source.update
@@ -341,7 +360,13 @@ def _write_video_offset_clip(path: Path, *, audio_first: bool = False) -> Path:
 def _assert_visual_wait_does_not_pause_before_the_first_video(*, poll_before_wait: bool = False) -> None:
     from solin.core.scenes.libobs_media_source import STATE_PAUSED
 
-    with _native_media() as (runtime, media, path), pytest.MonkeyPatch.context() as patch:
+    with (
+        _native_media() as (runtime, media, path),
+        _defer_video_preparation(runtime, media) as allow_video,
+        pytest.MonkeyPatch.context() as patch,
+    ):
+        if not poll_before_wait:
+            allow_video.set()
         offset_path = _write_video_offset_clip(path, audio_first=True)
         pauses = []
         original_pause = runtime.ob.Source.media_play_pause
@@ -360,6 +385,8 @@ def _assert_visual_wait_does_not_pause_before_the_first_video(*, poll_before_wai
 
             assert _wait_for(initially_paused), _observation(media)
             assert not media._video_readiness.ready, _observation(media)
+            assert not media.wait_for_video_frame(deadline=time.monotonic()), _observation(media)
+            allow_video.set()
         ready = media.wait_for_video_frame(deadline=time.monotonic() + 4)
         observation = {**_observation(media), "take_ready": ready, "pause_requests": pauses}
         print("visual_wait_audio_before_video", observation, flush=True)
@@ -392,7 +419,13 @@ def _assert_speed_before_initial_pause_acknowledgement() -> None:
 def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
     from solin.core.scenes.libobs_media_source import STATE_PAUSED
 
-    with _native_media() as (runtime, media, path), pytest.MonkeyPatch.context() as patch:
+    with (
+        _native_media() as (runtime, media, path),
+        _defer_video_preparation(runtime, media) as allow_video,
+        pytest.MonkeyPatch.context() as patch,
+    ):
+        if scenario != "audio-rearm":
+            allow_video.set()
         requested = []
         original_time = runtime.ob.Source.media_time
 
@@ -423,6 +456,8 @@ def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
 
                 assert _wait_for(audio_first_pause_acknowledged), _observation(media)
                 assert not media._video_readiness.ready, _observation(media)
+                assert not media.wait_for_video_frame(deadline=time.monotonic()), _observation(media)
+                allow_video.set()
             else:
                 assert _wait_for(lambda: media._video_readiness.ready), _observation(media)
                 if scenario == "delayed":
