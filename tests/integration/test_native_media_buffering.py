@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from contextlib import ExitStack
 import subprocess
 import sys
@@ -43,18 +44,31 @@ def _assert_finite_starvation(*, contract: str) -> None:
         # Wait for decoded/read-ahead bytes to drain; the server stays blocked.
         previous = media.position_ms
         unchanged_since = time.monotonic()
+        wait_started = last_poll_at = unchanged_since
+        max_poll_interval = 0.0
+        polls = deque(maxlen=16)
 
         def starved():
-            nonlocal previous, unchanged_since
+            nonlocal previous, unchanged_since, last_poll_at, max_poll_interval
             position = media.position_ms
+            state = media.state
+            now = time.monotonic()
+            max_poll_interval = max(max_poll_interval, now - last_poll_at)
+            last_poll_at = now
+            polls.append((round(now - wait_started, 3), state, position))
             if position != previous:
-                previous, unchanged_since = position, time.monotonic()
-            return time.monotonic() - unchanged_since >= 0.5
+                previous, unchanged_since = position, now
+            # A stationary position alone does not acknowledge the blocked-read
+            # notification: the worker may still be consuming buffered input.
+            return now - unchanged_since >= 0.5 and (
+                contract == "clock" or state == STATE_BUFFERING
+            )
 
-        assert _wait_for(starved, timeout=4), _observation(media)
+        assert _wait_for(starved, timeout=4), {
+            **_observation(media), "polls_elapsed_state_position": list(polls),
+            "max_poll_interval_s": max_poll_interval,
+        }
         frozen_at = media.position_ms
-        if contract != "clock":
-            assert media.state == STATE_BUFFERING, _observation(media)
         if contract in {"stop", "stop_restart", "stop_replay"}:
             media.stop()
             assert _wait_for(lambda: media.state == STATE_STOPPED), _observation(media)

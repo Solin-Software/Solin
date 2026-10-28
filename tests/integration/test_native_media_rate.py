@@ -385,54 +385,81 @@ def _write_av_clip(path, *, duration=5, periodic=False, constant_frequency=None)
 
 
 def _av_sync():
+    from pylibobs import VideoFormat
     from pylibobs._ffi import ffi, get_lib
     from pylibobs.callbacks import (
-        add_source_audio_capture_callback,
-        remove_source_audio_capture_callback,
+        add_raw_audio_callback,
+        add_raw_video_callback,
+        remove_raw_audio_callback,
+        remove_raw_video_callback,
     )
+    from solin.core.media.obs_runtime import MONITORING_NONE
 
-    with _native_media() as (runtime, media, path):
+    with _native_media() as (runtime, media, path), ExitStack() as resources:
         _write_av_clip(path)
-        # Establish a rendered starting frame before measuring a transition.
-        # First-use graphics setup must not consume the observation window.
         assert media.open(str(path))
-        assert media.wait_for_video_frame(deadline=time.monotonic() + 4)
-        assert _capture_prepared_source(runtime, media)["center_bgra"] == _RED_BGRA.hex()
+        # Compare program output timestamps on OBS's common clock, rather than
+        # producer audio arrival against a render readback's Python return time.
+        runtime.set_source_monitoring(media.source, MONITORING_NONE)
+        media.source.audio_mixers = 1
+        channel = runtime.acquire_channel()
+        resources.callback(runtime.release_channel, channel)
+        runtime.set_channel_source(channel, media.source)
         info = ffi.new("struct obs_audio_info *")
         assert get_lib().obs_get_audio_info(info)
-        high_tone = []
+        low_tone, high_tone, red_frame, blue_frame = Event(), Event(), Event(), Event()
+        transitions = {}
         lock = Lock()
 
-        def capture(planes, frames, _timestamp_ns, muted):
-            if muted or not planes or not planes[0] or not frames:
+        def capture_audio(_mix, planes, frames, timestamp_ns):
+            if not planes or not planes[0] or not frames:
                 return
             pcm = array("f", planes[0])
+            if max(pcm, default=0) < 0.01:
+                return
             crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
-            if crossings * int(info.samples_per_sec) / frames >= 750:
+            if crossings * int(info.samples_per_sec) / frames < 750:
+                low_tone.set()
+            else:
                 with lock:
-                    high_tone.append(time.monotonic())
+                    transitions.setdefault("audio", timestamp_ns)
+                high_tone.set()
 
-        callback = add_source_audio_capture_callback(media.source, capture, channels=1)
-        try:
-            assert _wait_for(lambda: _playing(media, 600), timeout=8)
-            media.set_speed(150)
-            deadline = time.monotonic() + 5
-            blue_at = None
-            while time.monotonic() < deadline:
-                if _capture_prepared_source(runtime, media)["center_bgra"] == _BLUE_BGRA.hex():
-                    blue_at = time.monotonic()
-                    break
-            assert blue_at is not None, "Video did not reach the 2 s transition"
-            assert _wait_for(lambda: bool(high_tone), timeout=3), (
-                "Audio did not reach its 2 s transition"
-            )
-            with lock:
-                audio_at = high_tone[0]
-            skew = audio_at - blue_at
-            print("A/V transition skew", skew, flush=True)
-            assert abs(skew) <= 0.45, skew
-        finally:
-            remove_source_audio_capture_callback(media.source, callback)
+        def capture_video(planes, strides, width, height, _format, timestamp_ns):
+            offset = (height // 2) * strides[0] + (width // 2) * 4
+            blue, _green, red, _alpha = planes[0][offset:offset + 4]
+            # Program output passes through YUV conversion; require the actual
+            # dominant color without assuming a lossless RGB round trip.
+            if red > 200 and blue < 20:
+                red_frame.set()
+            elif blue > 200 and red < 20:
+                with lock:
+                    transitions.setdefault("video", timestamp_ns)
+                blue_frame.set()
+
+        audio = add_raw_audio_callback(capture_audio, channels=1)
+        resources.callback(remove_raw_audio_callback, audio)
+        video = add_raw_video_callback(
+            capture_video, format=VideoFormat.BGRA, width=64, height=64,
+        )
+        resources.callback(remove_raw_video_callback, video)
+        assert _wait_for(
+            lambda: _playing(media, 600) and low_tone.is_set() and red_frame.is_set(),
+            timeout=8,
+        ), "Program output did not establish both initial A/V signals"
+        assert not high_tone.is_set() and not blue_frame.is_set(), transitions
+        acknowledged = Event()
+        resources.callback(runtime.observe_source_updates(media.source, acknowledged.set))
+        media.set_speed(150)
+        assert acknowledged.wait(0.25), "The native rate update was not acknowledged"
+        assert _poll(media) < 2000, "The transition preceded the rate update"
+        assert _wait_for(lambda: high_tone.is_set() and blue_frame.is_set(), timeout=5), (
+            "Program output did not reach both 2 s transitions", transitions,
+        )
+        with lock:
+            skew = (transitions["audio"] - transitions["video"]) / 1_000_000_000
+        print("A/V output transition skew", skew, flush=True)
+        assert abs(skew) <= 0.45, skew
 
 
 def _av_starvation(speed):
