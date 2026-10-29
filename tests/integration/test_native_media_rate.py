@@ -64,6 +64,24 @@ def _assert_rate(samples, rate):
     assert all(b >= a - 100 for (_, a), (_, b) in zip(samples, samples[1:], strict=False)), samples
 
 
+def _measure_audio_progress(media, blocks, lock, sample_rate, speed, duration):
+    with lock:
+        blocks.clear()
+        started = time.monotonic()
+    samples = _measure_progress(media, duration)
+    with lock:
+        elapsed = time.monotonic() - started
+        recorded = list(blocks)
+    _assert_rate(samples, speed)
+    pcm = array("f", b"".join(block[4] for block in recorded))
+    # The native producer keeps running while the observer is descheduled.
+    # Bound pacing against the same wall-clock window as the captured PCM.
+    assert sample_rate * elapsed * 0.7 <= len(pcm) <= sample_rate * elapsed * 1.3, (
+        speed, len(pcm), elapsed, duration,
+    )
+    return recorded, pcm
+
+
 def _change_rate_and_measure(runtime, media, speed, previous_speed, duration):
     acknowledged = Event()
     ack_times = []
@@ -763,13 +781,9 @@ def _audio(origin):
                     blocks.clear()
                 _assert_audio_continuity(transition, sample_rate, speed)
                 duration = 1.5 if speed == 25 else 1.0
-                samples = _measure_progress(media, duration)
-                with lock:
-                    recorded = list(blocks)
-                _assert_rate(samples, speed)
-                pcm = array("f", b"".join(block[4] for block in recorded))
-                assert len(pcm) >= sample_rate * duration * 0.7, (speed, len(pcm))
-                assert len(pcm) <= sample_rate * duration * 1.3, (speed, len(pcm))
+                recorded, pcm = _measure_audio_progress(
+                    media, blocks, lock, sample_rate, speed, duration,
+                )
                 assert not any(block[3] for block in recorded), speed
                 rms = math.sqrt(sum(value * value for value in pcm) / len(pcm))
                 crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
@@ -868,17 +882,8 @@ def _mp3_audio(origin):
             assert _wait_for(lambda: _playing(media, 400), timeout=8), media.position_ms
 
             def sample_tone(speed, duration):
-                with lock:
-                    blocks.clear()
-                samples = _measure_progress(media, duration)
-                with lock:
-                    recorded = list(blocks)
-                _assert_rate(samples, speed)
-                pcm = array("f", b"".join(block[4] for block in recorded))
-                assert sample_rate * duration * 0.7 <= len(pcm) <= sample_rate * duration * 1.3, (
-                    speed,
-                    len(pcm),
-                    duration,
+                recorded, pcm = _measure_audio_progress(
+                    media, blocks, lock, sample_rate, speed, duration,
                 )
                 assert not any(block[3] for block in recorded), speed
                 rms = math.sqrt(sum(value * value for value in pcm) / len(pcm))
@@ -934,6 +939,31 @@ def _mp3_audio(origin):
             assert len(requests) == after_seek_requests, requests
         finally:
             remove_source_audio_capture_callback(media.source, callback)
+
+
+@pytest.mark.parametrize("observer_delay", [0, 0.35])
+@pytest.mark.parametrize("audio_pacing", [0.5, 1, 2])
+def test_audio_measurement_uses_elapsed_capture_window(monkeypatch, observer_delay, audio_pacing):
+    now = 10.0
+    blocks = []
+    sample_rate = 48000
+
+    def measure(_media, duration):
+        nonlocal now
+        elapsed = duration + observer_delay
+        frames = round(sample_rate * elapsed * audio_pacing)
+        blocks.append((now, 0, frames, False, array("f", [0.25] * frames).tobytes()))
+        samples = [(now, 0), (now + duration, round(duration * 1000))]
+        now += elapsed
+        return samples
+
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+    monkeypatch.setattr(sys.modules[__name__], "_measure_progress", measure)
+    if audio_pacing == 1:
+        _measure_audio_progress(None, blocks, Lock(), sample_rate, 100, 0.7)
+    else:
+        with pytest.raises(AssertionError):
+            _measure_audio_progress(None, blocks, Lock(), sample_rate, 100, 0.7)
 
 
 def _run(scenario):
