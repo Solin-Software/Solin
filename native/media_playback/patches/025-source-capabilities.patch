@@ -1,0 +1,15 @@
+diff --git a/shared/media-playback/media-playback/media-playback.c b/shared/media-playback/media-playback/media-playback.c
+index e6a232a..49cadc2 100644
+--- a/shared/media-playback/media-playback/media-playback.c
++++ b/shared/media-playback/media-playback/media-playback.c
+@@ -28,6 +28,10 @@ struct media_playback {
+ 
+ media_playback_t *media_playback_create(const struct mp_media_info *info)
+ {
++	if (info->full_decode) {
++		blog(LOG_ERROR, "MP: full_decode is not supported by this media source");
++		return NULL;
++	}
+ 	media_playback_t *mp = bzalloc(sizeof(*mp));
+ 	mp->is_cached = info->is_local_file && info->full_decode;
+ 

@@ -1,0 +1,12 @@
+[
+  {
+    "file": "001-core-build.patch",
+    "purpose": "Build only the ABI-matched core with externally verified dependencies",
+    "upstream": "private"
+  },
+  {
+    "file": "010-wasapi-preroll.patch",
+    "purpose": "Prime Windows audio monitoring before starting the endpoint and rearm idle playback",
+    "upstream": "candidate"
+  }
+]

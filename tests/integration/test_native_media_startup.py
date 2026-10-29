@@ -13,8 +13,9 @@ import struct
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 import time
+import wave
 
 import pytest
 
@@ -64,21 +65,43 @@ def _write_segmented_avi(path: Path, *, duration_seconds: float = _DURATION_SECO
 
 
 @contextmanager
-def _serve_clip(path: Path) -> Iterator[str]:
+def _serve_clip(
+    path: Path, *, disconnect_once: bool = False, accept_ranges: bool = True,
+    disconnect_after: Event | None = None, requests: list[int] | None = None,
+    disconnect_offsets: list[int] | None = None,
+    reject_reconnections: Event | None = None,
+    abort_requests: Event | None = None,
+    stall_after: Event | None = None,
+    stalled: Event | None = None,
+    release_read: Event | None = None,
+    chunk_origin: int | None = None,
+) -> Iterator[str]:
     from tests._http import ThreadingLoopbackHTTPServer
 
     data = path.read_bytes()
+    disconnected = Event()
+    request_lock = Lock()
+    latest_request = 0
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            nonlocal latest_request
             start, end = 0, len(data) - 1
-            byte_range = self.headers.get("Range")
+            byte_range = self.headers.get("Range") if accept_ranges else None
             if byte_range is not None:
                 unit, interval = byte_range.split("=", 1)
                 assert unit == "bytes"
                 first, last = interval.split("-", 1)
                 start = int(first or 0)
                 end = min(int(last) if last else end, end)
+            with request_lock:
+                latest_request += 1
+                request_number = latest_request
+                if requests is not None:
+                    requests.append(start)
+            if disconnected.is_set() and reject_reconnections is not None and reject_reconnections.is_set():
+                self.send_error(503, "Origin unavailable")
+                return
             if start > end:
                 self.send_response(416)
                 self.send_header("Content-Range", f"bytes */{len(data)}")
@@ -86,14 +109,69 @@ def _serve_clip(path: Path) -> Iterator[str]:
                 return
             self.send_response(206 if byte_range is not None else 200)
             self.send_header("Content-Type", "video/x-msvideo")
-            self.send_header("Accept-Ranges", "bytes")
+            if accept_ranges:
+                self.send_header("Accept-Ranges", "bytes")
             self.send_header("Content-Length", str(end - start + 1))
             if byte_range is not None:
                 self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
             self.end_headers()
+            if abort_requests is not None and abort_requests.is_set():
+                # Accept the range reopen but fail its read, exercising optional
+                # rewind/preload after a fully consumed, successful playback.
+                self.close_connection = True
+                return
             try:
+                if (disconnect_once and not disconnected.is_set()) or stall_after is not None:
+                    # Feed probing normally. Once playback moves, interrupt its
+                    # current read at an exact byte offset, not a discarded probe.
+                    pacing_started = time.monotonic()
+                    paced_from = start
+                    origin = start if chunk_origin is None else chunk_origin
+                    offset = start
+                    while offset <= end:
+                        # An explicit payload origin can put disconnects between
+                        # complete codec packets, without relying on corruption.
+                        boundary = origin + ((offset - origin) // 4096 + 1) * 4096
+                        cut = min(boundary, end + 1)
+                        self.wfile.write(data[offset:cut])
+                        self.wfile.flush()
+                        with request_lock:
+                            stall_this_read = (
+                                stall_after is not None and stall_after.is_set()
+                                and request_number == latest_request
+                            )
+                            interrupt_this_read = (
+                                disconnect_after is not None and disconnect_after.is_set()
+                                and request_number == latest_request and not disconnected.is_set()
+                            )
+                            if interrupt_this_read:
+                                disconnected.set()
+                        if stall_this_read:
+                            assert stalled is not None and release_read is not None
+                            stalled.set()
+                            waiting_for_release = not release_read.is_set()
+                            if not release_read.wait(15):
+                                return
+                            # Deliberate starvation must not buy a catch-up burst.
+                            if waiting_for_release:
+                                pacing_started = time.monotonic()
+                                paced_from = offset
+                        if interrupt_this_read:
+                            if disconnect_offsets is not None:
+                                disconnect_offsets.append(cut)
+                            self.close_connection = True
+                            return
+                        if cut <= end:
+                            # Account for send overhead and delayed wakeups instead
+                            # of adding them to every block's nominal 10 ms budget.
+                            deadline = pacing_started + (cut - paced_from) / 409600
+                            remaining = deadline - time.monotonic()
+                            if remaining > 0:
+                                time.sleep(remaining)
+                        offset = cut
+                    return
                 self.wfile.write(data[start:end + 1])
-            except (BrokenPipeError, ConnectionResetError):
+            except ConnectionError:
                 # Decoder rebuild/teardown can cancel an HTTP read in progress.
                 return
 
@@ -106,6 +184,10 @@ def _serve_clip(path: Path) -> Iterator[str]:
     try:
         yield f"http://127.0.0.1:{server.server_port}/{path.name}"
     finally:
+        if release_read is not None:
+            release_read.set()
+        if disconnect_after is not None:
+            disconnect_after.set()
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
@@ -165,6 +247,25 @@ def _wait_for(predicate: Callable[[], bool], *, timeout: float = 4.0) -> bool:
             return True
         time.sleep(1 / 240)
     return False
+
+
+@contextmanager
+def _defer_video_preparation(runtime, media) -> Iterator[Event]:
+    """Order native transport acknowledgement before the first texture upload."""
+    allowed = Event()
+    original_prime = runtime.prime_source_video
+
+    def prime(source):
+        if source is media.source and not allowed.is_set():
+            return False
+        return original_prime(source)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(runtime, "prime_source_video", prime)
+        try:
+            yield allowed
+        finally:
+            allowed.set()
 
 
 @contextmanager
@@ -238,7 +339,7 @@ def _assert_stop_before_first_input_update() -> None:
             media.stop()
 
         def stopped() -> bool:
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             return media.source.media_state == STATE_STOPPED
 
         acknowledged = _wait_for(stopped)
@@ -279,7 +380,13 @@ def _write_video_offset_clip(path: Path, *, audio_first: bool = False) -> Path:
 def _assert_visual_wait_does_not_pause_before_the_first_video(*, poll_before_wait: bool = False) -> None:
     from solin.core.scenes.libobs_media_source import STATE_PAUSED
 
-    with _native_media() as (runtime, media, path), pytest.MonkeyPatch.context() as patch:
+    with (
+        _native_media() as (runtime, media, path),
+        _defer_video_preparation(runtime, media) as allow_video,
+        pytest.MonkeyPatch.context() as patch,
+    ):
+        if not poll_before_wait:
+            allow_video.set()
         offset_path = _write_video_offset_clip(path, audio_first=True)
         pauses = []
         original_pause = runtime.ob.Source.media_play_pause
@@ -293,11 +400,13 @@ def _assert_visual_wait_does_not_pause_before_the_first_video(*, poll_before_wai
         assert media.open(str(offset_path), autoplay=False)
         if poll_before_wait:
             def initially_paused():
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 return media.source.media_state == STATE_PAUSED
 
             assert _wait_for(initially_paused), _observation(media)
             assert not media._video_readiness.ready, _observation(media)
+            assert not media.wait_for_video_frame(deadline=time.monotonic()), _observation(media)
+            allow_video.set()
         ready = media.wait_for_video_frame(deadline=time.monotonic() + 4)
         observation = {**_observation(media), "take_ready": ready, "pause_requests": pauses}
         print("visual_wait_audio_before_video", observation, flush=True)
@@ -315,7 +424,7 @@ def _assert_speed_before_initial_pause_acknowledgement() -> None:
         # Watch the native upload directly; wait_for_video_frame would also queue the pause.
         assert _wait_for(lambda: media._video_readiness.ready), _observation(media)
         with _hold_tick(runtime):
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             assert media.source.media_state != STATE_PAUSED, "Tick barrier did not precede pause ack"
             media.set_speed(150)
         ready = media.wait_for_video_frame(deadline=time.monotonic() + 4)
@@ -330,7 +439,13 @@ def _assert_speed_before_initial_pause_acknowledgement() -> None:
 def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
     from solin.core.scenes.libobs_media_source import STATE_PAUSED
 
-    with _native_media() as (runtime, media, path), pytest.MonkeyPatch.context() as patch:
+    with (
+        _native_media() as (runtime, media, path),
+        _defer_video_preparation(runtime, media) as allow_video,
+        pytest.MonkeyPatch.context() as patch,
+    ):
+        if scenario != "audio-rearm":
+            allow_video.set()
         requested = []
         original_time = runtime.ob.Source.media_time
 
@@ -356,25 +471,27 @@ def _assert_startup_forwards_the_requested_seek(scenario: str) -> None:
                 media.seek(target)
 
                 def audio_first_pause_acknowledged():
-                    media.apply_pending_resume()
+                    media.apply_startup_transport()
                     return media.source.media_state == STATE_PAUSED and media._startup is None
 
                 assert _wait_for(audio_first_pause_acknowledged), _observation(media)
                 assert not media._video_readiness.ready, _observation(media)
+                assert not media.wait_for_video_frame(deadline=time.monotonic()), _observation(media)
+                allow_video.set()
             else:
                 assert _wait_for(lambda: media._video_readiness.ready), _observation(media)
                 if scenario == "delayed":
                     assert _wait_for(lambda: media.position_ms >= 400), _observation(media)
                 if scenario == "pause-ack":
-                    media.apply_pending_resume()
+                    media.apply_startup_transport()
                     assert _wait_for(lambda: media.source.media_state == STATE_PAUSED), _observation(media)
                 if scenario == "latest":
                     target = 1000
                     with _hold_tick(runtime):
                         media.seek(2000)
-                        media.apply_pending_resume()
+                        media.apply_startup_transport()
                         media.seek(target)
-                        media.apply_pending_resume()
+                        media.apply_startup_transport()
                 else:
                     media.seek(target)
 
@@ -405,6 +522,203 @@ def _run_native(scenario: str) -> None:
     assert result.returncode == 0, f"Native scenario {scenario!r} exited {result.returncode}:\n{diagnostics}"
 
 
+def _assert_finite_media_transport(scenario: str) -> None:
+    from solin.core.scenes import libobs_media_source
+    from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_ERROR, STATE_PAUSED, STATE_PLAYING
+
+    _, kind, origin, operation = scenario.split(":")
+    failure = operation in ("failure", "failure-play")
+    with _native_media() as (_runtime, media, path):
+        if kind == "cover":
+            path = Path(__file__).resolve().parents[1] / "fixtures/media_extract/audio-seek-cover.mp3"
+        elif kind == "audio":
+            path = path.with_suffix(".wav")
+            with wave.open(str(path), "wb") as output:
+                output.setparams((1, 2, 48000, 0, "NONE", "not compressed"))
+                seconds = 2 if operation == "end-rewind" else 8
+                output.writeframes(b"\x00\x01" * 48000 * seconds)
+        elif operation == "end":
+            _write_segmented_avi(path, duration_seconds=2)
+
+        with ExitStack() as stack:
+            interrupt = Event()
+            requests: list[int] = []
+            disconnect_offsets: list[int] = []
+            reject_reconnections = Event()
+            if failure:
+                reject_reconnections.set()
+                patch = stack.enter_context(pytest.MonkeyPatch.context())
+                # Exhaust real HTTP retries quickly while retaining the native
+                # failure path. The production retry budget is tested separately.
+                patch.setattr(libobs_media_source, "_PROGRESSIVE_FFMPEG_OPTIONS",
+                              "reconnect=1 reconnect_streamed=1 reconnect_on_network_error=1 "
+                              "reconnect_delay_max=0 rw_timeout=200000")
+            location = (
+                stack.enter_context(_serve_clip(
+                    path, disconnect_once=operation == "disconnect" or failure, accept_ranges=operation != "no-range",
+                    disconnect_after=interrupt, requests=requests, disconnect_offsets=disconnect_offsets,
+                    reject_reconnections=reject_reconnections,
+                    abort_requests=interrupt if operation == "end-rewind" else None,
+                    chunk_origin=44 if failure else None,
+                ))
+                if origin == "remote" else str(path)
+            )
+            # Tear down the decoder before withdrawing its network origin.
+            stack.callback(media.close)
+            assert media.open(location, autoplay=operation != "paused", volume_percent=0)
+
+            def poll():
+                media.apply_startup_transport()
+                return media.state
+
+            def assert_replay():
+                media.restart()
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100), _observation(media)
+                # Replaying after an idle interval must use a fresh clock,
+                # rather than decoding every overdue frame in a single burst.
+                deadline = time.monotonic() + 0.2
+                while time.monotonic() < deadline:
+                    assert poll() == STATE_PLAYING, _observation(media)
+                    time.sleep(0.01)
+                if kind == "video":
+                    frame = _capture_prepared_source(_runtime, media)
+                    assert frame["center_bgra"] == _RED_BGRA.hex(), frame
+
+            assert _wait_for(lambda: poll() in (STATE_PLAYING, STATE_PAUSED) and media._startup is None), (
+                {"requests": requests, **_observation(media)}
+            )
+            if operation == "end-rewind":
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100)
+                interrupt.set()
+                assert _wait_for(lambda: poll() == STATE_ENDED, timeout=5), _observation(media)
+                interrupt.clear()
+                assert_replay()
+                return
+            if failure:
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100)
+                interrupt.set()
+                states: list[int] = []
+
+                def failed():
+                    state = poll()
+                    states.append(state)
+                    assert state != STATE_ENDED, {"states": states, **_observation(media)}
+                    return state == STATE_ERROR
+
+                assert _wait_for(failed, timeout=5), _observation(media)
+                assert len(disconnect_offsets) == 1 and disconnect_offsets[0] in requests
+                assert (disconnect_offsets[0] - 44) % 4096 == 0, disconnect_offsets
+                # A user can explicitly retry the same media after the origin
+                # recovers; a failed decoder thread must not strand playback.
+                reject_reconnections.clear()
+                if operation == "failure-play":
+                    media.play()
+                else:
+                    media.restart()
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100), _observation(media)
+                return
+            if operation == "disconnect":
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100)
+                interrupt.set()
+                positions = [media.position_ms]
+
+                def recovered():
+                    assert poll() == STATE_PLAYING, _observation(media)
+                    position = media.position_ms
+                    assert position >= positions[-1], positions
+                    positions.append(position)
+                    return position >= 6000
+
+                try:
+                    reached_target = _wait_for(recovered, timeout=10)
+                finally:
+                    print("http_recovery", {
+                        "positions": positions[-10:], "requests": requests,
+                        "interrupted_at": disconnect_offsets, **_observation(media),
+                    }, flush=True)
+                assert reached_target, _observation(media)
+                assert len(disconnect_offsets) == 1, disconnect_offsets
+                assert disconnect_offsets[0] in requests, (disconnect_offsets, requests)
+                return
+            if operation == "no-range":
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > 100)
+                media.seek(4000)
+                position = media.position_ms
+                assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > position + 200), _observation(media)
+                return
+            if operation == "end":
+                # OBS's live lifecycle reconnects after 10 seconds by default.
+                assert _wait_for(lambda: poll() == STATE_ENDED, timeout=12), _observation(media)
+                deadline = time.monotonic() + 10.5
+                while time.monotonic() < deadline:
+                    assert poll() == STATE_ENDED, _observation(media)
+                    time.sleep(0.02)
+                assert_replay()
+                return
+
+            target = 4000
+            # Several consecutive requests model a slider drag. The last target wins.
+            media.seek(2000)
+            media.seek(1000)
+            media.seek(target)
+            if operation == "paused":
+                assert _wait_for(lambda: poll() == STATE_PAUSED)
+                media.play()
+            assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms >= target), _observation(media)
+            position = media.position_ms
+            assert _wait_for(lambda: poll() == STATE_PLAYING and media.position_ms > position + 200), _observation(media)
+            # Backward seek must also reset read-ahead EOF and keep decoding.
+            media.seek(500)
+            assert _wait_for(lambda: poll() == STATE_PLAYING and 500 <= media.position_ms < 2000), _observation(media)
+
+
+@pytest.mark.parametrize("kind", ["audio", "cover", "video"])
+@pytest.mark.parametrize("origin", ["local", "remote"])
+@pytest.mark.parametrize("operation", ["playing", "paused"])
+def test_native_seek_keeps_decoding(kind, origin, operation) -> None:
+    _run_native(f"transport:{kind}:{origin}:{operation}")
+
+
+@pytest.mark.parametrize("kind", ["cover", "video"])
+def test_native_http_eof_stays_ended_until_explicit_restart(kind) -> None:
+    _run_native(f"transport:{kind}:remote:end")
+
+
+def test_native_http_read_recovers_a_truncated_response() -> None:
+    _run_native("transport:audio:remote:disconnect")
+
+
+@pytest.mark.parametrize("retry", ["failure", "failure-play"], ids=["restart", "play"])
+def test_native_exhausted_http_retries_report_error_and_allow_explicit_retry(retry) -> None:
+    _run_native(f"transport:audio:remote:{retry}")
+
+
+def test_native_http_origin_without_ranges_does_not_terminate_on_seek() -> None:
+    _run_native("transport:audio:remote:no-range")
+
+
+def test_native_completion_survives_a_failed_rewind_read() -> None:
+    _run_native("transport:audio:remote:end-rewind")
+
+
+def _assert_invalid_media_reports_error() -> None:
+    from solin.core.scenes.libobs_media_source import STATE_ENDED, STATE_ERROR
+
+    with _native_media() as (_runtime, media, path):
+        assert media.open(str(path.with_suffix(".missing")), autoplay=True)
+
+        def failed():
+            media.apply_startup_transport()
+            assert media.state != STATE_ENDED, _observation(media)
+            return media.state == STATE_ERROR
+
+        assert _wait_for(failed), _observation(media)
+
+
+def test_native_input_initialization_failure_is_an_error() -> None:
+    _run_native("invalid-input")
+
+
 def _assert_system_default_audio_monitoring() -> None:
     from pylibobs._ffi import ffi, get_lib
     from solin.core.scenes.libobs_media_source import STATE_PAUSED
@@ -421,7 +735,7 @@ def _assert_system_default_audio_monitoring() -> None:
             assert media.open(str(media_path), autoplay=False, volume_percent=0)
 
             def paused():
-                media.apply_pending_resume()
+                media.apply_startup_transport()
                 return (
                     media.source.media_state == STATE_PAUSED
                     and media._startup is None
@@ -645,10 +959,14 @@ def test_native_visual_wait_recovers_an_acknowledged_audio_first_pause() -> None
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    if sys.argv[1].startswith("transport:"):
+        _assert_finite_media_transport(sys.argv[1])
+        raise SystemExit(0)
     if sys.argv[1].startswith("seek-"):
         _assert_startup_forwards_the_requested_seek(sys.argv[1].removeprefix("seek-"))
         raise SystemExit(0)
     {
+        "invalid-input": _assert_invalid_media_reports_error,
         "audio-monitoring": _assert_system_default_audio_monitoring,
         "audio-monitoring-overlap": _assert_audio_monitoring_reset_overlaps_media_replacement,
         "monitor-only-mix": _assert_monitor_only_media_stays_out_of_the_recording_mix,

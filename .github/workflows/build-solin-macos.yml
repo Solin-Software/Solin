@@ -129,6 +129,10 @@ jobs:
         shell: bash
         run: python scripts/build_media_extract.py
 
+      - name: Build corrected native media playback
+        shell: bash
+        run: python scripts/build_media_playback.py
+
       - name: Read app version
         id: version
         run: python scripts/release.py metadata --github-output

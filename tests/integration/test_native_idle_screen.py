@@ -382,8 +382,8 @@ def _playback(directory: Path, deadline: float) -> dict:
         background.pause()
 
         def both_paused():
-            foreground.apply_pending_resume()
-            background.apply_pending_resume()
+            foreground.apply_startup_transport()
+            background.apply_startup_transport()
             return foreground.source.media_state == background.source.media_state == STATE_PAUSED
 
         _wait_for(both_paused, deadline)

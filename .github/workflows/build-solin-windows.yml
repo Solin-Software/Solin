@@ -84,6 +84,14 @@ jobs:
         shell: pwsh
         run: python scripts/build_media_extract.py
 
+      - name: Build corrected Windows audio monitoring core
+        shell: pwsh
+        run: python scripts/build_obs_runtime.py
+
+      - name: Build corrected native media playback
+        shell: pwsh
+        run: python scripts/build_media_playback.py
+
       - name: Read app version
         id: version
         run: python scripts/release.py metadata --github-output

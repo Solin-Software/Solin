@@ -11,6 +11,9 @@ command-line tools during test execution. They contain generated colors and a
 - `video-short.mp4`: a single blue video frame.
 - `audio.mp3`: half-second MP3 with a title and no cover.
 - `audio-cover.mp3`: the same tone with an attached green JPEG cover.
+- `audio-seek-cover.mp3`: an eight-second MP3 with the same cover, for native
+  transport tests. Repeated synthetic audio frames omit the short fixture's
+  duration index so FFmpeg derives the extended duration from its bitrate.
 
 Fixtures were generated with FFmpeg 7.1. Test assertions check content,
 metadata and display geometry rather than depending on a particular encoder's
