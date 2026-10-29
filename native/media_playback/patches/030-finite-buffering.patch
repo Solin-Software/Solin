@@ -312,6 +312,15 @@
  		obs_source_media_started(s->source);
  }
  
+@@ -377,7 +398,7 @@
+ 
+ 		s->destroy_media = false;
+ 
+-		if (!s->is_local_file) {
++		if (!s->is_local_file && get_media_state(s) != OBS_MEDIA_STATE_STOPPED) {
+ 			pthread_mutex_lock(&s->reconnect_mutex);
+ 			if (!os_atomic_set_bool(&s->reconnecting, true))
+ 				FF_BLOG(LOG_WARNING, "Disconnected. "
 @@ -467,7 +488,7 @@
  	/* If media has ended and user enables looping, user expects that it restarts.
  	 * Should still check if is_looping was changed, because users may stop them
@@ -360,7 +369,24 @@
  		obs_source_media_started(s->source);
  }
  
-@@ -775,7 +797,7 @@
+@@ -725,11 +747,15 @@
+ {
+ 	struct ffmpeg_source *s = data;
+ 
++	/* Join a pending reconnect before publishing the final transport intent. */
++	stop_reconnect_thread(s);
++	set_media_state(s, OBS_MEDIA_STATE_STOPPED);
+ 	if (s->media) {
+ 		/* Stop wins over callbacks triggered by cancellation. */
+-		set_media_state(s, OBS_MEDIA_STATE_STOPPED);
+ 		media_playback_stop(s->media);
+ 		obs_source_output_video(s->source, NULL);
++		if (s->close_when_inactive || !s->is_local_file)
++			s->destroy_media = true;
+ 	}
+ }
+ 
+@@ -775,7 +801,7 @@
  {
  	struct ffmpeg_source *s = data;
  

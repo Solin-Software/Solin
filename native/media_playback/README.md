@@ -37,6 +37,9 @@ the OBS source owner thread.
 Non-looping completion retains the decoder and duration without rewinding or
 preloading; explicit Play/Restart resets it and rebases the playback clock.
 Looping continues to reset immediately.
+Explicit Stop cancels pending reconnection and releases live inputs or inputs
+configured to close when inactive without scheduling another reconnect.
+Subsequent Play/Restart opens a fresh input.
 
 Speed updates keep the input and decoder open. The worker applies the latest
 requested speed at an audio boundary, retains queued audio, and uses original
