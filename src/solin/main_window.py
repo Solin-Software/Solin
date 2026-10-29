@@ -563,6 +563,13 @@ class MainWindow(QWidget):
             background_media_controller,
             self,
         )
+        self._unsubscribe_background_song_projection = self.projection_session.subscribe(
+            self._sync_background_song_media_mute
+        )
+        self.destroyed.connect(
+            lambda _object=None: self._unsubscribe_background_song_projection()
+        )
+        self._sync_background_song_media_mute()
         self._zoom_meetings = ZoomMeetingController(
             self._zoom_service,
             self._background_song_service,
@@ -1117,6 +1124,11 @@ class MainWindow(QWidget):
 
     def _on_projection_state_changed_for_native(self) -> None:
         self._reconcile_native_scene_surfaces()
+
+    def _sync_background_song_media_mute(self) -> None:
+        # Audio and video share the video transport state. Keep the mute through
+        # pause, buffering, and playlist handoffs until that session is replaced.
+        self._background_song_service.set_media_muted(self.projection_session.state_type == "video")
 
     def _on_engine_media_event(self, event: object) -> None:
         # Runs on the engine's event thread; on_engine_media_state only emits

@@ -6,7 +6,9 @@ import random
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    QElapsedTimer, QObject, QSignalBlocker, QTimer, QVariantAnimation, Signal, Slot,
+)
 
 from solin.core.media.playback_state import SolinPlaybackState
 from solin.core.jw.background_song_settings import (
@@ -36,6 +38,7 @@ from solin.core.meetings.schedule import (
 
 _SCHEDULE_POLL_MS = 30_000
 _FADE_TICK_MS = 50
+BACKGROUND_SONG_MEDIA_FADE_SECONDS = 0.2
 
 
 class MeetingScheduleSource(Protocol):
@@ -97,6 +100,13 @@ class BackgroundSongService(QObject):
         self._store = songs_store
 
         self._media = media_controller
+        self._closed = False
+        self._playback_volume = self._media.volume
+        self._media_muted = False
+        self._media_gain = 1.0
+        self._media_fade = QVariantAnimation(self)
+        self._media_fade.setDuration(round(BACKGROUND_SONG_MEDIA_FADE_SECONDS * 1000))
+        self._media_fade.valueChanged.connect(self._on_media_gain_changed)
 
         self._enabled = False
         self._volume_percent = DEFAULT_BACKGROUND_SONG_VOLUME
@@ -134,7 +144,7 @@ class BackgroundSongService(QObject):
         self._fade_timer.timeout.connect(self._on_fade_tick)
         self._fade_target = 0.0
         self._fade_start = 0.0
-        self._fade_elapsed_ms = 0
+        self._fade_clock = QElapsedTimer()
         self._fade_duration_ms = 0
         self._stop_after_fade = False
 
@@ -198,6 +208,8 @@ class BackgroundSongService(QObject):
         self.evaluate_auto_playback()
 
     def shutdown(self) -> None:
+        self._closed = True
+        self._media_fade.stop()
         self._schedule_timer.stop()
         self._auto_stop_timer.stop()
         self._retry_timer.stop()
@@ -206,6 +218,40 @@ class BackgroundSongService(QObject):
         self._manual_session = False
         self._scheduled_fade_deadline = None
         self._media.stop()
+
+    @Slot(bool)
+    def set_media_muted(self, muted: bool) -> None:
+        """Fade only the output gain; transport and meeting deadlines stay independent.
+
+        Keep silence when a foreground session exits during a background stop.
+        A future explicit playback request will restore the configured volume.
+        """
+        if self._closed or self._media_muted == bool(muted):
+            return
+        self._media_muted = bool(muted)
+        self._media_fade.stop()
+        if not muted and self._fade_timer.isActive() and self._stop_after_fade:
+            return
+        target = 0.0 if muted else 1.0
+        if not self.is_playing or self._media_fade.duration() == 0:
+            self._on_media_gain_changed(target)
+            return
+        # Reconfiguring a stopped animation can emit values at its old playhead.
+        # Publish only the new envelope so reversing a fade cannot spike volume.
+        with QSignalBlocker(self._media_fade):
+            self._media_fade.setStartValue(self._media_gain)
+            self._media_fade.setEndValue(target)
+            self._media_fade.setCurrentTime(0)
+        self._media_fade.start()
+
+    @Slot(object)
+    def _on_media_gain_changed(self, gain: float) -> None:
+        self._media_gain = float(gain)
+        self._media.set_volume(self._playback_volume * self._media_gain)
+
+    def _set_playback_volume(self, volume: float) -> None:
+        self._playback_volume = max(0.0, min(1.0, volume))
+        self._media.set_volume(self._playback_volume * self._media_gain)
 
     @Slot()
     def reload_settings(self) -> None:
@@ -472,7 +518,9 @@ class BackgroundSongService(QObject):
             )
             return
         self._fade_timer.stop()
-        self._media.set_volume(self._volume_percent / 100.0)
+        self._media_fade.stop()
+        self._media_gain = 0.0 if self._media_muted else 1.0
+        self._set_playback_volume(self._volume_percent / 100.0)
         if not self._queue:
             self._queue = list(self._songs)
             random.shuffle(self._queue)
@@ -481,7 +529,7 @@ class BackgroundSongService(QObject):
         self._current_title = _display_title(item)
         self.current_song_changed.emit(self._current_title)
         self._media.stop()
-        self._media.set_volume(self._volume_percent / 100.0)
+        self._set_playback_volume(self._volume_percent / 100.0)
         self._media.start_playback(
             MediaPlaybackRequest(
                 source=url,
@@ -606,7 +654,7 @@ class BackgroundSongService(QObject):
         changed = value != self._volume_percent
         self._volume_percent = value
         if not self._fade_timer.isActive():
-            self._media.set_volume(value / 100.0)
+            self._set_playback_volume(value / 100.0)
         if changed:
             self.volume_changed.emit(value)
 
@@ -628,18 +676,20 @@ class BackgroundSongService(QObject):
 
     def _fade_to(self, target: float, seconds: float, *, stop_after: bool) -> None:
         self._fade_timer.stop()
+        if stop_after and not self._media_muted:
+            # A stop also wins when the foreground release started first.
+            self._media_fade.stop()
         self._fade_target = max(0.0, min(1.0, target))
-        self._fade_start = self._media.volume
-        self._fade_elapsed_ms = 0
+        self._fade_start = self._playback_volume
+        self._fade_clock.start()
         self._fade_duration_ms = max(1, int(seconds * 1000))
         self._stop_after_fade = stop_after
         self._fade_timer.start()
 
     def _on_fade_tick(self) -> None:
-        self._fade_elapsed_ms += _FADE_TICK_MS
-        progress = min(1.0, self._fade_elapsed_ms / self._fade_duration_ms)
+        progress = min(1.0, self._fade_clock.elapsed() / self._fade_duration_ms)
         value = self._fade_start + (self._fade_target - self._fade_start) * progress
-        self._media.set_volume(max(0.0, min(1.0, value)))
+        self._set_playback_volume(value)
         if progress >= 1.0:
             self._fade_timer.stop()
             if self._stop_after_fade:
@@ -647,9 +697,10 @@ class BackgroundSongService(QObject):
 
     def _finish_stop(self) -> None:
         self._fade_timer.stop()
+        self._media_fade.stop()
         self._scheduled_fade_deadline = None
         self._media.stop()
-        self._media.set_volume(self._volume_percent / 100.0)
+        self._set_playback_volume(self._volume_percent / 100.0)
         self._current_title = ""
         self.current_song_changed.emit("")
         self.playback_changed.emit(False)
