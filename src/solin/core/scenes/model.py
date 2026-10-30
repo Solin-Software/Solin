@@ -129,6 +129,7 @@ class TransitionKind(StrEnum):
     CUT = "cut"
     DISSOLVE = "dissolve"
     FADE_TO_BLACK = "fade_to_black"
+    MERGE = "merge"
 
 
 @dataclass(frozen=True, slots=True)

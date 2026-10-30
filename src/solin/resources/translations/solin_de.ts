@@ -6272,6 +6272,10 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <translation>Über Schwarz blenden</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Zusammenführen</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Quelle zum Einrahmen entsperren.</translation>
@@ -7120,6 +7124,14 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Über Schwarz blenden</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Zusammenführen</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Gemeinsame Quellen bewegen, den Rest ausblenden</translation>
     </message>
     <message>
         <location line="-150"/>

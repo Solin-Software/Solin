@@ -6240,6 +6240,10 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>검은 화면 페이드</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>병합</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>프레이밍하려면 소스 잠금을 해제하세요.</translation>
@@ -7088,6 +7092,14 @@ Add content, a camera, or another scene.</source>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>검은 화면 페이드</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>병합</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>공유 소스는 이동하고 나머지는 페이드</translation>
     </message>
     <message>
         <location line="-150"/>

@@ -638,6 +638,8 @@ Item {
                 transitionCutChoice.forceActiveFocus()
             else if (draftKind === "dissolve")
                 transitionDissolveChoice.forceActiveFocus()
+            else if (draftKind === "merge")
+                transitionMergeChoice.forceActiveFocus()
             else
                 transitionFadeChoice.forceActiveFocus()
         }
@@ -699,6 +701,15 @@ Item {
                     detail: qsTr("Fade out, then fade in")
                     selected: transitionPopover.draftKind === "fade_to_black"
                     onClicked: transitionPopover.draftKind = "fade_to_black"
+                }
+                TransitionChoice {
+                    id: transitionMergeChoice
+                    objectName: "scenesProgramTransitionMergeChoice"
+                    Layout.fillWidth: true
+                    title: qsTr("Merge")
+                    detail: qsTr("Move shared sources, fade the rest")
+                    selected: transitionPopover.draftKind === "merge"
+                    onClicked: transitionPopover.draftKind = "merge"
                 }
             }
             RowLayout {
@@ -854,6 +865,15 @@ Item {
                     && root.contextSceneTransitionKind === "fade_to_black"
                 onTriggered: root.bridge.setSceneTransitionOverride(
                     root.contextSceneId, "fade_to_black", -1)
+            }
+            ScenesMenuItem {
+                theme: root.theme
+                text: qsTr("Merge")
+                checkable: true
+                checked: root.contextSceneTransitionOverride
+                    && root.contextSceneTransitionKind === "merge"
+                onTriggered: root.bridge.setSceneTransitionOverride(
+                    root.contextSceneId, "merge", -1)
             }
             ScenesMenuSeparator { theme: root.theme }
             ScenesMenuItem {

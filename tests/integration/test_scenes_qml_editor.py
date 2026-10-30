@@ -769,6 +769,26 @@ def test_responsive_drawer_toggle_reflects_the_drawer_state(
     assert str(toggle_icon.property("source")) != closed_icon_source
 
 
+def test_merge_transition_can_be_chosen_in_the_program_popover(
+    scene_editor_factory,
+    tmp_path: Path,
+) -> None:
+    _workspace, _controller, widget, _close_editor = scene_editor_factory(_profile_paths(tmp_path))
+    widget.resize(1280, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    root = widget._qml.rootObject()
+    assert root is not None
+
+    root.findChild(QQuickItem, "scenesProgramTransitionButton").clicked.emit()
+    QCoreApplication.processEvents()
+    root.findChild(QQuickItem, "scenesProgramTransitionMergeChoice").clicked.emit()
+    root.findChild(QQuickItem, "scenesProgramTransitionApply").clicked.emit()
+
+    assert _wait_until(lambda: widget.bridge.programTransitionKind == "merge")
+    assert widget.bridge.programTransitionLabel == "Merge · 350 ms"
+
+
 def test_transition_duration_fields_apply_uncommitted_text_and_persist(
     scene_editor_factory,
     scene_workspace_factory,
