@@ -392,15 +392,19 @@ def _clean_geometry_value(value: float) -> float:
     return value
 
 
+def _move_axis_limits(start: float, size: float) -> tuple[float, float]:
+    overlap = min(MINIMUM_ON_CANVAS, size)
+    minimum = max(NormalizedRect.MINIMUM_POSITION, overlap - size)
+    maximum = min(NormalizedRect.MAXIMUM_POSITION, 1.0 - overlap)
+    # A layer already further out than the limits must not jump on grab.
+    return min(minimum, start), max(maximum, start)
+
+
 def move_rect(rect: NormalizedRect, dx: float, dy: float) -> NormalizedRect:
     """Move a layer, allowing it to extend past the canvas edges."""
 
     def move_axis(start: float, size: float, delta: float) -> float:
-        minimum = max(NormalizedRect.MINIMUM_POSITION, MINIMUM_ON_CANVAS - size)
-        maximum = min(NormalizedRect.MAXIMUM_POSITION, 1.0 - MINIMUM_ON_CANVAS)
-        # A layer already further out than the limits must not jump on grab.
-        minimum = min(minimum, start)
-        maximum = max(maximum, start)
+        minimum, maximum = _move_axis_limits(start, size)
         return min(maximum, max(minimum, start + delta))
 
     return NormalizedRect(
@@ -419,6 +423,7 @@ def snap_move_rect(
     disabled: bool = False,
     active_guides: tuple[tuple[str, float], ...] = (),
 ) -> tuple[NormalizedRect, tuple[tuple[str, float], ...]]:
+    """Snap visible layer anchors using the same position bounds as dragging."""
     if disabled or viewport_width <= 0 or viewport_height <= 0:
         return rect, ()
     active_by_axis = dict(active_guides)
@@ -431,6 +436,7 @@ def snap_move_rect(
         viewport: float,
     ) -> tuple[float, float | None]:
         safe_margin = safe_margin_pixels / viewport
+        minimum, maximum = _move_axis_limits(start, size)
         candidates = (
             (start, 0.0, safe_margin),
             (start, 0.0, 0.5),
@@ -448,7 +454,7 @@ def snap_move_rect(
                 candidate = target - offset
                 distance = abs(point - target) * viewport
                 if (
-                    0.0 <= candidate <= 1.0 - size
+                    minimum <= candidate <= maximum
                     and distance <= SNAP_RELEASE_THRESHOLD_PIXELS
                     and distance < best_distance
                 ):
@@ -460,7 +466,7 @@ def snap_move_rect(
             candidate = target - offset
             distance = abs(point - target) * viewport
             if (
-                0.0 <= candidate <= 1.0 - size
+                minimum <= candidate <= maximum
                 and distance <= SNAP_THRESHOLD_PIXELS
                 and distance < best_distance
             ):

@@ -506,3 +506,52 @@ def test_edge_edits_do_not_pull_fully_off_canvas_layers_back_in(operation: str) 
     assert rect.y == original.y
     assert rect.width == pytest.approx(0.09)
     assert rect.height == pytest.approx(0.09)
+
+
+@pytest.mark.parametrize(("start", "size", "expected"), [
+    (-0.295, 0.8, -0.3),
+    (-0.245, 1.5, -0.25),
+    (0.495, 0.8, 0.5),
+])
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_move_snaps_off_canvas_edges_and_oversized_layers_to_center(
+    start: float, size: float, expected: float, axis: str,
+) -> None:
+    original = NormalizedRect(x=start if axis == "x" else 0.2,
+                              y=start if axis == "y" else 0.2,
+                              width=size if axis == "x" else 0.2,
+                              height=size if axis == "y" else 0.2)
+
+    snapped, guides = snap_move_rect(original, viewport_width=960, viewport_height=960)
+
+    assert getattr(snapped, axis) == pytest.approx(expected)
+    assert (axis, 0.5) in guides
+    assert (snapped.width, snapped.height) == (original.width, original.height)
+
+
+def test_off_canvas_snapping_keeps_hysteresis_and_can_be_disabled() -> None:
+    original = NormalizedRect(x=-0.3, y=0.2, width=0.8, height=0.2)
+    nearby = move_rect(original, 0.01, 0.0)
+    snapped, guides = snap_move_rect(nearby, viewport_width=960, viewport_height=540,
+                                    active_guides=(("x", 0.5),))
+    assert snapped.x == pytest.approx(-0.3)
+    assert ("x", 0.5) in guides
+
+    released = move_rect(original, 0.02, 0.0)
+    snapped, guides = snap_move_rect(released, viewport_width=960, viewport_height=540,
+                                    active_guides=(("x", 0.5),))
+    assert snapped.x == released.x
+    assert ("x", 0.5) not in guides
+    assert snap_move_rect(nearby, viewport_width=960, viewport_height=540,
+                          disabled=True) == (nearby, ())
+
+
+def test_moving_tiny_layers_can_reach_canvas_edges_without_losing_visibility() -> None:
+    original = NormalizedRect(x=0.5, y=0.5, width=0.001, height=0.001)
+
+    left = move_rect(original, -10.0, -10.0)
+    right = move_rect(original, 10.0, 10.0)
+
+    assert (left.x, left.y) == (0.0, 0.0)
+    assert right.x + right.width == pytest.approx(1.0)
+    assert right.y + right.height == pytest.approx(1.0)
