@@ -8,6 +8,7 @@ from solin.core.scenes.editor_geometry import (
     expand_focus_rect_to_aspect,
     fill_crop_to_canvas,
     move_framing_rect,
+    move_rect,
     recover_uncropped_rect,
     resize_framing_rect,
     resize_rect,
@@ -296,3 +297,71 @@ def test_framing_move_resize_and_wheel_scale_stay_inside_available_bounds() -> N
     assert resized.width == pytest.approx(0.6)
     assert resized.height == pytest.approx(0.6)
     assert scaled == NormalizedRect(x=0.3, y=0.3, width=0.2, height=0.2)
+
+
+def test_editor_move_allows_negative_position_but_keeps_a_sliver_on_canvas() -> None:
+    original = NormalizedRect(x=0.1, y=0.2, width=0.5, height=0.4)
+
+    moved = move_rect(original, -0.3, -0.5)
+    assert moved.x == pytest.approx(-0.2)
+    assert moved.y == pytest.approx(-0.3)
+    assert (moved.width, moved.height) == (original.width, original.height)
+
+    far_left = move_rect(original, -5.0, -5.0)
+    assert far_left.x == pytest.approx(0.02 - original.width)
+    assert far_left.y == pytest.approx(0.02 - original.height)
+
+    far_right = move_rect(original, 5.0, 5.0)
+    assert far_right.x == pytest.approx(0.98)
+    assert far_right.y == pytest.approx(0.98)
+
+
+def test_editor_move_does_not_jump_a_layer_already_past_the_limits() -> None:
+    original = NormalizedRect(x=-1.5, y=-1.5, width=0.5, height=0.5)
+
+    assert move_rect(original, -0.1, -0.1) == original
+    assert move_rect(original, 0.1, 0.1).x == pytest.approx(-1.4)
+
+
+def test_editor_resize_keeps_off_canvas_edges_in_place() -> None:
+    original = NormalizedRect(x=-0.2, y=-0.1, width=0.5, height=0.4)
+
+    free = resize_rect(original, "bottom_right", 0.1, 0.1, preserve_aspect=False)
+    assert (free.x, free.y) == (original.x, original.y)
+    assert free.width == pytest.approx(0.6)
+    assert free.height == pytest.approx(0.5)
+
+    shrunk = resize_rect(original, "top_left", 0.05, 0.05, preserve_aspect=False)
+    assert shrunk.x == pytest.approx(-0.15)
+    assert shrunk.y == pytest.approx(-0.05)
+    assert shrunk.x + shrunk.width == pytest.approx(0.3)
+
+    grown_outward = resize_rect(original, "left", -0.3, 0.0, preserve_aspect=False)
+    assert grown_outward.x == pytest.approx(original.x)
+
+    preserved = resize_rect(original, "bottom_right", 0.1, 0.0, preserve_aspect=True)
+    assert (preserved.x, preserved.y) == (original.x, original.y)
+    assert preserved.width == pytest.approx(0.6)
+    assert preserved.width / preserved.height == pytest.approx(
+        original.width / original.height
+    )
+
+
+def test_editor_crop_of_an_off_canvas_layer_does_not_force_a_crop() -> None:
+    original = NormalizedRect(x=-0.2, y=-0.1, width=0.5, height=0.4)
+
+    rect, crop = crop_geometry(original, Crop(), "top_left", 0.0, 0.0)
+    assert rect == original
+    assert crop == Crop()
+
+    rect, crop = crop_geometry(original, Crop(), "top_left", 0.1, 0.1)
+    assert rect.x == pytest.approx(-0.1)
+    assert crop.left == pytest.approx(0.2)
+    assert crop.top == pytest.approx(0.25)
+
+    beyond = NormalizedRect(x=0.7, y=0.8, width=0.5, height=0.4)
+    rect, crop = crop_geometry(beyond, Crop(), "bottom_right", 0.0, 0.0)
+    assert (rect.x, rect.y, rect.width, rect.height) == pytest.approx(
+        (beyond.x, beyond.y, beyond.width, beyond.height)
+    )
+    assert crop == Crop()

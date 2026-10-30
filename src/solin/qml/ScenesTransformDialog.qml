@@ -70,9 +70,9 @@ Dialog {
             columnSpacing: 8
             rowSpacing: 8
             LabelText { text: "X" }
-            PercentField { id: xField; from: 0; to: 10000 }
+            PercentField { id: xField; from: -10000; to: 10000 }
             LabelText { text: "Y" }
-            PercentField { id: yField; from: 0; to: 10000 }
+            PercentField { id: yField; from: -10000; to: 10000 }
             LabelText { text: qsTr("Width") }
             PercentField { id: widthField; from: 200; to: 10000 }
             LabelText { text: qsTr("Height") }

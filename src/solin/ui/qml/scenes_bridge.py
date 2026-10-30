@@ -33,6 +33,7 @@ from solin.core.scenes.editor_geometry import (
     fill_crop_to_canvas,
     inscribed_aspect_rect,
     move_framing_rect,
+    move_rect,
     resize_framing_rect,
     resize_rect,
     scale_framing_rect,
@@ -1613,14 +1614,8 @@ class ScenesBridge(QObject):
         rect = layer.rect
         updated_crop = layer.crop
         if mode == "move":
-            moved = NormalizedRect(
-                x=min(1.0 - rect.width, max(0.0, rect.x + dx)),
-                y=min(1.0 - rect.height, max(0.0, rect.y + dy)),
-                width=rect.width,
-                height=rect.height,
-            )
             rect, self._active_guides = snap_move_rect(
-                moved,
+                move_rect(rect, dx, dy),
                 viewport_width=viewport_width,
                 viewport_height=viewport_height,
                 disabled=disable_snap,

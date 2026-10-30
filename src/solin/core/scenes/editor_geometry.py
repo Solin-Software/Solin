@@ -20,6 +20,9 @@ HANDLE_NAMES = (
 )
 MINIMUM_LAYER_SIZE = 0.02
 MINIMUM_VISIBLE_SOURCE = 0.01
+# Layers may be dragged past any canvas edge, but keep a grabbable sliver of
+# each one on the canvas so it can always be dragged back.
+MINIMUM_ON_CANVAS = 0.02
 SNAP_THRESHOLD_PIXELS = 8.0
 SNAP_RELEASE_THRESHOLD_PIXELS = 14.0
 EDGE_SNAP_MARGIN_SHORT_EDGE = 0.05
@@ -27,6 +30,8 @@ EDGE_SNAP_MARGIN_SHORT_EDGE = 0.05
 # square in this space always has the configured canvas's physical aspect.
 NORMALIZED_CANVAS_ASPECT = 1.0
 _GEOMETRY_EPSILON = 1e-9
+_RECT_POSITION_MINIMUM = -2.0
+_RECT_POSITION_MAXIMUM = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -389,6 +394,25 @@ def _clean_geometry_value(value: float) -> float:
     return value
 
 
+def move_rect(rect: NormalizedRect, dx: float, dy: float) -> NormalizedRect:
+    """Move a layer, allowing it to extend past the canvas edges."""
+
+    def move_axis(start: float, size: float, delta: float) -> float:
+        minimum = max(_RECT_POSITION_MINIMUM, MINIMUM_ON_CANVAS - size)
+        maximum = min(_RECT_POSITION_MAXIMUM, 1.0 - MINIMUM_ON_CANVAS)
+        # A layer already further out than the limits must not jump on grab.
+        minimum = min(minimum, start)
+        maximum = max(maximum, start)
+        return min(maximum, max(minimum, start + delta))
+
+    return NormalizedRect(
+        x=move_axis(rect.x, rect.width, dx),
+        y=move_axis(rect.y, rect.height, dy),
+        width=rect.width,
+        height=rect.height,
+    )
+
+
 def snap_move_rect(
     rect: NormalizedRect,
     *,
@@ -470,26 +494,32 @@ def resize_rect(
     moves_right = "right" in handle
     moves_top = "top" in handle
     moves_bottom = "bottom" in handle
+    original_right = original.x + original.width
+    original_bottom = original.y + original.height
+    # Resizing grows up to the canvas edges; an edge already outside the
+    # canvas keeps its position instead of being pulled back in.
+    min_left = min(0.0, original.x)
+    min_top = min(0.0, original.y)
+    max_right = max(1.0, original_right)
+    max_bottom = max(1.0, original_bottom)
     if not preserve_aspect:
-        original_right = original.x + original.width
-        original_bottom = original.y + original.height
         left = (
-            min(original_right - MINIMUM_LAYER_SIZE, max(0.0, original.x + dx))
+            min(original_right - MINIMUM_LAYER_SIZE, max(min_left, original.x + dx))
             if moves_left
             else original.x
         )
         right = (
-            min(1.0, max(original.x + MINIMUM_LAYER_SIZE, original_right + dx))
+            min(max_right, max(original.x + MINIMUM_LAYER_SIZE, original_right + dx))
             if moves_right
             else original_right
         )
         top = (
-            min(original_bottom - MINIMUM_LAYER_SIZE, max(0.0, original.y + dy))
+            min(original_bottom - MINIMUM_LAYER_SIZE, max(min_top, original.y + dy))
             if moves_top
             else original.y
         )
         bottom = (
-            min(1.0, max(original.y + MINIMUM_LAYER_SIZE, original_bottom + dy))
+            min(max_bottom, max(original.y + MINIMUM_LAYER_SIZE, original_bottom + dy))
             if moves_bottom
             else original_bottom
         )
@@ -522,18 +552,18 @@ def resize_rect(
     center_x = original.x + original.width / 2.0
     center_y = original.y + original.height / 2.0
     maximum_width = (
-        original.x + original.width
+        original_right - min_left
         if moves_left
-        else 1.0 - original.x
+        else max_right - original.x
         if moves_right
-        else 2.0 * min(center_x, 1.0 - center_x)
+        else 2.0 * min(center_x - min_left, max_right - center_x)
     )
     maximum_height = (
-        original.y + original.height
+        original_bottom - min_top
         if moves_top
-        else 1.0 - original.y
+        else max_bottom - original.y
         if moves_bottom
-        else 2.0 * min(center_y, 1.0 - center_y)
+        else 2.0 * min(center_y - min_top, max_bottom - center_y)
     )
     minimum_scale = max(
         MINIMUM_LAYER_SIZE / original.width,
@@ -583,22 +613,22 @@ def crop_geometry(
     visible_x = 1.0 - crop_left - crop_right
     visible_y = 1.0 - crop_top - crop_bottom
     if "left" in handle:
-        edge_delta = min(original_rect.width - MINIMUM_LAYER_SIZE, max(-left, dx))
+        edge_delta = min(original_rect.width - MINIMUM_LAYER_SIZE, max(min(0.0, -left), dx))
         candidate = crop_left + edge_delta / original_rect.width * visible_x
         crop_left = min(1.0 - crop_right - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
         left += (crop_left - original_crop.left) * original_rect.width / visible_x
     if "right" in handle:
-        edge_delta = min(1.0 - right, max(-(original_rect.width - MINIMUM_LAYER_SIZE), dx))
+        edge_delta = min(max(0.0, 1.0 - right), max(-(original_rect.width - MINIMUM_LAYER_SIZE), dx))
         candidate = crop_right - edge_delta / original_rect.width * visible_x
         crop_right = min(1.0 - crop_left - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
         right -= (crop_right - original_crop.right) * original_rect.width / visible_x
     if "top" in handle:
-        edge_delta = min(original_rect.height - MINIMUM_LAYER_SIZE, max(-top, dy))
+        edge_delta = min(original_rect.height - MINIMUM_LAYER_SIZE, max(min(0.0, -top), dy))
         candidate = crop_top + edge_delta / original_rect.height * visible_y
         crop_top = min(1.0 - crop_bottom - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
         top += (crop_top - original_crop.top) * original_rect.height / visible_y
     if "bottom" in handle:
-        edge_delta = min(1.0 - bottom, max(-(original_rect.height - MINIMUM_LAYER_SIZE), dy))
+        edge_delta = min(max(0.0, 1.0 - bottom), max(-(original_rect.height - MINIMUM_LAYER_SIZE), dy))
         candidate = crop_bottom - edge_delta / original_rect.height * visible_y
         crop_bottom = min(1.0 - crop_top - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
         bottom -= (crop_bottom - original_crop.bottom) * original_rect.height / visible_y
@@ -617,6 +647,7 @@ __all__ = [
     "expand_focus_rect_to_aspect",
     "fill_crop_to_canvas",
     "inscribed_aspect_rect",
+    "move_rect",
     "intersect_rect",
     "move_framing_rect",
     "recover_uncropped_rect",

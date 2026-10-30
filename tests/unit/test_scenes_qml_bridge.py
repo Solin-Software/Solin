@@ -1345,6 +1345,32 @@ def test_bridge_geometry_preview_commits_exactly_one_revision(scene_bridge_facto
     assert controller.document.revision == revision + 1
 
 
+def test_bridge_move_and_precise_transform_accept_negative_position(
+    scene_bridge_factory,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer.id,
+        replace(layer, rect=NormalizedRect(x=0.1, y=0.1, width=0.5, height=0.5)),
+    )
+
+    geometry = bridge.calculateLayerGeometry(
+        layer.id, "move", "", -0.3, -0.25, 960.0, 540.0, False, False, True
+    )
+    assert geometry["x"] == pytest.approx(-0.2)
+    assert geometry["y"] == pytest.approx(-0.15)
+    bridge.commitLayerGeometry(geometry)
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (pytest.approx(-0.2), pytest.approx(-0.15))
+
+    bridge.selectLayer(layer.id)
+    bridge.applyPreciseTransform(layer.id, {"x": -0.5, "y": -0.25})
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (-0.5, -0.25)
+
+
 def test_bridge_only_media_scene_role_is_removable(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     records = [bridge.scenesModel.get(row) for row in range(bridge.scenesModel.rowCount())]
