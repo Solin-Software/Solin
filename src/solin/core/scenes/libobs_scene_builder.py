@@ -1029,7 +1029,9 @@ class LibobsSceneGraph:
         not known any more: the output may still be showing an older generation of
         the scene after another output's content Take rebuilt it.
         """
-        known_origin = self.scene_source(origin_scene_id) if origin_scene_id else None
+        if not origin_scene_id:
+            return False
+        known_origin = self.scene_source(origin_scene_id)
         if known_origin is None or origin_source is None or (
             getattr(known_origin, "_ptr", known_origin)
             != getattr(origin_source, "_ptr", origin_source)
@@ -1085,6 +1087,7 @@ class LibobsSceneGraph:
     def _show_program_morph(self, morph_source: Any) -> None:
         if self._transition_kind != FALLBACK_TRANSITION_KIND:
             self._swap_transition(FALLBACK_TRANSITION_KIND)
+        assert self._transition is not None  # take() checked before routing a morph
         self._transition.set_source(morph_source)
 
     def _complete_program_morph(self, destination: Any) -> None:
