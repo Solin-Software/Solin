@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Kansion nimi:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Esim.: Erikoistapahtuma</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Luo kansio</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Anna kansiolle nimi.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Nimi ei saa alkaa eikä päättyä tyhjillä merkeillä.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Nimi ei saa sisältää merkkejä / \ &lt; &gt; : &quot; | ? * eikä ohjausmerkkejä.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Käyttöjärjestelmä on varannut tämän nimen.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Nimi ei saa alkaa pisteellä.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Nimi ei saa päättyä pisteeseen.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Kansion nimi on liian pitkä.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Samanniminen tiedosto tai kansio on jo olemassa.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Tämä nimi on varattu kokouksille. Valitse kansiolle toinen nimi.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Manuaalisesti lisätty sisältö, leikkaukset, rajaukset ja laajennettu tila sä
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Poista kokouksen synkronointi käytöstä</translation>
+        <source>Help</source>
+        <translation>Ohje</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Synkronoi kokous linkitettyyn kansioon</translation>
+        <source>Folder present</source>
+        <translation>Kansio on olemassa</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Kansiota ei löydy</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Kansio ei ole käytettävissä</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Tarkistetaan kansiota…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synkronointi käytössä</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synkronointi pois käytöstä</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synkronoidaan…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Viimeistellään…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Kokouksen kansio</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Kansion polku</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Linkitetty kansio ei ole käytettävissä. Tarkista sen sijainti ja käyttöoikeudet.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Luo kansio</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Avaa kansio</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Kokouksen synkronointi</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Tämä asetus koskee kaikkia tähän kokouskansioon linkitettyjä tietokoneita.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Poista kansio…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Poista synkronointi käytöstä, jotta voit poistaa tämän kansion</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Luodaan kansiota…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Kansiota ei voitu avata.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Kokouksen kansiota ei voitu päivittää.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Poista kansio</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Poistetaanko kansio ”{name}” ja sen koko sisältö?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Myös näihin tiedostoihin liittyvät kokouksen kohteet poistetaan. Tätä toimintoa ei voi kumota.
+
+Kansioiden synkronointipalvelu saattaa poistaa nämä tiedostot myös muilta tietokoneilta.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Lopeta esitys ennen tämän kansion poistamista.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Valmistellaan kansion poistamista…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Poistetaan kansiota…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Kokouksen synkronointi</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Poistetaanko tämän kokouksen synkronointi käytöstä linkitetyillä tietokoneilla?
+
+Kansio ja sen näkyvät tiedostot säilytetään.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Kokouksen synkronointia ei voitu päivittää.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Muutokset on tallennettu tälle tietokoneelle. Yritä uudelleen tai avaa linkitetty kansio.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Nollataanko kohteen ”{name}” synkronointi?
 Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottavia muutoksia ei oteta käyttöön.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Luo kansio</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Luo tyhjä kansio linkitettyyn kansioon</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Automaattinen vaihto</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediaikkunat</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Näytä mediaikkunoissa</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Tallennuksen tilaa ei voitu muuttaa.</translation>
@@ -5706,11 +5875,6 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Lähdön tilan vaihtaminen epäonnistui.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Mediaikkunoiden peilauksen vaihtaminen epäonnistui.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7061,11 +7225,6 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automaattinen vaihto</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Näytä mediaikkunoissa</translation>
     </message>
     <message>
         <location line="+19"/>

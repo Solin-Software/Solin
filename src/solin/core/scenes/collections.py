@@ -5,11 +5,12 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from solin.core.scenes.model import SceneValidationError
-from solin.core.scenes.recording import SceneRecordingConfig
+from solin.core.scenes.recording import DEFAULT_RECORDING_RESOLUTION, SceneRecordingConfig
 
 
-SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 2
+SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 3
 _LEGACY_SCENE_COLLECTION_CATALOG_SCHEMA_VERSION = 1
+_AUDIO_RECORDING_CATALOG_SCHEMA_VERSION = 2
 DEFAULT_SCENE_COLLECTION_ID = "solin.scene-profile.default"
 MAX_SCENE_COLLECTIONS = 64
 
@@ -65,13 +66,20 @@ class SceneCollection:
         name = data.get("name")
         if not isinstance(collection_id, str) or not isinstance(name, str):
             raise SceneCollectionError("Invalid Scene profile record")
+        recording = data.get("recording")
+        if schema_version == _AUDIO_RECORDING_CATALOG_SCHEMA_VERSION:
+            if not isinstance(recording, dict) or set(recording) != {
+                "microphone", "system_audio", "output_directory",
+            }:
+                raise SceneCollectionError("Invalid legacy Scene recording configuration")
+            recording = {**recording, "resolution": DEFAULT_RECORDING_RESOLUTION}
         return cls(
             id=collection_id,
             name=name,
             recording=(
                 SceneRecordingConfig()
                 if legacy
-                else SceneRecordingConfig.from_record(data.get("recording"))
+                else SceneRecordingConfig.from_record(recording)
             ),
         )
 
@@ -148,6 +156,7 @@ class SceneCollectionCatalog:
             raise SceneCollectionError("Invalid Scene profile catalog schema version")
         if schema_version not in {
             _LEGACY_SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
+            _AUDIO_RECORDING_CATALOG_SCHEMA_VERSION,
             SCENE_COLLECTION_CATALOG_SCHEMA_VERSION,
         }:
             raise UnsupportedSceneCollectionSchemaError(schema_version)

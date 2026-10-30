@@ -59,12 +59,13 @@ python -m pip install -r requirements-build.txt
 python -m pip install -e .
 ```
 
-Before running from source or executing the Python suites, install CMake 3.25+
+Before running from source or executing the Python suites, install Git, CMake 3.25+
 and a C++17 toolchain (MSVC on Windows, Clang on macOS, the Ubuntu build tools on
 Linux), then run with the application's Python interpreter:
 
 ```text
 python scripts/build_media_extract.py
+python scripts/build_media_playback.py
 ```
 
 The build uses `native/media_extract`, writes compiler output under
@@ -75,9 +76,34 @@ Ubuntu packages without overwriting existing wheel libraries; macOS adds relativ
 FFmpeg library aliases when necessary. Release recipes run this bootstrap
 automatically. Python dependency installation alone does not compile the helper.
 
+The playback build installs `obs-plugins/solin-media-source` in that runtime.
+It compiles a verified subset of OBS 32.1.2 with focused playback corrections:
+attached cover images are metadata rather than timed video, and successful seeks
+clear the demuxer's read-ahead EOF. Local files and progressive HTTP media share
+the finite playback lifecycle; HTTP read retries preserve the byte offset and
+natural EOF remains terminal. Live transports retain OBS's reconnect lifecycle.
+Finite read starvation reports native buffering and suspends presentation time;
+recovery resumes the media timeline without catching up to wall-clock time.
+Speed changes retain the decoder, and native FFmpeg tempo filtering preserves
+audio pitch through the same audio output path used at normal speed.
+Finite inputs retain native cancellation so Stop and shutdown interrupt pending
+network reads and retries. Native failures report an error rather than completion;
+an explicit retry creates a fresh decoder.
+Ordered diffs and prerequisites live in `native/media_playback/patches/series.json`;
+see the native module README for the upstream retirement procedure.
+The playback build recipe records its source checksum, patch hashes and installed binary in
+`media-playback-manifest.json`; packaging requires this module.
+
+Windows additionally requires `python scripts/build_obs_runtime.py` with CMake
+3.28+ and MSVC x64. This builds the ABI-matched OBS core with the WASAPI monitoring
+reserve from [`native/obs_runtime`](../native/obs_runtime/README.md). Original
+plugins and dependency DLLs remain supplied by pylibobs. Packaging verifies the
+core against `obs-runtime-manifest.json`. Linux and macOS keep their distributed
+cores and platform monitoring backends.
+
 Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
 SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
-libavcodec/libavformat 61, libavutil 59 and libswscale 8. SDK binaries are build
+libavcodec/libavformat 61, libavfilter 10, libavutil 59 and libswscale 8. SDK binaries are build
 inputs only and are never substituted for the installed runtime. Ubuntu 24.04
 uses the same archive's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
 `libswscale-dev`, matching runtime majors 60/60/58/7. The helper checks header
@@ -366,7 +392,13 @@ available on a particular machine.
   supervised, persistent helper uses native UI Automation with bounded requests.
   `scripts/prepare_zoom_bindings.py` generates `comtypes.gen.UIAutomationClient`
   and its type-library module from Windows' `UIAutomationCore.dll` before Nuitka
-  bundles them. Installed executables use the bundled interfaces.
+  bundles them. Installed executables use the bundled interfaces without runtime
+  regeneration. The shared Windows Nuitka package configuration disables only
+  source-cache timestamp invalidation for these immutable bindings, retaining
+  the generator-version check. Both Windows build recipes initialize the packaged
+  COM client with `--verify-zoom-runtime` before accepting the artifact; no Zoom
+  meeting is required. Meeting automation is enabled by default on Windows and
+  respects an explicitly saved preference.
   Background-song linking is available whenever background playback is enabled,
   including manual playback without scheduled days. An application controller
   stops playback on manual meeting start, respecting the configured fade and
@@ -379,6 +411,11 @@ available on a particular machine.
 - Recording microphone capture uses WASAPI on Windows and PulseAudio or ALSA
   on Linux. System-audio capture uses WASAPI on Windows and PulseAudio on Linux.
   The selector does not support macOS microphone or system-audio capture types.
+- Scene recordings use H.264/AAC MP4 at 360p, 540p, 720p (default), or 1080p,
+  independently of the virtual-camera resolution. Hardware encoders use bounded
+  VBR; the x264 fallback uses CRF 23 with a resolution-dependent VBV ceiling.
+  AAC audio uses 128 kb/s. Resolution is saved per scene collection and can be
+  changed when recording is stopped; file size varies with content and frame rate.
 - Office documents and presentations require LibreOffice and are converted
   through PDF to static images. Animations and embedded-media playback are not
   preserved.

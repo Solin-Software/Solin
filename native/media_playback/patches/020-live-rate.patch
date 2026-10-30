@@ -1,0 +1,859 @@
+diff --git a/plugins/obs-ffmpeg/obs-ffmpeg-source.c b/plugins/obs-ffmpeg/obs-ffmpeg-source.c
+index c99e89e..4c54c94 100644
+--- a/plugins/obs-ffmpeg/obs-ffmpeg-source.c
++++ b/plugins/obs-ffmpeg/obs-ffmpeg-source.c
+@@ -195,7 +195,8 @@ static obs_properties_t *ffmpeg_source_getproperties(void *data)
+ 
+ 	obs_property_set_long_description(prop, obs_module_text("CloseFileWhenInactive.ToolTip"));
+ 
+-	prop = obs_properties_add_int_slider(props, "speed_percent", obs_module_text("SpeedPercentage"), 1, 200, 1);
++	prop = obs_properties_add_int_slider(props, "speed_percent", obs_module_text("SpeedPercentage"),
++					     MEDIA_PLAYBACK_SPEED_MIN, MEDIA_PLAYBACK_SPEED_MAX, 1);
+ 	obs_property_int_set_suffix(prop, "%");
+ 
+ 	prop = obs_properties_add_list(props, "color_range", obs_module_text("ColorRange"), OBS_COMBO_TYPE_LIST,
+@@ -401,6 +402,13 @@ static void ffmpeg_source_tick(void *data, float seconds)
+ 
+ #define RIST_PROTO "rist"
+ 
++static inline bool same_string(const char *left, const char *right)
++{
++	left = left ? left : "";
++	right = right ? right : "";
++	return strcmp(left, right) == 0;
++}
++
+ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ {
+ 	struct ffmpeg_source *s = data;
+@@ -418,39 +426,42 @@ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ 	bool is_hw_decoding;
+ 	enum video_range_type range;
+ 	bool is_linear_alpha;
++	bool full_decode;
++	bool seekable;
+ 	int speed_percent;
++	int buffering_mb;
++	bool speed_changed;
+ 	bool is_looping;
+ 
+-	bfree(s->input_format);
+-
+ 	if (is_local_file) {
+ 		input = obs_data_get_string(settings, "local_file");
+ 		input_format = NULL;
+ 		is_looping = obs_data_get_bool(settings, "looping");
+ 
+-		if (s->input && !should_restart_media)
+-			should_restart_media |= strcmp(s->input, input) != 0;
+ 	} else {
+-		should_restart_media = true;
+ 		input = obs_data_get_string(settings, "input");
+ 		input_format = obs_data_get_string(settings, "input_format");
+ 		s->reconnect_delay_sec = (int)obs_data_get_int(settings, "reconnect_delay_sec");
+ 		s->reconnect_delay_sec = s->reconnect_delay_sec == 0 ? 10 : s->reconnect_delay_sec;
+ 		is_looping = false;
+ 	}
+-
+-	stop_reconnect_thread(s);
++	should_restart_media |= !same_string(s->input, input) || !same_string(s->input_format, input_format);
+ 
+ 	is_hw_decoding = obs_data_get_bool(settings, "hw_decode");
+ 	range = obs_data_get_int(settings, "color_range");
++	full_decode = obs_data_get_bool(settings, "full_decode");
++	seekable = obs_data_get_bool(settings, "seekable");
++	buffering_mb = (int)obs_data_get_int(settings, "buffering_mb");
+ 	speed_percent = (int)obs_data_get_int(settings, "speed_percent");
+-	if (speed_percent < 1 || speed_percent > 200)
++	if (speed_percent < MEDIA_PLAYBACK_SPEED_MIN || speed_percent > MEDIA_PLAYBACK_SPEED_MAX)
+ 		speed_percent = 100;
++	speed_changed = s->speed_percent != speed_percent;
+ 	ffmpeg_options = obs_data_get_string(settings, "ffmpeg_options");
+ 
+ 	/* Restart media source if these properties are changed */
+-	if (s->is_hw_decoding != is_hw_decoding || s->range != range || s->speed_percent != speed_percent ||
+-	    (s->ffmpeg_options && strcmp(s->ffmpeg_options, ffmpeg_options) != 0))
++	if (s->is_hw_decoding != is_hw_decoding || s->range != range || s->full_decode != full_decode ||
++	    s->seekable != seekable || s->buffering_mb != buffering_mb ||
++	    !same_string(s->ffmpeg_options, ffmpeg_options))
+ 		should_restart_media = true;
+ 
+ 	/* If media has ended and user enables looping, user expects that it restarts.
+@@ -459,8 +470,11 @@ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ 	if (active && s->state == OBS_MEDIA_STATE_ENDED && is_looping == true && s->is_looping == false) {
+ 		should_restart_media = true;
+ 	}
++	if (should_restart_media)
++		stop_reconnect_thread(s);
+ 
+ 	bfree(s->input);
++	bfree(s->input_format);
+ 	bfree(s->ffmpeg_options);
+ 
+ 	s->is_looping = is_looping;
+@@ -468,7 +482,7 @@ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ 	s->input = input ? bstrdup(input) : NULL;
+ 	s->input_format = input_format ? bstrdup(input_format) : NULL;
+ 	s->is_hw_decoding = is_hw_decoding;
+-	s->full_decode = obs_data_get_bool(settings, "full_decode");
++	s->full_decode = full_decode;
+ 	s->is_clear_on_media_end = obs_data_get_bool(settings, "clear_on_media_end");
+ 	s->restart_on_activate = !astrcmpi_n(input, RIST_PROTO, sizeof(RIST_PROTO) - 1)
+ 					 ? false
+@@ -476,16 +490,16 @@ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ 	s->range = range;
+ 	is_linear_alpha = obs_data_get_bool(settings, "linear_alpha");
+ 	s->is_linear_alpha = is_linear_alpha;
+-	s->buffering_mb = (int)obs_data_get_int(settings, "buffering_mb");
++	s->buffering_mb = buffering_mb;
+ 	s->speed_percent = speed_percent;
+ 	s->is_local_file = is_local_file;
+-	s->seekable = obs_data_get_bool(settings, "seekable");
++	s->seekable = seekable;
+ 	s->ffmpeg_options = ffmpeg_options ? bstrdup(ffmpeg_options) : NULL;
+ 	s->is_stinger = is_stinger;
+ 	s->is_track_matte = is_track_matte;
+ 	s->log_changes = obs_data_get_bool(settings, "log_changes");
+ 
+-	if (s->speed_percent < 1 || s->speed_percent > 200)
++	if (s->speed_percent < MEDIA_PLAYBACK_SPEED_MIN || s->speed_percent > MEDIA_PLAYBACK_SPEED_MAX)
+ 		s->speed_percent = 100;
+ 
+ 	if (s->media && should_restart_media) {
+@@ -496,6 +510,8 @@ static void ffmpeg_source_update(void *data, obs_data_t *settings)
+ 
+ 	/* directly set options if media is playing */
+ 	if (s->media) {
++		if (speed_changed)
++			media_playback_set_speed(s->media, speed_percent);
+ 		media_playback_set_looping(s->media, is_looping);
+ 		media_playback_set_is_linear_alpha(s->media, is_linear_alpha);
+ 	}
+diff --git a/shared/media-playback/media-playback/cache.c b/shared/media-playback/media-playback/cache.c
+index 8532d9a..fa2fb46 100644
+--- a/shared/media-playback/media-playback/cache.c
++++ b/shared/media-playback/media-playback/cache.c
+@@ -32,6 +32,26 @@ static bool mp_cache_reset(mp_cache_t *c);
+ 
+ static int64_t base_sys_ts = 0;
+ 
++static inline int64_t playback_time(int64_t media_time, int speed)
++{
++	return av_rescale_q(media_time, (AVRational){1, speed}, (AVRational){1, 100});
++}
++
++static inline uint64_t playback_timestamp(mp_cache_t *c, int64_t frame_pts)
++{
++	const int64_t now = c->next_ns ? (int64_t)c->next_ns : (int64_t)os_gettime_ns();
++	const int64_t offset = playback_time(frame_pts - c->next_pts_ns, c->speed);
++	return (uint64_t)(now + offset - base_sys_ts);
++}
++
++static inline void apply_speed(mp_cache_t *c, int speed)
++{
++	/* The current audio block has already been output at the old rate. Apply
++	 * the new rate at its boundary instead of shortening or extending the
++	 * remaining wait, which would overlap or leave a gap in downstream audio. */
++	c->speed = speed;
++}
++
+ #define v_eof(c) (c->cur_v_idx == c->video_frames.num)
+ #define a_eof(c) (c->cur_a_idx == c->audio_segments.num)
+ 
+@@ -63,31 +83,23 @@ static inline int64_t mp_cache_get_base_pts(mp_cache_t *c)
+ 
+ static void reset_ts(mp_cache_t *c)
+ {
+-	c->base_ts += mp_cache_get_base_pts(c);
+-	c->play_sys_ts = (int64_t)os_gettime_ns();
+-	c->start_ts = c->next_pts_ns = mp_cache_get_next_min_pts(c);
+ 	c->next_ns = 0;
+ }
+ 
+ static inline bool mp_cache_sleep(mp_cache_t *c)
+ {
+-	bool timeout = false;
+-
+ 	if (!c->next_ns) {
+ 		c->next_ns = os_gettime_ns();
+ 	} else {
+ 		const uint64_t t = os_gettime_ns();
+ 		if (c->next_ns > t) {
+ 			const uint32_t delta_ms = (uint32_t)((c->next_ns - t + 500000) / 1000000);
+-			if (delta_ms > 0) {
+-				static const uint32_t timeout_ms = 200;
+-				timeout = delta_ms > timeout_ms;
+-				os_sleep_ms(timeout ? timeout_ms : delta_ms);
+-			}
++			if (delta_ms > 0)
++				return os_event_timedwait(c->wake_event, delta_ms) != ETIMEDOUT;
+ 		}
+ 	}
+ 
+-	return timeout;
++	return false;
+ }
+ 
+ static bool mp_cache_eof(mp_cache_t *c)
+@@ -243,7 +255,7 @@ static void mp_cache_next_video(mp_cache_t *c, bool preload)
+ 	struct obs_source_frame *frame = &c->video_frames.array[c->next_v_idx];
+ 	struct obs_source_frame dup = *frame;
+ 
+-	dup.timestamp = c->base_ts + dup.timestamp - c->start_ts + c->play_sys_ts - base_sys_ts;
++	dup.timestamp = playback_timestamp(c, (int64_t)dup.timestamp);
+ 
+ 	if (!preload) {
+ 		if (!mp_media_can_play_video(c))
+@@ -280,7 +292,8 @@ static void mp_cache_next_audio(mp_cache_t *c)
+ 	struct obs_source_audio *audio = &c->audio_segments.array[c->next_a_idx];
+ 	struct obs_source_audio dup = *audio;
+ 
+-	dup.timestamp = c->base_ts + dup.timestamp - c->start_ts + c->play_sys_ts - base_sys_ts;
++	dup.timestamp = playback_timestamp(c, (int64_t)dup.timestamp);
++	dup.samples_per_sec = audio->samples_per_sec * c->speed / 100;
+ 	if (c->a_cb)
+ 		c->a_cb(c->opaque, &dup);
+ 
+@@ -296,11 +309,10 @@ static bool mp_cache_reset(mp_cache_t *c)
+ 	bool active;
+ 
+ 	int64_t next_ts = mp_cache_get_base_pts(c);
+-	int64_t offset = next_ts - c->next_pts_ns;
++	int64_t offset = playback_time(next_ts - c->next_pts_ns, c->speed);
+ 	int64_t start_time = c->start_time;
+ 
+ 	c->eof = false;
+-	c->base_ts += next_ts;
+ 	c->seek_next_ts = false;
+ 
+ 	seek_to(c, start_time);
+@@ -323,14 +335,11 @@ static bool mp_cache_reset(mp_cache_t *c)
+ 	}
+ 
+ 	if (active) {
+-		if (!c->play_sys_ts)
+-			c->play_sys_ts = (int64_t)os_gettime_ns();
+-		c->start_ts = c->next_pts_ns = mp_cache_get_next_min_pts(c);
++		c->next_pts_ns = mp_cache_get_next_min_pts(c);
+ 		if (c->next_ns)
+ 			c->next_ns += offset;
+ 	} else {
+-		c->start_ts = c->next_pts_ns = mp_cache_get_next_min_pts(c);
+-		c->play_sys_ts = (int64_t)os_gettime_ns();
++		c->next_pts_ns = mp_cache_get_next_min_pts(c);
+ 		c->next_ns = 0;
+ 	}
+ 
+@@ -361,7 +370,7 @@ static void mp_cache_calc_next_ns(mp_cache_t *c)
+ 			delta = 0;
+ 	}
+ 
+-	c->next_ns += delta;
++	c->next_ns += playback_time(delta, c->speed);
+ 	c->next_pts_ns = min_next_ns;
+ }
+ 
+@@ -374,9 +383,10 @@ static inline bool mp_cache_thread(mp_cache_t *c)
+ 	}
+ 
+ 	for (;;) {
+-		bool reset, kill, is_active, seek, pause, reset_time, preload_frame;
++		bool reset, kill, is_active, seek, pause, reset_time, preload_frame, speed_changed;
++		int pending_speed;
+ 		int64_t seek_pos;
+-		bool timeout = false;
++		bool interrupted = false;
+ 
+ 		pthread_mutex_lock(&c->mutex);
+ 		is_active = c->active;
+@@ -384,12 +394,12 @@ static inline bool mp_cache_thread(mp_cache_t *c)
+ 		pthread_mutex_unlock(&c->mutex);
+ 
+ 		if (!is_active || pause) {
+-			if (os_sem_wait(c->sem) < 0)
++			if (os_event_wait(c->wake_event) != 0)
+ 				return false;
+ 			if (pause)
+ 				reset_ts(c);
+ 		} else {
+-			timeout = mp_cache_sleep(c);
++			interrupted = mp_cache_sleep(c);
+ 		}
+ 
+ 		pthread_mutex_lock(&c->mutex);
+@@ -404,15 +414,20 @@ static inline bool mp_cache_thread(mp_cache_t *c)
+ 		seek_pos = c->seek_pos;
+ 		seek = c->seek;
+ 		reset_time = c->reset_ts;
++		speed_changed = c->speed_changed;
++		pending_speed = c->pending_speed;
+ 		c->preload_frame = false;
+ 		c->seek = false;
+ 		c->reset_ts = false;
++		c->speed_changed = false;
+ 
+ 		pthread_mutex_unlock(&c->mutex);
+ 
+ 		if (kill) {
+ 			break;
+ 		}
++		if (speed_changed)
++			apply_speed(c, pending_speed);
+ 		if (reset) {
+ 			mp_cache_reset(c);
+ 			continue;
+@@ -436,7 +451,7 @@ static inline bool mp_cache_thread(mp_cache_t *c)
+ 			c->v_preload_cb(c->opaque, &c->video_frames.array[0]);
+ 
+ 		/* frames are ready */
+-		if (is_active && !timeout) {
++		if (is_active && !interrupted) {
+ 			if (c->has_video)
+ 				mp_cache_next_video(c, false);
+ 			if (c->has_audio)
+@@ -517,8 +532,8 @@ static inline bool mp_cache_init_internal(mp_cache_t *c, const struct mp_media_i
+ 		blog(LOG_WARNING, "MP: Failed to init mutex");
+ 		return false;
+ 	}
+-	if (os_sem_init(&c->sem, 0) != 0) {
+-		blog(LOG_WARNING, "MP: Failed to init semaphore");
++	if (os_event_init(&c->wake_event, OS_EVENT_TYPE_AUTO) != 0) {
++		blog(LOG_WARNING, "MP: Failed to init wake event");
+ 		return false;
+ 	}
+ 
+@@ -568,6 +583,9 @@ bool mp_cache_init(mp_cache_t *c, const struct mp_media_info *info)
+ 	c->v_preload_cb = info->v_preload_cb;
+ 	c->request_preload = info->request_preload;
+ 	c->speed = info->speed;
++	if (c->speed < MEDIA_PLAYBACK_SPEED_MIN || c->speed > MEDIA_PLAYBACK_SPEED_MAX)
++		c->speed = 100;
++	c->pending_speed = c->speed;
+ 	c->media_duration = m->fmt->duration;
+ 
+ 	c->has_video = m->has_video;
+@@ -590,7 +608,7 @@ static void mp_kill_thread(mp_cache_t *c)
+ 		pthread_mutex_lock(&c->mutex);
+ 		c->kill = true;
+ 		pthread_mutex_unlock(&c->mutex);
+-		os_sem_post(c->sem);
++		os_event_signal(c->wake_event);
+ 
+ 		pthread_join(c->thread, NULL);
+ 	}
+@@ -621,7 +639,7 @@ void mp_cache_free(mp_cache_t *c)
+ 	bfree(c->path);
+ 	bfree(c->format_name);
+ 	pthread_mutex_destroy(&c->mutex);
+-	os_sem_destroy(c->sem);
++	os_event_destroy(c->wake_event);
+ 	memset(c, 0, sizeof(*c));
+ }
+ 
+@@ -637,7 +655,7 @@ void mp_cache_play(mp_cache_t *c, bool loop)
+ 
+ 	pthread_mutex_unlock(&c->mutex);
+ 
+-	os_sem_post(c->sem);
++	os_event_signal(c->wake_event);
+ }
+ 
+ void mp_cache_play_pause(mp_cache_t *c, bool pause)
+@@ -649,7 +667,20 @@ void mp_cache_play_pause(mp_cache_t *c, bool pause)
+ 	}
+ 	pthread_mutex_unlock(&c->mutex);
+ 
+-	os_sem_post(c->sem);
++	os_event_signal(c->wake_event);
++}
++
++void mp_cache_set_speed(mp_cache_t *c, int speed)
++{
++	if (speed < MEDIA_PLAYBACK_SPEED_MIN || speed > MEDIA_PLAYBACK_SPEED_MAX)
++		return;
++
++	pthread_mutex_lock(&c->mutex);
++	c->pending_speed = speed;
++	c->speed_changed = true;
++	pthread_mutex_unlock(&c->mutex);
++
++	os_event_signal(c->wake_event);
+ }
+ 
+ void mp_cache_stop(mp_cache_t *c)
+@@ -662,7 +693,7 @@ void mp_cache_stop(mp_cache_t *c)
+ 	}
+ 	pthread_mutex_unlock(&c->mutex);
+ 
+-	os_sem_post(c->sem);
++	os_event_signal(c->wake_event);
+ }
+ 
+ void mp_cache_preload_frame(mp_cache_t *c)
+@@ -671,13 +702,13 @@ void mp_cache_preload_frame(mp_cache_t *c)
+ 		pthread_mutex_lock(&c->mutex);
+ 		c->preload_frame = true;
+ 		pthread_mutex_unlock(&c->mutex);
+-		os_sem_post(c->sem);
++		os_event_signal(c->wake_event);
+ 	}
+ }
+ 
+ int64_t mp_cache_get_current_time(mp_cache_t *c)
+ {
+-	return mp_cache_get_base_pts(c) * (int64_t)c->speed / 100000000LL;
++	return mp_cache_get_base_pts(c) / 1000000LL;
+ }
+ 
+ void mp_cache_seek(mp_cache_t *c, int64_t pos)
+@@ -689,7 +720,7 @@ void mp_cache_seek(mp_cache_t *c, int64_t pos)
+ 	}
+ 	pthread_mutex_unlock(&c->mutex);
+ 
+-	os_sem_post(c->sem);
++	os_event_signal(c->wake_event);
+ }
+ 
+ int64_t mp_cache_get_frames(mp_cache_t *c)
+diff --git a/shared/media-playback/media-playback/cache.h b/shared/media-playback/media-playback/cache.h
+index 863e31e..1783427 100644
+--- a/shared/media-playback/media-playback/cache.h
++++ b/shared/media-playback/media-playback/cache.h
+@@ -40,7 +40,7 @@ struct mp_cache {
+ 	int speed;
+ 
+ 	pthread_mutex_t mutex;
+-	os_sem_t *sem;
++	os_event_t *wake_event;
+ 	bool preload_frame;
+ 	bool stopping;
+ 	bool looping;
+@@ -64,17 +64,16 @@ struct mp_cache {
+ 	int64_t final_v_duration;
+ 	int64_t final_a_duration;
+ 
+-	int64_t play_sys_ts;
+ 	int64_t next_pts_ns;
+ 	uint64_t next_ns;
+-	int64_t start_ts;
+-	int64_t base_ts;
+ 
+ 	bool pause;
+ 	bool reset_ts;
++	bool speed_changed;
+ 	bool seek;
+ 	bool seek_next_ts;
+ 	bool eof;
++	int pending_speed;
+ 	int64_t seek_pos;
+ 	int64_t start_time;
+ 	int64_t media_duration;
+@@ -89,6 +88,7 @@ extern void mp_cache_free(mp_cache_t *c);
+ 
+ extern void mp_cache_play(mp_cache_t *c, bool loop);
+ extern void mp_cache_play_pause(mp_cache_t *c, bool pause);
++extern void mp_cache_set_speed(mp_cache_t *c, int speed);
+ extern void mp_cache_stop(mp_cache_t *c);
+ extern void mp_cache_preload_frame(mp_cache_t *c);
+ extern int64_t mp_cache_get_current_time(mp_cache_t *c);
+diff --git a/shared/media-playback/media-playback/decode.c b/shared/media-playback/media-playback/decode.c
+index ab6e10d..af9b94d 100644
+--- a/shared/media-playback/media-playback/decode.c
++++ b/shared/media-playback/media-playback/decode.c
+@@ -414,11 +414,6 @@ bool mp_decode_next(struct mp_decode *d)
+ 		else
+ 			duration = av_rescale_q(duration, d->stream->time_base, (AVRational){1, 1000000000});
+ 
+-		if (d->m->speed != 100) {
+-			d->frame_pts = av_rescale_q(d->frame_pts, (AVRational){1, d->m->speed}, (AVRational){1, 100});
+-			duration = av_rescale_q(duration, (AVRational){1, d->m->speed}, (AVRational){1, 100});
+-		}
+-
+ 		d->last_duration = duration;
+ 		d->next_pts = d->frame_pts + duration;
+ 	}
+diff --git a/shared/media-playback/media-playback/media-playback.c b/shared/media-playback/media-playback/media-playback.c
+index 41ae9d2..e6a232a 100644
+--- a/shared/media-playback/media-playback/media-playback.c
++++ b/shared/media-playback/media-playback/media-playback.c
+@@ -85,6 +85,17 @@ void media_playback_stop(media_playback_t *mp)
+ 		mp_media_stop(&mp->media);
+ }
+ 
++void media_playback_set_speed(media_playback_t *mp, int speed)
++{
++	if (!mp)
++		return;
++
++	if (mp->is_cached)
++		mp_cache_set_speed(&mp->cache, speed);
++	else
++		mp_media_set_speed(&mp->media, speed);
++}
++
+ void media_playback_set_looping(media_playback_t *mp, bool looping)
+ {
+ 	if (mp->is_cached)
+diff --git a/shared/media-playback/media-playback/media-playback.h b/shared/media-playback/media-playback/media-playback.h
+index d9f3e69..da0f631 100644
+--- a/shared/media-playback/media-playback/media-playback.h
++++ b/shared/media-playback/media-playback/media-playback.h
+@@ -25,6 +25,9 @@ typedef void (*mp_video_cb)(void *opaque, struct obs_source_frame *frame);
+ typedef void (*mp_audio_cb)(void *opaque, struct obs_source_audio *audio);
+ typedef void (*mp_stop_cb)(void *opaque, bool error);
+ 
++#define MEDIA_PLAYBACK_SPEED_MIN 1
++#define MEDIA_PLAYBACK_SPEED_MAX 200
++
+ struct mp_media_info {
+ 	void *opaque;
+ 
+@@ -54,6 +57,7 @@ extern void media_playback_destroy(media_playback_t *mp);
+ extern void media_playback_play(media_playback_t *mp, bool looping, bool reconnecting);
+ extern void media_playback_play_pause(media_playback_t *mp, bool pause);
+ extern void media_playback_stop(media_playback_t *mp);
++extern void media_playback_set_speed(media_playback_t *mp, int speed);
+ extern void media_playback_set_looping(media_playback_t *mp, bool looping);
+ extern void media_playback_set_is_linear_alpha(media_playback_t *mp, bool is_linear_alpha);
+ extern void media_playback_preload_frame(media_playback_t *mp);
+diff --git a/shared/media-playback/media-playback/media.c b/shared/media-playback/media-playback/media.c
+index d2cc109..16f5e4c 100644
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -27,6 +27,26 @@
+ 
+ static int64_t base_sys_ts = 0;
+ 
++static inline int64_t playback_time(int64_t media_time, int speed)
++{
++	return av_rescale_q(media_time, (AVRational){1, speed}, (AVRational){1, 100});
++}
++
++static inline uint64_t playback_timestamp(mp_media_t *m, int64_t frame_pts)
++{
++	const int64_t now = m->next_ns ? (int64_t)m->next_ns : (int64_t)os_gettime_ns();
++	const int64_t offset = playback_time(frame_pts - m->next_pts_ns, m->speed);
++	return (uint64_t)(now + offset - base_sys_ts);
++}
++
++static inline void apply_speed(mp_media_t *m, int speed)
++{
++	/* The current audio block has already been output at the old rate. Apply
++	 * the new rate at its boundary instead of shortening or extending the
++	 * remaining wait, which would overlap or leave a gap in downstream audio. */
++	m->speed = speed;
++}
++
+ static inline enum video_format convert_pixel_format(int f)
+ {
+ 	switch (f) {
+@@ -367,12 +387,14 @@ void mp_media_next_audio(mp_media_t *m)
+ 	for (size_t i = 0; i < MAX_AV_PLANES; i++)
+ 		audio.data[i] = f->data[i];
+ 
+-	audio.samples_per_sec = f->sample_rate * m->speed / 100;
++	audio.samples_per_sec = m->full_decode ? f->sample_rate : f->sample_rate * m->speed / 100;
+ 	audio.speakers = convert_speaker_layout(f->ch_layout.nb_channels);
+ 	audio.format = convert_sample_format(f->format);
+ 	audio.frames = f->nb_samples;
+-	audio.timestamp = m->full_decode ? d->frame_pts
+-					 : m->base_ts + d->frame_pts - m->start_ts + m->play_sys_ts - base_sys_ts;
++	if (m->full_decode)
++		audio.timestamp = d->frame_pts;
++	else
++		audio.timestamp = playback_timestamp(m, d->frame_pts);
+ 
+ 	if (audio.format == AUDIO_FORMAT_UNKNOWN)
+ 		return;
+@@ -458,8 +480,10 @@ void mp_media_next_video(mp_media_t *m, bool preload)
+ 	if (frame->format == VIDEO_FORMAT_NONE)
+ 		return;
+ 
+-	frame->timestamp = m->full_decode ? d->frame_pts
+-					  : (m->base_ts + d->frame_pts - m->start_ts + m->play_sys_ts - base_sys_ts);
++	if (m->full_decode)
++		frame->timestamp = d->frame_pts;
++	else
++		frame->timestamp = playback_timestamp(m, d->frame_pts);
+ 
+ 	frame->width = f->width;
+ 	frame->height = f->height;
+@@ -521,7 +545,7 @@ static void mp_media_calc_next_ns(mp_media_t *m)
+ 			delta = 0;
+ 	}
+ 
+-	m->next_ns += delta;
++	m->next_ns += playback_time(delta, m->speed);
+ 	m->next_pts_ns = min_next_ns;
+ }
+ 
+@@ -570,13 +594,12 @@ bool mp_media_reset(mp_media_t *m)
+ 	bool active;
+ 
+ 	int64_t next_ts = mp_media_get_base_pts(m);
+-	int64_t offset = next_ts - m->next_pts_ns;
++	int64_t offset = playback_time(next_ts - m->next_pts_ns, m->speed);
+ 	int64_t start_time = m->fmt->start_time;
+ 	if (start_time == AV_NOPTS_VALUE)
+ 		start_time = 0;
+ 
+ 	m->eof = false;
+-	m->base_ts += next_ts;
+ 	m->seek_next_ts = false;
+ 
+ 	seek_to(m, start_time);
+@@ -591,14 +614,11 @@ bool mp_media_reset(mp_media_t *m)
+ 		return false;
+ 
+ 	if (active) {
+-		if (!m->play_sys_ts)
+-			m->play_sys_ts = (int64_t)os_gettime_ns();
+-		m->start_ts = m->next_pts_ns = mp_media_get_next_min_pts(m);
++		m->next_pts_ns = mp_media_get_next_min_pts(m);
+ 		if (m->next_ns)
+ 			m->next_ns += offset;
+ 	} else {
+-		m->start_ts = m->next_pts_ns = mp_media_get_next_min_pts(m);
+-		m->play_sys_ts = (int64_t)os_gettime_ns();
++		m->next_pts_ns = mp_media_get_next_min_pts(m);
+ 		m->next_ns = 0;
+ 	}
+ 
+@@ -613,23 +633,18 @@ bool mp_media_reset(mp_media_t *m)
+ 
+ static inline bool mp_media_sleep(mp_media_t *m)
+ {
+-	bool timeout = false;
+-
+ 	if (!m->next_ns) {
+ 		m->next_ns = os_gettime_ns();
+ 	} else {
+ 		const uint64_t t = os_gettime_ns();
+ 		if (m->next_ns > t) {
+ 			const uint32_t delta_ms = (uint32_t)((m->next_ns - t + 500000) / 1000000);
+-			if (delta_ms > 0) {
+-				static const uint32_t timeout_ms = 200;
+-				timeout = delta_ms > timeout_ms;
+-				os_sleep_ms(timeout ? timeout_ms : delta_ms);
+-			}
++			if (delta_ms > 0)
++				return os_event_timedwait(m->wake_event, delta_ms) != ETIMEDOUT;
+ 		}
+ 	}
+ 
+-	return timeout;
++	return false;
+ }
+ 
+ bool mp_media_eof(mp_media_t *m)
+@@ -745,9 +760,6 @@ static bool init_avformat(mp_media_t *m)
+ 
+ static void reset_ts(mp_media_t *m)
+ {
+-	m->base_ts += mp_media_get_base_pts(m);
+-	m->play_sys_ts = (int64_t)os_gettime_ns();
+-	m->start_ts = m->next_pts_ns = mp_media_get_next_min_pts(m);
+ 	m->next_ns = 0;
+ }
+ 
+@@ -771,9 +783,10 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 	}
+ 
+ 	for (;;) {
+-		bool reset, kill, is_active, seek, pause, reset_time, preload_frame;
++		bool reset, kill, is_active, seek, pause, reset_time, preload_frame, speed_changed;
++		int pending_speed;
+ 		int64_t seek_pos;
+-		bool timeout = false;
++		bool interrupted = false;
+ 
+ 		pthread_mutex_lock(&m->mutex);
+ 		is_active = m->active;
+@@ -781,12 +794,12 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 		pthread_mutex_unlock(&m->mutex);
+ 
+ 		if (!is_active || pause) {
+-			if (os_sem_wait(m->sem) < 0)
++			if (os_event_wait(m->wake_event) != 0)
+ 				return false;
+ 			if (pause)
+ 				reset_ts(m);
+ 		} else {
+-			timeout = mp_media_sleep(m);
++			interrupted = mp_media_sleep(m);
+ 		}
+ 
+ 		pthread_mutex_lock(&m->mutex);
+@@ -801,6 +814,9 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 		seek_pos = m->seek_pos;
+ 		seek = m->seek;
+ 		reset_time = m->reset_ts;
++		speed_changed = m->speed_changed;
++		pending_speed = m->pending_speed;
++		m->speed_changed = false;
+ 		m->preload_frame = false;
+ 		m->seek = false;
+ 		m->reset_ts = false;
+@@ -810,6 +826,8 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 		if (kill) {
+ 			break;
+ 		}
++		if (speed_changed)
++			apply_speed(m, pending_speed);
+ 		if (reset) {
+ 			mp_media_reset(m);
+ 			/* Reactivation needs a fresh clock after the deferred rewind. */
+@@ -839,7 +857,7 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 		}
+ 
+ 		/* frames are ready */
+-		if (is_active && !timeout) {
++		if (is_active && !interrupted) {
+ 			if (m->has_video)
+ 				mp_media_next_video(m, false);
+ 			if (m->has_audio)
+@@ -878,8 +896,8 @@ static inline bool mp_media_init_internal(mp_media_t *m, const struct mp_media_i
+ 		blog(LOG_WARNING, "MP: Failed to init mutex");
+ 		return false;
+ 	}
+-	if (os_sem_init(&m->sem, 0) != 0) {
+-		blog(LOG_WARNING, "MP: Failed to init semaphore");
++	if (os_event_init(&m->wake_event, OS_EVENT_TYPE_AUTO) != 0) {
++		blog(LOG_WARNING, "MP: Failed to init wake event");
+ 		return false;
+ 	}
+ 
+@@ -918,8 +936,10 @@ bool mp_media_init(mp_media_t *media, const struct mp_media_info *info)
+ 	media->is_local_file = info->is_local_file;
+ 	da_init(media->packet_pool);
+ 
+-	if (!info->is_local_file || media->speed < 1 || media->speed > 200)
++	if (!info->is_local_file || media->speed < MEDIA_PLAYBACK_SPEED_MIN ||
++	    media->speed > MEDIA_PLAYBACK_SPEED_MAX)
+ 		media->speed = 100;
++	media->pending_speed = media->speed;
+ 
+ 	static bool initialized = false;
+ 	if (!initialized) {
+@@ -945,7 +965,7 @@ static void mp_kill_thread(mp_media_t *m)
+ 		pthread_mutex_lock(&m->mutex);
+ 		m->kill = true;
+ 		pthread_mutex_unlock(&m->mutex);
+-		os_sem_post(m->sem);
++		os_event_signal(m->wake_event);
+ 
+ 		pthread_join(m->thread, NULL);
+ 	}
+@@ -965,7 +985,7 @@ void mp_media_free(mp_media_t *media)
+ 	da_free(media->packet_pool);
+ 	avformat_close_input(&media->fmt);
+ 	pthread_mutex_destroy(&media->mutex);
+-	os_sem_destroy(media->sem);
++	os_event_destroy(media->wake_event);
+ 	sws_freeContext(media->swscale);
+ 	av_freep(&media->scale_pic[0]);
+ 	bfree(media->path);
+@@ -990,7 +1010,7 @@ void mp_media_play(mp_media_t *m, bool loop, bool reconnecting)
+ 
+ 	pthread_mutex_unlock(&m->mutex);
+ 
+-	os_sem_post(m->sem);
++	os_event_signal(m->wake_event);
+ }
+ 
+ void mp_media_play_pause(mp_media_t *m, bool pause)
+@@ -1002,7 +1022,20 @@ void mp_media_play_pause(mp_media_t *m, bool pause)
+ 	}
+ 	pthread_mutex_unlock(&m->mutex);
+ 
+-	os_sem_post(m->sem);
++	os_event_signal(m->wake_event);
++}
++
++void mp_media_set_speed(mp_media_t *m, int speed)
++{
++	if (!m->is_local_file || speed < MEDIA_PLAYBACK_SPEED_MIN || speed > MEDIA_PLAYBACK_SPEED_MAX)
++		return;
++
++	pthread_mutex_lock(&m->mutex);
++	m->pending_speed = speed;
++	m->speed_changed = true;
++	pthread_mutex_unlock(&m->mutex);
++
++	os_event_signal(m->wake_event);
+ }
+ 
+ void mp_media_preload_frame(mp_media_t *m)
+@@ -1011,7 +1044,7 @@ void mp_media_preload_frame(mp_media_t *m)
+ 		pthread_mutex_lock(&m->mutex);
+ 		m->preload_frame = true;
+ 		pthread_mutex_unlock(&m->mutex);
+-		os_sem_post(m->sem);
++		os_event_signal(m->wake_event);
+ 	}
+ }
+ 
+@@ -1025,12 +1058,12 @@ void mp_media_stop(mp_media_t *m)
+ 	}
+ 	pthread_mutex_unlock(&m->mutex);
+ 
+-	os_sem_post(m->sem);
++	os_event_signal(m->wake_event);
+ }
+ 
+ int64_t mp_media_get_current_time(mp_media_t *m)
+ {
+-	return mp_media_get_base_pts(m) * (int64_t)m->speed / 100000000LL;
++	return mp_media_get_base_pts(m) / 1000000LL;
+ }
+ 
+ int64_t mp_media_get_frames(mp_media_t *m)
+@@ -1078,5 +1111,5 @@ void mp_media_seek(mp_media_t *m, int64_t pos)
+ 	}
+ 	pthread_mutex_unlock(&m->mutex);
+ 
+-	os_sem_post(m->sem);
++	os_event_signal(m->wake_event);
+ }
+diff --git a/shared/media-playback/media-playback/media.h b/shared/media-playback/media-playback/media.h
+index f6e4501..bf3e09b 100644
+--- a/shared/media-playback/media-playback/media.h
++++ b/shared/media-playback/media-playback/media.h
+@@ -79,17 +79,14 @@ struct mp_media {
+ 	enum video_range_type force_range;
+ 	bool is_linear_alpha;
+ 
+-	int64_t play_sys_ts;
+ 	int64_t next_pts_ns;
+ 	uint64_t next_ns;
+-	int64_t start_ts;
+-	int64_t base_ts;
+ 	bool full_decode;
+ 
+ 	uint64_t interrupt_poll_ts;
+ 
+ 	pthread_mutex_t mutex;
+-	os_sem_t *sem;
++	os_event_t *wake_event;
+ 	bool preload_frame;
+ 	bool stopping;
+ 	bool looping;
+@@ -102,8 +99,10 @@ struct mp_media {
+ 
+ 	bool pause;
+ 	bool reset_ts;
++	bool speed_changed;
+ 	bool seek;
+ 	bool seek_next_ts;
++	int pending_speed;
+ 	int64_t seek_pos;
+ };
+ 
+@@ -115,6 +114,7 @@ extern void mp_media_free(mp_media_t *media);
+ extern void mp_media_play(mp_media_t *media, bool loop, bool reconnecting);
+ extern void mp_media_stop(mp_media_t *media);
+ extern void mp_media_play_pause(mp_media_t *media, bool pause);
++extern void mp_media_set_speed(mp_media_t *media, int speed);
+ extern void mp_media_preload_frame(mp_media_t *media);
+ extern int64_t mp_media_get_current_time(mp_media_t *m);
+ extern int64_t mp_media_get_frames(mp_media_t *m);

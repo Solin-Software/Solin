@@ -745,6 +745,21 @@ class MeetingLinkedFolderSync:
                 return persist()
         return persist()
 
+    @contextmanager
+    def retiring_inactive_folder(self, folder: Path, identity: MeetingSyncIdentity):
+        """Exclude local activation and retire the binding around explicit deletion."""
+        with self._activation_publication(folder):
+            def require_inactive() -> None:
+                with self._activation_lock:
+                    if self._activation(folder, identity) is not None:
+                        raise MeetingSyncError("Disable meeting synchronization before deleting its folder")
+
+            require_inactive()
+            with self._replica(folder).retiring_binding():
+                require_inactive()
+                yield require_inactive
+            self._verified_legacy.discard(folder)
+
     def deactivate_tree(
         self, folder: Path, identity: MeetingSyncIdentity, *, cleanup: bool = True,
     ) -> MeetingSyncDeactivation:

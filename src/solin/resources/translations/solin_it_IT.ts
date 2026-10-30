@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Nome della cartella:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Es.: Evento speciale</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crea cartella</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Inserire un nome per la cartella.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Il nome non può iniziare o terminare con spazi vuoti.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Il nome non può contenere / \ &lt; &gt; : &quot; | ? * o caratteri di controllo.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Questo nome è riservato dal sistema operativo.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Il nome non può iniziare con un punto.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Il nome non può terminare con un punto.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Il nome della cartella è troppo lungo.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Esiste già un file o una cartella con questo nome.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Questo nome è riservato alle adunanze. Scegliere un altro nome per la cartella.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Il contenuto aggiunto manualmente, i tagli, l’inquadratura e lo stato espanso 
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Disattiva sincronizzazione dell’adunanza</translation>
+        <source>Help</source>
+        <translation>Aiuto</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Sincronizza l’adunanza con la cartella collegata</translation>
+        <source>Folder present</source>
+        <translation>Cartella esistente</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Cartella non trovata</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Cartella non disponibile</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Verifica della cartella…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Sincronizzazione attivata</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Sincronizzazione disattivata</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Sincronizzazione in corso…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Completamento…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Cartella dell’adunanza</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Percorso della cartella</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>La cartella collegata non è disponibile. Verificare il percorso e le autorizzazioni di accesso.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crea cartella</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Apri cartella</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Sincronizzazione dell’adunanza</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Questa impostazione si applica a tutti i computer collegati a questa cartella dell’adunanza.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Elimina cartella…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Disattivare la sincronizzazione per eliminare questa cartella</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Creazione della cartella…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Impossibile aprire la cartella.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Impossibile aggiornare la cartella dell’adunanza.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Elimina cartella</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Eliminare la cartella &quot;{name}&quot; e tutto il suo contenuto?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Verranno rimossi anche gli elementi dell’adunanza associati a questi file. Questa azione non può essere annullata.
+
+Il servizio di sincronizzazione delle cartelle potrebbe eliminare questi file anche su altri computer.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Interrompere la proiezione prima di eliminare questa cartella.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Preparazione dell’eliminazione della cartella…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Eliminazione della cartella…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Sincronizzazione dell’adunanza</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Disattivare la sincronizzazione di questa adunanza sui computer collegati?
+
+La cartella e i suoi file visibili verranno mantenuti.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Impossibile aggiornare la sincronizzazione dell’adunanza.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Le modifiche sono salvate su questo computer. Riprovare o aprire la cartella collegata.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Reimpostare la sincronizzazione di "{name}"?
 L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso della sincronizzazione precedente non saranno applicate.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crea cartella</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Crea una cartella vuota nella cartella collegata</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Cambio automatico</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Finestre dei media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Mostra nelle finestre dei media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Impossibile modificare lo stato della registrazione.</translation>
@@ -5706,11 +5875,6 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Non è stato possibile cambiare lo stato dell’uscita.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Non è stato possibile cambiare la duplicazione nelle finestre dei media.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7061,11 +7225,6 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Cambio automatico</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Mostra nelle finestre dei media</translation>
     </message>
     <message>
         <location line="+19"/>

@@ -254,6 +254,10 @@ class _Recording(QObject):
         )
         self.configuration_changed.emit(self.configuration)
 
+    def set_resolution(self, resolution: int) -> None:
+        self.configuration = replace(self.configuration, resolution=resolution)
+        self.configuration_changed.emit(self.configuration)
+
     def effective_output_directory(self) -> Path:
         return (
             Path(self.configuration.output_directory)
@@ -559,6 +563,24 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
     del workspace
 
 
+def test_recording_resolution_choices_selection_and_busy_guard(scene_bridge_factory, tmp_path) -> None:
+    recording = _Recording(tmp_path / "recordings")
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(recording=recording)
+    assert [choice["value"] for choice in bridge.recordingResolutionChoices] == [360, 540, 720, 1080]
+    assert bridge.recordingResolution == 720
+    changed = QSignalSpy(bridge.changed)
+    bridge.setRecordingResolution(1080)
+    assert recording.configuration.resolution == 1080
+    assert bridge.recordingResolution == 1080
+    assert changed.count() > 0
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(360)
+    assert bridge.recordingResolution == 1080
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(540)
+    assert bridge.recordingResolution == 540
+
+
 def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_factory) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CAMERA_SCENE_ID)  # the camera layer lives in the Camera scene
@@ -685,24 +707,30 @@ def test_bridge_rejects_absolute_position_for_non_onvif_camera(scene_bridge_fact
     assert workspace.resources.camera_presets == ()
 
 
+@pytest.mark.parametrize("bus_id", [BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS])
 def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
-    scene_bridge_factory,
+    scene_bridge_factory, bus_id,
 ) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
 
     bridge.createScene("Custom")
     camera_id = workspace.configured_cameras[0].id
     bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
-    bridge.takeLive()
+    other_bus = BusId.MEDIA_WINDOWS if bus_id is BusId.VIRTUAL_CAMERA else BusId.VIRTUAL_CAMERA
+    other_before = controller.runtime.state.output(other_bus)
+    bridge.takeScene(bus_id.value)
 
     scene = controller.document.scene(bridge.selectedSceneId)
-    virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
+    output = controller.runtime.state.output(bus_id)
     # First-run ships Content + Camera; the new Custom scene makes three.
     assert bridge.scenesModel.rowCount() == 3
     assert len(scene.layers) == 1
-    assert virtual.mode is OutputMode.AUTO
-    assert virtual.base_scene_id == scene.id
-    assert bridge.selectedSceneDesired
+    assert output.mode is OutputMode.AUTO
+    assert output.base_scene_id == scene.id
+    assert controller.runtime.state.output(other_bus) == other_before
+    outputs = {item["busId"]: item for item in bridge.selectedSceneOutputs}
+    assert not outputs[bus_id.value]["canTake"]
+    assert outputs[other_bus.value]["canTake"]
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
 

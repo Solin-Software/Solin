@@ -28,6 +28,7 @@ class MeetingTreeControllerDependencies:
     linked_folder_sync: Any
     media_info_queue_factory: Callable[[QObject], Any]
     projection_aspect_ratio_provider: Callable[[], object] | None = None
+    active_media_paths_provider: Callable[[], tuple[str, ...]] | None = None
 
 
 class MeetingTreeControllerFactory:
@@ -61,6 +62,7 @@ class MeetingTreeControllerFactory:
             linked_folder_sync=dependencies.linked_folder_sync,
             media_info_queue_factory=dependencies.media_info_queue_factory,
             projection_aspect_ratio_provider=(dependencies.projection_aspect_ratio_provider),
+            active_media_paths_provider=dependencies.active_media_paths_provider,
             fallback_language_code=language_context.fallback_code,
             parent=parent,
         )

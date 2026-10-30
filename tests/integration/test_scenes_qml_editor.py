@@ -123,6 +123,10 @@ class _Recording(QObject):
         )
         self.configuration_changed.emit(self.configuration)
 
+    def set_resolution(self, resolution: int) -> None:
+        self.configuration = replace(self.configuration, resolution=resolution)
+        self.configuration_changed.emit(self.configuration)
+
     def effective_output_directory(self) -> Path:
         return Path(self.configuration.output_directory) if self.configuration.output_directory else self.directory
 
@@ -342,6 +346,7 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     recording_button = root.findChild(QQuickItem, "scenesProgramRecordingButton")
     recording_popover = root.findChild(QObject, "scenesRecordingPopover")
     microphone = root.findChild(QQuickItem, "scenesRecordingMicrophone")
+    resolution = root.findChild(QQuickItem, "scenesRecordingResolution")
     system_audio = root.findChild(QQuickItem, "scenesRecordingSystemAudio")
     choose_folder = root.findChild(QQuickItem, "scenesRecordingChooseFolder")
     audio_warning = root.findChild(QQuickItem, "scenesRecordingAudioWarning")
@@ -351,6 +356,15 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     assert recording_button.property("expanded") is True
     assert recording_popover is not None
     assert microphone is not None
+    assert resolution is not None
+    assert resolution.property("count") == 4
+    assert resolution.property("currentValue") == 720
+    assert resolution.property("enabled") is True
+    resolution.setProperty("currentIndex", 3)
+    resolution.activated.emit(3)
+    assert recording.configuration.resolution == 1080
+    recording.set_resolution(540)
+    assert _wait_until(lambda: resolution.property("currentValue") == 540)
     assert system_audio is not None
     assert choose_folder is not None
     assert audio_warning is not None and not audio_warning.isVisible()
@@ -367,6 +381,7 @@ def test_program_recording_control_and_settings_share_the_injected_state(
     assert microphone.property("count") == 3
     assert system_audio.property("count") == 3
     assert choose_folder.property("enabled") is False
+    assert resolution.property("enabled") is False
     recording.state = replace(
         recording.state,
         system_audio_warning="System audio unavailable; recording silence.",
@@ -391,6 +406,7 @@ def test_program_recording_control_and_settings_share_the_injected_state(
 
     recording_button.toggleRequested.emit()
     assert _wait_until(lambda: widget.bridge.recordingStatus == "idle")
+    assert resolution.property("enabled") is True
     assert widget.bridge.profileChangesBlocked
     controller.set_output_enabled(BusId.VIRTUAL_CAMERA, False)
     assert not widget.bridge.profileChangesBlocked

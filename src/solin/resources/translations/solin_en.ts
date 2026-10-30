@@ -1302,6 +1302,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Folder name:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>E.g.: Special event</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Create folder</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Enter a folder name.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>The name cannot start or end with whitespace.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>This name is reserved by the operating system.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>The name cannot start with a dot.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>The name cannot end with a dot.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>This folder name is too long.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>A file or folder with this name already exists.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>This name is reserved for meetings. Choose another folder name.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2266,14 +2317,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation type="unfinished"></translation>
+        <source>Help</source>
+        <translation>Help</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation type="unfinished"></translation>
+        <source>Folder present</source>
+        <translation>Folder present</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Folder missing</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Folder unavailable</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Checking folder…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Sync enabled</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Sync disabled</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchronizing…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Finishing…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Meeting folder</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Folder path</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>The linked folder is unavailable. Check its location and access permissions.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Create folder</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Open folder</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Meeting synchronization</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>This setting applies to all computers linked to this meeting folder.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Delete folder…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Turn off synchronization to delete this folder</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Creating folder…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>The folder could not be opened.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Could not update the meeting folder.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Delete folder</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Delete folder &quot;{name}&quot; and all its contents?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Stop the projection before deleting this folder.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Preparing folder deletion…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Deleting folder…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Meeting sync</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Could not update meeting sync.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Your changes are saved on this computer. Try again or open the linked folder.</translation>
     </message>
 </context>
 <context>
@@ -3575,6 +3748,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Reset synchronization for "{name}"?
 The current organization and files will be preserved. Pending changes from the previous synchronization will not be applied.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Create folder</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Create an empty folder in the linked folder</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -4506,18 +4687,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation type="unfinished"></translation>
@@ -4585,11 +4754,6 @@ The current organization and files will be preserved. Pending changes from the p
     <message>
         <location line="+9"/>
         <source>The output state could not be changed.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -5940,11 +6104,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Auto-switch media</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Show in media windows</translation>
     </message>
     <message>
         <location line="+19"/>

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shlex
+
+import yaml
 
 from tests._paths import REPO_ROOT
 
@@ -81,11 +84,23 @@ def test_every_build_and_quality_environment_bootstraps_media_extraction_before_
     ):
         recipe = _read(relative)
         assert "build_media_extract.py" in recipe
+        assert "build_media_playback.py" in recipe
         consumer = "python scripts/typecheck.py" if relative.endswith("quality.yml") else "--include-package=pylibobs"
         assert recipe.index("build_media_extract.py") < recipe.index(consumer)
+        assert recipe.index("build_media_playback.py") < recipe.index(consumer)
     script = _read("scripts/build_solin.sh")
     for component in ("avcodec", "avformat", "avutil", "swscale"):
         assert f"lib{component}-dev" in script
+
+
+def test_windows_builds_qualify_the_corrected_core_before_packaging_or_tests():
+    for relative in (
+        "scripts/build_solin.bat", ".github/workflows/build-solin-windows.yml",
+        ".github/workflows/quality.yml",
+    ):
+        recipe = _read(relative)
+        consumer = "python scripts/typecheck.py" if relative.endswith("quality.yml") else "--include-package=pylibobs"
+        assert recipe.index("build_obs_runtime.py") < recipe.index(consumer)
 
 
 def test_macos_resolves_pylibobs_from_the_custom_wheel_during_dependency_download():
@@ -130,3 +145,15 @@ def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
     assert "            xauth" in quality and "            xvfb" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/contract tests/integration tests/e2e" in quality
     assert "xvfb-run --auto-servernum python -m pytest tests/unit" in quality
+
+    configuration = yaml.load(quality, Loader=yaml.BaseLoader)
+    playback_steps = [
+        step for step in configuration["jobs"]["platforms"]["steps"]
+        if "scripts/build_media_playback.py" in step.get("run", "")
+    ]
+    commands = {step.get("if"): shlex.split(step["run"]) for step in playback_steps}
+    assert len(playback_steps) == len(commands) == 2
+    assert commands["runner.os == 'Linux'"] == [
+        "xvfb-run", "--auto-servernum", "python", "scripts/build_media_playback.py",
+    ]
+    assert commands["runner.os != 'Linux'"] == ["python", "scripts/build_media_playback.py"]

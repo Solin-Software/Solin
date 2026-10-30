@@ -105,7 +105,7 @@ class OBSSettingsStore(_ProfilePrefsSettings):
 @dataclass(frozen=True, slots=True)
 class ZoomSettingsStore(_ProfilePrefsSettings):
     def is_enabled(self) -> bool:
-        return bool(self.settings.value(SettingsKey.ZOOM_ENABLED, False, bool))
+        return bool(self.settings.value(SettingsKey.ZOOM_ENABLED, True, bool))
 
     def set_enabled(self, enabled: bool) -> None:
         self.settings.set_value(SettingsKey.ZOOM_ENABLED, bool(enabled))

@@ -77,3 +77,8 @@ The Linux upgrade smoke receives the previous verified AppImage and the newly
 built AppImage, runs each under Xvfb with native XCB, and verifies that the same
 isolated user state survives. Release jobs set `SOLIN_E2E_STRICT=1`; under that
 mode, a missing prerequisite is a failure rather than a successful skip.
+
+`test_packaged_app_smoke.py` contains shared acceptance checks. Platform-specific
+checks live in separate modules, such as `test_packaged_windows_smoke.py`, and
+are selected only by that platform's build. Strict jobs must select applicable
+checks rather than rely on platform skips.

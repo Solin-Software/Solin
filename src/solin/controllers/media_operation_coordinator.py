@@ -189,6 +189,24 @@ class MediaOperationCoordinator(QObject):
             else:
                 self.cancel(operation_id)
 
+    def scope_is_idle(self, scope_id: str) -> bool:
+        """Include worker shutdown and queued GUI commits in the idle boundary."""
+        self._assert_gui_thread()
+        return not any(
+            spec.scope_id == scope_id
+            and (
+                operation_id in self._threads
+                or operation_id in self._queue
+                or operation_id in self._commit_results
+                or self._records[operation_id].state not in {
+                    MediaOperationState.READY,
+                    MediaOperationState.FAILED,
+                    MediaOperationState.CANCELLED,
+                }
+            )
+            for operation_id, spec in self._specs.items()
+        )
+
     @Slot(str, result=bool)
     def retry(self, operation_id: str) -> bool:
         self._assert_gui_thread()

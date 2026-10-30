@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Nombre de la carpeta:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Ej.: Evento especial</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crear carpeta</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Introduzca un nombre para la carpeta.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>El nombre no puede empezar ni terminar con espacios en blanco.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>El nombre no puede contener / \ &lt; &gt; : &quot; | ? * ni caracteres de control.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Este nombre está reservado por el sistema operativo.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>El nombre no puede empezar con un punto.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>El nombre no puede terminar con un punto.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>El nombre de la carpeta es demasiado largo.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Ya existe un archivo o una carpeta con este nombre.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Este nombre está reservado para reuniones. Elija otro nombre para la carpeta.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Se conservarán el contenido añadido manualmente, los recortes, el encuadre y e
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Desactivar sincronización de la reunión</translation>
+        <source>Help</source>
+        <translation>Ayuda</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Sincronizar reunión con la carpeta vinculada</translation>
+        <source>Folder present</source>
+        <translation>Carpeta existente</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Carpeta no encontrada</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Carpeta no disponible</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Comprobando carpeta…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Sincronización activada</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Sincronización desactivada</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Sincronizando…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Finalizando…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Carpeta de la reunión</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Ruta de la carpeta</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>La carpeta vinculada no está disponible. Compruebe su ubicación y los permisos de acceso.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crear carpeta</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Abrir carpeta</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Sincronización de la reunión</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Esta configuración se aplica a todos los equipos vinculados a esta carpeta de la reunión.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Eliminar carpeta…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Desactive la sincronización para eliminar esta carpeta</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Creando carpeta…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>No se pudo abrir la carpeta.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>No se pudo actualizar la carpeta de la reunión.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Eliminar carpeta</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>¿Eliminar la carpeta &quot;{name}&quot; y todo su contenido?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>También se eliminarán los elementos de la reunión asociados a estos archivos. Esta acción no se puede deshacer.
+
+El servicio de sincronización de carpetas también podría eliminar estos archivos en otros equipos.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Detenga la proyección antes de eliminar esta carpeta.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Preparando eliminación de la carpeta…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Eliminando carpeta…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Sincronización de la reunión</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>¿Desactivar la sincronización de esta reunión en los equipos vinculados?
+
+Se conservarán la carpeta y sus archivos visibles.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>No se pudo actualizar la sincronización de la reunión.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Los cambios están guardados en este equipo. Inténtelo de nuevo o abra la carpeta vinculada.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>¿Reiniciar la sincronización de "{name}"?
 Se conservarán la organización actual y los archivos. No se aplicarán los cambios pendientes de la sincronización anterior.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Crear carpeta</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Crear una carpeta vacía dentro de la carpeta vinculada</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>Cambio automático</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Ventanas multimedia</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Mostrar en las ventanas multimedia</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>No se pudo cambiar el estado de grabación.</translation>
@@ -5706,11 +5875,6 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>No se pudo cambiar el estado de la salida.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>No se pudo cambiar la duplicación en las ventanas multimedia.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7061,11 +7225,6 @@ Añada contenido, una cámara u otra escena.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Cambio automático</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Mostrar en las ventanas multimedia</translation>
     </message>
     <message>
         <location line="+19"/>

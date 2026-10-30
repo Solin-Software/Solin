@@ -186,15 +186,29 @@ def test_concurrent_callbacks_upload_only_once_for_one_generation():
         observer.close()
 
 
+def test_untracked_source_update_preserves_the_current_video_frame():
+    observer, runtime, source, callback, _handle = _watch(results=(True,))
+    updated = runtime.observe_source_updates.call_args.args[1]
+    try:
+        callback(64, 64)
+        assert observer.ready
+        source.update({"speed_percent": 150})
+        updated()
+        assert observer.ready and not observer.updating
+        runtime.discard_selected_source_video.assert_not_called()
+    finally:
+        observer.close()
+
+
 def test_deferred_update_cannot_accept_the_preceding_ticks_frame():
     observer, runtime, source, callback, _handle = _watch(results=(True, True))
     updated = runtime.observe_source_updates.call_args.args[1]
     try:
         callback(64, 64)
         assert observer.ready
-        observer.update({"speed_percent": 150})
+        observer.update({"input": "first"})
         assert observer.updating and not observer.ready
-        source.update.assert_called_once_with({"speed_percent": 150})
+        source.update.assert_called_once_with({"input": "first"})
         callback(64, 64)
         assert runtime.prime_source_video.call_count == 1
         updated()
@@ -213,12 +227,12 @@ def test_rejected_update_fails_generation_without_stranding_the_update_gate():
         callback(64, 64)
         source.update.side_effect = RuntimeError("queue rejected")
         with pytest.raises(RuntimeError, match="queue rejected"):
-            observer.update({"speed_percent": 150})
+            observer.update({"input": "first"})
         assert not observer.updating and not observer.ready
         callback(64, 64)
         assert runtime.prime_source_video.call_count == 1
         source.update.side_effect = None
-        observer.update({"speed_percent": 125})
+        observer.update({"input": "second"})
         updated()
         callback(64, 64)
         assert observer.ready

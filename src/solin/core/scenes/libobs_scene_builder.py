@@ -15,7 +15,7 @@ import time
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
-from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, Crop, NormalizedRect
+from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, BusId, Crop, NormalizedRect
 from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.libobs_scene_morph import (
     MERGE_TRANSITION_KIND,
@@ -33,10 +33,6 @@ log = logging.getLogger(__name__)
 
 # Neutral-gray placeholder for sources whose real pixels aren't wired yet.
 _PLACEHOLDER_COLOR = 0xFF404040
-# BusId values (see solin.core.scenes.model.BusId). VIRTUAL_CAMERA is the
-# "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
-_PROGRAM_BUS = "virtual_camera"
-_MIRROR_BUS = "media_windows"
 _MORPH_TICK_SECONDS = 1 / 60
 
 
@@ -868,7 +864,7 @@ class LibobsSceneGraph:
         )
 
     def _setup_program(self, active_scenes: dict) -> None:
-        program_scene_id = active_scenes.get(_PROGRAM_BUS) or active_scenes.get(_MIRROR_BUS)
+        program_scene_id = active_scenes.get(BusId.VIRTUAL_CAMERA.value)
         scene = self._scenes.get(program_scene_id) if program_scene_id else None
         if scene is None:
             return
@@ -887,7 +883,7 @@ class LibobsSceneGraph:
         scene_id: str,
         model_kind: str,
         duration_ms: int,
-        bus_id: str = _PROGRAM_BUS,
+        bus_id: str = BusId.VIRTUAL_CAMERA.value,
     ) -> dict | None:
         """Stage a switch to ``scene_id``. Returns a token + resolved transition,
         or None if the scene is unknown.
@@ -899,7 +895,7 @@ class LibobsSceneGraph:
             return None
         fallback_applied = model_kind not in TRANSITION_SOURCE_IDS
         effective_kind = FALLBACK_TRANSITION_KIND if fallback_applied else model_kind
-        if bus_id == _PROGRAM_BUS:
+        if bus_id == BusId.VIRTUAL_CAMERA.value:
             self._transitions.prepared(effective_kind)
         self._token_seq += 1
         token = f"prep-{self._token_seq}"
@@ -931,11 +927,11 @@ class LibobsSceneGraph:
             return False
         source = scene_source if scene_source is not None else scene.as_source()
         with self._morph_lock:
-            if self._continues_morph(_MIRROR_BUS, model_kind, source):
+            if self._continues_morph(BusId.MEDIA_WINDOWS.value, model_kind, source):
                 return True
-            self._finish_morph(_MIRROR_BUS)
+            self._finish_morph(BusId.MEDIA_WINDOWS.value)
             if model_kind == MERGE_TRANSITION_KIND and self._begin_morph(
-                _MIRROR_BUS, scene_id, route.scene_id, route.scene_source, source, duration_ms,
+                BusId.MEDIA_WINDOWS.value, scene_id, route.scene_id, route.scene_source, source, duration_ms,
                 show=lambda morph_source: route.show_morph(scene_id, morph_source, source),
                 complete=route.complete_morph,
             ):
@@ -953,11 +949,11 @@ class LibobsSceneGraph:
             return False
         source = scene_source if scene_source is not None else scene.as_source()
         with self._morph_lock:
-            if self._continues_morph(_PROGRAM_BUS, model_kind, source):
+            if self._continues_morph(BusId.VIRTUAL_CAMERA.value, model_kind, source):
                 return True
-            self._finish_morph(_PROGRAM_BUS)
+            self._finish_morph(BusId.VIRTUAL_CAMERA.value)
             if model_kind == MERGE_TRANSITION_KIND and self._begin_morph(
-                _PROGRAM_BUS, scene_id, self._active_scene_id, self._active_scene_source,
+                BusId.VIRTUAL_CAMERA.value, scene_id, self._active_scene_id, self._active_scene_source,
                 source, duration_ms,
                 show=self._show_program_morph,
                 complete=lambda: self._complete_program_morph(source),

@@ -82,6 +82,10 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
         assert executing
         changes.append((pointer, mode))
 
+    def change_mixers(pointer, mixers):
+        assert executing
+        changes.append((pointer, "mixers", mixers))
+
     def select(name, ident):
         assert executing
         changes.append((name, ident))
@@ -91,15 +95,49 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
     runtime._native_tasks = SimpleNamespace(run=run)
     runtime._pylibobs = SimpleNamespace(set_audio_monitoring_device=select)
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
-        get_lib=lambda: SimpleNamespace(obs_source_set_monitoring_type=change_source),
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_type=change_source,
+            obs_source_set_audio_mixers=change_mixers,
+        ),
     ))
     source = SimpleNamespace(_ptr=object())
 
     runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_ONLY)
     assert runtime.set_monitoring_device("Default", "default")
 
-    assert changes == [(source._ptr, obs_runtime.MONITORING_MONITOR_ONLY), ("Default", "default")]
+    assert changes == [
+        (source._ptr, "mixers", 0),
+        (source._ptr, obs_runtime.MONITORING_MONITOR_ONLY),
+        ("Default", "default"),
+    ]
     assert runtime.monitoring_device == ("Default", "default")
+
+
+@pytest.mark.parametrize(
+    ("monitoring", "mixer_changes"),
+    [
+        # libobs builds that deprecated monitoring types treat monitor-only as
+        # "monitor and output": only clearing the tracks keeps the source out of
+        # the recording mix, where the speaker loopback already carries it.
+        (obs_runtime.MONITORING_MONITOR_ONLY, [0]),
+        # Sources that are meant to reach a mix keep the tracks they were given.
+        (obs_runtime.MONITORING_MONITOR_AND_OUTPUT, []),
+        (obs_runtime.MONITORING_NONE, []),
+    ],
+)
+def test_monitor_only_keeps_a_source_out_of_every_mix(monkeypatch, monitoring, mixer_changes):
+    mixers, modes = [], []
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_type=lambda _pointer, mode: modes.append(mode),
+            obs_source_set_audio_mixers=lambda _pointer, value: mixers.append(value),
+        ),
+    ))
+
+    obs_runtime.ObsRuntime().set_source_monitoring(SimpleNamespace(_ptr=object()), monitoring)
+
+    assert mixers == mixer_changes
+    assert modes == [monitoring]
 
 
 @pytest.mark.parametrize("matching", [False, True])

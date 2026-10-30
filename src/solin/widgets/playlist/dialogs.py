@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import colorsys
+from collections.abc import Iterable
 
-from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QPoint, Qt, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -23,6 +24,15 @@ from PySide6.QtWidgets import (
 )
 
 from ...core.meetings.colors import section_colors
+from ...core.foundation.folder_names import (
+    FolderNameError,
+    FolderNameIssue,
+    ensure_available_folder_name,
+)
+from ...core.ingest.playlist_folder_names import (
+    MeetingFolderNameError,
+    normalize_playlist_folder_name,
+)
 from ...styles.theme import PALETTE, current_theme_scheme
 
 
@@ -55,6 +65,7 @@ class NameDialog(QDialog):
         )
 
         lay = QVBoxLayout(self)
+        self._name_layout = lay
         lay.setContentsMargins(20, 20, 20, 16)
         lay.setSpacing(12)
         lay.addWidget(QLabel(label_str))
@@ -66,7 +77,9 @@ class NameDialog(QDialog):
 
         row = QHBoxLayout()
         ok = QPushButton(ok_str)
+        self._ok_button = ok
         cancel = QPushButton(cancel_str)
+        self._cancel_button = cancel
         ok.setFixedHeight(30)
         cancel.setFixedHeight(30)
         ok.setStyleSheet(
@@ -90,6 +103,92 @@ class NameDialog(QDialog):
 
     def get_name(self) -> str:
         return self.name_edit.text().strip()
+
+
+class LinkedFolderNameDialog(NameDialog):
+    """Validate folder components inline while preserving ordinary playlist names."""
+
+    def __init__(
+        self,
+        initial: str = "",
+        *,
+        existing_names: Iterable[str] = (),
+        excluding_name: str | None = None,
+        lang=None,
+        parent=None,
+    ):
+        self._existing_names = tuple(existing_names)
+        self._excluding_name = excluding_name
+        super().__init__(
+            initial,
+            lang=lang,
+            parent=parent,
+            label=QCoreApplication.translate("LinkedFolderNameDialog", "Folder name:"),
+            placeholder=QCoreApplication.translate("LinkedFolderNameDialog", "E.g.: Special event"),
+        )
+        self.setMinimumWidth(380)
+        self._ok_button.setText(QCoreApplication.translate("NameDialog", "OK"))
+        self._cancel_button.setText(QCoreApplication.translate("NameDialog", "Cancel"))
+        self._ok_button.setStyleSheet(
+            self._ok_button.styleSheet()
+            + f"QPushButton:disabled{{background:{PALETTE.bg2};color:{PALETTE.text_muted};"
+            f"border-color:{PALETTE.border};}}"
+        )
+        self.setWindowTitle(self.tr("Create folder"))
+        self.name_edit.setAccessibleName(self.tr("Folder name:"))
+        # QLineEdit's default 32767-character limit accommodates the full
+        # portable byte/unit limit; validation must never silently truncate it.
+        self._error_label = QLabel(self)
+        self._error_label.setWordWrap(True)
+        self._error_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._error_label.setStyleSheet(
+            f"color:{PALETTE.danger};font-size:12px;background:transparent;"
+        )
+        self._name_layout.insertWidget(2, self._error_label)
+        self.name_edit.textChanged.connect(self._validate_name)
+        self._validate_name()
+
+    def get_name(self) -> str:
+        name = normalize_playlist_folder_name(self.name_edit.text())
+        return ensure_available_folder_name(
+            name, self._existing_names, excluding_name=self._excluding_name
+        )
+
+    def _validate_name(self) -> bool:
+        try:
+            self.get_name()
+        except FolderNameError as exc:
+            messages = {
+                FolderNameIssue.EMPTY: self.tr("Enter a folder name."),
+                FolderNameIssue.WHITESPACE: self.tr(
+                    "The name cannot start or end with whitespace."
+                ),
+                FolderNameIssue.CHARACTERS: self.tr(
+                    'The name cannot contain / \\ < > : " | ? * or control characters.'
+                ),
+                FolderNameIssue.RESERVED: self.tr("This name is reserved by the operating system."),
+                FolderNameIssue.HIDDEN: self.tr("The name cannot start with a dot."),
+                FolderNameIssue.TRAILING_DOT: self.tr("The name cannot end with a dot."),
+                FolderNameIssue.TOO_LONG: self.tr("This folder name is too long."),
+                FolderNameIssue.CONFLICT: self.tr("A file or folder with this name already exists."),
+            }
+            message = messages[exc.issue] if self.name_edit.text() else ""
+            if isinstance(exc, MeetingFolderNameError):
+                message = self.tr(
+                    "This name is reserved for meetings. Choose another folder name."
+                )
+            self._error_label.setText(message)
+            self.name_edit.setAccessibleDescription(message)
+            self._ok_button.setEnabled(False)
+            return False
+        self._error_label.clear()
+        self.name_edit.setAccessibleDescription("")
+        self._ok_button.setEnabled(True)
+        return True
+
+    def accept(self) -> None:
+        if self._validate_name():
+            super().accept()
 
 
 class _HueSliderBar(QWidget):

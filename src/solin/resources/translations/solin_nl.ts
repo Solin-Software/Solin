@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Mapnaam:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Bijv.: Speciale gebeurtenis</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Voer een mapnaam in.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>De naam mag niet beginnen of eindigen met witruimte.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>De naam mag geen / \ &lt; &gt; : &quot; | ? * of besturingstekens bevatten.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Deze naam is gereserveerd door het besturingssysteem.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>De naam mag niet beginnen met een punt.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>De naam mag niet eindigen met een punt.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Deze mapnaam is te lang.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Er bestaat al een bestand of map met deze naam.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Deze naam is gereserveerd voor vergaderingen. Kies een andere mapnaam.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Vergaderingssynchronisatie uitschakelen</translation>
+        <source>Help</source>
+        <translation>Help</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Vergadering synchroniseren met gekoppelde map</translation>
+        <source>Folder present</source>
+        <translation>Map aanwezig</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Map niet gevonden</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Map niet beschikbaar</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Map controleren…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synchronisatie ingeschakeld</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synchronisatie uitgeschakeld</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchroniseren…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Afronden…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Map van de vergadering</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Mappad</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>De gekoppelde map is niet beschikbaar. Controleer de locatie en toegangsrechten.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Map openen</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Vergaderingssynchronisatie</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Deze instelling geldt voor alle computers die aan deze vergadermap zijn gekoppeld.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Map verwijderen…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Schakel synchronisatie uit om deze map te verwijderen</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Map aanmaken…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>De map kon niet worden geopend.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>De map van de vergadering kon niet worden bijgewerkt.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Map verwijderen</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Map &quot;{name}&quot; en de volledige inhoud verwijderen?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>De vergaderingsitems die aan deze bestanden zijn gekoppeld, worden ook verwijderd. Deze actie kan niet ongedaan worden gemaakt.
+
+De mapsynchronisatiedienst kan deze bestanden ook op andere computers verwijderen.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Stop de projectie voordat deze map wordt verwijderd.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Verwijderen van map voorbereiden…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Map verwijderen…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Vergaderingssynchronisatie</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Synchronisatie van deze vergadering uitschakelen op gekoppelde computers?
+
+De map en de zichtbare bestanden blijven behouden.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>De vergaderingssynchronisatie kon niet worden bijgewerkt.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>De wijzigingen zijn op deze computer opgeslagen. Probeer het opnieuw of open de gekoppelde map.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Synchronisatie voor "{name}" opnieuw instellen?
 De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van de vorige synchronisatie worden niet toegepast.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Map aanmaken</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Een lege map aanmaken in de gekoppelde map</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Automatisch schakelen</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Mediavensters</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>De opnamestatus kon niet worden gewijzigd.</translation>
@@ -5706,11 +5875,6 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>De status van de uitvoer kon niet worden gewijzigd.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>De spiegeling in de mediavensters kon niet worden gewijzigd.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -7061,11 +7225,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Automatisch schakelen</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Tonen in de mediavensters</translation>
     </message>
     <message>
         <location line="+19"/>

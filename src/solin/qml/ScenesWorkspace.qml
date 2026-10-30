@@ -16,7 +16,6 @@ Item {
     property string contextSceneId: ""
     property string contextSceneName: ""
     property bool contextSceneMedia: false
-    property bool contextSceneLive: false
     property bool contextSceneTransitionOverride: false
     property string contextSceneTransitionKind: ""
     property int contextSceneTransitionDurationMs: 0
@@ -36,6 +35,7 @@ Item {
     readonly property color textSecondary: theme ? theme.textSecondary : "#aeb8c8"
     readonly property color textMuted: theme ? theme.textMuted : "#768397"
     readonly property color accent: theme ? theme.accent : "#3b82f6"
+    readonly property color accentText: theme ? theme.accentText : "#79c0ff"
     readonly property color accentTint: theme ? theme.accentTint : "#17335b"
     readonly property color success: theme ? theme.success : "#36c98f"
     readonly property color warning: theme ? theme.warning : "#e0ad55"
@@ -63,6 +63,18 @@ Item {
         return String(colorValue).replace("#", "")
     }
 
+    function outputLabel(busId) {
+        return busId === "media_windows"
+            ? qsTranslate("SceneWindow", "Projection")
+            : qsTranslate("SceneWindow", "Virtual camera")
+    }
+
+    function outputState(busId) {
+        return bridge ? bridge.selectedSceneOutputs.find(function(output) {
+            return output.busId === busId
+        }) : { live: false, canTake: false }
+    }
+
     function popupBelow(menu, anchor) {
         if (menu && anchor)
             popupAt(menu, anchor, 0, anchor.height + 4)
@@ -80,7 +92,6 @@ Item {
         contextSceneId = sceneId
         contextSceneName = sceneName
         contextSceneMedia = isMediaScene
-        contextSceneLive = isLiveScene
         contextSceneTransitionOverride = hasTransitionOverride
         contextSceneTransitionKind = transitionKind
         contextSceneTransitionDurationMs = transitionDurationMs
@@ -293,28 +304,16 @@ Item {
                                     font.pixelSize: 9
                                 }
                             }
-                            Rectangle {
-                                Layout.preferredWidth: 104
-                                Layout.preferredHeight: 36
-                                radius: 10
-                                color: takeMouse.containsMouse && takeMouse.enabled
-                                    ? Qt.lighter(root.accent, 1.08) : root.accent
-                                opacity: root.bridge && root.bridge.canTakeLive ? 1 : 0.38
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: root.bridge && root.bridge.selectedSceneLive
-                                        ? qsTr("On air") : qsTr("Take live")
-                                    color: "white"
-                                    font.pixelSize: 11
-                                    font.weight: Font.DemiBold
-                                }
-                                MouseArea {
-                                    id: takeMouse
-                                    anchors.fill: parent
-                                    enabled: root.bridge && root.bridge.canTakeLive
-                                    hoverEnabled: true
-                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                    onClicked: root.bridge.takeLive()
+                            RowLayout {
+                                spacing: 6
+                                Repeater {
+                                    model: root.bridge ? root.bridge.deliveryBusIds : []
+                                    SceneOutputTakeButton {
+                                        required property string modelData
+                                        objectName: "scenesTake-" + modelData
+                                        busId: modelData
+                                        onClicked: if (canTake) root.bridge.takeScene(busId)
+                                    }
                                 }
                             }
                         }
@@ -785,11 +784,20 @@ Item {
             border.width: 1
             border.color: root.borderColor
         }
-        ScenesMenuItem {
-            theme: root.theme
-            text: root.contextSceneLive ? qsTr("On air") : qsTr("Take live")
-            enabled: !root.contextSceneLive
-            onTriggered: root.bridge.takeLive()
+        Instantiator {
+            model: root.bridge ? root.bridge.deliveryBusIds : []
+            delegate: ScenesMenuItem {
+                required property string modelData
+                readonly property var outputState: root.outputState(modelData)
+                objectName: "scenesTakeMenu-" + modelData
+                theme: root.theme
+                text: root.outputLabel(modelData) + " · "
+                    + (outputState.live ? qsTr("On air") : qsTr("Take live"))
+                enabled: outputState.canTake
+                onTriggered: root.bridge.takeScene(modelData)
+            }
+            onObjectAdded: function(index, object) { sceneMenu.insertItem(index, object) }
+            onObjectRemoved: function(index, object) { sceneMenu.removeItem(object) }
         }
         ScenesMenuSeparator { theme: root.theme }
         ScenesMenuItem {
@@ -957,13 +965,6 @@ Item {
             checked: root.bridge && root.bridge.automaticEnabled
             enabled: root.bridge && root.bridge.automationConfigured
             onTriggered: root.bridge.setAutomaticEnabled(checked)
-        }
-        ScenesMenuItem {
-            theme: root.theme
-            text: qsTr("Show in media windows")
-            checkable: true
-            checked: root.bridge && root.bridge.mediaMirrorEnabled
-            onTriggered: root.bridge.setMediaMirrorEnabled(checked)
         }
     }
 
@@ -1368,6 +1369,48 @@ Item {
                 }
             }
         }
+    }
+
+    component SceneOutputTakeButton: Button {
+        id: button
+        required property string busId
+        readonly property var outputState: root.outputState(busId)
+        readonly property bool live: outputState.live
+        readonly property bool canTake: outputState.canTake
+        readonly property string outputName: root.outputLabel(busId)
+        readonly property string stateLabel: live ? qsTr("On air") : qsTr("Take live")
+
+        Layout.preferredWidth: 32
+        Layout.preferredHeight: 32
+        enabled: canTake || live
+        hoverEnabled: true
+        opacity: canTake || live ? 1 : 0.45
+        padding: 0
+        Accessible.name: outputName
+        Accessible.description: stateLabel
+
+        background: Rectangle {
+            radius: 7
+            color: button.live ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.14)
+                : button.hovered || button.down ? root.hover : "transparent"
+            border.width: 1
+            border.color: button.activeFocus ? root.accent
+                : button.live ? Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.5)
+                : button.hovered ? root.borderStrong : "transparent"
+        }
+        contentItem: Item {
+            Image {
+                anchors.centerIn: parent
+                width: 13; height: 13
+                source: "image://sceneicons/"
+                    + (button.busId === "media_windows" ? "screen" : "camera")
+                    + "/13/" + root.iconHex(button.live ? root.accentText
+                        : button.hovered ? root.textPrimary : root.textMuted)
+            }
+        }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+        ToolTip.visible: hovered
+        ToolTip.text: outputName + " · " + stateLabel
     }
 
     component HeaderIconButton: Rectangle {

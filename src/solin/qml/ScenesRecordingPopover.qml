@@ -198,6 +198,39 @@ Popup {
             Layout.fillWidth: true
             spacing: 5
             Text {
+                text: qsTr("Resolution")
+                color: root.textSecondary
+                font.pixelSize: 9
+                font.weight: Font.DemiBold
+            }
+            ScenesComboBox {
+                id: resolutionCombo
+                objectName: "scenesRecordingResolution"
+                Layout.fillWidth: true
+                theme: root.theme
+                model: root.bridge ? root.bridge.recordingResolutionChoices : []
+                textRole: "name"
+                valueRole: "value"
+                currentIndex: {
+                    for (var index = 0; index < model.length; ++index) {
+                        if (root.bridge && model[index].value === root.bridge.recordingResolution)
+                            return index
+                    }
+                    return -1
+                }
+                enabled: root.bridge && !root.bridge.recordingBusy
+                Accessible.name: qsTr("Resolution")
+                onActivated: function(index) {
+                    if (root.bridge && index >= 0)
+                        root.bridge.setRecordingResolution(model[index].value)
+                }
+            }
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 5
+            Text {
                 text: qsTr("Microphone")
                 color: root.textSecondary
                 font.pixelSize: 9

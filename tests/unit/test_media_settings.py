@@ -70,7 +70,7 @@ def test_projection_playback_settings_validate_and_clamp_values():
 
         assert store.loop_enabled() is True
         assert store.playback_order() == ORDER_NEXT
-        assert store.speed() == 4.0
+        assert store.speed() == 2.0
         assert store.volume() == 0.0
         assert store.image_match_projection_aspect() is True
         assert store.image_constrain_to_frame() is True
@@ -82,6 +82,20 @@ def test_projection_playback_settings_validate_and_clamp_values():
         assert store.playback_order() == ORDER_OFF
         assert store.speed() == 1.0
         assert store.volume() == 0.80
+    finally:
+        settings.clear()
+
+
+def test_saved_playback_speed_outside_ui_range_is_clamped():
+    settings = _settings()
+    store = ProjectionPlaybackSettingsStore(settings)
+    settings.clear()
+    try:
+        for saved, expected in ((0.25, 0.5), (4.0, 2.0), (1.5, 1.5)):
+            settings.set_value(SettingsKey.PLAYBACK_SPEED, saved)
+            assert store.speed() == expected
+            store.set_speed(saved)
+            assert settings.value(SettingsKey.PLAYBACK_SPEED, value_type=float) == expected
     finally:
         settings.clear()
 
