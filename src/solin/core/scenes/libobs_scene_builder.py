@@ -73,13 +73,18 @@ def _rtsp_ffmpeg_options(config: dict) -> str:
     Without ``rtsp_transport`` FFmpeg tries UDP first, and over Wi-Fi a
     high-resolution stream loses enough RTP packets that no frame ever decodes.
     The network buffer is the RTP reorder window, which FFmpeg takes in µs.
+    Only the video stream is set up: the auditorium's sound comes from the
+    mixer, and a camera microphone would only add a second, delayed copy.
     """
     transport = "udp" if str(config.get("transport", "tcp")) == "udp" else "tcp"
     try:
         latency_ms = max(0, int(config.get("latency_ms", 200)))
     except (TypeError, ValueError):
         latency_ms = 200
-    return f"rtsp_transport={transport} max_delay={latency_ms * 1000}"
+    return (
+        f"rtsp_transport={transport} max_delay={latency_ms * 1000} "
+        "allowed_media_types=video"
+    )
 
 
 # libobs centres bounded content when no edge flag is set; there is no CENTER member.
@@ -622,6 +627,12 @@ class LibobsSceneGraph:
                         "input": uri,
                         "ffmpeg_options": _rtsp_ffmpeg_options(config),
                         "reconnect_delay_sec": 2,
+                        # A live camera must show the newest frame, not a backlog.
+                        # The default 2 MB buffer keeps the packets FFmpeg read
+                        # while probing the stream, and media-playback paces them
+                        # out by timestamp, so the probe time became a permanent
+                        # delay behind the room's audio. 0 sets AVFMT_FLAG_NOBUFFER.
+                        "buffering_mb": 0,
                         # ffmpeg_source otherwise starts only from `activate`, which
                         # fires for sources on an output channel. The editor preview,
                         # the projection route, and thumbnails only *show* the camera,

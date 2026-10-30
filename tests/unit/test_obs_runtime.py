@@ -1020,7 +1020,7 @@ def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource
     return runtime, created
 
 
-def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000"):
+def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000 allowed_media_types=video"):
     return {"is_local_file": False, "input": uri, "ffmpeg_options": options}
 
 
@@ -1029,12 +1029,34 @@ def test_shared_rtsp_source_follows_transport_and_buffer_edits(monkeypatch) -> N
     source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
 
     # Same address, new transport and buffer: the live source must follow.
-    edited = _rtsp_settings(options="rtsp_transport=udp max_delay=500000")
+    edited = _rtsp_settings(options="rtsp_transport=udp max_delay=500000 allowed_media_types=video")
     assert runtime.rtsp_source("cam", "rtsp://camera/live", edited) is source
 
     assert len(created) == 1
     assert source.updates == [edited]
-    assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000"
+    assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000 allowed_media_types=video"
+
+
+def test_shared_rtsp_source_draws_its_newest_frame(monkeypatch) -> None:
+    calls: list[tuple[object, bool]] = []
+    lib = SimpleNamespace(obs_source_set_async_unbuffered=lambda ptr, value: calls.append((ptr, value)))
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(get_lib=lambda: lib))
+    runtime, created = _rtsp_runtime(monkeypatch)
+    monkeypatch.setattr(_RtspSource, "_ptr", "native", raising=False)
+
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings(options="rtsp_transport=udp"))
+
+    # Set once on creation; an in-place settings update keeps the flag.
+    assert len(created) == 1
+    assert calls == [("native", True)]
+
+
+def test_shared_rtsp_source_survives_a_binding_without_unbuffered(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(get_lib=lambda: SimpleNamespace()))
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    assert runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings()) is created[0]
 
 
 def test_shared_rtsp_source_is_not_rebuilt_for_unchanged_settings(monkeypatch) -> None:
