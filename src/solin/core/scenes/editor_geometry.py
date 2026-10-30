@@ -478,17 +478,27 @@ def snap_move_rect(
     return NormalizedRect(x=x, y=y, width=rect.width, height=rect.height), guides
 
 
+def _retained_axis_overlap(start: float, size: float) -> float:
+    """Keep the current canvas overlap up to the minimum grabbable sliver."""
+    return max(0.0, min(MINIMUM_ON_CANVAS, size, start + size, 1.0 - start))
+
+
 def _resize_scale_limits(start: float, size: float, anchor_fraction: float) -> tuple[float, float]:
     """Bound an axis scale without moving its anchor or existing off-canvas edges."""
     minimum = min(1.0, MINIMUM_LAYER_SIZE / size)
     maximum = NormalizedRect.MAXIMUM_SIZE / size
     anchor = start + anchor_fraction * size
+    overlap = _retained_axis_overlap(start, size)
     if anchor_fraction > 0.0:
         extent = anchor_fraction * size
         minimum = max(minimum, (anchor - NormalizedRect.MAXIMUM_POSITION) / extent)
+        if overlap > 0.0:
+            minimum = max(minimum, (anchor - (1.0 - overlap)) / extent)
         maximum = min(maximum, (anchor - min(0.0, start)) / extent)
     if anchor_fraction < 1.0:
         extent = (1.0 - anchor_fraction) * size
+        if overlap > 0.0:
+            minimum = max(minimum, (overlap - anchor) / extent)
         maximum = min(maximum, (max(1.0, start + size) - anchor) / extent)
     # The original, valid rectangle is always admissible, including tiny layers.
     return min(1.0, minimum), max(1.0, maximum)
@@ -567,6 +577,12 @@ def _crop_axis(
     )
     if moving_start:
         maximum_delta = min(maximum_delta, NormalizedRect.MAXIMUM_POSITION - start)
+    overlap = _retained_axis_overlap(start, size)
+    if overlap > 0.0:
+        maximum_delta = min(
+            maximum_delta,
+            1.0 - overlap - start if moving_start else start + size - overlap,
+        )
     inward_delta = min(maximum_delta, max(minimum_delta, delta if moving_start else -delta))
     fractional_delta = inward_delta / source_size
     desired_crop = min(maximum_crop, max(0.0, edge_crop + fractional_delta))

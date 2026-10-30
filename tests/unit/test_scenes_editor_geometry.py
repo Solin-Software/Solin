@@ -470,3 +470,39 @@ def test_uncropping_at_zero_handles_roundoff_without_walking_subnormal_values() 
     assert crop.left < original_crop.left
     assert rect.x + rect.width == pytest.approx(original.x + original.width)
     assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(original.width / 0.7)
+
+
+@pytest.mark.parametrize("operation", ["crop", "free_resize", "aspect_resize"])
+@pytest.mark.parametrize(("original", "handle", "dx", "dy"), [
+    (NormalizedRect(x=-0.08, y=0.2, width=0.1, height=0.3), "right", -0.03, 0.0),
+    (NormalizedRect(x=0.96, y=0.2, width=0.1, height=0.3), "left", 0.05, 0.0),
+    (NormalizedRect(x=0.2, y=-0.08, width=0.3, height=0.1), "bottom", 0.0, -0.03),
+    (NormalizedRect(x=0.2, y=0.96, width=0.3, height=0.1), "top", 0.0, 0.05),
+    (NormalizedRect(x=-0.08, y=-0.08, width=0.1, height=0.1), "bottom_right", -0.03, -0.03),
+    (NormalizedRect(x=0.96, y=0.96, width=0.1, height=0.1), "top_left", 0.05, 0.05),
+])
+def test_edge_edits_keep_a_grabbable_sliver_on_canvas(
+    operation: str, original: NormalizedRect, handle: str, dx: float, dy: float,
+) -> None:
+    if operation == "crop":
+        rect, _crop = crop_geometry(original, Crop(), handle, dx, dy)
+    else:
+        rect = resize_rect(original, handle, dx, dy, preserve_aspect=operation == "aspect_resize")
+
+    assert min(1.0, rect.x + rect.width) - max(0.0, rect.x) >= 0.02 - 1e-9
+    assert min(1.0, rect.y + rect.height) - max(0.0, rect.y) >= 0.02 - 1e-9
+
+
+@pytest.mark.parametrize("operation", ["crop", "free_resize", "aspect_resize"])
+def test_edge_edits_do_not_pull_fully_off_canvas_layers_back_in(operation: str) -> None:
+    original = NormalizedRect(x=-0.3, y=-0.3, width=0.1, height=0.1)
+    if operation == "crop":
+        rect, _crop = crop_geometry(original, Crop(), "bottom_right", -0.01, -0.01)
+    else:
+        rect = resize_rect(original, "bottom_right", -0.01, -0.01,
+                           preserve_aspect=operation == "aspect_resize")
+
+    assert rect.x == original.x
+    assert rect.y == original.y
+    assert rect.width == pytest.approx(0.09)
+    assert rect.height == pytest.approx(0.09)
