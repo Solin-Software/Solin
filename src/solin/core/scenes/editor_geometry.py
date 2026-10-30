@@ -20,6 +20,9 @@ HANDLE_NAMES = (
 )
 MINIMUM_LAYER_SIZE = 0.02
 MINIMUM_VISIBLE_SOURCE = 0.01
+# Layers may be dragged past any canvas edge, but keep a grabbable sliver of
+# each one on the canvas so it can always be dragged back.
+MINIMUM_ON_CANVAS = 0.02
 SNAP_THRESHOLD_PIXELS = 8.0
 SNAP_RELEASE_THRESHOLD_PIXELS = 14.0
 EDGE_SNAP_MARGIN_SHORT_EDGE = 0.05
@@ -389,6 +392,29 @@ def _clean_geometry_value(value: float) -> float:
     return value
 
 
+def _move_axis_limits(start: float, size: float) -> tuple[float, float]:
+    overlap = min(MINIMUM_ON_CANVAS, size)
+    minimum = max(NormalizedRect.MINIMUM_POSITION, overlap - size)
+    maximum = min(NormalizedRect.MAXIMUM_POSITION, 1.0 - overlap)
+    # A layer already further out than the limits must not jump on grab.
+    return min(minimum, start), max(maximum, start)
+
+
+def move_rect(rect: NormalizedRect, dx: float, dy: float) -> NormalizedRect:
+    """Move a layer, allowing it to extend past the canvas edges."""
+
+    def move_axis(start: float, size: float, delta: float) -> float:
+        minimum, maximum = _move_axis_limits(start, size)
+        return min(maximum, max(minimum, start + delta))
+
+    return NormalizedRect(
+        x=move_axis(rect.x, rect.width, dx),
+        y=move_axis(rect.y, rect.height, dy),
+        width=rect.width,
+        height=rect.height,
+    )
+
+
 def snap_move_rect(
     rect: NormalizedRect,
     *,
@@ -397,6 +423,7 @@ def snap_move_rect(
     disabled: bool = False,
     active_guides: tuple[tuple[str, float], ...] = (),
 ) -> tuple[NormalizedRect, tuple[tuple[str, float], ...]]:
+    """Snap visible layer anchors using the same position bounds as dragging."""
     if disabled or viewport_width <= 0 or viewport_height <= 0:
         return rect, ()
     active_by_axis = dict(active_guides)
@@ -409,6 +436,7 @@ def snap_move_rect(
         viewport: float,
     ) -> tuple[float, float | None]:
         safe_margin = safe_margin_pixels / viewport
+        minimum, maximum = _move_axis_limits(start, size)
         candidates = (
             (start, 0.0, safe_margin),
             (start, 0.0, 0.5),
@@ -426,7 +454,7 @@ def snap_move_rect(
                 candidate = target - offset
                 distance = abs(point - target) * viewport
                 if (
-                    0.0 <= candidate <= 1.0 - size
+                    minimum <= candidate <= maximum
                     and distance <= SNAP_RELEASE_THRESHOLD_PIXELS
                     and distance < best_distance
                 ):
@@ -438,7 +466,7 @@ def snap_move_rect(
             candidate = target - offset
             distance = abs(point - target) * viewport
             if (
-                0.0 <= candidate <= 1.0 - size
+                minimum <= candidate <= maximum
                 and distance <= SNAP_THRESHOLD_PIXELS
                 and distance < best_distance
             ):
@@ -456,6 +484,32 @@ def snap_move_rect(
     return NormalizedRect(x=x, y=y, width=rect.width, height=rect.height), guides
 
 
+def _retained_axis_overlap(start: float, size: float) -> float:
+    """Keep the current canvas overlap up to the minimum grabbable sliver."""
+    return max(0.0, min(MINIMUM_ON_CANVAS, size, start + size, 1.0 - start))
+
+
+def _resize_scale_limits(start: float, size: float, anchor_fraction: float) -> tuple[float, float]:
+    """Bound an axis scale without moving its anchor or existing off-canvas edges."""
+    minimum = min(1.0, MINIMUM_LAYER_SIZE / size)
+    maximum = NormalizedRect.MAXIMUM_SIZE / size
+    anchor = start + anchor_fraction * size
+    overlap = _retained_axis_overlap(start, size)
+    if anchor_fraction > 0.0:
+        extent = anchor_fraction * size
+        minimum = max(minimum, (anchor - NormalizedRect.MAXIMUM_POSITION) / extent)
+        if overlap > 0.0:
+            minimum = max(minimum, (anchor - (1.0 - overlap)) / extent)
+        maximum = min(maximum, (anchor - min(0.0, start)) / extent)
+    if anchor_fraction < 1.0:
+        extent = (1.0 - anchor_fraction) * size
+        if overlap > 0.0:
+            minimum = max(minimum, (overlap - anchor) / extent)
+        maximum = min(maximum, (max(1.0, start + size) - anchor) / extent)
+    # The original, valid rectangle is always admissible, including tiny layers.
+    return min(1.0, minimum), max(1.0, maximum)
+
+
 def resize_rect(
     original: NormalizedRect,
     handle: str,
@@ -464,103 +518,114 @@ def resize_rect(
     *,
     preserve_aspect: bool,
 ) -> NormalizedRect:
+    """Resize around fixed opposite edges within the model and canvas bounds."""
     if handle not in HANDLE_NAMES:
         raise ValueError(f"Unknown resize handle: {handle}")
     moves_left = "left" in handle
     moves_right = "right" in handle
     moves_top = "top" in handle
     moves_bottom = "bottom" in handle
-    if not preserve_aspect:
-        original_right = original.x + original.width
-        original_bottom = original.y + original.height
-        left = (
-            min(original_right - MINIMUM_LAYER_SIZE, max(0.0, original.x + dx))
-            if moves_left
-            else original.x
-        )
-        right = (
-            min(1.0, max(original.x + MINIMUM_LAYER_SIZE, original_right + dx))
-            if moves_right
-            else original_right
-        )
-        top = (
-            min(original_bottom - MINIMUM_LAYER_SIZE, max(0.0, original.y + dy))
-            if moves_top
-            else original.y
-        )
-        bottom = (
-            min(1.0, max(original.y + MINIMUM_LAYER_SIZE, original_bottom + dy))
-            if moves_bottom
-            else original_bottom
-        )
-        return NormalizedRect(x=left, y=top, width=right - left, height=bottom - top)
-
-    horizontal_scale = (
-        (original.width - dx) / original.width
-        if moves_left
-        else (original.width + dx) / original.width
-        if moves_right
-        else 1.0
+    anchor_x = 1.0 if moves_left else 0.0 if moves_right else 0.5
+    anchor_y = 1.0 if moves_top else 0.0 if moves_bottom else 0.5
+    scale_x = (
+        1.0 + (-dx if moves_left else dx) / original.width
+        if moves_left or moves_right else 1.0
     )
-    vertical_scale = (
-        (original.height - dy) / original.height
-        if moves_top
-        else (original.height + dy) / original.height
-        if moves_bottom
-        else 1.0
+    scale_y = (
+        1.0 + (-dy if moves_top else dy) / original.height
+        if moves_top or moves_bottom else 1.0
     )
-    if (moves_left or moves_right) and (moves_top or moves_bottom):
-        scale = (
-            horizontal_scale
-            if abs(horizontal_scale - 1.0) >= abs(vertical_scale - 1.0)
-            else vertical_scale
-        )
-    elif moves_left or moves_right:
-        scale = horizontal_scale
+    minimum_x, maximum_x = _resize_scale_limits(original.x, original.width, anchor_x)
+    minimum_y, maximum_y = _resize_scale_limits(original.y, original.height, anchor_y)
+    if preserve_aspect:
+        scale = scale_x if abs(scale_x - 1.0) >= abs(scale_y - 1.0) else scale_y
+        scale_x = scale_y = min(maximum_x, maximum_y, max(minimum_x, minimum_y, scale))
     else:
-        scale = vertical_scale
-    center_x = original.x + original.width / 2.0
-    center_y = original.y + original.height / 2.0
-    maximum_width = (
-        original.x + original.width
-        if moves_left
-        else 1.0 - original.x
-        if moves_right
-        else 2.0 * min(center_x, 1.0 - center_x)
+        scale_x = min(maximum_x, max(minimum_x, scale_x))
+        scale_y = min(maximum_y, max(minimum_y, scale_y))
+    width = min(
+        NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, original.width * scale_x),
     )
-    maximum_height = (
-        original.y + original.height
-        if moves_top
-        else 1.0 - original.y
-        if moves_bottom
-        else 2.0 * min(center_y, 1.0 - center_y)
+    height = min(
+        NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, original.height * scale_y),
     )
-    minimum_scale = max(
-        MINIMUM_LAYER_SIZE / original.width,
-        MINIMUM_LAYER_SIZE / original.height,
-    )
-    maximum_scale = min(
-        maximum_width / original.width,
-        maximum_height / original.height,
-    )
-    scale = min(maximum_scale, max(minimum_scale, scale))
-    width = original.width * scale
-    height = original.height * scale
-    x = (
-        original.x + original.width - width
-        if moves_left
-        else original.x
-        if moves_right
-        else center_x - width / 2.0
-    )
-    y = (
-        original.y + original.height - height
-        if moves_top
-        else original.y
-        if moves_bottom
-        else center_y - height / 2.0
-    )
+    # Limit roundoff at the inclusive model boundaries after scaling.
+    x = min(NormalizedRect.MAXIMUM_POSITION, max(
+        NormalizedRect.MINIMUM_POSITION, original.x + anchor_x * (original.width - width),
+    ))
+    y = min(NormalizedRect.MAXIMUM_POSITION, max(
+        NormalizedRect.MINIMUM_POSITION, original.y + anchor_y * (original.height - height),
+    ))
     return NormalizedRect(x=x, y=y, width=width, height=height)
+
+
+def _crop_axis(
+    start: float, size: float, crop_start: float, crop_end: float,
+    delta: float, *, moving_start: bool,
+) -> tuple[float, float, float, float]:
+    """Crop one edge within rectangle and source limits without rescaling."""
+    visible = 1.0 - crop_start - crop_end
+    source_size = size / visible
+    edge_crop = crop_start if moving_start else crop_end
+    opposite_crop = crop_end if moving_start else crop_start
+    minimum_size = min(MINIMUM_LAYER_SIZE, size)
+    maximum_crop = min(
+        MAXIMUM_CROP_FRACTION, max(edge_crop, 1.0 - opposite_crop - MINIMUM_VISIBLE_SOURCE),
+    )
+    minimum_delta = max(
+        min(0.0, -start if moving_start else start + size - 1.0),
+        size - NormalizedRect.MAXIMUM_SIZE,
+        -edge_crop * source_size,
+    )
+    maximum_delta = min(
+        size - minimum_size,
+        (maximum_crop - edge_crop) * source_size,
+    )
+    if moving_start:
+        maximum_delta = min(maximum_delta, NormalizedRect.MAXIMUM_POSITION - start)
+    overlap = _retained_axis_overlap(start, size)
+    if overlap > 0.0:
+        maximum_delta = min(
+            maximum_delta,
+            1.0 - overlap - start if moving_start else start + size - overlap,
+        )
+    inward_delta = min(maximum_delta, max(minimum_delta, delta if moving_start else -delta))
+    fractional_delta = inward_delta / source_size
+    desired_crop = min(maximum_crop, max(0.0, edge_crop + fractional_delta))
+    # Near a fully cropped source, one crop ULP can move an edge substantially.
+    # Check adjacent representations in both spaces; walking crop ULPs near zero
+    # would traverse subnormal values without meaningfully changing the geometry.
+    candidates = (
+        desired_crop,
+        edge_crop + math.nextafter(fractional_delta, 0.0),
+        math.nextafter(desired_crop, edge_crop),
+    )
+    for candidate in candidates:
+        updated_crop = min(maximum_crop, max(0.0, candidate))
+        inward_delta = (updated_crop - edge_crop) * source_size
+        updated_visible = (
+            1.0 - updated_crop - opposite_crop if moving_start
+            else 1.0 - opposite_crop - updated_crop
+        )
+        visible_delta = (visible - updated_visible) * source_size
+        if (
+            minimum_delta <= inward_delta <= maximum_delta
+            and abs(inward_delta - visible_delta) <= _GEOMETRY_EPSILON
+        ):
+            break
+    else:
+        # Keep the original axis when the requested change cannot be represented
+        # without moving its fixed edge or changing the source scale.
+        return start, size, crop_start, crop_end
+    if moving_start:
+        start = min(
+            NormalizedRect.MAXIMUM_POSITION, max(NormalizedRect.MINIMUM_POSITION, start + inward_delta),
+        )
+        crop_start = updated_crop
+    else:
+        crop_end = updated_crop
+    size = min(NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, size - inward_delta))
+    return start, size, crop_start, crop_end
 
 
 def crop_geometry(
@@ -570,41 +635,24 @@ def crop_geometry(
     dx: float,
     dy: float,
 ) -> tuple[NormalizedRect, Crop]:
+    """Crop selected edges while preserving the source footprint and valid geometry."""
     if handle not in HANDLE_NAMES:
         raise ValueError(f"Unknown crop handle: {handle}")
-    left = original_rect.x
-    top = original_rect.y
-    right = original_rect.x + original_rect.width
-    bottom = original_rect.y + original_rect.height
-    crop_left = original_crop.left
-    crop_top = original_crop.top
-    crop_right = original_crop.right
-    crop_bottom = original_crop.bottom
-    visible_x = 1.0 - crop_left - crop_right
-    visible_y = 1.0 - crop_top - crop_bottom
-    if "left" in handle:
-        edge_delta = min(original_rect.width - MINIMUM_LAYER_SIZE, max(-left, dx))
-        candidate = crop_left + edge_delta / original_rect.width * visible_x
-        crop_left = min(1.0 - crop_right - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        left += (crop_left - original_crop.left) * original_rect.width / visible_x
-    if "right" in handle:
-        edge_delta = min(1.0 - right, max(-(original_rect.width - MINIMUM_LAYER_SIZE), dx))
-        candidate = crop_right - edge_delta / original_rect.width * visible_x
-        crop_right = min(1.0 - crop_left - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        right -= (crop_right - original_crop.right) * original_rect.width / visible_x
-    if "top" in handle:
-        edge_delta = min(original_rect.height - MINIMUM_LAYER_SIZE, max(-top, dy))
-        candidate = crop_top + edge_delta / original_rect.height * visible_y
-        crop_top = min(1.0 - crop_bottom - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        top += (crop_top - original_crop.top) * original_rect.height / visible_y
-    if "bottom" in handle:
-        edge_delta = min(1.0 - bottom, max(-(original_rect.height - MINIMUM_LAYER_SIZE), dy))
-        candidate = crop_bottom - edge_delta / original_rect.height * visible_y
-        crop_bottom = min(1.0 - crop_top - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        bottom -= (crop_bottom - original_crop.bottom) * original_rect.height / visible_y
+    x, y = original_rect.x, original_rect.y
+    width, height = original_rect.width, original_rect.height
+    left, right = original_crop.left, original_crop.right
+    top, bottom = original_crop.top, original_crop.bottom
+    if "left" in handle or "right" in handle:
+        x, width, left, right = _crop_axis(
+            x, width, left, right, dx, moving_start="left" in handle,
+        )
+    if "top" in handle or "bottom" in handle:
+        y, height, top, bottom = _crop_axis(
+            y, height, top, bottom, dy, moving_start="top" in handle,
+        )
     return (
-        NormalizedRect(x=left, y=top, width=right - left, height=bottom - top),
-        Crop(left=crop_left, top=crop_top, right=crop_right, bottom=crop_bottom),
+        NormalizedRect(x=x, y=y, width=width, height=height),
+        Crop(left=left, top=top, right=right, bottom=bottom),
     )
 
 
@@ -617,6 +665,7 @@ __all__ = [
     "expand_focus_rect_to_aspect",
     "fill_crop_to_canvas",
     "inscribed_aspect_rect",
+    "move_rect",
     "intersect_rect",
     "move_framing_rect",
     "recover_uncropped_rect",

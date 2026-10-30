@@ -1345,6 +1345,82 @@ def test_bridge_geometry_preview_commits_exactly_one_revision(scene_bridge_facto
     assert controller.document.revision == revision + 1
 
 
+def test_bridge_exposes_constant_normalized_rect_limits(scene_bridge_factory) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    limits = bridge.property("normalizedRectLimits")
+    assert limits == {
+        "minimumPosition": NormalizedRect.MINIMUM_POSITION,
+        "maximumPosition": NormalizedRect.MAXIMUM_POSITION,
+        "minimumSize": NormalizedRect.MINIMUM_SIZE,
+        "maximumSize": NormalizedRect.MAXIMUM_SIZE,
+    }
+    meta = bridge.metaObject()
+    prop = meta.property(meta.indexOfProperty("normalizedRectLimits"))
+    assert prop.isConstant()
+    assert prop.typeName() == "QVariantMap"
+
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    for minimum, maximum in [("minimumPosition", "maximumPosition"),
+                             ("maximumPosition", "minimumPosition")]:
+        bridge.applyPreciseTransform(layer.id, {
+            "x": limits[minimum], "y": limits[maximum],
+            "width": limits["minimumSize"], "height": limits["maximumSize"],
+        })
+        rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+        assert rect == NormalizedRect(
+            x=limits[minimum], y=limits[maximum],
+            width=limits["minimumSize"], height=limits["maximumSize"],
+        )
+
+
+@pytest.mark.parametrize("values", [
+    {"x": NormalizedRect.MINIMUM_POSITION - 0.001},
+    {"y": NormalizedRect.MAXIMUM_POSITION + 0.001},
+    {"width": NormalizedRect.MINIMUM_SIZE / 2},
+    {"height": NormalizedRect.MAXIMUM_SIZE + 0.001},
+    {"x": float("nan")},
+    {"width": float("inf")},
+])
+def test_bridge_rejects_invalid_precise_transform_without_partial_changes(
+    scene_bridge_factory, values,
+) -> None:
+    notifications = _Notifications()
+    _, controller, bridge, _ = scene_bridge_factory(notifications=notifications)
+    original = controller.document
+    layer = original.scene(bridge.selectedSceneId).layers[0]
+
+    bridge.applyPreciseTransform(layer.id, {"rotation": 45.0, **values})
+
+    assert controller.document == original
+    assert notifications.errors
+
+
+def test_bridge_move_and_precise_transform_accept_negative_position(
+    scene_bridge_factory,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer.id,
+        replace(layer, rect=NormalizedRect(x=0.1, y=0.1, width=0.5, height=0.5)),
+    )
+
+    geometry = bridge.calculateLayerGeometry(
+        layer.id, "move", "", -0.3, -0.25, 960.0, 540.0, False, False, True
+    )
+    assert geometry["x"] == pytest.approx(-0.2)
+    assert geometry["y"] == pytest.approx(-0.15)
+    bridge.commitLayerGeometry(geometry)
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (pytest.approx(-0.2), pytest.approx(-0.15))
+
+    bridge.selectLayer(layer.id)
+    bridge.applyPreciseTransform(layer.id, {"x": -0.5, "y": -0.25})
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (-0.5, -0.25)
+
+
 def test_bridge_only_media_scene_role_is_removable(scene_bridge_factory) -> None:
     _workspace, controller, bridge, _preview_store = scene_bridge_factory()
     records = [bridge.scenesModel.get(row) for row in range(bridge.scenesModel.rowCount())]

@@ -9,17 +9,18 @@ from contextlib import ExitStack
 
 import pytest
 
-from PySide6.QtCore import Q_ARG, QCoreApplication, QEvent, QMetaObject, QObject, QPoint, QPointF, QSize, Qt, Signal
+from PySide6.QtCore import Q_ARG, QCoreApplication, QEvent, QMetaObject, QObject, QPoint, QPointF, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
+from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.scenes.engine import LocalCameraDevice, LocalCameraDiscovery, LocalCameraProbe, LocalCameraProbeStatus, LocalVideoFormat, LocalVideoFrameInterval, LocalVideoFrameRateRange, LocalVideoResolutionRange, SceneSourcePreview, SourceHealthEvent, SourceHealthStatus
-from solin.core.scenes.model import BusId, CameraMediaType, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
+from solin.core.scenes.model import BusId, CameraMediaType, Crop, DEFAULT_CAMERA_SOURCE_ID, LocalCameraConfig, NormalizedRect, SceneLayer, SourceDefinition, SourceKind, TransitionKind
 from solin.core.scenes.onvif_discovery import (
     OnvifDeviceDetails,
     OnvifDiscoveredCamera,
@@ -39,8 +40,10 @@ from solin.core.scenes.recording import (
     SceneRecordingConfig,
 )
 from solin.ui.qml.scenes import ScenesEditorWidget
+from solin.ui.qml.host import configure_qml_controls_style
 from tests.fixtures.editor_source_preview import EditorSourcePreview
 from tests._qt import mouse_move, mouse_press, mouse_release, show_and_activate, wait_until
+from tests._paths import REPO_ROOT
 
 
 class _Projection:
@@ -327,6 +330,149 @@ def test_scenes_qml_editor_loads_with_the_real_workspace(
     canvas = widget._qml.rootObject().findChild(QObject, "scenesCanvas")
     assert canvas is not None
     assert canvas.property("width") > 300
+
+
+def test_precise_transform_constructs_without_bridge_warnings(qt_object_owner) -> None:
+    configure_qml_controls_style()
+    engine = QQmlEngine(qt_object_owner)
+    engine.setOutputWarningsToStandardError(False)
+    warnings = []
+    engine.warnings.connect(lambda errors: warnings.extend(error.toString() for error in errors))
+    component = QQmlComponent(engine, QUrl.fromLocalFile(str(
+        REPO_ROOT / "src/solin/qml/ScenesTransformDialog.qml",
+    )), engine)
+    assert component.status() == QQmlComponent.Status.Ready, component.errorString()
+    dialog = component.create()
+    assert dialog is not None, component.errorString()
+    dialog.setParent(engine)
+    QCoreApplication.processEvents()
+    assert not warnings, "\n".join(warnings)
+
+
+@pytest.fixture
+def precise_transform_editor(scene_editor_factory, tmp_path):
+    _, controller, widget, _close = scene_editor_factory(_profile_paths(tmp_path))
+    layer = controller.document.scene(widget.bridge.selectedSceneId).layers[0]
+    widget.bridge.selectLayer(layer.id)
+    widget.resize(1000, 760)
+    widget.show()
+    QCoreApplication.processEvents()
+    assert widget._qml.status() is QQuickWidget.Status.Ready
+    dialog = widget._qml.rootObject().findChild(QObject, "scenesTransformDialog")
+    assert dialog is not None
+    return controller, widget, dialog
+
+
+@pytest.mark.parametrize("rect", [
+    NormalizedRect(x=-1.48, y=-0.25, width=1.5, height=0.5),
+    NormalizedRect(x=0.123456789, y=-0.000012345, width=0.001234567, height=0.009876543),
+    NormalizedRect(x=NormalizedRect.MINIMUM_POSITION, y=NormalizedRect.MAXIMUM_POSITION,
+                   width=NormalizedRect.MINIMUM_SIZE, height=NormalizedRect.MAXIMUM_SIZE),
+    NormalizedRect(x=NormalizedRect.MAXIMUM_POSITION, y=NormalizedRect.MINIMUM_POSITION,
+                   width=NormalizedRect.MAXIMUM_SIZE, height=NormalizedRect.MINIMUM_SIZE),
+], ids=["off-canvas", "sub-percent", "model-limits", "opposite-model-limits"])
+def test_precise_transform_open_save_preserves_unedited_geometry(
+    precise_transform_editor, rect: NormalizedRect,
+) -> None:
+    controller, widget, dialog = precise_transform_editor
+    bridge = widget.bridge
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    original = replace(layer, rect=rect, rotation_degrees=12.3456789,
+                       crop=Crop(left=0.49996, top=0.123456789, right=0.5))
+    controller.documents.update_layer(bridge.selectedSceneId, layer.id, original)
+    bridge.selectLayer(layer.id)
+
+    for _ in range(2):
+        assert QMetaObject.invokeMethod(dialog, "openForLayer")
+        assert dialog.property("visible")
+        assert QMetaObject.invokeMethod(dialog, "save")
+        assert not dialog.property("visible")
+        assert controller.document.scene(bridge.selectedSceneId).layers[0] == original
+
+
+@pytest.mark.parametrize(("field_name", "text", "expected"), [
+    ("X", "-148.25", {"rect": {"x": -1.4825}}),
+    ("Y", f"{NormalizedRect.MAXIMUM_POSITION * 100:.2f}",
+     {"rect": {"y": NormalizedRect.MAXIMUM_POSITION}}),
+    ("Width", f"{NormalizedRect.MINIMUM_SIZE * 100:.2f}",
+     {"rect": {"width": NormalizedRect.MINIMUM_SIZE}}),
+    ("Height", f"{NormalizedRect.MAXIMUM_SIZE * 100:.2f}",
+     {"rect": {"height": NormalizedRect.MAXIMUM_SIZE}}),
+    ("CropLeft", "12.36", {"crop": {"left": 0.1236}}),
+    ("Rotation", "45.67", {"rotation_degrees": 45.67}),
+])
+def test_precise_transform_saves_pending_edit_and_preserves_other_fields(
+    precise_transform_editor, field_name, text, expected,
+) -> None:
+    controller, widget, dialog = precise_transform_editor
+    bridge = widget.bridge
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    original = replace(
+        layer,
+        rect=NormalizedRect(x=-1.480012345, y=0.123456789,
+                            width=0.001234567, height=1.500000123),
+        crop=Crop(left=0.123456789, top=0.234567891,
+                  right=0.000012345, bottom=0.000023456),
+        rotation_degrees=12.3456789,
+    )
+    controller.documents.update_layer(bridge.selectedSceneId, layer.id, original)
+    revision = controller.document.revision
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    field = dialog.findChild(QQuickItem, "scenesTransform" + field_name)
+    assert field is not None
+    assert field.scale() == 1.0
+    editor = field.property("contentItem")
+    editor.forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClicks(widget._qml, text)
+    # Save before focus loss/Enter commits the SpinBox value.
+    assert QMetaObject.invokeMethod(dialog, "save")
+
+    changes = dict(expected)
+    for name in ("rect", "crop"):
+        if name in changes:
+            changes[name] = replace(getattr(original, name), **changes[name])
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == replace(
+        original, **changes,
+    )
+    assert controller.document.revision == revision + 1
+    bridge.undo()
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == original
+
+
+@pytest.mark.parametrize("commit_key", [Qt.Key.Key_Return, Qt.Key.Key_Tab], ids=["enter", "tab"])
+def test_precise_transform_edits_displayed_percentage_in_place(
+    precise_transform_editor, commit_key,
+) -> None:
+    controller, widget, dialog = precise_transform_editor
+    bridge = widget.bridge
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    original = replace(layer, rect=NormalizedRect(x=0.125))
+    controller.documents.update_layer(bridge.selectedSceneId, layer.id, original)
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    field = dialog.findChild(QQuickItem, "scenesTransformX")
+    field.property("contentItem").forceActiveFocus()
+    QTest.keyClick(widget._qml, Qt.Key.Key_End)
+    QTest.keyClick(widget._qml, Qt.Key.Key_Backspace)
+    QTest.keyClicks(widget._qml, "6")
+    QTest.keyClick(widget._qml, commit_key)
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert controller.document.scene(bridge.selectedSceneId).layers[0] == replace(
+        original, rect=replace(original.rect, x=0.1256),
+    )
+
+
+def test_precise_transform_cancel_discards_pending_input(precise_transform_editor) -> None:
+    controller, widget, dialog = precise_transform_editor
+    original = controller.document
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    field = dialog.findChild(QQuickItem, "scenesTransformX")
+    _set_edited_text(field.property("contentItem"), "-148.00")
+    assert QMetaObject.invokeMethod(dialog, "close")
+    assert controller.document == original
+    assert QMetaObject.invokeMethod(dialog, "openForLayer")
+    assert QMetaObject.invokeMethod(dialog, "save")
+    assert controller.document.scene(widget.bridge.selectedSceneId).layers[0].rect.x == 0
 
 
 def test_program_recording_control_and_settings_share_the_injected_state(
