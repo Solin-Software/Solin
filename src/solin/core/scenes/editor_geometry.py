@@ -30,8 +30,6 @@ EDGE_SNAP_MARGIN_SHORT_EDGE = 0.05
 # square in this space always has the configured canvas's physical aspect.
 NORMALIZED_CANVAS_ASPECT = 1.0
 _GEOMETRY_EPSILON = 1e-9
-_RECT_POSITION_MINIMUM = -2.0
-_RECT_POSITION_MAXIMUM = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -398,8 +396,8 @@ def move_rect(rect: NormalizedRect, dx: float, dy: float) -> NormalizedRect:
     """Move a layer, allowing it to extend past the canvas edges."""
 
     def move_axis(start: float, size: float, delta: float) -> float:
-        minimum = max(_RECT_POSITION_MINIMUM, MINIMUM_ON_CANVAS - size)
-        maximum = min(_RECT_POSITION_MAXIMUM, 1.0 - MINIMUM_ON_CANVAS)
+        minimum = max(NormalizedRect.MINIMUM_POSITION, MINIMUM_ON_CANVAS - size)
+        maximum = min(NormalizedRect.MAXIMUM_POSITION, 1.0 - MINIMUM_ON_CANVAS)
         # A layer already further out than the limits must not jump on grab.
         minimum = min(minimum, start)
         maximum = max(maximum, start)
@@ -480,6 +478,22 @@ def snap_move_rect(
     return NormalizedRect(x=x, y=y, width=rect.width, height=rect.height), guides
 
 
+def _resize_scale_limits(start: float, size: float, anchor_fraction: float) -> tuple[float, float]:
+    """Bound an axis scale without moving its anchor or existing off-canvas edges."""
+    minimum = min(1.0, MINIMUM_LAYER_SIZE / size)
+    maximum = NormalizedRect.MAXIMUM_SIZE / size
+    anchor = start + anchor_fraction * size
+    if anchor_fraction > 0.0:
+        extent = anchor_fraction * size
+        minimum = max(minimum, (anchor - NormalizedRect.MAXIMUM_POSITION) / extent)
+        maximum = min(maximum, (anchor - min(0.0, start)) / extent)
+    if anchor_fraction < 1.0:
+        extent = (1.0 - anchor_fraction) * size
+        maximum = min(maximum, (max(1.0, start + size) - anchor) / extent)
+    # The original, valid rectangle is always admissible, including tiny layers.
+    return min(1.0, minimum), max(1.0, maximum)
+
+
 def resize_rect(
     original: NormalizedRect,
     handle: str,
@@ -488,108 +502,44 @@ def resize_rect(
     *,
     preserve_aspect: bool,
 ) -> NormalizedRect:
+    """Resize around fixed opposite edges within the model and canvas bounds."""
     if handle not in HANDLE_NAMES:
         raise ValueError(f"Unknown resize handle: {handle}")
     moves_left = "left" in handle
     moves_right = "right" in handle
     moves_top = "top" in handle
     moves_bottom = "bottom" in handle
-    original_right = original.x + original.width
-    original_bottom = original.y + original.height
-    # Resizing grows up to the canvas edges; an edge already outside the
-    # canvas keeps its position instead of being pulled back in.
-    min_left = min(0.0, original.x)
-    min_top = min(0.0, original.y)
-    max_right = max(1.0, original_right)
-    max_bottom = max(1.0, original_bottom)
-    if not preserve_aspect:
-        left = (
-            min(original_right - MINIMUM_LAYER_SIZE, max(min_left, original.x + dx))
-            if moves_left
-            else original.x
-        )
-        right = (
-            min(max_right, max(original.x + MINIMUM_LAYER_SIZE, original_right + dx))
-            if moves_right
-            else original_right
-        )
-        top = (
-            min(original_bottom - MINIMUM_LAYER_SIZE, max(min_top, original.y + dy))
-            if moves_top
-            else original.y
-        )
-        bottom = (
-            min(max_bottom, max(original.y + MINIMUM_LAYER_SIZE, original_bottom + dy))
-            if moves_bottom
-            else original_bottom
-        )
-        return NormalizedRect(x=left, y=top, width=right - left, height=bottom - top)
-
-    horizontal_scale = (
-        (original.width - dx) / original.width
-        if moves_left
-        else (original.width + dx) / original.width
-        if moves_right
-        else 1.0
+    anchor_x = 1.0 if moves_left else 0.0 if moves_right else 0.5
+    anchor_y = 1.0 if moves_top else 0.0 if moves_bottom else 0.5
+    scale_x = (
+        1.0 + (-dx if moves_left else dx) / original.width
+        if moves_left or moves_right else 1.0
     )
-    vertical_scale = (
-        (original.height - dy) / original.height
-        if moves_top
-        else (original.height + dy) / original.height
-        if moves_bottom
-        else 1.0
+    scale_y = (
+        1.0 + (-dy if moves_top else dy) / original.height
+        if moves_top or moves_bottom else 1.0
     )
-    if (moves_left or moves_right) and (moves_top or moves_bottom):
-        scale = (
-            horizontal_scale
-            if abs(horizontal_scale - 1.0) >= abs(vertical_scale - 1.0)
-            else vertical_scale
-        )
-    elif moves_left or moves_right:
-        scale = horizontal_scale
+    minimum_x, maximum_x = _resize_scale_limits(original.x, original.width, anchor_x)
+    minimum_y, maximum_y = _resize_scale_limits(original.y, original.height, anchor_y)
+    if preserve_aspect:
+        scale = scale_x if abs(scale_x - 1.0) >= abs(scale_y - 1.0) else scale_y
+        scale_x = scale_y = min(maximum_x, maximum_y, max(minimum_x, minimum_y, scale))
     else:
-        scale = vertical_scale
-    center_x = original.x + original.width / 2.0
-    center_y = original.y + original.height / 2.0
-    maximum_width = (
-        original_right - min_left
-        if moves_left
-        else max_right - original.x
-        if moves_right
-        else 2.0 * min(center_x - min_left, max_right - center_x)
+        scale_x = min(maximum_x, max(minimum_x, scale_x))
+        scale_y = min(maximum_y, max(minimum_y, scale_y))
+    width = min(
+        NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, original.width * scale_x),
     )
-    maximum_height = (
-        original_bottom - min_top
-        if moves_top
-        else max_bottom - original.y
-        if moves_bottom
-        else 2.0 * min(center_y - min_top, max_bottom - center_y)
+    height = min(
+        NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, original.height * scale_y),
     )
-    minimum_scale = max(
-        MINIMUM_LAYER_SIZE / original.width,
-        MINIMUM_LAYER_SIZE / original.height,
-    )
-    maximum_scale = min(
-        maximum_width / original.width,
-        maximum_height / original.height,
-    )
-    scale = min(maximum_scale, max(minimum_scale, scale))
-    width = original.width * scale
-    height = original.height * scale
-    x = (
-        original.x + original.width - width
-        if moves_left
-        else original.x
-        if moves_right
-        else center_x - width / 2.0
-    )
-    y = (
-        original.y + original.height - height
-        if moves_top
-        else original.y
-        if moves_bottom
-        else center_y - height / 2.0
-    )
+    # Limit roundoff at the inclusive model boundaries after scaling.
+    x = min(NormalizedRect.MAXIMUM_POSITION, max(
+        NormalizedRect.MINIMUM_POSITION, original.x + anchor_x * (original.width - width),
+    ))
+    y = min(NormalizedRect.MAXIMUM_POSITION, max(
+        NormalizedRect.MINIMUM_POSITION, original.y + anchor_y * (original.height - height),
+    ))
     return NormalizedRect(x=x, y=y, width=width, height=height)
 
 

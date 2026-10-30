@@ -365,3 +365,34 @@ def test_editor_crop_of_an_off_canvas_layer_does_not_force_a_crop() -> None:
         (beyond.x, beyond.y, beyond.width, beyond.height)
     )
     assert crop == Crop()
+
+@pytest.mark.parametrize("preserve_aspect", [False, True])
+@pytest.mark.parametrize("handle", ["left", "top", "top_left"])
+@pytest.mark.parametrize("delta", [-10.0, 10.0])
+def test_resize_respects_model_limits_and_keeps_the_opposite_edges(
+    preserve_aspect: bool, handle: str, delta: float,
+) -> None:
+    original = NormalizedRect(x=1.5, y=1.5, width=3.0, height=3.0)
+
+    resized = resize_rect(original, handle, delta, delta, preserve_aspect=preserve_aspect)
+
+    assert -2.0 <= resized.x <= 2.0
+    assert -2.0 <= resized.y <= 2.0
+    assert 0.001 <= resized.width <= 4.0
+    assert 0.001 <= resized.height <= 4.0
+    if "left" in handle:
+        assert resized.x + resized.width == pytest.approx(original.x + original.width)
+    if "top" in handle:
+        assert resized.y + resized.height == pytest.approx(original.y + original.height)
+    if preserve_aspect:
+        assert resized.width / resized.height == pytest.approx(original.width / original.height)
+
+
+@pytest.mark.parametrize("handle", ["left", "top", "top_left", "bottom_right"])
+@pytest.mark.parametrize("preserve_aspect", [False, True])
+def test_resize_does_not_enlarge_valid_layers_smaller_than_editor_minimum(
+    handle: str, preserve_aspect: bool,
+) -> None:
+    original = NormalizedRect(x=-0.0005, y=0.9995, width=0.001, height=0.002)
+
+    assert resize_rect(original, handle, 0.0, 0.0, preserve_aspect=preserve_aspect) == original
