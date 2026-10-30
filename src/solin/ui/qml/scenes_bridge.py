@@ -332,6 +332,15 @@ class ScenesBridge(QObject):
         layer = self._selected_layer()
         return {} if layer is None else self._layer_record(layer)
 
+    @Property("QVariantMap", constant=True)  # type: ignore[arg-type]
+    def normalizedRectLimits(self) -> dict[str, float]:
+        return {
+            "minimumPosition": NormalizedRect.MINIMUM_POSITION,
+            "maximumPosition": NormalizedRect.MAXIMUM_POSITION,
+            "minimumSize": NormalizedRect.MINIMUM_SIZE,
+            "maximumSize": NormalizedRect.MAXIMUM_SIZE,
+        }
+
     @Property(bool, notify=framingChanged)
     def framingActive(self) -> bool:
         return self._framing_session is not None
