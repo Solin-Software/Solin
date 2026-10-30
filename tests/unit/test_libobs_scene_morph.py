@@ -369,6 +369,24 @@ def test_finishing_merge_does_not_undo_a_later_projection_cut(graph, route):
     assert route.transition_source.current_source == graph.scene_source("c")
 
 
+def test_failed_cut_during_a_merge_still_ends_on_its_destination(graph, route):
+    _take_projection(graph, route, "b")
+    transition = route.transition_source
+    original = transition.set_source
+
+    def refuse(_source):
+        raise RuntimeError("no route")
+
+    transition.set_source = refuse
+    assert route.set_scene("c", graph.scene_source("c")) is False
+    transition.set_source = original
+
+    graph._tick_morphs(float("inf"))
+
+    assert transition.current_source == graph.scene_source("b")
+    assert route.scene_id == "b"
+
+
 def test_projection_merge_never_flashes_the_destination(graph, route):
     seen = []
     route.start("a", graph.scene_source("a"), "dissolve", 100)  # not on the cut transition

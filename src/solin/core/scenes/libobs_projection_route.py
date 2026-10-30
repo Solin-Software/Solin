@@ -116,7 +116,6 @@ class LibobsProjectionRoute:
     ) -> bool:
         """Animate the projection to ``scene_source`` with its own transition."""
         with self._lock:
-            self._morph_source = None
             try:
                 transition = self._transitions.prepared(model_kind)
                 self._activate_transition(transition)
@@ -130,6 +129,7 @@ class LibobsProjectionRoute:
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.warning("Could not transition the projection to %r", scene_id, exc_info=True)
                 return False
+            self._morph_source = None
             self._scene_id = scene_id
             self._scene_source = scene_source
             return True
@@ -190,7 +190,6 @@ class LibobsProjectionRoute:
     def set_scene(self, scene_id: str, scene_source: Any) -> bool:
         """Cut the projection to ``scene_source`` (None clears it)."""
         with self._lock:
-            self._morph_source = None
             try:
                 transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
                 self._activate_transition(transition)
@@ -200,6 +199,8 @@ class LibobsProjectionRoute:
                     transition.set_source(scene_source)
                 self._scene_id = scene_id if scene_source is not None else ""
                 self._scene_source = scene_source
+                # Only now: a failed cut leaves the merge on screen to finish.
+                self._morph_source = None
                 self._reset_inactive_sources()
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.warning("Could not point the projection at scene %r", scene_id, exc_info=True)
