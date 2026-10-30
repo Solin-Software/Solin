@@ -250,6 +250,21 @@ class _CameraSource:
     height: int
 
 
+def _show_newest_frame(source: Any) -> None:
+    """Draw a live source's newest frame instead of scheduling it by timestamp.
+
+    libobs holds async frames until their timestamp comes due, which adds a delay
+    an IP camera cannot afford: its picture already trails the room's audio by the
+    camera's own encoding time.
+    """
+    try:
+        from pylibobs._ffi import get_lib
+
+        get_lib().obs_source_set_async_unbuffered(source._ptr, True)
+    except Exception:  # noqa: BLE001 - optional native tuning
+        log.warning("Could not make the IP camera source unbuffered", exc_info=True)
+
+
 class ObsRuntime:
     """Lazily-started, process-wide wrapper around a single ``OBSContext``.
 
@@ -512,6 +527,7 @@ class ObsRuntime:
                 return None
             if source is None:
                 return None
+            _show_newest_frame(source)
             self._rtsp_sources[camera_id] = (source, dict(settings))
             return source
 
