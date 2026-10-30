@@ -7163,7 +7163,7 @@ Dodaj treść, kamerę lub inną scenę.</translation>
     </message>
     <message>
         <source>Move shared sources, fade the rest</source>
-        <translation>Przesuń wspólne źródła, resztę wycisz</translation>
+        <translation>Przesuń wspólne źródła, resztę płynnie wyłaniaj i wygaszaj</translation>
     </message>
     <message>
         <location line="-150"/>

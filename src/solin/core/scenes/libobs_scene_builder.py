@@ -154,6 +154,7 @@ class LibobsSceneGraph:
         self._morph_lock = RLock()
         self._morph_thread: Thread | None = None
         self._morph_seq = 0
+        self._stranded_morphs: list[LibobsSceneMorph] = []
         # Layers of the scenes a content Take is staging, until it commits.
         self._staged_scene_layers: dict[str, list[dict[str, Any]]] = {}
 
@@ -992,8 +993,9 @@ class LibobsSceneGraph:
             == getattr(destination, "_ptr", destination)
         )
 
-    def _layers_for_morph(self, scene_id: str) -> list[dict[str, Any]]:
-        records = self._staged_scene_layers.get(scene_id, self._scene_layers.get(scene_id, ()))
+    def _layers_for_morph(self, scene_id: str, *, staged: bool) -> list[dict[str, Any]]:
+        committed = self._scene_layers.get(scene_id, ())
+        records = self._staged_scene_layers.get(scene_id, committed) if staged else committed
         return [self._layer_with_morph_fit(record) for record in records]
 
     def _layer_with_morph_fit(self, record: dict[str, Any]) -> dict[str, Any]:
@@ -1038,8 +1040,9 @@ class LibobsSceneGraph:
         ):
             return False
         plan = plan_scene_morph(
-            self._layers_for_morph(origin_scene_id),
-            self._layers_for_morph(scene_id),
+            # The origin is on screen, so a staged content Take must not stand in for it.
+            self._layers_for_morph(origin_scene_id, staged=False),
+            self._layers_for_morph(scene_id, staged=True),
         )
         if not any(entry.role is MorphRole.MOVE for entry in plan):
             return False
@@ -1069,7 +1072,8 @@ class LibobsSceneGraph:
             morph.start()
         except Exception:  # noqa: BLE001 - libobs boundary; the destination must still show
             log.warning("Could not start the merge transition", exc_info=True)
-            morph.finish()
+            self._morphs[bus_id] = morph
+            self._finish_morph(bus_id)
             return True
         self._morphs[bus_id] = morph
         if self._morph_thread is None:
@@ -1120,6 +1124,8 @@ class LibobsSceneGraph:
         try:
             morph.finish()
         except Exception:  # noqa: BLE001 - libobs boundary
+            # The output is still showing it, so keep it until the next rebuild.
+            self._stranded_morphs.append(morph)
             log.warning("Could not finish the merge transition", exc_info=True)
 
     def _swap_transition(self, model_kind: str) -> None:
@@ -1152,6 +1158,10 @@ class LibobsSceneGraph:
         if self._program_channel is not None:
             self._runtime.set_channel_source(self._program_channel, None)
         self._transitions.reset_sources()
+        with self._morph_lock:
+            stranded, self._stranded_morphs = self._stranded_morphs, []
+            for morph in stranded:
+                morph.release()
         self.clear_editor_source_preview()
         # Feeds rendering these are suspended before any rebuild; they rebuild
         # their stills on resume.

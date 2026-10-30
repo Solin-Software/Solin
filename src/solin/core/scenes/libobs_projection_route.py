@@ -151,8 +151,8 @@ class LibobsProjectionRoute:
         with self._lock:
             if self._morph_source is None or self._transition is None:
                 return
-            self._morph_source = None
             self._transition.set_source(self._scene_source)
+            self._morph_source = None
 
     def _inc_showing(self, transition: Any) -> bool:
         """Show-ref the transition so its scenes' sources actually run.

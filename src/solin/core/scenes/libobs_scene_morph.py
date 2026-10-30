@@ -228,11 +228,12 @@ class LibobsSceneMorph:
         return progress >= 1.0
 
     def finish(self) -> None:
-        """Hand the output to the destination, whatever the morph's progress."""
-        try:
-            self._complete()
-        finally:
-            self.release()
+        """Hand the output to the destination, whatever the morph's progress.
+
+        If that fails the output is still showing the private scene, so it stays.
+        """
+        self._complete()
+        self.release()
 
     def release(self) -> None:
         for item, _start, _end in self._moving:

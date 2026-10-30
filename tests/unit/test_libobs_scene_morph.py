@@ -264,6 +264,64 @@ def test_morph_keeps_its_item_fades_and_crops_out_of_the_graph_after_release(gra
     assert graph._cropped_items == {}
 
 
+def test_failed_completion_keeps_the_morph_scene_until_the_rebuild(graph):
+    _take(graph, "b")
+    morph = graph._morphs["virtual_camera"]
+    program = _program(graph)
+    original = program.set_source
+
+    def refuse(_source):
+        raise RuntimeError("no route")
+
+    program.set_source = refuse
+    graph._tick_morphs(float("inf"))
+
+    assert graph._morphs == {}
+    assert morph._scene is not None
+
+    program.set_source = original
+    graph.hydrate(_DOCUMENT, {"virtual_camera": "a"})
+
+    assert morph._scene is None
+
+
+def test_content_take_fades_the_content_it_replaces(fades, monkeypatch):
+    monkeypatch.setattr(LibobsSceneGraph, "_run_morphs", lambda _self: None)
+    document = {
+        "sources": [
+            {"id": "content", "type": "solin_content", "configuration": {}},
+            {"id": "logo", "type": "color", "configuration": {"color": "#00ff00"}},
+        ],
+        "scenes": [
+            {"id": "a", "layers": [_layer("a1", "content"), _layer("a2", "logo")]},
+            {"id": "b", "layers": [_layer("b1", "content", x=0.5), _layer("b2", "logo", x=0.5)]},
+        ],
+    }
+    runtime = _CompositingRuntime()
+    old = runtime.ob.Source.create("color_source_v3", "old", {})
+    new = runtime.ob.Source.create("color_source_v3", "new", {})
+    graph = LibobsSceneGraph(runtime)
+    graph.hydrate(document, {"virtual_camera": "a"}, old)
+
+    with graph.content_presentation(new) as presentation:
+        assert graph._begin_morph(
+            "virtual_camera", "b", "a", graph.scene_source("a"),
+            presentation.scene_source("b"), 400,
+            show=lambda _source: None, complete=lambda: None,
+        ) is True
+        morph = graph._morphs["virtual_camera"]
+        faded = {
+            entry.role: entry.record["item"].source
+            for entry in morph._plan
+            if entry.role is not MorphRole.MOVE
+        }
+        assert faded == {MorphRole.FADE_OUT: old, MorphRole.FADE_IN: new}
+        graph._morph_thread = None
+        graph._morphs.clear()
+        morph.release()
+    graph.clear()
+
+
 def test_content_shown_by_a_morph_stays_borrowed():
     morph_content = object()
     graph = LibobsSceneGraph(_CompositingRuntime())

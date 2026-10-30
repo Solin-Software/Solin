@@ -7162,7 +7162,7 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <source>Move shared sources, fade the rest</source>
-        <translation>Перемещать общие источники, остальное растворять</translation>
+        <translation>Перемещать общие источники, остальные плавно проявлять и скрывать</translation>
     </message>
     <message>
         <location line="-150"/>
