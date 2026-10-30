@@ -366,6 +366,7 @@ def test_editor_crop_of_an_off_canvas_layer_does_not_force_a_crop() -> None:
     )
     assert crop == Crop()
 
+
 @pytest.mark.parametrize("preserve_aspect", [False, True])
 @pytest.mark.parametrize("handle", ["left", "top", "top_left"])
 @pytest.mark.parametrize("delta", [-10.0, 10.0])
@@ -396,3 +397,76 @@ def test_resize_does_not_enlarge_valid_layers_smaller_than_editor_minimum(
     original = NormalizedRect(x=-0.0005, y=0.9995, width=0.001, height=0.002)
 
     assert resize_rect(original, handle, 0.0, 0.0, preserve_aspect=preserve_aspect) == original
+
+
+@pytest.mark.parametrize("handle", ["left", "top", "top_left"])
+@pytest.mark.parametrize("delta", [-10.0, 10.0])
+@pytest.mark.parametrize("size", [3.0, 4.0])
+def test_crop_respects_model_limits_without_rescaling_the_source(
+    handle: str, delta: float, size: float,
+) -> None:
+    original = NormalizedRect(x=1.5, y=1.5, width=size, height=size)
+    original_crop = Crop(left=0.2, top=0.2)
+
+    rect, crop = crop_geometry(original, original_crop, handle, delta, delta)
+
+    assert NormalizedRect.MINIMUM_POSITION <= rect.x <= NormalizedRect.MAXIMUM_POSITION
+    assert NormalizedRect.MINIMUM_POSITION <= rect.y <= NormalizedRect.MAXIMUM_POSITION
+    assert NormalizedRect.MINIMUM_SIZE <= rect.width <= NormalizedRect.MAXIMUM_SIZE
+    assert NormalizedRect.MINIMUM_SIZE <= rect.height <= NormalizedRect.MAXIMUM_SIZE
+    assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    assert rect.y + rect.height == pytest.approx(original.y + original.height)
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(original.width / 0.8)
+    assert rect.height / (1.0 - crop.top - crop.bottom) == pytest.approx(original.height / 0.8)
+
+
+@pytest.mark.parametrize("handle", ["left", "right", "top", "bottom", "top_left", "bottom_right"])
+def test_crop_does_not_change_valid_tiny_or_heavily_cropped_layers_on_grab(handle: str) -> None:
+    original = NormalizedRect(x=0.2, y=0.2, width=0.001, height=0.002)
+    original_crop = Crop(left=0.99, right=0.009, top=0.99, bottom=0.009)
+
+    rect, crop = crop_geometry(original, original_crop, handle, 0.0, 0.0)
+
+    assert rect.to_record() == pytest.approx(original.to_record())
+    assert crop == original_crop
+
+
+@pytest.mark.parametrize("handle", ["left", "right", "top", "bottom", "top_left", "bottom_right"])
+@pytest.mark.parametrize("delta", [-0.2, 0.2])
+@pytest.mark.parametrize("leading_crop", [0.01, 0.4, 0.6])
+def test_extreme_crop_rounding_preserves_fixed_edges_and_source_scale(
+    handle: str, delta: float, leading_crop: float,
+) -> None:
+    original = NormalizedRect(x=0.2, y=0.2, width=3.8, height=3.8)
+    trailing_crop = 1.0 - leading_crop - 1.5e-15
+    original_crop = Crop(left=leading_crop, right=trailing_crop,
+                         top=leading_crop, bottom=trailing_crop)
+
+    rect, crop = crop_geometry(original, original_crop, handle, delta, delta)
+
+    if "left" in handle:
+        assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    else:
+        assert rect.x == original.x
+    if "top" in handle:
+        assert rect.y + rect.height == pytest.approx(original.y + original.height)
+    else:
+        assert rect.y == original.y
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(
+        original.width / (1.0 - original_crop.left - original_crop.right),
+    )
+    assert rect.height / (1.0 - crop.top - crop.bottom) == pytest.approx(
+        original.height / (1.0 - original_crop.top - original_crop.bottom),
+    )
+
+
+def test_uncropping_at_zero_handles_roundoff_without_walking_subnormal_values() -> None:
+    original = NormalizedRect(x=0.04285714285714286, y=0.2, width=0.1, height=0.5)
+    original_crop = Crop(left=0.3)
+
+    rect, crop = crop_geometry(original, original_crop, "left", -0.1, 0.0)
+
+    assert 0.0 <= rect.x < original.x
+    assert crop.left < original_crop.left
+    assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(original.width / 0.7)

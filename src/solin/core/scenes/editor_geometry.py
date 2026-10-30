@@ -543,6 +543,69 @@ def resize_rect(
     return NormalizedRect(x=x, y=y, width=width, height=height)
 
 
+def _crop_axis(
+    start: float, size: float, crop_start: float, crop_end: float,
+    delta: float, *, moving_start: bool,
+) -> tuple[float, float, float, float]:
+    """Crop one edge within rectangle and source limits without rescaling."""
+    visible = 1.0 - crop_start - crop_end
+    source_size = size / visible
+    edge_crop = crop_start if moving_start else crop_end
+    opposite_crop = crop_end if moving_start else crop_start
+    minimum_size = min(MINIMUM_LAYER_SIZE, size)
+    maximum_crop = min(
+        MAXIMUM_CROP_FRACTION, max(edge_crop, 1.0 - opposite_crop - MINIMUM_VISIBLE_SOURCE),
+    )
+    minimum_delta = max(
+        min(0.0, -start if moving_start else start + size - 1.0),
+        size - NormalizedRect.MAXIMUM_SIZE,
+        -edge_crop * source_size,
+    )
+    maximum_delta = min(
+        size - minimum_size,
+        (maximum_crop - edge_crop) * source_size,
+    )
+    if moving_start:
+        maximum_delta = min(maximum_delta, NormalizedRect.MAXIMUM_POSITION - start)
+    inward_delta = min(maximum_delta, max(minimum_delta, delta if moving_start else -delta))
+    fractional_delta = inward_delta / source_size
+    desired_crop = min(maximum_crop, max(0.0, edge_crop + fractional_delta))
+    # Near a fully cropped source, one crop ULP can move an edge substantially.
+    # Check adjacent representations in both spaces; walking crop ULPs near zero
+    # would traverse subnormal values without meaningfully changing the geometry.
+    candidates = (
+        desired_crop,
+        edge_crop + math.nextafter(fractional_delta, 0.0),
+        math.nextafter(desired_crop, edge_crop),
+    )
+    for candidate in candidates:
+        updated_crop = min(maximum_crop, max(0.0, candidate))
+        inward_delta = (updated_crop - edge_crop) * source_size
+        updated_visible = (
+            1.0 - updated_crop - opposite_crop if moving_start
+            else 1.0 - opposite_crop - updated_crop
+        )
+        visible_delta = (visible - updated_visible) * source_size
+        if (
+            minimum_delta <= inward_delta <= maximum_delta
+            and abs(inward_delta - visible_delta) <= _GEOMETRY_EPSILON
+        ):
+            break
+    else:
+        # Keep the original axis when the requested change cannot be represented
+        # without moving its fixed edge or changing the source scale.
+        return start, size, crop_start, crop_end
+    if moving_start:
+        start = min(
+            NormalizedRect.MAXIMUM_POSITION, max(NormalizedRect.MINIMUM_POSITION, start + inward_delta),
+        )
+        crop_start = updated_crop
+    else:
+        crop_end = updated_crop
+    size = min(NormalizedRect.MAXIMUM_SIZE, max(NormalizedRect.MINIMUM_SIZE, size - inward_delta))
+    return start, size, crop_start, crop_end
+
+
 def crop_geometry(
     original_rect: NormalizedRect,
     original_crop: Crop,
@@ -550,41 +613,24 @@ def crop_geometry(
     dx: float,
     dy: float,
 ) -> tuple[NormalizedRect, Crop]:
+    """Crop selected edges while preserving the source footprint and valid geometry."""
     if handle not in HANDLE_NAMES:
         raise ValueError(f"Unknown crop handle: {handle}")
-    left = original_rect.x
-    top = original_rect.y
-    right = original_rect.x + original_rect.width
-    bottom = original_rect.y + original_rect.height
-    crop_left = original_crop.left
-    crop_top = original_crop.top
-    crop_right = original_crop.right
-    crop_bottom = original_crop.bottom
-    visible_x = 1.0 - crop_left - crop_right
-    visible_y = 1.0 - crop_top - crop_bottom
-    if "left" in handle:
-        edge_delta = min(original_rect.width - MINIMUM_LAYER_SIZE, max(min(0.0, -left), dx))
-        candidate = crop_left + edge_delta / original_rect.width * visible_x
-        crop_left = min(1.0 - crop_right - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        left += (crop_left - original_crop.left) * original_rect.width / visible_x
-    if "right" in handle:
-        edge_delta = min(max(0.0, 1.0 - right), max(-(original_rect.width - MINIMUM_LAYER_SIZE), dx))
-        candidate = crop_right - edge_delta / original_rect.width * visible_x
-        crop_right = min(1.0 - crop_left - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        right -= (crop_right - original_crop.right) * original_rect.width / visible_x
-    if "top" in handle:
-        edge_delta = min(original_rect.height - MINIMUM_LAYER_SIZE, max(min(0.0, -top), dy))
-        candidate = crop_top + edge_delta / original_rect.height * visible_y
-        crop_top = min(1.0 - crop_bottom - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        top += (crop_top - original_crop.top) * original_rect.height / visible_y
-    if "bottom" in handle:
-        edge_delta = min(max(0.0, 1.0 - bottom), max(-(original_rect.height - MINIMUM_LAYER_SIZE), dy))
-        candidate = crop_bottom - edge_delta / original_rect.height * visible_y
-        crop_bottom = min(1.0 - crop_top - MINIMUM_VISIBLE_SOURCE, max(0.0, candidate))
-        bottom -= (crop_bottom - original_crop.bottom) * original_rect.height / visible_y
+    x, y = original_rect.x, original_rect.y
+    width, height = original_rect.width, original_rect.height
+    left, right = original_crop.left, original_crop.right
+    top, bottom = original_crop.top, original_crop.bottom
+    if "left" in handle or "right" in handle:
+        x, width, left, right = _crop_axis(
+            x, width, left, right, dx, moving_start="left" in handle,
+        )
+    if "top" in handle or "bottom" in handle:
+        y, height, top, bottom = _crop_axis(
+            y, height, top, bottom, dy, moving_start="top" in handle,
+        )
     return (
-        NormalizedRect(x=left, y=top, width=right - left, height=bottom - top),
-        Crop(left=crop_left, top=crop_top, right=crop_right, bottom=crop_bottom),
+        NormalizedRect(x=x, y=y, width=width, height=height),
+        Crop(left=left, top=top, right=right, bottom=bottom),
     )
 
 
