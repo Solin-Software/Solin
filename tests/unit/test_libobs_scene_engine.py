@@ -1861,7 +1861,7 @@ def test_live_prepare_and_take_borrow_preprimed_transition_resources(
     live_program = runtime.channels[0]
     live_projection = route._transition
     resources = tuple(runtime.transitions)
-    assert len(resources) == 6
+    assert len(resources) == 8
 
     def unexpected_creation(*_args, **_kwargs):
         raise AssertionError("Live Prepare and Take must not allocate a native transition")
@@ -2013,7 +2013,7 @@ def test_transition_priming_failure_aborts_activation_cleans_up_and_allows_retry
     assert runtime.channels == {}
     assert engine._projection_route._transition is None
     retained = tuple(transition for transition in runtime.transitions if transition.released == 0)
-    assert len(retained) == (1 if bus_id == "virtual_camera" else 4)
+    assert len(retained) == (1 if bus_id == "virtual_camera" else 5)
     if failure_stage == "size":
         assert runtime.transitions[-1].released == 1
 
@@ -2041,7 +2041,7 @@ def test_transition_priming_failure_aborts_activation_cleans_up_and_allows_retry
     if retry:
         assert _ack_from_envelope(engine.handle(_request("hydrate", hydrate_payload))).applied
         ready = tuple(transition for transition in runtime.transitions if transition.released == 0)
-        assert len(ready) == 6
+        assert len(ready) == 8
         assert all(transition in ready for transition in retained)
         assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
         assert engine._projection_route._transition.current_source == "scene-source:solin-scene-a"
@@ -2062,7 +2062,7 @@ def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_ref
     }
     assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
     resources = tuple(runtime.transitions)
-    assert len(resources) == 6
+    assert len(resources) == 8
 
     def unexpected_creation(*_args, **_kwargs):
         raise AssertionError("Prepared transitions must remain reusable until shutdown")

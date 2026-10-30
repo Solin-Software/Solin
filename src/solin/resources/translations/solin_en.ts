@@ -4988,6 +4988,10 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Fade through black</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Merge</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Unlock the source to frame it.</translation>
@@ -5835,6 +5839,14 @@ Add content, a camera, or another scene.</source>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fade through black</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Merge</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Move shared sources, fade the rest</translation>
     </message>
     <message>
         <location line="-150"/>

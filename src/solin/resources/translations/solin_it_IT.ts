@@ -6108,6 +6108,10 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <translation>Dissolvenza al nero</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Unisci</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Sblocca la fonte per inquadrarla.</translation>
@@ -6956,6 +6960,14 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Dissolvenza al nero</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Unisci</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Sposta le sorgenti comuni, dissolvi il resto</translation>
     </message>
     <message>
         <location line="-150"/>

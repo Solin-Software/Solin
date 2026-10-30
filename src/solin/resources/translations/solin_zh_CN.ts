@@ -6076,6 +6076,10 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>黑场淡入淡出</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>合并</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>请解锁来源以进行构图。</translation>
@@ -6924,6 +6928,14 @@ Add content, a camera, or another scene.</source>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>黑场淡入淡出</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>合并</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>移动共享来源，其余淡入淡出</translation>
     </message>
     <message>
         <location line="-150"/>

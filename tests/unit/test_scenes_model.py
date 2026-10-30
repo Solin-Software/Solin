@@ -138,6 +138,11 @@ def test_transition_spec_enforces_cut_and_animated_duration_contracts() -> None:
     assert TransitionSpec(TransitionKind.CUT, 0).duration_ms == 0
     assert TransitionSpec(TransitionKind.DISSOLVE, 50).duration_ms == 50
     assert TransitionSpec(TransitionKind.FADE_TO_BLACK, 10_000).duration_ms == 10_000
+    assert TransitionSpec(TransitionKind.MERGE, 350).to_record() == {
+        "kind": "merge",
+        "duration_ms": 350,
+    }
+    assert TransitionSpec.from_record({"kind": "merge", "duration_ms": 350}).kind is TransitionKind.MERGE
 
     with pytest.raises(SceneValidationError, match="Cut transition duration"):
         TransitionSpec(TransitionKind.CUT, 50)

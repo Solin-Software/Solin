@@ -10,12 +10,19 @@ import logging
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from threading import RLock
+from threading import RLock, Thread
+import time
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
 from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, Crop, NormalizedRect
 from solin.core.scenes.engine import SceneSourcePreview
+from solin.core.scenes.libobs_scene_morph import (
+    MERGE_TRANSITION_KIND,
+    LibobsSceneMorph,
+    MorphRole,
+    plan_scene_morph,
+)
 from solin.core.scenes.libobs_transitions import (
     FALLBACK_TRANSITION_KIND,
     TRANSITION_SOURCE_IDS,
@@ -30,6 +37,7 @@ _PLACEHOLDER_COLOR = 0xFF404040
 # "Program" bus; MEDIA_WINDOWS mirrors it. The program scene is what composites.
 _PROGRAM_BUS = "virtual_camera"
 _MIRROR_BUS = "media_windows"
+_MORPH_TICK_SECONDS = 1 / 60
 
 
 class _SceneTransition(Protocol):
@@ -144,6 +152,14 @@ class LibobsSceneGraph:
         self._active_scene_source: Any = None
         self._pending: dict[str, tuple[str, str, int, str]] = {}
         self._token_seq = 0
+        # Merges in flight, per output. The ticker thread and the control thread
+        # share them; rendering never touches this lock.
+        self._morphs: dict[str, LibobsSceneMorph] = {}
+        self._morph_lock = RLock()
+        self._morph_thread: Thread | None = None
+        self._morph_seq = 0
+        # Layers of the scenes a content Take is staging, until it commits.
+        self._staged_scene_layers: dict[str, list[dict[str, Any]]] = {}
 
     def scene_uses_presentation_source(self, scene_id: str) -> bool:
         """Constant-time demand lookup, including visible nested scene layers."""
@@ -195,12 +211,16 @@ class LibobsSceneGraph:
     @property
     def content_sources(self) -> tuple[Any, ...]:
         """Borrowed content references, including partially committed replacements."""
+        with self._morph_lock:
+            morphing = tuple(
+                source for morph in self._morphs.values() for source in morph.content_sources
+            )
         return tuple(
             record["content_source"] for record in self._content_items
             if record["content_source"] is not None
         ) + ((self._content_source,) if self._content_source is not None else ()) + tuple(
             source for _scenes, sources in self._retired_presentations for source in sources
-        )
+        ) + morphing
 
     @property
     def active_scene_source(self) -> Any:
@@ -825,8 +845,10 @@ class LibobsSceneGraph:
                     self._media_only_source = media_only_source
                     committed = True
 
+            self._staged_scene_layers = candidate_records
             yield PreparedContentPresentation({**self._scenes, **candidates}, commit)
         finally:
+            self._staged_scene_layers = {}
             if not committed:
                 with self._crop_lock:
                     for records in candidate_records.values():
@@ -907,10 +929,18 @@ class LibobsSceneGraph:
         scene = self._scenes.get(scene_id)
         if scene is None:
             return False
-        return bool(route.start(
-            scene_id, scene_source if scene_source is not None else scene.as_source(),
-            model_kind, duration_ms,
-        ))
+        source = scene_source if scene_source is not None else scene.as_source()
+        with self._morph_lock:
+            if self._continues_morph(_MIRROR_BUS, model_kind, source):
+                return True
+            self._finish_morph(_MIRROR_BUS)
+            if model_kind == MERGE_TRANSITION_KIND and self._begin_morph(
+                _MIRROR_BUS, scene_id, route.scene_id, route.scene_source, source, duration_ms,
+                show=lambda morph_source: route.show_morph(scene_id, morph_source, source),
+                complete=route.complete_morph,
+            ):
+                return True
+        return bool(route.start(scene_id, source, model_kind, duration_ms))
 
     def take(self, token: str, *, scene_source: Any = None) -> bool:
         """Execute a prepared switch, animating the program transition."""
@@ -921,9 +951,22 @@ class LibobsSceneGraph:
         scene = self._scenes.get(scene_id)
         if scene is None or self._transition is None:
             return False
+        source = scene_source if scene_source is not None else scene.as_source()
+        with self._morph_lock:
+            if self._continues_morph(_PROGRAM_BUS, model_kind, source):
+                return True
+            self._finish_morph(_PROGRAM_BUS)
+            if model_kind == MERGE_TRANSITION_KIND and self._begin_morph(
+                _PROGRAM_BUS, scene_id, self._active_scene_id, self._active_scene_source,
+                source, duration_ms,
+                show=self._show_program_morph,
+                complete=lambda: self._complete_program_morph(source),
+            ):
+                self._active_scene_id = scene_id
+                self._active_scene_source = source
+                return True
         if model_kind != self._transition_kind:
             self._swap_transition(model_kind)
-        source = scene_source if scene_source is not None else scene.as_source()
         if not self._transition.start(source, duration_ms):
             if getattr(source, "_ptr", source) != getattr(
                 self._active_scene_source, "_ptr", self._active_scene_source,
@@ -942,6 +985,143 @@ class LibobsSceneGraph:
         :meth:`take`. Returns ``False`` for an unknown token, matching
         :meth:`take`."""
         return self._pending.pop(token, None) is not None
+
+    def _continues_morph(self, bus_id: str, model_kind: str, destination: Any) -> bool:
+        """A repeated Take of the scene a merge is already heading to changes nothing."""
+        morph = self._morphs.get(bus_id)
+        return (
+            morph is not None
+            and model_kind == MERGE_TRANSITION_KIND
+            and getattr(morph.destination_source, "_ptr", morph.destination_source)
+            == getattr(destination, "_ptr", destination)
+        )
+
+    def _layers_for_morph(self, scene_id: str) -> list[dict[str, Any]]:
+        records = self._staged_scene_layers.get(scene_id, self._scene_layers.get(scene_id, ()))
+        return [self._layer_with_morph_fit(record) for record in records]
+
+    def _layer_with_morph_fit(self, record: dict[str, Any]) -> dict[str, Any]:
+        # A color source is sized for its own layer, so only stretching keeps it
+        # filling the rectangle on the way to another layer's shape.
+        source_id = record["layer"].get("source_id")
+        definition = next(
+            (
+                source for source in self._document_record.get("sources") or ()
+                if isinstance(source, dict) and source.get("id") == source_id
+            ),
+            {},
+        )
+        if definition.get("type") != "color":
+            return record
+        return dict(record, layer=dict(record["layer"], fit_mode="stretch"))
+
+    def _begin_morph(
+        self,
+        bus_id: str,
+        scene_id: str,
+        origin_scene_id: str | None,
+        origin_source: Any,
+        destination_source: Any,
+        duration_ms: int,
+        *,
+        show: Callable[[Any], None],
+        complete: Callable[[], None],
+    ) -> bool:
+        """Route a morph onto the output. False means the caller should dissolve.
+
+        That covers scenes with nothing in common, and an origin whose layers are
+        not known any more: the output may still be showing an older generation of
+        the scene after another output's content Take rebuilt it.
+        """
+        known_origin = self.scene_source(origin_scene_id) if origin_scene_id else None
+        if known_origin is None or origin_source is None or (
+            getattr(known_origin, "_ptr", known_origin)
+            != getattr(origin_source, "_ptr", origin_source)
+        ):
+            return False
+        plan = plan_scene_morph(
+            self._layers_for_morph(origin_scene_id),
+            self._layers_for_morph(scene_id),
+        )
+        if not any(entry.role is MorphRole.MOVE for entry in plan):
+            return False
+        self._morph_seq += 1
+        morph = LibobsSceneMorph(
+            self._runtime,
+            f"solin-morph-{self._morph_seq}",
+            plan,
+            destination_source,
+            duration_ms,
+            self._apply_morph_geometry,
+            self._forget_morph_item,
+            complete,
+        )
+        try:
+            morph.build()
+        except Exception:  # noqa: BLE001 - libobs boundary; a dissolve still reaches the scene
+            log.warning("Could not build the merge transition", exc_info=True)
+            return False
+        try:
+            show(morph.source)
+        except Exception:  # noqa: BLE001 - libobs boundary; a dissolve still reaches the scene
+            log.warning("Could not route the merge transition", exc_info=True)
+            morph.release()
+            return False
+        try:
+            morph.start()
+        except Exception:  # noqa: BLE001 - libobs boundary; the destination must still show
+            log.warning("Could not start the merge transition", exc_info=True)
+            morph.finish()
+            return True
+        self._morphs[bus_id] = morph
+        if self._morph_thread is None:
+            self._morph_thread = Thread(target=self._run_morphs, name="solin-scene-morph", daemon=True)
+            self._morph_thread.start()
+        return True
+
+    def _apply_morph_geometry(self, item: Any, layer: dict) -> None:
+        self._apply_item_geometry(item, layer, self._runtime.video, self._runtime.ob)
+
+    def _forget_morph_item(self, item: Any) -> None:
+        with self._crop_lock:
+            self._cropped_items.pop(id(item), None)
+
+    def _show_program_morph(self, morph_source: Any) -> None:
+        if self._transition_kind != FALLBACK_TRANSITION_KIND:
+            self._swap_transition(FALLBACK_TRANSITION_KIND)
+        self._transition.set_source(morph_source)
+
+    def _complete_program_morph(self, destination: Any) -> None:
+        if self._transition is not None:
+            self._transition.set_source(destination)
+
+    def _run_morphs(self) -> None:
+        while True:
+            with self._morph_lock:
+                if not self._morphs:
+                    self._morph_thread = None
+                    return
+                self._tick_morphs(time.monotonic())
+            time.sleep(_MORPH_TICK_SECONDS)
+
+    def _tick_morphs(self, now: float) -> None:
+        for bus_id, morph in tuple(self._morphs.items()):
+            try:
+                finished = morph.tick(now)
+            except Exception:  # noqa: BLE001 - libobs boundary; never strand an output mid-morph
+                log.warning("Could not animate the merge transition", exc_info=True)
+                finished = True
+            if finished:
+                self._finish_morph(bus_id)
+
+    def _finish_morph(self, bus_id: str) -> None:
+        morph = self._morphs.pop(bus_id, None)
+        if morph is None:
+            return
+        try:
+            morph.finish()
+        except Exception:  # noqa: BLE001 - libobs boundary
+            log.warning("Could not finish the merge transition", exc_info=True)
 
     def _swap_transition(self, model_kind: str) -> None:
         # Carry the live scene into the prepared transition before routing it.
@@ -967,6 +1147,9 @@ class LibobsSceneGraph:
         A failed detachment propagates without releasing or mutating the graph.
         Its sources may still be rendered by the active output channel.
         """
+        with self._morph_lock:
+            for bus_id in tuple(self._morphs):
+                self._finish_morph(bus_id)
         if self._program_channel is not None:
             self._runtime.set_channel_source(self._program_channel, None)
         self._transitions.reset_sources()

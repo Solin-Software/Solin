@@ -6108,6 +6108,10 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Fifisha kupitia weusi</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Unganisha</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Fungua chanzo ili ukipangie fremu.</translation>
@@ -6956,6 +6960,14 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fifisha kupitia weusi</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Unganisha</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Sogeza vyanzo vya pamoja, fifisha vingine</translation>
     </message>
     <message>
         <location line="-150"/>

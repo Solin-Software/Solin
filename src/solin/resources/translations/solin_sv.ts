@@ -6107,6 +6107,10 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <translation>Toning via svart</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Sammanfoga</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Lås upp källan för att rama in den.</translation>
@@ -6955,6 +6959,14 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Toning via svart</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Sammanfoga</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Flytta delade källor, tona resten</translation>
     </message>
     <message>
         <location line="-150"/>

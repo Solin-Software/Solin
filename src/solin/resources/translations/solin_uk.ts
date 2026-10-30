@@ -6140,6 +6140,10 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Затемнення через чорний</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Злиття</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Розблокуйте джерело, щоб налаштувати кадр.</translation>
@@ -6988,6 +6992,14 @@ Add content, a camera, or another scene.</source>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Затемнення через чорний</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Злиття</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Переміщувати спільні джерела, решту розчиняти</translation>
     </message>
     <message>
         <location line="-150"/>

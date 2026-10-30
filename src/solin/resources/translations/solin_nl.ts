@@ -6108,6 +6108,10 @@ De huidige indeling en bestanden blijven behouden. Openstaande wijzigingen van d
         <translation>Uitvloeien via zwart</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Samenvoegen</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Ontgrendel de bron om deze te kaderen.</translation>
@@ -6956,6 +6960,14 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Uitvloeien via zwart</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Samenvoegen</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Gedeelde bronnen verplaatsen, de rest vervagen</translation>
     </message>
     <message>
         <location line="-150"/>

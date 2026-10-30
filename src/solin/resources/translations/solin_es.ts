@@ -6108,6 +6108,10 @@ Se conservarán la organización actual y los archivos. No se aplicarán los cam
         <translation>Fundido a negro</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Fusionar</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Desbloquear la fuente para encuadrarla.</translation>
@@ -6956,6 +6960,14 @@ Añada contenido, una cámara u otra escena.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fundido a negro</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Fusionar</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Mover las fuentes compartidas y fundir el resto</translation>
     </message>
     <message>
         <location line="-150"/>

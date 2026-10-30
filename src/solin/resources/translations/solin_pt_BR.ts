@@ -6123,6 +6123,10 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <translation>Fade</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Fundir</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Desbloqueie a fonte para enquadrá-la.</translation>
@@ -6425,6 +6429,14 @@ A organização atual e os arquivos serão preservados. As alterações pendente
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fade</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Fundir</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Move as fontes em comum e esmaece as demais</translation>
     </message>
     <message>
         <location line="-150"/>

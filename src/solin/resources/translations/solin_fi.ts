@@ -6108,6 +6108,10 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <translation>Häivytys mustan kautta</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Yhdistä</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Avaa lähteen lukitus rajausta varten.</translation>
@@ -6956,6 +6960,14 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Häivytys mustan kautta</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Yhdistä</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Siirrä yhteiset lähteet, häivytä muut</translation>
     </message>
     <message>
         <location line="-150"/>

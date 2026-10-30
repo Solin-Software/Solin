@@ -6076,6 +6076,10 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Pudar melalui hitam</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Gabungkan</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Buka kunci sumber untuk membingkainya.</translation>
@@ -6924,6 +6928,14 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Pudar melalui hitam</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Gabungkan</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Pindahkan sumber bersama, pudarkan yang lain</translation>
     </message>
     <message>
         <location line="-150"/>

@@ -6076,6 +6076,10 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>黒フェード</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>マージ</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>フレーミングするにはソースのロックを解除してください。</translation>
@@ -6924,6 +6928,14 @@ Add content, a camera, or another scene.</source>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>黒フェード</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>マージ</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>共通のソースを移動し、残りをフェード</translation>
     </message>
     <message>
         <location line="-150"/>

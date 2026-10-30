@@ -6108,6 +6108,10 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <translation>Fade sa itim</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Pagsamahin</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>I-unlock ang source para mai-frame ito.</translation>
@@ -6956,6 +6960,14 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fade sa itim</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Pagsamahin</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Ilipat ang magkaparehong source, i-fade ang iba</translation>
     </message>
     <message>
         <location line="-150"/>
