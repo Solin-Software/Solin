@@ -6304,6 +6304,10 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <translation>Przejście przez czerń</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Scal</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Odblokuj źródło, aby je wykadrować.</translation>
@@ -7152,6 +7156,14 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Przejście przez czerń</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Scal</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Przesuń wspólne źródła, resztę płynnie wyłaniaj i wygaszaj</translation>
     </message>
     <message>
         <location line="-150"/>

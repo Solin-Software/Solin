@@ -11,6 +11,8 @@ TRANSITION_SOURCE_IDS = {
     "cut": "cut_transition",
     "dissolve": "fade_transition",
     "fade_to_black": "fade_to_color_transition",
+    # A merge with nothing to morph is a dissolve; see LibobsSceneGraph.take.
+    "merge": "fade_transition",
 }
 FALLBACK_TRANSITION_KIND = "cut"
 

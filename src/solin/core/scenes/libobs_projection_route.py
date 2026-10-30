@@ -26,6 +26,7 @@ its own strong ref to the last scene until it is pointed at the new one.
 from __future__ import annotations
 
 import logging
+from threading import RLock
 from typing import Any
 
 from solin.core.scenes.libobs_transitions import (
@@ -48,6 +49,10 @@ class LibobsProjectionRoute:
         # Carry the last committed source into a prepared replacement so a kind
         # change preserves the transition's origin.
         self._scene_source: Any = None
+        # The merge currently on screen. Its completion arrives from the morph
+        # thread, and must not undo a change of scene made in the meantime.
+        self._morph_source: Any = None
+        self._lock = RLock()
 
     @property
     def scene_id(self) -> str:
@@ -110,22 +115,44 @@ class LibobsProjectionRoute:
         duration_ms: int,
     ) -> bool:
         """Animate the projection to ``scene_source`` with its own transition."""
-        try:
-            transition = self._transitions.prepared(model_kind)
+        with self._lock:
+            try:
+                transition = self._transitions.prepared(model_kind)
+                self._activate_transition(transition)
+                if not transition.start(scene_source, int(duration_ms)):
+                    # OBS declines an animation whose destination is already live.
+                    # A repeated ready-content Take still successfully keeps it live.
+                    return self._scene_id == scene_id and (
+                        getattr(self._scene_source, "_ptr", self._scene_source)
+                        == getattr(scene_source, "_ptr", scene_source)
+                    )
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.warning("Could not transition the projection to %r", scene_id, exc_info=True)
+                return False
+            self._morph_source = None
+            self._scene_id = scene_id
+            self._scene_source = scene_source
+            return True
+
+    def show_morph(self, scene_id: str, morph_source: Any, scene_source: Any) -> None:
+        """Put a merge on screen; ``scene_source`` is where it is heading."""
+        with self._lock:
+            # Commit the destination last: a kind change must carry the origin
+            # across, or the destination would flash before the merge begins.
+            transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
             self._activate_transition(transition)
-            if not transition.start(scene_source, int(duration_ms)):
-                # OBS declines an animation whose destination is already live.
-                # A repeated ready-content Take still successfully keeps it live.
-                return self._scene_id == scene_id and (
-                    getattr(self._scene_source, "_ptr", self._scene_source)
-                    == getattr(scene_source, "_ptr", scene_source)
-                )
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.warning("Could not transition the projection to %r", scene_id, exc_info=True)
-            return False
-        self._scene_id = scene_id
-        self._scene_source = scene_source
-        return True
+            transition.set_source(morph_source)
+            self._scene_id = scene_id
+            self._scene_source = scene_source
+            self._morph_source = morph_source
+
+    def complete_morph(self) -> None:
+        """Replace the finished merge with its destination, if it is still shown."""
+        with self._lock:
+            if self._morph_source is None or self._transition is None:
+                return
+            self._transition.set_source(self._scene_source)
+            self._morph_source = None
 
     def _inc_showing(self, transition: Any) -> bool:
         """Show-ref the transition so its scenes' sources actually run.
@@ -162,25 +189,30 @@ class LibobsProjectionRoute:
 
     def set_scene(self, scene_id: str, scene_source: Any) -> bool:
         """Cut the projection to ``scene_source`` (None clears it)."""
-        try:
-            transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
-            self._activate_transition(transition)
-            if scene_source is None:
-                transition.clear()
-            else:
-                transition.set_source(scene_source)
-            self._scene_id = scene_id if scene_source is not None else ""
-            self._scene_source = scene_source
-            self._reset_inactive_sources()
-        except Exception:  # noqa: BLE001 - libobs boundary
-            log.warning("Could not point the projection at scene %r", scene_id, exc_info=True)
-            return False
-        return True
+        with self._lock:
+            try:
+                transition = self._transitions.prepared(FALLBACK_TRANSITION_KIND)
+                self._activate_transition(transition)
+                if scene_source is None:
+                    transition.clear()
+                else:
+                    transition.set_source(scene_source)
+                self._scene_id = scene_id if scene_source is not None else ""
+                self._scene_source = scene_source
+                # Only now: a failed cut leaves the merge on screen to finish.
+                self._morph_source = None
+                self._reset_inactive_sources()
+            except Exception:  # noqa: BLE001 - libobs boundary
+                log.warning("Could not point the projection at scene %r", scene_id, exc_info=True)
+                return False
+            return True
 
     def shutdown(self) -> None:
-        transition, self._transition = self._transition, None
-        self._scene_id = ""
-        self._scene_source = None
+        with self._lock:
+            self._morph_source = None
+            transition, self._transition = self._transition, None
+            self._scene_id = ""
+            self._scene_source = None
         if self._showing and transition is not None:
             try:
                 self._dec_showing(transition)

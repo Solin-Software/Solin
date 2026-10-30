@@ -6272,6 +6272,10 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Fondu au noir</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Fusionner</translation>
+    </message>
+    <message>
         <location line="+23"/>
         <source>Unlock the source to frame it.</source>
         <translation>Déverrouiller la source pour la cadrer.</translation>
@@ -7120,6 +7124,14 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location line="+151"/>
         <source>Fade through black</source>
         <translation>Fondu au noir</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Fusionner</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Déplacer les sources communes, fondre le reste</translation>
     </message>
     <message>
         <location line="-150"/>

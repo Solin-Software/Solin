@@ -2584,6 +2584,7 @@ class ScenesBridge(QObject):
             TransitionKind.CUT: self.tr("Cut"),
             TransitionKind.DISSOLVE: self.tr("Dissolve"),
             TransitionKind.FADE_TO_BLACK: self.tr("Fade through black"),
+            TransitionKind.MERGE: self.tr("Merge"),
         }
         label = labels[spec.kind]
         if include_duration and spec.kind is not TransitionKind.CUT:
