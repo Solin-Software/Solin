@@ -134,3 +134,20 @@ def test_start_fails_cleanly_without_galene(store, tmp_path, monkeypatch):
     service.start_meeting()
     assert pump_until(lambda: service.state is MeetingState.FAILED)
     assert "not installed" in service.info["error"]
+
+
+def test_link_stays_the_same_across_meetings(store, tmp_path):
+    service = HostedMeetingService(store, tmp_path, scene_runtime=FakeRuntime())
+    before = service.info
+    group_keys = set()
+    for _ in range(2):
+        assert service.start_meeting()
+        assert pump_until(lambda: service.state is MeetingState.LIVE)
+        live = service.info
+        assert (live["invitationUrl"], live["stageUrl"]) == (before["invitationUrl"], before["stageUrl"])
+        assert service._runtime.core.stage_key == live["stageUrl"].split("#")[1]
+        group_keys.add(service._group_key)
+        service.end_meeting()
+        assert pump_until(lambda: service.state is MeetingState.IDLE, 30)
+        assert service.info["invitationUrl"] == before["invitationUrl"]
+    assert len(group_keys) == 2  # only the link is permanent: each meeting has its own key

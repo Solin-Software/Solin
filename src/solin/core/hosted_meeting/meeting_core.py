@@ -95,7 +95,9 @@ def _hash(secret: str) -> str:
 
 
 class MeetingCore:
-    def __init__(self, effects: CoreEffects, mint: TokenMinter, *, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self, effects: CoreEffects, mint: TokenMinter, *, clock: Callable[[], float] = time.time, stage_key: str = ""
+    ) -> None:
         self._effects = effects
         self._mint = mint
         self._clock = clock
@@ -103,7 +105,7 @@ class MeetingCore:
         self._by_galene: dict[str, str] = {}
         self.mics_locked = True
         self.ended = False
-        self.stage_key = secrets.token_urlsafe(18)
+        self.stage_key = stage_key or secrets.token_urlsafe(18)
 
     # ── browser side ──────────────────────────────────────────────────────
 

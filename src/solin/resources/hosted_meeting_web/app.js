@@ -240,6 +240,9 @@ function connectGalene(token) {
 // program, so attendees never download them separately (Galene matches a stream's
 // label first, then '').
 const PARTICIPANT_LABEL = 'participant';
+// 360p like the program's default quality: the hall shows it in a scene box.
+const PARTICIPANT_VIDEO = { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30 } };
+const PARTICIPANT_VIDEO_BITRATE = 500000;
 
 function requestMedia() {
   if (!sc) return;
@@ -384,13 +387,16 @@ function stopMic() {
 async function startCam() {
   if (!present || !sc || upCam || !partHolder) return;
   try {
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    camStream = await navigator.mediaDevices.getUserMedia({ video: PARTICIPANT_VIDEO, audio: false });
   } catch (e) { return; }
   upCam = sc.newUpStream();
   upCam.label = PARTICIPANT_LABEL;
   upCam.setStream(camStream);
   upCam.onclose = () => { upCam = null; };
-  for (const t of camStream.getVideoTracks()) upCam.pc.addTransceiver(t, { direction: 'sendonly', streams: [camStream] });
+  for (const t of camStream.getVideoTracks()) {
+    upCam.pc.addTransceiver(t, { direction: 'sendonly', streams: [camStream],
+                                 sendEncodings: [{ maxBitrate: PARTICIPANT_VIDEO_BITRATE }] });
+  }
   updatePartControls();
 }
 

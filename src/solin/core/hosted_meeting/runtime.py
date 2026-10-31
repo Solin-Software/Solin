@@ -45,7 +45,9 @@ from .tokens import OPERATOR, sign_token
 log = logging.getLogger(__name__)
 
 _MAX_BODY = 4096
-_SNAPSHOT_DEBOUNCE_S = 0.15
+# Coalesces bursts of Galene user events; short enough that the console reacts to a
+# click without a visible delay (the console updates its rows in place).
+_SNAPSHOT_DEBOUNCE_S = 0.05
 _OPERATOR_RETRY_S = 2.0
 
 _CSP = (
@@ -82,6 +84,7 @@ class MeetingRuntimeConfig:
     galene_port: int
     web_port: int
     bind_host: str = "0.0.0.0"
+    stage_key: str = ""
     assets_dir: Path = field(default_factory=default_assets_dir)
 
     @property
@@ -214,7 +217,7 @@ class MeetingRuntime:
 
     async def _main(self) -> None:
         self._stopping = asyncio.Event()
-        self.core = MeetingCore(_Effects(self), self._mint)
+        self.core = MeetingCore(_Effects(self), self._mint, stage_key=self.config.stage_key)
         app = web.Application(client_max_size=_MAX_BODY, middlewares=[self._security_headers])
         slug = self.config.slug
         app.router.add_get(f"/j/{slug}", self._page("index.html"))

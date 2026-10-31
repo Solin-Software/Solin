@@ -231,6 +231,8 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
             await ana.evaluate("startMic().then(() => true)")
             await ana.evaluate("document.getElementById('part-cam').click(); true")
             await ana.wait("upCam !== null && upMic !== null")
+            report["ana_camera"] = await ana.evaluate(
+                "(() => { const s = camStream.getVideoTracks()[0].getSettings(); return [s.width, s.height]; })()")
 
             # Bruno: Ana's voice as a hidden <audio>; the main video untouched (no program here).
             await bruno.wait("voices.size === 1")
@@ -263,6 +265,7 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
     assert video_events and video_events[0]["slot"] == 1 and video_events[0]["user"] == "Ana", bridge_events
     assert len(packets) >= 20, f"only {len(packets)} RTP packets reached slot 1"
     assert all(p[1] & 0x7F == 96 for p in packets)  # rewritten to the slot's payload type
+    assert report["ana_camera"] == [640, 360], report  # part-holder cameras go up at 360p
     assert report["bruno_audio"] == [{"hidden": True, "audio": 1, "video": 0}], report
     assert report["bruno_program_src"] is True, report
     assert [d["label"] for d in report["bruno_down_labels"]] == ["camera"], report  # Ana's mic only

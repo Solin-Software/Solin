@@ -20,11 +20,9 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import secrets
 import socket
 import threading
-import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -65,6 +63,7 @@ class MeetingInfo:
     invitation_url: str = ""
     lan_url: str = ""
     stage_url: str = ""
+    link_scope: str = "lan"        # lan (this network only) / hub (reachable from anywhere)
     output: str = "idle"           # program output: idle/starting/live/reconnecting/failed
     tunnel: str = "off"            # off/connecting/online/failed
     galene: str = "stopped"
@@ -76,17 +75,11 @@ class MeetingInfo:
     def as_dict(self) -> dict[str, Any]:
         return {
             "state": self.state.value, "slug": self.slug, "invitationUrl": self.invitation_url,
-            "lanUrl": self.lan_url, "stageUrl": self.stage_url, "output": self.output,
+            "lanUrl": self.lan_url, "stageUrl": self.stage_url, "linkScope": self.link_scope, "output": self.output,
             "tunnel": self.tunnel, "galene": self.galene, "commenterAudio": self.commenter_audio,
             "participantVideo": {str(slot): user for slot, user in sorted(self.participant_video.items())},
             "error": self.error, "warnings": list(self.warnings),
         }
-
-
-def meeting_slug(hall_name: str) -> str:
-    base = unicodedata.normalize("NFKD", hall_name or "meeting").encode("ascii", "ignore").decode("ascii")
-    base = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")[:24] or "meeting"
-    return f"{base}-{secrets.token_hex(4)}"
 
 
 def lan_address() -> str:
@@ -117,7 +110,7 @@ class HostedMeetingService(QObject):
         self._settings = settings
         self._data_dir = Path(data_dir) / "hosted_meeting"
         self._scene_runtime = scene_runtime
-        self._info = MeetingInfo()
+        self._info = MeetingInfo(**self._link_fields())
         self._lock = threading.RLock()
         self._galene: GaleneServer | None = None
         self._runtime: MeetingRuntime | None = None
@@ -148,6 +141,32 @@ class HostedMeetingService(QObject):
     def available() -> bool:
         return find_helper(Helper.GALENE) is not None
 
+    def _link_fields(self, *, use_hub: bool = True) -> dict[str, str]:
+        """This hall's permanent links, which exist with or without a meeting running."""
+
+        settings = self._settings
+        slug, stage_key = settings.meeting_link()
+        hub = settings.hub() if use_hub else None
+        lan = f"http://{lan_address()}:{settings.web_port()}"
+        origin = hub.public_origin if hub else lan
+        return {"slug": slug, "lan_url": f"{lan}/j/{slug}", "invitation_url": f"{origin}/j/{slug}",
+                "stage_url": f"{origin}/stage/{slug}#{stage_key}", "link_scope": "hub" if hub else "lan"}
+
+    def refresh_links(self) -> None:
+        """Show the current address after a settings change; a running meeting keeps its own."""
+
+        if self.state in (MeetingState.IDLE, MeetingState.FAILED):
+            self._update(**self._link_fields())
+
+    def new_link(self) -> bool:
+        """Replace the permanent link (not during a meeting: attendees are using it)."""
+
+        if self.state not in (MeetingState.IDLE, MeetingState.FAILED):
+            return False
+        self._settings.new_meeting_link()
+        self.refresh_links()
+        return True
+
     def _update(self, **changes: Any) -> None:
         with self._lock:
             for key, value in changes.items():
@@ -173,7 +192,7 @@ class HostedMeetingService(QObject):
         with self._lock:
             if self._info.state in (MeetingState.STARTING, MeetingState.LIVE, MeetingState.ENDING):
                 return False
-            self._info = MeetingInfo(state=MeetingState.STARTING)
+            self._info = MeetingInfo(state=MeetingState.STARTING, **self._link_fields())
         self.info_changed.emit(self.info)
         self._worker = threading.Thread(target=self._start_worker, name="solin-meeting-start", daemon=True)
         self._worker.start()
@@ -197,7 +216,7 @@ class HostedMeetingService(QObject):
         except GaleneUnavailable as error:
             raise RuntimeError(str(error)) from error
         title = settings.hall_name() or "Meeting"
-        slug = meeting_slug(title)
+        slug, stage_key = settings.meeting_link()
         self._group_key = new_group_key()
         self._galene.layout.clear_groups()
         self._galene.layout.write_group(slug, self._group_key, display_name=title)
@@ -205,34 +224,26 @@ class HostedMeetingService(QObject):
         port = settings.web_port()
         self._runtime = MeetingRuntime(
             MeetingRuntimeConfig(slug=slug, title=title, group_key=self._group_key,
-                                 galene_port=self._galene.port, web_port=port),
+                                 galene_port=self._galene.port, web_port=port, stage_key=stage_key),
             on_snapshot=self._on_snapshot,
         )
         self._runtime.start()
-        assert self._runtime.core is not None
-        stage_key = self._runtime.core.stage_key
-        lan = f"http://{lan_address()}:{port}"
-        self._update(slug=slug, lan_url=f"{lan}/j/{slug}", invitation_url=f"{lan}/j/{slug}",
-                     stage_url=f"{lan}/stage/{slug}#{stage_key}")
 
         if hub is not None:
-            self._start_tunnel(hub, port, slug, stage_key)
+            self._start_tunnel(hub, port)
         self._start_receiver(slug)
         self._main(lambda: self._start_output(slug))
         self._update(state=MeetingState.LIVE)
 
-    def _start_tunnel(self, hub: HubConnection, port: int, slug: str, stage_key: str) -> None:
+    def _start_tunnel(self, hub: HubConnection, port: int) -> None:
         binary = find_helper(Helper.FRPC)
         if binary is None:
             self._warn("The hub tunnel (frpc) is not installed; the meeting is reachable on this network only.")
-            self._update(tunnel="failed")
+            self._update(tunnel="failed", **self._link_fields(use_hub=False))
             return
-        origin = hub.public_origin
 
         def on_state(state: TunnelState, detail: str) -> None:
             self._update(tunnel=state.value)
-            if state is TunnelState.ONLINE:
-                self._update(invitation_url=f"{origin}/j/{slug}", stage_url=f"{origin}/stage/{slug}#{stage_key}")
 
         self._tunnel = FrpTunnel(binary, self._data_dir / "frpc", hub, local_port=port, on_state=on_state)
         self._update(tunnel="connecting")

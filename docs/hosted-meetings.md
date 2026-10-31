@@ -102,6 +102,10 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
 - auto-reconnect with backoff, plus an immediate reconnect when visible again;
 - media session, optional screen wake lock.
 
+### Permanent link
+
+Each hall has one invitation link and one stage page link, created once and stored in the profile (`HostedMeetingSettingsStore.meeting_link`). The console shows them before any meeting starts, so they can be shared in advance; "New link" replaces them while no meeting is running. Only the link is permanent: every meeting still has a new Galene key and an empty lobby, so an old link never skips admission. Without a hub the link uses the computer's LAN address, so it only works on that network, while a meeting is running.
+
 ### Hub (VPS, run by the project or self-hosted)
 
 Adapted from the S5 bundle (`spikes/hosted-meetings/s5_hub/`):

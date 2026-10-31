@@ -6,7 +6,7 @@ import logging
 import weakref
 from typing import Any, TYPE_CHECKING
 
-from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QWidget
 from PySide6.QtCore import QObject, QPoint, QTimer, Signal, QEvent, Qt
 
 from .controllers.auto_key_projection_controller import AutoKeyProjectionController
@@ -206,6 +206,8 @@ if TYPE_CHECKING:
 
 
 class MainWindow(QWidget):
+    _MEETING_DOCK_WIDTH = 340
+
     first_frame_presented = Signal()
     _benchmark_close_requested = Signal()
     _auto_share_finished = Signal(int, bool, bool)
@@ -277,6 +279,10 @@ class MainWindow(QWidget):
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(0)
         self._scenes_dock: QWidget | None = None
+        self._meeting_dock: QWidget | None = None
+        self._content_row = QHBoxLayout()
+        self._content_row.setContentsMargins(0, 0, 0, 0)
+        self._content_row.setSpacing(0)
         self._construction_cleanup = ExitStack()
         self._construction_cleanup.callback(self._abort_partial_resources)
         self._construction_finalized = False
@@ -1564,7 +1570,8 @@ class MainWindow(QWidget):
     def _set_content_widget(self, widget: QWidget) -> None:
         if self._content_layout.count():
             raise RuntimeError("Main window content can only be installed once.")
-        self._content_layout.addWidget(widget)
+        self._content_row.addWidget(widget, 1)
+        self._content_layout.addLayout(self._content_row, 1)
 
     def scenes_dock_container(self) -> QWidget:
         """The strip below the page content that hosts attached panels.
@@ -1584,6 +1591,20 @@ class MainWindow(QWidget):
             self._content_layout.addWidget(container)
             self._scenes_dock = container
         return self._scenes_dock
+
+    def meeting_dock_container(self) -> QWidget:
+        """The thin strip right of the page content that hosts the Live meeting console."""
+        if self._meeting_dock is None:
+            container = QWidget(self)
+            container.setObjectName("MainWindowRightDock")
+            container.setFixedWidth(self._MEETING_DOCK_WIDTH)
+            dock_layout = QVBoxLayout(container)
+            dock_layout.setContentsMargins(0, 0, 0, 0)
+            dock_layout.setSpacing(0)
+            container.hide()
+            self._content_row.addWidget(container)
+            self._meeting_dock = container
+        return self._meeting_dock
 
     def _install_ui_resources(self, resources: MainWindowUiResources) -> None:
         self.stack = resources.stack
@@ -1656,20 +1677,37 @@ class MainWindow(QWidget):
         def sync(*_args) -> None:
             mode = self._hosted_meeting_settings.provider() is MeetingProvider.SOLIN
             toolbar.set_hosted_meeting(mode, service.state is MeetingState.LIVE)
+            self._sync_meeting_dock(mode)
 
         service.info_changed.connect(sync)
         domain = getattr(getattr(self, "settings_widget", None), "meeting_hosting", None)
         if domain is not None:
             domain.provider_changed.connect(sync)
+            domain.links_changed.connect(service.refresh_links)
         toolbar.hosted_meeting_requested.connect(self._open_meeting_console)
         sync()
 
-    def _open_meeting_console(self) -> None:
+    def _ensure_meeting_console(self):
         if self._meeting_console is None:
             from .widgets.meeting_console_window import MeetingConsoleWindow
 
-            self._meeting_console = MeetingConsoleWindow(self._hosted_meeting, self._window_host)
-        self._meeting_console.present()
+            self._meeting_console = MeetingConsoleWindow(
+                self._hosted_meeting, self._window_host, dock_host=self.meeting_dock_container,
+            )
+            self._meeting_console.docked_changed.connect(self._hosted_meeting_settings.set_panel_docked)
+        return self._meeting_console
+
+    def _open_meeting_console(self) -> None:
+        console = self._ensure_meeting_console()
+        if not console.docked:  # attached to the window: already on screen
+            console.present()
+
+    def _sync_meeting_dock(self, solin_hosts_meetings: bool) -> None:
+        """Restore the attached console, and keep it off screen while Zoom is the provider."""
+        if solin_hosts_meetings and self._hosted_meeting_settings.panel_docked():
+            self._ensure_meeting_console().set_docked(True)
+        if self._meeting_dock is not None:
+            self._meeting_dock.setVisible(solin_hosts_meetings and self._meeting_dock.layout().count() > 0)
 
     def _apply_global_stylesheet(self, stylesheet: str) -> None:
         app = QApplication.instance()
@@ -1701,6 +1739,7 @@ class MainWindow(QWidget):
             getattr(self, "proj_bar", None),
             getattr(self, "_quick_toolbar", None),
             getattr(self, "_monitor_popup", None),
+            getattr(self, "_meeting_console", None),
             getattr(self, "_profile_avatar_btn", None),
         ):
             if widget is None:

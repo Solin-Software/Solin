@@ -48,6 +48,7 @@ class HostedMeetingSettings(SettingsDomain):
     """Profile-scoped hosted-meeting configuration."""
 
     provider_changed = Signal(str)
+    links_changed = Signal()
     _devices_loaded = Signal(object)
 
     def __init__(self, store: HostedMeetingSettingsStore, parent: QObject | None = None) -> None:
@@ -96,6 +97,7 @@ class HostedMeetingSettings(SettingsDomain):
             helpersStatus=(_tr("Missing components: {names}").format(names=", ".join(missing)) if missing
                            else _tr("All meeting components are installed")),
         )
+        self.links_changed.emit()
 
     def _device_options(self, current: dict[str, str]) -> list[dict[str, str]]:
         options = [{"value": "", "label": _tr("System default output")}]

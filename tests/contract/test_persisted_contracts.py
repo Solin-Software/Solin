@@ -115,6 +115,8 @@ EXPECTED_SETTINGS_KEYS = {
     "HOSTED_MEETING_PROVIDER": "hosted_meeting/provider",
     "HOSTED_MEETING_HALL_NAME": "hosted_meeting/hall_name",
     "HOSTED_MEETING_QUALITY": "hosted_meeting/quality",
+    "HOSTED_MEETING_LINK": "hosted_meeting/link",
+    "HOSTED_MEETING_PANEL_DOCKED": "hosted_meeting/panel_docked",
     "HOSTED_MEETING_HALL_FEED": "hosted_meeting/hall_feed",
     "HOSTED_MEETING_REMOTE_AUDIO_DEVICE": "hosted_meeting/remote_audio_device",
     "HOSTED_MEETING_WEB_PORT": "hosted_meeting/web_port",

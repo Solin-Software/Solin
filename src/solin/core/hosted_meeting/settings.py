@@ -16,6 +16,8 @@ from __future__ import annotations
 import base64
 import json
 import re
+import secrets
+import unicodedata
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from typing import Any
@@ -26,6 +28,14 @@ from solin.core.integrations.automation.settings import _ProfilePrefsSettings
 HUB_CODE_PREFIX = "solin-hub:"
 DEFAULT_WEB_PORT = 8780
 _HALL = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{3,63}$")
+_STAGE_KEY = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
+
+
+def meeting_slug(hall_name: str) -> str:
+    base = unicodedata.normalize("NFKD", hall_name or "meeting").encode("ascii", "ignore").decode("ascii")
+    base = re.sub(r"[^a-z0-9]+", "-", base.lower()).strip("-")[:24] or "meeting"
+    return f"{base}-{secrets.token_hex(6)}"
 
 
 class MeetingProvider(StrEnum):
@@ -127,6 +137,33 @@ class HostedMeetingSettingsStore(_ProfilePrefsSettings):
 
     def set_quality(self, quality: MeetingQuality) -> None:
         self.settings.set_value(SettingsKey.HOSTED_MEETING_QUALITY, MeetingQuality(quality).value)
+
+    def meeting_link(self) -> tuple[str, str]:
+        """This hall's permanent (slug, stage key), created on first use.
+
+        They stay the same from meeting to meeting so the invitation can be shared in
+        advance. The lobby still decides who gets in, and each meeting has its own
+        Galene key.
+        """
+        data = self._json(SettingsKey.HOSTED_MEETING_LINK)
+        slug, stage_key = data.get("slug"), data.get("stage_key")
+        if isinstance(slug, str) and isinstance(stage_key, str) and _SLUG.match(slug) and _STAGE_KEY.match(stage_key):
+            return slug, stage_key
+        return self.new_meeting_link()
+
+    def new_meeting_link(self) -> tuple[str, str]:
+        """Replace the permanent link; the previous one stops working."""
+        slug, stage_key = meeting_slug(self.hall_name()), secrets.token_urlsafe(18)
+        self.settings.set_value(SettingsKey.HOSTED_MEETING_LINK, json.dumps({"slug": slug, "stage_key": stage_key}))
+        return slug, stage_key
+
+    def panel_docked(self) -> bool:
+        """Whether the Live meeting console was left attached to the main window."""
+        value = self.settings.value(SettingsKey.HOSTED_MEETING_PANEL_DOCKED, False)
+        return value if isinstance(value, bool) else str(value).strip().lower() in {"1", "true", "yes"}
+
+    def set_panel_docked(self, docked: bool) -> None:
+        self.settings.set_value(SettingsKey.HOSTED_MEETING_PANEL_DOCKED, bool(docked))
 
     def _json(self, key: str) -> dict[str, str]:
         try:
