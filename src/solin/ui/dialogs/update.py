@@ -1,4 +1,4 @@
-"""Release notes and explicit download/install actions for verified packages."""
+"""Release notes and verified package update actions."""
 
 from __future__ import annotations
 
@@ -151,7 +151,7 @@ QProgressBar::chunk {{
 
 
 class UpdateDialog(QDialog):
-    """Non-modal presentation with cancellable download and explicit installation."""
+    """Non-modal update flow with automatic installation when supported."""
 
     installation_stopped = Signal()
 
@@ -272,6 +272,7 @@ class UpdateDialog(QDialog):
             browser = _ReleaseNotesBrowser()
             browser.setObjectName("changelog")
             browser.setReadOnly(True)
+            browser.setOpenLinks(False)
             browser.setOpenExternalLinks(False)
             browser.setMinimumHeight(150)
             browser.setMaximumHeight(300)
@@ -310,7 +311,13 @@ class UpdateDialog(QDialog):
         self._btn_cancel.clicked.connect(self._on_cancel)
         btn_row.addWidget(self._btn_cancel)
 
-        self._btn_action = QPushButton(self.tr("Download"))
+        from solin.core.remote.update_policy import UpdateAction
+
+        self._btn_action = QPushButton(
+            self.tr("Update now")
+            if self._info.action == UpdateAction.INSTALL
+            else self.tr("Download")
+        )
 
         self._btn_action.setObjectName("btn_primary")
         self._btn_action.clicked.connect(self._on_action)
@@ -373,9 +380,7 @@ class UpdateDialog(QDialog):
         self._downloader = None
         self._package_path = path
         self._progress_bar.setValue(100)
-        self._status_label.setText(self.tr("Download verified. Ready to install."))
         self._btn_cancel.setEnabled(True)
-        self._btn_action.setEnabled(True)
         self._btn_action.setText(
             self.tr("Install and restart")
             if self._info.action == UpdateAction.INSTALL
@@ -383,6 +388,13 @@ class UpdateDialog(QDialog):
             if self._info.action == UpdateAction.OPEN
             else self.tr("Show in folder")
         )
+        if self._info.action == UpdateAction.INSTALL:
+            self._status_label.setText(self.tr("Completed. Applying update…"))
+            self._open_package()
+            return
+
+        self._status_label.setText(self.tr("Download verified. Ready to install."))
+        self._btn_action.setEnabled(True)
 
     def _on_download_failed(self, msg: str) -> None:
         if self._invalidated:
