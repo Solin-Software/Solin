@@ -254,7 +254,8 @@ def _show_newest_frame(source: Any) -> None:
     try:
         from pylibobs._ffi import get_lib
 
-        get_lib().obs_source_set_async_unbuffered(source._ptr, True)
+        lib: Any = get_lib()
+        lib.obs_source_set_async_unbuffered(source._ptr, True)
     except Exception:  # noqa: BLE001 - optional native tuning
         log.warning("Could not make the IP camera source unbuffered", exc_info=True)
 
