@@ -1,9 +1,14 @@
-from PySide6.QtCore import QPoint, QObject, Qt, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QEvent, QPoint, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QTextDocument
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 from dataclasses import replace
+from contextlib import nullcontext
+import gc
+from hashlib import sha256
 from threading import Event
+from types import SimpleNamespace
+import weakref
 import pytest
 from scripts.release_contributors import Change, ContributionRange, Credits, RelatedIssue
 from solin.core.releases.channel import UpdateChannel
@@ -19,41 +24,78 @@ from tests._qt import wait_until
 _APP = QApplication.instance() or QApplication([])
 
 
-@pytest.mark.parametrize("cancel", [False, True])
-def test_installer_waits_for_download_thread_to_stop(monkeypatch, tmp_path, cancel):
-    emitted, release = Event(), Event()
+def test_cancelled_download_survives_its_owner_until_thread_exits(monkeypatch, tmp_path):
+    entered, release = Event(), Event()
 
-    class Transfer(QObject):
-        progress = Signal(int)
-        succeeded = Signal(str)
-        failed = Signal(str)
-        done = Signal()
-
-        def __init__(self, *args):
-            super().__init__()
-
+    class Transfer(update_download._Transfer):
         @Slot()
         def run(self):
-            self.succeeded.emit("Solin.exe")
+            entered.set()
+            release.wait(5)
+
+    monkeypatch.setattr(update_download, "_Transfer", Transfer)
+    instance = dialog()
+    worker = update_download.UpdateDownloadWorker(instance._info, instance, directory=tmp_path)
+    reference = weakref.ref(worker)
+    destroyed = []
+    worker.destroyed.connect(lambda: destroyed.append(True))
+    try:
+        worker.start()
+        wait_until(entered.is_set, description="transfer start")
+        worker.abort()
+        instance.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        del worker
+        gc.collect()
+        assert reference() is not None
+        assert destroyed == []
+    finally:
+        release.set()
+        wait_until(
+            lambda: reference() is None or reference()._thread is None,
+            description="cancelled download shutdown",
+        )
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert destroyed == [True]
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.parametrize("valid_package", [False, True])
+def test_download_delivers_result_after_thread_stops(monkeypatch, tmp_path, cancel, valid_package):
+    emitted, release = Event(), Event()
+
+    class Transfer(update_download._Transfer):
+        @Slot()
+        def run(self):
+            super().run()
             emitted.set()
             release.wait(5)
-            self.done.emit()
 
+    content = b"abc" if valid_package else b"abd"
+    response = SimpleNamespace(status_code=200, content_length=3, iter_bytes=lambda: iter([content]))
+    monkeypatch.setattr(update_download, "stream_get", lambda *args, **kwargs: nullcontext(response))
     monkeypatch.setattr(update_download, "_Transfer", Transfer)
     launches = []
     instance = dialog(launch=launches.append)
+    instance._info = replace(
+        instance._info, asset=replace(instance._info.asset, sha256=sha256(b"abc").hexdigest()),
+    )
     worker = update_download.UpdateDownloadWorker(instance._info, instance, directory=tmp_path)
+    failures = []
+    worker.failed.connect(failures.append)
     instance._downloader_factory = lambda *args: worker
     try:
         instance._on_action()
         wait_until(emitted.is_set, description="transfer success")
         QTest.qWait(50)
         assert launches == []
+        assert failures == []
         if cancel:
             assert instance.invalidate()
         release.set()
         wait_until(lambda: worker._thread is None, description="download thread shutdown")
-        assert launches == ([] if cancel else ["Solin.exe"])
+        assert launches == ([str(tmp_path / "Solin.exe")] if valid_package and not cancel else [])
+        assert bool(failures) is (not valid_package and not cancel)
     finally:
         release.set()
         if worker._thread is not None:
