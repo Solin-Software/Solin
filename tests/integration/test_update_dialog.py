@@ -1,6 +1,7 @@
-from PySide6.QtGui import QTextDocument
+from PySide6.QtCore import QPoint, QObject, Qt, Signal
+from PySide6.QtGui import QDesktopServices, QTextDocument
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QObject, Signal
 from dataclasses import replace
 from scripts.release_contributors import Change, ContributionRange, Credits, RelatedIssue
 from solin.core.releases.channel import UpdateChannel
@@ -14,27 +15,72 @@ from solin.ui.dialogs.update import UpdateDialog
 _APP = QApplication.instance() or QApplication([])
 
 
-def dialog(action=UpdateAction.INSTALL, launch=lambda path: None):
+def dialog(action=UpdateAction.INSTALL, launch=lambda path: None, markdown="- Changes"):
     version = ReleaseVersion.parse("26.32.0")
     info = UpdateInfo(
         action,
         version,
         ReleaseAsset("windows", "x86_64", "installer", "Solin.exe", 3, "a" * 64, "10"),
         "https://github.com/file",
-        (ReleaseNote(version, "- Changes", "en"),),
+        (ReleaseNote(version, markdown, "en"),),
     )
     return UpdateDialog(info, downloader_factory=lambda *args: None, launch_installer=launch)
 
 
-def test_download_completion_requires_explicit_installation():
+def test_download_completion_starts_confirmed_installation():
     launches = []
     instance = dialog(launch=launches.append)
     instance._on_download_done("Solin.exe")
-    assert launches == []
+    assert launches == ["Solin.exe"]
     assert instance._btn_action.text() == "Install and restart"
+    assert not instance._btn_action.isEnabled()
     assert instance._btn_cancel.isEnabled()
     instance._on_action()
     assert launches == ["Solin.exe"]
+
+
+def test_assisted_package_download_still_waits_for_user_action():
+    launches = []
+    instance = dialog(UpdateAction.REVEAL, launch=launches.append)
+    instance._on_download_done("Solin.exe")
+    assert launches == []
+    assert instance._btn_action.text() == "Show in folder"
+    assert instance._btn_action.isEnabled()
+
+
+def test_changelog_link_opens_externally_without_replacing_notes(monkeypatch, request):
+    url = "https://github.com/Solin-Software/Solin/pull/1"
+    instance = dialog(markdown=f"[PR #1]({url})\n\nStill here")
+    request.addfinalizer(instance.deleteLater)
+    browser = instance._changelog_browser
+    assert browser is not None
+    instance.show()
+    _APP.processEvents()
+
+    point = next(
+        (
+            QPoint(x, y)
+            for y in range(browser.viewport().height())
+            for x in range(browser.viewport().width())
+            if browser.anchorAt(QPoint(x, y)) == url
+        ),
+        None,
+    )
+    assert point is not None
+    before = browser.toPlainText()
+    opened = []
+    monkeypatch.setattr(
+        QDesktopServices,
+        "openUrl",
+        lambda target: opened.append(target.toString()) or True,
+    )
+
+    QTest.mouseClick(browser.viewport(), Qt.MouseButton.LeftButton, pos=point)
+    _APP.processEvents()
+
+    assert opened == [url]
+    assert browser.toPlainText() == before
+    assert browser.source().isEmpty()
 
 
 def test_dialog_renders_notes_but_blocks_images():
@@ -86,7 +132,6 @@ def test_installer_failure_allows_retry():
     stopped = []
     instance.installation_stopped.connect(lambda: stopped.append(True))
     instance._on_download_done("Solin.exe")
-    instance._on_action()
     assert instance._btn_action.isEnabled()
     assert instance._status_label.text() == "Failed to launch installer."
     assert stopped == [True]
@@ -156,7 +201,6 @@ def test_confirmed_installation_is_not_invalidated_or_launched_twice(request):
     instance = dialog(launch=launches.append)
     request.addfinalizer(instance.deleteLater)
     instance._on_download_done("Solin.exe")
-    instance._on_action()
     assert not instance.invalidate()
     instance._on_action()
     assert launches == ["Solin.exe"]
