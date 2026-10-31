@@ -9,20 +9,20 @@ import time
 from pathlib import Path
 from threading import Event
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QObject, QThread, Signal, Slot
 
 from solin.core.network.http import HttpError, stream_get
 from solin.core.remote.update_policy import UpdateInfo
 
 
-class _Transfer(QObject):
+class _Transfer(QThread):
     progress = Signal(int)
     succeeded = Signal(str)
     failed = Signal(str)
-    done = Signal()
-
-    def __init__(self, info: UpdateInfo, directory: Path, cancelled: Event) -> None:
-        super().__init__()
+    def __init__(
+        self, info: UpdateInfo, directory: Path, cancelled: Event, parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
         self.info = info
         self.directory = directory
         self.cancelled = cancelled
@@ -76,7 +76,6 @@ class _Transfer(QObject):
                     partial.unlink(missing_ok=True)
                 except OSError:
                     pass
-            self.done.emit()
 
 
 class UpdateDownloadWorker(QObject):
@@ -90,42 +89,46 @@ class UpdateDownloadWorker(QObject):
         self._thread: QThread | None = None
         self._info = info
         self._directory = directory
-        self._transfer: _Transfer | None = None
         self._aborted = False
+        self._result: tuple[bool, str] | None = None
 
     def start(self) -> None:
         if self._thread is not None:
             return
-        self._transfer = _Transfer(self._info, self._directory, self._cancelled)
-        self._thread = QThread(self)
-        self._transfer.moveToThread(self._thread)
-        self._thread.started.connect(self._transfer.run)
-        self._transfer.progress.connect(self.progress)
-        self._transfer.succeeded.connect(self._success)
-        self._transfer.failed.connect(self._failure)
-        self._transfer.done.connect(self._transfer.deleteLater)
-        self._transfer.done.connect(self._thread.quit)
+        # No event-driven Qt resources are used by the blocking transfer. Native
+        # completion must follow run() returning, including its Python cleanup.
+        thread = _Transfer(self._info, self._directory, self._cancelled, self)
+        self._thread = thread
+        thread.progress.connect(self.progress)
+        thread.succeeded.connect(self._success)
+        thread.failed.connect(self._failure)
         self._thread.finished.connect(self._cleanup)
         self._thread.start()
 
     def abort(self) -> None:
         self._aborted = True
         self._cancelled.set()
-        # Parent dialogs may be destroyed while a socket reaches its short timeout.
-        self.setParent(None)
+        # Keep a Qt owner while a cancelled socket reaches its short timeout,
+        # even if the dialog and its last Python reference disappear meanwhile.
+        self.setParent(QCoreApplication.instance())
 
     def _success(self, path: str) -> None:
-        if not self._aborted:
-            self.finished.emit(path)
+        self._result = (True, path)
 
     def _failure(self, message: str) -> None:
-        if not self._aborted:
-            self.failed.emit(message)
+        self._result = (False, message)
 
     @Slot()
     def _cleanup(self) -> None:
         if self._thread:
             self._thread.deleteLater()
         self._thread = None
-        self._transfer = None
+        result = self._result
+        self._result = None
+        if result is not None and not self._aborted:
+            success, value = result
+            if success:
+                self.finished.emit(value)
+            else:
+                self.failed.emit(value)
         self.deleteLater()
