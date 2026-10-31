@@ -92,6 +92,7 @@ class UpdateDownloadWorker(QObject):
         self._directory = directory
         self._transfer: _Transfer | None = None
         self._aborted = False
+        self._result: tuple[bool, str] | None = None
 
     def start(self) -> None:
         if self._thread is not None:
@@ -115,12 +116,10 @@ class UpdateDownloadWorker(QObject):
         self.setParent(None)
 
     def _success(self, path: str) -> None:
-        if not self._aborted:
-            self.finished.emit(path)
+        self._result = (True, path)
 
     def _failure(self, message: str) -> None:
-        if not self._aborted:
-            self.failed.emit(message)
+        self._result = (False, message)
 
     @Slot()
     def _cleanup(self) -> None:
@@ -128,4 +127,12 @@ class UpdateDownloadWorker(QObject):
             self._thread.deleteLater()
         self._thread = None
         self._transfer = None
+        result = self._result
+        self._result = None
+        if result is not None and not self._aborted:
+            success, value = result
+            if success:
+                self.finished.emit(value)
+            else:
+                self.failed.emit(value)
         self.deleteLater()

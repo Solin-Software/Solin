@@ -1,8 +1,10 @@
-from PySide6.QtCore import QPoint, QObject, Qt, Signal
+from PySide6.QtCore import QPoint, QObject, Qt, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QTextDocument
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 from dataclasses import replace
+from threading import Event
+import pytest
 from scripts.release_contributors import Change, ContributionRange, Credits, RelatedIssue
 from solin.core.releases.channel import UpdateChannel
 from solin.core.releases.manifest import (
@@ -11,8 +13,52 @@ from solin.core.releases.manifest import (
 from solin.core.releases.version import ReleaseVersion
 from solin.core.remote.update_policy import ReleaseNote, UpdateAction, UpdateInfo, evaluate_update
 from solin.ui.dialogs.update import UpdateDialog
+from solin.core.remote import update_download
+from tests._qt import wait_until
 
 _APP = QApplication.instance() or QApplication([])
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_installer_waits_for_download_thread_to_stop(monkeypatch, tmp_path, cancel):
+    emitted, release = Event(), Event()
+
+    class Transfer(QObject):
+        progress = Signal(int)
+        succeeded = Signal(str)
+        failed = Signal(str)
+        done = Signal()
+
+        def __init__(self, *args):
+            super().__init__()
+
+        @Slot()
+        def run(self):
+            self.succeeded.emit("Solin.exe")
+            emitted.set()
+            release.wait(5)
+            self.done.emit()
+
+    monkeypatch.setattr(update_download, "_Transfer", Transfer)
+    launches = []
+    instance = dialog(launch=launches.append)
+    worker = update_download.UpdateDownloadWorker(instance._info, instance, directory=tmp_path)
+    instance._downloader_factory = lambda *args: worker
+    try:
+        instance._on_action()
+        wait_until(emitted.is_set, description="transfer success")
+        QTest.qWait(50)
+        assert launches == []
+        if cancel:
+            assert instance.invalidate()
+        release.set()
+        wait_until(lambda: worker._thread is None, description="download thread shutdown")
+        assert launches == ([] if cancel else ["Solin.exe"])
+    finally:
+        release.set()
+        if worker._thread is not None:
+            wait_until(lambda: worker._thread is None, description="download thread shutdown")
+        instance.deleteLater()
 
 
 def dialog(action=UpdateAction.INSTALL, launch=lambda path: None, markdown="- Changes"):
@@ -125,7 +171,10 @@ def test_dialog_displays_automatic_beta_notes_from_the_existing_manifest_contrac
 
 
 def test_installer_failure_allows_retry():
+    launches = []
+
     def fail(path):
+        launches.append(path)
         raise RuntimeError("scope unavailable")
 
     instance = dialog(launch=fail)
@@ -135,6 +184,9 @@ def test_installer_failure_allows_retry():
     assert instance._btn_action.isEnabled()
     assert instance._status_label.text() == "Failed to launch installer."
     assert stopped == [True]
+    instance._on_action()
+    assert launches == ["Solin.exe", "Solin.exe"]
+    assert stopped == [True, True]
     assert instance.invalidate()
 
 
