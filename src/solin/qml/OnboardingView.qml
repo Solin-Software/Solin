@@ -303,6 +303,34 @@ Rectangle {
                         color: root.textMuted
                         font.pixelSize: 11
                     }
+
+                    FieldLabel {
+                        Layout.topMargin: 18
+                        text: qsTr("Meeting schedule")
+                    }
+
+                    LanguageChoice {
+                        Layout.fillWidth: true
+                        iconName: "calendar"
+                        title: qsTr("Congregation")
+                        value: root.draft.congregationName !== ""
+                               ? root.draft.congregationName
+                               : qsTr("Not configured")
+                        onClicked: congregationSheet.openSheet()
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.draft.congregationName === ""
+                              ? qsTr("Find your congregation to fill the meeting days and times from jw.org.")
+                              : (root.draft.congregationScheduleText !== ""
+                                 ? root.draft.congregationScheduleText
+                                 : root.draft.congregationStatusText)
+                        visible: text !== ""
+                        color: root.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
                 }
             }
         }
@@ -346,31 +374,6 @@ Rectangle {
                             title: qsTr("Media language")
                             value: root.draft.mediaName
                             onClicked: languageSheet.openSheet("media", qsTr("Media language"))
-                        }
-
-                        FieldLabel {
-                            Layout.topMargin: 18
-                            text: qsTr("Meeting schedule")
-                        }
-
-                        LanguageChoice {
-                            Layout.fillWidth: true
-                            iconName: "calendar"
-                            title: qsTr("Congregation")
-                            value: root.draft.congregationScheduleText !== ""
-                                   ? root.draft.congregationScheduleText
-                                   : qsTr("Not configured")
-                            onClicked: congregationSheet.openSheet()
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: root.draft.congregationName !== ""
-                                  ? root.draft.congregationName
-                                  : qsTr("Find your congregation to fill the meeting days and times from jw.org.")
-                            color: root.textMuted
-                            font.pixelSize: 11
-                            wrapMode: Text.Wrap
                         }
 
                         FieldLabel {
