@@ -46,6 +46,12 @@ MONITORING_NONE = 0
 MONITORING_MONITOR_ONLY = 1
 MONITORING_MONITOR_AND_OUTPUT = 2
 
+# Audio mixer tracks (``audio_mixers`` bitfield, bit 0 = track 1). Program
+# recording encodes track 1; track 6 is reserved for the hosted-meeting mix.
+RECORDING_MIX_INDEX = 0
+RECORDING_AUDIO_MIXERS = 1 << RECORDING_MIX_INDEX
+NO_AUDIO_MIXERS = 0
+
 # Highest usable global output channel index in libobs (0..63).
 _MAX_CHANNELS = 64
 
@@ -313,6 +319,19 @@ class ObsRuntime:
     @property
     def video(self) -> ObsVideoConfig:
         return self._video
+
+    def scale_video_encoder(self, encoder: Any, *, width: int, height: int) -> None:
+        """Scale one inactive encoder on the GPU without resetting the video mix."""
+        from pylibobs._ffi import get_lib
+
+        lib: Any = get_lib()
+        lib.obs_encoder_set_scaled_size(encoder._ptr, width, height)
+        lib.obs_encoder_set_gpu_scale_type(encoder._ptr, int(self.ob.ScaleType.LANCZOS))
+        if (
+            lib.obs_encoder_get_width(encoder._ptr) != width
+            or lib.obs_encoder_get_height(encoder._ptr) != height
+        ):
+            raise ObsRuntimeError("The recording encoder did not accept its output size")
 
     def camera_source(
         self,
@@ -930,12 +949,26 @@ class ObsRuntime:
     # ── Source helpers ────────────────────────────────────────────────────
 
     def set_source_monitoring(self, source: Any, monitoring_type: int) -> None:
-        """Set a source's monitoring type (route its audio to the speakers)."""
+        """Set a source's monitoring type (route its audio to the speakers).
+
+        ``MONITORING_MONITOR_ONLY`` also clears the source's mixer tracks. Stock
+        libobs 32 keeps a monitor-only source out of every mix by itself, but
+        newer libobs deprecates monitoring *types*: any monitoring becomes
+        "monitor and output" and only ``audio_mixers`` decides what reaches the
+        mixes. Without this, media would land directly in the recording track
+        on those builds — on top of the speaker loopback that the system-audio
+        capture already records. A caller that later wants the source in a mix
+        sets its tracks explicitly.
+        """
         from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
         lib: Any = get_lib()
+        monitor_only = int(monitoring_type) == MONITORING_MONITOR_ONLY
 
         def apply() -> None:
+            if monitor_only:
+                # Clear the tracks first so the source never reaches a mix in between.
+                lib.obs_source_set_audio_mixers(source._ptr, NO_AUDIO_MIXERS)
             lib.obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
 
         # Windows resets must share the native destruction queue with monitor
@@ -969,6 +1002,9 @@ __all__ = [
     "MONITORING_NONE",
     "MONITORING_MONITOR_ONLY",
     "MONITORING_MONITOR_AND_OUTPUT",
+    "NO_AUDIO_MIXERS",
+    "RECORDING_AUDIO_MIXERS",
+    "RECORDING_MIX_INDEX",
     "libobs_available",
     "obs_runtime",
 ]

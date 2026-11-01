@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Jina la folda:</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Mf.: Tukio maalumu</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Unda folda</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Weka jina la folda.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Jina haliwezi kuanza au kuisha kwa nafasi tupu.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Jina haliwezi kuwa na / \ &lt; &gt; : &quot; | ? * au vibambo vya udhibiti.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Jina hili limehifadhiwa kwa matumizi ya mfumo wa uendeshaji.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Jina haliwezi kuanza kwa nukta.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Jina haliwezi kuisha kwa nukta.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Jina hili la folda ni refu sana.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Faili au folda yenye jina hili tayari ipo.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Jina hili limehifadhiwa kwa ajili ya mikutano. Chagua jina lingine la folda.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Maudhui yaliyoongezwa kwa mkono, upunguzaji, upangaji wa picha, na hali iliyopan
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Zima usawazishaji wa mkutano</translation>
+        <source>Help</source>
+        <translation>Msaada</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Sawazisha mkutano na folda iliyounganishwa</translation>
+        <source>Folder present</source>
+        <translation>Folda ipo</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Folda haijapatikana</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Folda haipatikani</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Inakagua folda…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Usawazishaji umewashwa</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Usawazishaji umezimwa</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Inasawazisha…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Inakamilisha…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Folda ya mkutano</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Njia ya folda</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Folda iliyounganishwa haipatikani. Kagua mahali ilipo na ruhusa za kuifikia.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Unda folda</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Fungua folda</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Usawazishaji wa mkutano</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Mpangilio huu unatumika kwa kompyuta zote zilizounganishwa na folda hii ya mkutano.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Futa folda…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Zima usawazishaji ili kufuta folda hii</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Inaunda folda…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Imeshindwa kufungua folda.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Imeshindwa kusasisha folda ya mkutano.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Futa folda</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Futa folda &quot;{name}&quot; na yaliyomo yote?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Vipengee vya mkutano vinavyohusiana na faili hizi pia vitaondolewa. Hatua hii haiwezi kutenduliwa.
+
+Huduma ya usawazishaji wa folda inaweza pia kufuta faili hizi kwenye kompyuta nyingine.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Simamisha uonyeshaji kabla ya kufuta folda hii.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Inaandaa ufutaji wa folda…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Inafuta folda…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Usawazishaji wa mkutano</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Zima usawazishaji wa mkutano huu kwenye kompyuta zilizounganishwa?
+
+Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Imeshindwa kusasisha usawazishaji wa mkutano.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Mabadiliko yamehifadhiwa kwenye kompyuta hii. Jaribu tena au fungua folda iliyounganishwa.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Ungependa kuweka upya usawazishaji wa "{name}"?
 Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye usawazishaji uliotangulia hayatatumika.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Unda folda</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Unda folda tupu ndani ya folda iliyounganishwa</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Ubadilishaji otomatiki</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Madirisha ya media</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Onyesha kwenye madirisha ya media</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Hali ya kurekodi haikuweza kubadilishwa.</translation>
@@ -5706,11 +5875,6 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>Hali ya utoaji haikuweza kubadilishwa.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>Uakisi kwenye madirisha ya media haukuweza kubadilishwa.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -6106,6 +6270,10 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <location line="+1"/>
         <source>Fade through black</source>
         <translation>Fifisha kupitia weusi</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Unganisha</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -6958,6 +7126,14 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Fifisha kupitia weusi</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Unganisha</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Sogeza vyanzo vya pamoja, fifisha vingine</translation>
+    </message>
+    <message>
         <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Fifisha hadi weusi kisha rudi</translation>
@@ -7049,11 +7225,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Ubadilishaji otomatiki</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Onyesha kwenye madirisha ya media</translation>
     </message>
     <message>
         <location line="+19"/>

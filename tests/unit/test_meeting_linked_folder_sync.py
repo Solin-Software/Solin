@@ -1471,6 +1471,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._hidden_canonical_media = {}
             controller._sync_service = service
             controller.sectionCountsChanged = _Signal()
+            controller._store = SimpleNamespace(path=root / "local" / "meeting-trees.json")
             controller.chromeChanged = _Signal()
             controller.stateChanged = _Signal()
             controller.syncStateChanged = _Signal()

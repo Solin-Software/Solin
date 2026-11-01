@@ -58,45 +58,61 @@ def _services() -> tuple[SceneDocumentService, SceneRuntimeService]:
     return documents, runtime
 
 
-def test_manual_scene_is_sticky_until_automation_is_resumed() -> None:
-    documents, runtime = _services()
-    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IMAGE) == CONTENT_SCENE_ID
-
-    runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
-    assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
-    assert (
-        runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO)
-        == CONTENT_CAMERA_PIP_SCENE_ID
-    )
-
-    runtime.resume_program_automation()
-    assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
-    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IMAGE) == CONTENT_SCENE_ID
-
-
-def test_enabling_automation_can_normalize_a_media_scene_base() -> None:
+def test_manual_scene_is_sticky_until_its_automation_is_resumed() -> None:
+    bus_id = BusId.VIRTUAL_CAMERA
     _documents, runtime = _services()
-    runtime.take_program_scene(CONTENT_SCENE_ID)
+    other_bus = (
+        BusId.VIRTUAL_CAMERA if bus_id is BusId.MEDIA_WINDOWS else BusId.MEDIA_WINDOWS
+    )
+    other_output = runtime.state.output(other_bus)
+    assert runtime.resolve_scene(bus_id, ContentCategory.IMAGE) == CONTENT_SCENE_ID
 
-    runtime.set_program_automatic(
+    runtime.take_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    assert runtime.state.output(bus_id).mode is OutputMode.MANUAL
+    assert runtime.resolve_scene(bus_id, ContentCategory.VIDEO) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert runtime.state.output(other_bus) == other_output
+    assert runtime.resolve_scene(other_bus, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+
+    runtime.select_scene(bus_id, CONTENT_CAMERA_PIP_SCENE_ID)
+    assert runtime.state.output(bus_id).mode is OutputMode.AUTO
+    assert runtime.resolve_scene(bus_id, ContentCategory.IMAGE) == CONTENT_SCENE_ID
+    assert runtime.resolve_scene(bus_id, ContentCategory.IDLE) == CONTENT_CAMERA_PIP_SCENE_ID
+    assert runtime.state.output(other_bus) == other_output
+
+
+def test_enabling_automation_preserves_independent_scene_bases() -> None:
+    _documents, runtime = _services()
+    runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+    scene_ids = {output.bus_id: output.base_scene_id for output in runtime.state.outputs}
+    before = runtime.state
+    changes = []
+    runtime.subscribe(changes.append)
+
+    updated = runtime.set_program_automatic(
         True,
-        scene_ids={output.bus_id: CAMERA_SCENE_ID for output in runtime.state.outputs},
+        scene_ids=scene_ids,
     )
 
+    assert updated.revision == before.revision + 1
+    assert changes == [updated]
     assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
-    assert {output.base_scene_id for output in runtime.state.outputs} == {CAMERA_SCENE_ID}
-    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
-    assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
+    for bus_id, scene_id in scene_ids.items():
+        assert runtime.state.output(bus_id).base_scene_id == scene_id
+        assert runtime.resolve_scene(bus_id, ContentCategory.IDLE) == scene_id
+        assert runtime.resolve_scene(bus_id, ContentCategory.VIDEO) == CONTENT_SCENE_ID
 
 
-def test_automatic_program_base_can_explicitly_return_to_camera() -> None:
+def test_automatic_output_base_can_explicitly_return_to_camera() -> None:
     _documents, runtime = _services()
-    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+    other_output = runtime.state.output(BusId.MEDIA_WINDOWS)
 
-    runtime.select_program_scene(CAMERA_SCENE_ID)
+    runtime.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
 
-    assert all(output.base_scene_id == CAMERA_SCENE_ID for output in runtime.state.outputs)
+    assert runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IDLE) == CAMERA_SCENE_ID
+    assert runtime.state.output(BusId.MEDIA_WINDOWS) == other_output
 
 
 def test_base_selection_batch_validates_before_mutating_any_output() -> None:
@@ -130,7 +146,7 @@ def test_automation_disable_requires_valid_current_scenes_for_every_output() -> 
 def test_live_take_is_not_part_of_editor_undo_history() -> None:
     documents, runtime = _services()
     documents.rename_scene(CONTENT_SCENE_ID, "Renamed")
-    runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
 
     documents.undo()
 
@@ -142,7 +158,7 @@ def test_live_take_is_not_part_of_editor_undo_history() -> None:
 
 def test_deleting_a_selected_scene_fails_safe_to_document_fallback() -> None:
     documents, runtime = _services()
-    runtime.take_program_scene(CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
 
     documents.delete_scene(CONTENT_SCENE_ID)
 
@@ -154,18 +170,17 @@ def test_deleting_a_selected_scene_fails_safe_to_document_fallback() -> None:
 
 def test_removing_media_mapping_keeps_output_modes_and_bases() -> None:
     documents, runtime = _services()
-    runtime.select_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    runtime.select_base_scenes({
+        BusId.MEDIA_WINDOWS: CAMERA_SCENE_ID,
+        BusId.VIRTUAL_CAMERA: CONTENT_CAMERA_PIP_SCENE_ID,
+    })
+    before = runtime.state
 
     documents.set_program_media_scene(None)
 
-    assert all(output.mode is OutputMode.AUTO for output in runtime.state.outputs)
-    assert {
-        output.base_scene_id for output in runtime.state.outputs
-    } == {CONTENT_CAMERA_PIP_SCENE_ID}
-    assert (
-        runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.IMAGE)
-        == CONTENT_CAMERA_PIP_SCENE_ID
-    )
+    assert runtime.state is before
+    for output in before.outputs:
+        assert runtime.resolve_scene(output.bus_id, ContentCategory.IMAGE) == output.base_scene_id
 
 
 def test_runtime_repository_persists_only_small_live_state(tmp_path) -> None:
@@ -174,7 +189,7 @@ def test_runtime_repository_persists_only_small_live_state(tmp_path) -> None:
     initial = repository.load_or_create(documents.document)
     runtime = SceneRuntimeService(documents, initial, store=repository)
 
-    updated = runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+    updated = runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
     runtime.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
 
     reloaded = repository.load_or_create(documents.document)
@@ -297,7 +312,7 @@ def test_runtime_persistence_queue_stops_on_permanent_storage_failure(
             repository.path.write_bytes(expected_bytes)
             error_type = SceneRepositoryCorruptError
 
-        accepted = runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)
+        accepted = runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
         with queue._condition:
             assert queue._condition.wait_for(lambda: queue.last_error is not None, timeout=1)
         error = queue.last_error
@@ -554,7 +569,7 @@ def test_runtime_repository_recovers_a_stale_manual_scene_after_offline_edit(
         store=repository,
     )
     runtime.set_output_enabled(BusId.MEDIA_WINDOWS, True)
-    stale = runtime.take_program_scene(CONTENT_SCENE_ID)
+    stale = runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
     edited = SceneDocumentService(document).delete_scene(CONTENT_SCENE_ID)
 
     recovered = repository.load_or_create(edited)
@@ -597,8 +612,9 @@ def test_selecting_a_scene_restores_automation_on_a_pinned_output() -> None:
     and playing media never reached the screen.
     """
     documents, runtime = _services()
-    runtime.take_program_scene(CONTENT_CAMERA_PIP_SCENE_ID)  # pins every output
-    assert all(output.mode is OutputMode.MANUAL for output in runtime.state.outputs)
+    runtime.take_scene(BusId.MEDIA_WINDOWS, CONTENT_SCENE_ID)
+    runtime.take_scene(BusId.VIRTUAL_CAMERA, CONTENT_CAMERA_PIP_SCENE_ID)
+    other_output = runtime.state.output(BusId.MEDIA_WINDOWS)
 
     runtime.select_scene(BusId.VIRTUAL_CAMERA, CAMERA_SCENE_ID)
 
@@ -610,7 +626,8 @@ def test_selecting_a_scene_restores_automation_on_a_pinned_output() -> None:
     # …and playing media still takes it over.
     assert runtime.resolve_scene(BusId.VIRTUAL_CAMERA, ContentCategory.VIDEO) == CONTENT_SCENE_ID
     # The other output keeps its own pin: selecting is per-output.
-    assert runtime.state.output(BusId.MEDIA_WINDOWS).mode is OutputMode.MANUAL
+    assert runtime.state.output(BusId.MEDIA_WINDOWS) == other_output
+    assert runtime.resolve_scene(BusId.MEDIA_WINDOWS, ContentCategory.VIDEO) == CONTENT_SCENE_ID
 
 
 def test_taking_a_scene_still_pins_the_output_against_automation() -> None:
@@ -662,11 +679,16 @@ def test_runtime_store_keeps_revisions_independent_across_documents(tmp_path):
     assert repository.path.read_bytes() == before
 
 
-def test_media_scene_is_a_valid_explicit_return_base_for_every_output():
+def test_media_scene_is_a_valid_explicit_return_base_for_each_output():
+    bus_id = BusId.VIRTUAL_CAMERA
     _documents, runtime = _services()
-    runtime.select_program_scene(CONTENT_SCENE_ID)
-    for bus in (BusId.MEDIA_WINDOWS, BusId.VIRTUAL_CAMERA):
-        assert runtime.resolve_scene(bus, ContentCategory.IDLE) == CONTENT_SCENE_ID
+    other_outputs = tuple(output for output in runtime.state.outputs if output.bus_id is not bus_id)
+
+    runtime.select_scene(bus_id, CONTENT_SCENE_ID)
+
+    assert runtime.resolve_scene(bus_id, ContentCategory.IDLE) == CONTENT_SCENE_ID
+    for output in other_outputs:
+        assert runtime.state.output(output.bus_id) == output
 
 
 @pytest.mark.parametrize("mutation", ["mode", "bus", "revision", "extra"])

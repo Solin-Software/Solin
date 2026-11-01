@@ -1,0 +1,569 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+#include <stdbool.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "../read_clock.h"
+
+#define REQUIRE(condition) do { \
+	if (!(condition)) { \
+		fprintf(stderr, "Terminal contract failed at line %d: %s\n", __LINE__, #condition); \
+		exit(1); \
+	} \
+} while (0)
+
+#define AVERROR_EOF (-1000)
+#define AVERROR_EXIT (-1001)
+#define AVERROR_INVALIDDATA (-1002)
+#define AV_PKT_FLAG_CORRUPT 2
+#define IO_ERROR (-5)
+#define AVERROR(error) (-(error))
+#define LOG_WARNING 0
+#define blog(...) ((void)0)
+#define FF_BLOG(...) ((void)0)
+#define UNUSED_PARAMETER(value) ((void)(value))
+
+enum obs_media_state {
+	OBS_MEDIA_STATE_PLAYING, OBS_MEDIA_STATE_PAUSED, OBS_MEDIA_STATE_STOPPED,
+	OBS_MEDIA_STATE_ENDED, OBS_MEDIA_STATE_ERROR, OBS_MEDIA_STATE_BUFFERING,
+};
+typedef struct { int size, flags; } AVPacket;
+typedef struct {
+	int error, eof_reached;
+	int64_t pos, bytes_read;
+	unsigned char *buf_ptr, *buf_end;
+} AVIOContext;
+typedef struct { AVIOContext *pb; } AVFormatContext;
+typedef struct mp_decode { bool frame_ready, eof; } decoder;
+typedef void (*mp_stop_cb)(void *, bool);
+typedef struct {
+	AVFormatContext *fmt;
+	struct { AVPacket **array; unsigned num; } packet_pool;
+	bool kill, stopping, terminal_packet_corrupt;
+	bool has_audio, has_video, looping, active, completed, reset, reset_ts, reconnecting;
+	bool is_local_file, full_decode, pause;
+	bool tempo_failed, tempo_rate_pending;
+	struct { unsigned size; } tempo_queue;
+	uint64_t next_ns;
+	int64_t play_sys_ts;
+	int64_t known_input_size;
+	struct solin_read_clock read_clock;
+	decoder v, a;
+	void *sem;
+	void *wake_event;
+	int mutex;
+	mp_stop_cb stop_cb;
+	void *opaque;
+} mp_media_t;
+typedef mp_media_t mp_cache_t;
+typedef struct { int id; } media_playback_t;
+struct ffmpeg_source {
+	media_playback_t *media;
+	bool destroy_media, is_clear_on_media_end, is_track_matte;
+	bool close_when_inactive, is_local_file, is_looping, reconnecting;
+	bool restart_on_activate, reconnect_thread_valid;
+	int reconnect_thread, reconnect_mutex, reconnect_delay_sec;
+	void *reconnect_stop_event;
+	void *source;
+	volatile long state;
+};
+
+static int read_result, callbacks, ended, started, destroyed, opened, locked;
+static int open_failure;
+static int resets, wakes;
+static int reconnect_created, reconnect_joined, reconnect_signaled, reconnect_reset;
+static bool reconnect_cancelled, reconnect_entered;
+static void *(*reconnect_worker)(void *);
+static void *reconnect_data;
+static uint64_t os_gettime_ns(void) { return 0; }
+static bool thread_result, stop_callback;
+static media_playback_t initial_media = {1}, replacement_media = {2};
+static AVPacket packet;
+
+static void media_stopped(void *opaque, bool error);
+static void ffmpeg_source_open(struct ffmpeg_source *s);
+static void pthread_mutex_lock(int *mutex) { (void)mutex; locked++; }
+static void pthread_mutex_unlock(int *mutex) { (void)mutex; locked--; }
+static int av_read_frame(AVFormatContext *fmt, AVPacket *pkt)
+{
+	(void)fmt; (void)pkt;
+	return read_result;
+}
+static AVPacket *av_packet_alloc(void) { return &packet; }
+#define da_end(pool) ((pool).num ? &(pool).array[(pool).num - 1] : NULL)
+#define da_pop_back(pool) ((pool).num--)
+static decoder *get_packet_decoder(mp_media_t *m, AVPacket *pkt)
+{
+	(void)m; (void)pkt;
+	return NULL;
+}
+static void mp_decode_push_packet(decoder *d, AVPacket *pkt) { (void)d; (void)pkt; }
+static void mp_media_free_packet(mp_media_t *m, AVPacket *pkt) { (void)m; (void)pkt; }
+static bool mp_media_thread(mp_media_t *m) { (void)m; return thread_result; }
+static bool mp_cache_thread(mp_cache_t *c) { (void)c; return thread_result; }
+static bool mp_media_reset(mp_media_t *m) { (void)m; resets++; return false; }
+static void os_sem_post(void *sem) { (void)sem; wakes++; }
+static void os_event_signal(void *event)
+{
+	wakes++;
+	if (event) {
+		reconnect_cancelled = true;
+		reconnect_signaled++;
+	}
+}
+static void os_event_reset(void *event)
+{
+	REQUIRE(event != NULL);
+	reconnect_cancelled = false;
+	reconnect_reset++;
+}
+static int os_event_timedwait(void *event, unsigned timeout)
+{
+	REQUIRE(event != NULL);
+	(void)timeout;
+	/* An entered worker has already passed its timer before Stop signals it. */
+	return reconnect_cancelled && !reconnect_entered ? 0 : 1;
+}
+static int pthread_create(int *thread, void *attributes, void *(*worker)(void *), void *data)
+{
+	(void)attributes;
+	*thread = ++reconnect_created;
+	reconnect_worker = worker;
+	reconnect_data = data;
+	return 0;
+}
+static int pthread_join(int thread, void **result)
+{
+	(void)result;
+	REQUIRE(thread != 0 && reconnect_worker != NULL);
+	reconnect_joined++;
+	/* Execute the actual worker at this controlled scheduling boundary. */
+	reconnect_worker(reconnect_data);
+	return 0;
+}
+static bool os_atomic_set_bool(volatile bool *value, bool desired)
+{
+	bool previous = *value;
+	*value = desired;
+	return previous;
+}
+static enum obs_media_state get_media_state(struct ffmpeg_source *s)
+{
+	return (enum obs_media_state)s->state;
+}
+static long os_atomic_load_long(const volatile long *state) { return *state; }
+static int interleaved_state = -1;
+static bool os_atomic_compare_swap_long(volatile long *state, long expected, long desired)
+{
+	/* An explicit transport command can arrive immediately before the CAS. */
+	if (interleaved_state >= 0) {
+		*state = interleaved_state;
+		interleaved_state = -1;
+	}
+	if (*state != expected)
+		return false;
+	*state = desired;
+	return true;
+}
+static void mp_media_tempo_drain(mp_media_t *m) { (void)m; }
+static void set_media_state(void *data, enum obs_media_state state)
+{
+	((struct ffmpeg_source *)data)->state = state;
+}
+static void obs_source_output_video(void *source, void *frame) { (void)source; (void)frame; }
+static void obs_source_show_preloaded_video(void *source) { (void)source; }
+static bool obs_source_showing(void *source) { (void)source; return true; }
+static bool obs_source_active(void *source) { (void)source; return true; }
+static void obs_source_media_ended(void *source) { (void)source; ended++; }
+static void obs_source_media_started(void *source) { (void)source; started++; }
+static void media_playback_destroy(media_playback_t *media)
+{
+	REQUIRE(media != NULL);
+	REQUIRE(locked == 0);
+	destroyed++;
+}
+static void media_playback_play(media_playback_t *media, bool loop, bool reconnect)
+{
+	(void)media; (void)loop; (void)reconnect;
+}
+static bool media_playback_has_video(media_playback_t *media) { (void)media; return false; }
+static void media_playback_play_pause(media_playback_t *media, bool pause) { (void)media; (void)pause; }
+static struct ffmpeg_source *stopping_source;
+static void media_playback_stop(media_playback_t *media)
+{
+	(void)media;
+	REQUIRE(stopping_source->state == OBS_MEDIA_STATE_STOPPED);
+	if (stop_callback)
+		media_stopped(stopping_source, true);
+}
+
+#include "terminal-under-test.h"
+
+static void ffmpeg_source_open(struct ffmpeg_source *s)
+{
+	opened++;
+	s->media = open_failure == 2 ? NULL : &replacement_media;
+	if (open_failure)
+		media_stopped(s, true);
+}
+static void failed(void *opaque, bool error)
+{
+	REQUIRE(locked == 0 && error);
+	callbacks++;
+	media_stopped(opaque, error);
+}
+static void completed(void *opaque, bool error)
+{
+	REQUIRE(locked == 0 && !error);
+	callbacks++;
+	media_stopped(opaque, error);
+}
+static struct ffmpeg_source fresh_source(void)
+{
+	return (struct ffmpeg_source){
+		.media = &initial_media, .is_local_file = true,
+		.state = OBS_MEDIA_STATE_PLAYING,
+	};
+}
+
+static struct ffmpeg_source transport_source(bool local, bool close_inactive)
+{
+	struct ffmpeg_source source = fresh_source();
+	source.is_local_file = local;
+	source.close_when_inactive = close_inactive;
+	/* Non-null identity for the controlled reconnect event. */
+	source.reconnect_stop_event = &initial_media;
+	destroyed = opened = started = ended = 0;
+	reconnect_created = reconnect_joined = reconnect_signaled = reconnect_reset = 0;
+	reconnect_cancelled = reconnect_entered = false;
+	reconnect_worker = NULL;
+	reconnect_data = NULL;
+	stop_callback = false;
+	open_failure = 0;
+	return source;
+}
+
+static void test_stop_resources(void)
+{
+	for (int local = 0; local <= 1; local++) {
+		for (int close_inactive = 0; close_inactive <= 1; close_inactive++) {
+			struct ffmpeg_source source = transport_source(local != 0, close_inactive != 0);
+			stopping_source = &source;
+			ffmpeg_source_stop(&source);
+			REQUIRE(source.state == OBS_MEDIA_STATE_STOPPED);
+			REQUIRE(source.destroy_media == (!local || close_inactive));
+			/* Stop defers destruction to the source owner tick. */
+			REQUIRE(destroyed == 0);
+			ffmpeg_source_tick(&source, 0);
+			REQUIRE(destroyed == (!local || close_inactive));
+			REQUIRE(source.media == ((!local || close_inactive) ? NULL : &initial_media));
+			REQUIRE(reconnect_created == 0 && source.state == OBS_MEDIA_STATE_STOPPED);
+		}
+	}
+}
+
+static void schedule_failed_reconnect(struct ffmpeg_source *source)
+{
+	media_stopped(source, true);
+	ffmpeg_source_tick(source, 0);
+	REQUIRE(source->media == NULL && source->reconnect_thread_valid);
+	REQUIRE(reconnect_created == 1 && destroyed == 1);
+}
+
+static void test_stop_without_media(void)
+{
+	struct ffmpeg_source source = transport_source(false, false);
+	schedule_failed_reconnect(&source);
+	stopping_source = &source;
+	ffmpeg_source_stop(&source);
+	REQUIRE(source.state == OBS_MEDIA_STATE_STOPPED);
+	REQUIRE(reconnect_joined == 1 && !source.reconnect_thread_valid && !source.reconnecting);
+	REQUIRE(opened == 0 && started == 0);
+	ffmpeg_source_tick(&source, 0);
+	REQUIRE(reconnect_created == 1 && opened == 0);
+}
+
+static void test_stop_entered_reconnect(void)
+{
+	struct ffmpeg_source source = transport_source(false, false);
+	schedule_failed_reconnect(&source);
+	reconnect_entered = true;
+	stopping_source = &source;
+	ffmpeg_source_stop(&source);
+	/* The timer had expired: joining allows the real worker to finish Start.
+	 * Stop must publish its final intent after that completion. */
+	REQUIRE(reconnect_joined == 1 && opened == 1 && started == 1);
+	REQUIRE(source.state == OBS_MEDIA_STATE_STOPPED && source.destroy_media);
+	REQUIRE(!source.reconnect_thread_valid && !source.reconnecting);
+	ffmpeg_source_tick(&source, 0);
+	REQUIRE(source.media == NULL && destroyed == 2 && reconnect_created == 1);
+}
+
+static void test_stopped_tick(void)
+{
+	struct ffmpeg_source source = transport_source(false, false);
+	source.state = OBS_MEDIA_STATE_STOPPED;
+	source.destroy_media = true;
+	ffmpeg_source_tick(&source, 0);
+	REQUIRE(destroyed == 1 && source.media == NULL && !source.destroy_media);
+	REQUIRE(reconnect_created == 0);
+	ffmpeg_source_tick(&source, 0);
+	REQUIRE(destroyed == 1 && reconnect_created == 0);
+}
+
+static void test_stop_then_play_before_tick(void)
+{
+	for (int local = 0; local <= 1; local++) {
+		struct ffmpeg_source source = transport_source(local != 0, true);
+		stopping_source = &source;
+		ffmpeg_source_stop(&source);
+		ffmpeg_source_play_pause(&source, false);
+		REQUIRE(destroyed == 1 && opened == 1 && started == 1);
+		REQUIRE(source.media == &replacement_media && !source.destroy_media);
+		REQUIRE(source.state == OBS_MEDIA_STATE_PLAYING);
+		ffmpeg_source_tick(&source, 0);
+		REQUIRE(destroyed == 1 && source.media == &replacement_media);
+		REQUIRE(reconnect_created == 0 && source.state == OBS_MEDIA_STATE_PLAYING);
+	}
+}
+
+static void test_failed_live_reconnect(void)
+{
+	struct ffmpeg_source source = transport_source(false, false);
+	schedule_failed_reconnect(&source);
+	/* An ordinary failure still takes the actual reconnect worker/start path. */
+	reconnect_worker(reconnect_data);
+	REQUIRE(opened == 1 && started == 1 && source.media == &replacement_media);
+	REQUIRE(source.state == OBS_MEDIA_STATE_PLAYING && !source.destroy_media);
+}
+
+static void test_physical_eof(void)
+{
+	unsigned char buffer[2] = {0};
+	AVIOContext io = {.eof_reached = 1, .buf_ptr = buffer, .buf_end = buffer};
+	AVFormatContext format = {&io};
+	mp_media_t media = {.fmt = &format, .is_local_file = true, .known_input_size = 768044};
+	read_result = AVERROR_EOF;
+	packet.flags = 0;
+	/* macOS returned complete PCM packets, then physical EOF without an error.
+	 * Probe/seek rereads make bytes_read larger than the physical position. */
+	const int64_t positions[] = {24620, 32812};
+	const int64_t bytes_read[] = {503808, 516096};
+	for (unsigned i = 0; i < 2; i++) {
+		io.pos = positions[i];
+		io.bytes_read = bytes_read[i];
+		for (int stored_eof = 0; stored_eof <= 1; stored_eof++) {
+			io.error = stored_eof ? AVERROR_EOF : 0;
+			REQUIRE(mp_media_next_packet(&media) == AVERROR(EIO));
+		}
+	}
+	io.error = 0;
+	/* Delivered packet data is still accepted before a terminal read. */
+	read_result = 0;
+	REQUIRE(mp_media_next_packet(&media) == 0);
+	read_result = AVERROR_EOF;
+	io.bytes_read = 2000000;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR(EIO));
+	/* Preserve the more specific transport/cancellation/corruption evidence. */
+	const int transport_error = -1234;
+	io.error = transport_error;
+	REQUIRE(mp_media_next_packet(&media) == transport_error);
+	io.error = AVERROR_EXIT;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EXIT);
+	io.error = 0;
+	media.terminal_packet_corrupt = true;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_INVALIDDATA);
+	media.terminal_packet_corrupt = false;
+
+	/* A demuxer may finish while more physical input is available or buffered. */
+	io.eof_reached = 0;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.eof_reached = 1;
+	io.buf_end = buffer + 1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.buf_end = buffer;
+	io.pos = 768044;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos++;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos = -1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.pos = 24620;
+	media.known_input_size = 0;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.known_input_size = -1;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.known_input_size = 768044;
+	media.is_local_file = false;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	media.is_local_file = true;
+	format.pb = NULL;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+}
+
+int main(int argc, char **argv)
+{
+	if (argc == 2) {
+		const struct {
+			const char *name;
+			void (*run)(void);
+		} cases[] = {
+			{"stop_resources", test_stop_resources},
+			{"stop_without_media", test_stop_without_media},
+			{"stop_entered_reconnect", test_stop_entered_reconnect},
+			{"stopped_tick", test_stopped_tick},
+			{"stop_then_play", test_stop_then_play_before_tick},
+			{"failed_live_reconnect", test_failed_live_reconnect},
+		};
+		for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+			if (strcmp(argv[1], cases[i].name) == 0) {
+				cases[i].run();
+				printf("Terminal transport contract qualified: %s\n", cases[i].name);
+				return 0;
+			}
+		}
+		fprintf(stderr, "Unknown terminal transport contract: %s\n", argv[1]);
+		return 1;
+	}
+	test_physical_eof();
+	for (int waiting = 0; waiting <= 1; waiting++) {
+		struct ffmpeg_source buffering = fresh_source();
+		buffering.state = waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING;
+		media_buffering(&buffering, waiting != 0);
+		REQUIRE(buffering.state == (waiting ? OBS_MEDIA_STATE_BUFFERING : OBS_MEDIA_STATE_PLAYING));
+		for (int intent = OBS_MEDIA_STATE_PAUSED; intent <= OBS_MEDIA_STATE_ERROR; intent++) {
+			buffering.state = waiting ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_BUFFERING;
+			interleaved_state = intent;
+			media_buffering(&buffering, waiting != 0);
+			REQUIRE(buffering.state == intent);
+		}
+	}
+	struct ffmpeg_source completing = fresh_source();
+	interleaved_state = OBS_MEDIA_STATE_STOPPED;
+	media_stopped(&completing, false);
+	REQUIRE(completing.state == OBS_MEDIA_STATE_STOPPED && ended == 0);
+	AVIOContext io = {0};
+	AVFormatContext format = {&io};
+	mp_media_t media = {.fmt = &format};
+	read_result = AVERROR_EOF;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.error = AVERROR_EOF;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	io.error = IO_ERROR;
+	REQUIRE(mp_media_next_packet(&media) == IO_ERROR);
+	io.error = AVERROR_EXIT;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EXIT);
+	read_result = 0;
+	REQUIRE(mp_media_next_packet(&media) == 0);
+	format.pb = NULL;
+	read_result = AVERROR_EOF;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+	/* WAV can return a short corrupt packet followed by EOF with no pb error. */
+	read_result = 0;
+	packet.flags = AV_PKT_FLAG_CORRUPT;
+	REQUIRE(mp_media_next_packet(&media) == 0);
+	read_result = AVERROR_EOF;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_INVALIDDATA);
+	/* Recoverable corruption followed by valid data is not a terminal error. */
+	read_result = 0;
+	packet.flags = 0;
+	REQUIRE(mp_media_next_packet(&media) == 0);
+	read_result = AVERROR_EOF;
+	REQUIRE(mp_media_next_packet(&media) == AVERROR_EOF);
+
+	/* Both worker implementations distinguish failure from stop/destruction. */
+	for (int cached = 0; cached <= 1; cached++) {
+		for (int cancellation = 0; cancellation <= 2; cancellation++) {
+			struct ffmpeg_source source = fresh_source();
+			media.stop_cb = failed;
+			media.opaque = &source;
+			media.kill = cancellation == 1;
+			media.stopping = cancellation == 2;
+			callbacks = ended = 0;
+			thread_result = false;
+			if (cached)
+				mp_cache_thread_start(&media);
+			else
+				mp_media_thread_start(&media);
+			REQUIRE(callbacks == (cancellation ? 0 : 1));
+			REQUIRE(ended == 0);
+			REQUIRE(source.state == (cancellation ? OBS_MEDIA_STATE_PLAYING : OBS_MEDIA_STATE_ERROR));
+			REQUIRE(source.destroy_media == (cancellation == 0));
+			thread_result = true;
+			callbacks = 0;
+			if (cached)
+				mp_cache_thread_start(&media);
+			else
+				mp_media_thread_start(&media);
+			REQUIRE(callbacks == 0);
+		}
+	}
+
+	struct ffmpeg_source source = fresh_source();
+	ended = 0;
+	media_stopped(&source, false);
+	REQUIRE(source.state == OBS_MEDIA_STATE_ENDED && ended == 1 && !source.destroy_media);
+	for (int error = 0; error <= 1; error++) {
+		source = fresh_source();
+		source.state = OBS_MEDIA_STATE_STOPPED;
+		ended = 0;
+		media_stopped(&source, error != 0);
+		REQUIRE(source.state == OBS_MEDIA_STATE_STOPPED && ended == 0);
+	}
+	source = fresh_source();
+	stopping_source = &source;
+	stop_callback = true;
+	ffmpeg_source_stop(&source);
+	REQUIRE(source.state == OBS_MEDIA_STATE_STOPPED && ended == 0);
+
+	/* First activation keeps the decoder's initial clock and seek contract. */
+	media = (mp_media_t){0};
+	mp_media_play(&media, false, false);
+	REQUIRE(media.active && !media.reset && !media.reset_ts);
+
+	/* Natural completion must not read or rewind an unavailable origin. */
+	source = fresh_source();
+	media = (mp_media_t){.stop_cb = completed, .opaque = &source, .active = true};
+	callbacks = ended = resets = wakes = 0;
+	REQUIRE(mp_media_eof(&media));
+	REQUIRE(source.state == OBS_MEDIA_STATE_ENDED && ended == 1 && callbacks == 1);
+	REQUIRE(media.completed && !media.active && resets == 0);
+	REQUIRE(mp_media_eof(&media));
+	REQUIRE(ended == 1 && callbacks == 1 && resets == 0);
+	mp_media_play(&media, false, false);
+	REQUIRE(media.active && media.reset && media.reset_ts && !media.completed && wakes == 1);
+	REQUIRE(resets == 0); /* Reset is deferred to the decoder's next iteration. */
+	media = (mp_media_t){.stop_cb = completed, .opaque = &source, .active = true, .looping = true};
+	callbacks = resets = 0;
+	REQUIRE(mp_media_eof(&media));
+	REQUIRE(resets == 1 && callbacks == 0 && media.active && !media.completed);
+	/* A completed decoder accepts Play through the same start path as Restart. */
+	source = fresh_source();
+	source.state = OBS_MEDIA_STATE_ENDED;
+	open_failure = 0;
+	started = 0;
+	ffmpeg_source_play_pause(&source, false);
+	REQUIRE(source.state == OBS_MEDIA_STATE_PLAYING && started == 1);
+
+	/* Retry cannot depend on the next video tick consuming destroy_media. */
+	for (int play = 0; play <= 1; play++) {
+		for (int failure = 0; failure <= 2; failure++) {
+			source = fresh_source();
+			media_stopped(&source, true);
+			open_failure = failure;
+			destroyed = opened = started = ended = 0;
+			if (play)
+				ffmpeg_source_play_pause(&source, false);
+			else
+				ffmpeg_source_restart(&source);
+			REQUIRE(destroyed == 1 && opened == 1 && ended == 0);
+			REQUIRE(source.state == (failure ? OBS_MEDIA_STATE_ERROR : OBS_MEDIA_STATE_PLAYING));
+			REQUIRE(source.destroy_media == (failure != 0));
+			REQUIRE(started == (failure ? 0 : 1));
+		}
+	}
+	puts("Terminal EOF, failure, cancellation and explicit retry qualified");
+	return 0;
+}

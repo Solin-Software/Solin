@@ -1,0 +1,513 @@
+diff --git a/shared/media-playback/media-playback/media.c b/shared/media-playback/media-playback/media.c
+index 16f5e4c..c8d3626 100644
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -21,8 +21,11 @@
+ #include "media-playback.h"
+ #include "media.h"
+ #include "closest-format.h"
++#include "rate_tempo.h"
+ 
+ #include <libavdevice/avdevice.h>
++#include <libavfilter/buffersink.h>
++#include <libavutil/channel_layout.h>
+ #include <libavutil/imgutils.h>
+ 
+ static int64_t base_sys_ts = 0;
+@@ -333,7 +336,170 @@ bool mp_media_prepare_frames(mp_media_t *m)
+ 	return true;
+ }
+ 
++/* maximum timestamp variance in nanoseconds */
++#define MAX_TS_VAR 2000000000LL
++
++/* ------------------------------------------------------------------------- */
++/* Pitch-preserving speed                                                    */
++
++/* A rate change takes effect at the end of the input already accepted by
++ * the current graph. Draining retains its tail and the queued output. */
++static void mp_media_request_speed(mp_media_t *m, int speed)
++{
++	if (!m->tempo_rate_pending && speed == m->speed)
++		return;
++	if (m->tempo_rate_pending) {
++		m->tempo_pending_speed = speed;
++		return;
++	}
++	if (!m->tempo_graph && !m->tempo_queue.size) {
++		apply_speed(m, speed);
++		return;
++	}
++	int64_t boundary = m->next_pts_ns;
++	if (m->tempo_graph) {
++		boundary = m->tempo_anchor_pts + mp_media_tempo_fed_ns(m, m->tempo_in_samples);
++		mp_media_tempo_drain(m);
++	}
++	if (m->tempo_queue.size) {
++		struct mp_tempo_frame tail;
++		deque_peek_back(&m->tempo_queue, &tail, sizeof(tail));
++		int64_t end = tail.pts + tempo_output_media_ns(m, tail.frame->nb_samples, tail.frame->sample_rate);
++		if (end > boundary)
++			boundary = end;
++	}
++	m->tempo_pending_speed = speed;
++	m->tempo_switch_pts = boundary;
++	m->tempo_rate_pending = true;
++}
++
++static inline bool mp_media_tempo_due(mp_media_t *m, int64_t pts)
++{
++	if (m->full_decode || pts <= m->next_pts_ns)
++		return true;
++
++	/* the video frame this pass output, if any, is the one the clock sits
++	 * on: it was output just before this, so it's no longer ready */
++	bool clock_at_video = m->has_video && !m->v.frame_ready && m->v.frame_pts == m->next_pts_ns;
++
++	/* like decoded frames, audio far ahead of the clock goes out right
++	 * away, but only at a video frame, which is the only time the regular
++	 * path can see audio that far ahead. Otherwise, long frames at low
++	 * speeds or a timestamp jump would have audio fed or sent early at the
++	 * tempo path's own wake-ups. */
++	return clock_at_video && pts - m->next_pts_ns > MAX_TS_VAR;
++}
++
++static void mp_media_tempo_send(mp_media_t *m, const AVFrame *f, int64_t pts)
++{
++	struct obs_source_audio audio = {0};
++
++	for (size_t i = 0; i < MAX_AV_PLANES; i++)
++		audio.data[i] = f->data[i];
++
++	/* the samples are already time-stretched, so they play at their real
++	 * rate */
++	audio.samples_per_sec = f->sample_rate;
++	audio.speakers = convert_speaker_layout(f->ch_layout.nb_channels);
++	audio.format = convert_sample_format(f->format);
++	audio.frames = f->nb_samples;
++	audio.timestamp = m->full_decode ? pts : playback_timestamp(m, pts);
++
++	if (audio.format == AUDIO_FORMAT_UNKNOWN || audio.speakers == SPEAKERS_UNKNOWN) {
++		blog(LOG_ERROR, "MP: Unsupported tempo output audio format or speaker layout");
++		m->tempo_failed = true;
++		return;
++	}
++
++	/* the cache takes the length of the last audio it gets from here,
++	 * which is no longer the length of the last decoded frame */
++	if (m->full_decode)
++		m->a.last_duration = tempo_samples_to_ns(f->nb_samples, f->sample_rate);
++
++	m->a_cb(m->opaque, &audio);
++}
++
++/* Sends the queued audio that's due. */
++static void mp_media_tempo_send_due(mp_media_t *m)
++{
++	struct mp_tempo_frame chunk = {0};
++
++	while (m->tempo_queue.size) {
++		deque_peek_front(&m->tempo_queue, &chunk, sizeof(chunk));
++		/* Independently rescaled media clocks can differ below one output
++		 * sample. Such a block is already due at audio's actual precision;
++		 * do not hold it across an unrelated video/input read wake-up. */
++		int64_t precision = tempo_output_media_ns(m, 1, chunk.frame->sample_rate);
++		if (!mp_media_tempo_due(m, chunk.pts) && chunk.pts - m->next_pts_ns >= precision)
++			break;
++
++		deque_pop_front(&m->tempo_queue, NULL, sizeof(chunk));
++		if (m->a_cb)
++			mp_media_tempo_send(m, chunk.frame, chunk.pts);
++
++		m->tempo_sent_end_pts =
++			chunk.pts + tempo_output_media_ns(m, chunk.frame->nb_samples, chunk.frame->sample_rate);
++		m->tempo_sent = true;
++		av_frame_free(&chunk.frame);
++	}
++}
++
++/* Media time of the first audio that hasn't been sent to the source. */
++static int64_t mp_media_audio_frame_pts(mp_media_t *m)
++{
++	return m->a.frame_pts + tempo_samples_to_ns(m->tempo_frame_offset, m->a.frame->sample_rate);
++}
++
++static bool mp_media_audio_pending_pts(mp_media_t *m, int64_t *pts)
++{
++	if (m->tempo_queue.size) {
++		struct mp_tempo_frame chunk = {0};
++
++		deque_peek_front(&m->tempo_queue, &chunk, sizeof(chunk));
++		*pts = chunk.pts;
++		return true;
++	}
++	if (m->tempo_graph) {
++		/* audio the filter holds back, which is laid out against the
++		 * next frame once that is fed */
++		int64_t anchor = m->a.frame_ready ? mp_media_tempo_anchor(m, mp_media_audio_frame_pts(m)) : m->tempo_anchor_pts;
++		int rate = av_buffersink_get_sample_rate(m->tempo_sink);
++
++		*pts = anchor + tempo_output_media_ns(m, m->tempo_out_samples, rate);
++		return true;
++	}
++	if (m->a.frame_ready) {
++		*pts = mp_media_audio_frame_pts(m);
++		return true;
++	}
++
++	return false;
++}
++
++/* ------------------------------------------------------------------------- */
++
++/* Earliest media time of what's waiting to be output: where the clock starts
++ * after the timeline is reset. */
+ static inline int64_t mp_media_get_next_min_pts(mp_media_t *m)
++{
++	int64_t min_next_ns = 0x7FFFFFFFFFFFFFFFLL;
++	int64_t audio_pts = 0;
++
++	if (m->has_video && m->v.frame_ready) {
++		if (m->v.frame_pts < min_next_ns)
++			min_next_ns = m->v.frame_pts;
++	}
++	if (m->has_audio && mp_media_audio_pending_pts(m, &audio_pts)) {
++		if (audio_pts < min_next_ns)
++			min_next_ns = audio_pts;
++	}
++
++	return min_next_ns;
++}
++
++/* Media time at which something next needs to happen: a frame being output,
++ * filtered audio being sent, or decoded audio being fed to the tempo filter. */
++static inline int64_t mp_media_get_next_event_pts(mp_media_t *m)
+ {
+ 	int64_t min_next_ns = 0x7FFFFFFFFFFFFFFFLL;
+ 
+@@ -341,9 +507,29 @@ static inline int64_t mp_media_get_next_min_pts(mp_media_t *m)
+ 		if (m->v.frame_pts < min_next_ns)
+ 			min_next_ns = m->v.frame_pts;
+ 	}
+-	if (m->has_audio && m->a.frame_ready) {
+-		if (m->a.frame_pts < min_next_ns)
+-			min_next_ns = m->a.frame_pts;
++	if (m->tempo_queue.size) {
++		struct mp_tempo_frame chunk = {0};
++
++		deque_peek_front(&m->tempo_queue, &chunk, sizeof(chunk));
++		if (chunk.pts < min_next_ns)
++			min_next_ns = chunk.pts;
++	}
++	if (m->tempo_rate_pending && !m->tempo_queue.size) {
++		int64_t boundary = FFMAX(m->tempo_switch_pts, m->next_pts_ns);
++		if (boundary < min_next_ns)
++			min_next_ns = boundary;
++	}
++	if (!m->tempo_rate_pending && m->has_audio && m->a.frame_ready) {
++		int64_t lookahead_ns = mp_media_tempo_update_lookahead(m);
++		int64_t frame_pts = mp_media_audio_frame_pts(m);
++		int64_t feed_pts = frame_pts - lookahead_ns;
++
++		/* feeding ahead doesn't move the clock back: audio that's
++		 * already due to be fed is fed right away */
++		if (lookahead_ns && feed_pts < m->next_pts_ns)
++			feed_pts = frame_pts < m->next_pts_ns ? frame_pts : m->next_pts_ns;
++		if (feed_pts < min_next_ns)
++			min_next_ns = feed_pts;
+ 	}
+ 
+ 	return min_next_ns;
+@@ -352,18 +538,22 @@ static inline int64_t mp_media_get_next_min_pts(mp_media_t *m)
+ static inline int64_t mp_media_get_base_pts(mp_media_t *m)
+ {
+ 	int64_t base_ts = 0;
++	int64_t audio_end = m->a.next_pts;
++
++	/* with the tempo filter, only audio that has been sent counts */
++	if (m->tempo_sent)
++		audio_end = m->tempo_sent_end_pts;
++	else if (m->tempo_graph || m->tempo_queue.size)
++		mp_media_audio_pending_pts(m, &audio_end);
+ 
+ 	if (m->has_video && m->v.next_pts > base_ts)
+ 		base_ts = m->v.next_pts;
+-	if (m->has_audio && m->a.next_pts > base_ts)
+-		base_ts = m->a.next_pts;
++	if (m->has_audio && audio_end > base_ts)
++		base_ts = audio_end;
+ 
+ 	return base_ts;
+ }
+ 
+-/* maximum timestamp variance in nanoseconds */
+-#define MAX_TS_VAR 2000000000LL
+-
+ static inline bool mp_media_can_play_frame(mp_media_t *m, struct mp_decode *d)
+ {
+ 	if (m->full_decode)
+@@ -377,28 +567,83 @@ void mp_media_next_audio(mp_media_t *m)
+ 	struct obs_source_audio audio = {0};
+ 	AVFrame *f = d->frame;
+ 
++	mp_media_tempo_send_due(m);
++
++	if (m->tempo_rate_pending) {
++		if (m->tempo_queue.size || m->next_pts_ns < m->tempo_switch_pts)
++			return;
++		apply_speed(m, m->tempo_pending_speed);
++		m->tempo_rate_pending = false;
++		m->tempo_lookahead_ns = 0;
++		m->tempo_max_frame_samples = 0;
++	}
++
++	if (mp_media_use_tempo(m)) {
++		int64_t frame_pts = d->frame_ready ? mp_media_audio_frame_pts(m) : d->frame_pts;
++		int64_t feed_pts = frame_pts - mp_media_tempo_update_lookahead(m);
++
++		if (!d->frame_ready || !mp_media_tempo_due(m, feed_pts))
++			return;
++
++		if (!m->a_cb) {
++			m->tempo_frame_offset = 0;
++			d->frame_ready = false;
++			return;
++		}
++
++		int count = FFMIN(mp_media_tempo_slice(f->sample_rate), f->nb_samples - m->tempo_frame_offset);
++		if (mp_media_tempo_process(m, f, m->tempo_frame_offset, count, frame_pts)) {
++			m->tempo_frame_offset += count;
++			if (m->tempo_frame_offset == f->nb_samples) {
++				m->tempo_frame_offset = 0;
++				d->frame_ready = false;
++			}
++			mp_media_tempo_send_due(m);
++			return;
++		}
++
++		return;
++	}
++
+ 	if (!mp_media_can_play_frame(m, d))
+ 		return;
+ 
+ 	d->frame_ready = false;
+-	if (!m->a_cb)
++	if (!m->a_cb) {
++		m->tempo_frame_offset = 0;
+ 		return;
++	}
+ 
++	int offset = m->tempo_frame_offset;
++	int stride = av_get_bytes_per_sample(f->format);
++	if (stride <= 0) {
++		blog(LOG_ERROR, "MP: Unsupported decoded audio format");
++		m->tempo_failed = true;
++		return;
++	}
++	if (!av_sample_fmt_is_planar(f->format))
++		stride *= f->ch_layout.nb_channels;
+ 	for (size_t i = 0; i < MAX_AV_PLANES; i++)
+-		audio.data[i] = f->data[i];
++		audio.data[i] = f->data[i] ? f->data[i] + offset * stride : NULL;
+ 
+-	audio.samples_per_sec = m->full_decode ? f->sample_rate : f->sample_rate * m->speed / 100;
++	audio.samples_per_sec = f->sample_rate;
+ 	audio.speakers = convert_speaker_layout(f->ch_layout.nb_channels);
+ 	audio.format = convert_sample_format(f->format);
+-	audio.frames = f->nb_samples;
++	audio.frames = f->nb_samples - offset;
++	int64_t frame_pts = d->frame_pts + tempo_samples_to_ns(offset, f->sample_rate);
++	m->tempo_frame_offset = 0;
+ 	if (m->full_decode)
+-		audio.timestamp = d->frame_pts;
++		audio.timestamp = frame_pts;
+ 	else
+-		audio.timestamp = playback_timestamp(m, d->frame_pts);
++		audio.timestamp = playback_timestamp(m, frame_pts);
+ 
+-	if (audio.format == AUDIO_FORMAT_UNKNOWN)
++	if (audio.format == AUDIO_FORMAT_UNKNOWN || audio.speakers == SPEAKERS_UNKNOWN) {
++		blog(LOG_ERROR, "MP: Unsupported decoded audio format or speaker layout");
++		m->tempo_failed = true;
+ 		return;
++	}
+ 
++	m->tempo_sent = false;
+ 	m->a_cb(m->opaque, &audio);
+ }
+ 
+@@ -529,13 +774,17 @@ void mp_media_next_video(mp_media_t *m, bool preload)
+ 
+ static void mp_media_calc_next_ns(mp_media_t *m)
+ {
+-	int64_t min_next_ns = mp_media_get_next_min_pts(m);
+-	int64_t delta = min_next_ns - m->next_pts_ns;
++	int64_t min_next_ns;
++	int64_t delta;
+ 
+ 	if (m->seek_next_ts) {
++		/* the clock starts over at the new position */
++		min_next_ns = mp_media_get_next_min_pts(m);
+ 		delta = 0;
+ 		m->seek_next_ts = false;
+ 	} else {
++		min_next_ns = mp_media_get_next_event_pts(m);
++		delta = min_next_ns - m->next_pts_ns;
+ #ifdef _DEBUG
+ 		assert(delta >= 0);
+ #endif
+@@ -576,16 +825,25 @@ static void seek_to(mp_media_t *m, int64_t pos)
+ 		m->terminal_packet_corrupt = false;
+ 		pthread_mutex_lock(&m->mutex);
+ 		m->completed = false;
++		m->reported_pts = pos * 1000;
+ 		pthread_mutex_unlock(&m->mutex);
+ 	}
+ 
+-	if (m->has_video && m->is_local_file) {
+-		mp_decode_flush(&m->v);
+-		if (m->seek_next_ts && m->pause && m->v_preload_cb && mp_media_prepare_frames(m))
+-			mp_media_next_video(m, true);
++	if (m->is_local_file) {
++		/* A rejected seek returned above without disturbing queued playback. */
++		mp_media_tempo_reset(m);
++		if (m->tempo_rate_pending) {
++			apply_speed(m, m->tempo_pending_speed);
++			m->tempo_rate_pending = false;
++		}
++		if (m->has_audio)
++			mp_decode_flush(&m->a);
++		if (m->has_video) {
++			mp_decode_flush(&m->v);
++			if (m->seek_next_ts && m->pause && m->v_preload_cb && mp_media_prepare_frames(m))
++				mp_media_next_video(m, true);
++		}
+ 	}
+-	if (m->has_audio && m->is_local_file)
+-		mp_decode_flush(&m->a);
+ }
+ 
+ bool mp_media_reset(mp_media_t *m)
+@@ -651,6 +909,12 @@ bool mp_media_eof(mp_media_t *m)
+ {
+ 	bool v_ended = !m->has_video || !m->v.frame_ready;
+ 	bool a_ended = !m->has_audio || !m->a.frame_ready;
++	if (m->has_audio && m->a.eof && !m->a.frame_ready)
++		mp_media_tempo_drain(m);
++	if (m->tempo_failed)
++		return false;
++	if (m->tempo_queue.size || m->tempo_rate_pending)
++		a_ended = false;
+ 	bool eof = v_ended && a_ended;
+ 
+ 	if (eof) {
+@@ -827,7 +1091,9 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 			break;
+ 		}
+ 		if (speed_changed)
+-			apply_speed(m, pending_speed);
++			mp_media_request_speed(m, pending_speed);
++		if (m->tempo_failed)
++			return false;
+ 		if (reset) {
+ 			mp_media_reset(m);
+ 			/* Reactivation needs a fresh clock after the deferred rewind. */
+@@ -863,10 +1129,16 @@ static inline bool mp_media_thread(mp_media_t *m)
+ 			if (m->has_audio)
+ 				mp_media_next_audio(m);
+ 
+-			if (!mp_media_prepare_frames(m))
++			if (m->tempo_failed || !mp_media_prepare_frames(m))
+ 				return false;
++			int64_t reported_pts = mp_media_get_base_pts(m);
++			pthread_mutex_lock(&m->mutex);
++			m->reported_pts = reported_pts;
++			pthread_mutex_unlock(&m->mutex);
+ 			if (mp_media_eof(m))
+ 				continue;
++			if (m->tempo_failed)
++				return false;
+ 
+ 			mp_media_calc_next_ns(m);
+ 		}
+@@ -980,6 +1252,7 @@ void mp_media_free(mp_media_t *media)
+ 	mp_kill_thread(media);
+ 	mp_decode_free(&media->v);
+ 	mp_decode_free(&media->a);
++	mp_media_tempo_free(media);
+ 	for (size_t i = 0; i < media->packet_pool.num; i++)
+ 		av_packet_free(&media->packet_pool.array[i]);
+ 	da_free(media->packet_pool);
+@@ -1063,7 +1336,10 @@ void mp_media_stop(mp_media_t *m)
+ 
+ int64_t mp_media_get_current_time(mp_media_t *m)
+ {
+-	return mp_media_get_base_pts(m) / 1000000LL;
++	pthread_mutex_lock(&m->mutex);
++	int64_t pts = m->reported_pts;
++	pthread_mutex_unlock(&m->mutex);
++	return pts / 1000000LL;
+ }
+ 
+ int64_t mp_media_get_frames(mp_media_t *m)
+diff --git a/shared/media-playback/media-playback/media.h b/shared/media-playback/media-playback/media.h
+index bf3e09b..4a1d9db 100644
+--- a/shared/media-playback/media-playback/media.h
++++ b/shared/media-playback/media-playback/media.h
+@@ -31,7 +31,9 @@ extern "C" {
+ 
+ #include <libavformat/avformat.h>
+ #include <libavcodec/avcodec.h>
++#include <libavfilter/avfilter.h>
+ #include <libswscale/swscale.h>
++#include <util/deque.h>
+ #include <util/threading.h>
+ 
+ #ifdef _MSC_VER
+@@ -54,6 +56,37 @@ struct mp_media {
+ 	int buffering;
+ 	int speed;
+ 
++	/* Pitch-preserving speed: when speed != 100, decoded audio is
++	 * time-stretched with atempo and output at its real sample rate,
++	 * instead of being played back at a scaled sample rate (which would
++	 * shift the pitch along with the tempo).
++	 *
++	 * atempo holds audio back, so decoded audio is fed to it
++	 * tempo_lookahead_ns ahead of its pts, and what it outputs waits in
++	 * tempo_queue until it's due, the same way decoded frames wait. */
++	bool tempo_failed;
++	int tempo_frame_offset;
++	bool tempo_rate_pending;
++	int tempo_pending_speed;
++	int64_t tempo_switch_pts;
++	AVFilterGraph *tempo_graph;
++	AVFilterContext *tempo_src;
++	AVFilterContext *tempo_sink;
++	AVFrame *tempo_frame;
++	AVChannelLayout tempo_ch_layout;
++	enum AVSampleFormat tempo_format;
++	int tempo_sample_rate;
++	int64_t tempo_in_samples;
++	int64_t tempo_out_samples;
++	int64_t tempo_anchor_pts;
++	int64_t tempo_out_end_pts;
++	int64_t tempo_lookahead_ns;
++	int tempo_lookahead_rate;
++	int tempo_max_frame_samples;
++	struct deque tempo_queue;
++	int64_t tempo_sent_end_pts;
++	bool tempo_sent;
++
+ 	enum AVPixelFormat scale_format;
+ 	struct SwsContext *swscale;
+ 	int scale_linesizes[4];
+@@ -103,6 +136,7 @@ struct mp_media {
+ 	bool seek;
+ 	bool seek_next_ts;
+ 	int pending_speed;
++	int64_t reported_pts;
+ 	int64_t seek_pos;
+ };
+ 

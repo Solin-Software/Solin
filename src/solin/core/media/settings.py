@@ -122,10 +122,10 @@ class ProjectionPlaybackSettingsStore:
             self.settings.value(SettingsKey.PLAYBACK_SPEED, 1.0),
             1.0,
         )
-        return max(0.25, min(4.0, speed))
+        return max(0.5, min(2.0, speed))
 
     def set_speed(self, speed: float) -> None:
-        self.settings.set_value(SettingsKey.PLAYBACK_SPEED, max(0.25, min(4.0, speed)))
+        self.settings.set_value(SettingsKey.PLAYBACK_SPEED, max(0.5, min(2.0, speed)))
 
     def volume(self) -> float:
         volume = _float_setting(

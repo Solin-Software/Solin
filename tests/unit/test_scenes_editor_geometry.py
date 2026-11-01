@@ -8,6 +8,7 @@ from solin.core.scenes.editor_geometry import (
     expand_focus_rect_to_aspect,
     fill_crop_to_canvas,
     move_framing_rect,
+    move_rect,
     recover_uncropped_rect,
     resize_framing_rect,
     resize_rect,
@@ -296,3 +297,261 @@ def test_framing_move_resize_and_wheel_scale_stay_inside_available_bounds() -> N
     assert resized.width == pytest.approx(0.6)
     assert resized.height == pytest.approx(0.6)
     assert scaled == NormalizedRect(x=0.3, y=0.3, width=0.2, height=0.2)
+
+
+def test_editor_move_allows_negative_position_but_keeps_a_sliver_on_canvas() -> None:
+    original = NormalizedRect(x=0.1, y=0.2, width=0.5, height=0.4)
+
+    moved = move_rect(original, -0.3, -0.5)
+    assert moved.x == pytest.approx(-0.2)
+    assert moved.y == pytest.approx(-0.3)
+    assert (moved.width, moved.height) == (original.width, original.height)
+
+    far_left = move_rect(original, -5.0, -5.0)
+    assert far_left.x == pytest.approx(0.02 - original.width)
+    assert far_left.y == pytest.approx(0.02 - original.height)
+
+    far_right = move_rect(original, 5.0, 5.0)
+    assert far_right.x == pytest.approx(0.98)
+    assert far_right.y == pytest.approx(0.98)
+
+
+def test_editor_move_does_not_jump_a_layer_already_past_the_limits() -> None:
+    original = NormalizedRect(x=-1.5, y=-1.5, width=0.5, height=0.5)
+
+    assert move_rect(original, -0.1, -0.1) == original
+    assert move_rect(original, 0.1, 0.1).x == pytest.approx(-1.4)
+
+
+def test_editor_resize_keeps_off_canvas_edges_in_place() -> None:
+    original = NormalizedRect(x=-0.2, y=-0.1, width=0.5, height=0.4)
+
+    free = resize_rect(original, "bottom_right", 0.1, 0.1, preserve_aspect=False)
+    assert (free.x, free.y) == (original.x, original.y)
+    assert free.width == pytest.approx(0.6)
+    assert free.height == pytest.approx(0.5)
+
+    shrunk = resize_rect(original, "top_left", 0.05, 0.05, preserve_aspect=False)
+    assert shrunk.x == pytest.approx(-0.15)
+    assert shrunk.y == pytest.approx(-0.05)
+    assert shrunk.x + shrunk.width == pytest.approx(0.3)
+
+    grown_outward = resize_rect(original, "left", -0.3, 0.0, preserve_aspect=False)
+    assert grown_outward.x == pytest.approx(original.x)
+
+    preserved = resize_rect(original, "bottom_right", 0.1, 0.0, preserve_aspect=True)
+    assert (preserved.x, preserved.y) == (original.x, original.y)
+    assert preserved.width == pytest.approx(0.6)
+    assert preserved.width / preserved.height == pytest.approx(
+        original.width / original.height
+    )
+
+
+def test_editor_crop_of_an_off_canvas_layer_does_not_force_a_crop() -> None:
+    original = NormalizedRect(x=-0.2, y=-0.1, width=0.5, height=0.4)
+
+    rect, crop = crop_geometry(original, Crop(), "top_left", 0.0, 0.0)
+    assert rect == original
+    assert crop == Crop()
+
+    rect, crop = crop_geometry(original, Crop(), "top_left", 0.1, 0.1)
+    assert rect.x == pytest.approx(-0.1)
+    assert crop.left == pytest.approx(0.2)
+    assert crop.top == pytest.approx(0.25)
+
+    beyond = NormalizedRect(x=0.7, y=0.8, width=0.5, height=0.4)
+    rect, crop = crop_geometry(beyond, Crop(), "bottom_right", 0.0, 0.0)
+    assert (rect.x, rect.y, rect.width, rect.height) == pytest.approx(
+        (beyond.x, beyond.y, beyond.width, beyond.height)
+    )
+    assert crop == Crop()
+
+
+@pytest.mark.parametrize("preserve_aspect", [False, True])
+@pytest.mark.parametrize("handle", ["left", "top", "top_left"])
+@pytest.mark.parametrize("delta", [-10.0, 10.0])
+def test_resize_respects_model_limits_and_keeps_the_opposite_edges(
+    preserve_aspect: bool, handle: str, delta: float,
+) -> None:
+    original = NormalizedRect(x=1.5, y=1.5, width=3.0, height=3.0)
+
+    resized = resize_rect(original, handle, delta, delta, preserve_aspect=preserve_aspect)
+
+    assert -2.0 <= resized.x <= 2.0
+    assert -2.0 <= resized.y <= 2.0
+    assert 0.001 <= resized.width <= 4.0
+    assert 0.001 <= resized.height <= 4.0
+    if "left" in handle:
+        assert resized.x + resized.width == pytest.approx(original.x + original.width)
+    if "top" in handle:
+        assert resized.y + resized.height == pytest.approx(original.y + original.height)
+    if preserve_aspect:
+        assert resized.width / resized.height == pytest.approx(original.width / original.height)
+
+
+@pytest.mark.parametrize("handle", ["left", "top", "top_left", "bottom_right"])
+@pytest.mark.parametrize("preserve_aspect", [False, True])
+def test_resize_does_not_enlarge_valid_layers_smaller_than_editor_minimum(
+    handle: str, preserve_aspect: bool,
+) -> None:
+    original = NormalizedRect(x=-0.0005, y=0.9995, width=0.001, height=0.002)
+
+    assert resize_rect(original, handle, 0.0, 0.0, preserve_aspect=preserve_aspect) == original
+
+
+@pytest.mark.parametrize("handle", ["left", "top", "top_left"])
+@pytest.mark.parametrize("delta", [-10.0, 10.0])
+@pytest.mark.parametrize("size", [3.0, 4.0])
+def test_crop_respects_model_limits_without_rescaling_the_source(
+    handle: str, delta: float, size: float,
+) -> None:
+    original = NormalizedRect(x=1.5, y=1.5, width=size, height=size)
+    original_crop = Crop(left=0.2, top=0.2)
+
+    rect, crop = crop_geometry(original, original_crop, handle, delta, delta)
+
+    assert NormalizedRect.MINIMUM_POSITION <= rect.x <= NormalizedRect.MAXIMUM_POSITION
+    assert NormalizedRect.MINIMUM_POSITION <= rect.y <= NormalizedRect.MAXIMUM_POSITION
+    assert NormalizedRect.MINIMUM_SIZE <= rect.width <= NormalizedRect.MAXIMUM_SIZE
+    assert NormalizedRect.MINIMUM_SIZE <= rect.height <= NormalizedRect.MAXIMUM_SIZE
+    assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    assert rect.y + rect.height == pytest.approx(original.y + original.height)
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(original.width / 0.8)
+    assert rect.height / (1.0 - crop.top - crop.bottom) == pytest.approx(original.height / 0.8)
+
+
+@pytest.mark.parametrize("handle", ["left", "right", "top", "bottom", "top_left", "bottom_right"])
+def test_crop_does_not_change_valid_tiny_or_heavily_cropped_layers_on_grab(handle: str) -> None:
+    original = NormalizedRect(x=0.2, y=0.2, width=0.001, height=0.002)
+    original_crop = Crop(left=0.99, right=0.009, top=0.99, bottom=0.009)
+
+    rect, crop = crop_geometry(original, original_crop, handle, 0.0, 0.0)
+
+    assert rect.to_record() == pytest.approx(original.to_record())
+    assert crop == original_crop
+
+
+@pytest.mark.parametrize("handle", ["left", "right", "top", "bottom", "top_left", "bottom_right"])
+@pytest.mark.parametrize("delta", [-0.2, 0.2])
+@pytest.mark.parametrize("leading_crop", [0.01, 0.4, 0.6])
+def test_extreme_crop_rounding_preserves_fixed_edges_and_source_scale(
+    handle: str, delta: float, leading_crop: float,
+) -> None:
+    original = NormalizedRect(x=0.2, y=0.2, width=3.8, height=3.8)
+    trailing_crop = 1.0 - leading_crop - 1.5e-15
+    original_crop = Crop(left=leading_crop, right=trailing_crop,
+                         top=leading_crop, bottom=trailing_crop)
+
+    rect, crop = crop_geometry(original, original_crop, handle, delta, delta)
+
+    if "left" in handle:
+        assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    else:
+        assert rect.x == original.x
+    if "top" in handle:
+        assert rect.y + rect.height == pytest.approx(original.y + original.height)
+    else:
+        assert rect.y == original.y
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(
+        original.width / (1.0 - original_crop.left - original_crop.right),
+    )
+    assert rect.height / (1.0 - crop.top - crop.bottom) == pytest.approx(
+        original.height / (1.0 - original_crop.top - original_crop.bottom),
+    )
+
+
+def test_uncropping_at_zero_handles_roundoff_without_walking_subnormal_values() -> None:
+    original = NormalizedRect(x=0.04285714285714286, y=0.2, width=0.1, height=0.5)
+    original_crop = Crop(left=0.3)
+
+    rect, crop = crop_geometry(original, original_crop, "left", -0.1, 0.0)
+
+    assert 0.0 <= rect.x < original.x
+    assert crop.left < original_crop.left
+    assert rect.x + rect.width == pytest.approx(original.x + original.width)
+    assert rect.width / (1.0 - crop.left - crop.right) == pytest.approx(original.width / 0.7)
+
+
+@pytest.mark.parametrize("operation", ["crop", "free_resize", "aspect_resize"])
+@pytest.mark.parametrize(("original", "handle", "dx", "dy"), [
+    (NormalizedRect(x=-0.08, y=0.2, width=0.1, height=0.3), "right", -0.03, 0.0),
+    (NormalizedRect(x=0.96, y=0.2, width=0.1, height=0.3), "left", 0.05, 0.0),
+    (NormalizedRect(x=0.2, y=-0.08, width=0.3, height=0.1), "bottom", 0.0, -0.03),
+    (NormalizedRect(x=0.2, y=0.96, width=0.3, height=0.1), "top", 0.0, 0.05),
+    (NormalizedRect(x=-0.08, y=-0.08, width=0.1, height=0.1), "bottom_right", -0.03, -0.03),
+    (NormalizedRect(x=0.96, y=0.96, width=0.1, height=0.1), "top_left", 0.05, 0.05),
+])
+def test_edge_edits_keep_a_grabbable_sliver_on_canvas(
+    operation: str, original: NormalizedRect, handle: str, dx: float, dy: float,
+) -> None:
+    if operation == "crop":
+        rect, _crop = crop_geometry(original, Crop(), handle, dx, dy)
+    else:
+        rect = resize_rect(original, handle, dx, dy, preserve_aspect=operation == "aspect_resize")
+
+    assert min(1.0, rect.x + rect.width) - max(0.0, rect.x) >= 0.02 - 1e-9
+    assert min(1.0, rect.y + rect.height) - max(0.0, rect.y) >= 0.02 - 1e-9
+
+
+@pytest.mark.parametrize("operation", ["crop", "free_resize", "aspect_resize"])
+def test_edge_edits_do_not_pull_fully_off_canvas_layers_back_in(operation: str) -> None:
+    original = NormalizedRect(x=-0.3, y=-0.3, width=0.1, height=0.1)
+    if operation == "crop":
+        rect, _crop = crop_geometry(original, Crop(), "bottom_right", -0.01, -0.01)
+    else:
+        rect = resize_rect(original, "bottom_right", -0.01, -0.01,
+                           preserve_aspect=operation == "aspect_resize")
+
+    assert rect.x == original.x
+    assert rect.y == original.y
+    assert rect.width == pytest.approx(0.09)
+    assert rect.height == pytest.approx(0.09)
+
+
+@pytest.mark.parametrize(("start", "size", "expected"), [
+    (-0.295, 0.8, -0.3),
+    (-0.245, 1.5, -0.25),
+    (0.495, 0.8, 0.5),
+])
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_move_snaps_off_canvas_edges_and_oversized_layers_to_center(
+    start: float, size: float, expected: float, axis: str,
+) -> None:
+    original = NormalizedRect(x=start if axis == "x" else 0.2,
+                              y=start if axis == "y" else 0.2,
+                              width=size if axis == "x" else 0.2,
+                              height=size if axis == "y" else 0.2)
+
+    snapped, guides = snap_move_rect(original, viewport_width=960, viewport_height=960)
+
+    assert getattr(snapped, axis) == pytest.approx(expected)
+    assert (axis, 0.5) in guides
+    assert (snapped.width, snapped.height) == (original.width, original.height)
+
+
+def test_off_canvas_snapping_keeps_hysteresis_and_can_be_disabled() -> None:
+    original = NormalizedRect(x=-0.3, y=0.2, width=0.8, height=0.2)
+    nearby = move_rect(original, 0.01, 0.0)
+    snapped, guides = snap_move_rect(nearby, viewport_width=960, viewport_height=540,
+                                    active_guides=(("x", 0.5),))
+    assert snapped.x == pytest.approx(-0.3)
+    assert ("x", 0.5) in guides
+
+    released = move_rect(original, 0.02, 0.0)
+    snapped, guides = snap_move_rect(released, viewport_width=960, viewport_height=540,
+                                    active_guides=(("x", 0.5),))
+    assert snapped.x == released.x
+    assert ("x", 0.5) not in guides
+    assert snap_move_rect(nearby, viewport_width=960, viewport_height=540,
+                          disabled=True) == (nearby, ())
+
+
+def test_moving_tiny_layers_can_reach_canvas_edges_without_losing_visibility() -> None:
+    original = NormalizedRect(x=0.5, y=0.5, width=0.001, height=0.001)
+
+    left = move_rect(original, -10.0, -10.0)
+    right = move_rect(original, 10.0, 10.0)
+
+    assert (left.x, left.y) == (0.0, 0.0)
+    assert right.x + right.width == pytest.approx(1.0)
+    assert right.y + right.height == pytest.approx(1.0)

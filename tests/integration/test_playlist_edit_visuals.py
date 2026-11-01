@@ -43,6 +43,7 @@ def test_playlist_icons_stay_embedded_in_python():
         "back",
         "plus",
         "export",
+        "folder",
         "folder_link",
         "refresh",
         "close",

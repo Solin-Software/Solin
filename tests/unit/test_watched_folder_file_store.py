@@ -297,6 +297,75 @@ def test_watched_folder_file_store_rejects_nested_rename(tmp_path):
         store.rename_folder(folder, "../escape")
 
 
+def test_watched_folder_rename_cannot_hide_playlist_from_scanner(tmp_path):
+    folder = tmp_path / "visible"
+    folder.mkdir()
+
+    with pytest.raises(ValueError):
+        WatchedFolderFileStore().rename_folder(folder, ".hidden")
+
+    assert folder.is_dir()
+
+
+@pytest.mark.parametrize("name", ["Other", "OTHER", "Cafe\u0301"])
+def test_folder_mutations_reject_file_and_folder_collisions(tmp_path, name):
+    (tmp_path / "Other").mkdir()
+    (tmp_path / "Café").write_bytes(b"keep")
+    source = tmp_path / "Source"
+    source.mkdir()
+    files = WatchedFolderFileStore()
+
+    with pytest.raises(ValueError):
+        files.create_folder(tmp_path, name)
+    with pytest.raises(ValueError):
+        files.rename_folder(source, name)
+
+    assert source.is_dir()
+    assert (tmp_path / "Café").read_bytes() == b"keep"
+
+
+def test_folder_creation_does_not_accept_a_late_exact_collision(tmp_path, monkeypatch):
+    existing = tmp_path / "Playlist"
+    existing.mkdir()
+    (existing / "keep.txt").write_text("original")
+    files = WatchedFolderFileStore()
+    # Another process creates the target between enumeration and mkdir.
+    monkeypatch.setattr(files, "folder_entry_names", lambda _root: ())
+
+    with pytest.raises(FileExistsError):
+        files.create_folder(tmp_path, "Playlist")
+
+    assert (existing / "keep.txt").read_text() == "original"
+
+
+def test_folder_rename_allows_case_only_change(tmp_path):
+    source = tmp_path / "Music"
+    source.mkdir()
+    (source / "keep.txt").write_text("original")
+
+    result = Path(WatchedFolderFileStore().rename_folder(source, "MUSIC"))
+
+    assert result.name == "MUSIC"
+    assert (result / "keep.txt").read_text() == "original"
+    assert [entry.name for entry in tmp_path.iterdir()] == ["MUSIC"]
+
+
+def test_folder_rename_rejects_redirected_sources(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("Creating directory symlinks is unavailable")
+
+    with pytest.raises(ValueError, match="redirected"):
+        WatchedFolderFileStore().rename_folder(alias, "Renamed")
+
+    assert alias.is_symlink()
+    assert outside.is_dir()
+
+
 def test_watched_folder_file_store_removes_only_contained_files(tmp_path):
     folder = tmp_path / "folder"
     folder.mkdir()

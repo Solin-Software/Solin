@@ -1,21 +1,23 @@
-"""Program recording for the scene-engine sidecar (libobs ffmpeg_muxer).
+"""Compact H.264/AAC Program recording with independent encoder scaling.
 
-Records the program composite (the main video mix) plus the main audio mix to a
-file, using libobs' own recording pipeline: an ``ffmpeg_muxer`` output fed by a
-video encoder (``obs_x264`` — universal + reliable) and an AAC audio encoder,
-both auto-attached to the global mix.
+Hardware encoders use bounded VBR; the x264 fallback uses CRF with a VBV ceiling.
+Only the recording encoder is scaled, leaving the shared Program mix unchanged.
 
-Audio track: the encoder binds the main audio mix, so recordings carry an audio
-track. Selecting specific microphone / system-audio devices (adding capture
-sources to the mix) is a later slice; today the track is whatever the main mix
-carries.
+Audio track: the audio encoder binds mix track 1 (``RECORDING_MIX_INDEX``), which
+carries the microphone and system-audio captures (see ``libobs_audio_sources``).
+Media sources are monitor-only with no mixer tracks, so media is heard in the
+recording through the system-audio capture alone, never twice.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
+
+from solin.core.media.obs_runtime import RECORDING_MIX_INDEX
+from solin.core.scenes.recording import DEFAULT_RECORDING_RESOLUTION
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +43,51 @@ _HW_VIDEO_ENCODERS = (
 )
 _CPU_VIDEO_ENCODER = "obs_x264"
 _AUDIO_ENCODER = "ffmpeg_aac"
+_AUDIO_BITRATE = 128
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingProfile:
+    bitrate: int
+    maximum_bitrate: int
+
+
+# Kilobits/second at 30 FPS. CRF can spend far less on a static speaker/slide;
+# the ceiling leaves headroom for movement without unbounded recording sizes.
+_PROFILES = {
+    360: _RecordingProfile(500, 900),
+    540: _RecordingProfile(900, 1600),
+    720: _RecordingProfile(1500, 2500),
+    1080: _RecordingProfile(3000, 5000),
+}
+
+
+def _video_settings(encoder_id: str, height: int, fps: int) -> dict[str, object]:
+    profile = _PROFILES[height]
+    multiplier = max(1.0, fps / 30)
+    bitrate = round(profile.bitrate * multiplier)
+    maximum = round(profile.maximum_bitrate * multiplier)
+    if encoder_id == _CPU_VIDEO_ENCODER:
+        return {
+            "rate_control": "CRF", "crf": 23, "profile": "high",
+            "preset": "veryfast" if height == 1080 else "faster",
+            "keyint_sec": 2,
+            "x264opts": f"vbv-maxrate={maximum} vbv-bufsize={maximum * 3}",
+        }
+    settings: dict[str, object] = {
+        "rate_control": "VBR", "bitrate": bitrate, "keyint_sec": 2,
+    }
+    if encoder_id == "ffmpeg_vaapi":
+        # VAAPI uses FFmpeg's numeric H.264 profile and its own ceiling key.
+        settings.update(profile=100, maxrate=maximum)
+    else:
+        settings["profile"] = "high"
+        if encoder_id == "h264_texture_amf":
+            # AMF's VBR implementation derives its peak as 1.5 * bitrate.
+            settings["preset"] = "quality"
+        else:
+            settings["max_bitrate"] = maximum
+    return settings
 
 
 def _hw_encode_enabled() -> bool:
@@ -72,9 +119,18 @@ class LibobsRecorder:
     def path(self) -> str:
         return self._path
 
-    def start(self, path: str, *, video_bitrate: int = 6000, audio_bitrate: int = 160) -> bool:
+    def start(
+        self, path: str, *,
+        width: int = DEFAULT_RECORDING_RESOLUTION * 16 // 9,
+        height: int = DEFAULT_RECORDING_RESOLUTION,
+    ) -> bool:
         if self._output is not None:
             return False  # already recording
+        if (
+            type(width) is not int or type(height) is not int
+            or height not in _PROFILES or width != height * 16 // 9
+        ):
+            return False
         ob = self._runtime.ob
         output_kind = self._select_output_kind(ob.enum_output_types())
         if output_kind is None:
@@ -86,7 +142,7 @@ class LibobsRecorder:
         candidates = self._video_encoder_candidates(ob.enum_encoder_types())
         for encoder_id in candidates:
             if self._try_start(
-                ob, output_kind, encoder_id, str(path), int(video_bitrate), int(audio_bitrate)
+                ob, output_kind, encoder_id, str(path), width, height
             ):
                 log.info("recording started with the %s video encoder", encoder_id)
                 return True
@@ -99,8 +155,8 @@ class LibobsRecorder:
         output_kind: str,
         video_encoder_id: str,
         path: str,
-        video_bitrate: int,
-        audio_bitrate: int,
+        width: int,
+        height: int,
     ) -> bool:
         """Attempt one full recording start with ``video_encoder_id``.
 
@@ -112,10 +168,13 @@ class LibobsRecorder:
         video_encoder = audio_encoder = output = None
         try:
             video_encoder = ob.VideoEncoder.create(
-                video_encoder_id, "solin-rec-video", {"bitrate": video_bitrate}
+                video_encoder_id, "solin-rec-video",
+                _video_settings(video_encoder_id, height, self._runtime.video.fps),
             )
+            self._runtime.scale_video_encoder(video_encoder, width=width, height=height)
             audio_encoder = ob.AudioEncoder.create(
-                _AUDIO_ENCODER, "solin-rec-audio", {"bitrate": audio_bitrate}
+                _AUDIO_ENCODER, "solin-rec-audio", {"bitrate": _AUDIO_BITRATE},
+                mixer_idx=RECORDING_MIX_INDEX,
             )
             output = ob.Output.create(output_kind, "solin-recording", {"path": path})
             output.set_video_encoder(video_encoder)

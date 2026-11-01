@@ -254,6 +254,10 @@ class _Recording(QObject):
         )
         self.configuration_changed.emit(self.configuration)
 
+    def set_resolution(self, resolution: int) -> None:
+        self.configuration = replace(self.configuration, resolution=resolution)
+        self.configuration_changed.emit(self.configuration)
+
     def effective_output_directory(self) -> Path:
         return (
             Path(self.configuration.output_directory)
@@ -559,6 +563,24 @@ def test_recording_bridge_projects_one_controller_and_applies_live_settings(
     del workspace
 
 
+def test_recording_resolution_choices_selection_and_busy_guard(scene_bridge_factory, tmp_path) -> None:
+    recording = _Recording(tmp_path / "recordings")
+    _workspace, _controller, bridge, _preview = scene_bridge_factory(recording=recording)
+    assert [choice["value"] for choice in bridge.recordingResolutionChoices] == [360, 540, 720, 1080]
+    assert bridge.recordingResolution == 720
+    changed = QSignalSpy(bridge.changed)
+    bridge.setRecordingResolution(1080)
+    assert recording.configuration.resolution == 1080
+    assert bridge.recordingResolution == 1080
+    assert changed.count() > 0
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(360)
+    assert bridge.recordingResolution == 1080
+    bridge.toggleProgramRecording()
+    bridge.setRecordingResolution(540)
+    assert bridge.recordingResolution == 540
+
+
 def test_camera_source_health_surfaces_an_actionable_layer_warning(scene_bridge_factory) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
     bridge.selectScene(CAMERA_SCENE_ID)  # the camera layer lives in the Camera scene
@@ -685,24 +707,30 @@ def test_bridge_rejects_absolute_position_for_non_onvif_camera(scene_bridge_fact
     assert workspace.resources.camera_presets == ()
 
 
+@pytest.mark.parametrize("bus_id", [BusId.VIRTUAL_CAMERA, BusId.MEDIA_WINDOWS])
 def test_bridge_edits_a_scene_and_tracks_desired_separately_from_applied(
-    scene_bridge_factory,
+    scene_bridge_factory, bus_id,
 ) -> None:
     workspace, controller, bridge, _preview_store = scene_bridge_factory()
 
     bridge.createScene("Custom")
     camera_id = workspace.configured_cameras[0].id
     bridge.addConfiguredCamera(camera_id, "Stage camera", bridge.sourceEditContext())
-    bridge.takeLive()
+    other_bus = BusId.MEDIA_WINDOWS if bus_id is BusId.VIRTUAL_CAMERA else BusId.VIRTUAL_CAMERA
+    other_before = controller.runtime.state.output(other_bus)
+    bridge.takeScene(bus_id.value)
 
     scene = controller.document.scene(bridge.selectedSceneId)
-    virtual = controller.runtime.state.output(BusId.VIRTUAL_CAMERA)
+    output = controller.runtime.state.output(bus_id)
     # First-run ships Content + Camera; the new Custom scene makes three.
     assert bridge.scenesModel.rowCount() == 3
     assert len(scene.layers) == 1
-    assert virtual.mode is OutputMode.AUTO
-    assert virtual.base_scene_id == scene.id
-    assert bridge.selectedSceneDesired
+    assert output.mode is OutputMode.AUTO
+    assert output.base_scene_id == scene.id
+    assert controller.runtime.state.output(other_bus) == other_before
+    outputs = {item["busId"]: item for item in bridge.selectedSceneOutputs}
+    assert not outputs[bus_id.value]["canTake"]
+    assert outputs[other_bus.value]["canTake"]
     assert not bridge.selectedSceneLive
     assert bridge.engineStatus == "Scene engine unavailable"
 
@@ -1315,6 +1343,82 @@ def test_bridge_geometry_preview_commits_exactly_one_revision(scene_bridge_facto
     bridge.commitLayerGeometry(geometry)
 
     assert controller.document.revision == revision + 1
+
+
+def test_bridge_exposes_constant_normalized_rect_limits(scene_bridge_factory) -> None:
+    _, controller, bridge, _ = scene_bridge_factory()
+    limits = bridge.property("normalizedRectLimits")
+    assert limits == {
+        "minimumPosition": NormalizedRect.MINIMUM_POSITION,
+        "maximumPosition": NormalizedRect.MAXIMUM_POSITION,
+        "minimumSize": NormalizedRect.MINIMUM_SIZE,
+        "maximumSize": NormalizedRect.MAXIMUM_SIZE,
+    }
+    meta = bridge.metaObject()
+    prop = meta.property(meta.indexOfProperty("normalizedRectLimits"))
+    assert prop.isConstant()
+    assert prop.typeName() == "QVariantMap"
+
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    for minimum, maximum in [("minimumPosition", "maximumPosition"),
+                             ("maximumPosition", "minimumPosition")]:
+        bridge.applyPreciseTransform(layer.id, {
+            "x": limits[minimum], "y": limits[maximum],
+            "width": limits["minimumSize"], "height": limits["maximumSize"],
+        })
+        rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+        assert rect == NormalizedRect(
+            x=limits[minimum], y=limits[maximum],
+            width=limits["minimumSize"], height=limits["maximumSize"],
+        )
+
+
+@pytest.mark.parametrize("values", [
+    {"x": NormalizedRect.MINIMUM_POSITION - 0.001},
+    {"y": NormalizedRect.MAXIMUM_POSITION + 0.001},
+    {"width": NormalizedRect.MINIMUM_SIZE / 2},
+    {"height": NormalizedRect.MAXIMUM_SIZE + 0.001},
+    {"x": float("nan")},
+    {"width": float("inf")},
+])
+def test_bridge_rejects_invalid_precise_transform_without_partial_changes(
+    scene_bridge_factory, values,
+) -> None:
+    notifications = _Notifications()
+    _, controller, bridge, _ = scene_bridge_factory(notifications=notifications)
+    original = controller.document
+    layer = original.scene(bridge.selectedSceneId).layers[0]
+
+    bridge.applyPreciseTransform(layer.id, {"rotation": 45.0, **values})
+
+    assert controller.document == original
+    assert notifications.errors
+
+
+def test_bridge_move_and_precise_transform_accept_negative_position(
+    scene_bridge_factory,
+) -> None:
+    _workspace, controller, bridge, _preview_store = scene_bridge_factory()
+    layer = controller.document.scene(bridge.selectedSceneId).layers[0]
+    controller.documents.update_layer(
+        bridge.selectedSceneId,
+        layer.id,
+        replace(layer, rect=NormalizedRect(x=0.1, y=0.1, width=0.5, height=0.5)),
+    )
+
+    geometry = bridge.calculateLayerGeometry(
+        layer.id, "move", "", -0.3, -0.25, 960.0, 540.0, False, False, True
+    )
+    assert geometry["x"] == pytest.approx(-0.2)
+    assert geometry["y"] == pytest.approx(-0.15)
+    bridge.commitLayerGeometry(geometry)
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (pytest.approx(-0.2), pytest.approx(-0.15))
+
+    bridge.selectLayer(layer.id)
+    bridge.applyPreciseTransform(layer.id, {"x": -0.5, "y": -0.25})
+    rect = controller.document.scene(bridge.selectedSceneId).layers[0].rect
+    assert (rect.x, rect.y) == (-0.5, -0.25)
 
 
 def test_bridge_only_media_scene_role_is_removable(scene_bridge_factory) -> None:

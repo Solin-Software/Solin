@@ -84,6 +84,14 @@ jobs:
         shell: pwsh
         run: python scripts/build_media_extract.py
 
+      - name: Build corrected Windows audio monitoring core
+        shell: pwsh
+        run: python scripts/build_obs_runtime.py
+
+      - name: Build corrected native media playback
+        shell: pwsh
+        run: python scripts/build_media_playback.py
+
       - name: Read app version
         id: version
         run: python scripts/release.py metadata --github-output
@@ -146,6 +154,7 @@ jobs:
 
           python -m nuitka `
             --standalone `
+            --user-package-configuration-file="packaging/windows/solin.nuitka-package.config.yml" `
             --output-dir="$env:BUILD_DIR" `
             --output-filename="$env:APP_NAME" `
             --windows-icon-from-ico="src\solin\resources\assets\icon.ico" `
@@ -190,6 +199,16 @@ jobs:
             --enable-plugin=pyside6 `
             --include-qt-plugins=platforms,styles,imageformats,position `
             main.py
+
+      - name: Qualify packaged Zoom automation runtime
+        shell: python
+        run: |
+          import os
+          import subprocess
+          from pathlib import Path
+
+          executable = Path(os.environ["BUILD_DIR"]) / "main.dist" / "Solin.exe"
+          subprocess.run([str(executable), "--verify-zoom-runtime"], check=True, timeout=30)
 
       - name: Stage and qualify packaged libobs runtime
         shell: pwsh
@@ -377,7 +396,7 @@ jobs:
           SOLIN_PACKAGED_EXE: 'build\main.dist\Solin.exe'
           SOLIN_E2E_STARTUP_SECONDS: "8"
         run: |
-          python -m pytest tests\e2e\test_packaged_app_smoke.py -q
+          python -m pytest tests\e2e\test_packaged_app_smoke.py tests\e2e\test_packaged_windows_smoke.py -q
 
       - name: Collect installer artifacts
         shell: pwsh

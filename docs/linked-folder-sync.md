@@ -137,6 +137,11 @@ while transport catches up.
 
 ### Meeting folders with synchronization disabled
 
+The meeting folder control reports folder availability and synchronization separately.
+An empty meeting folder can be created without enabling synchronization; enabling
+synchronization also creates the folder if needed. An inaccessible location is
+reported as unavailable rather than missing.
+
 Turning off meeting synchronization preserves visible files and the local meeting
 tree. The linked folder continues to accept new sources: midweek media appears in
 **Living as Christians**, and weekend media appears in **Public Talk**. These
@@ -162,6 +167,26 @@ Shared cache cleanup waits for successful local snapshot persistence and pending
 insertions. Media prepared before deactivation finishes through local detachment;
 late removals use the current activation marker and cannot remove a replacement
 document's resources.
+
+Explicit folder deletion is a separate, confirmed action, available only after
+synchronization and pending operations finish. It removes the folder's contents
+and their associated local meeting items, preserving official meeting items and
+unrelated media. Stop projection of media from that folder first. The application
+drains local workers and records a durable deletion intent before removal. If
+removal is partial or the application closes, recovery reconciles only sources
+proven absent; it never repeats physical deletion automatically. The intent is
+cleared only after the reconciled local snapshot is saved. A cloud provider may
+propagate the physical deletion to other computers.
+
+### Linked playlist folder names
+
+The linked folders section supports creating empty folders without activating a
+shared document. Creation and renaming use the same meeting-folder classifier:
+names recognized as midweek or weekend meetings are reserved for the Meetings tab.
+Names use NFC normalization and reject portable filesystem restrictions,
+including Windows device names, separators, control characters, leading dots,
+trailing dots, and surrounding whitespace. Length limits cover both UTF-8 and
+UTF-16; collision checks ignore case and Unicode normalization on every platform.
 
 ### Shared removal and recovery
 

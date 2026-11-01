@@ -126,6 +126,7 @@ class OnboardingBridge(QObject):
         self._session_revision = 0
         self._original_language = "en"
         self._media_language_touched = False
+        self._profile_name_touched = False
         self._obs_status_state = OBSConnectionState.DISCONNECTED
         self._obs_status_message = ""
         self._meeting_schedule: MeetingSchedule | None = None
@@ -211,6 +212,7 @@ class OnboardingBridge(QObject):
         self._history.clear()
         self._session_revision += 1
         self._media_language_touched = False
+        self._profile_name_touched = False
         self._meeting_schedule = None
         self._congregation_status_kind = "idle"
         self._obs_probe.stop()
@@ -235,6 +237,8 @@ class OnboardingBridge(QObject):
             normalized = bool(value)
         elif name in {"profileName", "obsPort", "obsPassword"}:
             normalized = str(value)
+        if name == "profileName":
+            self._profile_name_touched = True
         self._state[name] = normalized
         self._state["errorText"] = ""
         if name == "obsSelected" and not normalized:
@@ -438,6 +442,8 @@ class OnboardingBridge(QObject):
             return
         self._meeting_schedule = None
         self._congregation_status_kind = "resolving"
+        if not self._profile_name_touched or not str(self._state["profileName"]).strip():
+            self._state["profileName"] = name
         self._state.update(
             {
                 "congregationName": name,

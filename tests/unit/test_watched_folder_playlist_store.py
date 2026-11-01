@@ -149,3 +149,109 @@ def test_resource_registry_cannot_change_after_store_use(monkeypatch):
 
     with pytest.raises(RuntimeError):
         store.bind_resource_lanes(ResourceLaneRegistry())
+
+
+def test_linked_playlist_rename_cannot_reclassify_as_meeting(tmp_path):
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+
+    folder = tmp_path / "Playlist"
+    folder.mkdir()
+    with pytest.raises(ValueError):
+        WatchedFolderPlaylistStore().rename_folder(
+            str(folder), "2026-10-21 MW", WatchedFolderFileStore()
+        )
+
+    assert folder.is_dir()
+
+
+def test_linked_playlist_creation_stays_empty_even_after_discovery(tmp_path, monkeypatch):
+    from pathlib import Path
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+
+    store = WatchedFolderPlaylistStore()
+    notifications = []
+    store.subscribe(lambda: notifications.append(True))
+    # Creation must not construct a replica, publish a manifest, or enable sync.
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            watched_folder_playlists, "playlist_sync",
+            lambda *_args: pytest.fail("Creation must not initialize playlist sync"),
+        )
+        result = Path(store.create_folder(str(tmp_path), "Reunia\u0303o", WatchedFolderFileStore()))
+
+    assert result.name == "Reunião"
+    assert result.is_dir()
+    assert list(result.iterdir()) == []
+    assert notifications == [True]
+    entries = store.scan_root(str(tmp_path))
+    assert len(entries) == 1
+    assert entries[0]["name"] == "Reunião"
+    assert entries[0]["item_count"] == 0
+    assert list(result.iterdir()) == []
+
+
+@pytest.mark.parametrize("name", ["2026-10-21 MW", "2026-10-25 we", "2026-10-25\u2003WE", "../escape", "A/B", "COM¹.txt", ".solin_sync", " name", "name."])
+def test_linked_playlist_creation_validates_before_any_mutation(tmp_path, name):
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+
+    store = WatchedFolderPlaylistStore()
+    notifications = []
+    store.subscribe(lambda: notifications.append(True))
+
+    with pytest.raises(ValueError):
+        store.create_folder(str(tmp_path), name, WatchedFolderFileStore())
+
+    assert list(tmp_path.iterdir()) == []
+    assert notifications == []
+
+
+def test_linked_folder_creation_requires_existing_accessible_root(tmp_path):
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+
+    root = tmp_path / "unavailable"
+    with pytest.raises(FileNotFoundError):
+        WatchedFolderPlaylistStore().create_folder(str(root), "Playlist", WatchedFolderFileStore())
+
+    assert not root.exists()
+
+
+def test_concurrent_portable_collisions_are_serialized_at_root(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from solin.core.foundation.folder_names import FolderNameError
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+
+    store = WatchedFolderPlaylistStore()
+    files = WatchedFolderFileStore()
+
+    def create(name):
+        try:
+            return store.create_folder(str(tmp_path), name, files)
+        except FolderNameError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(create, "Playlist")
+        second = executor.submit(create, "PLAYLIST")
+        outcomes = [first.result(timeout=5), second.result(timeout=5)]
+
+    assert sum(result is not None for result in outcomes) == 1
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_rename_failure_can_restore_an_existing_legacy_name(tmp_path, monkeypatch):
+    from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
+    from solin.core.playlists.linked_folder import playlist_sync
+
+    folder = tmp_path / ".legacy"
+    folder.mkdir()
+    service = playlist_sync(folder)
+
+    def fail_rebind(_destination):
+        raise PermissionError("binding unavailable")
+
+    monkeypatch.setattr(service, "rebind_folder", fail_rebind)
+    with pytest.raises(PermissionError, match="binding unavailable"):
+        WatchedFolderPlaylistStore().rename_folder(str(folder), "Visible", WatchedFolderFileStore())
+
+    assert folder.is_dir()
+    assert not (tmp_path / "Visible").exists()

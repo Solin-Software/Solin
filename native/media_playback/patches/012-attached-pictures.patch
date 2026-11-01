@@ -1,0 +1,25 @@
+--- a/shared/media-playback/media-playback/decode.c
++++ b/shared/media-playback/media-playback/decode.c
+@@ -145,6 +145,22 @@
+ 	ret = av_find_best_stream(m->fmt, type, -1, -1, NULL, 0);
+ 	if (ret < 0)
+ 		return false;
++	/* Attached pictures belong to metadata, not the playback clock. */
++	if (type == AVMEDIA_TYPE_VIDEO &&
++	    (m->fmt->streams[ret]->disposition & AV_DISPOSITION_ATTACHED_PIC)) {
++		ret = AVERROR_STREAM_NOT_FOUND;
++		for (unsigned int i = 0; i < m->fmt->nb_streams; i++) {
++			AVStream *candidate = m->fmt->streams[i];
++			if (candidate->codecpar->codec_type != type ||
++			    (candidate->disposition & AV_DISPOSITION_ATTACHED_PIC))
++				continue;
++			ret = av_find_best_stream(m->fmt, type, (int)i, -1, NULL, 0);
++			if (ret >= 0)
++				break;
++		}
++		if (ret < 0)
++			return false;
++	}
+ 	stream = d->stream = m->fmt->streams[ret];
+ 	id = stream->codecpar->codec_id;
+ 

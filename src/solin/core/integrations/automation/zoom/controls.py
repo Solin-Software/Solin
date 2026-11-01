@@ -12,6 +12,8 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any
 
+from solin.core.foundation.constants import IS_COMPILED
+
 from .i18n_labels import (
     AUDIO_MUTED_TEXT,
     AUDIO_UNMUTED_TEXT,
@@ -64,6 +66,8 @@ class Automation:
         try:
             api = import_module("comtypes.gen.UIAutomationClient")
         except ImportError:
+            if IS_COMPILED:
+                raise
             api = comtypes.client.GetModule("UIAutomationCore.dll")
         self.api = api
         self.errors = (OSError, ValueError, comtypes.COMError)
@@ -269,7 +273,7 @@ class ZoomControls:
         self.desktop.focus(window or self.window)
         invoked = self._press(element, window)
         try:
-            return self._popup("WCN_ModelessWnd", timeout=0.4)
+            return self._popup("WCN_ModelessWnd", timeout=0.5)
         except ZoomAutomationError as exc:
             if exc.code != "dialog_not_found":
                 raise
@@ -296,14 +300,6 @@ class ZoomControls:
                 dialog = dialogs[0]
                 buttons = self.automation.elements(self.automation.root(dialog.handle), BUTTON)
                 button = self._named(buttons, JOIN_AUDIO_TEXT)
-                if button is None:
-                    # Zoom's primary computer-audio action is the largest dialog button.
-                    candidates = [b for b in buttons if b.name and b.rect[2] > b.rect[0]]
-                    button = max(
-                        candidates,
-                        key=lambda b: (b.rect[2] - b.rect[0]) * (b.rect[3] - b.rect[1]),
-                        default=None,
-                    )
                 if button is None:
                     raise ZoomAutomationError("join_audio_control_not_found")
                 self._press(button, dialog)

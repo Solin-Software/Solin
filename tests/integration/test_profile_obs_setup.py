@@ -27,6 +27,12 @@ class _CongregationLookup:
     schedule_ready = _Signal()
     failed = _Signal()
 
+    def __init__(self):
+        self.schedule_requests = []
+
+    def fetch_schedule(self, guid):
+        self.schedule_requests.append(guid)
+
 
 def _bridge() -> OnboardingBridge:
     return OnboardingBridge(
@@ -117,6 +123,40 @@ def test_qml_onboarding_media_language_uses_media_icon():
     assert 'iconName: "media_language"' in qml_source
     assert '"media_language": ICON_MEDIA_LANGUAGE' in bridge_source
     assert "ICON_MEDIA_LANGUAGE" in icons_source
+
+
+def test_qml_onboarding_places_congregation_choice_with_profile_name():
+    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    profile_page = qml_source.split("id: profilePage", 1)[1].split("id: preferencesPage", 1)[0]
+    preferences_page = qml_source.split("id: preferencesPage", 1)[1].split(
+        "id: integrationsPage", 1
+    )[0]
+
+    assert "onClicked: congregationSheet.openSheet()" in profile_page
+    assert "onClicked: congregationSheet.openSheet()" not in preferences_page
+
+
+def test_onboarding_congregation_replaces_untouched_profile_name():
+    bridge = _bridge()
+
+    bridge.start("Profile 2", allow_cancel=True)
+    bridge.chooseCongregation("central-id", "Central")
+    bridge.chooseCongregation("north-id", "North")
+
+    assert bridge.state["profileName"] == "North"
+
+
+def test_onboarding_congregation_preserves_user_profile_name_unless_empty():
+    bridge = _bridge()
+
+    bridge.start("Profile 2", allow_cancel=True)
+    bridge.updateField("profileName", "Main hall")
+    bridge.chooseCongregation("central-id", "Central")
+    assert bridge.state["profileName"] == "Main hall"
+
+    bridge.updateField("profileName", "  ")
+    bridge.chooseCongregation("north-id", "North")
+    assert bridge.state["profileName"] == "North"
 
 
 def test_qml_onboarding_scene_choice_uses_custom_polished_popup():

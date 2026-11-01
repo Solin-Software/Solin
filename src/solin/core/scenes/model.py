@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from collections.abc import Collection, Iterable
-from typing import Any, Final, TypeAlias, TypeVar
+from typing import Any, ClassVar, Final, TypeAlias, TypeVar
 from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 from solin.core.media.camera_identity import local_camera_device_key
@@ -129,6 +129,7 @@ class TransitionKind(StrEnum):
     CUT = "cut"
     DISSOLVE = "dissolve"
     FADE_TO_BLACK = "fade_to_black"
+    MERGE = "merge"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1210,16 +1211,27 @@ def camera_source_from_legacy_record(raw: object) -> SourceDefinition:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedRect:
+    MINIMUM_POSITION: ClassVar[float] = -2.0
+    MAXIMUM_POSITION: ClassVar[float] = 2.0
+    MINIMUM_SIZE: ClassVar[float] = 0.001
+    MAXIMUM_SIZE: ClassVar[float] = 4.0
+
     x: float = 0.0
     y: float = 0.0
     width: float = 1.0
     height: float = 1.0
 
     def __post_init__(self) -> None:
-        _validate_number(self.x, field_name="rect.x", minimum=-2.0, maximum=2.0)
-        _validate_number(self.y, field_name="rect.y", minimum=-2.0, maximum=2.0)
-        _validate_number(self.width, field_name="rect.width", minimum=0.001, maximum=4.0)
-        _validate_number(self.height, field_name="rect.height", minimum=0.001, maximum=4.0)
+        for name, value in (("x", self.x), ("y", self.y)):
+            _validate_number(
+                value, field_name=f"rect.{name}",
+                minimum=self.MINIMUM_POSITION, maximum=self.MAXIMUM_POSITION,
+            )
+        for name, value in (("width", self.width), ("height", self.height)):
+            _validate_number(
+                value, field_name=f"rect.{name}",
+                minimum=self.MINIMUM_SIZE, maximum=self.MAXIMUM_SIZE,
+            )
 
     def to_record(self) -> dict[str, float]:
         return {"x": self.x, "y": self.y, "width": self.width, "height": self.height}

@@ -36,6 +36,7 @@ from solin.core.scenes.ipc_protocol import (
     write_envelope,
 )
 from solin.core.scenes.model import SceneValidationError
+from solin.core.scenes.recording import RECORDING_RESOLUTIONS
 from solin.core.scenes.engine import (
     SCENE_THUMBNAILS_CHANNEL,
     LocalCameraModeQuery,
@@ -391,9 +392,6 @@ class LibobsSidecarEngine:
         self._requested_video_epoch: int | None = None
         self._reported_video_epoch: int | None = None
         self._media_lock = threading.Lock()
-        # slot -> the last (position, duration) actually observed, so a dropped
-        # stream can be told apart from a video that reached its end.
-        self._media_last_progress: dict[int, tuple[int, int]] = {}
         self._media_poller: threading.Thread | None = None
         self._media_poll_stop = threading.Event()
         self._media_trim_start_ms = 0
@@ -848,16 +846,26 @@ class LibobsSidecarEngine:
         if not self._runtime_started or recorder is None:
             return _ack(request, applied=False, error_code="runtime_unavailable",
                         error_message="the libobs runtime is not running")
+        if recorder.active:
+            return _ack(request, applied=False, error_code="recording_busy",
+                        error_message="Program is already recording")
         path = str(request.payload.get("path") or "")
         if not path:
             return _ack(request, applied=False, error_code="invalid_path",
                         error_message="a recording path is required")
+        width, height = request.payload.get("width"), request.payload.get("height")
+        if (
+            type(width) is not int or type(height) is not int
+            or height not in RECORDING_RESOLUTIONS or width != height * 16 // 9
+        ):
+            return _ack(request, applied=False, error_code="recording_video_format_unsupported",
+                        error_message="unsupported recording resolution")
         # Bind the selected microphone + system audio into the mix BEFORE the
         # recorder starts, so the file carries them from the first frame. An
         # audio-selection failure must not block the recording itself — it is
         # surfaced as a warning on the recording-state event instead.
         warnings = self._apply_recording_audio(request.payload)
-        if recorder.start(path):
+        if recorder.start(path, width=width, height=height):
             self._emit_recording_state("recording", path=path, warnings=warnings)
             return _ack(request, applied=True)
         # The recording never began, so drop the capture sources we just bound —
@@ -1364,9 +1372,7 @@ class LibobsSidecarEngine:
             media = self._media_for_slot(slot)
             if media is None or media.source is None:
                 return None
-            # A rate change rebuilds the decoder on a later tick, so the position
-            # it threw away can only be restored once that has happened.
-            media.apply_pending_resume()
+            media.apply_startup_transport()
             position = media.position_ms
             state = media.state
             duration = media.duration_ms
@@ -1393,47 +1399,7 @@ class LibobsSidecarEngine:
         window_end = effective_end if effective_end else duration
         rel_position = max(0, position - start)
         rel_duration = max(0, window_end - start) if window_end else 0
-        state, rel_position, rel_duration = self._survive_disconnect(
-            slot, state, rel_position, rel_duration, path
-        )
         return (state, rel_position, rel_duration, path)
-
-    # A stream that drops mid-play reports ENDED, exactly like a video that
-    # finished. Below this fraction of the duration, treat it as a disconnect.
-    _ENDED_IS_REALLY_THE_END = 0.98
-
-    def _survive_disconnect(
-        self,
-        slot: int,
-        state: int,
-        position: int,
-        duration: int,
-        path: str,
-    ) -> tuple[int, int, int]:
-        """Report a mid-stream disconnect as buffering, not as end-of-media.
-
-        media-playback ends its decode thread on any read error and ffmpeg_source
-        turns that into ENDED — indistinguishable from a video that actually
-        finished. Taken at face value the app advances the playlist, so a moment of
-        bad wifi skipped to the next item mid-meeting. ffmpeg_source is already
-        rebuilding the media underneath, so the honest report is "buffering", and
-        the last known position is held so the transport does not snap to zero.
-        """
-        from solin.core.scenes.libobs_media_source import (
-            STATE_BUFFERING,
-            STATE_ENDED,
-            _is_remote,
-        )
-
-        if state == STATE_ENDED and _is_remote(path) and not self._media_trim_ended:
-            last_position, last_duration = self._media_last_progress.get(slot, (0, 0))
-            reference = duration or last_duration
-            reached = position or last_position
-            if reference and reached < reference * self._ENDED_IS_REALLY_THE_END:
-                return (STATE_BUFFERING, reached, reference)
-        if position or duration:
-            self._media_last_progress[slot] = (position, duration)
-        return (state, position, duration)
 
     def _emit_media_state_now(self, slot: int = 0) -> None:
         snapshot = self._sample_media(slot)
@@ -1815,11 +1781,7 @@ class LibobsSidecarEngine:
         graph = self._scene_graph
         if route is None or graph is None:
             return
-        scene_id = str(
-            active_scenes.get("media_windows")
-            or active_scenes.get("virtual_camera")
-            or ""
-        )
+        scene_id = str(active_scenes.get("media_windows") or "")
         source = graph.scene_source(scene_id) if scene_id else None
         route.set_scene(scene_id, source)
 
@@ -1832,13 +1794,7 @@ class LibobsSidecarEngine:
         graph = self._scene_graph
         if graph is None:
             return
-        # The editor previews the MEDIA_WINDOWS (edit) bus scene.
-        preview_scene_id = (
-            active_scenes.get("editor")
-            or active_scenes.get("media_windows")
-            or active_scenes.get("virtual_camera")
-        )
-        self._editor_scene_id = str(preview_scene_id or "")
+        self._editor_scene_id = str(active_scenes.get("editor") or "")
         if egress is None:
             return
         source = graph.editor_scene_source(self._editor_scene_id)
@@ -1848,14 +1804,11 @@ class LibobsSidecarEngine:
         # cache still reads "enabled" and so never re-sends set_render_enabled.
         # Apply the snapshot's render demand here so one hydrate fully restores the
         # editor preview (source *and* enable) — the canvas updates after a restart.
-        for key in ("editor", "media_windows"):
-            if render_enabled and key in render_enabled:
-                egress.set_enabled(bool(render_enabled[key]))
-                break
+        egress.set_enabled(bool(render_enabled and render_enabled.get("editor", False)))
 
     def _handle_set_render_enabled(self, request: SceneIpcEnvelope) -> SceneIpcEnvelope:
-        # The MEDIA_WINDOWS bus render demand gates the editor preview egress;
-        # the program bus always composites, so just ack it.
+        # Only the editor bus gates its preview egress. Delivery outputs keep
+        # independent demand and native references.
         payload = request.payload
         self._render_demand[str(payload.get("bus_id") or "")] = bool(payload.get("enabled"))
         if payload.get("bus_id") == "editor" and self._preview_egress is not None:

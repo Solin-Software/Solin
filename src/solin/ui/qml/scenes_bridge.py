@@ -33,6 +33,7 @@ from solin.core.scenes.editor_geometry import (
     fill_crop_to_canvas,
     inscribed_aspect_rect,
     move_framing_rect,
+    move_rect,
     resize_framing_rect,
     resize_rect,
     scale_framing_rect,
@@ -50,6 +51,7 @@ from solin.core.scenes.engine import (
 )
 from solin.core.scenes.model import (
     BusId,
+    DELIVERY_BUSES,
     CameraMediaType,
     CameraPreset,
     Crop,
@@ -80,6 +82,8 @@ from solin.core.scenes.model import (
     new_identity,
 )
 from solin.core.scenes.recording import (
+    DEFAULT_RECORDING_RESOLUTION,
+    RECORDING_RESOLUTIONS,
     AudioDeviceDirection,
     AudioDeviceSelection,
     AudioSelectionMode,
@@ -328,6 +332,15 @@ class ScenesBridge(QObject):
         layer = self._selected_layer()
         return {} if layer is None else self._layer_record(layer)
 
+    @Property("QVariantMap", constant=True)  # type: ignore[arg-type]
+    def normalizedRectLimits(self) -> dict[str, float]:
+        return {
+            "minimumPosition": NormalizedRect.MINIMUM_POSITION,
+            "maximumPosition": NormalizedRect.MAXIMUM_POSITION,
+            "minimumSize": NormalizedRect.MINIMUM_SIZE,
+            "maximumSize": NormalizedRect.MAXIMUM_SIZE,
+        }
+
     @Property(bool, notify=framingChanged)
     def framingActive(self) -> bool:
         return self._framing_session is not None
@@ -402,19 +415,32 @@ class ScenesBridge(QObject):
 
     @Property(bool, notify=changed)
     def selectedSceneLive(self) -> bool:
-        return self._controller.applied_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+        return any(
+            self._controller.applied_scene(bus_id) == self._selected_scene_id
+            for bus_id in DELIVERY_BUSES
+        )
 
     @Property(bool, notify=changed)
     def selectedSceneRequiresReplacement(self) -> bool:
         return self._controller.program_scene_is_live(self._selected_scene_id)
 
-    @Property(bool, notify=changed)
-    def selectedSceneDesired(self) -> bool:
-        return self._controller.desired_scene(BusId.VIRTUAL_CAMERA) == self._selected_scene_id
+    @Property("QStringList", constant=True)  # type: ignore[arg-type]
+    def deliveryBusIds(self) -> list[str]:
+        return [bus_id.value for bus_id in DELIVERY_BUSES]
 
-    @Property(bool, notify=changed)
-    def canTakeLive(self) -> bool:
-        return not self.selectedSceneDesired and not self._controller.hydration_in_progress
+    @Property("QVariantList", notify=changed)  # type: ignore[arg-type]
+    def selectedSceneOutputs(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "busId": bus_id.value,
+                "live": self._controller.applied_scene(bus_id) == self._selected_scene_id,
+                "canTake": (
+                    self._controller.desired_scene(bus_id) != self._selected_scene_id
+                    and not self._controller.hydration_in_progress
+                ),
+            }
+            for bus_id in DELIVERY_BUSES
+        ]
 
     @Property(bool, notify=changed)
     def virtualCameraEnabled(self) -> bool:
@@ -426,10 +452,6 @@ class ScenesBridge(QObject):
             self.virtualCameraEnabled
             and self._controller.output_health(BusId.VIRTUAL_CAMERA).status is OutputHealthStatus.READY
         )
-
-    @Property(bool, notify=changed)
-    def mediaMirrorEnabled(self) -> bool:
-        return self._controller.runtime.state.output(BusId.MEDIA_WINDOWS).enabled
 
     @Property(bool, notify=changed)
     def automaticEnabled(self) -> bool:
@@ -627,6 +649,18 @@ class ScenesBridge(QObject):
         if self._recording is None:
             return ""
         return self._recording_selection_key(self._recording.configuration.system_audio)
+
+    @Property("QVariantList", constant=True)  # type: ignore[arg-type]
+    def recordingResolutionChoices(self) -> list[dict[str, object]]:
+        return [{"value": resolution, "name": f"{resolution}p"} for resolution in RECORDING_RESOLUTIONS]
+
+    @Property(int, notify=changed)
+    def recordingResolution(self) -> int:
+        return (
+            self._recording.configuration.resolution
+            if self._recording is not None
+            else DEFAULT_RECORDING_RESOLUTION
+        )
 
     @Property(str, notify=changed)
     def recordingOutputDirectory(self) -> str:
@@ -901,20 +935,22 @@ class ScenesBridge(QObject):
         self._selected_layer_id = layer_id
         self.changed.emit()
 
-    @Slot()
-    def takeLive(self) -> None:
-        self._run_runtime(lambda: self._controller.take_program_scene(self._selected_scene_id))
+    @Slot(str)
+    def takeScene(self, bus_id: str) -> None:
+        if self._controller.hydration_in_progress:
+            return
+        try:
+            bus = BusId(bus_id)
+        except ValueError:
+            return
+        if bus not in DELIVERY_BUSES:
+            return
+        self._run_runtime(lambda: self._controller.select_scene(bus, self._selected_scene_id))
 
     @Slot(bool)
     def setVirtualCameraEnabled(self, enabled: bool) -> None:
         self._run_runtime(
             lambda: self._controller.set_output_enabled(BusId.VIRTUAL_CAMERA, bool(enabled))
-        )
-
-    @Slot(bool)
-    def setMediaMirrorEnabled(self, enabled: bool) -> None:
-        self._run_runtime(
-            lambda: self._controller.set_output_enabled(BusId.MEDIA_WINDOWS, bool(enabled))
         )
 
     @Slot(bool)
@@ -957,6 +993,13 @@ class ScenesBridge(QObject):
             recording.configuration.system_audio,
         )
         self._run_recording(lambda: recording.set_system_audio_selection(selection))
+
+    @Slot(int)
+    def setRecordingResolution(self, resolution: int) -> None:
+        recording = self._recording
+        if recording is None or recording.busy:
+            return
+        self._run_recording(lambda: recording.set_resolution(resolution))
 
     @Slot()
     def chooseRecordingDirectory(self) -> None:
@@ -1580,14 +1623,8 @@ class ScenesBridge(QObject):
         rect = layer.rect
         updated_crop = layer.crop
         if mode == "move":
-            moved = NormalizedRect(
-                x=min(1.0 - rect.width, max(0.0, rect.x + dx)),
-                y=min(1.0 - rect.height, max(0.0, rect.y + dy)),
-                width=rect.width,
-                height=rect.height,
-            )
             rect, self._active_guides = snap_move_rect(
-                moved,
+                move_rect(rect, dx, dy),
                 viewport_width=viewport_width,
                 viewport_height=viewport_height,
                 disabled=disable_snap,
@@ -2551,6 +2588,7 @@ class ScenesBridge(QObject):
             TransitionKind.CUT: self.tr("Cut"),
             TransitionKind.DISSOLVE: self.tr("Dissolve"),
             TransitionKind.FADE_TO_BLACK: self.tr("Fade through black"),
+            TransitionKind.MERGE: self.tr("Merge"),
         }
         label = labels[spec.kind]
         if include_duration and spec.kind is not TransitionKind.CUT:

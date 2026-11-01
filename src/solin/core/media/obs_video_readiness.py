@@ -65,7 +65,8 @@ class ObsSourceVideoReadiness:
 
     def _updated(self) -> None:
         with self._lock:
-            if self._source is None:
+            # Updates that do not replace the decoder (e.g. speed) keep its frame.
+            if self._source is None or not self._awaiting_update:
                 return
             try:
                 # async_tick selects before process_media_actions/deferred_update.

@@ -163,6 +163,18 @@ jobs:
       - name: Build and qualify bundled media extraction
         run: python scripts/build_media_extract.py
 
+      - name: Build corrected Windows audio monitoring core
+        if: runner.os == 'Windows'
+        run: python scripts/build_obs_runtime.py
+
+      - name: Build corrected native media playback on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum python scripts/build_media_playback.py
+
+      - name: Build corrected native media playback
+        if: runner.os != 'Linux'
+        run: python scripts/build_media_playback.py
+
       - run: python scripts/typecheck.py --pythonplatform ${{ matrix.platform }}
 
       - name: Windows virtual-camera filter tests

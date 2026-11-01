@@ -1534,6 +1534,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>Nom du dossier :</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>Ex. : Événement spécial</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Créer un dossier</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>Saisissez un nom de dossier.</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>Le nom ne peut pas commencer ni se terminer par des espaces.</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>Le nom ne peut pas contenir / \ &lt; &gt; : &quot; | ? * ni de caractères de contrôle.</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>Ce nom est réservé par le système d’exploitation.</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>Le nom ne peut pas commencer par un point.</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>Le nom ne peut pas se terminer par un point.</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>Ce nom de dossier est trop long.</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>Un fichier ou un dossier portant ce nom existe déjà.</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>Ce nom est réservé aux réunions. Choisissez un autre nom de dossier.</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2794,14 +2845,136 @@ Le contenu ajouté manuellement, les découpes, le cadrage et l’état déplié
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>Désactiver la synchronisation de la réunion</translation>
+        <source>Help</source>
+        <translation>Aide</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>Synchroniser la réunion avec le dossier lié</translation>
+        <source>Folder present</source>
+        <translation>Dossier existant</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>Dossier introuvable</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>Dossier indisponible</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>Vérification du dossier…</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>Synchronisation activée</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>Synchronisation désactivée</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>Synchronisation en cours…</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Finalisation…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>Dossier de la réunion</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>Chemin du dossier</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>Le dossier lié est indisponible. Vérifiez son emplacement et les autorisations d’accès.</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Créer un dossier</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>Ouvrir le dossier</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>Synchronisation de la réunion</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>Ce réglage s’applique à tous les ordinateurs liés à ce dossier de réunion.</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>Supprimer le dossier…</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>Désactivez la synchronisation pour supprimer ce dossier</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>Création du dossier…</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>Impossible d’ouvrir le dossier.</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>Impossible de mettre à jour le dossier de la réunion.</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>Supprimer le dossier</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>Supprimer le dossier « {name} » et tout son contenu ?</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>Les éléments de la réunion associés à ces fichiers seront également supprimés. Cette action est irréversible.
+
+Le service de synchronisation des dossiers pourrait également supprimer ces fichiers sur d’autres ordinateurs.</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>Arrêtez la projection avant de supprimer ce dossier.</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>Préparation de la suppression du dossier…</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>Suppression du dossier…</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>Synchronisation de la réunion</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>Désactiver la synchronisation de cette réunion sur les ordinateurs liés ?
+
+Le dossier et ses fichiers visibles seront conservés.</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>Impossible de mettre à jour la synchronisation de la réunion.</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>Les modifications sont enregistrées sur cet ordinateur. Réessayez ou ouvrez le dossier lié.</translation>
     </message>
 </context>
 <context>
@@ -4376,6 +4549,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>Réinitialiser la synchronisation de « {name} » ?
 L’organisation actuelle et les fichiers seront conservés. Les modifications en attente de la synchronisation précédente ne seront pas appliquées.</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>Créer un dossier</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>Créer un dossier vide dans le dossier lié</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5626,18 +5807,6 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <translation>Changement automatique</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>Fenêtres de médias</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>Afficher dans les fenêtres de médias</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>Impossible de modifier l’état de l’enregistrement.</translation>
@@ -5706,11 +5875,6 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>L’état de la sortie n’a pas pu être modifié.</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>La duplication dans les fenêtres de médias n’a pas pu être modifiée.</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -6106,6 +6270,10 @@ L’organisation actuelle et les fichiers seront conservés. Les modifications e
         <location line="+1"/>
         <source>Fade through black</source>
         <translation>Fondu au noir</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>Fusionner</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -6958,6 +7126,14 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <translation>Fondu au noir</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>Fusionner</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>Déplacer les sources communes, fondre le reste</translation>
+    </message>
+    <message>
         <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>Fondu au noir puis réapparition</translation>
@@ -7049,11 +7225,6 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>Changement automatique</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>Afficher dans les fenêtres de médias</translation>
     </message>
     <message>
         <location line="+19"/>

@@ -546,6 +546,12 @@ class MainWindowUiController:
             meeting_linked_folder_sync=context.meeting_linked_folder_sync,
             publication_service=meeting_publication_service,
             preparation_service=meeting_preparation_service,
+            active_media_paths_provider=lambda: tuple(
+                path for path in (
+                    context.media_controller.current_url,
+                    context.media_controller.local_path,
+                ) if path
+            ),
             memorial_service_factory=context.memorial_service_factory,
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),

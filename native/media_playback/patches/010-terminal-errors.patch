@@ -1,0 +1,246 @@
+--- a/plugins/obs-ffmpeg/obs-ffmpeg-source.c
++++ b/plugins/obs-ffmpeg/obs-ffmpeg-source.c
+@@ -271,19 +271,21 @@
+ 		FF_BLOG(LOG_INFO, "Reconnected.");
+ }
+ 
+-static void media_stopped(void *opaque)
++static void media_stopped(void *opaque, bool error)
+ {
+ 	struct ffmpeg_source *s = opaque;
+ 	if (s->is_clear_on_media_end && !s->is_track_matte) {
+ 		obs_source_output_video(s->source, NULL);
+ 	}
+ 
+-	if ((s->close_when_inactive || !s->is_local_file) && s->media)
++	/* Destruction belongs to the source owner, never the decoder thread. */
++	if (error || ((s->close_when_inactive || !s->is_local_file) && s->media))
+ 		s->destroy_media = true;
+ 
+ 	if (s->state != OBS_MEDIA_STATE_STOPPED) {
+-		set_media_state(s, OBS_MEDIA_STATE_ENDED);
+-		obs_source_media_ended(s->source);
++		set_media_state(s, error ? OBS_MEDIA_STATE_ERROR : OBS_MEDIA_STATE_ENDED);
++		if (!error)
++			obs_source_media_ended(s->source);
+ 	}
+ }
+ 
+@@ -312,11 +314,22 @@
+ 		};
+ 
+ 		s->media = media_playback_create(&info);
++		if (!s->media)
++			media_stopped(s, true);
+ 	}
+ }
+ 
+ static void ffmpeg_source_start(struct ffmpeg_source *s)
+ {
++	/* Explicit retry must not reuse a failed thread before the next tick. */
++	if (s->destroy_media) {
++		if (s->media)
++			media_playback_destroy(s->media);
++		s->media = NULL;
++		s->destroy_media = false;
++	}
++	/* Publish intent before opening: initialization can fail asynchronously. */
++	set_media_state(s, OBS_MEDIA_STATE_PLAYING);
+ 	if (!s->media)
+ 		ffmpeg_source_open(s);
+ 
+@@ -328,8 +341,8 @@
+ 		obs_source_show_preloaded_video(s->source);
+ 	else
+ 		obs_source_output_video(s->source, NULL);
+-	set_media_state(s, OBS_MEDIA_STATE_PLAYING);
+-	obs_source_media_started(s->source);
++	if (s->state == OBS_MEDIA_STATE_PLAYING)
++		obs_source_media_started(s->source);
+ }
+ 
+ static void *ffmpeg_source_reconnect(void *data)
+@@ -478,6 +491,7 @@
+ 	if (s->media && should_restart_media) {
+ 		media_playback_destroy(s->media);
+ 		s->media = NULL;
++		s->destroy_media = false;
+ 	}
+ 
+ 	/* directly set options if media is playing */
+@@ -677,22 +691,18 @@
+ {
+ 	struct ffmpeg_source *s = data;
+ 
+-	if (!s->media)
+-		ffmpeg_source_open(s);
+-
++	if (!pause && (!s->media || s->destroy_media || s->state == OBS_MEDIA_STATE_ERROR ||
++	               s->state == OBS_MEDIA_STATE_ENDED)) {
++		ffmpeg_source_start(s);
++		return;
++	}
+ 	if (!s->media)
+ 		return;
+ 
++	set_media_state(s, pause ? OBS_MEDIA_STATE_PAUSED : OBS_MEDIA_STATE_PLAYING);
+ 	media_playback_play_pause(s->media, pause);
+-
+-	if (pause) {
+-
+-		set_media_state(s, OBS_MEDIA_STATE_PAUSED);
+-	} else {
+-
+-		set_media_state(s, OBS_MEDIA_STATE_PLAYING);
++	if (!pause && s->state == OBS_MEDIA_STATE_PLAYING)
+ 		obs_source_media_started(s->source);
+-	}
+ }
+ 
+ static void ffmpeg_source_stop(void *data)
+@@ -700,9 +710,10 @@
+ 	struct ffmpeg_source *s = data;
+ 
+ 	if (s->media) {
++		/* Stop wins over callbacks triggered by cancellation. */
++		set_media_state(s, OBS_MEDIA_STATE_STOPPED);
+ 		media_playback_stop(s->media);
+ 		obs_source_output_video(s->source, NULL);
+-		set_media_state(s, OBS_MEDIA_STATE_STOPPED);
+ 	}
+ }
+ 
+@@ -712,8 +723,8 @@
+ 
+ 	if (obs_source_showing(s->source))
+ 		ffmpeg_source_start(s);
+-
+-	set_media_state(s, OBS_MEDIA_STATE_PLAYING);
++	else
++		set_media_state(s, OBS_MEDIA_STATE_PLAYING);
+ }
+ 
+ static int64_t ffmpeg_source_get_duration(void *data)
+--- a/shared/media-playback/media-playback/cache.c
++++ b/shared/media-playback/media-playback/cache.c
+@@ -339,7 +339,7 @@
+ 	if (!active && c->v_preload_cb)
+ 		mp_cache_next_video(c, true);
+ 	if (stopping && c->stop_cb)
+-		c->stop_cb(c->opaque);
++		c->stop_cb(c->opaque, false);
+ 	return true;
+ }
+ 
+@@ -457,9 +457,11 @@
+ 	mp_cache_t *c = opaque;
+ 
+ 	if (!mp_cache_thread(c)) {
+-		if (c->stop_cb) {
+-			c->stop_cb(c->opaque);
+-		}
++		pthread_mutex_lock(&c->mutex);
++		bool cancelled = c->kill || c->stopping;
++		pthread_mutex_unlock(&c->mutex);
++		if (!cancelled && c->stop_cb)
++			c->stop_cb(c->opaque, true);
+ 	}
+ 
+ 	return NULL;
+--- a/shared/media-playback/media-playback/media-playback.h
++++ b/shared/media-playback/media-playback/media-playback.h
+@@ -23,7 +23,7 @@
+ 
+ typedef void (*mp_video_cb)(void *opaque, struct obs_source_frame *frame);
+ typedef void (*mp_audio_cb)(void *opaque, struct obs_source_audio *audio);
+-typedef void (*mp_stop_cb)(void *opaque);
++typedef void (*mp_stop_cb)(void *opaque, bool error);
+ 
+ struct mp_media_info {
+ 	void *opaque;
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -176,6 +176,22 @@
+ 	}
+ 
+ 	int ret = av_read_frame(media->fmt, pkt);
++	/* Demuxers can mask an exhausted transport as EOF (for example WAV). */
++	if (ret == AVERROR_EOF && media->fmt->pb && media->fmt->pb->error < 0 &&
++	    media->fmt->pb->error != AVERROR_EOF)
++		ret = media->fmt->pb->error;
++	if (ret == AVERROR_EOF && media->terminal_packet_corrupt)
++		ret = AVERROR_INVALIDDATA;
++	if (ret == AVERROR_EOF && media->is_local_file && media->known_input_size > 0) {
++		AVIOContext *io = media->fmt->pb;
++		/* A failed reconnect can lose its error at a complete packet boundary.
++		 * Only physical EOF with no buffered bytes proves a short input. */
++		if (io && io->eof_reached && io->buf_ptr == io->buf_end && io->pos >= 0 &&
++		    io->pos < media->known_input_size)
++			ret = AVERROR(EIO);
++	}
++	if (ret >= 0)
++		media->terminal_packet_corrupt = (pkt->flags & AV_PKT_FLAG_CORRUPT) != 0;
+ 	if (ret < 0) {
+ 		if (ret != AVERROR_EOF && ret != AVERROR_EXIT)
+ 			blog(LOG_WARNING, "MP: av_read_frame failed: %s (%d)", av_err2str(ret), ret);
+@@ -268,7 +284,7 @@
+ 	while (!mp_media_ready_to_start(m)) {
+ 		if (!m->eof) {
+ 			int ret = mp_media_next_packet(m);
+-			if (ret == AVERROR_EOF || ret == AVERROR_EXIT) {
++			if (ret == AVERROR_EOF) {
+ 				if (!actively_seeking) {
+ 					m->eof = true;
+ 				} else {
+@@ -591,7 +607,7 @@
+ 	if (!active && m->is_local_file && m->v_preload_cb)
+ 		mp_media_next_video(m, true);
+ 	if (stopping && m->stop_cb)
+-		m->stop_cb(m->opaque);
++		m->stop_cb(m->opaque, false);
+ 	return true;
+ }
+ 
+@@ -701,6 +717,15 @@
+ 		return false;
+ 	}
+ 
++	/* Keep the successful input's size before probing or reconnects can
++	 * change protocol state. AVSEEK_SIZE never falls back to a real seek. */
++	m->known_input_size = 0;
++	if (m->is_local_file && m->fmt->pb) {
++		int64_t size = avio_seek(m->fmt->pb, 0, AVSEEK_SIZE);
++		if (size > 0)
++			m->known_input_size = size;
++	}
++
+ 	if (avformat_find_stream_info(m->fmt, NULL) < 0) {
+ 		blog(LOG_WARNING, "MP: Failed to find stream info for '%s'", m->path);
+ 		return false;
+@@ -837,9 +862,11 @@
+ 	mp_media_t *m = opaque;
+ 
+ 	if (!mp_media_thread(m)) {
+-		if (m->stop_cb) {
+-			m->stop_cb(m->opaque);
+-		}
++		pthread_mutex_lock(&m->mutex);
++		bool cancelled = m->kill || m->stopping;
++		pthread_mutex_unlock(&m->mutex);
++		if (!cancelled && m->stop_cb)
++			m->stop_cb(m->opaque, true);
+ 	}
+ 
+ 	return NULL;
+--- a/shared/media-playback/media-playback/media.h
++++ b/shared/media-playback/media-playback/media.h
+@@ -69,6 +69,9 @@
+ 	bool has_audio;
+ 	bool is_file;
+ 	bool eof;
++	bool terminal_packet_corrupt;
++	bool completed;
++	int64_t known_input_size;
+ 	bool hw;
+ 
+ 	struct obs_source_frame obsframe;

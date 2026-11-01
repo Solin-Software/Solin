@@ -1,0 +1,73 @@
+[
+  {
+    "file": "001-source-identity.patch",
+    "purpose": "Private source identifier",
+    "upstream": "private"
+  },
+  {
+    "file": "010-terminal-errors.patch",
+    "purpose": "Distinguish terminal failures, completion and cancellation",
+    "upstream": "candidate"
+  },
+  {
+    "file": "011-seek.patch",
+    "purpose": "Seek selected stream and reset successful reads without discarding rejected queues",
+    "upstream": "candidate",
+    "requires": [
+      "010-terminal-errors.patch"
+    ]
+  },
+  {
+    "file": "012-attached-pictures.patch",
+    "purpose": "Exclude metadata pictures from the timed video stream",
+    "upstream": "candidate"
+  },
+  {
+    "file": "013-cancellation.patch",
+    "purpose": "Cancel blocked reads for finite inputs",
+    "upstream": "candidate"
+  },
+  {
+    "file": "014-completion.patch",
+    "purpose": "Complete before optional rewind and restart with a fresh clock",
+    "upstream": "candidate",
+    "requires": [
+      "010-terminal-errors.patch"
+    ]
+  },
+  {
+    "file": "020-live-rate.patch",
+    "purpose": "Apply speed changes on the decoder worker without reopening media",
+    "upstream": "candidate",
+    "requires": [
+      "010-terminal-errors.patch",
+      "014-completion.patch"
+    ]
+  },
+  {
+    "file": "021-native-tempo.patch",
+    "purpose": "Preserve audio pitch and presentation continuity across speed changes",
+    "upstream": "candidate",
+    "requires": [
+      "020-live-rate.patch",
+      "011-seek.patch"
+    ]
+  },
+  {
+    "file": "025-source-capabilities.patch",
+    "purpose": "Limit the private source to the supported decode mode",
+    "upstream": "private",
+    "requires": [
+      "001-source-identity.patch"
+    ]
+  },
+  {
+    "file": "030-finite-buffering.patch",
+    "purpose": "Suspend finite presentation clock and publish buffering during blocked reads",
+    "upstream": "candidate",
+    "requires": [
+      "013-cancellation.patch",
+      "021-native-tempo.patch"
+    ]
+  }
+]

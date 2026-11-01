@@ -16,6 +16,11 @@ def run() -> None:
     """Dispatch the process role before importing application services or Qt."""
 
     arguments = sys.argv[1:]
+    if any(argument.split("=", 1)[0] == "--verify-zoom-runtime" for argument in arguments):
+        from .zoom_runtime_verification import main as verify_zoom_runtime
+
+        raise SystemExit(verify_zoom_runtime(arguments))
+
     if ZOOM_AUTOMATION_ARGUMENT in arguments:
         if arguments != [ZOOM_AUTOMATION_ARGUMENT]:
             raise SystemExit("The Zoom automation helper accepts no application arguments.")

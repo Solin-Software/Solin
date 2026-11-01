@@ -1520,6 +1520,57 @@
     </message>
 </context>
 <context>
+    <name>LinkedFolderNameDialog</name>
+    <message>
+        <source>Folder name:</source>
+        <translation>文件夹名称：</translation>
+    </message>
+    <message>
+        <source>E.g.: Special event</source>
+        <translation>例如：特别活动</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Enter a folder name.</source>
+        <translation>请输入文件夹名称。</translation>
+    </message>
+    <message>
+        <source>The name cannot start or end with whitespace.</source>
+        <translation>名称不能以空白字符开头或结尾。</translation>
+    </message>
+    <message>
+        <source>The name cannot contain / \ &lt; &gt; : &quot; | ? * or control characters.</source>
+        <translation>名称不能包含 / \ &lt; &gt; : &quot; | ? * 或控制字符。</translation>
+    </message>
+    <message>
+        <source>This name is reserved by the operating system.</source>
+        <translation>此名称由操作系统保留。</translation>
+    </message>
+    <message>
+        <source>The name cannot start with a dot.</source>
+        <translation>名称不能以句点开头。</translation>
+    </message>
+    <message>
+        <source>The name cannot end with a dot.</source>
+        <translation>名称不能以句点结尾。</translation>
+    </message>
+    <message>
+        <source>This folder name is too long.</source>
+        <translation>文件夹名称过长。</translation>
+    </message>
+    <message>
+        <source>A file or folder with this name already exists.</source>
+        <translation>已存在同名文件或文件夹。</translation>
+    </message>
+    <message>
+        <source>This name is reserved for meetings. Choose another folder name.</source>
+        <translation>此名称为聚会保留。请选择其他文件夹名称。</translation>
+    </message>
+</context>
+<context>
     <name>LiveIntegration</name>
     <message>
         <location filename="../../controllers/live_integration_controller.py" line="+18"/>
@@ -2777,14 +2828,136 @@ Manually added content, trims, framing and expanded state will be kept.</source>
 <context>
     <name>MeetingSync</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+21"/>
-        <source>Turn off meeting sync</source>
-        <translation>关闭聚会同步</translation>
+        <source>Help</source>
+        <translation>帮助</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Sync meeting to linked folder</source>
-        <translation>将聚会同步到关联文件夹</translation>
+        <source>Folder present</source>
+        <translation>文件夹已存在</translation>
+    </message>
+    <message>
+        <source>Folder missing</source>
+        <translation>未找到文件夹</translation>
+    </message>
+    <message>
+        <source>Folder unavailable</source>
+        <translation>文件夹不可用</translation>
+    </message>
+    <message>
+        <source>Checking folder…</source>
+        <translation>正在检查文件夹……</translation>
+    </message>
+    <message>
+        <source>Sync enabled</source>
+        <translation>同步已开启</translation>
+    </message>
+    <message>
+        <source>Sync disabled</source>
+        <translation>同步已关闭</translation>
+    </message>
+    <message>
+        <source>Synchronizing…</source>
+        <translation>正在同步……</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>正在完成…</translation>
+    </message>
+    <message>
+        <source>Meeting folder</source>
+        <translation>聚会文件夹</translation>
+    </message>
+    <message>
+        <source>Folder path</source>
+        <translation>文件夹路径</translation>
+    </message>
+    <message>
+        <source>The linked folder is unavailable. Check its location and access permissions.</source>
+        <translation>关联文件夹不可用。请检查其位置和访问权限。</translation>
+    </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Open folder</source>
+        <translation>打开文件夹</translation>
+    </message>
+    <message>
+        <source>Meeting synchronization</source>
+        <translation>聚会同步</translation>
+    </message>
+    <message>
+        <source>This setting applies to all computers linked to this meeting folder.</source>
+        <translation>此设置适用于关联到此聚会文件夹的所有电脑。</translation>
+    </message>
+    <message>
+        <source>Delete folder…</source>
+        <translation>删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization to delete this folder</source>
+        <translation>关闭同步后才能删除此文件夹</translation>
+    </message>
+    <message>
+        <source>Creating folder…</source>
+        <translation>正在创建文件夹……</translation>
+    </message>
+    <message>
+        <source>The folder could not be opened.</source>
+        <translation>无法打开文件夹。</translation>
+    </message>
+    <message>
+        <source>Could not update the meeting folder.</source>
+        <translation>无法更新聚会文件夹。</translation>
+    </message>
+    <message>
+        <source>Delete folder</source>
+        <translation>删除文件夹</translation>
+    </message>
+    <message>
+        <source>Delete folder &quot;{name}&quot; and all its contents?</source>
+        <translation>删除文件夹“{name}”及其所有内容？</translation>
+    </message>
+    <message>
+        <source>The meeting items associated with these files will also be removed. This action cannot be undone.
+
+Your folder-sync service may also delete these files on other computers.</source>
+        <translation>与这些文件关联的聚会项目也将被移除。此操作无法撤销。
+
+文件夹同步服务也可能会删除其他电脑上的这些文件。</translation>
+    </message>
+    <message>
+        <source>Stop the projection before deleting this folder.</source>
+        <translation>删除此文件夹前，请先停止投影。</translation>
+    </message>
+    <message>
+        <source>Preparing folder deletion…</source>
+        <translation>正在准备删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Deleting folder…</source>
+        <translation>正在删除文件夹……</translation>
+    </message>
+    <message>
+        <source>Meeting sync</source>
+        <translation>聚会同步</translation>
+    </message>
+    <message>
+        <source>Turn off synchronization for this meeting on linked computers?
+
+The folder and its visible files will be kept.</source>
+        <translation>关闭关联电脑上此聚会的同步？
+
+文件夹及其可见文件将被保留。</translation>
+    </message>
+    <message>
+        <source>Could not update meeting sync.</source>
+        <translation>无法更新聚会同步。</translation>
+    </message>
+    <message>
+        <source>Your changes are saved on this computer. Try again or open the linked folder.</source>
+        <translation>更改已保存在此电脑上。请重试或打开关联文件夹。</translation>
     </message>
 </context>
 <context>
@@ -4348,6 +4521,14 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>是否重置“{name}”的同步？
 当前排列和文件将保留。上次同步中尚未应用的更改将不会应用。</translation>
     </message>
+    <message>
+        <source>Create folder</source>
+        <translation>创建文件夹</translation>
+    </message>
+    <message>
+        <source>Create an empty folder in the linked folder</source>
+        <translation>在关联文件夹中创建空文件夹</translation>
+    </message>
 </context>
 <context>
     <name>PlaylistPanel</name>
@@ -5594,18 +5775,6 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>自动切换</translation>
     </message>
     <message>
-        <location line="-612"/>
-        <location line="+613"/>
-        <source>Media windows</source>
-        <translation>媒体窗口</translation>
-    </message>
-    <message>
-        <location line="-609"/>
-        <location line="+610"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
-    </message>
-    <message>
         <location line="-597"/>
         <source>The recording state could not be changed.</source>
         <translation>无法更改录制状态。</translation>
@@ -5674,11 +5843,6 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+9"/>
         <source>The output state could not be changed.</source>
         <translation>无法更改输出状态。</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>The media-window mirror could not be changed.</source>
-        <translation>无法更改媒体窗口的镜像。</translation>
     </message>
     <message>
         <location line="+24"/>
@@ -6074,6 +6238,10 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+1"/>
         <source>Fade through black</source>
         <translation>黑场淡入淡出</translation>
+    </message>
+    <message>
+        <source>Merge</source>
+        <translation>合并</translation>
     </message>
     <message>
         <location line="+23"/>
@@ -6926,6 +7094,14 @@ Add content, a camera, or another scene.</source>
         <translation>黑场淡入淡出</translation>
     </message>
     <message>
+        <source>Merge</source>
+        <translation>合并</translation>
+    </message>
+    <message>
+        <source>Move shared sources, fade the rest</source>
+        <translation>移动共享来源，其余淡入淡出</translation>
+    </message>
+    <message>
         <location line="-150"/>
         <source>Fade out, then fade in</source>
         <translation>淡出到黑场再淡入</translation>
@@ -7017,11 +7193,6 @@ Add content, a camera, or another scene.</source>
         <location line="+7"/>
         <source>Auto-switch media</source>
         <translation>自动切换</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>Show in media windows</source>
-        <translation>在媒体窗口中显示</translation>
     </message>
     <message>
         <location line="+19"/>

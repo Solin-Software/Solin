@@ -83,6 +83,7 @@ from ...core.ingest.manifest import (
     retry_manifest_write,
 )
 from ...core.meetings.models import MemorialData
+from ...core.meetings.folder_lifecycle import MeetingFolderDeletion, MeetingFolderDeletionResult
 from ...core.meetings.tree_migrations import migrate_publication_subsections
 from ...core.ingest.sync.journal import ReplicaSnapshot
 from ...core.ingest.watched_folder_files import WatchedFolderCopyResult
@@ -270,6 +271,12 @@ class _MeetingSyncDiscovery:
 
 
 @dataclass(frozen=True, slots=True)
+class _MeetingFolderRecovery:
+    deletion: MeetingFolderDeletion
+    result: MeetingFolderDeletionResult
+
+
+@dataclass(frozen=True, slots=True)
 class _PreparedMeetingNodes:
     nodes: list[Node]
     linked_files: dict[str, str]
@@ -297,10 +304,6 @@ def _reset_media_requests(controller: Any) -> None:
 
 def _emit_controller_state_changed(controller: Any) -> None:
     controller.stateChanged.emit()
-
-
-def _tr(context: str, source: str) -> str:
-    return QCoreApplication.translate(context, source)
 
 
 _PLAYLIST_EDIT_CONTEXT = "PlaylistEditView"
@@ -364,6 +367,7 @@ class MeetingTreeController(QObject):
         linked_folder_sync: MeetingLinkedFolderSync,
         media_info_queue_factory: Callable[[QObject], MediaInfoQueue],
         projection_aspect_ratio_provider: Callable[[], object] | None = None,
+        active_media_paths_provider: Callable[[], Sequence[str]] | None = None,
         fallback_language_code: str = "",
         parent=None,
     ) -> None:
@@ -386,9 +390,10 @@ class MeetingTreeController(QObject):
             lambda: DEFAULT_PROJECTION_ASPECT_RATIO
         )
         self._builder = MeetingTreeBuilder(
-            media_fallback_title=lambda: _tr("_MediaRow", "Media"),
+            media_fallback_title=lambda: QCoreApplication.translate("_MediaRow", "Media"),
         )
         self._sync_service = linked_folder_sync
+        self._active_media_paths_provider = active_media_paths_provider or (lambda: ())
         self._nodes: list[Node] = []
         self._tree_key = ""
         self._canonical_hash = ""
@@ -400,11 +405,20 @@ class MeetingTreeController(QObject):
         self._sync_identity: MeetingSyncIdentity | None = None
         self._sync_root = ""
         self._sync_folder = ""
+        self._folder_state = "checking"
+        self._folder_mutation_pending = False
+        self._folder_deletion_persistence: dict[str, MeetingFolderDeletion] = {}
+        self._pending_folder_delete: tuple[str, MeetingSyncIdentity, str, str] | None = None
+        self._folder_delete_timer = QTimer(self)
+        self._folder_delete_timer.setInterval(25)
+        self._folder_delete_timer.timeout.connect(self._drain_folder_deletion)
         self._sync_available = False
         self._sync_enabled = False
         self._sync_busy = False
         self._sync_busy_message = ""
         self._modal_operation_id = ""
+        self._modal_operation_cancellable = True
+        media_tree_runtime.operations.operationChanged.connect(self._on_modal_operation_changed)
         self._sync_revision = 0
         self._sync_snapshot = ReplicaSnapshot()
         self._sync_refresh_generation = 0
@@ -533,10 +547,6 @@ class MeetingTreeController(QObject):
         return False
 
     @Property(bool, notify=syncStateChanged)
-    def syncAvailable(self):
-        return self._sync_available
-
-    @Property(bool, notify=syncStateChanged)
     def syncEnabled(self):
         return self._sync_enabled
 
@@ -549,15 +559,29 @@ class MeetingTreeController(QObject):
         return self._sync_busy_message
 
     @Property(bool, notify=syncStateChanged)
+    def modalCancellable(self):
+        return self._modal_operation_cancellable
+
+    @Property(bool, notify=syncStateChanged)
     def syncPending(self):
+        if self._tree_key in getattr(self, "_folder_deletion_persistence", {}):
+            return True
         if not self._sync_folder:
             return False
         key = os.path.normcase(os.path.abspath(self._sync_folder))
         return key in self._pending_sync_saves or getattr(self, "_sync_transport_pending", False)
 
     @Property(str, notify=syncStateChanged)
-    def syncFolderPath(self):
+    def folderPath(self):
         return self._sync_folder
+
+    @Property(str, notify=syncStateChanged)
+    def folderState(self):
+        return self._folder_state
+
+    @Property(bool, notify=syncStateChanged)
+    def folderManagementAvailable(self):
+        return bool(self._sync_root and self._sync_identity is not None)
 
     @Property(bool, notify=canonicalStateChanged)
     def canonicalRestoreAvailable(self):
@@ -625,7 +649,7 @@ class MeetingTreeController(QObject):
         nodes = [
             self._node_from_playlist_item(
                 item,
-                str(item.get("title") or _tr("_MediaRow", "Media")),
+                str(item.get("title") or QCoreApplication.translate("_MediaRow", "Media")),
             )
             for item in partition.unique_items
         ]
@@ -644,7 +668,10 @@ class MeetingTreeController(QObject):
     @Slot(str)
     def set_sync_root(self, watched_folder_path: str) -> None:
         self._flush_image_framing_save()
-        self._sync_root = watched_folder_path or ""
+        root = watched_folder_path or ""
+        if root != self._sync_root:
+            self._folder_state = "checking"
+        self._sync_root = root
         self._refresh_sync_availability()
         if self._tree_key:
             self._request_sync_refresh()
@@ -672,9 +699,9 @@ class MeetingTreeController(QObject):
         self._canonical_reset_generation = snapshot.canonical_reset_generation
         self._hidden_canonical_media = copy.deepcopy(snapshot.hidden_canonical_media)
         self._playlist_name = snapshot.overview.title or (
-            _tr("_PubCard", "Life & Ministry")
+            QCoreApplication.translate("_PubCard", "Life & Ministry")
             if snapshot.pub_type == "mwb"
-            else _tr("_PubCard", "Watchtower Study")
+            else QCoreApplication.translate("_PubCard", "Watchtower Study")
         )
         self._overview = snapshot.overview
         self._sync_identity = MeetingSyncIdentity(
@@ -759,7 +786,7 @@ class MeetingTreeController(QObject):
             md.memorial_date.year if getattr(md, "memorial_date", None) else ""
         )
         date_key = md.memorial_date.isoformat() if md.memorial_date else str(year)
-        self._playlist_name = _tr("_MemorialCard", "MEMORIAL")
+        self._playlist_name = QCoreApplication.translate("_MemorialCard", "MEMORIAL")
         self._overview = None
         self._tree_key = f"memorial:{date_key}:{self._language_code}:{year}"
         self._sync_identity = None
@@ -871,6 +898,7 @@ class MeetingTreeController(QObject):
             self._request_sync_refresh()
 
     def _restore_local_sync_binding(self, stored: MeetingTreeSnapshot | None) -> None:
+        self._folder_state = "checking"
         binding = stored.linked_sync if stored is not None else {}
         snapshot = binding.get("snapshot")
         self._sync_folder = str(binding.get("folder") or "")
@@ -964,6 +992,11 @@ class MeetingTreeController(QObject):
         )
 
     def _request_sync_refresh(self) -> None:
+        if (
+            getattr(self, "_folder_mutation_pending", False)
+            or self._tree_key in getattr(self, "_folder_deletion_persistence", {})
+        ):
+            return
         root = self._sync_root
         identity = self._sync_identity
         tree_key = self._tree_key
@@ -984,8 +1017,19 @@ class MeetingTreeController(QObject):
         cached_snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
         cached_nodes = clone_nodes(self._nodes) if cached_enabled else []
         cached_hidden = copy.deepcopy(self._hidden_canonical_media) if cached_enabled else {}
+        recovery_nodes = cached_nodes if cached_enabled else clone_nodes(self._nodes)
+        recovery_imports = copy.deepcopy(self._meeting_folder_imports)
+        deletion_state_dir = self._store.path.parent / "meeting_folder_deletions"
 
         def run(_progress, _cancellation):
+            deletion = MeetingFolderDeletion.pending_for(deletion_state_dir, Path(root), identity)
+            if deletion is not None:
+                result = deletion.reconcile(recovery_nodes, recovery_imports)
+                if result.folder_exists is not None:
+                    return _MeetingFolderRecovery(deletion, result)
+                return _MeetingSyncDiscovery(
+                    False, Path(cached_folder) if cached_folder else None, active=cached_enabled,
+                )
             root_path = Path(root)
             if not root_path.is_dir():
                 record = (
@@ -1065,6 +1109,12 @@ class MeetingTreeController(QObject):
             ):
                 return
             self._sync_refresh_operation_id = ""
+            if isinstance(value, _MeetingFolderRecovery):
+                if local_revision != getattr(self, "_local_edit_revision", 0):
+                    self._request_sync_refresh()
+                    return
+                MeetingTreeController._apply_folder_deletion_result(self, value.deletion, value.result)
+                return
             if not isinstance(value, _MeetingSyncDiscovery):
                 raise TypeError("Meeting sync discovery returned an invalid result")
             if value.detached_state is not None and (
@@ -1081,6 +1131,7 @@ class MeetingTreeController(QObject):
         def finished_without_result(*_args) -> None:
             if generation == self._sync_refresh_generation:
                 self._sync_refresh_operation_id = ""
+                self._folder_state = "unavailable"
                 MeetingTreeController._mark_sync_transport_pending(self)
 
         submitted = self._media_tree_runtime.operations.submit(
@@ -1111,6 +1162,10 @@ class MeetingTreeController(QObject):
         self._sync_refresh_operation_id = ""
 
     def _apply_sync_discovery(self, discovery: _MeetingSyncDiscovery) -> None:
+        self._folder_state = (
+            "unavailable" if not discovery.available
+            else "present" if discovery.folder is not None else "missing"
+        )
         self._sync_available = discovery.available
         if not discovery.available and discovery.record is None:
             MeetingTreeController._mark_sync_transport_pending(self)
@@ -1136,7 +1191,7 @@ class MeetingTreeController(QObject):
                 discovery.cleanup_errors or discovery.cleanup_deferred or detach_pending
             )
             self._sync_busy_message = (
-                _tr("_PlaylistEditView", "Offline / Syncing")
+                QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing")
                 if self._sync_transport_pending else ""
             )
             if discovery.cleanup_errors or discovery.cleanup_deferred:
@@ -1187,7 +1242,7 @@ class MeetingTreeController(QObject):
         # Loss of transport availability does not revoke the user's sync intent
         # or its causal base. Further edits must continue into the local outbox.
         self._sync_transport_pending = True
-        self._sync_busy_message = _tr("_PlaylistEditView", "Offline / Syncing")
+        self._sync_busy_message = QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing")
         timer = getattr(self, "_sync_retry_timer", None)
         if timer is not None:
             timer.start(2_000)
@@ -1199,7 +1254,7 @@ class MeetingTreeController(QObject):
         timer = getattr(self, "_sync_retry_timer", None)
         if timer is not None:
             timer.start(2_000) if pending else timer.stop()
-        self._sync_busy_message = _tr("_PlaylistEditView", "Offline / Syncing") if pending else ""
+        self._sync_busy_message = QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing") if pending else ""
         self.syncStateChanged.emit()
 
     def _apply_sync_record(self, record: MeetingSyncRecord) -> None:
@@ -1249,7 +1304,10 @@ class MeetingTreeController(QObject):
         Processing state follows the active persistence target: local store when
         sync is off, operation journal when sync is on.
         """
-        if not watched_folder_path or not self._tree_key:
+        if (
+            not watched_folder_path or not self._tree_key
+            or getattr(self, "_folder_mutation_pending", False)
+        ):
             return
 
         # Determine which monday this tree belongs to
@@ -1312,6 +1370,8 @@ class MeetingTreeController(QObject):
         tree_monday: str,
         tree_pub_type: str,
     ) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         touched = False
         snapshot = getattr(self, "_sync_snapshot", ReplicaSnapshot())
         suppressions = ResourceSuppressions(snapshot.entities)
@@ -1495,6 +1555,9 @@ class MeetingTreeController(QObject):
         self._save()
 
     def _record_meeting_folder_failure(self, source: dict[str, Any], name: str, error: str) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            self._meeting_folder_pending_sources.discard(str(source.get("source_key") or ""))
+            return
         self._record_meeting_folder_import(
             source,
             [],
@@ -1516,6 +1579,9 @@ class MeetingTreeController(QObject):
         self, source: dict[str, Any], nodes: list[Node], list_id: str, insert_index: int,
     ) -> None:
         source_key = str(source.get("source_key") or "")
+        if getattr(self, "_folder_mutation_pending", False):
+            self._meeting_folder_pending_sources.discard(source_key)
+            return
         if source.get("_tree_key", getattr(self, "_tree_key", "")) != getattr(self, "_tree_key", ""):
             return
         folder_path = str(source.get("folder_path") or "")
@@ -1585,6 +1651,8 @@ class MeetingTreeController(QObject):
         list_id: str,
         insert_index: int,
     ) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         source_key = str(source.get("source_key") or "")
         path = str(source.get("path") or "")
         kind = str(source.get("kind") or "")
@@ -1730,6 +1798,9 @@ class MeetingTreeController(QObject):
         return None
 
     def cleanup(self) -> None:
+        self._folder_delete_timer.stop()
+        self._pending_folder_delete = None
+        self._folder_mutation_pending = False
         owner_id = self._tree_session.owner_id
         if owner_id:
             self._media_tree_runtime.operations.cancel_scope(owner_id)
@@ -1815,6 +1886,8 @@ class MeetingTreeController(QObject):
     def add_files(
         self, paths: list[str], list_id: str = "root", insert_index: int = _BIG_INDEX
     ) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         media_paths = []
         pdf_paths = []
         jwpub_paths = []
@@ -1879,7 +1952,7 @@ class MeetingTreeController(QObject):
         node = create_jw_media_node(
             payload,
             node_id=node_id,
-            fallback_title=_tr("_MediaRow", "Media"),
+            fallback_title=QCoreApplication.translate("_MediaRow", "Media"),
         )
         ref = node["media_ref"]
         partition = partition_media_items(self._media_identity_records(), [ref])
@@ -1947,7 +2020,7 @@ class MeetingTreeController(QObject):
                 or record.get("label")
                 or record.get("caption")
                 or Path(location).stem
-                or _tr("_MediaRow", "Media")
+                or QCoreApplication.translate("_MediaRow", "Media")
             )
             identity = media_identity(record)
             signal.emit(
@@ -2117,7 +2190,7 @@ class MeetingTreeController(QObject):
             target_list_id=list_id,
             insert_index=insert_index,
         )
-        stage = _tr("PlaylistTransfer", "Opening playlist…")
+        stage = QCoreApplication.translate("PlaylistTransfer", "Opening playlist…")
         fallback_language = self._fallback_language_code
         profile_store = self._profile_media_store
         embedded_conflict = folder_resource_key(profile_store.embedded_dir)
@@ -2173,7 +2246,7 @@ class MeetingTreeController(QObject):
                                 Path(path).stem,
                                 node_id=node_id,
                                 url=playlist_item_media_url(raw),
-                                media_fallback_title=_tr("_MediaRow", "Media"),
+                                media_fallback_title=QCoreApplication.translate("_MediaRow", "Media"),
                             )
                         )
                 if cancellation.is_set():
@@ -2290,14 +2363,16 @@ class MeetingTreeController(QObject):
             fallback_title,
             node_id=node_id,
             url=url,
-            media_fallback_title=_tr("_MediaRow", "Media"),
+            media_fallback_title=QCoreApplication.translate("_MediaRow", "Media"),
         )
 
     def _warn_import_failed(self, name: str, error: str) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         parent = self.parent()
         QMessageBox.warning(
             parent,
-            _tr("_PlaylistEditView", "Add Media"),
+            QCoreApplication.translate("_PlaylistEditView", "Add Media"),
             f"{name}\n{str(error)[:160]}",
         )
 
@@ -2323,21 +2398,232 @@ class MeetingTreeController(QObject):
         )
         paths, _ = QFileDialog.getOpenFileNames(
             parent,
-            _tr("_PlaylistEditView", "Add Media"),
+            QCoreApplication.translate("_PlaylistEditView", "Add Media"),
             "",
             filter_text,
         )
         if paths:
             self.add_files(paths)
 
-    @Slot()
-    def toggleSync(self) -> None:
-        if self._sync_busy:
+    @Slot(bool)
+    def setSyncEnabled(self, enabled: bool) -> None:
+        if (
+            self._sync_busy or getattr(self, "_folder_mutation_pending", False)
+            or self._folder_state not in ("present", "missing")
+            or self.syncPending or bool(enabled) == self._sync_enabled
+        ):
             return
-        if self._sync_enabled:
+        if not enabled:
             self._disable_sync()
         else:
             self._enable_sync()
+
+    @Slot()
+    def createMeetingFolder(self) -> None:
+        if (
+            not self._sync_available or self._sync_identity is None
+            or getattr(self, "_sync_busy", False)
+            or self.syncPending
+            or getattr(self, "_folder_mutation_pending", False)
+            or self._folder_state != "missing"
+        ):
+            return
+        self._cancel_sync_refresh()
+        root, identity, tree_key = self._sync_root, self._sync_identity, self._tree_key
+
+        def run(_report, cancellation):
+            if cancellation.is_set():
+                raise MediaOperationCancelled("Folder creation cancelled")
+            return self._sync_service.locate_folder(root, identity, create=True)
+
+        def commit(value: object) -> None:
+            if tree_key != self._tree_key or root != self._sync_root:
+                return
+            if not isinstance(value, Path):
+                raise MeetingSyncError("Meeting folder is not available")
+            self._sync_folder = str(value)
+            self._folder_state = "present"
+            self._save_local_cache()
+            self.syncStateChanged.emit()
+            self._request_sync_refresh()
+
+        self._submit_modal_operation(
+            operation_type="create_meeting_folder",
+            conflict_key=folder_resource_key(root),
+            stage=QCoreApplication.translate("MeetingSync", "Creating folder…"),
+            runner=run,
+            commit=commit,
+            failed=lambda message: MeetingTreeController._warn_folder_failed(self, message),
+        )
+
+    @Slot()
+    def openMeetingFolder(self) -> None:
+        if self._folder_state == "present" and self._sync_folder:
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(self._sync_folder)):
+                MeetingTreeController._warn_folder_failed(
+                    self, QCoreApplication.translate("MeetingSync", "The folder could not be opened."),
+                )
+
+    def _warn_folder_failed(self, message: str) -> None:
+        QMessageBox.warning(
+            self.parent(), QCoreApplication.translate("MeetingSync", "Meeting folder"),
+            QCoreApplication.translate("MeetingSync", "Could not update the meeting folder.") + "\n\n" + message,
+        )
+
+    def _folder_has_active_media(self, folder: Path) -> bool:
+        resolved = folder.resolve()
+        for source in self._active_media_paths_provider():
+            url = QUrl(source)
+            if url.isLocalFile():
+                source = url.toLocalFile()
+            elif source.startswith(("http://", "https://")):
+                continue
+            if source and Path(source).resolve().is_relative_to(resolved):
+                return True
+        return False
+
+    def _confirm_folder_deletion(self, folder: Path) -> bool:
+        dialog = QMessageBox(self.parent())
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setWindowTitle(QCoreApplication.translate("MeetingSync", "Delete folder"))
+        dialog.setText(QCoreApplication.translate("MeetingSync", 'Delete folder "{name}" and all its contents?').replace(
+            "{name}", folder.name,
+        ))
+        dialog.setInformativeText(QCoreApplication.translate(
+            "MeetingSync",
+            "The meeting items associated with these files will also be removed. "
+            "This action cannot be undone.\n\n"
+            "Your folder-sync service may also delete these files on other computers.",
+        ) + "\n\n" + str(folder))
+        delete = dialog.addButton(
+            QCoreApplication.translate("MeetingSync", "Delete folder"), QMessageBox.ButtonRole.DestructiveRole,
+        )
+        dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        dialog.setEscapeButton(QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+        return dialog.clickedButton() is delete
+
+    @Slot()
+    def deleteMeetingFolder(self) -> None:
+        if (
+            self._sync_identity is None or not self._sync_folder
+            or self._sync_enabled or self._sync_busy or self.syncPending
+            or self._folder_mutation_pending or self._folder_state != "present"
+        ):
+            return
+        folder = Path(self._sync_folder)
+        if self._folder_has_active_media(folder):
+            self._warn_folder_failed(QCoreApplication.translate(
+                "MeetingSync", "Stop the projection before deleting this folder.",
+            ))
+            return
+        if not self._confirm_folder_deletion(folder):
+            return
+        if not self._flush_image_framing_save() or not self._flush_derived_media_patches():
+            return
+        self._folder_mutation_pending = True
+        self._pending_folder_delete = (
+            self._sync_root, self._sync_identity, self._sync_folder, self._tree_key,
+        )
+        self._cancel_sync_refresh()
+        self._cancel_local_snapshot()
+        self._sync_retry_timer.stop()
+        self._meeting_folder_scan_generation += 1
+        self._media_tree_runtime.operations.cancel_scope(f"meeting:{self._tree_key}")
+        self._set_sync_busy(True, QCoreApplication.translate("MeetingSync", "Preparing folder deletion…"))
+        self._folder_delete_timer.start()
+        self._drain_folder_deletion()
+
+    def _finish_folder_deletion(self) -> None:
+        self._folder_delete_timer.stop()
+        self._pending_folder_delete = None
+        self._folder_mutation_pending = False
+        self._set_sync_busy(False)
+        self._request_sync_refresh()
+
+    def _drain_folder_deletion(self) -> None:
+        pending = self._pending_folder_delete
+        if pending is None:
+            return
+        root, identity, folder, tree_key = pending
+        if (root, identity, tree_key) != (self._sync_root, self._sync_identity, self._tree_key):
+            self._finish_folder_deletion()
+            return
+        if not self._media_tree_runtime.operations.scope_is_idle(f"meeting:{tree_key}"):
+            return
+        # Finished callbacks remove these entries only after queued document
+        # results have run. isRunning() alone would miss pending GUI callbacks.
+        if any(getattr(self, field, ()) for field in ("_pdf_threads", "_lo_threads", "_jwpub_threads")):
+            return
+        self._folder_delete_timer.stop()
+        if self._folder_has_active_media(Path(folder)):
+            self._finish_folder_deletion()
+            self._warn_folder_failed(QCoreApplication.translate(
+                "MeetingSync", "Stop the projection before deleting this folder.",
+            ))
+            return
+        deletion = MeetingFolderDeletion(
+            Path(root), Path(folder), identity, self._store.path.parent / "meeting_folder_deletions",
+        )
+        nodes, imports = clone_nodes(self._nodes), copy.deepcopy(self._meeting_folder_imports)
+        stage = QCoreApplication.translate("MeetingSync", "Deleting folder…")
+
+        def run(report, cancellation):
+            report(MediaOperationProgress(
+                MediaOperationState.FINALIZING, stage=stage, cancellable=False,
+            ))
+            return deletion.delete(
+                self._watched_folder_file_store, self._sync_service,
+                nodes=nodes, imports=imports, cancellation=cancellation,
+            )
+
+        def commit(value: object) -> None:
+            if not isinstance(value, MeetingFolderDeletionResult):
+                raise TypeError("Meeting folder deletion returned an invalid result")
+            if (root, identity, tree_key) != (self._sync_root, self._sync_identity, self._tree_key):
+                return  # The durable intent will reconcile when this meeting is reopened.
+            MeetingTreeController._apply_folder_deletion_result(self, deletion, value)
+            if value.error:
+                self._warn_folder_failed(value.error)
+
+        if not self._submit_modal_operation(
+            operation_type="delete_meeting_folder", conflict_key=folder_resource_key(root),
+            stage=stage, runner=run, commit=commit, failed=self._warn_folder_failed,
+            settled=self._finish_folder_deletion,
+        ):
+            self._finish_folder_deletion()
+
+    def _apply_folder_deletion_result(
+        self, deletion: MeetingFolderDeletion, result: MeetingFolderDeletionResult,
+    ) -> None:
+        self._nodes = result.nodes
+        self._meeting_folder_imports = result.imports
+        self._linked_folder_files = {
+            path: node_id for path, node_id in self._linked_folder_files.items()
+            if node_id not in result.removed_node_ids
+        }
+        self._meeting_folder_pending_sources.clear()
+        self._sync_enabled = False
+        self._sync_revision = 0
+        self._sync_snapshot = ReplicaSnapshot()
+        self._sync_transport_pending = False
+        self._sync_folder = "" if result.folder_exists is False else str(deletion.folder)
+        self._folder_state = (
+            "unavailable" if result.folder_exists is None
+            else "present" if result.folder_exists else "missing"
+        )
+        if not hasattr(self, "_folder_deletion_persistence"):
+            self._folder_deletion_persistence = {}
+        if result.pending and result.folder_exists is not None:
+            self._folder_deletion_persistence[self._tree_key] = deletion
+        _reset_media_requests(self)
+        self._save_local_cache()
+        self.chromeChanged.emit()
+        self.syncStateChanged.emit()
+        self._emit_section_counts()
+        _emit_controller_state_changed(self)
 
     @Slot()
     def restoreCanonicalContent(self) -> None:
@@ -2352,13 +2638,13 @@ class MeetingTreeController(QObject):
             MeetingTreeController._refresh_canonical_restore_state(self)
             return
 
-        message = _tr(
+        message = QCoreApplication.translate(
             _CANONICAL_RESTORE_CONTEXT,
             _RESTORE_CONFIRM_SOURCE,
         )
         reply = QMessageBox.question(
             self.parent(),
-            _tr(_CANONICAL_RESTORE_CONTEXT, _RESTORE_TITLE_SOURCE),
+            QCoreApplication.translate(_CANONICAL_RESTORE_CONTEXT, _RESTORE_TITLE_SOURCE),
             message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -2378,7 +2664,7 @@ class MeetingTreeController(QObject):
         generation = self._canonical_reset_generation + 1
         sync_folder = self._sync_folder if self._sync_enabled else ""
         generated_roots = self._generated_asset_roots()
-        stage = _tr("MediaDestinationDialog", "Preparing media")
+        stage = QCoreApplication.translate("MediaDestinationDialog", "Preparing media")
 
         def run(report, cancellation):
             report(MediaOperationProgress(MediaOperationState.PROCESSING, stage=stage))
@@ -2453,7 +2739,7 @@ class MeetingTreeController(QObject):
         canonical_generation = self._canonical_reset_generation
         hidden_media = copy.deepcopy(self._hidden_canonical_media)
         generated_roots = self._generated_asset_roots()
-        stage = _tr("_PlaylistEditView", "Offline / Syncing")
+        stage = QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing")
 
         def run(report, cancellation):
             report(MediaOperationProgress(MediaOperationState.PREPARING, stage=stage))
@@ -2494,6 +2780,7 @@ class MeetingTreeController(QObject):
             if self._tree_key != tree_key or self._sync_identity != identity:
                 raise RuntimeError("Meeting changed while sync was being enabled")
             self._apply_sync_record(value)
+            self._folder_state = "present"
             self._save_local_cache()
             self._start_media_requests()
             self.chromeChanged.emit()
@@ -2557,9 +2844,14 @@ class MeetingTreeController(QObject):
             return
         reply = QMessageBox.question(
             self.parent(),
-            _tr("MeetingSync", "Meeting sync"),
-            _tr("MeetingSync", "Turn off meeting sync"),
+            QCoreApplication.translate("MeetingSync", "Meeting sync"),
+            QCoreApplication.translate(
+                "MeetingSync",
+                "Turn off synchronization for this meeting on linked computers?\n\n"
+                "The folder and its visible files will be kept.",
+            ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -2575,7 +2867,7 @@ class MeetingTreeController(QObject):
         hidden_media = copy.deepcopy(self._hidden_canonical_media)
         local_revision = self._local_edit_revision
         durable_dir = self._durable_detached_dir()
-        stage = _tr("_PlaylistEditView", "Offline / Syncing")
+        stage = QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing")
 
         def run(report, cancellation):
             report(MediaOperationProgress(MediaOperationState.COPYING, stage=stage))
@@ -2617,7 +2909,7 @@ class MeetingTreeController(QObject):
             self._detach_pending_persistence.add(tree_key)
             self._sync_transport_pending = True
             self._sync_busy_message = (
-                _tr("_PlaylistEditView", "Offline / Syncing")
+                QCoreApplication.translate("_PlaylistEditView", "Offline / Syncing")
                 if self._sync_transport_pending else ""
             )
             if value.cleanup_errors:
@@ -2646,8 +2938,19 @@ class MeetingTreeController(QObject):
 
     @Slot()
     def cancelModalOperation(self) -> None:  # noqa: N802 - QML API
+        if not self._modal_operation_cancellable:
+            return
         if self._modal_operation_id:
             self._media_tree_runtime.operations.cancel(self._modal_operation_id)
+        elif self._pending_folder_delete is not None:
+            self._finish_folder_deletion()
+
+    def _on_modal_operation_changed(self, record) -> None:
+        if record.operation_id != self._modal_operation_id:
+            return
+        if self._modal_operation_cancellable != record.cancellable:
+            self._modal_operation_cancellable = record.cancellable
+            self.syncStateChanged.emit()
 
     def _submit_modal_operation(
         self,
@@ -2658,18 +2961,23 @@ class MeetingTreeController(QObject):
         runner,
         commit,
         failed,
+        settled: Callable[[], None] | None = None,
     ) -> bool:
         if self._modal_operation_id:
             return False
         operation_id = f"{operation_type}:{uuid.uuid4().hex}"
         self._modal_operation_id = operation_id
+        self._modal_operation_cancellable = True
         self._set_sync_busy(True, stage)
 
         def finish() -> None:
             if self._modal_operation_id != operation_id:
                 return
             self._modal_operation_id = ""
+            self._modal_operation_cancellable = True
             self._set_sync_busy(False)
+            if settled is not None:
+                settled()
 
         def guarded_commit(value: object) -> None:
             if self._modal_operation_id != operation_id:
@@ -2713,10 +3021,10 @@ class MeetingTreeController(QObject):
     ) -> bool:
         dialog = QMessageBox(self.parent())
         dialog.setIcon(QMessageBox.Icon.Warning)
-        dialog.setWindowTitle(_tr("MeetingSync", "Meeting sync"))
-        dialog.setText(_tr("MeetingSync", "Could not update meeting sync."))
+        dialog.setWindowTitle(QCoreApplication.translate("MeetingSync", "Meeting sync"))
+        dialog.setText(QCoreApplication.translate("MeetingSync", "Could not update meeting sync."))
         dialog.setInformativeText(
-            _tr(
+            QCoreApplication.translate(
                 "MeetingSync",
                 "Your changes are saved on this computer. Try again or open the linked folder.",
             )
@@ -2743,10 +3051,10 @@ class MeetingTreeController(QObject):
         dlg = NameDialog(
             parent=self.parent(),
             lang=True,
-            label=_tr(_PLAYLIST_EDIT_CONTEXT, "Section name:"),
-            placeholder=_tr(_PLAYLIST_EDIT_CONTEXT, "E.g.: Introduction"),
+            label=QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Section name:"),
+            placeholder=QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "E.g.: Introduction"),
         )
-        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "New Section"))
+        dlg.setWindowTitle(QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "New Section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -2772,10 +3080,10 @@ class MeetingTreeController(QObject):
         dlg = NameDialog(
             parent=self.parent(),
             lang=True,
-            label=_tr(_PLAYLIST_EDIT_CONTEXT, "Subsection name:"),
-            placeholder=_tr(_PLAYLIST_EDIT_CONTEXT, "E.g.: Part 1"),
+            label=QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Subsection name:"),
+            placeholder=QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "E.g.: Part 1"),
         )
-        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "New Subsection"))
+        dlg.setWindowTitle(QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "New Subsection"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -3010,6 +3318,8 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def removeItem(self, item_id: str):
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         if self._tree_session.remove_pending_node(item_id):
             return
         node = self._find_node(item_id)
@@ -3066,7 +3376,7 @@ class MeetingTreeController(QObject):
         if referenced:
             return
         operation_id = f"meeting-remove:{uuid.uuid4().hex}"
-        stage = _tr("MediaDestinationDialog", "Preparing media")
+        stage = QCoreApplication.translate("MediaDestinationDialog", "Preparing media")
         tree_key = self._tree_key
         identity = self._sync_identity
         document_id = getattr(self, "_sync_snapshot", ReplicaSnapshot()).document_id
@@ -3181,7 +3491,7 @@ class MeetingTreeController(QObject):
         if not node or node.get("type") != "media":
             return
         dlg = NameDialog(node.get("title", ""), lang=True, parent=self.parent())
-        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "Rename media"))
+        dlg.setWindowTitle(QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Rename media"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -3234,12 +3544,12 @@ class MeetingTreeController(QObject):
         canonical = MeetingTreeController._canonical_counterpart(self, node)
         initial_title = display_meeting_section_title(node)
         label = (
-            _tr(_PLAYLIST_EDIT_CONTEXT, "Subsection name:")
+            QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Subsection name:")
             if node.get("type") == "subsection"
-            else _tr(_PLAYLIST_EDIT_CONTEXT, "Section name:")
+            else QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Section name:")
         )
         dlg = NameDialog(initial_title, lang=True, parent=self.parent(), label=label)
-        dlg.setWindowTitle(_tr(_PLAYLIST_EDIT_CONTEXT, "Rename section"))
+        dlg.setWindowTitle(QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Rename section"))
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         name = dlg.get_name()
@@ -3274,11 +3584,11 @@ class MeetingTreeController(QObject):
         if node.get("meeting_generated") and has_manual_structure:
             QMessageBox.warning(
                 self.parent(),
-                _tr(
+                QCoreApplication.translate(
                     _PLAYLIST_EDIT_CONTEXT,
                     _CANNOT_DELETE_OFFICIAL_SECTION_SOURCE,
                 ),
-                _tr(
+                QCoreApplication.translate(
                     _PLAYLIST_EDIT_CONTEXT,
                     _MOVE_MANUAL_STRUCTURE_SOURCE,
                 ),
@@ -3286,8 +3596,8 @@ class MeetingTreeController(QObject):
             return
         reply = QMessageBox.question(
             self.parent(),
-            _tr(_PLAYLIST_EDIT_CONTEXT, "Delete section"),
-            _tr(
+            QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Delete section"),
+            QCoreApplication.translate(
                 _PLAYLIST_EDIT_CONTEXT, 'Delete section "{name}"?\nItems inside will be kept.'
             ).replace("{name}", display_meeting_section_title(node)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -3421,6 +3731,7 @@ class MeetingTreeController(QObject):
             "snapshot": getattr(self, "_sync_snapshot", ReplicaSnapshot()).to_dict(),
         }
         storage_key = self._snapshot_storage_key(tree_key)
+        deletion = getattr(self, "_folder_deletion_persistence", {}).get(tree_key)
 
         def persist_snapshot() -> None:
             self._store.save(
@@ -3436,6 +3747,8 @@ class MeetingTreeController(QObject):
                 hidden_canonical_media=hidden_media,
                 linked_sync=linked_sync,
             )
+            if deletion is not None:
+                deletion.acknowledge()
 
         generation = self._media_tree_runtime.snapshots.request(
             storage_key,
@@ -3456,6 +3769,12 @@ class MeetingTreeController(QObject):
 
     @Slot(str, int)
     def _on_snapshot_write_completed(self, key: str, _generation: int) -> None:
+        pending_deletions = getattr(self, "_folder_deletion_persistence", {})
+        for tree_key in tuple(pending_deletions):
+            if key == self._snapshot_storage_key(tree_key):
+                pending_deletions.pop(tree_key)
+                if tree_key == self._tree_key:
+                    self._request_sync_refresh()
         pending_detach = getattr(self, "_detach_pending_persistence", set())
         for tree_key in tuple(pending_detach):
             if key == self._snapshot_storage_key(tree_key):
@@ -3777,6 +4096,10 @@ class MeetingTreeController(QObject):
         signal_name: str = "media",
         on_completed: Callable[[list[Node] | None], None] | None = None,
     ) -> bool:
+        if getattr(self, "_folder_mutation_pending", False):
+            if on_completed is not None:
+                on_completed(None)
+            return False
         kind, target_id = self._parse_list_id(list_id)
         target_children = self._children_for_target(kind, target_id)
         if target_children is None:
@@ -3831,7 +4154,7 @@ class MeetingTreeController(QObject):
             return False
         operation_id = f"meeting-copy:{uuid.uuid4().hex}"
         pending_nodes = clone_nodes(nodes)
-        stage = _tr("MediaDestinationDialog", "Preparing media")
+        stage = QCoreApplication.translate("MediaDestinationDialog", "Preparing media")
         self._tree_session.add_pending(
             operation_id,
             pending_nodes,
@@ -4095,10 +4418,10 @@ class MeetingTreeController(QObject):
 
     def _badge_for(self, _ref: dict[str, Any], media_type: str) -> str:
         if media_type == "image":
-            return _tr("PlaylistPanel", "Image")
+            return QCoreApplication.translate("PlaylistPanel", "Image")
         if media_type == "audio":
-            return _tr("PlaylistPanel", "Audio")
-        return _tr("PlaylistPanel", "Video")
+            return QCoreApplication.translate("PlaylistPanel", "Audio")
+        return QCoreApplication.translate("PlaylistPanel", "Video")
 
     def _media_type_from_ref(self, ref: dict[str, Any]) -> str:
         mime = str(ref.get("mime_type", "")).lower()
@@ -4617,7 +4940,7 @@ class MeetingTreeController(QObject):
     def _should_accept_resolved_title(self, node: Node) -> bool:
         return should_accept_resolved_media_title(
             node,
-            placeholder_titles=(_tr("_MediaRow", "Media"),),
+            placeholder_titles=(QCoreApplication.translate("_MediaRow", "Media"),),
         )
 
     @Slot(int, int)

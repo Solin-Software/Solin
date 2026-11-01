@@ -1,0 +1,32 @@
+--- a/shared/media-playback/media-playback/media.c
++++ b/shared/media-playback/media-playback/media.c
+@@ -527,7 +527,7 @@
+ 
+ static void seek_to(mp_media_t *m, int64_t pos)
+ {
+-	AVStream *stream = m->fmt->streams[0];
++	AVStream *stream = m->has_video ? m->v.stream : m->a.stream;
+ 	int64_t seek_pos = pos;
+ 	int seek_flags;
+ 
+@@ -541,10 +541,18 @@
+ 				      : seek_pos;
+ 
+ 	if (m->is_local_file) {
+-		int ret = av_seek_frame(m->fmt, 0, seek_target, seek_flags);
++		int ret = av_seek_frame(m->fmt, stream->index, seek_target, seek_flags);
+ 		if (ret < 0) {
+ 			blog(LOG_WARNING, "MP: Failed to seek: %s", av_err2str(ret));
+-		}
++			m->seek_next_ts = false;
++			return;
++		}
++		/* A seek can recover after the demuxer has read ahead to EOF. */
++		m->eof = false;
++		m->terminal_packet_corrupt = false;
++		pthread_mutex_lock(&m->mutex);
++		m->completed = false;
++		pthread_mutex_unlock(&m->mutex);
+ 	}
+ 
+ 	if (m->has_video && m->is_local_file) {

@@ -479,6 +479,8 @@ class _FakeEncoder:
         # True means the encoder binds libobs' global mix — the same composite the
         # virtual camera outputs.
         self.attach_global = attach_global
+        self.mixer_idx: int | None = None  # audio encoders only: the mix track encoded
+        self.scaled_size: tuple[int, int] | None = None
         self.released = 0
 
     def release(self) -> None:
@@ -609,7 +611,7 @@ class _CompositingRuntime:
         self.fail_encoder_kinds: set[str] = set()
         self.failing_video_encoders: set[str] = set()
         self.source_types = [
-            "color_source_v3", "ffmpeg_source", "solin_frame_source",
+            "color_source_v3", "ffmpeg_source", "solin_media_source", "solin_frame_source",
             "pulse_input_capture", "pulse_output_capture",
         ]
         # Failure-injection hooks for the audio-mixer tests.
@@ -646,7 +648,7 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict):
                 if kind in runtime.fail_source_kinds:
                     return None  # simulate a plugin refusing the device
-                if kind == "ffmpeg_source":
+                if kind == "solin_media_source":
                     source = _FakeMediaSource(kind, name, settings)
                 else:
                     source = _FakeColorSource(kind, name, settings)
@@ -683,6 +685,7 @@ class _CompositingRuntime:
             def create(kind: str, name: str, settings: dict, mixer_idx: int = 0,
                        *, attach_global: bool = True):
                 encoder = _FakeEncoder(kind, name, settings, attach_global)
+                encoder.mixer_idx = mixer_idx
                 runtime.encoders.append(encoder)
                 return encoder
 
@@ -794,6 +797,9 @@ class _CompositingRuntime:
             self.channels.pop(channel, None)
         else:
             self.channels[channel] = source
+
+    def scale_video_encoder(self, encoder, *, width: int, height: int) -> None:
+        encoder.scaled_size = (width, height)
 
     def release_channel(self, channel: int) -> None:
         self.released_channels.append(channel)
@@ -1863,7 +1869,7 @@ def test_live_prepare_and_take_borrow_preprimed_transition_resources(
     live_program = runtime.channels[0]
     live_projection = route._transition
     resources = tuple(runtime.transitions)
-    assert len(resources) == 6
+    assert len(resources) == 8
 
     def unexpected_creation(*_args, **_kwargs):
         raise AssertionError("Live Prepare and Take must not allocate a native transition")
@@ -2015,7 +2021,7 @@ def test_transition_priming_failure_aborts_activation_cleans_up_and_allows_retry
     assert runtime.channels == {}
     assert engine._projection_route._transition is None
     retained = tuple(transition for transition in runtime.transitions if transition.released == 0)
-    assert len(retained) == (1 if bus_id == "virtual_camera" else 4)
+    assert len(retained) == (1 if bus_id == "virtual_camera" else 5)
     if failure_stage == "size":
         assert runtime.transitions[-1].released == 1
 
@@ -2043,7 +2049,7 @@ def test_transition_priming_failure_aborts_activation_cleans_up_and_allows_retry
     if retry:
         assert _ack_from_envelope(engine.handle(_request("hydrate", hydrate_payload))).applied
         ready = tuple(transition for transition in runtime.transitions if transition.released == 0)
-        assert len(ready) == 6
+        assert len(ready) == 8
         assert all(transition in ready for transition in retained)
         assert runtime.channels[0].current_source == "scene-source:solin-scene-a"
         assert engine._projection_route._transition.current_source == "scene-source:solin-scene-a"
@@ -2064,7 +2070,7 @@ def test_repeated_transition_kinds_reuse_resources_and_rehydrate_drops_scene_ref
     }
     assert _ack_from_envelope(engine.handle(_request("hydrate", payload))).applied
     resources = tuple(runtime.transitions)
-    assert len(resources) == 6
+    assert len(resources) == 8
 
     def unexpected_creation(*_args, **_kwargs):
         raise AssertionError("Prepared transitions must remain reusable until shutdown")
@@ -2187,7 +2193,7 @@ def test_engine_prepare_then_take_scene():
 
 
 def _engine_hydrated_on_a_with_fake_preview():
-    """Engine hydrated with both buses on scene 'a' and a recording preview egress."""
+    """Engine hydrated with all buses on scene 'a' and a recording preview egress."""
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
@@ -2195,7 +2201,7 @@ def _engine_hydrated_on_a_with_fake_preview():
     engine._preview_egress = fake
     engine.handle(_request("hydrate", {
         "document": _TWO_SCENE_DOC,
-        "active_scenes": {"media_windows": "a", "virtual_camera": "a"},
+        "active_scenes": {"media_windows": "a", "virtual_camera": "a", "editor": "a"},
     }))
     return runtime, engine, fake
 
@@ -2595,6 +2601,141 @@ def test_recorder_start_creates_muxer_and_encoders_then_stops():
     assert all(encoder.released == 1 for encoder in runtime.encoders)
 
 
+def test_recorder_encodes_the_recording_track_not_the_meeting_track():
+    from solin.core.media.obs_runtime import RECORDING_MIX_INDEX
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    assert LibobsRecorder(runtime).start(_recording_path("solin-test.mp4")) is True
+
+    audio = runtime.outputs[-1].audio_encoder
+    assert audio.mixer_idx == RECORDING_MIX_INDEX == 0
+    assert audio.mixer_idx != 5  # track 6 carries the hosted-meeting mix
+
+
+def test_recorder_uses_bounded_quality_instead_of_fixed_streaming_bitrate():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("compact.mp4"))
+    settings = runtime.outputs[-1].video_encoder.settings
+    assert settings["rate_control"] == "CRF"
+    assert 20 <= settings["crf"] <= 23
+    assert "vbv-maxrate=" in settings["x264opts"]
+    assert "vbv-bufsize=" in settings["x264opts"]
+    assert runtime.outputs[-1].audio_encoder.settings["bitrate"] <= 160
+
+
+@pytest.mark.parametrize("height", [360, 540, 720, 1080])
+def test_engine_applies_recording_resolution_without_changing_program_canvas(height):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    width = height * 16 // 9
+    response = engine.handle(_request("start_program_recording", {
+        "path": _recording_path("scaled.mp4"), "width": width, "height": height,
+        "fps_numerator": 30, "fps_denominator": 1,
+        "microphone": {}, "system_audio": {},
+    }))
+    assert _ack_from_envelope(response).applied
+    assert runtime.outputs[-1].video_encoder.scaled_size == (width, height)
+    assert (runtime.video.width, runtime.video.height) == (1920, 1080)
+
+
+@pytest.mark.parametrize("width,height", [
+    (None, None), (True, 360), (1280, "720"), (1280, 720.0),
+    (1920, 720), (640, 0), (3840, 2160),
+])
+def test_engine_rejects_invalid_recording_size_before_opening_audio(width, height):
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    response = engine.handle(_request("start_program_recording", {
+        "path": _recording_path("invalid.mp4"), "width": width, "height": height,
+        "microphone": {"mode": "system_default"},
+        "system_audio": {"mode": "system_default"},
+    }))
+    ack = _ack_from_envelope(response)
+    assert not ack.applied and ack.error_code == "recording_video_format_unsupported"
+    assert not runtime.outputs and not runtime.encoders
+    assert not _audio_sources(runtime, "pulse_input_capture")
+
+
+@pytest.mark.parametrize("encoder_id", [
+    "obs_nvenc_h264_tex", "jim_nvenc", "obs_qsv11", "h264_texture_amf", "ffmpeg_vaapi",
+])
+@pytest.mark.parametrize("height", [360, 540, 720, 1080])
+def test_hardware_recording_profiles_have_bounded_variable_bitrate(encoder_id, height):
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = [encoder_id, "obs_x264"]
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("hw.mp4"), width=height * 16 // 9, height=height)
+    encoder = runtime.outputs[-1].video_encoder
+    assert encoder.kind == encoder_id
+    assert encoder.scaled_size == (height * 16 // 9, height)
+    settings = encoder.settings
+    assert settings["rate_control"] == "VBR"
+    if encoder_id == "h264_texture_amf":
+        maximum = settings["bitrate"] * 1.5
+    else:
+        maximum = settings["maxrate" if encoder_id == "ffmpeg_vaapi" else "max_bitrate"]
+    assert 0 < settings["bitrate"] <= maximum < 6000
+
+
+def test_recording_scaling_failure_releases_encoder_before_software_fallback():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    runtime = _CompositingRuntime()
+    runtime.encoder_types = ["obs_nvenc_h264_tex", "obs_x264"]
+    scale = runtime.scale_video_encoder
+
+    def scale_software_only(encoder, *, width, height):
+        if encoder.kind == "obs_nvenc_h264_tex":
+            raise RuntimeError("hardware scaling unavailable")
+        scale(encoder, width=width, height=height)
+
+    runtime.scale_video_encoder = scale_software_only
+    recorder = LibobsRecorder(runtime)
+    assert recorder.start(_recording_path("fallback.mp4"), width=960, height=540)
+    assert runtime.encoders[0].released == 1
+    assert runtime.outputs[-1].video_encoder.kind == "obs_x264"
+    assert runtime.outputs[-1].video_encoder.scaled_size == (960, 540)
+
+
+def test_recording_bitrate_budget_scales_with_frame_rate():
+    from solin.core.scenes.libobs_recorder import LibobsRecorder
+
+    settings = []
+    for fps in (30, 60):
+        runtime = _CompositingRuntime()
+        runtime.video.fps = fps
+        runtime.encoder_types = ["obs_nvenc_h264_tex", "obs_x264"]
+        recorder = LibobsRecorder(runtime)
+        assert recorder.start(_recording_path(f"{fps}fps.mp4"))
+        settings.append(runtime.outputs[-1].video_encoder.settings)
+    assert settings[1]["bitrate"] == settings[0]["bitrate"] * 2
+    assert settings[1]["max_bitrate"] == settings[0]["max_bitrate"] * 2
+
+
+def test_duplicate_recording_start_preserves_live_output_and_audio():
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    payload = {
+        "path": _recording_path("active.mp4"), "width": 1280, "height": 720,
+        "microphone": {"mode": "system_default"}, "system_audio": {"mode": "none"},
+    }
+    assert _ack_from_envelope(engine.handle(_request("start_program_recording", payload))).applied
+    microphone = _audio_sources(runtime, "pulse_input_capture")[0]
+    response = engine.handle(_request("start_program_recording", payload))
+    assert not _ack_from_envelope(response).applied
+    assert microphone.released == 0
+    assert runtime.outputs[-1].active
+
+
 def test_recorder_double_start_is_rejected():
     from solin.core.scenes.libobs_recorder import LibobsRecorder
 
@@ -2732,7 +2873,7 @@ def test_engine_start_recording_failure_emits_failed_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
 
-    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     assert _ack_from_envelope(response).applied is False
     failed = _program_recording_event_from_envelope(events[-1])
     assert failed.state.status is ProgramRecordingStatus.FAILED
@@ -2742,7 +2883,7 @@ def test_engine_start_recording_failure_emits_failed_state():
 def test_engine_start_recording_without_runtime_fails():
     engine = LibobsSidecarEngine()  # protocol-only, no runtime
     engine.handle(_request("hello"))
-    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    response = engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     ack = _ack_from_envelope(response)
     assert ack.applied is False and ack.error_code == "runtime_unavailable"
 
@@ -2818,7 +2959,7 @@ def test_shutdown_stops_an_active_recording():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
-    engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4")}))
+    engine.handle(_request("start_program_recording", {"path": _recording_path("r.mp4"), "width": 1280, "height": 720}))
     output = runtime.outputs[-1]
 
     engine.shutdown()
@@ -2886,6 +3027,20 @@ def test_audio_mixer_apply_system_default_uses_default_device_id():
     assert mic.settings["device_id"] == "default"
     assert system.settings["device_id"] == "default"
     assert mic in runtime.channels.values() and system in runtime.channels.values()
+
+
+def test_audio_mixer_puts_captures_on_the_recording_track_only():
+    from solin.core.media.obs_runtime import RECORDING_AUDIO_MIXERS
+    from solin.core.scenes.libobs_audio_sources import LibobsAudioMixer
+
+    runtime = _CompositingRuntime()
+    LibobsAudioMixer(runtime).apply({"mode": "system_default"}, {"mode": "system_default"})
+
+    mic = _audio_sources(runtime, "pulse_input_capture")[0]
+    system = _audio_sources(runtime, "pulse_output_capture")[0]
+    assert mic.audio_mixers == system.audio_mixers == RECORDING_AUDIO_MIXERS == 0b1
+    # Off track 6 (mix index 5), which the hosted-meeting mix owns.
+    assert not system.audio_mixers & (1 << 5)
 
 
 def test_audio_mixer_apply_none_creates_no_source():
@@ -2989,7 +3144,7 @@ def test_engine_start_recording_applies_audio_before_start():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3005,7 +3160,7 @@ def test_engine_stop_recording_clears_audio_sources():
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "system_default"},
     }))
@@ -3023,7 +3178,7 @@ def test_engine_failed_recording_start_clears_audio_sources():
     engine.handle(_request("hello"))
 
     response = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3135,7 +3290,7 @@ def test_engine_start_recording_with_missing_device_warns_but_records():
     engine.handle(_request("hello"))
 
     start = engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "ghost-mic"},
         "system_audio": {"mode": "none"},
     }))
@@ -3153,7 +3308,7 @@ def test_engine_live_device_switch_replaces_source_and_emits_state():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "device", "device_id": "usb-mic-1"},
         "system_audio": {"mode": "none"},
     }))
@@ -3180,7 +3335,7 @@ def test_engine_set_recording_audio_missing_device_emits_warning():
     engine.set_event_sink(events.append)
     engine.handle(_request("hello"))
     engine.handle(_request("start_program_recording", {
-        "path": _recording_path("rec.mp4"),
+        "path": _recording_path("rec.mp4"), "width": 1280, "height": 720,
         "microphone": {"mode": "system_default"},
         "system_audio": {"mode": "none"},
     }))
@@ -3233,7 +3388,7 @@ _MEDIA_DOC = {
 
 
 def _media_sources(runtime):
-    return [s for s in runtime.sources if s.kind == "ffmpeg_source"]
+    return [s for s in runtime.sources if s.kind == "solin_media_source"]
 
 
 def _hydrate_media_graph(engine, content_source):
@@ -3907,7 +4062,7 @@ def test_engine_control_media_drives_transport_with_trim_offset():
     assert media.media_time == 2000  # opened → seeked to trim start
     # Model the requested trim frame arriving after the queued seek.
     media.readiness.ready = True
-    engine._media_source.apply_pending_resume()
+    engine._media_source.apply_startup_transport()
 
     engine.handle(_request("control_media", {"action": "pause"}))
     assert media.play_pause_calls[-1] is True
@@ -3918,6 +4073,34 @@ def test_engine_control_media_drives_transport_with_trim_offset():
     engine.handle(_request("control_media", {"action": "restart"}))
     assert media.restarts == 1 and media.media_time == 2000  # restart re-seeks trim start
     engine.shutdown()
+
+
+@pytest.mark.parametrize("slot", [0, 1])
+@pytest.mark.parametrize("duration", [0, 140_000])
+@pytest.mark.parametrize("terminal_state", [MediaPlaybackState.ENDED, MediaPlaybackState.ERROR])
+def test_native_terminal_state_survives_a_decoder_position_reset(slot, duration, terminal_state):
+    """Completion and failure come from the decoder, not a duration estimate."""
+    runtime = _CompositingRuntime()
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    try:
+        response = engine.handle(_request("open_media", {
+            "path": "https://cdn.example/media.mp3", "is_local_file": False, "slot": slot,
+        }))
+        assert _ack_from_envelope(response).applied
+        engine._stop_media_poller()
+        media = _media_sources(runtime)[-1]
+        media.media_time = 30_000
+        media._duration = duration
+        engine._sample_media(slot)
+        media._state = terminal_state
+        media.media_time = 0
+        snapshot = engine._sample_media(slot)
+        assert snapshot == (
+            terminal_state, 0, duration, "https://cdn.example/media.mp3",
+        )
+    finally:
+        engine.shutdown()
 
 
 def test_engine_control_media_close_retires_a_silent_picture_and_stops_poller():
@@ -4392,8 +4575,7 @@ def test_engine_set_media_properties_updates_volume_and_speed():
     engine.shutdown()
 
 
-def test_engine_off_normal_speed_moves_the_audio_off_the_media_source():
-    """The rate change is carried by a pitch-preserving stretch playing alongside."""
+def test_engine_off_normal_speed_keeps_audio_on_the_media_source():
     runtime = _CompositingRuntime()
     engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
     engine.set_event_sink(lambda _e: None)
@@ -4407,7 +4589,7 @@ def test_engine_off_normal_speed_moves_the_audio_off_the_media_source():
 
     assert ack.applied is True
     assert media.settings["speed_percent"] == 150
-    assert media.volume == 0.0  # silenced; the stretch is heard instead
+    assert media.volume == 0.5
     engine.shutdown()
 
 
@@ -4534,7 +4716,7 @@ def test_engine_hydrate_configures_preview_egress_and_sets_scene():
                   "width": 1920, "height": 1080}
     engine.handle(_request("hydrate", {
         "document": _MEDIA_DOC,
-        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1"},
+        "active_scenes": {"media_windows": "s1", "virtual_camera": "s1", "editor": "s1"},
         "preview_egress": descriptor,
     }))
     assert fake.configured[-1] == descriptor
