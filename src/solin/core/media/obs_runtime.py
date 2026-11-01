@@ -528,6 +528,16 @@ class ObsRuntime:
                 return None
             if source is None:
                 return None
+            try:
+                # A video SDP section can still contain MPEG-TS audio.
+                source.audio_mixers = NO_AUDIO_MIXERS
+            except Exception:  # noqa: BLE001 - native routing boundary
+                log.warning("Could not disable the IP camera audio mixers", exc_info=True)
+                try:
+                    source.release()
+                except Exception:  # noqa: BLE001 - failed-source cleanup
+                    log.debug("Error releasing the unrouted IP camera source", exc_info=True)
+                return None
             _show_newest_frame(source)
             self._rtsp_sources[camera_id] = (source, dict(settings))
             return source

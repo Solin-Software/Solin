@@ -77,8 +77,8 @@ def _rtsp_ffmpeg_options(config: dict) -> str:
     Without ``rtsp_transport`` FFmpeg tries UDP first, and over Wi-Fi a
     high-resolution stream loses enough RTP packets that no frame ever decodes.
     The network buffer is the RTP reorder window, which FFmpeg takes in µs.
-    Only the video stream is set up: the auditorium's sound comes from the
-    mixer, and a camera microphone would only add a second, delayed copy.
+    Request only video media sections; the shared source also disables audio
+    mixers because MPEG-TS can carry audio inside a video section.
     """
     transport = "udp" if str(config.get("transport", "tcp")) == "udp" else "tcp"
     try:

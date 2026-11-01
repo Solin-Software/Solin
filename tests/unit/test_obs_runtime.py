@@ -1042,10 +1042,15 @@ class _RtspSource:
     def __init__(self, settings: dict) -> None:
         self.settings = dict(settings)
         self.updates: list[dict] = []
+        self.audio_mixers = 0x3F
+        self.releases = 0
 
     def update(self, settings: dict) -> None:
         self.updates.append(dict(settings))
         self.settings.update(settings)
+
+    def release(self) -> None:
+        self.releases += 1
 
 
 def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource]]:
@@ -1073,6 +1078,49 @@ def test_shared_rtsp_source_follows_transport_and_buffer_edits(monkeypatch) -> N
     assert len(created) == 1
     assert source.updates == [edited]
     assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000 allowed_media_types=video"
+
+
+def test_shared_rtsp_source_excludes_embedded_audio_from_all_mixers(monkeypatch) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+
+    # MPEG-TS may carry audio inside a video SDP section despite the media filter.
+    assert source.audio_mixers == 0
+
+    edited = _rtsp_settings("rtsp://camera/other", "rtsp_transport=udp allowed_media_types=video")
+    assert runtime.rtsp_source("cam", "rtsp://camera/other", edited) is source
+    assert source.audio_mixers == 0
+    assert len(created) == 1
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+def test_shared_rtsp_source_releases_and_retries_if_audio_routing_fails(
+    monkeypatch, release_fails,
+) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    def set_attribute(source, name, value):
+        if name == "audio_mixers" and value == 0:
+            raise RuntimeError("native audio routing failed")
+        object.__setattr__(source, name, value)
+
+    def release(source):
+        source.releases += 1
+        if release_fails:
+            raise RuntimeError("native source release failed")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(_RtspSource, "__setattr__", set_attribute)
+        failure.setattr(_RtspSource, "release", release)
+
+        assert runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings()) is None
+        assert created[0].releases == 1
+
+    # A failed source must not be cached or prevent a later successful attempt.
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+    assert source is created[1]
+    assert source.audio_mixers == 0
 
 
 def test_shared_rtsp_source_draws_its_newest_frame(monkeypatch) -> None:
