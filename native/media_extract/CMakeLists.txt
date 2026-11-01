@@ -13,7 +13,7 @@ if(SOLIN_FFMPEG_ROOT)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SOLIN_FFMPEG_SDK REQUIRED
-        libavformat>=60.16.100 libavcodec>=60.31.102 libavutil>=58.29.100 libswscale>=7.5.100)
+        libavformat>=62.3.100 libavcodec>=62.11.100 libavutil>=60.8.100 libswscale>=9.1.100)
     find_path(SOLIN_FFMPEG_INCLUDE_DIR libavformat/avformat.h
         HINTS ${SOLIN_FFMPEG_SDK_INCLUDE_DIRS} NO_CACHE REQUIRED)
 else()

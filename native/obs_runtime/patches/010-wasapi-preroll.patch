@@ -68,7 +68,7 @@
  
  	success = true;
  
-@@ -271,9 +283,90 @@
+@@ -271,9 +283,88 @@
  
  	audio_resampler_destroy(monitor->resampler);
  	monitor->resampler = NULL;
@@ -125,7 +125,7 @@
 +/* Submit once: the startup reserve precedes PCM, never replaces active samples.
 + * A very large packet may leave less room for the reserve; never overrun the
 + * actual endpoint capacity. */
-+static HRESULT write_audio(struct audio_monitor *monitor, const float *data, uint32_t frames, uint32_t pad, bool muted)
++static HRESULT write_audio(struct audio_monitor *monitor, const float *data, uint32_t frames, uint32_t pad)
 +{
 +	BYTE *output;
 +	if (!frames)
@@ -137,12 +137,10 @@
 +	HRESULT hr = monitor->render->lpVtbl->GetBuffer(monitor->render, total, &output);
 +	if (FAILED(hr))
 +		return hr;
-+	if (!muted) {
-+		memset(output, 0, (size_t)reserve * monitor->channels * sizeof(float));
-+		memcpy(output + (size_t)reserve * monitor->channels * sizeof(float), data,
-+		       (size_t)frames * monitor->channels * sizeof(float));
-+	}
-+	hr = monitor->render->lpVtbl->ReleaseBuffer(monitor->render, total, muted ? AUDCLNT_BUFFERFLAGS_SILENT : 0);
++	memset(output, 0, (size_t)reserve * monitor->channels * sizeof(float));
++	memcpy(output + (size_t)reserve * monitor->channels * sizeof(float), data,
++	       (size_t)frames * monitor->channels * sizeof(float));
++	hr = monitor->render->lpVtbl->ReleaseBuffer(monitor->render, total, 0);
 +	if (FAILED(hr))
 +		return hr;
 +	if (!monitor->started) {
@@ -159,7 +157,7 @@
  }
  
  static void on_audio_playback(void *param, obs_source_t *source, const struct audio_data *audio_data, bool muted)
-@@ -284,7 +377,6 @@
+@@ -286,7 +377,6 @@
  	uint32_t resample_frames;
  	uint64_t ts_offset;
  	bool success;
@@ -167,7 +165,7 @@
  
  	if (!TryAcquireSRWLockExclusive(&monitor->playback_mutex)) {
  		return;
-@@ -309,6 +401,10 @@
+@@ -311,6 +401,10 @@
  		goto free_for_reconnect;
  	}
  
@@ -178,39 +176,34 @@
  	bool decouple_audio = source->async_unbuffered && source->async_decoupled;
  
  	if (monitor->source_has_video && !decouple_audio) {
-@@ -319,28 +415,15 @@
+@@ -321,26 +415,16 @@
  		}
  	}
  
 -	IAudioRenderClient *const render = monitor->render;
 -	hr = render->lpVtbl->GetBuffer(render, resample_frames, &output);
 -	if (FAILED(hr)) {
-+	if (!muted && !close_float(vol, 1.0f, EPSILON)) {
+-		goto free_for_reconnect;
+-	}
+-
+-	/* apply volume */
++	/* apply volume; monitoring deliberately ignores the source's output mute */
+ 	if (!close_float(vol, 1.0f, EPSILON)) {
+-		register float *cur = (float *)resample_data[0];
+-		register float *end = cur + resample_frames * monitor->channels;
+-
 +		float *cur = (float *)resample_data[0];
 +		float *end = cur + (size_t)resample_frames * monitor->channels;
-+		while (cur < end)
-+			*(cur++) *= vol;
-+	}
-+	hr = write_audio(monitor, (const float *)resample_data[0], resample_frames, pad, muted);
+ 		while (cur < end)
+ 			*(cur++) *= vol;
+ 	}
+-	memcpy(output, resample_data[0], resample_frames * monitor->channels * sizeof(float));
+-
+-	hr = render->lpVtbl->ReleaseBuffer(render, resample_frames, 0);
+-	if (FAILED(hr)) {
++	hr = write_audio(monitor, (const float *)resample_data[0], resample_frames, pad);
 +	if (FAILED(hr))
  		goto free_for_reconnect;
--	}
--
--	if (!muted) {
--		/* apply volume */
--		if (!close_float(vol, 1.0f, EPSILON)) {
--			register float *cur = (float *)resample_data[0];
--			register float *end = cur + resample_frames * monitor->channels;
--
--			while (cur < end)
--				*(cur++) *= vol;
--		}
--		memcpy(output, resample_data[0], resample_frames * monitor->channels * sizeof(float));
--	}
--
--	hr = render->lpVtbl->ReleaseBuffer(render, resample_frames, muted ? AUDCLNT_BUFFERFLAGS_SILENT : 0);
--	if (FAILED(hr)) {
--		goto free_for_reconnect;
 -	}
  
  	goto unlock;

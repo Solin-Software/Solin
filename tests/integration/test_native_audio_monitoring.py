@@ -289,8 +289,12 @@ def _play(source_id, speed=100, video=False):
         )
         stack.callback(source.release)
         source.volume = 0.5
+        audio_controls = (source.muted, source.volume)
         runtime.set_source_monitoring(source, MONITORING_MONITOR_ONLY)
         stack.callback(runtime.set_source_monitoring, source, MONITORING_NONE)
+        assert source.monitoring_enabled is True
+        assert source.audio_mixers == 0
+        assert (source.muted, source.volume) == audio_controls
         _route(runtime, stack, source)
         source_blocks = []
         lock = Lock()

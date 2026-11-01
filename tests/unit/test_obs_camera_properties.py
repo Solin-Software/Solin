@@ -7,7 +7,6 @@ from cffi import FFI
 import pytest
 
 from solin.core.media import obs_camera_properties as metadata
-from solin.core.media.pylibobs_compat import complete_frame_rate_type_compat
 from solin.core.scenes.engine import LocalCameraModeQuery
 
 
@@ -67,60 +66,6 @@ def test_dshow_exact_size_query_does_not_probe_other_resolutions(size):
     assert ranges == ()
     assert all((mode.width, mode.height) == size for mode in formats)
     assert properties.modified.count("resolution") == (0 if size == (1280, 720) else 1)
-
-
-def test_avcapture_exact_size_query_does_not_invent_resolution():
-    properties = AVCaptureProperties()
-    assert metadata._avcapture_modes(properties, "native-device", requested_size=(1296, 728)) == ((), ())
-    assert "frame_rate" not in properties.settings
-
-
-class AVCaptureProperties:
-    def __init__(self):
-        self.settings = {}
-
-    def set(self, name, value):
-        self.settings[name] = value
-
-    def fps_ranges(self):
-        assert self.settings["resolution"] == '{"width":1920,"height":1080}'
-        # All underlying ranges are exposed by OBS's enumerate_frame_rates().
-        return ((Fraction(15), Fraction(20)), (Fraction(25), Fraction(30)), (Fraction(15), Fraction(30)))
-
-    def choices(self, name):
-        if name == "resolution":
-            assert not self.settings["use_preset"]
-            return (("HD", '{"width":1920,"height":1080}'),)
-        if name == "input_format":
-            fps = self.settings["frame_rate"]
-            formats = [("automatic", -1), ("UYVY", int.from_bytes(b"2vuy", "big"))]
-            if 15 <= fps <= 20 or 25 <= fps <= 30:
-                formats.append(("NV12", int.from_bytes(b"420v", "big")))
-            return formats
-        raise AssertionError(name)
-
-
-def test_avcapture_preserves_gaps_and_validates_formats_at_the_selected_fps():
-    formats, ranges = metadata._avcapture_modes(AVCaptureProperties(), "native-device")
-    nv12 = [item for item in ranges if item.pixel_format == "420v"]
-    assert any(item.supports(30, 1) for item in nv12)
-    assert any(item.supports(20, 1) for item in nv12)
-    assert not any(item.supports(24, 1) for item in nv12)
-    assert not any(mode.pixel_format == "420v" and 20 < mode.frames_per_second < 25 for mode in formats)
-    assert any(mode.pixel_format == "420v" and (mode.fps_numerator, mode.fps_denominator) == (30000, 1001)
-               for mode in formats)
-    assert any(mode.pixel_format == "420v" and mode.frames_per_second == 30 for mode in formats)
-    assert all(len(mode.pixel_format) == 4 for mode in formats)
-
-
-def test_opaque_binding_fps_type_is_completed_idempotently():
-    ffi = FFI()
-    ffi.cdef("typedef unsigned int uint32_t; struct media_frames_per_second;")
-    with pytest.raises(ValueError):
-        ffi.sizeof("struct media_frames_per_second")
-    complete_frame_rate_type_compat(ffi)
-    complete_frame_rate_type_compat(ffi)
-    assert ffi.sizeof("struct media_frames_per_second") == 8
 
 
 def test_raw_properties_are_freed_even_when_default_callbacks_fail(monkeypatch):
@@ -326,7 +271,7 @@ def native_properties_library(monkeypatch):
     return state, lib
 
 
-@pytest.mark.parametrize("platform", ["win32", "darwin"])
+@pytest.mark.parametrize("platform", ["win32"])
 def test_native_session_isolates_devices_and_recovers_after_callback_failure(
     monkeypatch, native_properties_library, platform,
 ):
@@ -353,13 +298,8 @@ def test_native_session_isolates_devices_and_recovers_after_callback_failure(
             return (("format", int.from_bytes(b"420v" if device_id == b"first" else b"jpeg", "big")),)
         raise AssertionError(name)
 
-    def fps_ranges(props):
-        fps = Fraction(30 if props.settings[device_key] == b"first" else 5)
-        return ((fps, fps),)
-
     monkeypatch.setattr(metadata.sys, "platform", platform)
     monkeypatch.setattr(metadata._NativeProperties, "choices", choices)
-    monkeypatch.setattr(metadata._NativeProperties, "fps_ranges", fps_ranges)
     # Each device fits this budget; a shared cumulative budget would break the
     # final camera after the first camera's successful query and the driver error.
     monkeypatch.setattr(metadata, "_CALLBACK_LIMIT", 7)

@@ -492,7 +492,7 @@ Result extract(FFmpeg& api, const Options& options, Deadline& deadline) {
     if (status < 0)
         media_failure(api, deadline, status, "Cannot open media source");
     deadline.check();
-    // FFmpeg 6.1/7.1 also forces threads=1 for streams discovered during probing.
+    // FFmpeg also forces threads=1 for streams discovered during probing.
     // Known streams additionally receive pixel and thread-type limits here.
     struct ProbeOptions {
         FFmpeg& api;

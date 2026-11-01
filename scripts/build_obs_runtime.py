@@ -17,15 +17,26 @@ import tempfile
 if __package__:
     from . import obs_sources
     from .build_media_extract import installed_runtime, prepare_sdk, target
-    from .package_libobs_runtime import _publish_runtime, _retry_windows_sharing
+    from .package_libobs_runtime import (
+        _publish_runtime,
+        _retry_windows_sharing,
+        module_binary_path,
+        module_data_path,
+    )
 else:
     import obs_sources
     from build_media_extract import installed_runtime, prepare_sdk, target
-    from package_libobs_runtime import _publish_runtime, _retry_windows_sharing
+    from package_libobs_runtime import (
+        _publish_runtime,
+        _retry_windows_sharing,
+        module_binary_path,
+        module_data_path,
+    )
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRECTORY = ROOT / "native" / "obs_runtime"
 MANIFEST_NAME = "obs-runtime-manifest.json"
+_REQUIRED_MODULES = {"obs-ffmpeg": "ffmpeg_source", "win-wasapi": "wasapi_output_capture"}
 
 
 class ObsRuntimeBuildError(RuntimeError):
@@ -72,39 +83,70 @@ def verify_exports(linker: Path, binary: Path, installed: Path) -> None:
 
 
 _VERIFY_RUNTIME = """
-import os, sys, tempfile
+import json, os, sys, tempfile
 from pathlib import Path
-candidate, runtime, expected_version = sys.argv[1:]
+candidate, runtime, expected_version, module_paths = sys.argv[1:]
 dll_search = os.add_dll_directory(runtime)
 from pylibobs.context import OBSContext
 from pylibobs._ffi import ffi, get_lib
 library = get_lib()
-if library.obs_get_version() != int(expected_version):
-    raise RuntimeError('The corrected OBS core does not match the pinned runtime ABI')
+actual_version = library.obs_get_version()
+if actual_version != int(expected_version):
+    raise RuntimeError(
+        f'The corrected OBS core does not match the pinned runtime ABI: '
+        f'expected {int(expected_version):#x}, got {actual_version:#x}')
+required_modules = json.loads(module_paths)
 with tempfile.TemporaryDirectory(prefix='solin-core-qualification-') as config:
     with OBSContext(module_config_path=config) as context:
         context.set_audio(samples_per_sec=48000)
-        library.obs_add_module_path(
-            str(Path(runtime) / 'obs-plugins').encode(),
-            str(Path(runtime) / 'data/obs-plugins/%module%').encode())
-        library.obs_load_all_modules()
+        # The candidate core is outside the installed package; resolve required
+        # modules from the selected runtime rather than package discovery.
+        for binary_path, data_path, _ in required_modules:
+            binary, data = Path(binary_path), Path(data_path)
+            if not binary.is_file():
+                raise RuntimeError(f'Required OBS module binary is missing: {binary}')
+            if not data.is_dir():
+                raise RuntimeError(f'Required OBS module data directory is missing: {data}')
+            module = ffi.new('obs_module_t **')
+            # libobs splits module names at '/', including on Windows.
+            result = library.obs_open_module(
+                module, binary.as_posix().encode(), data.as_posix().encode())
+            if result != 0:
+                raise RuntimeError(
+                    f'obs_open_module failed for {binary} (code {result}; data: {data})')
+            if module[0] == ffi.NULL:
+                raise RuntimeError(f'obs_open_module returned a NULL module for {binary}')
+            if not library.obs_init_module(module[0]):
+                raise RuntimeError(
+                    f'obs_init_module returned false for {binary} (data: {data})')
         library.obs_post_load_modules()
         from pylibobs import enum_source_types
         registered = set(enum_source_types())
-        if not {'wasapi_output_capture', 'ffmpeg_source'} <= registered:
-            raise RuntimeError('The existing Windows media/audio plugins did not load')
+        missing = sorted(source for _, _, source in required_modules if source not in registered)
+        if missing:
+            raise RuntimeError(
+                'Required Windows source types were not registered: ' + ', '.join(missing))
 print('Corrected OBS core qualified')
 """
 
 
 def verify_runtime(binary: Path, runtime: Path) -> None:
+    runtime = runtime.resolve()
     environment = os.environ.copy()
     environment["LIBOBS_PATH"] = str(binary.resolve())
-    environment["OBS_DATA_PATH"] = str(runtime.resolve() / "data")
-    # Native module loading uses LoadLibraryW, whose dependency search includes
-    # PATH rather than Python's AddDllDirectory entries.
-    environment["PATH"] = str(runtime.resolve()) + os.pathsep + environment.get("PATH", "")
+    environment["OBS_DATA_PATH"] = str(runtime / "data")
+    # Keep dependencies visible to helper processes; the child retains an
+    # AddDllDirectory handle for libobs's LoadLibraryExW module loads.
+    environment["PATH"] = str(runtime) + os.pathsep + environment.get("PATH", "")
     major, minor, patch = map(int, obs_sources.OBS_VERSION.split("."))
+    modules = [
+        (
+            str(module_binary_path(runtime, "windows", name)),
+            str(module_data_path(runtime, "windows", name)),
+            source,
+        )
+        for name, source in _REQUIRED_MODULES.items()
+    ]
     result = subprocess.run(
         [
             sys.executable,
@@ -112,8 +154,9 @@ def verify_runtime(binary: Path, runtime: Path) -> None:
             "-c",
             _VERIFY_RUNTIME,
             str(binary.resolve()),
-            str(runtime.resolve()),
+            str(runtime),
             str(major << 24 | minor << 16 | patch),
+            json.dumps(modules),
         ],
         cwd=ROOT,
         env=environment,

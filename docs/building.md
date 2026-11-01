@@ -1,8 +1,9 @@
 # Building and platform requirements
 
-The repository supports Windows x86-64, macOS 13+ on Intel and Apple Silicon,
-and Linux x86-64 with glibc 2.38 or newer. Generated files are written under
-`build/` or `dist/` and must not be committed.
+Build targets are Windows x86-64, macOS 13+ on Intel and Apple Silicon, and Linux
+x86-64 with glibc 2.43 or newer. Each target requires native runtime and packaged
+application qualification before distribution. Generated files are written
+under `build/` or `dist/` and must not be committed.
 
 Build recipes generate Qt `.qm` catalogs from versioned `.ts` sources before
 packaging; no precompiled catalog is required in the checkout. Wheels use the
@@ -25,8 +26,8 @@ Builds run `scripts/package_libobs_runtime.py` before producing release artifact
 It validates the runtime files, adjusts private library paths on Linux/macOS and
 requires a real packaged IPC handshake, decoded image pixels through preview
 egress, media playback progress, heartbeat and clean shutdown. Runtime startup
-or missing-plugin failures fail the
-build. Linux qualification needs a graphics session; CI uses Xvfb. macOS
+or missing-plugin failures fail the build. Linux qualification needs a graphics
+session; CI uses Xvfb. macOS
 qualification runs in the macOS workflow and cannot be established by Windows
 tests alone.
 
@@ -50,14 +51,32 @@ the private libobs runtime. No external `ffprobe` or `ffmpeg` executable is
 required. Extraction does not initialize OBS, a graphics session, or a render
 context.
 
-Install the Python dependencies before invoking a build. On Intel macOS, use the
-[macOS binding bootstrap](#macos) below. On other platforms:
+## Native media dependencies
 
-```text
-python -m pip install -r requirements-dev.txt
-python -m pip install -r requirements-build.txt
-python -m pip install -e .
-```
+Install Python dependencies as described in [Contributing](../CONTRIBUTING.md#before-starting).
+The [dependency manifests](../CONTRIBUTING.md#dependencies) define the binding
+version used by source runs, CI and delivery. Verified OBS source versions and
+digests live in [`scripts/obs_sources.py`](../scripts/obs_sources.py); SDK archives
+and checksums live in [`scripts/build_media_extract.py`](../scripts/build_media_extract.py).
+Solin builds its extraction helper, playback module and corrected Windows core
+separately against that runtime.
+
+When upgrading the binding or OBS runtime:
+
+1. Update the dependency manifests, verified OBS source/archive digests and
+   platform requirements together. Inspect the actual release artifacts and
+   their native dependencies; wheel tags alone do not establish compatibility.
+2. Rebase the ordered native patch series and rerun its behavioral tests. Match
+   SDK headers to the loaded FFmpeg ABI; retire corrections only after qualifying
+   their upstream replacements.
+3. Check plugin discovery, helper locations, framework resources, private loader
+   paths and redistribution notices against the new layout. Update the shared
+   runtime staging contract rather than adding compatibility copies.
+4. Run the [dependency ABI and capability contracts](../tests/contract/test_dependency_contracts.py)
+   against the release dependency artifacts. Rebuild and qualify the final layout
+   on every target, including packaged IPC, decoded pixels, playback, recording,
+   shutdown and upgrade checks. A local dependency override does not qualify the
+   artifacts selected by the manifests.
 
 Before running from source or executing the Python suites, install Git, CMake 3.25+
 and a C++17 toolchain (MSVC on Windows, Clang on macOS, the Ubuntu build tools on
@@ -76,23 +95,13 @@ Ubuntu packages without overwriting existing wheel libraries; macOS adds relativ
 FFmpeg library aliases when necessary. Release recipes run this bootstrap
 automatically. Python dependency installation alone does not compile the helper.
 
-The playback build installs `obs-plugins/solin-media-source` in that runtime.
-It compiles a verified subset of OBS 32.1.2 with focused playback corrections:
-attached cover images are metadata rather than timed video, and successful seeks
-clear the demuxer's read-ahead EOF. Local files and progressive HTTP media share
-the finite playback lifecycle; HTTP read retries preserve the byte offset and
-natural EOF remains terminal. Live transports retain OBS's reconnect lifecycle.
-Finite read starvation reports native buffering and suspends presentation time;
-recovery resumes the media timeline without catching up to wall-clock time.
-Speed changes retain the decoder, and native FFmpeg tempo filtering preserves
-audio pitch through the same audio output path used at normal speed.
-Finite inputs retain native cancellation so Stop and shutdown interrupt pending
-network reads and retries. Native failures report an error rather than completion;
-an explicit retry creates a fresh decoder.
-Ordered diffs and prerequisites live in `native/media_playback/patches/series.json`;
-see the native module README for the upstream retirement procedure.
-The playback build recipe records its source checksum, patch hashes and installed binary in
-`media-playback-manifest.json`; packaging requires this module.
+The playback build installs `solin-media-source` in the runtime's platform plugin
+directory. It compiles a verified subset of the matching OBS sources with the
+ordered corrections in [`patches/series.json`](../native/media_playback/patches/series.json).
+See the [native module reference](../native/media_playback/README.md) for playback
+behavior, regression tests and the upstream retirement procedure. The build
+records its source checksum, patch hashes and installed binary in
+`media-playback-manifest.json`; packaging requires this module and its receipt.
 
 Windows additionally requires `python scripts/build_obs_runtime.py` with CMake
 3.28+ and MSVC x64. This builds the ABI-matched OBS core with the WASAPI monitoring
@@ -101,13 +110,13 @@ plugins and dependency DLLs remain supplied by pylibobs. Packaging verifies the
 core against `obs-runtime-manifest.json`. Linux and macOS keep their distributed
 cores and platform monitoring backends.
 
-Windows x64 and both macOS architectures use the official `obs-deps 2025-08-23`
-SDK, verified against fixed SHA-256 values. Its FFmpeg 7.1.1 public headers match
-libavcodec/libavformat 61, libavfilter 10, libavutil 59 and libswscale 8. SDK binaries are build
-inputs only and are never substituted for the installed runtime. Ubuntu 24.04
-uses the same archive's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
-`libswscale-dev`, matching runtime majors 60/60/58/7. The helper checks header
-and loaded runtime versions and exports their actual library paths through
+Windows x64 and both macOS architectures use the checksum-pinned official OBS
+dependencies SDK selected by the extraction builder. SDK binaries are build
+inputs only and are never substituted for the installed runtime. Ubuntu 26.04
+uses its distribution's `libavcodec-dev`, `libavformat-dev`, `libavutil-dev` and
+`libswscale-dev`. See the [extraction ABI contract](../native/media_extract/README.md#build-interface)
+for required library versions. The helper checks header and
+loaded runtime versions and exports their actual library paths through
 `--version`; packaging rejects a mismatched ABI or a library outside the private
 runtime.
 
@@ -118,7 +127,7 @@ contains no build-machine paths. Qualification removes native runtime overrides
 so it can only validate the staged dependency graph.
 
 The packaging script qualifies metadata, Unicode titles, covers and decoded BGRA
-pixels before publishing the runtime. It uses generated WAV/PNG data and the
+pixels before accepting the staged runtime. It uses generated WAV/PNG data and the
 small repository fixtures under `tests/fixtures/media_extract`, with external
 CLI and graphics environment lookup disabled. Use `--qualification-fixtures`
 to supply that fixture directory explicitly to `package_libobs_runtime.py`.
@@ -268,37 +277,51 @@ Intel and Apple Silicon jobs build with Nuitka, apply ad-hoc signatures, create
 architecture-specific DMGs, verify the bundle architecture, and validate
 packaged startup and application replacement.
 
-Published `pylibobs` wheels provide the runtime on Windows and Linux. On both
-macOS architectures, bootstrap a local `pylibobs==0.1.2` wheel against the official
-OBS 32.1.2 runtime before installing requirements. The helper preserves the
-`libobs.framework` identity required for Cocoa resource lookup and relocates its
-native dependencies before signing and validating them:
+OBS requires macOS 13 or newer. The runtime must preserve `libobs.framework`
+for Cocoa shader lookup, relocate its dependencies and sign the native graph.
 
-```text
-python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
-python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
-python -m pip install -r requirements-dev.txt
-python -m pip install --no-deps -e .
-```
+For editable development, use a framework build of Python and install the
+Xcode Command Line Tools (`xcode-select --install`). Running `python main.py`
+or the editable `solin` command builds an ad-hoc signed `build/dev/SolinDev.app`
+host before starting the Cocoa UI. The host retains the active Python
+environment and gives development camera/microphone requests their own bundle
+identity and usage declarations. It does not alter Python's installed app
+bundle. Headless helpers and runtime verification commands bypass this bootstrap.
 
-The helper verifies the downloads, target architecture and native initialization.
-It leaves other hosts unchanged. The workflow uses the local wheel during its
-binary dependency download and runs the same packaged runtime qualification.
-Release replacement tests resolve the previous DMG for the same architecture.
-The first Apple Silicon release runs clean-install and startup checks because no
-native predecessor exists. Ad-hoc signing does not provide a Developer ID or
-notarization.
+Cocoa projection windows and their previews receive the independent projection
+transition through the binding's bounded
+IOSurface/Mach transport. Qt owns the receiving views; only the supervised
+sidecar initializes libobs. Native view addresses never cross the process
+boundary. A failed receiving presenter falls
+back locally without disabling healthy windows. Windows and X11 retain their
+direct native displays; native Wayland presentation is unsupported.
+
+macOS virtual-camera output requires an installed and enabled OBS camera extension.
+Solin reads the vendor's native camera UID from its installed bundle metadata;
+the binding feeds its CoreMediaIO sink from the program mix. The OBS frontend
+plugin is not loaded. No Solin camera is installed. Stop other producers for
+that camera before enabling the Solin output; the OBS extension does not
+arbitrate competing writers. Output readiness requires camera-service frame
+consumption, with the normal bounded recovery policy for stalls/disconnection.
+
+The experimental GPU editor preview remains opt-in through
+`SOLIN_NATIVE_EDITOR_PREVIEW=1`, including on Cocoa. It follows the selected
+editor scene independently of projection and program; otherwise the editor uses
+the existing image preview.
+
+Release replacement tests resolve the previous DMG for the same architecture;
+targets without a predecessor require clean-install and startup checks. Ad-hoc
+signing does not provide a Developer ID or notarization.
 
 ## Linux development
 
-Ubuntu 24.04 x86_64 is the reference Linux platform for development, CI and
-AppImage builds. Ubuntu 22.04 is unsupported by this delivery recipe. The pinned
-`pylibobs==0.1.2` Linux wheel is tagged `manylinux_2_31_x86_64`, but its ELF
-version requirements reach `GLIBC_2.34`. Its native dependency set from Ubuntu
-24.04 raises the minimum further: `libsrt.so.1.5`, `librist.so.4`,
-`libx264.so.164` and `libvpl.so.2` require `GLIBC_2.38`. Ubuntu 24.04 provides
-glibc 2.39. The wheel tag alone does not establish distribution compatibility.
+Ubuntu 26.04 x86_64 is the reference Linux platform for development, CI and
+AppImage builds. Ubuntu 24.04 and older are unsupported by this delivery recipe.
+The binding runtime comes from the official OBS Ubuntu 26.04 release and requires
+glibc 2.43, FFmpeg 8, x264 165 and MbedTLS 3.
+Use the project's runtime qualification before advertising support for another
+distribution; the wheel tag alone does not establish native dependency or glibc
+compatibility.
 
 The embedded SideView browser uses GTK 3, WebKitGTK 4.1, libsoup 3, and
 `pkg-config`. The libobs runtime needs the host's graphics and audio support.
@@ -309,7 +332,7 @@ libobs `virtualcam_output` plugin. Automatic Zoom sharing from source requires
 SideView and its native backend are installed from PyPI through the Python
 dependencies. No SideView binary is vendored in this repository.
 
-Install the native dependencies from the Ubuntu 24.04 archive before installing
+Install the native dependencies from the Ubuntu 26.04 archive before installing
 the Python requirements. The build script supplies the same explicit libobs
 package list used by both CI workflows; apt resolves its transitive dependencies:
 
@@ -330,7 +353,7 @@ QT_QPA_PLATFORM=xcb python main.py
 
 ## Linux standalone and AppImage
 
-Linux builds must run on Ubuntu 24.04 x86_64 or its WSL 2 distribution, with
+Linux builds must run on Ubuntu 26.04 x86_64 or its WSL 2 distribution, with
 Python 3.13 or newer and the native dependencies above. The standalone build
 entry point is:
 
@@ -342,11 +365,11 @@ xvfb-run --auto-servernum bash scripts/build_solin.sh
 Set `SOLIN_PYTHON` only when the desired interpreter is not discoverable through
 the environment or repository-local environment.
 
-The script downloads the official `OBS-Studio-32.1.2-Ubuntu-24.04-x86_64.deb`,
-verifies SHA-256
-`a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8`,
-and reuses only a verified archive in the build's dependency cache. It extracts
-the missing `usr/local/bin/obs-ffmpeg-mux` with `dpkg-deb` and passes it to runtime
+The script downloads the official OBS Ubuntu release archive selected in
+[`scripts/build_solin.sh`](../scripts/build_solin.sh), checks its SHA-256 against
+the pinned GitHub asset digest, and reuses only a verified archive in the build's
+dependency cache. It extracts the missing `usr/local/bin/obs-ffmpeg-mux` with
+`dpkg-deb` and passes it to runtime
 staging. This supplies the wheel's matching recording helper without installing
 the OBS application or using a third-party apt repository. The temporary
 extraction is removed when the build exits.
@@ -363,7 +386,7 @@ From Windows, the WSL wrapper can run the complete build:
 scripts\build_solin_appimage.bat
 ```
 
-The wrapper defaults to `Ubuntu-24.04` and runs full builds under Xvfb. Install
+The wrapper defaults to `Ubuntu-26.04` and runs full builds under Xvfb. Install
 that WSL distribution and its dependencies first; `SOLIN_WSL_DISTRO` or
 `-Distribution` selects another compatible distribution explicitly.
 
@@ -373,9 +396,10 @@ current. The resulting AppImage and SHA-256 file are written to `dist/`.
 The AppImage packages the application and its Python/Qt dependencies while
 using the host distribution's security-maintained WebKitGTK stack. Its Zoom
 automation requires X11 and rejects Wayland sessions. AppImage packaging does
-not lower the native glibc requirements or establish support for Ubuntu 22.04.
+not lower the native glibc requirements or establish support for older Ubuntu
+releases.
 Native Linux rendering, decoding and packaging qualification are gated by the
-Ubuntu 24.04 workflow; Windows tests do not establish those results.
+Ubuntu 26.04 workflow; Windows tests do not establish those results.
 
 ## Integration capabilities
 
@@ -385,9 +409,10 @@ available on a particular machine.
 
 - Virtual-camera output on Windows requires registered Solin DirectShow
   filters; the installer supplies them. Linux requires a configured
-  `v4l2loopback` device and the libobs `virtualcam_output` plugin. The macOS
-  runtime includes `mac-virtualcam`; validate camera-extension availability,
-  permissions, and camera output on the target Mac before distributing a build.
+  `v4l2loopback` device and the libobs `virtualcam_output` plugin. macOS uses
+  the camera extension and CoreMediaIO transport described under [macOS](#macos);
+  validate extension availability and
+  actual camera-source pixels on the target Mac before distributing a build.
 - Zoom meeting audio/video automation requires Windows and `comtypes`. A
   supervised, persistent helper uses native UI Automation with bounded requests.
   `scripts/prepare_zoom_bindings.py` generates `comtypes.gen.UIAutomationClient`

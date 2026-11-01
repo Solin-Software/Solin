@@ -1,12 +1,9 @@
 """Offscreen ``obs_source_t`` → BGRA readback for the libobs egress paths.
 
-The preview and thumbnail egresses need a scene rendered into CPU memory. Published
-``pylibobs`` wheels expose no source-to-CPU helper (only ``render_main_texture_letterboxed``,
-which draws the *main mix* into a live ``Display``), so this implements the standard libobs
-readback — texrender → stage surface → map — against ``pylibobs._ffi``.
-
-``render_source_to_bgra`` intentionally mirrors the signature the egresses already call, so
-if a future ``pylibobs`` ships its own version the call sites can prefer it unchanged.
+Preview and thumbnail consumers require cached readback resources and source-crop
+preparation inside the graphics context. This application adapter adds those
+policies to the binding's typed graphics API. Consumers without these policies
+use the binding's own readback helper.
 
 Rendering happens under ``obs_enter_graphics()``. The texrender is drawn at the requested
 output size while ``gs_ortho`` spans the *canvas* coordinate space, so a 1920x1080 scene
@@ -39,40 +36,19 @@ _GS_BLEND_INVSRCALPHA = 5
 
 _texrender: Any = None
 _stage_surfaces: dict[tuple[int, int], Any] = {}
-_casts: dict[str, Any] = {}
 
 
 def _bind() -> tuple[Any, Any]:
-    """Return ``(ffi, lib)`` and prepare casts for the unprototyped entry points.
-
-    pylibobs declares ``gs_texrender_create``, ``gs_stagesurface_create`` and
-    ``gs_texrender_get_texture`` as ``void(*)()`` — cffi refuses to call those with
-    arguments — so each is cast to its real libobs signature once and cached.
-    """
+    """Return the binding's audited graphics declarations."""
     from pylibobs._ffi import ffi, get_lib
 
-    lib: Any = get_lib()
-    if not _casts:
-        # Publish a complete binding table; another egress must never observe a
-        # partially prepared set while a CFFI conversion releases the GIL.
-        _casts.update({
-            "texrender_create": ffi.cast(
-                "struct gs_texrender_s **(*)(int, int)", lib.gs_texrender_create
-            ),
-            "stagesurface_create": ffi.cast(
-                "struct gs_stagesurf_s **(*)(uint32_t, uint32_t, int)", lib.gs_stagesurface_create
-            ),
-            "texrender_get_texture": ffi.cast(
-                "gs_texture_t *(*)(struct gs_texrender_s **)", lib.gs_texrender_get_texture
-            ),
-        })
-    return ffi, lib
+    return ffi, get_lib()
 
 
-def _stage_surface_for(ffi: Any, width: int, height: int) -> Any:
+def _stage_surface_for(lib: Any, width: int, height: int) -> Any:
     surface = _stage_surfaces.get((width, height))
     if surface is None:
-        surface = _casts["stagesurface_create"](width, height, _GS_BGRA)
+        surface = lib.gs_stagesurface_create(width, height, _GS_BGRA)
         if not surface:
             raise RuntimeError("gs_stagesurface_create returned NULL")
         _stage_surfaces[(width, height)] = surface
@@ -110,10 +86,10 @@ def render_source_to_bgra(
         if before_render is not None and not before_render():
             return None
         if _texrender is None:
-            _texrender = _casts["texrender_create"](_GS_BGRA, _GS_ZS_NONE)
+            _texrender = lib.gs_texrender_create(_GS_BGRA, _GS_ZS_NONE)
             if not _texrender:
                 raise RuntimeError("gs_texrender_create returned NULL")
-        surface = _stage_surface_for(ffi, width, height)
+        surface = _stage_surface_for(lib, width, height)
 
         lib.gs_texrender_reset(_texrender)
         if not lib.gs_texrender_begin(_texrender, width, height):
@@ -144,7 +120,7 @@ def render_source_to_bgra(
         finally:
             lib.gs_texrender_end(_texrender)
 
-        texture = _casts["texrender_get_texture"](_texrender)
+        texture = lib.gs_texrender_get_texture(_texrender)
         if not texture:
             return None
         lib.gs_stage_texture(surface, texture)
@@ -217,7 +193,7 @@ def resolve_render_source_to_bgra(
 
     import pylibobs
 
-    return getattr(pylibobs, "render_source_to_bgra", render_source_to_bgra)
+    return pylibobs.render_source_to_bgra
 
 
 __all__ = ["render_source_to_bgra", "resolve_render_source_to_bgra", "shutdown"]

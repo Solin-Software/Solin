@@ -18,6 +18,7 @@ from solin.core.media import camera_identity
 from solin.core.scenes.collections import DEFAULT_SCENE_COLLECTION_ID
 from solin.core.scenes.application import SceneNotFoundError
 from solin.core.scenes.model import (
+    SCHEMA_VERSION,
     BusId,
     CameraMediaType,
     CameraPreset,
@@ -374,7 +375,7 @@ def test_beta_migration_preserves_custom_collections_and_rebuilds_only_pristine(
     workspace.close()
     reloaded = scene_workspace_factory(paths, seed_names=_names())
     assert reloaded.documents.document == document
-    assert json.loads((paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json").read_text())["schema_version"] == 13
+    assert json.loads((paths.scene_profiles_dir / f"{DEFAULT_SCENE_COLLECTION_ID}.json").read_text())["schema_version"] == SCHEMA_VERSION
 
 
 def test_legacy_backup_is_migrated_and_normalized_to_shared_camera_refs(
@@ -1492,7 +1493,7 @@ def test_existing_beta_catalog_without_resources_captures_routes_before_normaliz
         assert workspace.runtime.state.output(BusId.VIRTUAL_CAMERA).base_scene_id == CAMERA_SCENE_ID
     for path in (primary, backup):
         record = json.loads(path.read_text(encoding="utf-8"))
-        assert record["schema_version"] == 13
+        assert record["schema_version"] == SCHEMA_VERSION
         assert all("default_scene_id" not in output for output in record["outputs"])
         if not customized:
             assert [scene["name"] for scene in record["scenes"]] == ["Media", "Camera"]

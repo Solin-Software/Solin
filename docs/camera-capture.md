@@ -73,11 +73,21 @@ conflict. Loading a collection preserves these aliases and their settings.
 
 ## Metadata
 
-On Windows and macOS, discovery reads the DirectShow and AVFoundation plugins'
-dynamic properties. Temporary settings run the dependent property callbacks;
+On Windows, discovery reads the DirectShow plugin's dynamic properties.
+Temporary settings run the dependent property callbacks;
 enumeration does not create another capture source. A small native boundary
 owns the properties and settings that the Python binding does not expose.
 The plugin contracts target the OBS version pinned by the project.
+
+On macOS, metadata reads AVFoundation devices, format descriptions, and exact
+frame durations without creating a capture session or requesting permission.
+The modern capture plugin requires a source instance for its dynamic properties;
+metadata therefore does not use those properties. Native format identity is
+stored separately from pixel subtype and passed as `supported_format`. Camera
+access is requested on the GUI thread when the operator submits a local camera;
+startup, discovery, and recovery never prompt. App bundles declare camera and
+microphone usage descriptions before signing. Source execution uses the
+[macOS development host](building.md#macos) for its permission identity.
 
 On Linux, metadata uses nonblocking V4L2 ioctls and skips metadata-only nodes.
 This avoids opening those nodes through the capture plugin's enumeration path.
@@ -97,8 +107,8 @@ queries are cached with the inventory and discard stale completions. A dispatch
 worker runs outside foreground IPC handling and the Qt UI thread; native
 enumeration runs in a disposable helper process with no capture sources or
 graphics/audio outputs. Windows initializes COM on the helper's querying thread.
-Each OBS inventory scan reuses one properties session, with fresh settings for
-each device.
+Each DirectShow inventory scan reuses one properties session, with fresh settings
+for each device.
 
 Native device notifications start when the scene engine becomes ready and remain
 owned by the application controller until it closes. Platform adapters report
@@ -137,14 +147,16 @@ saved modes remain identified instead of selecting a replacement device.
 
 Automatic reads completed cached capabilities without starting or waiting for
 discovery during scene preparation. It considers advertised modes up to
-1920×1080 and 30 FPS. It prioritizes
+1920×1080 and nominal 30 FPS (with a 0.1% allowance for native clock
+quantization). It prioritizes
 fluid video, grouping 30 and 30000/1001 FPS in the target tier, then image area,
 canvas aspect ratio, and the backend's ordering. If metadata offers no eligible
 mode, including a cold cache at startup, Automatic makes an explicit attempt
 using the plugin's native preference; that attempt does not promise Full HD.
 Completing or refreshing discovery does not reconfigure an existing capture.
 
-Resolution, native format, and rational FPS all participate in change detection.
+Resolution, pixel subtype, native format identity, and rational FPS all participate
+in change detection.
 Returning to Automatic explicitly resets all application-controlled native mode
 settings. Connection mutations validate device conflicts before persistence or
 graph mutation; historical conflicts remain available for correction.
@@ -152,7 +164,7 @@ graph mutation; historical conflicts remain available for correction.
 | Backend | Exact-mode settings |
 | --- | --- |
 | DirectShow | Custom resolution, native format enum, frame interval in 100 ns units |
-| AVFoundation | Serialized resolution, native format code, rational frame rate |
+| AVFoundation | Native supported-format identity and rational frame rate |
 | V4L2 | Native fourcc, packed resolution, packed rational frame interval |
 
 ## Capture lifetime
@@ -212,9 +224,9 @@ the current configuration. A rejected manual mode is not silently substituted.
 
 | Contract | Current version |
 | --- | --- |
-| Scene document schema | 13 |
-| Shared scene resource schema | 2 |
-| Scene IPC protocol | 11 |
+| Scene document schema | 14 |
+| Shared scene resource schema | 3 |
+| Scene IPC protocol | 12 |
 
 Scene schema 12 and resource schema 1 accept a missing or boolean `keep_active`
 field in legacy camera configurations and remove it during migration. Other

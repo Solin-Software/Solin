@@ -22,12 +22,14 @@ visual presentation. It brings meeting preparation,
 JW.org media, playlists, projection, and live scenes into one workspace on
 Windows, macOS, and Linux.
 
+## Download
+
 | Platform | Download | Requirements |
 | --- | --- | --- |
 | Windows | `Solin-<version>-windows-x86_64.exe` | Windows 10 version 1809 or newer; 64-bit Intel/AMD |
 | macOS · Apple Silicon | `Solin-<version>-macos-arm64.dmg` | macOS 13 or newer; Apple M-series |
 | macOS · Intel | `Solin-<version>-macos-x86_64.dmg` | macOS 13 or newer; Intel |
-| Linux | `Solin-<version>-linux-x86_64.AppImage` | 64-bit Intel/AMD; Ubuntu 24.04 is the reference platform |
+| Linux | `Solin-<version>-linux-x86_64.AppImage` | 64-bit Intel/AMD; glibc 2.43+; Ubuntu 26.04 is the reference platform |
 
 See the [installation guide](docs/installation.md) for installation
 steps. For beta versions and release notes, browse

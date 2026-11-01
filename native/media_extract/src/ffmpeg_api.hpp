@@ -16,15 +16,9 @@ extern "C" {
 
 namespace solin::media {
 
-#if defined(__linux__)
 constexpr std::array<unsigned, 4> minimum_versions = {
-    AV_VERSION_INT(60, 16, 100), AV_VERSION_INT(60, 31, 102), AV_VERSION_INT(58, 29, 100),
-    AV_VERSION_INT(7, 5, 100)};
-#else
-constexpr std::array<unsigned, 4> minimum_versions = {
-    AV_VERSION_INT(61, 7, 100), AV_VERSION_INT(61, 19, 100), AV_VERSION_INT(59, 39, 100),
-    AV_VERSION_INT(8, 3, 100)};
-#endif
+    AV_VERSION_INT(62, 3, 100), AV_VERSION_INT(62, 11, 100), AV_VERSION_INT(60, 8, 100),
+    AV_VERSION_INT(9, 1, 100)};
 constexpr std::array<unsigned, 4> compiled_versions = {
     LIBAVFORMAT_VERSION_INT, LIBAVCODEC_VERSION_INT, LIBAVUTIL_VERSION_INT, LIBSWSCALE_VERSION_INT};
 constexpr bool valid_sdk() {
@@ -37,7 +31,7 @@ constexpr bool valid_sdk() {
 }
 static_assert(
     valid_sdk(),
-    "FFmpeg SDK must match platform ABI and minimum FFmpeg 6.1 (Linux) / 7.1 (Windows/macOS)");
+    "FFmpeg SDK must match the FFmpeg 8 ABI and minimum versions");
 
 // Function pointer types come exclusively from the public SDK declarations.
 #define SOLIN_FORMAT_FUNCTIONS(X)                                                                  \

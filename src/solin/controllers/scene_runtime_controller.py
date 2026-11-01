@@ -2240,12 +2240,16 @@ class SceneRuntimeController(QObject):
             document_revision=self._engine_document_revision,
             targets=self._combined_window_targets(),
         )
-        future = self._engine.set_window_targets(
-            context.targets,
-            request_id=context.request_id,
-            sequence=context.sequence,
-            deadline_ms=_TAKE_DEADLINE_MS,
-        )
+        try:
+            future = self._engine.set_window_targets(
+                context.targets,
+                request_id=context.request_id,
+                sequence=context.sequence,
+                deadline_ms=_TAKE_DEADLINE_MS,
+            )
+        except Exception as exc:  # noqa: BLE001 - engine dispatch boundary
+            self._report_exception("window_targets", exc)
+            return
         self._track_future(future, "window_targets", context)
 
     def _prepare_take(self, bus_id: BusId, scene_id: str) -> None:
@@ -2512,11 +2516,12 @@ class SceneRuntimeController(QObject):
             if operation == "hydrate":
                 self._finish_hydration(context)
             return
+        hydration_applied = False
         try:
             if operation == "start":
                 self._handle_started(result)
             elif operation == "hydrate":
-                self._handle_hydrated(context, result)
+                hydration_applied = self._handle_hydrated(context, result)
             elif operation == "profile_hydrate":
                 self._handle_profile_hydrated(context, result)
             elif operation == "prepare":
@@ -2551,7 +2556,7 @@ class SceneRuntimeController(QObject):
                 self.operational_state_changed.emit()
         finally:
             if operation == "hydrate":
-                self._finish_hydration(context)
+                self._finish_hydration(context, applied=hydration_applied)
 
     def _handle_started(self, result: object) -> None:
         if not isinstance(result, SceneEngineCapabilities):
@@ -2567,9 +2572,9 @@ class SceneRuntimeController(QObject):
         if generation_changed or not was_ready:
             self._hydrate_if_ready()
 
-    def _handle_hydrated(self, context: object, result: object) -> None:
+    def _handle_hydrated(self, context: object, result: object) -> bool:
         if context != self._hydrate_in_flight:
-            return
+            return False
         request_id, snapshot = _context_tuple(context, 2, "hydration")
         if not isinstance(request_id, str) or not isinstance(snapshot, SceneEngineSnapshot):
             raise RuntimeError("Invalid hydration context")
@@ -2581,7 +2586,7 @@ class SceneRuntimeController(QObject):
         )
         if not ack.applied:
             self._report_rejection("hydrate", ack)
-            return
+            return False
         self._set_last_engine_error_code("")
         self._engine_document_revision = snapshot.document.revision
         self._idle_applied_revision = snapshot.idle_screen.revision
@@ -2591,8 +2596,9 @@ class SceneRuntimeController(QObject):
         # Take obligation even when recovery cleared the applied scene cache.
         self._require_pending_content_takes()
         if self._hydrate_dirty:
-            return
+            return True
         self._schedule_next_take()
+        return True
 
     def _handle_profile_hydrated(self, context: object, result: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -2637,6 +2643,7 @@ class SceneRuntimeController(QObject):
         self.operational_state_changed.emit()
         self._schedule_next_take()
         self._dispatch_idle_screen()
+        self._dispatch_window_targets()
 
     def _fail_profile_activation(self, context: object, error: object) -> None:
         if not isinstance(context, _PendingProfileActivation):
@@ -3076,7 +3083,7 @@ class SceneRuntimeController(QObject):
         log.warning("Scene engine %s rejected request (%s)", operation, error_code)
         self.engine_error.emit(f"Scene engine {operation} rejected ({error_code})")
 
-    def _finish_hydration(self, context: object) -> None:
+    def _finish_hydration(self, context: object, *, applied: bool = False) -> None:
         if self._hydrate_in_flight != context:
             return
         self._hydrate_in_flight = None
@@ -3087,6 +3094,10 @@ class SceneRuntimeController(QObject):
             return
         self._dispatch_layer_geometry()
         self._dispatch_idle_screen()
+        if applied:
+            # The snapshot restores outputs best-effort. Reconcile separately
+            # so an output failure has its own ACK without rejecting the graph.
+            self._dispatch_window_targets()
         self.operational_state_changed.emit()
         self._schedule_next_take()
 

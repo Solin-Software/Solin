@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import platform
+import re
 import sys
 import tomllib
 from importlib.metadata import version
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import pylibobs
 import pytest
@@ -12,29 +14,25 @@ import sideview
 import yaml
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
-from packaging.utils import canonicalize_name
-from packaging.version import Version
+from packaging.utils import canonicalize_name, parse_wheel_filename
 
 from tests._paths import REPO_ROOT
 
 SIDEVIEW_REQUIREMENT = "sideview==0.4.1"
-# The release carrying every entry point the libobs engine calls, plus the NV12
-# chroma-plane over-read fix the Windows virtual camera trips over.
-PYLIBOBS_VERSION = Version("0.1.2")
 
 
 def _project_metadata() -> dict:
     return tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
 
-def _locked_requirements() -> dict[str, Requirement]:
-    requirements: dict[str, Requirement] = {}
+def _locked_requirements() -> list[Requirement]:
+    requirements: list[Requirement] = []
     for line in (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
         candidate = line.strip()
         if not candidate or candidate.startswith(("#", "-")):
             continue
         requirement = Requirement(candidate)
-        requirements[canonicalize_name(requirement.name)] = requirement
+        requirements.append(requirement)
     return requirements
 
 
@@ -43,11 +41,7 @@ def test_locked_requirements_cover_every_direct_runtime_dependency() -> None:
 
     for dependency in _project_metadata()["project"]["dependencies"]:
         expected = Requirement(dependency)
-        actual = locked.get(canonicalize_name(expected.name))
-
-        assert actual is not None, f"{expected.name} is missing from requirements.txt"
-        assert actual.specifier == expected.specifier
-        assert str(actual.marker) == str(expected.marker)
+        assert expected in locked, f"{expected} is missing from requirements.txt"
 
 
 @pytest.mark.parametrize("recipe", [
@@ -62,6 +56,25 @@ def test_windows_zoom_packaging_prepares_and_bundles_uia_interfaces(recipe):
     assert "--user-package-configuration-file=" in source
     assert "solin.nuitka-package.config.yml" in source
     assert "--verify-zoom-runtime" in source
+
+
+def test_macos_build_includes_and_qualifies_the_binding_native_libraries():
+    configuration_path = "packaging/macos/solin.nuitka-package.config.yml"
+    configuration = yaml.safe_load((REPO_ROOT / configuration_path).read_text(encoding="utf-8"))
+    entry, = configuration
+    assert entry["module-name"] == "pylibobs"
+    rule, = entry["dlls"]
+    assert rule["when"] == "macos and standalone"
+    assert rule["from_filenames"]["relative_path"] == "native"
+    assert rule["from_filenames"]["suffixes"] == ["dylib"]
+    workflow = yaml.safe_load((REPO_ROOT / ".github/workflows/build-solin-macos.yml").read_text())
+    commands = [step.get("run", "") for step in workflow["jobs"]["build"]["steps"]]
+    compilation = next(command for command in commands if "-m nuitka" in command)
+    assert f'--user-package-configuration-file="{configuration_path}"' in compilation
+    verification = next(command for command in commands if "--verify-macos-runtime" in command)
+    signature = next(command for command in commands if "codesign --verify" in command)
+    dmg = next(command for command in commands if "\ncreate-dmg " in "\n" + command)
+    assert commands.index(signature) < commands.index(verification) < commands.index(dmg)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows COM type libraries")
@@ -130,28 +143,37 @@ def test_installed_sideview_distribution_provides_the_native_backend():
     assert (package_dir / native_name).is_file()
 
 
-def test_pylibobs_is_a_pinned_runtime_dependency():
-    """libobs is the only media engine on this branch, so pin its binding.
-
-    Keep the manifests and the macOS wheel bootstrap on the same binding release.
-    """
-    pinned = _locked_requirements().get(canonicalize_name("pylibobs"))
-
-    assert pinned is not None, "pylibobs is missing from requirements.txt"
-    assert str(pinned.specifier) == f"=={PYLIBOBS_VERSION}"
-    from scripts.build_pylibobs_macos import PYLIBOBS_VERSION as macos_binding_version
-
-    assert Version(macos_binding_version) == PYLIBOBS_VERSION
-
-
 @pytest.mark.parametrize(
     ("system", "architecture"),
     [("darwin", "x86_64"), ("darwin", "arm64"), ("win32", "AMD64"), ("linux", "x86_64")],
 )
 def test_scene_engine_dependency_is_selected_on_every_supported_platform(system, architecture):
-    requirement = _locked_requirements()[canonicalize_name("pylibobs")]
     environment = default_environment() | {"sys_platform": system, "platform_machine": architecture}
-    assert requirement.marker is None or requirement.marker.evaluate(environment)
+    selected = [
+        requirement for requirement in _locked_requirements()
+        if canonicalize_name(requirement.name) == "pylibobs"
+        and (requirement.marker is None or requirement.marker.evaluate(environment))
+    ]
+    assert len(selected) == 1, f"Expected one binding dependency for {system}/{architecture}"
+    requirement, = selected
+    if requirement.url is not None:
+        url = urlsplit(requirement.url)
+        checksums = parse_qs(url.fragment).get("sha256", [])
+        assert len(checksums) == 1 and re.fullmatch(r"[0-9a-f]{64}", checksums[0])
+        name, _version, _build, tags = parse_wheel_filename(unquote(Path(url.path).name))
+        assert canonicalize_name(name) == "pylibobs"
+        if system == "win32":
+            assert any(tag.platform == "win_amd64" for tag in tags)
+        elif system == "linux":
+            assert any(
+                tag.platform.startswith("manylinux_") and tag.platform.endswith("_x86_64")
+                for tag in tags
+            )
+        else:
+            assert any(
+                tag.platform.startswith("macosx_") and tag.platform.endswith(f"_{architecture}")
+                for tag in tags
+            )
 
 
 def test_macos_installation_contains_the_native_media_backend():
@@ -170,26 +192,21 @@ def test_macos_installation_contains_the_native_media_backend():
     assert (root / "Frameworks" / "libobs-opengl.dylib").is_file()
     assert (root / "data" / "libobs" / "default.effect").is_file()
     modules = {name: (Path(binary), Path(data)) for name, binary, data in get_bundled_modules()}
-    for name in ("obs-ffmpeg", "image-source", "mac-capture", "mac-avcapture", "mac-virtualcam"):
+    for name in ("obs-ffmpeg", "image-source", "mac-capture", "mac-avcapture"):
         assert name in modules
         assert modules[name][0].is_file()
         assert modules[name][1].is_dir()
-    assert ffi.string(get_lib().obs_get_version_string()).decode("utf-8") == "32.1.2"
+    from scripts.obs_sources import OBS_VERSION
+
+    assert ffi.string(get_lib().obs_get_version_string()).decode("utf-8") == OBS_VERSION
 
 
 def test_installed_pylibobs_provides_the_scene_engine_entry_points():
     """A pylibobs too old for this branch must fail here, not inside the sidecar.
 
-    An older build has no projection renderer and over-reads NV12 chroma planes in
-    the raw video callback; the second takes the sidecar down with no Python
-    traceback, which is expensive to diagnose from a user's log.
-
-    Checked against ``pylibobs.__version__`` rather than the installed distribution
-    metadata: an editable dev checkout keeps whatever version it was installed with,
-    so the metadata goes stale while the code is current.
+    Exercise the capabilities used at the native boundary rather than duplicating
+    the dependency version declared in the project manifests.
     """
-    assert Version(pylibobs.__version__) >= PYLIBOBS_VERSION
-
     from pylibobs.display import (  # the projection route's per-source renderer
         render_main_texture_letterboxed,
         render_source_letterboxed,
@@ -197,3 +214,16 @@ def test_installed_pylibobs_provides_the_scene_engine_entry_points():
 
     assert callable(render_main_texture_letterboxed)
     assert callable(render_source_letterboxed)
+
+
+def test_binding_exposes_the_native_task_and_rational_frame_rate_abi():
+    """Reject an unpatched binding before native scheduling or camera discovery."""
+    from pylibobs._ffi import ffi, get_lib
+
+    assert ffi.typeof("obs_task_t").kind == "function"
+    assert ffi.typeof("obs_task_handler_t").kind == "function"
+    assert ffi.typeof("obs_scene_atomic_update_func").kind == "function"
+    frame_getter = ffi.typeof(get_lib().obs_source_get_frame)
+    assert frame_getter.args == (ffi.typeof("obs_source_t *"),)
+    assert frame_getter.result == ffi.typeof("struct obs_source_frame *")
+    assert ffi.sizeof("struct media_frames_per_second") == 8
