@@ -18,6 +18,8 @@ pytestmark = pytest.mark.integration
 
 
 def _assert_stalled_input_closes(*, stop_first: bool = False) -> None:
+    from pylibobs._ffi import get_lib
+
     from solin.core.media.obs_runtime import ObsRuntime
     from solin.core.scenes.libobs_media_source import LibobsMediaSource, STATE_STOPPED
     from tests._http import ThreadingLoopbackHTTPServer
@@ -60,11 +62,15 @@ def _assert_stalled_input_closes(*, stop_first: bool = False) -> None:
                 time.sleep(0.02)
         started = time.monotonic()
         media.close()
-        # Source release is deferred. Drain actual native destruction too.
-        runtime.shutdown()
+        # Source release is deferred. Wait for native destruction before checking
+        # cancellation, excluding unrelated graphics/plugin shutdown costs.
+        while get_lib().obs_wait_for_destroy_queue():
+            assert time.monotonic() - started < 2, "Native source destruction did not finish"
         elapsed = time.monotonic() - started
         assert elapsed < 2, f"Finite HTTP teardown took {elapsed:.3f}s"
         print(f"Finite HTTP close and native destruction: {elapsed:.3f}s", flush=True)
+        # The process timeout still bounds complete runtime shutdown.
+        runtime.shutdown()
     finally:
         release.set()
         server.shutdown()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 import sys
-import weakref
+import base64
 
 import pytest
 
@@ -78,9 +78,9 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
         finally:
             executing = False
 
-    def change_source(pointer, mode):
+    def change_source(pointer, enabled):
         assert executing
-        changes.append((pointer, mode))
+        changes.append((pointer, "monitoring", enabled))
 
     def change_mixers(pointer, mixers):
         assert executing
@@ -96,7 +96,7 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
     runtime._pylibobs = SimpleNamespace(set_audio_monitoring_device=select)
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
         get_lib=lambda: SimpleNamespace(
-            obs_source_set_monitoring_type=change_source,
+            obs_source_set_monitoring_enabled=change_source,
             obs_source_set_audio_mixers=change_mixers,
         ),
     ))
@@ -107,37 +107,139 @@ def test_monitoring_mutations_run_on_the_native_lifetime_lane(monkeypatch):
 
     assert changes == [
         (source._ptr, "mixers", 0),
-        (source._ptr, obs_runtime.MONITORING_MONITOR_ONLY),
+        (source._ptr, "monitoring", True),
         ("Default", "default"),
     ]
     assert runtime.monitoring_device == ("Default", "default")
 
 
 @pytest.mark.parametrize(
-    ("monitoring", "mixer_changes"),
+    ("monitoring", "enabled", "mixers"),
     [
-        # libobs builds that deprecated monitoring types treat monitor-only as
-        # "monitor and output": only clearing the tracks keeps the source out of
-        # the recording mix, where the speaker loopback already carries it.
-        (obs_runtime.MONITORING_MONITOR_ONLY, [0]),
-        # Sources that are meant to reach a mix keep the tracks they were given.
-        (obs_runtime.MONITORING_MONITOR_AND_OUTPUT, []),
-        (obs_runtime.MONITORING_NONE, []),
+        (obs_runtime.MONITORING_MONITOR_ONLY, True, 0),
+        (obs_runtime.MONITORING_MONITOR_AND_OUTPUT, True, 0b100001),
+        (obs_runtime.MONITORING_NONE, False, 0b100001),
     ],
 )
-def test_monitor_only_keeps_a_source_out_of_every_mix(monkeypatch, monitoring, mixer_changes):
-    mixers, modes = [], []
+@pytest.mark.parametrize("muted", [False, True])
+def test_monitoring_preserves_caller_audio_controls(monkeypatch, monitoring, enabled, mixers, muted):
+    source = SimpleNamespace(
+        _ptr=object(), monitoring_enabled=not enabled, audio_mixers=0b100001, muted=muted, volume=0.4,
+    )
+    routing_at_switch = []
+
+    def change_mixers(pointer, value):
+        assert pointer is source._ptr
+        source.audio_mixers = value
+
+    def change_monitoring(pointer, value):
+        assert pointer is source._ptr
+        assert isinstance(value, bool)
+        routing_at_switch.append(source.audio_mixers)
+        source.monitoring_enabled = value
+
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
         get_lib=lambda: SimpleNamespace(
-            obs_source_set_monitoring_type=lambda _pointer, mode: modes.append(mode),
-            obs_source_set_audio_mixers=lambda _pointer, value: mixers.append(value),
+            obs_source_set_monitoring_enabled=change_monitoring,
+            obs_source_set_audio_mixers=change_mixers,
         ),
     ))
 
-    obs_runtime.ObsRuntime().set_source_monitoring(SimpleNamespace(_ptr=object()), monitoring)
+    obs_runtime.ObsRuntime().set_source_monitoring(source, monitoring)
 
-    assert mixers == mixer_changes
-    assert modes == [monitoring]
+    assert source.monitoring_enabled is enabled
+    assert source.audio_mixers == mixers
+    # Monitor-only must leave every mix before monitoring can start.
+    assert routing_at_switch == [mixers]
+    assert source.muted is muted
+    assert source.volume == 0.4
+
+
+def test_leaving_monitor_only_does_not_restore_mixer_tracks(monkeypatch):
+    source = SimpleNamespace(_ptr=object(), audio_mixers=0b1, monitoring_enabled=False)
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_enabled=lambda _pointer, value: setattr(
+                source, "monitoring_enabled", value,
+            ),
+            obs_source_set_audio_mixers=lambda _pointer, value: setattr(source, "audio_mixers", value),
+        ),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_ONLY)
+    for monitoring in (obs_runtime.MONITORING_NONE, obs_runtime.MONITORING_MONITOR_AND_OUTPUT):
+        runtime.set_source_monitoring(source, monitoring)
+        assert source.audio_mixers == 0
+
+    # A caller can opt into a different mix without changing monitoring policy.
+    source.audio_mixers = 1 << 5
+    runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_AND_OUTPUT)
+    assert source.monitoring_enabled is True
+    assert source.audio_mixers == 1 << 5
+
+
+@pytest.mark.parametrize("dispatched", [False, True])
+@pytest.mark.parametrize("failure_stage", ["mixers", "monitoring"])
+def test_monitoring_failure_keeps_safe_routing_and_propagates(monkeypatch, dispatched, failure_stage):
+    source = SimpleNamespace(
+        _ptr=object(), audio_mixers=0b1, monitoring_enabled=False, muted=False, volume=0.4,
+    )
+    error = RuntimeError("native monitoring failed")
+    attempts = []
+
+    def change_mixers(_pointer, value):
+        attempts.append("mixers")
+        if failure_stage == "mixers":
+            raise error
+        source.audio_mixers = value
+
+    def change_monitoring(_pointer, _value):
+        attempts.append("monitoring")
+        raise error
+
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_enabled=change_monitoring,
+            obs_source_set_audio_mixers=change_mixers,
+        ),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    if dispatched:
+        runtime._native_tasks = SimpleNamespace(run=lambda operation: operation())
+
+    with pytest.raises(RuntimeError) as caught:
+        runtime.set_source_monitoring(source, obs_runtime.MONITORING_MONITOR_ONLY)
+
+    assert caught.value is error
+    assert attempts == (["mixers"] if failure_stage == "mixers" else ["mixers", "monitoring"])
+    assert source.audio_mixers == (0b1 if failure_stage == "mixers" else 0)
+    assert source.monitoring_enabled is False
+    assert source.muted is False
+    assert source.volume == 0.4
+
+
+def test_rejected_monitoring_task_does_not_mutate_the_source(monkeypatch):
+    error = RuntimeError("OBS task dispatcher is not accepting work")
+
+    def reject(_operation):
+        raise error
+
+    def unexpected_mutation(*_args):
+        pytest.fail("Rejected monitoring tasks must not change native audio routing")
+
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
+        get_lib=lambda: SimpleNamespace(
+            obs_source_set_monitoring_enabled=unexpected_mutation,
+            obs_source_set_audio_mixers=unexpected_mutation,
+        ),
+    ))
+    runtime = obs_runtime.ObsRuntime()
+    runtime._native_tasks = SimpleNamespace(run=reject)
+
+    with pytest.raises(RuntimeError) as caught:
+        runtime.set_source_monitoring(SimpleNamespace(_ptr=object()), obs_runtime.MONITORING_MONITOR_ONLY)
+
+    assert caught.value is error
 
 
 @pytest.mark.parametrize("matching", [False, True])
@@ -266,16 +368,12 @@ def test_native_frame_priming_releases_the_frame_after_upload(monkeypatch, failu
         assert pointer is source._ptr and selected is frame
         events.append("release")
 
-    def cast(signature, function):
-        assert signature == "struct obs_source_frame *(*)(obs_source_t *)"
-        return function
-
     lib = SimpleNamespace(
         obs_source_get_frame=get_frame, obs_source_set_video_frame=upload,
         obs_source_release_frame=release, obs_source_show_preloaded_video=show,
     )
     monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(
-        ffi=SimpleNamespace(NULL=None, cast=cast), get_lib=lambda: lib,
+        ffi=SimpleNamespace(NULL=None), get_lib=lambda: lib,
     ))
     runtime = obs_runtime.ObsRuntime()
     if failure:
@@ -362,47 +460,6 @@ def test_prepared_decoder_showing_reference_is_balanced_and_released_only_once(m
     release()
     assert events == [("retain", source._ptr), ("release", source._ptr)]
 
-
-@pytest.mark.parametrize("audio_failure", [False, True])
-def test_graphics_buffer_is_retained_through_context_shutdown(monkeypatch, audio_failure):
-    events = []
-    runtime = _runtime_with_fake_libobs(monkeypatch, events)
-    context = runtime.ob.OBSContext()
-    owner_ref = None
-
-    class GraphicsBuffer:
-        pass
-
-    def initialize_video(*args, **kwargs):
-        nonlocal owner_ref
-        owner = GraphicsBuffer()
-        owner_ref = weakref.ref(owner)
-        return owner
-
-    def audio():
-        assert owner_ref is not None and owner_ref() is not None
-        if audio_failure:
-            raise RuntimeError("audio failed")
-
-    def shutdown():
-        assert owner_ref is not None and owner_ref() is not None
-        events.append("shutdown-with-buffer")
-
-    monkeypatch.setattr(obs_runtime, "set_video_compat", initialize_video)
-    monkeypatch.setattr(runtime, "_configure_nix_platform", lambda: False)
-    monkeypatch.setattr(context, "set_audio", audio)
-    monkeypatch.setattr(context, "shutdown", shutdown)
-    if audio_failure:
-        with pytest.raises(obs_runtime.ObsRuntimeError, match="audio failed"):
-            runtime.ensure_started(width=320, height=180, fps=30)
-    else:
-        runtime.ensure_started(width=320, height=180, fps=30)
-        assert runtime._graphics_module_owner is owner_ref()
-        runtime.shutdown()
-
-    assert events[-1] == "shutdown-with-buffer"
-    assert runtime._graphics_module_owner is None
-    assert owner_ref is not None and owner_ref() is None
 
 
 class _FakeContext:
@@ -670,7 +727,7 @@ def camera_runtime(monkeypatch):
 
 def _exact_camera_mode(**changes):
     return dict(width=1920, height=1080, fps_numerator=30000, fps_denominator=1001,
-                media_type="image/jpeg", pixel_format="MJPG") | changes
+                media_type="image/jpeg", pixel_format="MJPG", native_format="") | changes
 
 
 def test_camera_rate_only_change_updates_existing_shared_source(camera_runtime):
@@ -723,7 +780,7 @@ def test_camera_automatic_with_cold_catalog_does_not_discover(camera_runtime, mo
 
 @pytest.mark.parametrize(("platform", "token", "expected"), [
     ("win32", "400", {"res_type": 0, "resolution": "", "frame_interval": -1, "video_format": 0}),
-    ("darwin", "420v", {"use_preset": True, "resolution": "", "input_format": -1,
+    ("darwin", "420v", {"use_preset": True, "supported_format": "",
                         "frame_rate": {"numerator": 0, "denominator": 1}}),
     ("linux", "MJPG", {"pixelformat": -1, "resolution": -1, "framerate": -1}),
 ])
@@ -732,7 +789,11 @@ def test_camera_manual_to_automatic_clears_pinned_settings(
 ):
     monkeypatch.setattr(sys, "platform", platform)
     runtime, created, _events, _modes = camera_runtime
-    source = runtime.camera_source("device", **_exact_camera_mode(pixel_format=token))
+    mode = _exact_camera_mode(pixel_format=token)
+    if platform == "darwin":
+        mode.update(media_type="video/x-raw", native_format=base64.b64encode(
+            b"1920x1080 29.970-30.000 2 875704438").decode())
+    source = runtime.camera_source("device", **mode)
     assert runtime.camera_source("device") is source
     assert len(created) == 1
     assert {key: source.settings[key] for key in expected} == expected
@@ -1155,3 +1216,15 @@ def test_shared_rtsp_source_is_not_rebuilt_for_unchanged_settings(monkeypatch) -
 
     assert len(created) == 1
     assert [update["input"] for update in source.updates] == ["rtsp://camera/other"]
+
+
+def test_camera_native_identity_change_updates_shared_source(monkeypatch, camera_runtime):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    runtime, created, _events, _modes = camera_runtime
+    token = lambda colorspace: base64.b64encode(
+        f"1920x1080 29.970-30.000 {colorspace} 875704438".encode()).decode()
+    mode = _exact_camera_mode(media_type="video/x-raw", pixel_format="420v", native_format=token(2))
+    source = runtime.camera_source("device", **mode)
+    assert runtime.camera_source("device", **(mode | {"native_format": token(1)})) is source
+    assert len(created) == 1 and len(source.updates) == 1
+    assert source.settings["supported_format"] == token(1)

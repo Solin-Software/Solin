@@ -1,19 +1,25 @@
 # Media playback module
 
-`solin-media-source` registers `solin_media_source`, using the OBS 32.1.2 media
-source and media-playback implementation. It links the installed pylibobs libobs
-and matching FFmpeg libraries; it does not replace upstream modules or libraries.
+`solin-media-source` registers `solin_media_source`, using the media source and
+playback implementation from the [pinned OBS sources](../../scripts/obs_sources.py).
+It links the installed pylibobs libobs and matching FFmpeg libraries; it does not
+replace upstream modules or libraries.
 
 ```text
 python scripts/build_media_playback.py
 ```
 
 The builder requires Git, CMake 3.25+ and a native C compiler: MSVC x64 on Windows,
-Apple Clang on macOS, or the Ubuntu 24.04 toolchain on Linux. Supported targets
+Apple Clang on macOS, or the Ubuntu 26.04 toolchain on Linux. Supported targets
 are Windows/Linux x86_64 and macOS x86_64/arm64. Linux additionally requires
-`libavdevice-dev`, `libavfilter-dev`, `libsimde-dev` and the media-extraction development packages.
+`libavdevice-dev`, `libavfilter-dev`, `libsimde-dev` and the
+[media-extraction development packages](../../docs/building.md#linux-development).
 Windows/macOS reuse the checksum-pinned OBS dependencies SDK from the extraction
 builder. macOS imports and rpaths resolve inside the private `Frameworks` tree.
+
+The module follows the [runtime staging layout](../../scripts/package_libobs_runtime.py):
+`core/solin-media-source` on Windows, `obs-modules/core` on Linux, and `obs-plugins`
+on macOS. Locale and license data follow the corresponding module data directory.
 
 The source archive is SHA-256 verified on every build. Ordered unified diffs in
 [`patches/series.json`](patches/series.json) are the source of truth for downstream
@@ -64,8 +70,8 @@ The UI notification debounce is independent of clock accounting. Accepted seeks
 and clock resets discard pending read accounting. Pause/stop/error/completion take
 precedence over buffering callbacks. Live inputs retain their existing timing policy.
 
-Installation qualifies a candidate in a separate process before publishing
-`obs-plugins/solin-media-source.{dll,so,dylib}` and its matching data directory.
+The builder qualifies a candidate in a separate process before installing the
+module and its matching data directory.
 `media-playback-manifest.json` records the relative plugin path, plugin SHA-256,
 upstream version, source archive SHA-256 and each applied patch with its SHA-256.
 Packaging requires the current patch receipts. A failed load or ABI

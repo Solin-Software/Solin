@@ -126,23 +126,22 @@ def _runtime(package: Path, target: str) -> Path:
     root = package / "_libs" / target / "x86_64"
     names = {
         "windows": ("obs.dll", "libobs-d3d11.dll", "obs-ffmpeg-mux.exe"),
-        "linux": ("libobs.so.0", "libobs-opengl.so", "obs-ffmpeg-mux"),
+        "linux": ("libobs.so.30", "libobs-opengl.so", "obs-ffmpeg-mux"),
         "macos": (
             "Frameworks/libobs.framework/Versions/A/libobs",
             "Frameworks/libobs-opengl.dylib",
             "obs-ffmpeg-mux",
         ),
     }
-    suffix = {"windows": ".dll", "linux": ".so", "macos": ".dylib"}[target]
     for name in names[target]:
         _touch(root / name)
     _touch(root / packaging.media_extract_name(target))
     if target == "macos":
         _framework(root)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions", "solin-media-source"):
-        _touch(root / "obs-plugins" / f"{name}{suffix}")
+        _touch(root / ({"windows": f"core/{name}/{name}.dll", "linux": f"obs-modules/core/{name}.so", "macos": f"obs-plugins/{name}.dylib"}[target]))
     if target == "windows":
-        _touch(root / "obs-plugins" / "win-wasapi.dll")
+        _touch(root / "core/win-wasapi/win-wasapi.dll")
         _touch(root / "data/solin-obs-runtime/COPYING")
         (root / "obs-runtime-manifest.json").write_text(json.dumps({
             "schema": 1, "obs_version": packaging.obs_sources.OBS_VERSION,
@@ -151,8 +150,8 @@ def _runtime(package: Path, target: str) -> Path:
             "library": {"path": "obs.dll", "sha256": hashlib.sha256((root / "obs.dll").read_bytes()).hexdigest()},
         }))
     _touch(root / "data/libobs/default.effect")
-    _touch(root / "data/obs-plugins/obs-ffmpeg/locale/en-US.ini")
-    plugin = root / "obs-plugins" / f"solin-media-source{suffix}"
+    _touch(root / {"windows": "core/obs-ffmpeg/data/locale/en-US.ini", "linux": "data/obs-modules/core/obs-ffmpeg/locale/en-US.ini", "macos": "data/obs-plugins/obs-ffmpeg/locale/en-US.ini"}[target])
+    plugin = root / {"windows": "core/solin-media-source/solin-media-source.dll", "linux": "obs-modules/core/solin-media-source.so", "macos": "obs-plugins/solin-media-source.dylib"}[target]
     (root / "media-playback-manifest.json").write_text(json.dumps({
         "schema": 1, "source_id": "solin_media_source",
         "obs_version": packaging.obs_sources.OBS_VERSION,
@@ -175,7 +174,7 @@ def test_playback_receipt_rejects_unqualified_modules_before_staging(tmp_path, f
     if failure == "corrupt_json":
         manifest.write_text("{")
     elif failure == "changed_binary":
-        (root / "obs-plugins/solin-media-source.dll").write_bytes(b"different build")
+        (root / "core/solin-media-source/solin-media-source.dll").write_bytes(b"different build")
     else:
         if failure == "wrong_source":
             receipt["source_id"] = "ffmpeg_source"
@@ -636,14 +635,14 @@ def test_runtime_publish_retries_transient_windows_sharing_violation(tmp_path, m
         "obs.dll",
         "solin-media-extract.exe",
         "obs-ffmpeg-mux.exe",
-        "obs-plugins/obs-ffmpeg.dll",
-        "obs-plugins/solin-media-source.dll",
+        "core/obs-ffmpeg/obs-ffmpeg.dll",
+        "core/solin-media-source/solin-media-source.dll",
         "media-playback-manifest.json",
         "obs-runtime-manifest.json",
         "data/solin-obs-runtime/COPYING",
-        "obs-plugins/win-wasapi.dll",
+        "core/win-wasapi/win-wasapi.dll",
         "data/libobs/default.effect",
-        "data/obs-plugins/obs-ffmpeg/locale/en-US.ini",
+        "core/obs-ffmpeg/data/locale/en-US.ini",
     ],
 )
 def test_incomplete_runtime_fails_before_touching_an_existing_package(tmp_path, missing):

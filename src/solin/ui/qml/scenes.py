@@ -31,7 +31,7 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 
 
 class ScenePreviewImageProvider(QQuickImageProvider):
-    """Thread-safe fallback preview provider for non-DXGI Qt Quick backends."""
+    """Thread-safe image preview provider when native presentation is inactive."""
 
     def __init__(self) -> None:
         super().__init__(QQuickImageProvider.ImageType.Image)
@@ -65,14 +65,14 @@ _NATIVE_EDITOR_PREVIEW_ENV = "SOLIN_NATIVE_EDITOR_PREVIEW"
 def native_editor_preview_enabled() -> bool:
     """Whether the experimental direct-GPU editor preview is active.
 
-    Opt-in via ``SOLIN_NATIVE_EDITOR_PREVIEW=1`` and only where a native window
-    handle can be shared cross-process with the sidecar: X11/XWayland (xcb) or
-    Windows. Wayland/macOS keep the CPU-readback preview.
+    Opt-in via ``SOLIN_NATIVE_EDITOR_PREVIEW=1`` on Windows, X11/XWayland
+    (xcb), and Cocoa. Cocoa uses a shared-surface endpoint instead of passing
+    a process-local view pointer to the sidecar. Native Wayland uses images.
     """
     flag = os.environ.get(_NATIVE_EDITOR_PREVIEW_ENV, "").strip().lower()
     if flag not in ("1", "true", "on", "yes"):
         return False
-    return QGuiApplication.platformName() in ("xcb", "windows")
+    return QGuiApplication.platformName() in ("xcb", "windows", "cocoa")
 
 
 class ScenesEditorWidget(QWidget):
@@ -167,6 +167,7 @@ class ScenesEditorWidget(QWidget):
             from solin.widgets.projection.native_surface import NativeVideoSurface
 
             self._preview_surface = NativeVideoSurface(self)
+            self._preview_surface.geometry_changed.connect(self._update_preview_target)
             self.bridge.canvasRectChanged.connect(self._on_preview_canvas_rect)
             scene_changed = getattr(controller, "preview_scene_changed", None)
             if scene_changed is not None:
@@ -247,11 +248,19 @@ class ScenesEditorWidget(QWidget):
 
         origin = surface.mapToGlobal(QPoint(0, 0))
         screen = surface.screen() or QApplication.primaryScreen()
+        try:
+            endpoint = surface.surface_endpoint
+        except (OSError, RuntimeError):
+            log_ignored_exception(__name__, "Could not create native editor preview presenter")
+            surface.hide()
+            self._controller.set_editor_preview_target(None)
+            return
         self._controller.set_editor_preview_target(OutputWindowTarget(
             bus_id=BusId.MEDIA_WINDOWS,
             target_id="editor-preview",
             screen_id=(screen.name() or "primary") if screen is not None else "primary",
-            native_handle=surface.native_handle,
+            native_handle=0 if endpoint else surface.native_handle,
+            surface_endpoint=endpoint,
             x=origin.x(),
             y=origin.y(),
             width=max(1, rect.width()),

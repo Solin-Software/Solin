@@ -33,12 +33,13 @@ def select_automatic_mode(
 ) -> LocalVideoFormat | None:
     """Prefer fluid video, then detail, within the automatic 1080p/30 budget.
 
+    Rates within 0.1% of 30 include native clock quantization above 30;
     30000/1001 and 30 belong to the same target tier. Stable ordering retains
     the backend's preference when its modes otherwise score identically.
     """
     eligible = [mode for mode in formats if
                 mode.width <= 1920 and mode.height <= 1080
-                and mode.fps_numerator <= 30 * mode.fps_denominator]
+                and mode.fps_numerator * 1000 <= 30_030 * mode.fps_denominator]
     ratio = Fraction(canvas_width, canvas_height)
 
     def score(mode: LocalVideoFormat):

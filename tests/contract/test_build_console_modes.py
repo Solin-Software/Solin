@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shlex
 
+import pytest
 import yaml
 
 from tests._paths import REPO_ROOT
@@ -59,7 +60,8 @@ def test_linux_build_uses_shared_script_and_xcb_launcher():
     assert "bash scripts/build_solin.sh" in workflow
     assert "gstreamer1.0-plugins-bad" not in workflow
     assert "xdotool" in workflow
-    assert "runs-on: ubuntu-24.04" in workflow
+    configuration = yaml.load(workflow, Loader=yaml.BaseLoader)
+    assert configuration["jobs"]["build"]["runs-on"] == "ubuntu-26.04"
     assert "scripts/package_solin_appimage.sh" in workflow
     assert "dist/Solin-${{ env.APP_VERSION }}-linux-x86_64.AppImage" in workflow
 
@@ -103,16 +105,15 @@ def test_windows_builds_qualify_the_corrected_core_before_packaging_or_tests():
         assert recipe.index("build_obs_runtime.py") < recipe.index(consumer)
 
 
-def test_macos_resolves_pylibobs_from_the_custom_wheel_during_dependency_download():
-    workflow = _read(".github/workflows/build-solin-macos.yml")
-    assert workflow.index("python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel") < workflow.index("python -m pip download")
-    assert "setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0" in workflow
-    download = workflow.split("python -m pip download", 1)[1].split("python -m pip install", 1)[0]
-    assert "--find-links .pylibobs-wheel" in download
-    assert "--force-reinstall" in workflow
-    assert "--no-deps" in workflow
-    assert "Expected exactly one custom pylibobs wheel." in workflow
-    assert 'root.rglob("obs-ffmpeg-mux")' in workflow
+def test_macos_installs_requirements_before_native_builds():
+    configuration = yaml.load(_read(".github/workflows/build-solin-macos.yml"), Loader=yaml.BaseLoader)
+    steps = configuration["jobs"]["build"]["steps"]
+    dependencies = next(index for index, step in enumerate(steps)
+                        if "requirements-dev.txt" in step.get("run", ""))
+    for script in ("build_media_extract.py", "build_media_playback.py"):
+        native_build = next(index for index, step in enumerate(steps)
+                            if script in step.get("run", ""))
+        assert dependencies < native_build
 
 
 def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():
@@ -157,3 +158,27 @@ def test_linux_ci_provides_a_graphics_session_for_libobs_build_qualification():
         "xvfb-run", "--auto-servernum", "python", "scripts/build_media_playback.py",
     ]
     assert commands["runner.os != 'Linux'"] == ["python", "scripts/build_media_playback.py"]
+
+
+@pytest.mark.parametrize("name,job", [
+    ("quality.yml", "platforms"),
+    ("build-solin-windows.yml", "build"),
+    ("build-solin-linux.yml", "build"),
+    ("build-solin-macos.yml", "build"),
+])
+def test_delivery_and_quality_install_published_requirements(name, job):
+    recipe = _read(f".github/workflows/{name}")
+    configuration = yaml.load(recipe, Loader=yaml.BaseLoader)
+    commands = "\n".join(step.get("run", "") for step in configuration["jobs"][job]["steps"])
+    installs = [shlex.split(line) for line in commands.splitlines()
+                if "pip install" in line and "requirements-dev.txt" in line]
+    assert installs
+    assert all("-r" in command and command[command.index("-r") + 1] == "requirements-dev.txt"
+               for command in installs)
+    for source_bootstrap in (
+        "PYLIBOBS_SOURCE_REF", "build_pylibobs.py", ".pylibobs-wheel",
+        "git+", "fetch_libs.py", "PYLIBOBS_ALLOW_SYSTEM_LIBOBS",
+    ):
+        assert source_bootstrap not in recipe
+    for override in ("--find-links", "--no-index", "--force-reinstall"):
+        assert override not in commands

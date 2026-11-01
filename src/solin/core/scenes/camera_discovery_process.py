@@ -244,7 +244,7 @@ class CameraDiscoveryProcess:
         except Exception as error:  # noqa: BLE001 - isolated process and protocol boundary
             log.warning("Camera metadata request failed: %s (elapsed=%.3fs)",
                         error, time.monotonic() - started, exc_info=True)
-            raise CameraDiscoveryError() from error
+            raise CameraDiscoveryError(getattr(error, "error_code", _FAILURE_CODE)) from error
         finally:
             if acquired:
                 self._query_gate.release()
@@ -295,6 +295,8 @@ class CameraDiscoveryProcess:
                     raise SceneIpcMessageError("Camera metadata helper returned no frame or trailing output")
                 if response != replace(request, message_type=response.message_type, payload=response.payload):
                     raise SceneIpcMessageError("Camera metadata response identity mismatch")
+                if response.message_type == "error":
+                    raise CameraDiscoveryError(require_text(response.payload["error_code"], "camera error code", maximum=128))
                 expected_type = "local_camera_list" if query is None else "local_camera_modes"
                 if response.message_type != expected_type:
                     raise SceneIpcMessageError("Camera metadata helper returned a failed or unexpected response")
@@ -368,7 +370,7 @@ def _load_camera_module() -> None:
     from pylibobs._ffi import ffi, get_lib
     from pylibobs._lib import get_bundled_modules
 
-    name = "win-dshow" if sys.platform == "win32" else "mac-avcapture"
+    name = "win-dshow"
     module = next((item for item in get_bundled_modules() if item[0] == name), None)
     if module is None:
         raise RuntimeError(f"Bundled camera metadata module unavailable: {name}")
@@ -388,6 +390,11 @@ def _native_metadata(query: LocalCameraModeQuery | None) -> list[LocalCameraDevi
         with _stage("inventory" if query is None else "modes"):
             return discover_local_cameras() if query is None else [query_local_camera_modes(query)]
 
+    if sys.platform == "darwin":
+        from .avfoundation_camera_discovery import discover_avfoundation_cameras
+
+        with _stage("avfoundation_metadata"):
+            return discover_avfoundation_cameras(query)
     if sys.platform.startswith("linux"):
         return collect()
     with _stage("com"), _com_apartment():
@@ -433,9 +440,9 @@ def serve(stream_in: BinaryIO, stream_out: BinaryIO) -> int:
                    "devices": [serialize_camera_device(device) for device in devices], "error_code": ""}
         response = replace(request, message_type="local_camera_list" if query is None else "local_camera_modes",
                            payload=payload)
-    except Exception:  # noqa: BLE001 - child process reports contextual metadata failure
+    except Exception as error:  # noqa: BLE001 - child process reports contextual metadata failure
         log.exception("Camera metadata child request failed")
-        response = replace(request, message_type="error", payload={"error_code": _FAILURE_CODE})
+        response = replace(request, message_type="error", payload={"error_code": getattr(error, "error_code", _FAILURE_CODE)})
     write_envelope(stream_out, response)
     return 0
 

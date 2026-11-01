@@ -63,16 +63,12 @@ _LINUX_HOST_LIBRARIES = frozenset({
     "ld-linux-x86-64.so.2", "ld-linux-aarch64.so.1",
 })
 _LINUX_DOCUMENTATION_ROOT = Path("/usr/share/doc")
-# Effects loaded by OBS 32.1.2's graphics initialization, including OpenGL.
+# Effects loaded by libobs graphics initialization, including OpenGL.
 _MACOS_LIBOBS_EFFECTS = (
     "default", "default_rect", "opaque", "solid", "repeat", "format_conversion",
     "bicubic_scale", "lanczos_scale", "area", "bilinear_lowres_scale", "premultiplied_alpha",
 )
-_MEDIA_EXTRACT_ABI = {
-    "windows": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
-    "linux": {"avcodec": 60, "avformat": 60, "avutil": 58, "swscale": 7},
-    "macos": {"avcodec": 61, "avformat": 61, "avutil": 59, "swscale": 8},
-}
+_MEDIA_EXTRACT_ABI = {"avcodec": 62, "avformat": 62, "avutil": 60, "swscale": 9}
 _MEDIA_EXTRACT_MANIFEST = "media-extract-manifest.json"
 _MEDIA_PLAYBACK_MANIFEST = "media-playback-manifest.json"
 _OBS_RUNTIME_MANIFEST = "obs-runtime-manifest.json"
@@ -110,7 +106,7 @@ def _stage_windows_redists(root: Path, application_dir: Path) -> None:
 
 
 def _audit_windows_media_extract(root: Path, helper: Path, architecture: str) -> None:
-    expected = {f"{name}-{major}.dll" for name, major in _MEDIA_EXTRACT_ABI["windows"].items()}
+    expected = {f"{name}-{major}.dll" for name, major in _MEDIA_EXTRACT_ABI.items()}
     imports = {name.casefold() for name in _windows_pe.pe_imports(helper)}
     if not imports or any(name.startswith("obs") for name in imports):
         raise LibobsPackagingError("Extraction helper must run independently of OBS")
@@ -141,7 +137,7 @@ def _audit_windows_media_extract(root: Path, helper: Path, architecture: str) ->
 def stage_media_extract_dependencies(root: Path, target_platform: str) -> None:
     """Fill missing Linux dependencies from the installed archive, never replace wheel libraries."""
     if target_platform == "macos":
-        for name, major in _MEDIA_EXTRACT_ABI["macos"].items():
+        for name, major in _MEDIA_EXTRACT_ABI.items():
             alias = root / "Frameworks" / f"lib{name}.{major}.dylib"
             if not alias.exists():
                 canonical = alias.with_name(f"lib{name}.dylib")
@@ -157,7 +153,7 @@ def stage_media_extract_dependencies(root: Path, target_platform: str) -> None:
     libdir = Path(result.stdout.strip())
     pending = [
         (f"lib{name}.so.{major}", libdir / f"lib{name}.so.{major}")
-        for name, major in _MEDIA_EXTRACT_ABI["linux"].items()
+        for name, major in _MEDIA_EXTRACT_ABI.items()
     ]
     visited: set[str] = set()
     while pending:
@@ -189,7 +185,7 @@ def relocate_media_extract(root: Path, helper: Path, target_platform: str, archi
         _audit_windows_media_extract(root, helper, architecture)
     elif target_platform == "linux":
         _relocate_linux(root, binaries=[helper])
-        for name, major in _MEDIA_EXTRACT_ABI["linux"].items():
+        for name, major in _MEDIA_EXTRACT_ABI.items():
             binary = root / f"lib{name}.so.{major}"
             _require_file(binary)
             for dependency, library in _linux_linked_libraries(binary).items():
@@ -240,7 +236,7 @@ def _run_media_extract(command: list[str], *, environment: dict[str, str], cwd: 
 
 def _verify_media_extract_abi(version: dict, root: Path, target_platform: str) -> None:
     abi = version.get("abi")
-    expected = _MEDIA_EXTRACT_ABI[target_platform]
+    expected = _MEDIA_EXTRACT_ABI
     if not isinstance(abi, dict) or set(abi) != set(expected):
         raise LibobsPackagingError("Extraction helper FFmpeg ABI inventory is incomplete")
     for name, major in expected.items():
@@ -511,9 +507,27 @@ def _native_build_receipt(
         raise LibobsPackagingError(f"Native {label} binary differs from its build receipt")
 
 
-def _media_playback_receipt(root: Path, suffix: str, *, rehash: bool = False) -> None:
+def module_binary_path(root: Path, target_platform: str, name: str) -> Path:
+    """Locate a module in the OBS 33 runtime supplied by pylibobs."""
+    return root / {
+        "windows": f"core/{name}/{name}.dll",
+        "linux": f"obs-modules/core/{name}.so",
+        "macos": f"obs-plugins/{name}.dylib",
+    }[target_platform]
+
+
+def module_data_path(root: Path, target_platform: str, name: str) -> Path:
+    """Locate resources alongside the runtime's native module layout."""
+    return root / {
+        "windows": f"core/{name}/data",
+        "linux": f"data/obs-modules/core/{name}",
+        "macos": f"data/obs-plugins/{name}",
+    }[target_platform]
+
+
+def _media_playback_receipt(root: Path, target_platform: str, *, rehash: bool = False) -> None:
     _native_build_receipt(
-        root, _MEDIA_PLAYBACK_MANIFEST, root / "obs-plugins" / f"solin-media-source{suffix}",
+        root, _MEDIA_PLAYBACK_MANIFEST, module_binary_path(root, target_platform, "solin-media-source"),
         "plugin",
         {
             "source_id": "solin_media_source",
@@ -531,10 +545,8 @@ def validate_runtime(
     """Validate resources loaded dynamically, beyond Nuitka's import graph."""
     if target_platform == "windows":
         libraries = ("obs.dll", "libobs-d3d11.dll")
-        suffix = ".dll"
     elif target_platform == "linux":
-        libraries = ("libobs.so.0", "libobs-opengl.so")
-        suffix = ".so"
+        libraries = ("libobs.so.30", "libobs-opengl.so")
     elif target_platform == "macos":
         _validate_macos_links(root)
         _macos_framework_aliases(root)
@@ -542,7 +554,6 @@ def validate_runtime(
             "Frameworks/libobs.framework/Versions/A/libobs",
             "Frameworks/libobs-opengl.dylib",
         )
-        suffix = ".dylib"
     else:
         raise LibobsPackagingError(f"Unsupported libobs platform: {target_platform}")
     _require_file(root / media_extract_name(target_platform))
@@ -552,10 +563,10 @@ def validate_runtime(
     for name in libraries:
         _require_file(root / name)
     for name in ("obs-ffmpeg", "image-source", "obs-transitions", "solin-media-source"):
-        _require_file(root / "obs-plugins" / f"{name}{suffix}")
-    _media_playback_receipt(root, suffix)
+        _require_file(module_binary_path(root, target_platform, name))
+    _media_playback_receipt(root, target_platform)
     if target_platform == "windows":
-        _require_file(root / "obs-plugins" / "win-wasapi.dll")
+        _require_file(module_binary_path(root, target_platform, "win-wasapi"))
         _native_build_receipt(
             root, _OBS_RUNTIME_MANIFEST, root / "obs.dll", "library",
             {"obs_version": obs_sources.OBS_VERSION, "source_sha256": obs_sources.SOURCE_SHA256,
@@ -564,7 +575,7 @@ def validate_runtime(
         )
         _require_file(root / "data/solin-obs-runtime/COPYING")
     _require_file(root / "data" / "libobs" / "default.effect")
-    _require_file(root / "data" / "obs-plugins" / "obs-ffmpeg" / "locale" / "en-US.ini")
+    _require_file(module_data_path(root, target_platform, "obs-ffmpeg") / "locale/en-US.ini")
 
 
 def _native_files(root: Path) -> list[Path]:
@@ -959,8 +970,7 @@ def stage_runtime(
         # The source receipt was verified before copying. Relocation can alter
         # Mach-O/ELF bytes while preserving the same qualified native code.
         _media_playback_receipt(
-            staging, {"windows": ".dll", "linux": ".so", "macos": ".dylib"}[target_platform],
-            rehash=True,
+            staging, target_platform, rehash=True,
         )
         validate_runtime(staging, target_platform)
         receipt = verify_media_extract(

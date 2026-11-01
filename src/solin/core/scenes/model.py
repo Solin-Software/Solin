@@ -13,7 +13,7 @@ from urllib.parse import SplitResult, parse_qsl, urlsplit
 
 from solin.core.media.camera_identity import local_camera_device_key
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 MAXIMUM_CAMERA_SOURCE_DIMENSION = 3_840
 MAXIMUM_CAMERA_SOURCE_SHORT_EDGE = 2_160
 MAXIMUM_CAMERA_SOURCE_PIXELS = 3_840 * 2_160
@@ -814,10 +814,14 @@ class LocalCameraConfig:
     media_type: CameraMediaType | None = None
     pixel_format: str = ""
     ptz_binding: PtzBinding | None = None
+    native_format: str = ""
 
     def __post_init__(self) -> None:
         if (
-            not isinstance(self.device_id, str)
+            not isinstance(self.native_format, str)
+            or len(self.native_format) > 4096
+            or _contains_control_character(self.native_format)
+            or not isinstance(self.device_id, str)
             or not isinstance(self.pixel_format, str)
             or _contains_control_character(self.device_id)
             or _contains_control_character(self.pixel_format)
@@ -868,6 +872,7 @@ class LocalCameraConfig:
             and self.fps_numerator == 0
             and self.media_type is None
             and self.pixel_format == ""
+            and self.native_format == ""
         )
         exact_format = (
             self.width > 0
@@ -887,6 +892,7 @@ class LocalCameraConfig:
             "fps_denominator": self.fps_denominator,
             "media_type": self.media_type.value if self.media_type is not None else "",
             "pixel_format": self.pixel_format,
+            "native_format": self.native_format,
             "ptz_binding": (self.ptz_binding.to_record() if self.ptz_binding is not None else None),
         }
 
@@ -903,6 +909,7 @@ class LocalCameraConfig:
                 "fps_denominator",
                 "media_type",
                 "pixel_format",
+                "native_format",
                 "ptz_binding",
             },
         )
@@ -949,6 +956,10 @@ class LocalCameraConfig:
                 data.get("pixel_format", ""),
                 field_name="source.configuration.pixel_format",
                 maximum=80,
+            ),
+            native_format=_optional_string(
+                data.get("native_format", ""),
+                field_name="source.configuration.native_format", maximum=4096,
             ),
             ptz_binding=(
                 None
@@ -2463,6 +2474,10 @@ def _migrate_scene_document_record(
                 for source in sources
             ]
             current_version = 13
+            migrated["schema_version"] = current_version
+            continue
+        if current_version == 13:
+            current_version = 14
             migrated["schema_version"] = current_version
             continue
         raise UnsupportedSceneSchemaError(current_version)

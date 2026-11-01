@@ -88,6 +88,7 @@ from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.process_engine import (
     SceneEngineCommandRejectedError,
     SceneEngineProcessConfig,
+    SceneEngineProcessError,
     SceneEngineRequestTimeoutError,
     SubprocessSceneEngine,
 )
@@ -1003,7 +1004,10 @@ def test_profile_hydration_holds_geometry_until_the_profile_outcome(
 ) -> None:
     workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     engine = _PendingGeometryEngine()
-    ids = iter(("hydrate", "profile", "geometry", "new-geometry"))
+    ids = iter((
+        "hydrate", "initial-window-replay", "profile", "profile-window-replay",
+        "geometry", "new-geometry",
+    ))
     controller = SceneRuntimeController(
         workspace, _Projection(), engine=cast(SceneEngine, engine),
         request_id_factory=lambda: next(ids), session_id="test-session",
@@ -1623,9 +1627,10 @@ def test_content_ingress_generation_hydration_preserves_live_program_before_anim
         engine,
         projection,
         request_ids=(
-            "initial-hydrate",
+            "initial-hydrate", "initial-window-replay",
             "prepare-program",
             "transport-hydrate",
+            "transport-window-replay",
             "prepare-program-current-transport",
         ),
     )
@@ -1670,7 +1675,7 @@ def test_content_ingress_generation_retirement_waits_for_the_animated_program_ex
         engine,
         projection,
         request_ids=(
-            "initial-hydrate",
+            "initial-hydrate", "initial-window-replay",
             "prepare-program-exit",
             "take-program-exit",
             "transport-hydrate",
@@ -1842,13 +1847,25 @@ def test_camera_health_cannot_replace_current_state_with_an_old_configuration(re
     assert controller.source_health(DEFAULT_CAMERA_SOURCE_ID) == current
 
 
+@pytest.mark.parametrize("window_outcome", ["applied", "rejected", "error", "dispatch_error"])
 def test_scene_profile_is_published_only_after_native_hydration_ack(
-    scene_workspace_factory, request, tmp_path: Path
+    scene_workspace_factory, request, tmp_path: Path, window_outcome: str
 ) -> None:
     class _PendingProfileEngine(_Engine):
         def __init__(self) -> None:
             super().__init__()
             self.profile_hydration: Future[SceneEngineAck] = Future()
+            self.window_future: Future[SceneEngineAck] = Future()
+
+        def set_window_targets(self, *args, **kwargs):
+            completed = super().set_window_targets(*args, **kwargs)
+            if len(self.snapshots) == 1:
+                return completed
+            assert workspace.active_collection.id == collection.id
+            self.window_ack = completed.result()
+            if window_outcome == "dispatch_error":
+                raise SceneEngineProcessError("output dispatch failed")
+            return self.window_future
 
         def hydrate(self, snapshot, *, request_id, deadline_ms):
             if not self.snapshots:
@@ -1863,7 +1880,9 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(
     workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     previous_id = workspace.active_collection.id
     engine = _PendingProfileEngine()
-    request_ids = iter(("initial-hydrate", "profile-hydrate"))
+    request_ids = iter((
+        "initial-hydrate", "initial-window-replay", "profile-hydrate", "profile-window-replay",
+    ))
     controller = SceneRuntimeController(
         workspace,
         _Projection(),
@@ -1878,6 +1897,8 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(
         lambda _change: published_document_ids.append(controller.document.document_id)
     )
     controller.start_engine()
+    errors: list[str] = []
+    controller.engine_error.connect(errors.append)
 
     controller.activate_scene_profile(collection.id)
 
@@ -1902,6 +1923,26 @@ def test_scene_profile_is_published_only_after_native_hydration_ack(
     assert controller.preview_scene_id == CONTENT_SCENE_ID
     assert published_document_ids[-1] == "document-b"
     assert controller.applied_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
+    assert len(engine.window_target_updates) == 2
+    assert engine.window_ack.request_id != request_id
+    assert engine.window_ack.sequence > snapshot.sequence
+    if window_outcome == "error":
+        engine.window_future.set_exception(SceneEngineProcessError("output failed"))
+    elif window_outcome != "dispatch_error":
+        engine.window_future.set_result(replace(
+            engine.window_ack, applied=window_outcome == "applied",
+            error_code="window_targets_failed" if window_outcome == "rejected" else "",
+        ))
+    assert bool(errors) is (window_outcome != "applied")
+    expected_error = {
+        "applied": "", "rejected": "window_targets_failed",
+        "error": "engine_process_failed", "dispatch_error": "engine_process_failed",
+    }[window_outcome]
+    assert controller.last_engine_error_code == expected_error
+    assert workspace.active_collection.id == collection.id
+    assert controller.document.document_id == "document-b"
+    assert controller.native_window_routing_ready
+    assert len(engine.snapshots) == 2
 
 
 def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
@@ -1933,7 +1974,7 @@ def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
     workspace, collection = _real_workspace(scene_workspace_factory, tmp_path)
     previous_id = workspace.active_collection.id
     engine = _RejectingProfileEngine()
-    request_ids = iter(("initial-hydrate", "profile-hydrate"))
+    request_ids = iter(("initial-hydrate", "initial-window-replay", "profile-hydrate"))
     controller = SceneRuntimeController(
         workspace,
         _Projection(),
@@ -1949,6 +1990,7 @@ def test_rejected_scene_profile_hydration_preserves_the_previous_profile(
     assert workspace.active_collection.id == previous_id
     assert controller.document.document_id == "default-document"
     assert controller.last_engine_error_code == "source_unavailable"
+    assert len(engine.window_target_updates) == 1  # Only the initial, applied graph.
 
 
 def _real_workspace(scene_workspace_factory, tmp_path: Path):
@@ -2325,7 +2367,7 @@ def test_runtime_coalesces_camera_refreshes_while_discovery_is_in_flight(request
         request,
         engine,
         _Projection(),
-        request_ids=("hydrate", "list-cameras"),
+        request_ids=("hydrate", "initial-window-replay", "list-cameras"),
     )
     controller.start_engine()
 
@@ -3989,7 +4031,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> 
         engine,
         projection,
         request_ids=(
-            "hydrate",
+            "hydrate", "initial-window-replay",
             "prepare-content-preview",
             "take-content-preview",
             "prepare-content-program",
@@ -4044,7 +4086,7 @@ def test_auto_switch_resolves_transition_for_each_destination_scene(request) -> 
     # program, projection and editor each prepare per reconcile
     assert engine.preparation_content_media_epochs == [1, 1, 1, None, None, None]
     assert len(engine.snapshots) == 1
-    assert [targets for _request_id, targets in engine.window_target_updates] == [(target,)]
+    assert [targets for _request_id, targets in engine.window_target_updates] == [(), (target,)]
 
 
 @pytest.mark.parametrize("completion", ["already_completed", "gui_thread", "worker_thread"])
@@ -5130,7 +5172,7 @@ def test_editor_preview_transport_is_idle_until_the_editor_requests_frames(reque
         engine,
         _Projection(),
         request_ids=(
-            "hydrate",
+            "hydrate", "initial-window-replay",
             "enable-preview-render",
             "preview-prepare",
             "preview-take",
@@ -5215,6 +5257,92 @@ def test_editor_preview_and_program_remain_independent_of_media_output_activatio
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
     assert controller.desired_scene(BusId.EDITOR) == CONTENT_SCENE_ID
     assert controller.applied_scene(BusId.EDITOR) == CONTENT_SCENE_ID
+
+
+@pytest.mark.parametrize("rejected", [False, True])
+def test_applied_hydration_replays_window_targets_with_an_independent_ack(request, rejected):
+    class PendingWindowEngine(_PendingGeometryEngine):
+        def set_window_targets(self, *args, **kwargs):
+            self.window_ack = super().set_window_targets(*args, **kwargs).result()
+            self.window_future = Future()
+            return self.window_future
+
+    engine = PendingWindowEngine(defer_hydration=True)
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    target = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="projection", screen_id="primary",
+        native_handle=123, x=0, y=0, width=1280, height=720, device_pixel_ratio=1.0,
+    )
+    controller.set_window_targets((target,))
+    controller.start_engine()
+    errors = []
+    controller.engine_error.connect(errors.append)
+    assert engine.snapshots[0][1].window_targets == (target,)
+    assert engine.window_target_updates == []
+
+    engine.finish_hydration(0)
+
+    assert not controller.hydration_in_progress
+    assert controller.native_window_routing_ready
+    assert controller.applied_scenes == engine.snapshots[0][1].active_scenes
+    assert [targets for _, targets in engine.window_target_updates] == [(target,)]
+    assert engine.window_ack.request_id != engine.snapshots[0][0]
+    assert engine.window_ack.sequence > engine.snapshots[0][1].sequence
+    assert errors == []
+    engine.window_future.set_result(replace(
+        engine.window_ack, applied=not rejected,
+        error_code="window_targets_failed" if rejected else "",
+    ))
+    assert bool(errors) is rejected
+    assert controller.last_engine_error_code == ("window_targets_failed" if rejected else "")
+    assert controller.native_window_routing_ready
+    assert controller.applied_scenes == engine.snapshots[0][1].active_scenes
+    assert len(engine.snapshots) == len(engine.window_target_updates) == 1
+
+
+@pytest.mark.parametrize("outcome", ["rejected", "error", "cancelled", "invalid_ack"])
+def test_unapplied_hydration_does_not_replay_window_targets(request, outcome):
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    controller.start_engine()
+    request_id, snapshot = engine.snapshots[0]
+    future = engine.hydration_futures[0]
+    ack = engine._ack(request_id, snapshot.sequence, snapshot.document.revision)
+    if outcome == "error":
+        future.set_exception(SceneEngineRequestTimeoutError("timeout"))
+    elif outcome == "cancelled":
+        future.cancel()
+    elif outcome == "invalid_ack":
+        future.set_result(replace(ack, request_id="unrelated-request"))
+    else:
+        future.set_result(replace(ack, applied=False, error_code="hydrate_failed"))
+    assert not controller.hydration_in_progress
+    assert engine.window_target_updates == []
+
+
+def test_hydration_replays_latest_targets_once_after_coalesced_snapshot_and_restart(request):
+    engine = _PendingGeometryEngine(defer_hydration=True)
+    _, _, controller = _runtime_controller(request, engine, _Projection(), request_ids=())
+    target = OutputWindowTarget(
+        bus_id=BusId.MEDIA_WINDOWS, target_id="projection", screen_id="primary",
+        native_handle=123, x=0, y=0, width=1280, height=720, device_pixel_ratio=1.0,
+    )
+    controller.set_window_targets((target,))
+    controller.start_engine()
+    latest = replace(target, width=1920)
+    controller.set_window_targets((latest,))
+    engine.finish_hydration(0)
+    assert len(engine.snapshots) == 2
+    assert engine.window_target_updates == []
+    engine.finish_hydration(1)
+    assert [targets for _, targets in engine.window_target_updates] == [(latest,)]
+    engine.emit_health(SceneEngineStatus.FAILED)
+    engine.generation = "restarted-generation"
+    engine.emit_health(SceneEngineStatus.READY)
+    assert len(engine.snapshots) == 3
+    engine.finish_hydration(2)
+    assert [targets for _, targets in engine.window_target_updates] == [(latest,), (latest,)]
+    assert controller.native_window_routing_ready
 
 
 def test_native_window_target_updates_without_rehydrating_the_scene_graph(request) -> None:
@@ -5331,7 +5459,7 @@ def test_raw_native_window_target_is_independent_from_authored_scenes(request) -
         request,
         engine,
         _Projection(),
-        request_ids=("initial-hydrate", "attach-window"),
+        request_ids=("initial-hydrate", "initial-window-replay", "attach-window"),
     )
     target = OutputWindowTarget(
         bus_id=BusId.MEDIA_WINDOWS,
@@ -5348,7 +5476,7 @@ def test_raw_native_window_target_is_independent_from_authored_scenes(request) -
     controller.start_engine()
     controller.set_window_targets((target,))
 
-    assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
+    assert [targets for _id, targets in engine.window_target_updates] == [(), (target,)]
     assert controller.desired_scene(BusId.EDITOR) == CAMERA_SCENE_ID
 
 
@@ -5358,7 +5486,7 @@ def test_program_window_target_uses_program_without_an_editor_scene(request) -> 
         request,
         engine,
         _Projection(),
-        request_ids=("initial-hydrate", "program-render", "program-window"),
+        request_ids=("initial-hydrate", "initial-window-replay", "program-render", "program-window"),
     )
     target = OutputWindowTarget(
         bus_id=BusId.VIRTUAL_CAMERA,
@@ -5376,7 +5504,7 @@ def test_program_window_target_uses_program_without_an_editor_scene(request) -> 
     controller.set_window_targets((target,))
 
     assert len(engine.snapshots) == 1
-    assert [targets for _id, targets in engine.window_target_updates] == [(target,)]
+    assert [targets for _id, targets in engine.window_target_updates] == [(), (target,)]
     assert engine.renders[-1] == ("program-render", BusId.VIRTUAL_CAMERA, True)
     assert controller.desired_scene(BusId.VIRTUAL_CAMERA) == CAMERA_SCENE_ID
 
@@ -5692,7 +5820,7 @@ def test_failed_preparation_cancels_its_native_resource(request) -> None:
         request,
         engine,
         projection,
-        request_ids=("hydrate", "prepare-media", "prepare-vcam"),
+        request_ids=("hydrate", "initial-window-replay", "prepare-media", "prepare-vcam"),
     )
     errors: list[str] = []
     controller.engine_error.connect(errors.append)
@@ -5734,7 +5862,7 @@ def test_rejected_preparation_preserves_the_native_error_code(request) -> None:
         request,
         engine,
         projection,
-        request_ids=("hydrate", "prepare-media", "prepare-vcam"),
+        request_ids=("hydrate", "initial-window-replay", "prepare-media", "prepare-vcam"),
     )
     errors: list[str] = []
     controller.engine_error.connect(errors.append)
@@ -5992,7 +6120,7 @@ def test_keep_current_ptz_policy_blocks_take_on_failure(request) -> None:
         engine,
         projection,
         request_ids=(
-            "hydrate",
+            "hydrate", "initial-window-replay",
             "prepare-program",
             "prepare-media",
             "take-media",
@@ -6054,7 +6182,7 @@ def test_document_change_cancels_in_flight_ptz_and_native_preparation(request) -
         engine,
         projection,
         request_ids=(
-            "hydrate",
+            "hydrate", "initial-window-replay",
             "prepare-program",
             "rehydrate",
         ),

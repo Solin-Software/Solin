@@ -72,7 +72,13 @@ jobs:
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" \
             | sha256sum --check --strict
           tar --extract --gzip --file "$archive" --directory "$RUNNER_TEMP" actionlint
-          "$RUNNER_TEMP/actionlint" -shellcheck=""
+          # This actionlint release predates the Ubuntu 26.04 hosted runner label.
+          config="$RUNNER_TEMP/actionlint.yaml"
+          cat > "$config" <<'YAML'
+          self-hosted-runner:
+            labels: [ubuntu-26.04]
+          YAML
+          "$RUNNER_TEMP/actionlint" -config-file "$config" -shellcheck=""
 
   platforms:
     name: Tests (${{ matrix.runner }})
@@ -82,7 +88,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-24.04
+          - runner: ubuntu-26.04
             platform: Linux
             qt_platform: offscreen
           - runner: windows-2025
@@ -143,22 +149,10 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
-      - name: Build macOS pylibobs wheel
-        if: runner.os == 'macOS'
+      - name: Install dependencies
         shell: bash
         run: |
-          python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-          python scripts/build_pylibobs_macos.py --output-dir .pip-wheels
-
-      - name: Install dependencies on macOS
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install --no-index --find-links .pip-wheels --no-deps pylibobs
           python -m pip install -r requirements-dev.txt -e .
-
-      - name: Install dependencies
-        if: runner.os != 'macOS'
-        run: python -m pip install -r requirements-dev.txt -e .
 
       - name: Build and qualify bundled media extraction
         run: python scripts/build_media_extract.py

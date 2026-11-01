@@ -26,12 +26,15 @@ single-configuration Unix generators produce
 set `SOLIN_MEDIA_EXTRACT_BUILD_TESTS=OFF` to omit them. Windows uses a static C++
 runtime and a Unicode `wmain`; Unix arguments must be UTF-8.
 
-The required SDK/runtime versions, in library order above, are:
+All targets use the FFmpeg 8 ABI. The minimum public versions are defined in
+[`src/ffmpeg_api.hpp`](src/ffmpeg_api.hpp):
 
-| Platform | Minimum public versions | Required majors |
+| Library | Minimum public version | Required major |
 | --- | --- | --- |
-| Windows, macOS | 61.7.100 / 61.19.100 / 59.39.100 / 8.3.100 | 61 / 61 / 59 / 8 |
-| Linux | 60.16.100 / 60.31.102 / 58.29.100 / 7.5.100 | 60 / 60 / 58 / 7 |
+| `avformat` | 62.3.100 | 62 |
+| `avcodec` | 62.11.100 | 62 |
+| `avutil` | 60.8.100 | 60 |
+| `swscale` | 9.1.100 | 9 |
 
 Compilation rejects a different major or older SDK. Runtime validation happens
 before allocating FFmpeg objects and requires those majors and versions at least
@@ -104,8 +107,8 @@ separate moving-video candidate; `cover` still returns the typed format failure.
 
 Frame extraction targets 5% of known duration, or one second when unknown,
 relative to container start. Targets within the first second decode forward;
-later targets seek and decode forward from a preceding keyframe
-and uses presentation timestamps; successful seeks flush the decoder. If the
+later targets seek and decode forward from a preceding keyframe. Selection uses
+presentation timestamps; successful seeks flush the decoder. If the
 target is unavailable, it uses a start frame cached before seeking within the same
 format context. This also preserves fallback after a destructive failed seek.
 Nonseekable sources read forward, retaining that decoded start frame for

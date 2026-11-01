@@ -23,7 +23,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRECTORY = REPOSITORY_ROOT / "native" / "media_extract"
 DEFAULT_BUILD_DIRECTORY = REPOSITORY_ROOT / "build" / "native" / "media-extract"
 DEFAULT_CACHE_DIRECTORY = REPOSITORY_ROOT / "build" / "dependencies" / "media-extract"
-SDK_VERSION = "2025-08-23"
+SDK_VERSION = "2026-07-15"
 COMPONENTS = ("avformat", "avcodec", "avutil", "swscale")
 PLATFORMS = {"win32": "windows", "linux": "linux", "darwin": "macos"}
 ARCHITECTURES = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}
@@ -38,15 +38,15 @@ class SdkSpec:
 SDK_SPECS = {
     ("windows", "x86_64"): SdkSpec(
         f"windows-deps-{SDK_VERSION}-x64.zip",
-        "8de229cff6f1981508c0eb646b35e644633a5855787b9f5d3b90ae2aeb87ffc1",
+        "6f90e9598fa10cff5ad23cdcfae49b87868c07bf896b02cd464582b4ce2f2ba9",
     ),
     ("macos", "x86_64"): SdkSpec(
         f"macos-deps-{SDK_VERSION}-x86_64.tar.xz",
-        "a84e850ff7773ab45e3ce0f25bb34799f4df46f3bfce28c8341030a4e2a48505",
+        "d301f9866f049f8667d45ffbf741b3074af5a19f50a68f4021a3aae9c12ef5cc",
     ),
     ("macos", "arm64"): SdkSpec(
         f"macos-deps-{SDK_VERSION}-arm64.tar.xz",
-        "09cbeb3cbf4fbb9e58e4cf4ca030a724fb1be41d2d7851c8b356f476e04544db",
+        "52805d9ccb2417aee124551a36d988d96129afafb6114a2e0512e6d0af546020",
     ),
 }
 

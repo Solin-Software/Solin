@@ -316,6 +316,7 @@ def main() -> int:
                                 {
                                     "media_type": "video/x-raw",
                                     "pixel_format": "NV12",
+                                    "native_format": "",
                                     "width": 1920,
                                     "height": 1080,
                                     "fps_numerator": (

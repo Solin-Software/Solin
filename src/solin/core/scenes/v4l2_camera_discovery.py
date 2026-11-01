@@ -1,7 +1,7 @@
-"""Metadata-only discovery through safe V4L2 ioctls or OBS properties.
+"""Platform metadata dispatch and nonblocking V4L2 device capabilities.
 
-Linux avoids the capture plugin's unsafe enumeration of metadata nodes. Other
-platforms query the capture plugin's properties without opening a source.
+Linux avoids the capture plugin's unsafe enumeration of metadata nodes. Windows
+reads DirectShow properties; macOS reads AVFoundation metadata without capture.
 """
 
 from __future__ import annotations
@@ -278,6 +278,10 @@ def discover_local_cameras() -> list[LocalCameraDevice]:
     """Return inventory or raise on enumeration failure, never conflate the two."""
     if sys.platform.startswith("linux"):
         return discover_v4l2_cameras()
+    if sys.platform == "darwin":
+        from .avfoundation_camera_discovery import discover_avfoundation_cameras
+
+        return discover_avfoundation_cameras()
     from solin.core.media.obs_camera_properties import discover_obs_cameras
 
     return discover_obs_cameras()
@@ -330,6 +334,10 @@ def query_local_camera_modes(query: LocalCameraModeQuery) -> LocalCameraDevice:
         raise TypeError("Camera mode query must be a LocalCameraModeQuery")
     if sys.platform.startswith("linux"):
         return query_v4l2_camera_modes(query)
+    if sys.platform == "darwin":
+        from .avfoundation_camera_discovery import discover_avfoundation_cameras
+
+        return discover_avfoundation_cameras(query)[0]
     from solin.core.media.obs_camera_properties import query_obs_camera_modes
 
     return query_obs_camera_modes(query)

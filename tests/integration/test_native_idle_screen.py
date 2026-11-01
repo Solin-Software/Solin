@@ -280,7 +280,6 @@ def _playback(directory: Path, deadline: float) -> dict:
         STATE_PLAYING,
     )
     from solin.core.scenes.libobs_recorder import LibobsRecorder
-    from pylibobs._ffi import get_lib
 
     video, image, audio = _fixtures(directory, deadline, background=True)
     report: dict[str, Any] = {"fixture_audio": _audio_observation(video, deadline)}
@@ -300,8 +299,7 @@ def _playback(directory: Path, deadline: float) -> dict:
         initial_hash = hashlib.sha256(_assert_visible_contain(_frame(source))[0]).hexdigest()
         assert _native_decoder_count() == 1
         assert idle.muted and idle.volume == 0 and idle.audio_mixers == 0
-        lib: Any = get_lib()
-        assert lib.obs_source_get_monitoring_type(idle._ptr) == 0
+        assert idle.monitoring_enabled is False
         report["silent_routes"] = {
             "muted": idle.muted,
             "volume": idle.volume,

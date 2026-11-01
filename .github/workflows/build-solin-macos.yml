@@ -64,9 +64,7 @@ jobs:
       - name: Cache pip packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/Library/Caches/pip
-            .pip-wheels
+          path: ~/Library/Caches/pip
           key: ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt', 'requirements-build.txt') }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-pip-${{ env.PYTHON_VERSION }}-
@@ -96,32 +94,7 @@ jobs:
           PIP_NO_INPUT: "1"
         run: |
           python -m pip install --upgrade --retries 10 --timeout 120 pip
-          rm -rf .pylibobs-wheel
-          mkdir -p .pip-wheels .pylibobs-wheel
-          python -m pip install setuptools==80.10.2 wheel==0.46.3 cffi==2.0.0
-          python scripts/build_pylibobs_macos.py --output-dir .pylibobs-wheel
-          python -m pip download \
-            --find-links .pylibobs-wheel \
-            --requirement requirements-dev.txt \
-            --dest .pip-wheels \
-            --only-binary=:all: \
-            --retries 10 \
-            --timeout 120 \
-            --progress-bar off
-          python -m pip install \
-            --no-index \
-            --find-links .pip-wheels \
-            --requirement requirements-dev.txt
-          set -- .pylibobs-wheel/pylibobs-*.whl
-          if [ "$#" -ne 1 ] || [ ! -f "$1" ]; then
-            echo "Expected exactly one custom pylibobs wheel." >&2
-            exit 1
-          fi
-          python -m pip install \
-            --force-reinstall \
-            --no-deps \
-            "$1"
-          python -c 'from pathlib import Path; import pylibobs; root = Path(pylibobs.__file__).resolve().parent / "_libs" / "macos"; helpers = list(root.rglob("obs-ffmpeg-mux")); assert len(helpers) == 1, f"Expected one bundled obs-ffmpeg-mux, found {helpers}"'
+          python -m pip install --retries 10 --timeout 120 -r requirements-dev.txt
           python -m pip install --no-deps -e .
           python -m pip install --retries 10 --timeout 120 --prefer-binary -r requirements-build.txt
 

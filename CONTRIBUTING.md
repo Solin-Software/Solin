@@ -2,9 +2,8 @@
 
 ## Before starting
 
-Use Python 3.13 or newer. On macOS, first follow the
-[macOS binding bootstrap](docs/building.md#macos) before installing dependencies.
-On Linux, first install the
+Use Python 3.13 or newer. On macOS, install the toolchain and review the
+[macOS development requirements](docs/building.md#macos). On Linux, first install the
 [native dependencies](docs/building.md#linux-development). Then activate an
 isolated environment and install the locked development dependencies:
 
@@ -14,7 +13,7 @@ python -m pip install -e .
 ```
 
 The repository does not depend on a specific environment manager or Python
-launcher.
+launcher. See [Dependencies](#dependencies) for the manifest and lockfile contract.
 
 ## Run from source
 
@@ -42,18 +41,10 @@ python scripts/build_media_extract.py
 python scripts/build_media_playback.py
 ```
 
-The extraction script compiles and qualifies `solin-media-extract`, then installs only that
-executable beside the installed `pylibobs` runtime. Windows and macOS use
-checksum-pinned OBS FFmpeg SDK headers; Linux uses matching Ubuntu development
-packages and stages missing native dependencies without replacing wheel libraries.
-Rebuild after changing the helper or upgrading native dependencies. Media
-extraction requires no `ffmpeg` or `ffprobe` executable. Playback and scene
-composition use the supervised libobs process. See
-[Building and platform requirements](docs/building.md) for toolchains and packaging.
-
-The playback script builds `solin-media-source` from pinned OBS sources with
-corrections listed in `native/media_playback/patches/series.json`. It installs the module into the
-same private runtime; rebuild it after changing its patches or native dependencies.
+These scripts qualify and install the extraction helper and patched playback
+module in the installed `pylibobs` runtime. Rebuild after changing their sources,
+patches or native dependencies. See [Building and platform requirements](docs/building.md)
+for toolchains, SDK selection and packaging.
 
 On Windows, also run `python scripts/build_obs_runtime.py`. It builds the matching
 OBS core with the WASAPI monitoring correction described in

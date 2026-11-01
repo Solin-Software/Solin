@@ -223,9 +223,10 @@ def test_orchestrator_construction_refused_off_windows():
         LibobsWindowsVirtualCamera(object())
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="exercises the non-Windows v4l2 branch")
-def test_virtual_camera_uses_the_v4l2_path_off_windows():
+def test_virtual_camera_uses_the_v4l2_path_on_linux(monkeypatch):
     from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
+
+    monkeypatch.setattr("solin.core.scenes.libobs_virtual_camera.sys.platform", "linux")
 
     class _Ctx:
         def get_video(self):

@@ -18,6 +18,7 @@ Dialog {
     property string cameraId: ""
     property string deviceId: ""
     property string formatId: ""
+    property bool cameraAccessPending: false
     property bool formatSelectionChanged: false
     property var selectedDeviceSnapshot: ({})
     property var selectedFormatSnapshot: ({})
@@ -230,6 +231,15 @@ Dialog {
     Connections {
         target: root.bridge
         function onChanged() { root.validateLayerName() }
+        function onLocalCameraAccessResolved(granted) {
+            if (!root.cameraAccessPending || !root.visible)
+                return
+            root.cameraAccessPending = false
+            if (granted)
+                root.save()
+            else
+                root.validationError = root.bridge.localCameraAccessError()
+        }
         function onOnvifCameraQueried(requestId, result) {
             if (requestId === root.streamQueryId && root.streamQueryRunning)
                 root.applyStreamQuery(result)
@@ -603,6 +613,15 @@ Dialog {
             layerNameField.forceActiveFocus()
             return
         }
+        if (cameraKind === "local_camera" && bridge) {
+            var access = bridge.requestLocalCameraAccess()
+            if (access !== "granted") {
+                cameraAccessPending = access === "pending"
+                if (!cameraAccessPending)
+                    validationError = root.bridge.localCameraAccessError()
+                return
+            }
+        }
         if (reusingCamera) {
             if (bridge && bridge.addConfiguredCamera(cameraId, layerNameField.text.trim(), editContext).length)
                 close()
@@ -677,6 +696,7 @@ Dialog {
     }
 
     onClosed: {
+        cameraAccessPending = false
         resetCustomResolution()
         passwordField.text = ""
         usernameField.text = ""
@@ -1228,7 +1248,7 @@ Dialog {
                     theme: root.theme
                     text: root.addToScene ? qsTr("Add") : qsTr("Save")
                     primary: true
-                    enabled: !root.deviceConflict && !root.connectionChoicePending && !root.customResolutionPending && !root.customResolutionError.length
+                    enabled: !root.cameraAccessPending && !root.deviceConflict && !root.connectionChoicePending && !root.customResolutionPending && !root.customResolutionError.length
                         && (!root.addToScene || root.cameraKind !== "local_camera" || root.deviceId.length > 0)
                         && (!root.addToScene || (!root.nameError.length && layerNameField.text.trim().length > 0))
                     onClicked: root.save()

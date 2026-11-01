@@ -833,12 +833,15 @@ def _assert_monitor_only_media_stays_out_of_the_recording_mix() -> None:
             assert _wait_for(lambda: media.position_ms > 300), _observation(media)
             # Heard on the speakers only: the system-audio capture is what puts it
             # in the recording, so a direct copy here would be heard twice.
+            assert media.source.monitoring_enabled is True
             assert media.source.audio_mixers == 0
             assert loudest_over(1.0) < 1e-4
             # Control: the same playing source does reach the track once routed.
-            # Stock libobs 32 drops monitor-only audio before any mix whatever the
-            # tracks, so routing it takes monitor-and-output as well.
+            # OBS 33 keeps monitoring enabled; only the caller's explicit mixer
+            # selection adds the source to the recording track.
             runtime.set_source_monitoring(media.source, MONITORING_MONITOR_AND_OUTPUT)
+            assert media.source.monitoring_enabled is True
+            assert media.source.audio_mixers == 0
             media.source.audio_mixers = RECORDING_AUDIO_MIXERS
             assert loudest_over(1.0) > 0.05
         finally:
@@ -855,7 +858,6 @@ def test_native_monitor_only_media_stays_out_of_the_recording_mix() -> None:
 
 def _assert_audio_monitoring_reset_overlaps_media_replacement() -> None:
     from pylibobs._ffi import ffi, get_lib
-    from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
 
     with _native_media() as (runtime, media, path):
         assert runtime.ob.audio_monitoring_available()
@@ -902,9 +904,8 @@ def _assert_audio_monitoring_reset_overlaps_media_replacement() -> None:
             for index in range(80):
                 media_path = audio if index % 2 else path
                 assert media.open(str(media_path), autoplay=False, volume_percent=0)
-                assert get_lib().obs_source_get_monitoring_type(
-                    media.source._ptr,
-                ) == MONITORING_MONITOR_ONLY, "Media monitoring was not enabled"
+                assert media.source.monitoring_enabled is True, "Media monitoring was not enabled"
+                assert media.source.audio_mixers == 0, "Monitor-only media reached an output mix"
                 # Allow resets to overlap monitor creation and deferred destruction.
                 time.sleep(0.005)
                 media.close()

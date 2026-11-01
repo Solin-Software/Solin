@@ -27,6 +27,9 @@ struct audio_monitor {
 	bool started;
 	uint64_t last_submit_time;
 	uint64_t last_submit_duration;
+	SRWLOCK playback_mutex;
+	void *resampler;
+	bool source_has_video;
 };
 
 static uint64_t clock_ns;
@@ -182,7 +185,14 @@ static HRESULT STDMETHODCALLTYPE fake_reset(IAudioClient *client)
 	return S_OK;
 }
 
+static HRESULT STDMETHODCALLTYPE fake_get_padding(IAudioClient *client, UINT32 *padding)
+{
+	*padding = from_client(client)->padding;
+	return S_OK;
+}
+
 static IAudioClientVtbl client_vtable = {
+	.GetCurrentPadding = fake_get_padding,
 	.Start = fake_start,
 	.Stop = fake_stop,
 	.Reset = fake_reset,
@@ -278,6 +288,84 @@ static void advance_to(struct fake_device *device, uint64_t now, uint32_t rate)
 	clock_ns = now;
 }
 
+/* Exercise the real capture callback: OBS 33 output muting must never silence
+ * monitoring, including the monitor-only route. Resampling and A/V buffering
+ * are controlled boundaries; the production submission path is unchanged. */
+#define MAX_AV_PLANES 8
+#define EPSILON 0.00001f
+#define UNUSED_PARAMETER(value) ((void)(value))
+typedef struct {
+	float user_volume;
+	volatile long activate_refs;
+	bool async_unbuffered, async_decoupled;
+} obs_source_t;
+struct audio_data {
+	uint8_t *data[MAX_AV_PLANES];
+	uint32_t frames;
+	uint64_t timestamp;
+};
+
+static long os_atomic_load_long(volatile long *value) { return *value; }
+static bool close_float(float left, float right, float epsilon)
+{
+	return left - right < epsilon && right - left < epsilon;
+}
+static bool audio_monitor_init_wasapi(struct audio_monitor *monitor)
+{
+	(void)monitor;
+	REQUIRE(false);
+	return false;
+}
+static void audio_monitor_free_for_reconnect(struct audio_monitor *monitor)
+{
+	(void)monitor;
+	REQUIRE(false);
+}
+static bool audio_resampler_resample(void *resampler, uint8_t **output, uint32_t *frames,
+				    uint64_t *offset, const uint8_t *const *input, uint32_t input_frames)
+{
+	(void)resampler;
+	output[0] = (uint8_t *)input[0];
+	*frames = input_frames;
+	*offset = 0;
+	return true;
+}
+static bool process_audio_delay(struct audio_monitor *monitor, float **data, uint32_t *frames,
+			       uint64_t timestamp, uint32_t padding)
+{
+	(void)monitor; (void)data; (void)frames; (void)timestamp; (void)padding;
+	REQUIRE(false);
+	return false;
+}
+#define os_gettime_ns mock_gettime_ns
+#include "monitor-callback-contract.h"
+#undef os_gettime_ns
+
+static void test_monitoring_ignores_output_mute(void)
+{
+	const float volumes[] = {1.0f, 0.5f};
+	for (unsigned muted = 0; muted < 2; muted++) {
+		for (unsigned volume = 0; volume < 2; volume++) {
+			struct fake_device device;
+			struct audio_monitor monitor;
+			float pcm[8];
+			fill_pcm(pcm, 0, 4);
+			init_device(&device, &monitor, 32, 8);
+			InitializeSRWLock(&monitor.playback_mutex);
+			obs_source_t source = {.user_volume = volumes[volume], .activate_refs = 1};
+			struct audio_data audio = {.data = {(uint8_t *)pcm}, .frames = 4};
+			on_audio_playback(&monitor, &source, &audio, muted != 0);
+			REQUIRE(monitor.started && device.padding == 12 && device.last_flags == 0);
+			require_zero(device.queue, 8 * monitor.channels);
+			for (unsigned frame = 0; frame < 4; frame++)
+				for (unsigned channel = 0; channel < 2; channel++)
+					REQUIRE(device.queue[(8 + frame) * 2 + channel] ==
+						sample_at(frame, channel) * volumes[volume]);
+			free_device(&device);
+		}
+	}
+}
+
 static void test_preroll_and_pcm(void)
 {
 	struct fake_device device;
@@ -285,33 +373,33 @@ static void test_preroll_and_pcm(void)
 	float pcm[18];
 	fill_pcm(pcm, 0, 9);
 	init_device(&device, &monitor, 64, 8);
-	REQUIRE(write_audio(&monitor, pcm, 5, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 5, 0) == S_OK);
 	REQUIRE(strcmp(device.calls, "GLS") == 0);
 	REQUIRE(device.padding == 13 && device.last_get_frames == 13);
 	require_zero(device.queue, 8 * monitor.channels);
 	REQUIRE(memcmp(device.queue + 8 * monitor.channels, pcm, 5 * monitor.channels * sizeof(float)) == 0);
 	REQUIRE(monitor.started && monitor.last_submit_time == clock_ns);
 	REQUIRE(monitor.last_submit_duration == util_mul_div64(13, 1000000000, monitor.sample_rate));
-	REQUIRE(write_audio(&monitor, pcm + 10, 4, device.padding, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm + 10, 4, device.padding) == S_OK);
 	REQUIRE(device.start_count == 1 && device.last_get_frames == 4 && device.padding == 17);
 	REQUIRE(memcmp(device.queue + 13 * monitor.channels, pcm + 10, 4 * monitor.channels * sizeof(float)) == 0);
 	free_device(&device);
 }
 
-static void test_muted_and_empty(void)
+static void test_empty(void)
 {
 	struct fake_device device;
 	struct audio_monitor monitor;
+	float pcm[10];
+	fill_pcm(pcm, 0, 5);
 	init_device(&device, &monitor, 32, 8);
-	REQUIRE(write_audio(&monitor, NULL, 0, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, NULL, 0, 0) == S_OK);
 	REQUIRE(!monitor.started && device.call_count == 0 && monitor.last_submit_time == 0);
-	REQUIRE(write_audio(&monitor, NULL, 5, 0, true) == S_OK);
-	REQUIRE(device.last_flags == AUDCLNT_BUFFERFLAGS_SILENT && device.padding == 13);
-	require_zero(device.queue, 13 * monitor.channels);
+	REQUIRE(write_audio(&monitor, pcm, 5, 0) == S_OK);
 	uint64_t submitted_at = monitor.last_submit_time;
 	uint64_t duration = monitor.last_submit_duration;
 	clock_ns++;
-	REQUIRE(write_audio(&monitor, NULL, 0, device.padding, true) == S_OK);
+	REQUIRE(write_audio(&monitor, NULL, 0, device.padding) == S_OK);
 	REQUIRE(strcmp(device.calls, "GLS") == 0 && monitor.started);
 	REQUIRE(monitor.last_submit_time == submitted_at && monitor.last_submit_duration == duration);
 	free_device(&device);
@@ -325,21 +413,21 @@ static void test_capacity(void)
 	fill_pcm(pcm, 0, 17);
 	for (uint32_t frames = 12; frames <= 16; frames += 4) {
 		init_device(&device, &monitor, 16, 8);
-		REQUIRE(write_audio(&monitor, pcm, frames, 0, false) == S_OK);
+		REQUIRE(write_audio(&monitor, pcm, frames, 0) == S_OK);
 		REQUIRE(device.last_get_frames == 16 && device.padding == 16);
 		uint32_t reserve = 16 - frames;
 		require_zero(device.queue, reserve * monitor.channels);
 		REQUIRE(memcmp(device.queue + reserve * monitor.channels, pcm,
 			       frames * monitor.channels * sizeof(float)) == 0);
-		REQUIRE(write_audio(&monitor, pcm, 1, device.padding, false) == AUDCLNT_E_BUFFER_TOO_LARGE);
+		REQUIRE(write_audio(&monitor, pcm, 1, device.padding) == AUDCLNT_E_BUFFER_TOO_LARGE);
 		REQUIRE(device.get_count == 1 && device.start_count == 1);
 		free_device(&device);
 	}
 	init_device(&device, &monitor, 16, 8);
-	REQUIRE(write_audio(&monitor, pcm, 17, 0, false) == AUDCLNT_E_BUFFER_TOO_LARGE);
-	REQUIRE(write_audio(&monitor, pcm, UINT32_MAX, 0, false) == AUDCLNT_E_BUFFER_TOO_LARGE);
-	REQUIRE(write_audio(&monitor, pcm, 2, 15, false) == AUDCLNT_E_BUFFER_TOO_LARGE);
-	REQUIRE(write_audio(&monitor, pcm, 1, UINT32_MAX, false) == AUDCLNT_E_BUFFER_TOO_LARGE);
+	REQUIRE(write_audio(&monitor, pcm, 17, 0) == AUDCLNT_E_BUFFER_TOO_LARGE);
+	REQUIRE(write_audio(&monitor, pcm, UINT32_MAX, 0) == AUDCLNT_E_BUFFER_TOO_LARGE);
+	REQUIRE(write_audio(&monitor, pcm, 2, 15) == AUDCLNT_E_BUFFER_TOO_LARGE);
+	REQUIRE(write_audio(&monitor, pcm, 1, UINT32_MAX) == AUDCLNT_E_BUFFER_TOO_LARGE);
 	REQUIRE(device.call_count == 0 && !monitor.started);
 	free_device(&device);
 }
@@ -359,7 +447,7 @@ static void test_write_failures(void)
 			device.release_result = E_FAIL;
 		else
 			device.start_result = E_FAIL;
-		REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == E_FAIL);
+		REQUIRE(write_audio(&monitor, pcm, 4, 0) == E_FAIL);
 		REQUIRE(strcmp(device.calls, expected[failure]) == 0);
 		REQUIRE(!monitor.started && !device.running);
 		REQUIRE(monitor.last_submit_time == 0 && monitor.last_submit_duration == 0);
@@ -375,12 +463,12 @@ static void test_reset_rearms(void)
 	float pcm[8];
 	fill_pcm(pcm, 0, 4);
 	init_device(&device, &monitor, 32, 8);
-	REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 	REQUIRE(reset_playback(&monitor) == S_OK);
 	REQUIRE(!monitor.started && !device.running && device.padding == 0);
 	REQUIRE(monitor.last_submit_time == 0 && monitor.last_submit_duration == 0);
 	clock_ns++;
-	REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 	REQUIRE(strcmp(device.calls, "GLSTRGLS") == 0);
 	REQUIRE(device.padding == 12 && device.start_count == 2);
 	require_zero(device.queue, 8 * monitor.channels);
@@ -396,7 +484,7 @@ static void test_reset_failures(void)
 		struct fake_device device;
 		struct audio_monitor monitor;
 		init_device(&device, &monitor, 32, 8);
-		REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+		REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 		uint64_t submitted_at = monitor.last_submit_time;
 		if (failure == 0)
 			device.stop_result = E_FAIL;
@@ -419,7 +507,7 @@ static void test_idle_requires_empty_and_expired(void)
 	init_device(&device, &monitor, 32, 8);
 	REQUIRE(reset_if_idle(&monitor, 0, clock_ns) == S_OK);
 	REQUIRE(device.stop_count == 0);
-	REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 	uint64_t expiry = monitor.last_submit_time + monitor.last_submit_duration +
 			  util_mul_div64(monitor.preroll_frames, 1000000000, monitor.sample_rate);
 	REQUIRE(reset_if_idle(&monitor, device.padding, expiry + 1) == S_OK);
@@ -433,7 +521,7 @@ static void test_idle_requires_empty_and_expired(void)
 	REQUIRE(reset_if_idle(&monitor, 0, expiry + 2) == S_OK);
 	REQUIRE(device.stop_count == 1);
 	clock_ns = expiry + 2;
-	REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 	REQUIRE(device.padding == 12 && device.start_count == 2);
 	free_device(&device);
 }
@@ -445,7 +533,7 @@ static void test_idle_propagates_failure(void)
 	float pcm[8];
 	fill_pcm(pcm, 0, 4);
 	init_device(&device, &monitor, 32, 8);
-	REQUIRE(write_audio(&monitor, pcm, 4, 0, false) == S_OK);
+	REQUIRE(write_audio(&monitor, pcm, 4, 0) == S_OK);
 	consume_frames(&device, device.padding);
 	device.reset_result = E_FAIL;
 	REQUIRE(reset_if_idle(&monitor, 0, clock_ns + 1000000000) == E_FAIL);
@@ -495,7 +583,7 @@ static void test_small_packet_jitter(uint32_t reserve, bool expect_underflow)
 		advance_to(&device, arrival, rate);
 		previous = arrival;
 		fill_pcm(pcm, packet * packet_frames, packet_frames);
-		REQUIRE(write_audio(&monitor, pcm, packet_frames, device.padding, false) == S_OK);
+		REQUIRE(write_audio(&monitor, pcm, packet_frames, device.padding) == S_OK);
 	}
 	REQUIRE(device.padding != 0);
 	while (device.padding)
@@ -542,7 +630,7 @@ static void test_dac_jitter(uint32_t reserve)
 		advance_to(&device, origin + nominal + jitter, rate);
 		/* Isolate startup reserve: idle recovery has its own boundary tests. */
 		fill_pcm(pcm, packet * packet_frames, packet_frames);
-		REQUIRE(write_audio(&monitor, pcm, packet_frames, device.padding, false) == S_OK);
+		REQUIRE(write_audio(&monitor, pcm, packet_frames, device.padding) == S_OK);
 	}
 	REQUIRE(device.padding != 0);
 	/* EOF sends no new callback: the DAC must still consume every queued frame. */
@@ -577,7 +665,8 @@ static void test_dac_jitter(uint32_t reserve)
 int main(void)
 {
 	test_preroll_and_pcm();
-	test_muted_and_empty();
+	test_empty();
+	test_monitoring_ignores_output_mute();
 	test_capacity();
 	test_write_failures();
 	test_reset_rearms();

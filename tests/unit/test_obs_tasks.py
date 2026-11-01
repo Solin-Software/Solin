@@ -86,8 +86,8 @@ def dispatcher(monkeypatch):
     ffi = FFI()
     ffi.cdef("""
         typedef _Bool bool;
-        typedef struct obs_task_s *obs_task_t;
-        typedef struct obs_task_handler_s *obs_task_handler_t;
+        typedef void (*obs_task_t)(void *);
+        typedef void (*obs_task_handler_t)(obs_task_t, void *, bool);
     """)
     lane = _NativeLane(ffi)
     com = []
@@ -316,7 +316,7 @@ def test_bridge_creation_failure_retains_guard_until_close(dispatcher, monkeypat
     def fail(_dispatch):
         raise RuntimeError("bridge unavailable")
 
-    monkeypatch.setattr(obs_tasks, "ObsTaskBridgeCompat", fail)
+    monkeypatch.setattr(obs_tasks, "_NativeTaskBridge", fail)
     with pytest.raises(RuntimeError, match="bridge unavailable"):
         tasks.install()
     assert lane.mta_active
@@ -409,3 +409,49 @@ def test_mta_guard_balances_cookie_and_checks_failed_hresult(
     assert increment.restype is ctypes.c_int32
     assert decrement.argtypes == (ctypes.c_void_p,)
     assert decrement.restype is ctypes.c_int32
+
+
+def test_async_task_bridge_retains_handle_until_trampoline_finishes(monkeypatch):
+    import gc
+
+    from cffi import FFI
+
+    ffi = FFI()
+    ffi.cdef("""
+        typedef void (*obs_task_t)(void *);
+        typedef void (*obs_task_handler_t)(obs_task_t, void *, _Bool);
+    """)
+    queued = []
+
+    def queue(kind, task, handle, wait):
+        # Native OBS retains only an address, never the Python handle owner.
+        borrowed = ffi.cast("void *", int(ffi.cast("uintptr_t", handle)))
+        queued.append((kind, task, borrowed, wait))
+
+    monkeypatch.setattr(pylibobs_ffi, "ffi", ffi)
+    monkeypatch.setattr(
+        pylibobs_ffi,
+        "get_lib",
+        lambda: SimpleNamespace(obs_queue_task=queue),
+    )
+    bridge = obs_tasks._NativeTaskBridge(lambda _task, _wait: None)
+    executed = []
+
+    class Payload:
+        def __call__(self):
+            executed.append("executed")
+
+    payload = Payload()
+    reference = weakref.ref(payload)
+    bridge.queue(payload, wait=False)
+    del payload
+    gc.collect()
+    assert reference() is not None
+    assert len(bridge._handles) == 1
+    kind, pointer, param, wait = queued.pop()
+    assert kind == 3 and wait is False
+    ffi.cast("void (*)(void *)", pointer)(param)
+    gc.collect()
+    assert executed == ["executed"]
+    assert not bridge._handles
+    assert reference() is None

@@ -149,7 +149,7 @@ def _invalid_format_payload() -> dict[str, object]:
     device["formats"] = [
         {
             "media_type": "video/x-raw",
-            "pixel_format": "NV12",
+            "native_format": "", "pixel_format": "NV12",
             "width": 1920,
             "height": 1080,
             "fps_numerator": 30,
@@ -290,7 +290,7 @@ def test_exact_size_query_parser_rejects_cross_device_or_cross_resolution_data(m
         payload["devices"].append(extra)
     else:
         device["frame_rate_ranges"] = [{
-            "media_type": "video/x-raw", "pixel_format": "NV12", "width": 640, "height": 480,
+            "media_type": "video/x-raw", "native_format": "", "pixel_format": "NV12", "width": 640, "height": 480,
             "min_interval": {"numerator": 1, "denominator": 30},
             "max_interval": {"numerator": 1, "denominator": 5}, "step_interval": None,
         }]

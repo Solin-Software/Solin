@@ -14,6 +14,9 @@ whose location it learns from a per-user named-pipe broker. On Windows this
 delegates to :class:`~solin.core.scenes.libobs_windows_virtual_camera.LibobsWindowsVirtualCamera`,
 which owns the broker + NV12 video producer in Python (see that module). The
 shipped filter in ``native/virtual_camera`` shares this wire and frame contract.
+
+macOS feeds the sink stream of an already installed OBS camera extension through
+the binding's generic CoreMediaIO producer. It does not install a Solin camera.
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ class LibobsVirtualCamera:
     def __init__(self, runtime: Any) -> None:
         self._runtime = runtime
         self._output: Any = None
-        self._windows: Any = None  # LibobsWindowsVirtualCamera on win32
+        self._platform_output: Any = None
         self._enabled = False
         self._health = OutputHealth()
         self._recovery_attempts = 0
@@ -52,7 +55,7 @@ class LibobsVirtualCamera:
     @property
     def active(self) -> bool:
         return ((self._output is not None and self._output.active)
-                or (self._windows is not None and self._windows.active))
+                or (self._platform_output is not None and self._platform_output.active))
 
     @property
     def health(self) -> OutputHealth:
@@ -75,7 +78,7 @@ class LibobsVirtualCamera:
         self._ready_since = None
         self._total_frames = 0
         self._generation += 1
-        started = self._start_windows() if sys.platform == "win32" else self._start_v4l2()
+        started = self._start_platform_output() if sys.platform in {"win32", "darwin"} else self._start_v4l2()
         if started:
             self._health = OutputHealth(OutputHealthStatus.STARTING, generation=self._generation)
         else:
@@ -115,8 +118,8 @@ class LibobsVirtualCamera:
         return self._health
 
     def _observe(self, now: float) -> OutputHealth:
-        if self._windows is not None:
-            return self._windows.health
+        if self._platform_output is not None:
+            return self._platform_output.health
         output = self._output
         if output is None or not output.active:
             return OutputHealth(OutputHealthStatus.FAILED, "output_stopped")
@@ -140,19 +143,22 @@ class LibobsVirtualCamera:
         log.warning("Virtual camera output %s: code=%s generation=%d attempts=%d",
                     self._health.status, error_code, self._generation, self._recovery_attempts)
 
-    def _start_windows(self) -> bool:
+    def _start_platform_output(self) -> bool:
         try:
-            from solin.core.scenes.libobs_windows_virtual_camera import (
-                LibobsWindowsVirtualCamera,
-            )
+            if sys.platform == "darwin":
+                from solin.core.scenes.libobs_macos_virtual_camera import LibobsMacVirtualCamera
 
-            windows = LibobsWindowsVirtualCamera(self._runtime)
-            if not windows.start():
+                output = LibobsMacVirtualCamera(self._runtime)
+            else:
+                from solin.core.scenes.libobs_windows_virtual_camera import LibobsWindowsVirtualCamera
+
+                output = LibobsWindowsVirtualCamera(self._runtime)
+            if not output.start():
                 return False
-        except Exception:  # noqa: BLE001 - Windows vcam boundary
-            log.warning("Could not start the Windows virtual camera", exc_info=True)
+        except Exception:  # noqa: BLE001 - platform virtual-camera boundary
+            log.warning("Could not start the platform virtual camera", exc_info=True)
             return False
-        self._windows = windows
+        self._platform_output = output
         return True
 
     def _start_v4l2(self) -> bool:
@@ -193,12 +199,12 @@ class LibobsVirtualCamera:
         self._next_retry_at = 0.0
 
     def _stop_backend(self) -> None:
-        windows, self._windows = self._windows, None
-        if windows is not None:
+        platform_output, self._platform_output = self._platform_output, None
+        if platform_output is not None:
             try:
-                windows.stop()
-            except Exception:  # noqa: BLE001 - Windows vcam boundary
-                log.debug("Windows virtual camera stop errored", exc_info=True)
+                platform_output.stop()
+            except Exception:  # noqa: BLE001 - platform virtual-camera boundary
+                log.debug("Platform virtual camera stop errored", exc_info=True)
         output, self._output = self._output, None
         if output is None:
             return

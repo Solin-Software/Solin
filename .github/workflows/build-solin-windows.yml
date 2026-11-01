@@ -73,7 +73,7 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-nuitka-v2-${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements*.txt', 'pyproject.toml') }}-
 
       - name: Install Python dependencies
-        shell: pwsh
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt

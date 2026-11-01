@@ -199,10 +199,12 @@ def test_elevated_installation_gets_full_setup_for_assisted_install():
     assert result.action == UpdateAction.REVEAL
 
 
-@pytest.mark.parametrize("glibc,compatible", [("2.35", False), ("2.37", False), ("2.38", True), ("2.39", True)])
-def test_linux_update_respects_the_packaged_dependency_abi_floor(glibc, compatible):
+@pytest.mark.parametrize("minor_offset,compatible", [(-1, False), (0, True), (1, True)])
+def test_linux_update_respects_the_packaged_dependency_abi_floor(minor_offset, compatible):
     release = manifest(platform="linux", kind="appimage")
     floor = REQUIRED_ASSETS[("linux", "x86_64", "appimage")][1]
+    major, minor = map(int, floor.split("."))
+    glibc = f"{major}.{minor + minor_offset}"
     release = replace(release, assets=(replace(release.assets[0], minimum_os=floor),))
     result = select([release], platform="linux", os_version=glibc)
     assert (result is not None) is compatible

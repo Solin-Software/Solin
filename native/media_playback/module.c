@@ -40,5 +40,5 @@ MODULE_EXPORT const char *obs_module_name(void)
 
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return "OBS 32.1.2 media playback with finite transport and live playback-rate corrections";
+	return "OBS media playback with finite transport and live playback-rate corrections";
 }

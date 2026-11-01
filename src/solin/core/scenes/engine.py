@@ -159,8 +159,10 @@ class LocalVideoFormat:
     height: int
     fps_numerator: int
     fps_denominator: int
+    native_format: str = ""
 
     def __post_init__(self) -> None:
+        _bounded_text(self.native_format, 4096, "local video native format")
         if not isinstance(self.media_type, CameraMediaType):
             raise ValueError("Invalid local video media type")
         if not self.pixel_format:
@@ -229,10 +231,11 @@ class LocalVideoFrameRateRange:
     min_interval: LocalVideoFrameInterval
     max_interval: LocalVideoFrameInterval
     step_interval: LocalVideoFrameInterval | None = None
+    native_format: str = ""
 
     def __post_init__(self) -> None:
         # Reuse exact-mode validation for the shared format and dimension contract.
-        LocalVideoFormat(self.media_type, self.pixel_format, self.width, self.height, 1, 1)
+        LocalVideoFormat(self.media_type, self.pixel_format, self.width, self.height, 1, 1, self.native_format)
         if not isinstance(self.min_interval, LocalVideoFrameInterval) or not isinstance(
             self.max_interval, LocalVideoFrameInterval
         ):
@@ -490,6 +493,7 @@ class OutputWindowTarget:
     device_pixel_ratio: float
     visible: bool = True
     scene_id: str = ""  # render this one scene directly ("" = the composited main mix)
+    surface_endpoint: str = ""  # a native GPU transport endpoint, never a foreign NSView
 
     def __post_init__(self) -> None:
         if not isinstance(self.bus_id, BusId):
@@ -498,7 +502,12 @@ class OutputWindowTarget:
         _identity(self.screen_id, "screen id")
         if self.scene_id:
             _bounded_text(self.scene_id, 256, "window target scene id")
-        _bounded_int(self.native_handle, 1, 2**64 - 1, "window native handle")
+        if self.surface_endpoint:
+            _bounded_text(self.surface_endpoint, 120, "surface endpoint")
+            if not self.surface_endpoint.startswith("org.pylibobs.surfaces.") or self.native_handle != 0:
+                raise ValueError("Surface targets require a binding endpoint and no native handle")
+        else:
+            _bounded_int(self.native_handle, 1, 2**64 - 1, "window native handle")
         _bounded_int(self.x, -(2**31), 2**31 - 1, "window x")
         _bounded_int(self.y, -(2**31), 2**31 - 1, "window y")
         _bounded_int(self.width, 1, 32_768, "window width")
