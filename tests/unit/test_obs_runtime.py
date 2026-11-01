@@ -1042,10 +1042,15 @@ class _RtspSource:
     def __init__(self, settings: dict) -> None:
         self.settings = dict(settings)
         self.updates: list[dict] = []
+        self.audio_mixers = 0x3F
+        self.releases = 0
 
     def update(self, settings: dict) -> None:
         self.updates.append(dict(settings))
         self.settings.update(settings)
+
+    def release(self) -> None:
+        self.releases += 1
 
 
 def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource]]:
@@ -1058,7 +1063,7 @@ def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource
     return runtime, created
 
 
-def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000"):
+def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000 allowed_media_types=video"):
     return {"is_local_file": False, "input": uri, "ffmpeg_options": options}
 
 
@@ -1067,12 +1072,77 @@ def test_shared_rtsp_source_follows_transport_and_buffer_edits(monkeypatch) -> N
     source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
 
     # Same address, new transport and buffer: the live source must follow.
-    edited = _rtsp_settings(options="rtsp_transport=udp max_delay=500000")
+    edited = _rtsp_settings(options="rtsp_transport=udp max_delay=500000 allowed_media_types=video")
     assert runtime.rtsp_source("cam", "rtsp://camera/live", edited) is source
 
     assert len(created) == 1
     assert source.updates == [edited]
-    assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000"
+    assert source.settings["ffmpeg_options"] == "rtsp_transport=udp max_delay=500000 allowed_media_types=video"
+
+
+def test_shared_rtsp_source_excludes_embedded_audio_from_all_mixers(monkeypatch) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+
+    # MPEG-TS may carry audio inside a video SDP section despite the media filter.
+    assert source.audio_mixers == 0
+
+    edited = _rtsp_settings("rtsp://camera/other", "rtsp_transport=udp allowed_media_types=video")
+    assert runtime.rtsp_source("cam", "rtsp://camera/other", edited) is source
+    assert source.audio_mixers == 0
+    assert len(created) == 1
+
+
+@pytest.mark.parametrize("release_fails", [False, True])
+def test_shared_rtsp_source_releases_and_retries_if_audio_routing_fails(
+    monkeypatch, release_fails,
+) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    def set_attribute(source, name, value):
+        if name == "audio_mixers" and value == 0:
+            raise RuntimeError("native audio routing failed")
+        object.__setattr__(source, name, value)
+
+    def release(source):
+        source.releases += 1
+        if release_fails:
+            raise RuntimeError("native source release failed")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(_RtspSource, "__setattr__", set_attribute)
+        failure.setattr(_RtspSource, "release", release)
+
+        assert runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings()) is None
+        assert created[0].releases == 1
+
+    # A failed source must not be cached or prevent a later successful attempt.
+    source = runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+    assert source is created[1]
+    assert source.audio_mixers == 0
+
+
+def test_shared_rtsp_source_draws_its_newest_frame(monkeypatch) -> None:
+    calls: list[tuple[object, bool]] = []
+    lib = SimpleNamespace(obs_source_set_async_unbuffered=lambda ptr, value: calls.append((ptr, value)))
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(get_lib=lambda: lib))
+    runtime, created = _rtsp_runtime(monkeypatch)
+    monkeypatch.setattr(_RtspSource, "_ptr", "native", raising=False)
+
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings(options="rtsp_transport=udp"))
+
+    # Set once on creation; an in-place settings update keeps the flag.
+    assert len(created) == 1
+    assert calls == [("native", True)]
+
+
+def test_shared_rtsp_source_survives_a_binding_without_unbuffered(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "pylibobs._ffi", SimpleNamespace(get_lib=lambda: SimpleNamespace()))
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    assert runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings()) is created[0]
 
 
 def test_shared_rtsp_source_is_not_rebuilt_for_unchanged_settings(monkeypatch) -> None:

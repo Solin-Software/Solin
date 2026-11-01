@@ -1267,18 +1267,20 @@ def test_rtsp_layer_creates_an_ffmpeg_source():
     assert source.settings["is_local_file"] is False
     assert source.settings["input"] == "rtsp://host/stream"
     # The model's defaults: TCP, 200 ms buffer.
-    assert source.settings["ffmpeg_options"] == "rtsp_transport=tcp max_delay=200000"
+    assert source.settings["ffmpeg_options"] == "rtsp_transport=tcp max_delay=200000 allowed_media_types=video"
     # Shown in the preview or a projection without being on an output channel,
     # the camera must still play: activation never comes there.
     assert source.settings["restart_on_activate"] is False
+    # No network buffer: the probe-time backlog would trail the room's audio.
+    assert source.settings["buffering_mb"] == 0
 
 
 @pytest.mark.parametrize(
     ("configuration", "options"),
     [
-        ({"transport": "tcp", "latency_ms": 500}, "rtsp_transport=tcp max_delay=500000"),
-        ({"transport": "udp", "latency_ms": 0}, "rtsp_transport=udp max_delay=0"),
-        ({"transport": "bogus", "latency_ms": "x"}, "rtsp_transport=tcp max_delay=200000"),
+        ({"transport": "tcp", "latency_ms": 500}, "rtsp_transport=tcp max_delay=500000 allowed_media_types=video"),
+        ({"transport": "udp", "latency_ms": 0}, "rtsp_transport=udp max_delay=0 allowed_media_types=video"),
+        ({"transport": "bogus", "latency_ms": "x"}, "rtsp_transport=tcp max_delay=200000 allowed_media_types=video"),
     ],
 )
 def test_rtsp_layer_forwards_transport_and_network_buffer(configuration, options):
