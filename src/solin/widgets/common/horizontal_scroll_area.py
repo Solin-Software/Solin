@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QScrollArea, QWidget
 
@@ -29,6 +29,17 @@ class HorizontalScrollArea(QScrollArea):
             event.setAccepted(bar.value() != previous)
             return
 
+        angle = event.angleDelta()
+        forwarded = event
+        if angle.x() and abs(angle.y()) >= abs(angle.x()):
+            # Qt ignores vertical-dominant diagonal input on horizontal bars.
+            forwarded = QWheelEvent(
+                event.position(), event.globalPosition(), pixels, QPoint(0, angle.y()),
+                event.buttons(), event.modifiers(), event.phase(), event.inverted(),
+                event.source(), event.pointingDevice(),
+            )
+
         # Keep Qt's wheel-step preference, fractional-angle accumulation and
-        # modifier behavior. A horizontal scrollbar accepts either wheel axis.
-        bar.event(event)
+        # modifier behavior, and propagate whether the scrollbar consumed it.
+        bar.event(forwarded)
+        event.setAccepted(forwarded.isAccepted())

@@ -789,6 +789,30 @@ def test_scene_strip_mouse_wheel_scrolls_over_cards_without_routing(
 
 
 @pytest.mark.parametrize(
+    "angle",
+    [
+        QPoint(-1, -120), QPoint(1, -120), QPoint(-120, -1), QPoint(-120, 1),
+        QPoint(-120, -120), QPoint(120, -120),
+    ],
+    ids=[
+        "vertical", "vertical-mixed-sign", "horizontal", "horizontal-mixed-sign",
+        "equal-axes", "equal-axes-mixed-sign",
+    ],
+)
+def test_scene_strip_scrolls_with_angle_only_diagonal_gestures(
+    overflowing_scene_panel, angle,
+) -> None:
+    popup = overflowing_scene_panel
+    viewport = popup._cards_scroll.viewport()
+    bar = popup._cards_scroll.horizontalScrollBar()
+
+    _wheel(viewport, angle=angle)
+    assert bar.value() > bar.minimum()
+    _wheel(viewport, angle=-angle)
+    assert bar.value() == bar.minimum()
+
+
+@pytest.mark.parametrize(
     ("pixels", "angle"),
     [
         (QPoint(0, -25), QPoint(0, -120)),
@@ -821,14 +845,16 @@ def test_scene_strip_natural_scrolling_uses_the_delivered_direction(
     assert popup._cards_scroll.horizontalScrollBar().value() == 25
 
 
-@pytest.mark.parametrize("horizontal", [False, True], ids=["vertical", "horizontal"])
+@pytest.mark.parametrize(
+    "delta", [QPoint(0, -1), QPoint(-1, 0), QPoint(1, -1)],
+    ids=["vertical", "horizontal", "diagonal"],
+)
 def test_scene_strip_wheel_accumulates_small_steps_and_stays_within_bounds(
-    overflowing_scene_panel, horizontal,
+    overflowing_scene_panel, delta,
 ) -> None:
     popup = overflowing_scene_panel
     viewport = popup._cards_scroll.viewport()
     bar = popup._cards_scroll.horizontalScrollBar()
-    delta = QPoint(-1, 0) if horizontal else QPoint(0, -1)
     for _ in range(120):
         _wheel(viewport, angle=delta)
     assert bar.value() > bar.minimum()
