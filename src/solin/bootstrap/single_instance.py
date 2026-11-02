@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import sys
+import time
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QLockFile, QStandardPaths
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import QApplication
 
-from solin.controllers.ipc_controller import IpcController
+from solin.controllers.ipc_controller import IpcController, encode_open_request
 from solin.core.foundation.constants import IPC_SERVER_NAME, IPC_TIMEOUT_MS
 
 log = logging.getLogger(__name__)
+_FORWARD_TIMEOUT_SECONDS = 15.0
 
 
 def _log_ignored_exception(message: str, *, warning: bool = False) -> None:
@@ -42,19 +47,73 @@ class SingleInstanceServer:
         self._pending_files = pending_files
         self._server_name = server_name
         self._server: QLocalServer | None = None
+        self._connections: set[QLocalSocket] = set()
+        self._lock: QLockFile | None = None
+        self._reserved_until_exit = False
+        self._receiver = IpcController(
+            app,
+            bring_to_front=self._bring_current_window_to_front,
+            open_media_files=self._deliver_files,
+        )
+
+    @property
+    def accepted_request_ids(self) -> list[str]:
+        return self._receiver.accepted_request_ids
+
+    def restore_request_ids(self, identifiers: list[str]) -> None:
+        self._receiver.restore_request_ids(identifiers)
 
     def start(self) -> bool:
         if self._server is not None and self._server.isListening():
             return True
+        if self._reserved_until_exit:
+            return False
+        lock = self._lock
+        if lock is None:
+            directory = Path(
+                QStandardPaths.writableLocation(
+                    QStandardPaths.StandardLocation.RuntimeLocation,
+                )
+            )
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                log.exception("Could not create the single-instance lock directory")
+                return False
+            name_hash = hashlib.sha256(self._server_name.encode("utf-8")).hexdigest()
+            lock = QLockFile(str(directory / f"solin-{name_hash}.lock"))
+            # A running owner cannot be displaced just because its lock is old.
+            lock.setStaleLockTime(0)
+            if not lock.tryLock(0):
+                return False
 
         server = QLocalServer(self._app)
+        server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
         server.newConnection.connect(self._on_connection)
 
         if not server.listen(self._server_name):
+            probe = QLocalSocket()
+            probe.connectToServer(self._server_name)
+            connected = probe.waitForConnected(IPC_TIMEOUT_MS)
+            error = probe.error()
+            probe.abort()
+            if connected or error not in (
+                QLocalSocket.LocalSocketError.ServerNotFoundError,
+                QLocalSocket.LocalSocketError.ConnectionRefusedError,
+            ):
+                server.deleteLater()
+                lock.unlock()
+                self._lock = None
+                return False
+            # Only remove an unreachable stale endpoint, never a live owner.
             QLocalServer.removeServer(self._server_name)
             if not server.listen(self._server_name):
+                server.deleteLater()
+                lock.unlock()
+                self._lock = None
                 return False
 
+        self._lock = lock
         self._server = server
         app_dynamic: Any = self._app
         app_dynamic._solin_single_instance_server = self
@@ -62,37 +121,53 @@ class SingleInstanceServer:
         return True
 
     def close(self) -> None:
-        try:
-            if self._server is not None:
-                self._server.close()
-        except Exception:  # noqa: BLE001 - Qt IPC cleanup boundary
-            _log_ignored_exception("Could not close single-instance IPC server", warning=True)
-        QLocalServer.removeServer(self._server_name)
+        self.pause()
         app_dynamic: Any = self._app
-        app_dynamic._solin_app_ipc_server_active = False
+        if not self._reserved_until_exit and self._lock is not None:
+            self._lock.unlock()
+            self._lock = None
+        if getattr(app_dynamic, "_solin_single_instance_server", None) is self:
+            if not self._reserved_until_exit:
+                app_dynamic._solin_single_instance_server = None
+            app_dynamic._solin_app_ipc_server_active = False
+
+    def pause(self) -> None:
+        """Stop admission and drain complete frames before synchronous shutdown."""
+        server = self._server
+        if server is None:
+            return
+        self._server = None
+        try:
+            server.close()
+        finally:
+            for connection in tuple(self._connections):
+                try:
+                    if connection.bytesAvailable():
+                        self._receiver.receive(connection)
+                except Exception:  # noqa: BLE001 - isolate accepted request failures during shutdown
+                    log.exception("Could not drain a pending file-open request")
+                finally:
+                    self._receiver.discard_connection(connection)
+                    connection.abort()
+            self._connections.clear()
+            server.deleteLater()
+
+    def reserve_until_exit(self) -> None:
+        """Keep startup admission locked while a departing process drains workers."""
+        self._reserved_until_exit = True
 
     def _on_connection(self) -> None:
         if self._server is None:
             return
-        conn = self._server.nextPendingConnection()
-        if conn is None:
-            return
-        conn.readyRead.connect(lambda: self._on_ipc_data(conn))
-        QTimer.singleShot(3000, lambda: conn.disconnectFromServer())
+        while self._server.hasPendingConnections():
+            conn = self._server.nextPendingConnection()
+            if conn is None:
+                return
+            self._connections.add(conn)
+            conn.disconnected.connect(lambda connection=conn: self._connections.discard(connection))
+            self._receiver.attach_connection(conn)
 
-    def _on_ipc_data(self, conn: QLocalSocket) -> None:
-        raw = conn.readAll()
-        text = bytes(raw.data()).decode("utf-8", errors="ignore").strip()
-
-        self._bring_current_window_to_front()
-
-        if not text:
-            return
-
-        paths = IpcController._valid_payload_paths(text)
-        if not paths:
-            return
-
+    def _deliver_files(self, paths: list[str]) -> None:
         window = self._current_window()
         open_media_files = getattr(window, "open_media_files", None)
         if callable(open_media_files):
@@ -119,6 +194,8 @@ class SingleInstanceServer:
     def _bring_current_window_to_front(self) -> None:
         window = self._current_window()
         if window is None:
+            return
+        if not getattr(window, "accepts_external_activation", True):
             return
 
         bring_to_front = getattr(window, "_bring_to_front", None)
@@ -158,48 +235,43 @@ def try_forward_to_running(
     paths: list[str],
     *,
     server_name: str = IPC_SERVER_NAME,
+    request_id: str | None = None,
+    wait_for_owner: bool = False,
 ) -> bool:
-    socket = QLocalSocket()
-    socket.connectToServer(server_name)
-    if not socket.waitForConnected(IPC_TIMEOUT_MS):
-        return False
-    grant_focus_to_first_instance()
-    payload = ("\n".join(paths) + "\n").encode("utf-8") if paths else b"\n"
-    socket.write(payload)
-    socket.flush()
-    socket.waitForBytesWritten(2000)
-    socket.disconnectFromServer()
-    return True
-
-
-def stop_process_ipc(app, window=None):
-    server = getattr(app, "_solin_single_instance_server", None)
-    if server is not None and hasattr(server, "close"):
-        server.close()
-        return server
-
-    try:
-        if window is not None and hasattr(window, "_ipc_server"):
-            window._ipc_server.close()
-    except Exception:  # noqa: BLE001 - legacy Qt IPC cleanup boundary
-        _log_ignored_exception("Could not close legacy window IPC server", warning=True)
-    QLocalServer.removeServer(IPC_SERVER_NAME)
-    return None
-
-
-def restart_process_ipc(app, server, window=None) -> None:
-    restarted = False
-    if server is not None and hasattr(server, "start"):
+    identifier = request_id or uuid4().hex
+    payload = encode_open_request(paths, identifier)
+    expected = identifier.encode("ascii") + b"\n"
+    deadline = time.monotonic() + _FORWARD_TIMEOUT_SECONDS
+    retry = wait_for_owner
+    while True:
+        socket = QLocalSocket()
         try:
-            restarted = bool(server.start())
-        except Exception:  # noqa: BLE001 - Qt IPC lifecycle boundary
-            _log_ignored_exception("Could not restart app-owned IPC server", warning=True)
-            restarted = False
-    if restarted:
-        return
-
-    try:
-        if window is not None and hasattr(window, "_start_ipc_server"):
-            window._start_ipc_server()
-    except Exception:  # noqa: BLE001 - legacy Qt IPC lifecycle boundary
-        _log_ignored_exception("Could not restart legacy window IPC server")
+            socket.connectToServer(server_name)
+            connected = socket.waitForConnected(IPC_TIMEOUT_MS)
+            if connected:
+                retry = True
+                grant_focus_to_first_instance()
+                if socket.write(payload) == len(payload):
+                    socket.flush()
+                    while socket.bytesToWrite() and time.monotonic() < deadline:
+                        remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                        if not socket.waitForBytesWritten(min(remaining, 2000)):
+                            break
+                    reply = bytearray()
+                    while time.monotonic() < deadline:
+                        reply.extend(bytes(socket.readAll().data()))
+                        if reply == expected:
+                            return True
+                        if not expected.startswith(reply):
+                            break
+                        remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                        if not socket.waitForReadyRead(min(remaining, 2000)):
+                            reply.extend(bytes(socket.readAll().data()))
+                            if reply == expected:
+                                return True
+                            break
+        finally:
+            socket.abort()
+        if not retry or time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)

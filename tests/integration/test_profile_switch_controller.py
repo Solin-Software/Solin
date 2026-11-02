@@ -1,57 +1,75 @@
+from types import SimpleNamespace
+
+import pytest
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QWidget
+
 from solin.bootstrap import profile_flow
 from solin.controllers.profile_switch_controller import ProfileSwitchController
+from solin.core.profiles.models import ProfileInfo
 
 
-class _SignalStub:
-    def __init__(self):
-        self.emitted = 0
-        self.callbacks = []
-
-    def connect(self, callback):
-        self.callbacks.append(callback)
-
-    def emit(self, *args):
-        self.emitted += 1
-        for callback in list(self.callbacks):
-            callback(*args)
+class _Window(QWidget):
+    switch_profile_requested = Signal()
+    profile_transition_available = True
 
 
-class _Profile:
-    def __init__(self, name):
-        self.name = name
+class _Overlay(QWidget):
+    cancelled = Signal()
+    profile_selected = Signal(str)
+    create_profile_requested = Signal()
+    logout_requested = Signal()
+
+    def __init__(self, parent, current_id, *, profiles):
+        super().__init__(parent)
+        self.current_id = current_id
+        self.profiles = profiles
 
 
-class _ProfileService:
-    def __init__(self, active_profile=None):
-        self.active_profile = active_profile
-        self.profiles = [active_profile] if active_profile is not None else []
+@pytest.fixture
+def wired(monkeypatch):
+    overlays = []
+    window = _Window()
+    try:
+        current = ProfileInfo(id="current", name="Current")
+        target = ProfileInfo(id="target", name="Target")
+        profiles = SimpleNamespace(
+            active_profile=current,
+            profiles=[current, target],
+            get_profile=lambda identifier: next(
+                (profile for profile in (current, target) if profile.id == identifier),
+                None,
+            ),
+        )
+
+        def create_overlay(*args, **kwargs):
+            overlay = _Overlay(*args, **kwargs)
+            overlays.append(overlay)
+            return overlay
+
+        monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", create_overlay)
+        flow = profile_flow.wire_profile_switch(
+            object(),
+            [window],
+            profiles,
+            shutdown=lambda: None,
+        )
+        yield SimpleNamespace(window=window, profiles=profiles, flow=flow, overlays=overlays)
+    finally:
+        window.close()
+        window.deleteLater()
 
 
-class _WindowStub:
-    def __init__(self):
-        self.switch_profile_requested = _SignalStub()
-        self.removed_filters = []
-        self.enabled = []
-
-    def removeEventFilter(self, event_filter):
-        self.removed_filters.append(event_filter)
-
-    def setEnabled(self, enabled):
-        self.enabled.append(enabled)
-
-
-def test_request_switch_emits_main_window_signal():
-    window = _WindowStub()
-    controller = ProfileSwitchController(window.switch_profile_requested.emit)
-
+def test_request_switch_emits_main_window_signal(wired):
+    requested = []
+    wired.window.switch_profile_requested.connect(lambda: requested.append(True))
+    controller = ProfileSwitchController(wired.window.switch_profile_requested.emit)
     assert controller.request_switch() is True
-
-    assert window.switch_profile_requested.emitted == 1
+    assert requested == [True]
 
 
 def test_profile_switch_controller_uses_explicit_dependencies():
     controller = ProfileSwitchController(lambda: None)
-
     assert not hasattr(controller, "_window")
 
 
@@ -63,115 +81,55 @@ def test_profile_switch_is_blocked_before_opening_the_profile_overlay():
         can_switch=lambda: False,
         notify_blocked=lambda: blocked.append(True),
     )
-
     assert controller.request_switch() is False
     assert requested == []
     assert blocked == [True]
 
 
-def test_wire_profile_switch_relaunches_selected_profile_from_overlay(monkeypatch):
-    overlays = []
-    relaunches = []
-
-    class _Overlay:
-        def __init__(self, parent, current_id, *, profiles):
-            self.parent = parent
-            self.current_id = current_id
-            self.profiles = profiles
-            self.cancelled = _SignalStub()
-            self.profile_selected = _SignalStub()
-            self.create_profile_requested = _SignalStub()
-            self.shown = 0
-            self.raised = 0
-            self.deleted = 0
-            overlays.append(self)
-
-        def show(self):
-            self.shown += 1
-
-        def raise_(self):
-            self.raised += 1
-
-        def deleteLater(self):
-            self.deleted += 1
-
-    app = object()
-    window = _WindowStub()
-    manager = _ProfileService(_Profile("Current"))
-    manager.active_profile.id = "profile-a"
-
-    monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
-    monkeypatch.setattr(
-        profile_flow,
-        "relaunch_with_profile",
-        lambda app_arg, profile_id, window_arg, manager_arg: relaunches.append(
-            (app_arg, profile_id, window_arg, manager_arg)
-        ),
-    )
-
-    profile_flow.wire_profile_switch(
-        app,
-        window_ref=[window],
-        profile_service=manager,
-    )
-    window.switch_profile_requested.emit()
-    overlays[0].profile_selected.emit("profile-b")
-
-    assert overlays[0].parent is window
-    assert overlays[0].current_id == "profile-a"
-    assert overlays[0].profiles == manager.profiles
-    assert overlays[0].shown == 1
-    assert overlays[0].raised == 1
-    assert window.removed_filters == [overlays[0]]
-    assert overlays[0].deleted == 1
-    assert window.enabled == [False]
-    assert relaunches == [(app, "profile-b", window, manager)]
+def test_wire_profile_switch_opens_only_one_overlay(wired):
+    wired.window.switch_profile_requested.emit()
+    wired.window.switch_profile_requested.emit()
+    assert len(wired.overlays) == 1
+    overlay = wired.overlays[0]
+    assert overlay.parent() is wired.window
+    assert overlay.current_id == "current"
+    assert overlay.profiles == wired.profiles.profiles
 
 
-def test_wire_profile_switch_cancel_only_removes_overlay(monkeypatch):
-    overlays = []
-    relaunches = []
+@pytest.mark.parametrize(
+    "signal,method,args",
+    [
+        ("profile_selected", "select_profile", ("target",)),
+        ("create_profile_requested", "create_profile", ()),
+        ("logout_requested", "logout", ()),
+    ],
+)
+def test_overlay_dispatches_to_shared_transition_controller(
+    wired, monkeypatch, signal, method, args
+):
+    calls = []
+    monkeypatch.setattr(wired.flow, method, lambda *arguments: calls.append(arguments))
+    wired.window.switch_profile_requested.emit()
+    getattr(wired.overlays[0], signal).emit(*args)
+    assert calls == [args]
 
-    class _Overlay:
-        def __init__(self, parent, current_id, *, profiles):
-            self.parent = parent
-            self.current_id = current_id
-            self.profiles = profiles
-            self.cancelled = _SignalStub()
-            self.profile_selected = _SignalStub()
-            self.create_profile_requested = _SignalStub()
-            self.deleted = 0
-            overlays.append(self)
 
-        def show(self):
-            pass
+def test_cancelled_overlay_cannot_dispatch_stale_events(wired, monkeypatch):
+    launches = []
+    monkeypatch.setattr(wired.flow, "logout", lambda: launches.append(True))
+    wired.window.switch_profile_requested.emit()
+    overlay = wired.overlays[0]
+    overlay.cancelled.emit()
+    overlay.logout_requested.emit()
+    assert wired.flow._overlay is None
+    assert launches == []
+    wired.window.switch_profile_requested.emit()
+    assert len(wired.overlays) == 2
 
-        def raise_(self):
-            pass
 
-        def deleteLater(self):
-            self.deleted += 1
-
-    window = _WindowStub()
-    manager = _ProfileService(_Profile("Current"))
-    manager.active_profile.id = "profile-a"
-
-    monkeypatch.setattr("solin.ui.profile_switch_overlay.ProfileSwitchOverlay", _Overlay)
-    monkeypatch.setattr(
-        profile_flow,
-        "relaunch_with_profile",
-        lambda *args: relaunches.append(args),
-    )
-
-    profile_flow.wire_profile_switch(
-        app=object(),
-        window_ref=[window],
-        profile_service=manager,
-    )
-    window.switch_profile_requested.emit()
-    overlays[0].cancelled.emit()
-
-    assert window.removed_filters == [overlays[0]]
-    assert overlays[0].deleted == 1
-    assert window.enabled == []
-    assert relaunches == []
+def test_current_profile_selection_dismisses_without_transition(wired):
+    wired.window.switch_profile_requested.emit()
+    wired.overlays[0].profile_selected.emit("current")
+    assert wired.flow._overlay is None
+    assert not wired.flow._transitioning
+    assert wired.window.isEnabled()

@@ -1644,6 +1644,10 @@
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Could not switch profiles. Please try again.</source>
+        <translation>Nie udało się przełączyć profilu. Spróbuj ponownie.</translation>
+    </message>
+    <message>
         <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
@@ -5156,6 +5160,17 @@ Bieżący układ i pliki zostaną zachowane. Oczekujące zmiany z poprzedniej sy
         <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
+    </message>
+</context>
+<context>
+    <name>ProfileSelector</name>
+    <message>
+        <source>Sign out of profile</source>
+        <translation>Wyloguj się z profilu</translation>
+    </message>
+    <message>
+        <source>Current profile</source>
+        <translation>Bieżący profil</translation>
     </message>
 </context>
 <context>

@@ -4,7 +4,6 @@ import sys
 from types import SimpleNamespace
 
 from solin.bootstrap import application as main
-from solin.bootstrap import profile_flow
 from solin.bootstrap.runtime_args import parse_runtime_args
 
 
@@ -609,242 +608,28 @@ def test_run_zoom_poll_standalone_keeps_window_alive_until_event_loop(monkeypatc
     ]
 
 
-def test_relaunch_with_profile_persists_target_profile_starts_new_process_and_quits(
-    monkeypatch,
-):
-    launches = []
-    stopped = []
-
-    class _ProfileService:
-        def __init__(self):
-            self.remembered = []
-
-        def get_profile(self, profile_id):
-            return object() if profile_id == "profile-b" else None
-
-        def remember_profile_for_next_launch(self, profile_id):
-            self.remembered.append(profile_id)
-
-    class _App:
-        def __init__(self):
-            self.events = []
-
-        def processEvents(self):
-            self.events.append("processEvents")
-
-        def quit(self):
-            self.events.append("quit")
-
-    class _Window:
-        def __init__(self):
-            self.closed = 0
-            self.enabled = []
-            self.shown = 0
-
-        def close(self):
-            self.closed += 1
-
-        def setEnabled(self, enabled):
-            self.enabled.append(enabled)
-
-        def show(self):
-            self.shown += 1
-
-    app = _App()
-    window = _Window()
-    profile_service = _ProfileService()
-    monkeypatch.setattr(
-        profile_flow.single_instance,
-        "stop_process_ipc",
-        lambda app, window: stopped.append((app, window)) or "ipc",
-    )
-    monkeypatch.setattr(profile_flow.single_instance, "restart_process_ipc", lambda *args: None)
-    monkeypatch.setattr(
-        profile_flow,
-        "QProcess",
-        SimpleNamespace(
-            startDetached=lambda program, args, cwd: launches.append((program, args, cwd)) or True
-        ),
-    )
-    monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
-    monkeypatch.delattr(profile_flow.sys, "frozen", raising=False)
-
-    profile_flow.relaunch_with_profile(
-        app,
-        "profile-b",
-        window,
-        profile_service,
-    )
-
-    assert profile_service.remembered == ["profile-b"]
-    assert stopped == [(app, window)]
-    assert launches[0][0] == "python.exe"
-    assert launches[0][1][-2:] == ["--profile", "profile-b"]
-    assert launches[0][1][0].endswith("main.py")
-    assert window.closed == 1
-    assert window.enabled == []
-    assert window.shown == 0
-    assert app.events == ["processEvents", "quit"]
+def test_profile_selector_flag_is_transient_and_preserves_media(tmp_path):
+    media = tmp_path / "clip.mp4"
+    media.touch()
+    args = parse_runtime_args(["solin", "--select-profile", str(media)])
+    assert args.show_profile_selector is True
+    assert args.media_files == (str(media),)
+    assert parse_runtime_args(["solin"]).show_profile_selector is False
 
 
-def test_relaunch_with_profile_restores_window_and_ipc_when_new_process_fails(
-    monkeypatch,
-):
-    restored = []
-
-    class _ProfileService:
-        def __init__(self):
-            self.remembered = []
-
-        def get_profile(self, profile_id):
-            return object()
-
-        def remember_profile_for_next_launch(self, profile_id):
-            self.remembered.append(profile_id)
-
-    class _App:
-        def __init__(self):
-            self.events = []
-
-        def processEvents(self):
-            self.events.append("processEvents")
-
-        def quit(self):
-            self.events.append("quit")
-
-    class _Window:
-        def __init__(self):
-            self.closed = 0
-            self.enabled = []
-            self.shown = 0
-
-        def close(self):
-            self.closed += 1
-
-        def setEnabled(self, enabled):
-            self.enabled.append(enabled)
-
-        def show(self):
-            self.shown += 1
-
-    app = _App()
-    window = _Window()
-    profile_service = _ProfileService()
-    monkeypatch.setattr(
-        profile_flow.single_instance,
-        "stop_process_ipc",
-        lambda app, window: "ipc-server",
-    )
-    monkeypatch.setattr(
-        profile_flow.single_instance,
-        "restart_process_ipc",
-        lambda app, server, window: restored.append((app, server, window)),
-    )
-    monkeypatch.setattr(
-        profile_flow,
-        "QProcess",
-        SimpleNamespace(startDetached=lambda *_args: False),
-    )
-
-    profile_flow.relaunch_with_profile(
-        app,
-        "profile-b",
-        window,
-        profile_service,
-    )
-
-    assert profile_service.remembered == ["profile-b"]
-    assert window.enabled == [True]
-    assert window.shown == 1
-    assert window.closed == 0
-    assert restored == [(app, "ipc-server", window)]
-    assert app.events == []
+def test_private_handoff_argument_is_consumed_separately_from_media(tmp_path):
+    media = tmp_path / "clip.mp4"
+    media.touch()
+    args = parse_runtime_args(["solin", "--profile-handoff", "channel", str(media)])
+    assert args.profile_handoff == "channel"
+    assert args.media_files == (str(media),)
+    assert parse_runtime_args(["solin", "--profile-handoff=channel"]).profile_handoff == "channel"
+    assert parse_runtime_args(["solin"]).profile_handoff is None
 
 
-def test_relaunch_with_profile_ignores_unknown_profile(monkeypatch):
-    launches = []
-
-    class _ProfileService:
-        def get_profile(self, profile_id):
-            return None
-
-    profile_service = _ProfileService()
-    monkeypatch.setattr(
-        profile_flow.single_instance,
-        "stop_process_ipc",
-        lambda *_args: launches.append("stop"),
-    )
-    monkeypatch.setattr(
-        profile_flow,
-        "QProcess",
-        SimpleNamespace(startDetached=lambda *_args: launches.append("launch")),
-    )
-
-    profile_flow.relaunch_with_profile(
-        app=object(),
-        profile_id="missing",
-        window=object(),
-        profile_service=profile_service,
-    )
-
-    assert launches == []
-
-
-def test_relaunch_to_profile_creator_persists_bootstrap_language_and_quits(
-    monkeypatch,
-):
-    launches = []
-    stopped = []
-
-    class _ProfileService:
-        def __init__(self):
-            self.prepared = 0
-
-        def prepare_profile_creation(self):
-            self.prepared += 1
-
-    class _App:
-        def __init__(self):
-            self.events = []
-
-        def processEvents(self):
-            self.events.append("processEvents")
-
-        def quit(self):
-            self.events.append("quit")
-
-    class _Window:
-        def __init__(self):
-            self.closed = 0
-
-        def close(self):
-            self.closed += 1
-
-    app = _App()
-    window = _Window()
-    profile_service = _ProfileService()
-    monkeypatch.setattr(
-        profile_flow.single_instance,
-        "stop_process_ipc",
-        lambda app, window: stopped.append((app, window)) or "ipc",
-    )
-    monkeypatch.setattr(profile_flow.single_instance, "restart_process_ipc", lambda *args: None)
-    monkeypatch.setattr(
-        profile_flow,
-        "QProcess",
-        SimpleNamespace(
-            startDetached=lambda program, args, cwd: launches.append((program, args, cwd)) or True
-        ),
-    )
-    monkeypatch.setattr(profile_flow.sys, "executable", "python.exe")
-    monkeypatch.delattr(profile_flow.sys, "frozen", raising=False)
-
-    profile_flow.relaunch_to_profile_creator(app, window, profile_service)
-
-    assert profile_service.prepared == 1
-    assert stopped == [(app, window)]
-    assert launches[0][0] == "python.exe"
-    assert launches[0][1][-1:] == ["--create-profile"]
-    assert launches[0][1][0].endswith("main.py")
-    assert window.closed == 1
-    assert app.events == ["processEvents", "quit"]
+def test_missing_option_values_do_not_consume_the_selector_flag():
+    args = parse_runtime_args(["solin", "--profile", "--profile-handoff", "--select-profile"])
+    assert args.show_profile_selector is True
+    assert args.requested_profile_id == ""
+    # A supplied but empty private gate must fail closed in bootstrap.
+    assert args.profile_handoff == ""

@@ -1,10 +1,11 @@
 from pathlib import Path
 
 from solin.ui import profile_widgets
+from solin.styles.theme import PALETTE
 
 
 def test_profile_widget_palette_lives_with_selector_widgets():
-    assert profile_widgets.PROFILE_BG == "#0d1117"
+    assert profile_widgets.PROFILE_BG == PALETTE.bg0
     assert profile_widgets.PROFILE_ACCENT
     assert profile_widgets.PROFILE_TEXT
 

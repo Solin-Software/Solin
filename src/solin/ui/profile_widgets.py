@@ -1,9 +1,11 @@
-"""Visual widgets and style helpers for ProfileScreen."""
+"""Shared profile tiles, dialogs, and style helpers."""
+
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush,
+    QContextMenuEvent,
     QColor,
     QFont,
     QFontMetrics,
@@ -13,216 +15,235 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QVBoxLayout,
-    QWidget,
 )
 
 from ..core.profiles.models import ProfileInfo
 from .helpers import avatar_colors
 from .helpers import initials
-from ..styles.theme import PALETTE
+from ..styles.theme import PALETTE, ThemeColorToken, palette_token
 
 # ── Cores ────────────────────────────────────────────────────────────────────
-PROFILE_BG = PALETTE.bg0
-PROFILE_SURFACE = PALETTE.surface
-PROFILE_CARD = PALETTE.surface_hover_strong
-PROFILE_BORDER = PALETTE.border
-PROFILE_MUTED = PALETTE.text_muted
-PROFILE_TEXT = PALETTE.text_primary
-PROFILE_DIM = PALETTE.text_dim
-PROFILE_ACCENT = PALETTE.accent
-PROFILE_DANGER = PALETTE.danger
+PROFILE_BG = palette_token("bg0")
+PROFILE_SURFACE = palette_token("surface")
+PROFILE_CARD = palette_token("surface_hover_strong")
+PROFILE_BORDER = palette_token("border")
+PROFILE_MUTED = palette_token("text_muted")
+PROFILE_TEXT = palette_token("text_primary")
+PROFILE_DIM = palette_token("text_dim")
+PROFILE_ACCENT = palette_token("accent")
+PROFILE_DANGER = palette_token("danger")
 
-# ── ProfileCard ───────────────────────────────────────────────────────────────
 
-class ProfileCard(QWidget):
-    """Clickable profile card with avatar and name."""
+class _ProfileButton(QAbstractButton):
+    """Shared button semantics and painting for profile tiles."""
 
-    clicked = Signal(str)   # profile_id
-    context_requested = Signal(str, object)   # profile_id, global QPoint
+    _W, _H = 148, 172
+    _BORDER_R = 14
 
-    _W, _H        = 148, 172
-    _AVATAR_R     = 48
-    _BORDER_R     = 14
-    _HOVER_SCALE  = 1.04
-
-    def __init__(self, profile: ProfileInfo, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.profile   = profile
-        self._hovered  = False
-        self._pressed  = False
-        self._scale    = 1.0
         self.setFixedSize(self._W, self._H)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
-        self.setMouseTracking(True)
-        self._c1, self._c2 = avatar_colors(profile.id)
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._W, self._H)
 
     def enterEvent(self, event):
-        self._hovered = True
+        super().enterEvent(event)
         self.update()
 
     def leaveEvent(self, event):
-        self._hovered = False
-        self._pressed = False
+        super().leaveEvent(event)
         self.update()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._pressed = True
-            self.update()
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.update()
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self._pressed:
-            self._pressed = False
-            self.update()
-            self.clicked.emit(self.profile.id)
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if not event.isAutoRepeat():
+                self.click()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _painter(self, *, dashed: bool = False, current: bool = False) -> QPainter:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if not self.isEnabled():
+            painter.setOpacity(0.5)
+        highlighted = self.underMouse() or self.hasFocus()
+        background = (
+            PALETTE.success_surface
+            if current
+            else PALETTE.accent_tint
+            if dashed and highlighted
+            else "transparent"
+            if dashed
+            else PALETTE.bg2
+            if highlighted
+            else PROFILE_CARD
+        )
+        border = (
+            PROFILE_ACCENT
+            if self.hasFocus()
+            else PALETTE.success
+            if current
+            else PROFILE_ACCENT
+            if highlighted
+            else PROFILE_BORDER
+        )
+        pen = QPen(QColor(str(border)), 2 if current or self.hasFocus() or dashed else 1.5)
+        if dashed:
+            pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(QColor(str(background)))
+        path = QPainterPath()
+        inset = 6 if self.isDown() else 4
+        path.addRoundedRect(
+            QRectF(inset, inset, self._W - inset * 2, self._H - inset * 2),
+            self._BORDER_R,
+            self._BORDER_R,
+        )
+        painter.drawPath(path)
+        if self.hasFocus():
+            painter.setPen(QPen(QColor(str(PROFILE_ACCENT)), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(1, 1, self._W - 2, self._H - 2), 16, 16)
+        return painter
+
+
+class ProfileCard(_ProfileButton):
+    """Profile tile with optional current-profile and management states."""
+
+    context_requested = Signal(str, object)
+
+    def __init__(
+        self,
+        profile: ProfileInfo,
+        parent=None,
+        *,
+        is_current: bool = False,
+        allow_management: bool = False,
+    ):
+        super().__init__(parent)
+        self.profile = profile
+        self._is_current = is_current
+        self._allow_management = allow_management
+        self.setText(profile.name.replace("&", "&&"))
+        self.setAccessibleName(profile.name)
+        self.setToolTip(profile.name)
+        self._c1, self._c2 = avatar_colors(profile.id)
 
     def contextMenuEvent(self, event):
-        self.context_requested.emit(self.profile.id, event.globalPos())
+        if not self._allow_management:
+            event.ignore()
+            return
+        position = (
+            self.mapToGlobal(self.rect().center())
+            if event.reason() == QContextMenuEvent.Reason.Keyboard
+            else event.globalPos()
+        )
+        self.context_requested.emit(self.profile.id, position)
         event.accept()
 
     def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        scale   = 0.97 if self._pressed else (self._HOVER_SCALE if self._hovered else 1.0)
-        cx, cy  = self._W / 2, self._H / 2
-        p.translate(cx, cy)
-        p.scale(scale, scale)
-        p.translate(-cx, -cy)
-
-        # Card background
-        bg_color = QColor(PALETTE.bg2) if self._hovered else QColor(PROFILE_CARD)
-        border_c = QColor(PROFILE_ACCENT if self._hovered else PROFILE_BORDER)
-        path     = QPainterPath()
-        path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
-        p.setBrush(QBrush(bg_color))
-        p.setPen(QPen(border_c, 1.5))
-        p.drawPath(path)
-
-        # Avatar (gradient circle)
-        av_x  = (self._W - self._AVATAR_R * 2) / 2
-        av_y  = 28
-        grad  = QLinearGradient(av_x, av_y, av_x + self._AVATAR_R * 2, av_y + self._AVATAR_R * 2)
-        grad.setColorAt(0, QColor(self._c1))
-        grad.setColorAt(1, QColor(self._c2))
-        p.setBrush(QBrush(grad))
-        p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2))
-
-        # Iniciais
-        font = QFont("Segoe UI", 20, QFont.Weight.Bold)
-        p.setFont(font)
-        p.setPen(QColor(PALETTE.white))
-        p.drawText(
-            QRectF(av_x, av_y, self._AVATAR_R * 2, self._AVATAR_R * 2),
-            Qt.AlignmentFlag.AlignCenter,
-            initials(self.profile.name),
+        painter = self._painter(current=self._is_current)
+        avatar = QRectF((self._W - 96) / 2, 28, 96, 96)
+        gradient = QLinearGradient(avatar.topLeft(), avatar.bottomRight())
+        gradient.setColorAt(0, QColor(self._c1))
+        gradient.setColorAt(1, QColor(self._c2))
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(avatar)
+        font = QFont(self.font())
+        font.setPointSize(20)
+        font.setWeight(QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.setPen(QColor(PALETTE.white))
+        painter.drawText(avatar, Qt.AlignmentFlag.AlignCenter, initials(self.profile.name))
+        if self._is_current:
+            badge = QRectF(103, 103, 22, 22)
+            painter.setBrush(QColor(PALETTE.success))
+            painter.setPen(QPen(QColor(str(PROFILE_BG)), 2))
+            painter.drawEllipse(badge)
+            painter.setPen(
+                QPen(
+                    QColor(PALETTE.white),
+                    2,
+                    Qt.PenStyle.SolidLine,
+                    Qt.PenCapStyle.RoundCap,
+                    Qt.PenJoinStyle.RoundJoin,
+                )
+            )
+            painter.drawLine(109, 114, 112, 117)
+            painter.drawLine(112, 117, 119, 110)
+        font.setPointSize(11)
+        font.setWeight(QFont.Weight.Normal)
+        painter.setFont(font)
+        painter.setPen(QColor(str(PROFILE_TEXT)))
+        name = QFontMetrics(font).elidedText(
+            self.profile.name,
+            Qt.TextElideMode.ElideRight,
+            self._W - 20,
         )
-
-        # Name
-        name_y  = av_y + self._AVATAR_R * 2 + 14
-        name_h  = self._H - name_y - 12
-        font2   = QFont("Segoe UI", 11, QFont.Weight.Normal)
-        fm      = QFontMetrics(font2)
-        elided  = fm.elidedText(self.profile.name, Qt.TextElideMode.ElideRight, self._W - 20)
-        p.setFont(font2)
-        p.setPen(QColor(PROFILE_TEXT))
-        p.drawText(
-            QRectF(0, name_y, self._W, name_h),
+        painter.drawText(
+            QRectF(10, 138, self._W - 20, 26),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-            elided,
+            name,
         )
-        p.end()
+        painter.end()
 
 
-# ── AddProfileCard ────────────────────────────────────────────────────────────
+class AddProfileCard(_ProfileButton):
+    """Dashed button for creating a profile."""
 
-class AddProfileCard(QWidget):
-    """Dashed card for creating a profile."""
-
-    clicked = Signal()
-
-    _W, _H      = 148, 172
-    _BORDER_R   = 14
-
-    def __init__(self, label: str = "New Profile", parent=None):
+    def __init__(self, label: str, parent=None):
         super().__init__(parent)
-        self._label   = label
-        self._hovered = False
-        self._pressed = False
-        self.setFixedSize(self._W, self._H)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+        self.set_label(label)
 
     def set_label(self, label: str) -> None:
-        self._label = label
+        self.setText(label)
+        self.setToolTip(label)
         self.update()
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self.update()
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self.update()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._pressed = True
-            self.update()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self._pressed:
-            self._pressed = False
-            self.update()
-            self.clicked.emit()
 
     def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        scale  = 0.97 if self._pressed else (1.04 if self._hovered else 1.0)
-        cx, cy = self._W / 2, self._H / 2
-        p.translate(cx, cy)
-        p.scale(scale, scale)
-        p.translate(-cx, -cy)
-
-        # Borda pontilhada
-        pen = QPen(QColor(PROFILE_ACCENT if self._hovered else PROFILE_BORDER), 2, Qt.PenStyle.DashLine)
-        p.setPen(pen)
-        p.setBrush(QColor(PALETTE.accent_tint if self._hovered else "transparent"))
-        path = QPainterPath()
-        path.addRoundedRect(QRectF(4, 4, self._W - 8, self._H - 8), self._BORDER_R, self._BORDER_R)
-        p.drawPath(path)
-
-        # Plus icon
-        c = QColor(PROFILE_ACCENT if self._hovered else PROFILE_DIM)
-        p.setPen(QPen(c, 2.5))
-        cx2, cy2 = self._W / 2, self._H / 2 - 12
-        r        = 16
-        p.drawLine(int(cx2 - r), int(cy2), int(cx2 + r), int(cy2))
-        p.drawLine(int(cx2), int(cy2 - r), int(cx2), int(cy2 + r))
-
-        # Label
-        font = QFont("Segoe UI", 11)
-        p.setFont(font)
-        p.setPen(QColor(PROFILE_ACCENT if self._hovered else PROFILE_MUTED))
-        p.drawText(
-            QRectF(0, cy2 + r + 10, self._W, 30),
-            Qt.AlignmentFlag.AlignHCenter,
-            self._label,
+        painter = self._painter(dashed=True)
+        highlighted = self.underMouse() or self.hasFocus()
+        color = PROFILE_ACCENT if highlighted else PROFILE_MUTED
+        painter.setPen(
+            QPen(QColor(str(color)), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
         )
-        p.end()
+        painter.drawLine(58, 72, 90, 72)
+        painter.drawLine(74, 56, 74, 88)
+        font = QFont(self.font())
+        font.setPointSize(11)
+        painter.setFont(font)
+        painter.setPen(QColor(str(color)))
+        painter.drawText(
+            QRectF(10, 106, self._W - 20, 52),
+            Qt.AlignmentFlag.AlignHCenter | Qt.TextFlag.TextWordWrap,
+            self.text(),
+        )
+        painter.end()
 
 
 # ── Helpers de estilo ─────────────────────────────────────────────────────────
+
 
 def profile_button(text: str, primary: bool = True) -> QPushButton:
     b = QPushButton(text)
@@ -285,8 +306,13 @@ def profile_field(placeholder: str = "") -> QLineEdit:
     return f
 
 
-def profile_label(text: str, size: int = 13, color: str = PROFILE_TEXT,
-         weight: int = 400, align=Qt.AlignmentFlag.AlignLeft) -> QLabel:
+def profile_label(
+    text: str,
+    size: int = 13,
+    color: str | ThemeColorToken = PROFILE_TEXT,
+    weight: int = 400,
+    align=Qt.AlignmentFlag.AlignLeft,
+) -> QLabel:
     l = QLabel(text)
     l.setWordWrap(True)
     l.setAlignment(align)
@@ -350,20 +376,6 @@ class ProfileNameDialog(QDialog):
     def result_name(self) -> str:
         return self._field.text().strip()
 
-# ── FlowLayout ─────────────────────────────────────────────────────────────────
-
-class ProfileFlowLayout(QHBoxLayout):
-    """
-    Simple single-row flow layout for profile cards.
-    Use QHBoxLayout wrapped in QWidget; consider a custom flow layout
-    for larger grids.
-    """
-
-    def __init__(self, parent=None, h_spacing=16, v_spacing=16):
-        # Use a simple centered grid rather than a full flow layout.
-        super().__init__(parent)
-        self.setSpacing(h_spacing)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 __all__ = [
     "AddProfileCard",
@@ -373,7 +385,6 @@ __all__ = [
     "PROFILE_BORDER",
     "PROFILE_CARD",
     "PROFILE_DIM",
-    "ProfileFlowLayout",
     "PROFILE_MUTED",
     "ProfileNameDialog",
     "PROFILE_DANGER",

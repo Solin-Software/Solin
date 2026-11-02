@@ -221,20 +221,6 @@ def test_delete_rolls_back_staged_data_when_registry_save_fails(tmp_path):
     assert storage.deleted == []
 
 
-def test_relaunch_selection_does_not_mutate_active_runtime_profile(tmp_path):
-    profiles = [
-        ProfileInfo("first", "First", created_at=1.0),
-        ProfileInfo("second", "Second", created_at=2.0),
-    ]
-    service, _, _, preferences = _service(tmp_path, profiles)
-    service.set_active("first")
-
-    service.remember_profile_for_next_launch("second")
-
-    assert service.active_id == "first"
-    assert preferences.last_active == "second"
-
-
 def test_enabled_obs_configuration_rejects_invalid_port():
     with pytest.raises(ValueError, match="between 1 and 65535"):
         OBSOnboardingConfiguration(enabled=True, port=0)
