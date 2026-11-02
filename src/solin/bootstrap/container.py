@@ -63,6 +63,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     initialize_media_extract_service()
     from solin.core.foundation.logging_config import configure_logging
     from solin.bootstrap.media import MediaComposition
+    from solin.core.jw.background_song_settings import BackgroundSongSettingsStore
     from solin.core.jw.catalog import JWMediaCatalogCachePaths
     from solin.core.jw.language_settings import JWLanguageSettingsStore
     from solin.core.jw.songs import JWSongsStore
@@ -118,6 +119,9 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
             media_settings=MediaSettingsStore.for_profile_settings(settings),
             meeting_schedule_settings=(
                 MeetingScheduleSettingsStore.for_profile_settings(settings)
+            ),
+            background_song_settings=(
+                BackgroundSongSettingsStore.for_profile_settings(settings)
             ),
             obs_settings=OBSSettingsStore.for_profile_settings(settings),
             auto_share_settings=AutoShareSettingsStore.for_profile_settings(settings),

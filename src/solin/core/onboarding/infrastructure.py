@@ -10,6 +10,7 @@ from solin.core.integrations.automation.settings import (
     AutoShareSettingsStore,
     OBSSettingsStore,
 )
+from solin.core.jw.background_song_settings import BackgroundSongSettingsStore
 from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.media.settings import MediaSettingsStore
 from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
@@ -22,6 +23,7 @@ class OnboardingSettingsStores:
     media_language_settings: JWLanguageSettingsStore
     media_settings: MediaSettingsStore
     meeting_schedule_settings: MeetingScheduleSettingsStore
+    background_song_settings: BackgroundSongSettingsStore
     obs_settings: OBSSettingsStore
     auto_share_settings: AutoShareSettingsStore
 
@@ -54,6 +56,10 @@ class QSettingsOnboardingSettings:
                     slot.weekday,
                     slot.time_text,
                 )
+        stores.background_song_settings.set_enabled(
+            command.meeting_schedule is not None
+            and command.meeting_schedule.has_configured_slot
+        )
 
         obs_settings = stores.obs_settings
         obs_settings.set_enabled(command.obs.enabled)
