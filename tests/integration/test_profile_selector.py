@@ -44,6 +44,17 @@ def own_widget():
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
+@pytest.fixture
+def embedded_selector(own_widget):
+    host = own_widget(QWidget())
+    host.resize(460, 600)
+    # No host layout: the child keeps its requested viewport even when the
+    # desktop constrains the native window's initial size.
+    selector = ProfileSelector(host)
+    host.show()
+    return selector
+
+
 def _profiles(count: int) -> list[ProfileInfo]:
     return [ProfileInfo(f"profile-{index}", f"Profile {index}") for index in range(count)]
 
@@ -214,8 +225,10 @@ def test_overlay_paints_background_and_cards_without_hover_or_forced_render(
 
 @pytest.mark.parametrize("count", [1, 3, 8, 30])
 @pytest.mark.parametrize("width", [460, 860, 960, 1500])
-def test_profiles_reflow_without_widening_window_and_remain_reachable(own_widget, count, width):
-    selector = own_widget(ProfileSelector())
+def test_profiles_reflow_without_widening_window_and_remain_reachable(
+    embedded_selector, count, width
+):
+    selector = embedded_selector
     selector.set_profiles(_profiles(count))
     selector.resize(width, 600)
     selector.show()
@@ -240,33 +253,41 @@ def test_profiles_reflow_without_widening_window_and_remain_reachable(own_widget
         )
 
 
-def test_resize_reuses_cards_and_reflows_in_both_directions(own_widget):
-    selector = own_widget(ProfileSelector())
+def test_resize_reuses_cards_and_reflows_in_both_directions(embedded_selector):
+    selector = embedded_selector
     selector.set_profiles(_profiles(12))
     selector.resize(1500, 600)
     selector.show()
     _settle_layout()
+    assert selector.width() == 1500
     cards = tuple(selector.findChildren(ProfileCard))
     initial_rows = {card.y() for card in cards}
 
     selector.resize(460, 600)
     _settle_layout()
+    assert selector.width() == 460
     assert tuple(selector.findChildren(ProfileCard)) == cards
     assert len({card.y() for card in cards}) > len(initial_rows)
 
     selector.resize(1500, 600)
     _settle_layout()
+    assert selector.width() == 1500
     assert {card.y() for card in cards} == initial_rows
 
 
-def test_resize_keeps_focused_card_in_view(own_widget):
-    selector = own_widget(ProfileSelector())
+def test_resize_keeps_focused_card_in_view(embedded_selector):
+    selector = embedded_selector
     selector.set_profiles(_profiles(30))
     selector.resize(1500, 1000)
     selector.show()
-    selector.activateWindow()
+    selector.window().activateWindow()
     _settle_layout()
+    assert (selector.width(), selector.height()) == (1500, 1000)
     selector._add_card.setFocus()
+    wait_until(
+        lambda: QApplication.focusWidget() is selector._add_card,
+        description="focused profile creation card before resize",
+    )
 
     selector.resize(460, 600)
     _settle_layout()
