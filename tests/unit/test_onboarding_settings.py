@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from solin.core.meetings.schedule import (
     MIDWEEK,
     WEEKEND,
@@ -65,6 +67,14 @@ class _OBSSettings:
         self.scenes = (default_scene, media_scene)
 
 
+class _BackgroundSongSettings:
+    def __init__(self, enabled: bool = False) -> None:
+        self.enabled = enabled
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+
+
 class _AutoShareSettings:
     def __init__(self) -> None:
         self.enabled = False
@@ -98,6 +108,7 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
                 media_language_settings=media_language_settings,
                 media_settings=media_settings,
                 meeting_schedule_settings=meeting_schedule_settings,
+                background_song_settings=_BackgroundSongSettings(),
                 obs_settings=obs_settings,
                 auto_share_settings=auto_share_settings,
             )
@@ -159,6 +170,7 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
             media_language_settings=_MediaLanguageSettings(),
             media_settings=media_settings,
             meeting_schedule_settings=meeting_schedule_settings,
+            background_song_settings=_BackgroundSongSettings(),
             obs_settings=obs_settings,
             auto_share_settings=auto_share_settings,
         )
@@ -185,3 +197,67 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
     assert auto_share_settings.enabled is False
     assert auto_share_settings.hotkey == ""
     assert auto_share_settings.click_position is None
+
+
+@pytest.mark.parametrize("initially_enabled", [False, True])
+@pytest.mark.parametrize(
+    ("meeting_schedule", "expected_enabled"),
+    [
+        pytest.param(None, False, id="no-congregation-schedule"),
+        pytest.param(
+            MeetingSchedule(MeetingSlot(MIDWEEK), MeetingSlot(WEEKEND)),
+            False,
+            id="unconfigured-schedule",
+        ),
+        pytest.param(
+            MeetingSchedule(
+                MeetingSlot.from_values(MIDWEEK, 2, "19:45"),
+                MeetingSlot(WEEKEND),
+            ),
+            True,
+            id="midweek-only",
+        ),
+        pytest.param(
+            MeetingSchedule(
+                MeetingSlot(MIDWEEK),
+                MeetingSlot.from_values(WEEKEND, 6, "10:00"),
+            ),
+            True,
+            id="weekend-only",
+        ),
+        pytest.param(
+            MeetingSchedule(
+                MeetingSlot.from_values(MIDWEEK, 2, "19:45"),
+                MeetingSlot.from_values(WEEKEND, 6, "10:00"),
+            ),
+            True,
+            id="both-meetings",
+        ),
+    ],
+)
+def test_onboarding_enables_background_song_only_with_configured_schedule(
+    meeting_schedule, expected_enabled, initially_enabled,
+):
+    background_song_settings = _BackgroundSongSettings(initially_enabled)
+    adapter = QSettingsOnboardingSettings(
+        lambda _profile_id: OnboardingSettingsStores(
+            app_settings=_AppSettings(),
+            media_language_settings=_MediaLanguageSettings(),
+            media_settings=_MediaSettings(),
+            meeting_schedule_settings=_MeetingScheduleSettings(),
+            background_song_settings=background_song_settings,
+            obs_settings=_OBSSettings(),
+            auto_share_settings=_AutoShareSettings(),
+        )
+    )
+
+    adapter.apply(
+        "main_hall",
+        ProfileOnboardingCommand(
+            name="Main Hall",
+            interface_language="en",
+            meeting_schedule=meeting_schedule,
+        ),
+    )
+
+    assert background_song_settings.enabled is expected_enabled
