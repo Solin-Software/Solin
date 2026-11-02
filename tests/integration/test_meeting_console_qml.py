@@ -8,6 +8,7 @@ from PySide6.QtCore import QCoreApplication, QObject, QtMsgType, Signal, qInstal
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from solin.styles.theme import PALETTE
 from solin.widgets.meeting_console_window import MeetingConsoleWindow
 
 
@@ -174,6 +175,15 @@ def test_docks_into_a_thin_vertical_panel_and_back():
         root = quick.rootObject()
         assert root.property("compact") is True
         assert quick.errors() == []
+        # Reads as window chrome: the bottom bar's background and line.
+        seam = root.findChild(QQuickItem, "dockSeam")
+        assert seam.isVisible() and seam.width() == 1 and seam.height() == root.height()
+        assert seam.property("color").name() == PALETTE.border
+        assert root.property("color").name() == PALETTE.bg1
+        assert quick.color().name() == PALETTE.bg1
+        grabbed = quick.grabWindow()
+        assert grabbed.pixelColor(0, 400).name() == PALETTE.border
+        assert grabbed.pixelColor(1, 400).name() == PALETTE.bg1
         rows = _attendee_delegates(window)
         assert "Ana" in rows  # the attendee list still renders, and fits the strip
         button = rows["Ana"]
@@ -185,6 +195,9 @@ def test_docks_into_a_thin_vertical_panel_and_back():
         assert not window.docked and states == [True, False]
         assert window.isVisible() and not strip.isVisible() and window.isAncestorOf(quick_container(window))
         assert quick.rootObject().property("compact") is False
+        assert not seam.isVisible()
+        assert root.property("color").name() == PALETTE.bg0
+        assert quick.color().name() == PALETTE.bg0
     finally:
         window.close()
         window.deleteLater()

@@ -6,7 +6,10 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: root
-    color: appTheme.bg
+    // Docked it is window chrome, so it matches the bottom bar (#StatusBar).
+    color: docked ? appTheme.surfaceChrome : appTheme.bg
+
+    readonly property bool docked: meeting ? meeting.docked : false
 
     readonly property var info: meeting ? meeting.info : ({})
     readonly property var snap: meeting ? meeting.snapshot : ({})
@@ -342,9 +345,10 @@ Rectangle {
 
     // Docked: the seam against the page content.
     Rectangle {
-        visible: meeting && meeting.docked
+        objectName: "dockSeam"
+        visible: root.docked
         anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-        width: 1; color: appTheme.border_
+        width: 1; color: appTheme.borderChrome
     }
 
     Dialog {

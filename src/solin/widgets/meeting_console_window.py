@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QSurfaceFormat
+from PySide6.QtGui import QColor
 from PySide6.QtQuick import QQuickView
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
@@ -47,10 +47,12 @@ class MeetingConsoleWindow(QWidget):
         self.bridge.dockRequested.connect(self.set_docked, Qt.ConnectionType.QueuedConnection)
         configure_qml_controls_style()
         self._view = QQuickView()
-        surface_format = QSurfaceFormat()
+        # Start from the view's own format: the scene graph needs its depth buffer to
+        # draw opaque items in order. Without it the root hides every square rectangle.
+        surface_format = self._view.format()
         surface_format.setAlphaBufferSize(8)
         self._view.setFormat(surface_format)
-        self._view.setColor(QColor(PALETTE.bg0))
+        self._sync_view_color()
         self._view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
         context = self._view.rootContext()
         context.setContextProperty("appTheme", current_qml_theme())
@@ -93,6 +95,7 @@ class MeetingConsoleWindow(QWidget):
             self.show()
         self._body.show()
         self._docked = docked
+        self._sync_view_color()
         self.bridge.set_docked(docked)
         self.qml_load_handle.start()
         self.docked_changed.emit(docked)
@@ -104,7 +107,11 @@ class MeetingConsoleWindow(QWidget):
     def apply_theme(self) -> None:
         configure_qml_controls_style()
         self._view.rootContext().setContextProperty("appTheme", current_qml_theme())
-        self._view.setColor(QColor(PALETTE.bg0))
+        self._sync_view_color()
+
+    def _sync_view_color(self) -> None:
+        # What shows while a resize outruns the QML: the same colour as the root item.
+        self._view.setColor(QColor(PALETTE.bg1 if self._docked else PALETTE.bg0))
 
     def present(self) -> None:
         self.show()
