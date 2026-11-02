@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -56,6 +55,7 @@ from solin.ui.scene_recording_status import (
 )
 from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
+from solin.widgets.common.horizontal_scroll_area import HorizontalScrollArea
 from solin.widgets.common.popup_dock_button import PopupDockButton
 from solin.widgets.common.popup_hover_button import PopupHoverButton
 from solin.widgets.scenes.scene_window import SceneWindowGeometryStore, SceneWindowManager
@@ -340,6 +340,7 @@ class SceneControlPopup(QWidget):
 
     _PREFERRED_WIDTH = 420
     _MIN_WIDTH = 340
+    _MAX_POPUP_WIDTH = 720
     _SCREEN_MARGIN = 8
     _ANCHOR_GAP = 10
     # Square icon button; matches the sibling text buttons' 34px outer height so
@@ -355,7 +356,6 @@ class SceneControlPopup(QWidget):
         + 2 * _SceneCard._BORDER_WIDTH  # the card's own border, or the strip clips it
     )
     _SCENE_CARD_SPACING = 8
-    _SCENE_CARD_SCROLLBAR_ALLOWANCE = 12
     _SCENE_CARD_EDGE_PAD = 2
 
     def __init__(
@@ -480,11 +480,9 @@ class SceneControlPopup(QWidget):
         # One horizontal strip of scene cards. It scrolls sideways rather than
         # wrapping, so the panel keeps a single predictable row however many
         # scenes exist.
-        self._cards_scroll = QScrollArea()
+        self._cards_scroll = HorizontalScrollArea()
         self._cards_scroll.setObjectName("SceneCardStrip")
-        self._cards_scroll.setWidgetResizable(True)
         self._cards_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._cards_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._cards_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._cards_host = QWidget()
         self._cards_host.setObjectName("SceneCardStripHost")
@@ -495,9 +493,7 @@ class SceneControlPopup(QWidget):
         self._cards_layout.setSpacing(self._SCENE_CARD_SPACING)
         self._cards_layout.addStretch()  # keeps the cards left-aligned
         self._cards_scroll.setWidget(self._cards_host)
-        self._cards_scroll.setFixedHeight(
-            self._SCENE_CARD_HEIGHT + self._SCENE_CARD_SCROLLBAR_ALLOWANCE
-        )
+        self._cards_scroll.setFixedHeight(self._SCENE_CARD_HEIGHT)
         layout.addWidget(self._cards_scroll)
         root.addWidget(self._card)
 
@@ -521,7 +517,7 @@ class SceneControlPopup(QWidget):
         """Only reserve room for the scrollbar when the cards actually overflow."""
         overflows = content_width > max(0, viewport_width)
         height = self._SCENE_CARD_HEIGHT + (
-            self._SCENE_CARD_SCROLLBAR_ALLOWANCE if overflows else 0
+            self._cards_scroll.horizontalScrollBar().sizeHint().height() if overflows else 0
         )
         self._cards_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
@@ -1021,11 +1017,10 @@ class SceneControlPopup(QWidget):
             if self._available_rect is not None
             else None
         )
-        # Grow to show as many scene cards as fit; the screen is the ceiling and
-        # the strip scrolls sideways for whatever is left over.
+        # Keep floating controls compact; excess cards scroll within the strip.
         chrome = self._card_strip_chrome()
         content_width = self._cards_host.sizeHint().width()
-        width = max(self._PREFERRED_WIDTH, content_width + chrome)
+        width = min(self._MAX_POPUP_WIDTH, max(self._PREFERRED_WIDTH, content_width + chrome))
         if available is not None:
             width = max(self._MIN_WIDTH, min(width, available.width()))
         self.setFixedWidth(width)
@@ -1109,9 +1104,10 @@ class SceneControlPopup(QWidget):
             QPushButton#SceneCardProjection[expanded="true"]:hover, QPushButton#SceneCardProgram[expanded="true"]:hover {{ background:transparent; border-color:{PALETTE.border_strong}; }}
             QPushButton#SceneCardProjection[expanded="true"]:checked, QPushButton#SceneCardProgram[expanded="true"]:checked {{ background:transparent; border:2px solid {PALETTE.accent}; }}
             QPushButton#SceneCardProjection[expanded="true"]:focus, QPushButton#SceneCardProgram[expanded="true"]:focus {{ border-color:{PALETTE.accent_alt}; }}
-            QScrollBar:horizontal {{ height:5px; margin-top:3px; background:transparent; }}
-            QScrollBar::handle:horizontal {{ background:{PALETTE.border}; border-radius:2px; min-width:24px; }}
-            QScrollBar::handle:horizontal:hover {{ background:{PALETTE.text_dim}; }}
+            QScrollBar:horizontal {{ height:12px; margin-top:4px; background:transparent; }}
+            QScrollBar::handle:horizontal {{ background:{PALETTE.text_muted}; border-radius:4px; min-width:48px; }}
+            QScrollBar::handle:horizontal:hover {{ background:{PALETTE.text_secondary}; }}
+            QScrollBar::handle:horizontal:pressed {{ background:{PALETTE.text_primary}; }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; }}
             QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background:transparent; }}
             """
