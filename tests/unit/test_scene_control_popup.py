@@ -8,10 +8,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, QRect, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, QPoint, QPointF, QRect, Signal
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionSlider, QWidget
 
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.foundation.runtime_paths import ProfilePaths
@@ -635,6 +636,30 @@ def test_scene_strip_scrolls_sideways_and_never_exceeds_the_screen(controller_fa
     QCoreApplication.processEvents()
 
 
+@pytest.mark.parametrize("screen_width", [None, 500, 1920])
+def test_scene_popup_caps_its_width_and_scrolls_excess_scenes(
+    controller_factory, screen_width,
+) -> None:
+    controller = controller_factory()
+    for index in range(10):
+        controller.documents.create_scene(f"Scene {index}", scene_id=f"capped-{index}")
+    popup = SceneControlPopup(controller)
+    try:
+        popup.show()
+        if screen_width is not None:
+            popup._available_rect = QRect(0, 0, screen_width, 1080)
+        popup._sync_geometry()
+        QCoreApplication.processEvents()
+
+        assert popup.width() <= SceneControlPopup._MAX_POPUP_WIDTH
+        if screen_width is not None:
+            assert popup.width() <= screen_width - 2 * popup._SCREEN_MARGIN
+        assert popup._cards_scroll.horizontalScrollBar().maximum() > 0
+    finally:
+        popup.close()
+        popup.deleteLater()
+
+
 def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(controller_factory) -> None:
     # Regression: the panel width ignored the card frame's 1px borders, so it came
     # out 2px short of its own content — showing a scrollbar and clipping the last
@@ -659,6 +684,8 @@ def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(controller_facto
     )
     # no wasted strip height reserved for a scrollbar that is not there
     assert popup._cards_scroll.height() == SceneControlPopup._SCENE_CARD_HEIGHT
+    _wheel(popup._cards_scroll.viewport(), angle=QPoint(0, -120))
+    assert bar.value() == bar.minimum()
 
     # Squeeze the work area until the cards overflow: the scrollbar comes back.
     for index in range(8):
@@ -675,6 +702,195 @@ def test_scene_strip_hides_the_scrollbar_when_the_cards_all_fit(controller_facto
     popup.close()
     popup.deleteLater()
     QCoreApplication.processEvents()
+
+
+@pytest.fixture(params=[False, True], ids=["popup", "docked"])
+def overflowing_scene_panel(request, controller_factory):
+    controller = controller_factory()
+    for index in range(8):
+        controller.documents.create_scene(f"Scene {index}", scene_id=f"scroll-{index}")
+    controller.set_output_enabled(BusId.VIRTUAL_CAMERA, True)
+    host = _DockHost()
+    popup = SceneControlPopup(controller, host)
+    try:
+        host.resize(700, 600)
+        show_and_activate(host)
+        popup.set_docked(request.param)
+        popup._available_rect = QRect(0, 0, 700, 600)
+        popup.show()
+        popup._sync_geometry()
+        wait_until(
+            lambda: popup._cards_scroll.horizontalScrollBar().isVisible()
+            and popup._cards_scroll.horizontalScrollBar().maximum() > 0,
+            description="overflowing scene strip layout",
+        )
+        yield popup
+    finally:
+        popup.close()
+        popup.deleteLater()
+        host.close()
+        host.deleteLater()
+
+
+def _wheel(target: QWidget, *, angle: QPoint | None = None, pixels: QPoint | None = None) -> None:
+    position = target.rect().center()
+    window = target.window().windowHandle()
+    assert window is not None
+    wait_until(window.isExposed, description="scene strip input window exposure")
+    global_position = target.mapToGlobal(position)
+    QTest.wheelEvent(
+        window, window.mapFromGlobal(global_position),
+        angle if angle is not None else QPoint(),
+        pixelDelta=pixels if pixels is not None else QPoint(),
+    )
+
+
+def test_scene_panel_width_limit_only_applies_while_floating(overflowing_scene_panel) -> None:
+    popup = overflowing_scene_panel
+    host = popup._floating_parent
+    host.resize(SceneControlPopup._MAX_POPUP_WIDTH + 100, host.height())
+    popup.set_docked(True)
+    wait_until(
+        lambda: popup.width() == host.width(),
+        description="scene dock filling the window width",
+    )
+    assert popup.width() > SceneControlPopup._MAX_POPUP_WIDTH
+
+    popup.set_docked(False)
+    popup.show()
+    popup._sync_geometry()
+    QCoreApplication.processEvents()
+    assert popup.width() <= SceneControlPopup._MAX_POPUP_WIDTH
+    assert popup._cards_scroll.horizontalScrollBar().maximum() > 0
+
+
+@pytest.mark.parametrize("target_name", ["viewport", "preview", "routing", "expand"])
+def test_scene_strip_mouse_wheel_scrolls_over_cards_without_routing(
+    overflowing_scene_panel, target_name,
+) -> None:
+    popup = overflowing_scene_panel
+    controller = popup._controller
+    card = next(iter(popup._scene_cards.values()))
+    targets = {
+        "viewport": popup._cards_scroll.viewport(),
+        "preview": card._preview,
+        "routing": card._program,
+        "expand": card.expand_button,
+    }
+    bar = popup._cards_scroll.horizontalScrollBar()
+    before = controller.runtime.state
+    assert bar.value() == bar.minimum()
+
+    _wheel(targets[target_name], angle=QPoint(0, -120))
+    assert bar.value() > bar.minimum()
+    _wheel(popup._cards_scroll.viewport(), angle=QPoint(0, 120))
+    assert bar.value() == bar.minimum()
+    assert controller.runtime.state == before
+
+
+@pytest.mark.parametrize(
+    "angle",
+    [
+        QPoint(-1, -120), QPoint(1, -120), QPoint(-120, -1), QPoint(-120, 1),
+        QPoint(-120, -120), QPoint(120, -120),
+    ],
+    ids=[
+        "vertical", "vertical-mixed-sign", "horizontal", "horizontal-mixed-sign",
+        "equal-axes", "equal-axes-mixed-sign",
+    ],
+)
+def test_scene_strip_scrolls_with_angle_only_diagonal_gestures(
+    overflowing_scene_panel, angle,
+) -> None:
+    popup = overflowing_scene_panel
+    viewport = popup._cards_scroll.viewport()
+    bar = popup._cards_scroll.horizontalScrollBar()
+
+    _wheel(viewport, angle=angle)
+    assert bar.value() > bar.minimum()
+    _wheel(viewport, angle=-angle)
+    assert bar.value() == bar.minimum()
+
+
+@pytest.mark.parametrize(
+    ("pixels", "angle"),
+    [
+        (QPoint(0, -25), QPoint(0, -120)),
+        (QPoint(-25, 0), QPoint(-120, 0)),
+        (QPoint(-25, -10), QPoint(-120, -120)),
+    ],
+    ids=["vertical", "horizontal", "diagonal"],
+)
+def test_scene_strip_preserves_touchpad_pixel_distance(
+    overflowing_scene_panel, pixels, angle,
+) -> None:
+    popup = overflowing_scene_panel
+    bar = popup._cards_scroll.horizontalScrollBar()
+    _wheel(popup._cards_scroll.viewport(), pixels=pixels, angle=angle)
+    assert bar.value() == 25
+
+
+def test_scene_strip_natural_scrolling_uses_the_delivered_direction(
+    overflowing_scene_panel,
+) -> None:
+    popup = overflowing_scene_panel
+    viewport = popup._cards_scroll.viewport()
+    position = viewport.rect().center()
+    event = QWheelEvent(
+        QPointF(position), QPointF(viewport.mapToGlobal(position)),
+        QPoint(0, -25), QPoint(0, -120), Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, True,
+    )
+    QCoreApplication.sendEvent(viewport, event)
+    assert popup._cards_scroll.horizontalScrollBar().value() == 25
+
+
+@pytest.mark.parametrize(
+    "delta", [QPoint(0, -1), QPoint(-1, 0), QPoint(1, -1)],
+    ids=["vertical", "horizontal", "diagonal"],
+)
+def test_scene_strip_wheel_accumulates_small_steps_and_stays_within_bounds(
+    overflowing_scene_panel, delta,
+) -> None:
+    popup = overflowing_scene_panel
+    viewport = popup._cards_scroll.viewport()
+    bar = popup._cards_scroll.horizontalScrollBar()
+    for _ in range(120):
+        _wheel(viewport, angle=delta)
+    assert bar.value() > bar.minimum()
+
+    bar.setValue(bar.maximum())
+    _wheel(viewport, angle=delta * 120)
+    assert bar.value() == bar.maximum()
+    _wheel(viewport, angle=-delta * 120)
+    assert bar.value() < bar.maximum()
+
+    bar.setValue(bar.minimum())
+    _wheel(viewport, pixels=QPoint(0, 25))
+    assert bar.value() == bar.minimum()
+    _wheel(viewport, pixels=QPoint(0, -25))
+    assert bar.value() > bar.minimum()
+
+
+def test_scene_strip_scrollbar_has_a_draggable_target(overflowing_scene_panel) -> None:
+    popup = overflowing_scene_panel
+    bar = popup._cards_scroll.horizontalScrollBar()
+    option = QStyleOptionSlider()
+    bar.initStyleOption(option)
+    handle = bar.style().subControlRect(
+        QStyle.ComplexControl.CC_ScrollBar, option,
+        QStyle.SubControl.SC_ScrollBarSlider, bar,
+    )
+    assert 8 <= handle.height() <= 10
+    assert handle.width() >= 48
+    assert popup._cards_scroll.viewport().height() >= SceneControlPopup._SCENE_CARD_HEIGHT
+    start = handle.center()
+    QTest.mousePress(bar, Qt.MouseButton.LeftButton, pos=start)
+    try:
+        QTest.mouseMove(bar, start + QPoint(80, 0))
+    finally:
+        QTest.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=start + QPoint(80, 0))
+    assert bar.value() > bar.minimum()
 
 
 def test_panel_never_uses_a_graphics_effect_and_reopens_visible(controller_factory) -> None:
