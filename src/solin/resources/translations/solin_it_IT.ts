@@ -1630,6 +1630,10 @@
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Could not switch profiles. Please try again.</source>
+        <translation>Impossibile cambiare profilo. Riprova.</translation>
+    </message>
+    <message>
         <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
@@ -5126,6 +5130,17 @@ L’organizzazione attuale e i file saranno conservati. Le modifiche in sospeso 
         <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
+    </message>
+</context>
+<context>
+    <name>ProfileSelector</name>
+    <message>
+        <source>Sign out of profile</source>
+        <translation>Disconnettiti dal profilo</translation>
+    </message>
+    <message>
+        <source>Current profile</source>
+        <translation>Profilo attuale</translation>
     </message>
 </context>
 <context>

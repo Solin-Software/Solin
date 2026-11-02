@@ -138,6 +138,12 @@ class ApplicationWindow(QMainWindow):
         self._runtime_candidate: Any = None
         self._save_geometry = save_geometry
         self._pending_files = pending_files
+        self._profile_transition_pending = False
+        self._profile_close_approved = False
+        self._committing_profile_transition = False
+        self._close_error: Exception | None = None
+        self._close_confirmation_pending = False
+        self._shutdown_completed = False
 
         self.setWindowTitle("Solin")
         self.setMinimumSize(_MINIMUM_WIDTH, _MINIMUM_HEIGHT)
@@ -166,6 +172,65 @@ class ApplicationWindow(QMainWindow):
     @property
     def runtime(self) -> Any:
         return self._runtime
+
+    @property
+    def profile_transition_available(self) -> bool:
+        return (
+            self._state is ApplicationWindowState.READY
+            and not self._profile_transition_pending
+            and not self._close_confirmation_pending
+        )
+
+    @property
+    def accepts_external_activation(self) -> bool:
+        return (
+            not self._profile_transition_pending
+            and self._state is not ApplicationWindowState.CLOSING
+        )
+
+    @property
+    def pending_files(self) -> list[str]:
+        return list(self._pending_files)
+
+    def remove_pending_files(self, paths: set[str]) -> None:
+        self._pending_files[:] = [path for path in self._pending_files if path not in paths]
+
+    def prepare_profile_transition(self) -> bool:
+        """Approve closure once without shutting down a recoverable session."""
+        if not self.profile_transition_available:
+            return False
+        self._profile_transition_pending = True
+        try:
+            if not self._runtime.confirm_close():
+                self.cancel_profile_transition()
+                return False
+        except Exception:  # noqa: BLE001 - restore the transition guard before propagating
+            self.cancel_profile_transition()
+            raise
+        self._profile_close_approved = True
+        return True
+
+    def cancel_profile_transition(self) -> None:
+        self._profile_close_approved = False
+        self._profile_transition_pending = False
+        if self._state is ApplicationWindowState.READY:
+            self._flush_pending_files()
+
+    def close_for_profile_transition(self) -> bool:
+        if not self._profile_transition_pending or not self._profile_close_approved:
+            return False
+        if not self._runtime.can_leave_profile():
+            return False
+        self._committing_profile_transition = True
+        try:
+            closed = self.close()
+            if self._close_error is not None:
+                raise RuntimeError(
+                    "Application resources could not be shut down.",
+                ) from self._close_error
+            return closed and self._shutdown_completed
+        finally:
+            self._committing_profile_transition = False
 
     def content_parent(self) -> QWidget:
         """Return the stable parent used while constructing application content."""
@@ -244,7 +309,11 @@ class ApplicationWindow(QMainWindow):
         self._runtime.open_media_files(paths)
 
     def open_media_files(self, paths: list[str]) -> None:
-        if self._state is ApplicationWindowState.READY and self._runtime is not None:
+        if (
+            self._state is ApplicationWindowState.READY
+            and self._runtime is not None
+            and not self._profile_transition_pending
+        ):
             self._runtime.open_media_files(paths)
             return
         for path in paths:
@@ -338,20 +407,51 @@ class ApplicationWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self._state is ApplicationWindowState.CLOSING:
-            super().closeEvent(event)
+            if self._shutdown_completed or self._close_error is not None:
+                super().closeEvent(event)
+            else:
+                event.ignore()
             return
-        confirm_close = getattr(self._runtime, "confirm_close", None)
-        if callable(confirm_close) and not confirm_close():
+        if self._close_confirmation_pending or (
+            self._profile_transition_pending and not self._committing_profile_transition
+        ):
             event.ignore()
             return
+        confirm_close = getattr(self._runtime, "confirm_close", None)
+        if not self._profile_close_approved and callable(confirm_close):
+            self._close_confirmation_pending = True
+            try:
+                if not confirm_close():
+                    event.ignore()
+                    return
+            finally:
+                self._close_confirmation_pending = False
+        self._profile_close_approved = False
         self._state = ApplicationWindowState.CLOSING
-        self._save_geometry(self.saveGeometry())
+        try:
+            self._save_geometry(self.saveGeometry())
+        except Exception:  # noqa: BLE001 - geometry persistence must not prevent resource shutdown
+            log.warning("Could not save the application window geometry", exc_info=True)
+        cleanup = [self.abort_runtime_construction]
         if self._load_handle is not None:
-            self._load_handle.cancel()
+            cleanup.insert(0, self._load_handle.cancel)
             self._load_handle = None
-        self.abort_runtime_construction()
         if self._runtime is not None:
-            self._runtime.shutdown()
+            cleanup.append(self._runtime.shutdown)
+        errors = []
+        for callback in cleanup:
+            try:
+                callback()
+            except Exception as exc:  # noqa: BLE001 - complete independent shutdown stages
+                errors.append(exc)
+                log.exception("Application window shutdown failed")
+        if errors:
+            self._close_error = ExceptionGroup("Application shutdown failed", errors)
+            if self._committing_profile_transition:
+                event.ignore()
+                return
+        else:
+            self._shutdown_completed = True
         super().closeEvent(event)
 
 

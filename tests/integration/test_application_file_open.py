@@ -64,3 +64,22 @@ def test_startup_event_is_deduplicated_but_file_can_be_reopened(tmp_path) -> Non
         assert window.opened == [[path], [path]]
     finally:
         router.close()
+
+
+def test_capture_precedes_deferred_delivery_and_close_preserves_the_queue(tmp_path) -> None:
+    playlist = tmp_path / "portable.solinplaylist"
+    playlist.write_bytes(b"package")
+    path = os.fspath(playlist)
+    pending: list[str] = []
+    window = _Window()
+    router = ApplicationFileOpenRouter(_APP, [window], pending)
+    try:
+        assert router.eventFilter(_APP, QFileOpenEvent(path))
+        assert pending == [path]
+        assert window.opened == []
+        router.close()
+        _APP.processEvents()
+        assert pending == [path]
+        assert window.opened == []
+    finally:
+        router.close()

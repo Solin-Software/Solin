@@ -1630,6 +1630,10 @@
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Could not switch profiles. Please try again.</source>
+        <translation>Det gick inte att byta profil. Försök igen.</translation>
+    </message>
+    <message>
         <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
@@ -5125,6 +5129,17 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
+    </message>
+</context>
+<context>
+    <name>ProfileSelector</name>
+    <message>
+        <source>Sign out of profile</source>
+        <translation>Logga ut från profilen</translation>
+    </message>
+    <message>
+        <source>Current profile</source>
+        <translation>Aktuell profil</translation>
     </message>
 </context>
 <context>

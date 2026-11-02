@@ -26,7 +26,6 @@ from solin.styles.icons import ICON_EDIT, ICON_PACKAGE, ICON_TRASH, make_icon
 from solin.styles.theme import PALETTE
 from solin.ui.helpers import fade_in
 from solin.ui.profile_widgets import (
-    AddProfileCard,
     PROFILE_ACCENT,
     PROFILE_BG,
     PROFILE_BORDER,
@@ -34,14 +33,13 @@ from solin.ui.profile_widgets import (
     PROFILE_MUTED,
     PROFILE_SURFACE,
     PROFILE_TEXT,
-    ProfileCard,
-    ProfileFlowLayout,
     ProfileNameDialog,
     profile_button,
     profile_field,
     profile_label,
 )
 from solin.ui.qml.onboarding import OnboardingQmlHost
+from solin.ui.profile_selector import ProfileSelector
 
 
 class ProfileScreen(QWidget):
@@ -113,64 +111,15 @@ class ProfileScreen(QWidget):
         self._tr_placeholders.append((field, source))
         return field
 
-    def _build_selector_page(self) -> QWidget:
-        page = QWidget()
-        page.setStyleSheet(f"background: {PROFILE_BG};")
-        layout = QVBoxLayout(page)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        header = QWidget()
-        header.setFixedHeight(72)
-        header.setStyleSheet(
-            f"background: {PROFILE_SURFACE};"
-            f" border-bottom: 1px solid {PALETTE.border_muted};"
-        )
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(32, 0, 32, 0)
-        logo = QLabel("Solin")
-        logo.setStyleSheet(
-            f"color: {PROFILE_TEXT}; font-size: 22px; font-weight: 700;"
-            " background: transparent;"
-        )
-        header_layout.addWidget(logo)
-        header_layout.addStretch()
-        layout.addWidget(header)
-
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-        body_layout.setContentsMargins(40, 60, 40, 40)
-        body_layout.setSpacing(0)
-        self._selector_title = self._tr_label(
-            profile_label("", 28, PROFILE_TEXT, 700, Qt.AlignmentFlag.AlignHCenter),
-            QT_TRANSLATE_NOOP("ProfileScreen", "Who is using Solin?"),
-        )
-        body_layout.addWidget(self._selector_title)
-        body_layout.addSpacing(40)
-        self._selector_grid = QWidget()
-        self._grid_lay = ProfileFlowLayout(
-            self._selector_grid,
-            h_spacing=18,
-            v_spacing=18,
-        )
-        body_layout.addWidget(self._selector_grid, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(body, 1)
-        return page
+    def _build_selector_page(self) -> ProfileSelector:
+        selector = ProfileSelector(allow_management=True)
+        selector.profile_selected.connect(self._on_profile_selected)
+        selector.create_profile_requested.connect(self.start_new_profile)
+        selector.context_requested.connect(self._show_profile_context_menu)
+        return selector
 
     def _populate_selector(self) -> None:
-        while self._grid_lay.count():
-            item = self._grid_lay.takeAt(0)
-            if item is not None and item.widget() is not None:
-                item.widget().deleteLater()
-        for profile in self._profiles.profiles:
-            card = ProfileCard(profile)
-            card.clicked.connect(self._on_profile_selected)
-            card.context_requested.connect(self._show_profile_context_menu)
-            self._grid_lay.addWidget(card)
-        self._selector_add_card = AddProfileCard(self.tr("New Profile"))
-        self._selector_add_card.clicked.connect(self.start_new_profile)
-        self._grid_lay.addWidget(self._selector_add_card)
+        self._page_selector.set_profiles(self._profiles.profiles)
 
     def _build_migration_page(self) -> QWidget:
         page = QWidget()
@@ -260,7 +209,7 @@ class ProfileScreen(QWidget):
         layout.addWidget(card, 0, Qt.AlignmentFlag.AlignCenter)
         return page
 
-    def start(self) -> None:
+    def start(self, *, force_selector: bool = False) -> None:
         if not self._profiles.has_profiles():
             if self._profiles.has_legacy_settings():
                 self._stack.setCurrentWidget(self._page_migration)
@@ -268,11 +217,12 @@ class ProfileScreen(QWidget):
                 return
             self._start_onboarding(self.tr("Profile 1"), allow_cancel=False)
             return
-        if len(self._profiles.profiles) == 1:
+        if len(self._profiles.profiles) == 1 and not force_selector:
             self._activate_and_emit(self._profiles.profiles[0].id)
             return
         self._populate_selector()
         self._stack.setCurrentWidget(self._page_selector)
+        self._page_selector.focus_initial_card()
         fade_in(self)
 
     def start_new_profile(self) -> None:
@@ -296,6 +246,7 @@ class ProfileScreen(QWidget):
         self._creating_additional_profile = False
         self._populate_selector()
         self._stack.setCurrentWidget(self._page_selector)
+        self._page_selector.focus_initial_card()
 
     def _on_onboarding_completed(self, profile_id: str) -> None:
         self._creating_additional_profile = False
@@ -412,8 +363,7 @@ class ProfileScreen(QWidget):
             button.setText(self.tr(source))
         for field, source in self._tr_placeholders:
             field.setPlaceholderText(self.tr(source))
-        if hasattr(self, "_selector_add_card"):
-            self._selector_add_card.set_label(self.tr("New Profile"))
+        self._page_selector.retranslateUi()
 
     def changeEvent(self, event) -> None:
         if event.type() == QEvent.Type.LanguageChange:

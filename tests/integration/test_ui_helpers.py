@@ -6,7 +6,7 @@ import time
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, QPropertyAnimation, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QWidget
 
@@ -160,3 +160,36 @@ def test_fade_in_safely_replaces_an_active_animation():
         assert _wait_for(lambda: widget.graphicsEffect() is None)
     finally:
         widget.deleteLater()
+
+
+def test_completed_fade_cannot_remove_its_queued_replacement():
+    widget = QWidget()
+    try:
+        helpers.fade_in(widget, duration=10)
+        first_effect = widget.graphicsEffect()
+        first_effect.findChild(QPropertyAnimation).setCurrentTime(10)
+
+        # Completion cleanup is queued; replace the fade before it runs.
+        helpers.fade_in(widget, duration=1000)
+        replacement = widget.graphicsEffect()
+        QTest.qWait(10)
+        assert widget.graphicsEffect() is replacement
+
+        replacement.findChild(QPropertyAnimation).setCurrentTime(1000)
+        assert _wait_for(lambda: widget.graphicsEffect() is None)
+    finally:
+        widget.deleteLater()
+
+
+def test_destroyed_widget_cancels_queued_fade_cleanup(monkeypatch):
+    import sys
+
+    errors = []
+    monkeypatch.setattr(sys, "excepthook", lambda *error: errors.append(error))
+    widget = QWidget()
+    helpers.fade_in(widget, duration=10)
+    widget.graphicsEffect().findChild(QPropertyAnimation).setCurrentTime(10)
+    widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QTest.qWait(10)
+    assert errors == []

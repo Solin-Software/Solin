@@ -1616,6 +1616,10 @@
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Could not switch profiles. Please try again.</source>
+        <translation>无法切换配置。请重试。</translation>
+    </message>
+    <message>
         <location filename="../../main_window.py" line="+565"/>
         <location filename="../../controllers/main_window_nav.py" line="+11"/>
         <source>Solin</source>
@@ -5096,6 +5100,17 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+8"/>
         <source>Solin</source>
         <translation>Solin</translation>
+    </message>
+</context>
+<context>
+    <name>ProfileSelector</name>
+    <message>
+        <source>Sign out of profile</source>
+        <translation>退出配置</translation>
+    </message>
+    <message>
+        <source>Current profile</source>
+        <translation>当前配置</translation>
     </message>
 </context>
 <context>

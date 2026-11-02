@@ -1,6 +1,7 @@
 import os
 import logging
 import sys
+from uuid import uuid4
 
 from solin.core.foundation.qt_logging import (
     configure_qt_logging_rules,
@@ -24,7 +25,8 @@ from solin.bootstrap.file_open import (
 log = logging.getLogger(__name__)
 from solin.core.foundation.resources import application_asset_path
 from solin.bootstrap.profile_flow import wire_profile_switch
-from solin.bootstrap.runtime_args import parse_runtime_args
+from solin.bootstrap.profile_handoff import wait_for_profile_handoff
+from solin.bootstrap.runtime_args import RuntimeArgs, parse_runtime_args
 from solin.bootstrap.single_instance import (
     SingleInstanceServer,
     try_forward_to_running,
@@ -686,6 +688,8 @@ def _launch_profile_window(
             container.app,
             container.window_ref,
             container.profile_service,
+            shutdown=container.lifecycle.shutdown,
+            notify_failure=runtime.notify_profile_transition_failed,
         )
         return runtime
 
@@ -741,9 +745,53 @@ def _launch_profile_window(
     return window
 
 
-def main():
-    catalog_directory = prepare_application_catalogs()
+def _start_profile_flow(container, lang_manager, runtime_args: RuntimeArgs, file_args) -> None:
+    profiles = container.profile_service
+    if not runtime_args.show_profile_selector and not runtime_args.create_profile:
+        profile_id = runtime_args.requested_profile_id
+        if profile_id and profiles.get_profile(profile_id) is not None:
+            pass
+        elif len(profiles.profiles) == 1:
+            profile_id = profiles.restore_last_active()
+            if profile_id is None:
+                raise RuntimeError("Profile selection returned no active profile.")
+        else:
+            profile_id = ""
+        if profile_id:
+            profiles.set_active(profile_id)
+            _launch_profile_window(container, lang_manager, file_args, profile_id)
+            return
 
+    screen = _create_profile_screen(container, lang_manager)
+    container.window_ref[0] = screen
+    screen.setWindowTitle("Solin")
+    screen.setMinimumSize(860, 580)
+    screen.resize(960, 640)
+
+    from PySide6.QtGui import QGuiApplication
+
+    primary = QGuiApplication.primaryScreen()
+    if primary is not None:
+        geometry = primary.availableGeometry()
+        screen.move(
+            geometry.center().x() - screen.width() // 2,
+            geometry.center().y() - screen.height() // 2,
+        )
+    screen.show()
+
+    def on_profile_ready(profile_id: str) -> None:
+        screen.hide()
+        _launch_profile_window(container, lang_manager, file_args, profile_id)
+        QTimer.singleShot(400, screen.close)
+
+    screen.profile_ready.connect(on_profile_ready)
+    if runtime_args.create_profile and not runtime_args.show_profile_selector:
+        screen.start_new_profile()
+    else:
+        screen.start(force_selector=runtime_args.show_profile_selector)
+
+
+def main():
     # High-DPI support
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
@@ -757,11 +805,51 @@ def main():
     app = QApplication(sys.argv)
     startup_timeline().mark("qt_application_created")
     config.apply_to(app)
+    runtime_args = parse_runtime_args(sys.argv)
+    file_args = list(runtime_args.media_files)
+    accepted_request_ids = []
+    if runtime_args.profile_handoff is not None:
+        handoff_files = wait_for_profile_handoff(runtime_args.profile_handoff)
+        if handoff_files is None:
+            log.error("Profile handoff was not released; startup was cancelled.")
+            return
+        file_args.extend(path for path in handoff_files.pending_files if path not in file_args)
+        accepted_request_ids = handoff_files.accepted_request_ids
+
+    # Admit this process before constructing any shared/profile services. The
+    # selector and onboarding retain the same app-owned endpoint as the runtime.
+    window_ref = [None]
+    file_open_router = ApplicationFileOpenRouter(app, window_ref, file_args)
+    csv_args = [
+        path for path in runtime_args.media_files
+        if os.path.isfile(path) and os.path.splitext(path)[1].lower() == ".csv"
+    ]
+    single_instance = None
+    if not csv_args:
+        ipc_name = os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
+        request_id = uuid4().hex
+        if try_forward_to_running(file_args, server_name=ipc_name, request_id=request_id):
+            file_open_router.close()
+            return
+        single_instance = SingleInstanceServer(app, window_ref, file_args, server_name=ipc_name)
+        single_instance.restore_request_ids(accepted_request_ids)
+        if not single_instance.start():
+            forwarded = try_forward_to_running(
+                file_args, server_name=ipc_name, request_id=request_id, wait_for_owner=True,
+            )
+            if not forwarded:
+                log.error("Could not acquire single-instance IPC; startup was cancelled.")
+            file_open_router.close()
+            return
     try:
+        catalog_directory = prepare_application_catalogs()
         container = initialize_application_container(app, config)
     except ProfileRegistryLoadError as exc:
         from PySide6.QtWidgets import QMessageBox
 
+        file_open_router.close()
+        if single_instance is not None:
+            single_instance.close()
         QMessageBox.critical(
             None,
             "Solin",
@@ -770,9 +858,18 @@ def main():
             f"{exc}",
         )
         return
+    except BaseException:  # noqa: BLE001 - release admitted IPC and file routing on any startup failure, then re-raise
+        file_open_router.close()
+        if single_instance is not None:
+            single_instance.close()
+        raise
+    container.window_ref = window_ref
+    # Native file capture must outlive synchronous lifecycle teardown while a
+    # profile successor acknowledges the final queued files.
+    app.aboutToQuit.connect(file_open_router.close)
+    if single_instance is not None:
+        container.lifecycle.register_single_instance(single_instance)
     startup_timeline().mark("container_ready")
-    profile_service = container.profile_service
-
     # Path-dependent imports
     from solin.core.i18n.manager import LanguageManager
 
@@ -783,15 +880,6 @@ def main():
 
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    # Command-line arguments
-    runtime_args = parse_runtime_args(sys.argv)
-    requested_profile_id = runtime_args.requested_profile_id
-    create_profile_mode = runtime_args.create_profile
-    file_args = list(runtime_args.media_files)
-    _main_window_ref = container.window_ref
-    file_open_router = ApplicationFileOpenRouter(app, _main_window_ref, file_args)
-    container.lifecycle.register_cleanup(file_open_router.close)
-
     # ── LanguageManager ───────────────────────────────────────────────────────
     lang_manager = LanguageManager(
         catalog_directory=catalog_directory,
@@ -801,127 +889,11 @@ def main():
     )
     container.lifecycle.register_cleanup(lang_manager.shutdown)
 
-    # Zoom CSV: standalone window
-    csv_args = [
-        a for a in file_args if os.path.isfile(a) and os.path.splitext(a)[1].lower() == ".csv"
-    ]
+    # Zoom CSV remains a separate, standalone window.
     if csv_args:
         sys.exit(_run_zoom_poll_standalone(app, csv_args[0], lang_manager))
 
-    # ── Single-instance ───────────────────────────────────────────────────────
-    ipc_server_name = os.environ.get("SOLIN_IPC_SERVER_NAME", "").strip() or IPC_SERVER_NAME
-    if try_forward_to_running(file_args, server_name=ipc_server_name):
-        sys.exit(0)
-    single_instance = SingleInstanceServer(
-        app,
-        _main_window_ref,
-        file_args,
-        server_name=ipc_server_name,
-    )
-    single_instance_started = single_instance.start()
-    if not single_instance_started and try_forward_to_running(
-        file_args,
-        server_name=ipc_server_name,
-    ):
-        sys.exit(0)
-    if single_instance_started:
-        container.lifecycle.register_single_instance(single_instance)
-
-    # Choose between opening a profile directly and showing the profile selector.
-    #
-    # • 0  profiles + no legacy data → Full onboarding
-    # • 0  profiles + legacy data    → Migration screen
-    # • 1  profile                   → Open directly (skip the selector)
-    # • 2+ profiles                  → Selector
-
-    if create_profile_mode:
-        screen = _create_profile_screen(container, lang_manager)
-        _main_window_ref[0] = screen
-        screen.setWindowTitle("Solin")
-        screen.setMinimumSize(860, 580)
-        screen.resize(960, 640)
-
-        from PySide6.QtGui import QGuiApplication
-
-        geo = QGuiApplication.primaryScreen().availableGeometry()
-        screen.move(
-            geo.center().x() - screen.width() // 2,
-            geo.center().y() - screen.height() // 2,
-        )
-        screen.show()
-
-        def _on_profile_ready(profile_id: str):
-            screen.hide()
-            _launch_profile_window(
-                container,
-                lang_manager,
-                file_args,
-                profile_id,
-            )
-            QTimer.singleShot(400, screen.close)
-
-        screen.profile_ready.connect(_on_profile_ready)
-        _pm_screen = screen
-        screen.start_new_profile()
-
-    elif requested_profile_id and profile_service.get_profile(requested_profile_id):
-        # Controlled relaunch: open directly into the requested profile.
-        profile_service.set_active(requested_profile_id)
-        _launch_profile_window(
-            container,
-            lang_manager,
-            file_args,
-            requested_profile_id,
-        )
-
-    elif profile_service.has_profiles() and len(profile_service.profiles) == 1:
-        # Fast path: a single profile skips the selector.
-        last_id = profile_service.restore_last_active()
-        if last_id is not None:
-            profile_service.set_active(last_id)
-        if last_id is None:
-            raise RuntimeError("Profile selection returned no active profile.")
-        _launch_profile_window(
-            container,
-            lang_manager,
-            file_args,
-            last_id,
-        )
-
-    else:
-        # Show ProfileScreen
-        screen = _create_profile_screen(container, lang_manager)
-        _main_window_ref[0] = screen
-        screen.setWindowTitle("Solin")
-        screen.setMinimumSize(860, 580)
-        screen.resize(960, 640)
-
-        # Center on the screen.
-        from PySide6.QtGui import QGuiApplication
-
-        geo = QGuiApplication.primaryScreen().availableGeometry()
-        screen.move(
-            geo.center().x() - screen.width() // 2,
-            geo.center().y() - screen.height() // 2,
-        )
-        screen.show()
-
-        def _on_profile_ready(profile_id: str):
-            screen.hide()
-            _launch_profile_window(
-                container,
-                lang_manager,
-                file_args,
-                profile_id,
-            )
-            # Close the profile screen permanently after the animation.
-            QTimer.singleShot(400, screen.close)
-
-        screen.profile_ready.connect(_on_profile_ready)
-        _pm_screen = screen
-
-        # Start the appropriate flow.
-        screen.start()
+    _start_profile_flow(container, lang_manager, runtime_args, file_args)
 
     sys.exit(app.exec())
 

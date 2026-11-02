@@ -1,153 +1,202 @@
-from solin.controllers.ipc_controller import IpcController
-from solin.bootstrap import single_instance
+from uuid import uuid4
+
+import pytest
+from PySide6.QtCore import QByteArray, QObject
+from PySide6.QtNetwork import QLocalSocket
+
+from solin.bootstrap.single_instance import SingleInstanceServer
+from solin.controllers.ipc_controller import IpcController, encode_open_request
 
 
-class _Raw:
-    def __init__(self, text):
-        self._data = text.encode("utf-8")
-
-    def data(self):
-        return self._data
-
-    def isEmpty(self):
-        return not self._data
-
-
-class _Conn:
-    def __init__(self, text):
-        self._raw = _Raw(text)
+class _Connection(QObject):
+    def __init__(self, payload=b""):
+        super().__init__()
+        self.pending = payload
+        self.written = b""
+        self.aborted = False
+        self.disconnected = False
 
     def readAll(self):
-        return self._raw
+        payload, self.pending = self.pending, b""
+        return QByteArray(payload)
+
+    def write(self, payload):
+        self.written += payload
+        return len(payload)
+
+    def flush(self):
+        return True
+
+    def disconnectFromServer(self):
+        self.disconnected = True
+
+    def abort(self):
+        self.aborted = True
+
+    def state(self):
+        if self.disconnected or self.aborted:
+            return QLocalSocket.LocalSocketState.UnconnectedState
+        return QLocalSocket.LocalSocketState.ConnectedState
+
+
+def _receiver():
+    opened, focused = [], []
+    receiver = IpcController(
+        object(),
+        bring_to_front=lambda: focused.append(True),
+        open_media_files=opened.append,
+    )
+    return receiver, opened, focused
 
 
 def test_valid_payload_paths_keeps_existing_files_and_urls(tmp_path):
     media_file = tmp_path / "clip.mp4"
-    media_file.write_bytes(b"")
-
-    payload = f"""
-    {media_file}
-    https://example.test/video.mp4
-    http://example.test/audio.mp3
-    C:/does/not/exist.mp4
-
-    """
-
-    assert IpcController._valid_payload_paths(payload) == [
-        str(media_file),
-        "https://example.test/video.mp4",
-        "http://example.test/audio.mp3",
-    ]
+    media_file.touch()
+    assert IpcController._valid_payload_paths(
+        f"{media_file}\nhttps://example.test/video.mp4\nhttp://example.test/audio.mp3\nmissing.mp4\n",
+    ) == [str(media_file), "https://example.test/video.mp4", "http://example.test/audio.mp3"]
 
 
 def test_valid_payload_paths_ignores_blank_payload():
     assert IpcController._valid_payload_paths("  \n  ") == []
 
 
-def test_bootstrap_ipc_reuses_controller_payload_parser(monkeypatch):
-    calls = []
+def test_complete_request_is_acknowledged_after_dispatch(tmp_path):
+    media_file = tmp_path / "clip.mp4"
+    media_file.touch()
+    receiver, opened, focused = _receiver()
+    identifier = uuid4().hex
+    connection = _Connection(encode_open_request([str(media_file), "missing.mp4"], identifier))
+    receiver.receive(connection)
+    assert opened == [[str(media_file)]]
+    assert focused == [True]
+    assert connection.written == identifier.encode("ascii") + b"\n"
+    assert connection.disconnected
 
+
+def test_fragmented_request_is_not_accepted_until_complete():
+    receiver, opened, focused = _receiver()
+    identifier = uuid4().hex
+    payload = encode_open_request(["https://example.test/video.mp4"], identifier)
+    connection = _Connection(payload[:10])
+    receiver.receive(connection)
+    assert opened == []
+    assert focused == []
+    assert connection.written == b""
+    connection.pending = payload[10:]
+    receiver.receive(connection)
+    assert opened == [["https://example.test/video.mp4"]]
+    assert connection.written == identifier.encode("ascii") + b"\n"
+
+
+def test_retry_is_acknowledged_without_dispatching_twice():
+    receiver, opened, focused = _receiver()
+    identifier = uuid4().hex
+    payload = encode_open_request(["https://example.test/video.mp4"], identifier)
+    receiver.receive(_Connection(payload))
+    replacement, replacement_opened, _ = _receiver()
+    replacement.restore_request_ids(receiver.accepted_request_ids)
+    retried = _Connection(payload)
+    replacement.receive(retried)
+    assert opened == [["https://example.test/video.mp4"]]
+    assert focused == [True]
+    assert replacement_opened == []
+    assert retried.written == identifier.encode("ascii") + b"\n"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"[]\n",
+        b"null\n",
+        b"not json\n",
+        b'{"id":"invalid","paths":[]}\n',
+        b'{"id":"0123456789abcdef0123456789abcdef","paths":[true]}\n',
+    ],
+)
+def test_invalid_request_cannot_dispatch_or_claim_acceptance(payload):
+    receiver, opened, focused = _receiver()
+    connection = _Connection(payload)
+    receiver.receive(connection)
+    assert connection.aborted
+    assert connection.written == b""
+    assert opened == []
+    assert focused == []
+    assert receiver.accepted_request_ids == []
+
+
+def test_failed_dispatch_is_not_acknowledged_or_cached():
+    receiver, _, _ = _receiver()
+
+    def fail(_paths):
+        raise OSError("cannot open media")
+
+    receiver._open_media_files = fail
+    connection = _Connection(encode_open_request(["https://example.test/video.mp4"], uuid4().hex))
+    with pytest.raises(OSError, match="cannot open media"):
+        receiver.receive(connection)
+    assert connection.written == b""
+    assert receiver.accepted_request_ids == []
+
+
+def test_focus_request_does_not_import_media():
+    receiver, opened, focused = _receiver()
+    connection = _Connection(encode_open_request([], uuid4().hex))
+    receiver.receive(connection)
+    assert opened == []
+    assert focused == [True]
+    assert connection.written
+
+
+def test_bootstrap_ipc_uses_shared_request_decoder_and_path_validation(monkeypatch):
+    calls = []
     monkeypatch.setattr(
         IpcController,
         "_valid_payload_paths",
-        staticmethod(lambda text: calls.append(text) or []),
+        staticmethod(
+            lambda text: calls.append(text) or [],
+        ),
     )
-
-    server = single_instance.SingleInstanceServer(app=object(), window_ref=[], pending_files=[])
-    server._bring_current_window_to_front = lambda: None
-    server._on_ipc_data(_Conn("https://example.test/video.mp4\n"))
-
+    server = SingleInstanceServer(object(), [], [])
+    server._current_window = lambda: None
+    server._receiver.receive(
+        _Connection(encode_open_request(["https://example.test/video.mp4"], uuid4().hex))
+    )
     assert calls == ["https://example.test/video.mp4"]
 
 
-def test_ipc_controller_brings_window_forward_and_opens_valid_payload_paths(tmp_path):
-    media_file = tmp_path / "clip.mp4"
-    media_file.write_bytes(b"video")
-
-    class _Window:
+def test_bootstrap_dispatches_to_current_window():
+    class Window:
         def __init__(self):
-            self.front_calls = 0
             self.opened = []
+
+        def open_media_files(self, paths):
+            self.opened.append(paths)
 
         def _bring_to_front(self):
-            self.front_calls += 1
+            pass
 
-        def open_media_files(self, paths):
-            self.opened.append(paths)
-
-    window = _Window()
-    controller = IpcController(
-        window,
-        bring_to_front=window._bring_to_front,
-        open_media_files=window.open_media_files,
+    window = Window()
+    server = SingleInstanceServer(object(), [window], [])
+    server._receiver.receive(
+        _Connection(encode_open_request(["https://example.test/video.mp4"], uuid4().hex))
     )
-
-    controller._on_data(
-        _Conn(f"{media_file}\nC:/missing.mp4\nhttps://example.test/song.mp3\n")
-    )
-
-    assert window.front_calls == 1
-    assert window.opened == [[str(media_file), "https://example.test/song.mp3"]]
+    assert window.opened == [["https://example.test/video.mp4"]]
 
 
-def test_ipc_controller_ignores_empty_payload_without_focus_or_open():
-    class _Window:
-        def __init__(self):
-            self.front_calls = 0
-            self.opened = []
-
-        def _bring_to_front(self):
-            self.front_calls += 1
-
-        def open_media_files(self, paths):
-            self.opened.append(paths)
-
-    window = _Window()
-    controller = IpcController(
-        window,
-        bring_to_front=window._bring_to_front,
-        open_media_files=window.open_media_files,
-    )
-
-    controller._on_data(_Conn(""))
-
-    assert window.front_calls == 0
-    assert window.opened == []
-
-
-def test_single_instance_server_dispatches_media_to_current_window(tmp_path):
-    media_file = tmp_path / "clip.mp4"
-    media_file.write_bytes(b"video")
-
-    class _Window:
-        def __init__(self):
-            self.opened = []
-
-        def open_media_files(self, paths):
-            self.opened.append(paths)
-
-    window = _Window()
-    server = single_instance.SingleInstanceServer(
-        app=object(),
-        window_ref=[window],
-        pending_files=[],
-    )
-    server._bring_current_window_to_front = lambda: None
-
-    server._on_ipc_data(_Conn(f"{media_file}\nhttps://example.test/clip.mp4\n"))
-
-    assert window.opened == [[str(media_file), "https://example.test/clip.mp4"]]
-    assert server._pending_files == []
-
-
-def test_single_instance_server_queues_unique_media_until_window_exists(tmp_path):
-    media_file = tmp_path / "clip.mp4"
-    media_file.write_bytes(b"video")
-    pending = [str(media_file)]
-    server = single_instance.SingleInstanceServer(app=object(), window_ref=[], pending_files=pending)
-    server._bring_current_window_to_front = lambda: None
+def test_bootstrap_queues_unique_media_before_a_window_exists():
+    pending = ["https://example.test/video.mp4"]
+    server = SingleInstanceServer(object(), [], pending)
     server._current_window = lambda: None
-
-    server._on_ipc_data(_Conn(f"{media_file}\nhttps://example.test/new.mp4\n"))
-
-    assert pending == [str(media_file), "https://example.test/new.mp4"]
+    server._receiver.receive(
+        _Connection(
+            encode_open_request(
+                [
+                    "https://example.test/video.mp4",
+                    "https://example.test/other.mp4",
+                ],
+                uuid4().hex,
+            )
+        )
+    )
+    assert pending == ["https://example.test/video.mp4", "https://example.test/other.mp4"]

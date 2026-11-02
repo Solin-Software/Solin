@@ -422,7 +422,7 @@ class MainWindow(QWidget):
         )
         self._profile_switch = ProfileSwitchController(
             self.switch_profile_requested.emit,
-            can_switch=lambda: not self._program_recording.busy,
+            can_switch=self.can_leave_profile,
             notify_blocked=self._notify_recording_blocks_profile_switch,
         )
         self._projection_targets = ProjectionWindowController(
@@ -2001,6 +2001,16 @@ class MainWindow(QWidget):
             return
         self.shutdown()
         super().closeEvent(event)
+
+    def can_leave_profile(self) -> bool:
+        """Recheck volatile transition guards without reopening editor dialogs."""
+        return not getattr(self, "_closing", False) and not self._program_recording.busy
+
+    def notify_profile_transition_failed(self) -> None:
+        self.notifications.error(
+            self.tr("Could not switch profiles. Please try again."),
+            dedupe_key="profile-transition-failed",
+        )
 
     def confirm_close(self) -> bool:
         if self._program_recording.busy:

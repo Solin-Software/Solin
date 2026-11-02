@@ -218,11 +218,6 @@ class ProfileService:
         if self._active_id:
             self._preferences.prepare_profile_creation(self._active_id)
 
-    def remember_profile_for_next_launch(self, profile_id: str) -> None:
-        if self.get_profile(profile_id) is None:
-            raise ValueError(f"Unknown profile: {profile_id!r}")
-        self._preferences.set_last_active_profile(profile_id)
-
     def rollback_profile_creation(self, profile_id: str) -> None:
         if self.get_profile(profile_id) is None:
             return

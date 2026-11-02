@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 
@@ -64,10 +64,11 @@ def fade_in(widget: QWidget, duration: int = 300) -> None:
 
     def cleanup_effect() -> None:
         if widget.graphicsEffect() is effect:
-            effect.setEnabled(False)
-            effect.deleteLater()
+            widget.setGraphicsEffect(None)
 
-    anim.finished.connect(cleanup_effect)
+    # Remove through QWidget so its complete backing store is invalidated.
+    # Queue removal outside the finished signal: the effect owns the animation.
+    anim.finished.connect(lambda: QTimer.singleShot(0, widget, cleanup_effect))
     anim.start()
 
 
