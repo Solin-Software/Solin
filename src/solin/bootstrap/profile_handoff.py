@@ -23,6 +23,8 @@ _STATE = b"state "
 _PREPARED = b"prepared\n"
 _RELEASED = b"ready\n"
 _MAX_MESSAGE_BYTES = 1_048_576
+# Leave room for Darwin's per-user temporary path without reducing token entropy.
+_CHANNEL_PREFIX = "solin"
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +125,7 @@ class ProfileHandoff(QObject):
         self._timer.timeout.connect(lambda: self._fail("Replacement process did not acknowledge handoff."))
 
     def start(self) -> str:
-        name = f"solin-profile-handoff-{os.getpid()}-{uuid4().hex}"
+        name = f"{_CHANNEL_PREFIX}-{os.getpid()}-{uuid4().hex}"
         if not self._server.listen(name):
             raise RuntimeError(self._server.errorString())
         self._timer.start(_CONNECT_TIMEOUT_MS)
@@ -232,7 +234,7 @@ class ProfileHandoff(QObject):
 
 def wait_for_profile_handoff(name: str) -> ProfileHandoffState | None:
     """Block child bootstrap before it reads or mutates profile state; fail closed."""
-    match = re.fullmatch(r"solin-profile-handoff-([1-9][0-9]*)-[0-9a-f]{32}", name)
+    match = re.fullmatch(rf"{_CHANNEL_PREFIX}-([1-9][0-9]*)-[0-9a-f]{{32}}", name)
     if match is None:
         return None
     pid = int(match[1])

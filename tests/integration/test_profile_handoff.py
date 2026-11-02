@@ -10,8 +10,9 @@ from uuid import uuid4
 
 import pytest
 from PySide6.QtNetwork import QLocalSocket
-from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
+from shiboken6 import isValid
 
 from solin.bootstrap.single_instance import SingleInstanceServer
 from solin.controllers.ipc_controller import IpcController, MAX_RECENT_REQUESTS
@@ -113,6 +114,23 @@ def _stop(process: subprocess.Popen | None) -> None:
         process.communicate(timeout=5)
 
 
+@pytest.mark.parametrize("temporary_root", ["/var/folders", "/private/var/folders"])
+def test_handoff_endpoint_fits_darwin_temporary_directory_budget(monkeypatch, temporary_root):
+    from solin.bootstrap import profile_handoff
+
+    # Darwin's sockaddr_un has 104 bytes, including the trailing NUL. Model
+    # its per-user temporary directory, including the canonical /private path.
+    temporary_directory = f"{temporary_root}/xx/{'d' * 30}/T"
+    monkeypatch.setattr(profile_handoff.os, "getpid", lambda: 99999)
+    gate = profile_handoff.ProfileHandoff(QApplication.instance())
+    try:
+        name = gate.start()
+        assert len(os.fsencode(f"{temporary_directory}/{name}")) + 1 <= 104
+    finally:
+        gate.close()
+        gate.deleteLater()
+
+
 @pytest.mark.parametrize("mode", ["success", "large", "abort", "timeout", "prepared_abort", "partial_commit"])
 def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_path, mode):
     from solin.bootstrap.profile_handoff import _MAX_MESSAGE_BYTES
@@ -138,7 +156,7 @@ def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_pa
     child = None
     try:
         name = parent.stdout.readline().strip()
-        assert name.startswith("solin-profile-handoff-"), parent.stderr.read()
+        assert name, parent.stderr.read()
         marker = tmp_path / "child-started"
         child = subprocess.Popen(
             [sys.executable, "-u", "-c", _CHILD, name, str(marker), public_name, mode],
@@ -398,12 +416,17 @@ def test_transport_connection_without_application_ack_cannot_report_success(tmp_
         server.close()
 
 
+@pytest.mark.parametrize("pause_during_delivery", [False, True])
 def test_retry_during_modal_file_delivery_is_accepted_once_without_dead_socket_access(
     tmp_path,
     monkeypatch,
+    pause_during_delivery,
 ):
     name = f"solin-test-{uuid4().hex}"
     deliveries = []
+    alive_during_delivery = []
+    active_connections = []
+    resumed = []
     callback_errors = []
     monkeypatch.setattr(sys, "excepthook", lambda *error: callback_errors.append(error))
     server = SingleInstanceServer(QApplication.instance(), [None], [], server_name=name)
@@ -411,11 +434,18 @@ def test_retry_during_modal_file_delivery_is_accepted_once_without_dead_socket_a
     def deliver(paths):
         deliveries.append(paths)
         if len(deliveries) == 1:
+            connection = next(iter(server._connections))
+            active_connections.append(connection)
             # Outlast the client's ACK wait while processing nested Qt events,
-            # as a modal dialog does. The original socket is deleted on retry.
+            # as a modal dialog does. Keep the original Qt socket alive until
+            # the active readyRead handler has returned to its native caller.
             loop = QEventLoop()
+            if pause_during_delivery:
+                QTimer.singleShot(50, server.pause)
+                QTimer.singleShot(300, lambda: resumed.append(server.start()))
             QTimer.singleShot(2500, loop.quit)
             loop.exec()
+            alive_during_delivery.append(isValid(connection))
 
     server._receiver._open_media_files = deliver
     server._receiver._bring_to_front = lambda: None
@@ -444,7 +474,11 @@ def test_retry_during_modal_file_delivery_is_accepted_once_without_dead_socket_a
         assert client.returncode == 0, errors
         assert json.loads(output) is True
         assert deliveries == [["https://example.test/during-shutdown.mp4"]]
+        assert alive_during_delivery == [True]
         assert callback_errors == []
+        assert resumed == ([True] if pause_during_delivery else [])
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert all(not isValid(connection) for connection in active_connections)
     finally:
         _stop(client)
         server.close()

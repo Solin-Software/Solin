@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 from PySide6.QtCore import QByteArray, QObject
+from PySide6.QtNetwork import QLocalSocket
 
 from solin.bootstrap.single_instance import SingleInstanceServer
 from solin.controllers.ipc_controller import IpcController, encode_open_request
@@ -31,6 +32,11 @@ class _Connection(QObject):
 
     def abort(self):
         self.aborted = True
+
+    def state(self):
+        if self.disconnected or self.aborted:
+            return QLocalSocket.LocalSocketState.UnconnectedState
+        return QLocalSocket.LocalSocketState.ConnectedState
 
 
 def _receiver():

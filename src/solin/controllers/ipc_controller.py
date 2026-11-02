@@ -39,6 +39,8 @@ class IpcController:
         self._open_media_files = open_media_files
         self._server: QLocalServer | None = None
         self._buffers: dict[QLocalSocket, bytearray] = {}
+        self._receiving: set[QLocalSocket] = set()
+        self._pending_deletion: set[QLocalSocket] = set()
         self._accepted: dict[str, None] = {}
         self._in_flight: set[str] = set()
 
@@ -77,9 +79,10 @@ class IpcController:
         self.attach_connection(conn)
 
     def attach_connection(self, conn: QLocalSocket) -> None:
+        # Listener teardown may run inside a modal delivery's nested event loop.
+        conn.setParent(self._parent)
         conn.readyRead.connect(lambda: self.receive(conn))
-        conn.disconnected.connect(lambda: self.discard_connection(conn))
-        conn.disconnected.connect(conn.deleteLater)
+        conn.disconnected.connect(lambda: self._on_disconnected(conn))
         timer = QTimer(conn)
         timer.setSingleShot(True)
         timer.timeout.connect(conn.disconnectFromServer)
@@ -90,7 +93,28 @@ class IpcController:
     def discard_connection(self, conn: QLocalSocket) -> None:
         self._buffers.pop(conn, None)
 
+    def _on_disconnected(self, conn: QLocalSocket) -> None:
+        self.discard_connection(conn)
+        if conn in self._receiving:
+            # A nested modal loop must not destroy the active socket callback's sender.
+            self._pending_deletion.add(conn)
+        else:
+            conn.deleteLater()
+
     def receive(self, conn: QLocalSocket) -> None:
+        if conn in self._receiving:
+            return
+        self._receiving.add(conn)
+        try:
+            self._receive_request(conn)
+        finally:
+            self._receiving.remove(conn)
+            if conn in self._pending_deletion:
+                self._pending_deletion.remove(conn)
+                if isValid(conn):
+                    conn.deleteLater()
+
+    def _receive_request(self, conn: QLocalSocket) -> None:
         raw = conn.readAll()
         if raw.isEmpty():
             return
@@ -138,9 +162,9 @@ class IpcController:
                 self._in_flight.discard(identifier)
         # ACK proves application acceptance of the complete frame. Retried
         # identities are remembered across a handoff, independently of ACK loss.
-        # A modal delivery may outlive this connection and its Qt object. The
-        # accepted identity lets the next retry receive its ACK safely.
-        if isValid(conn):
+        # A retry can disconnect this socket during modal delivery. The accepted
+        # identity lets the next connection receive its ACK safely.
+        if isValid(conn) and conn.state() == QLocalSocket.LocalSocketState.ConnectedState:
             conn.write(identifier.encode("ascii") + b"\n")
             conn.flush()
             conn.disconnectFromServer()
