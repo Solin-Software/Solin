@@ -14,7 +14,7 @@ from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 from PySide6.QtWidgets import QApplication
 
 from solin.bootstrap.single_instance import SingleInstanceServer
-from solin.controllers.ipc_controller import IpcController
+from solin.controllers.ipc_controller import IpcController, MAX_RECENT_REQUESTS
 
 
 _PARENT = r"""
@@ -39,15 +39,28 @@ def ready():
         app.quit()
 gate.ready.connect(ready)
 
+def prepared():
+    (folder / "prepared").touch()
+    if mode in ("prepared_abort", "partial_commit"):
+        if mode == "partial_commit":
+            gate._socket.write(b"rea")
+            gate._socket.waitForBytesWritten(2000)
+        gate.close()
+        app.quit()
+        return
+    ipc.reserve_until_exit()
+    ipc.close()
+    assert gate.release()
+    (folder / "released").touch()
+gate.prepared.connect(prepared)
+
 released = False
 def poll():
     global released
     if (folder / "release").exists() and not released:
         released = True
-        ipc.reserve_until_exit()
-        ipc.close()
-        assert gate.release(["https://example.test/late.mp4"], ["a" * 32])
-        (folder / "released").touch()
+        state = json.loads((folder / "handoff.json").read_text(encoding="utf-8"))
+        gate.prepare(state["files"], state["accepted"])
     if (folder / "exit").exists():
         app.quit()
 timer = QTimer(app)
@@ -100,9 +113,20 @@ def _stop(process: subprocess.Popen | None) -> None:
         process.communicate(timeout=5)
 
 
-@pytest.mark.parametrize("mode", ["success", "abort", "timeout"])
+@pytest.mark.parametrize("mode", ["success", "large", "abort", "timeout", "prepared_abort", "partial_commit"])
 def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_path, mode):
+    from solin.bootstrap.profile_handoff import _MAX_MESSAGE_BYTES
+
     public_name = f"solin-test-{uuid4().hex}"
+    files = ["https://example.test/late.mp4"]
+    accepted = ["a" * 32]
+    if mode == "large":
+        files = [f"https://example.test/{index}/" + '\u4f8b"\\' * 60_000 for index in range(3)]
+        accepted = [f"{index:032x}" for index in range(MAX_RECENT_REQUESTS)]
+        assert len(json.dumps({"files": files, "accepted": accepted})) > _MAX_MESSAGE_BYTES
+    (tmp_path / "handoff.json").write_text(
+        json.dumps({"files": files, "accepted": accepted}), encoding="utf-8",
+    )
     environment = dict(os.environ, QT_QPA_PLATFORM="offscreen")
     parent = subprocess.Popen(
         [sys.executable, "-u", "-c", _PARENT, str(tmp_path), mode, public_name],
@@ -124,9 +148,10 @@ def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_pa
             env=environment,
         )
         _wait_for(tmp_path / "waiting", parent) if mode != "abort" else None
-        if mode == "success":
+        if mode in ("success", "large", "prepared_abort", "partial_commit"):
             assert not marker.exists()
             (tmp_path / "release").touch()
+        if mode in ("success", "large"):
             _wait_for(tmp_path / "released", parent)
             assert not marker.exists(), "A release token alone must not expose profile mutations"
             assert child.poll() is None
@@ -146,10 +171,10 @@ def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_pa
         output, errors = child.communicate(timeout=5)
         assert child.returncode == 0, errors
         result = json.loads(output)
-        if mode == "success":
+        if mode in ("success", "large"):
             assert result == {
-                "files": ["https://example.test/late.mp4"],
-                "accepted": ["a" * 32],
+                "files": files,
+                "accepted": accepted,
                 "started": True,
             }
             assert marker.exists()
@@ -159,6 +184,49 @@ def test_real_process_handoff_requires_release_and_departing_process_exit(tmp_pa
     finally:
         _stop(child)
         _stop(parent)
+
+
+@pytest.mark.parametrize("failure", ["disconnect", "invalid_ack", "timeout", "oversized_item"])
+def test_handoff_rejects_failed_preparation_without_reporting_success(monkeypatch, failure):
+    from solin.bootstrap import profile_handoff
+
+    gate = profile_handoff.ProfileHandoff(QApplication.instance())
+    socket = QLocalSocket()
+    ready = []
+    prepared = []
+    failures = []
+    gate.ready.connect(lambda: ready.append(True))
+    gate.prepared.connect(lambda: prepared.append(True))
+    gate.failed.connect(failures.append)
+
+    def wait_for(predicate):
+        deadline = time.monotonic() + 5
+        while not predicate() and time.monotonic() < deadline:
+            QCoreApplication.processEvents()
+            time.sleep(0.005)
+        assert predicate()
+
+    try:
+        socket.connectToServer(gate.start())
+        assert socket.waitForConnected(1000)
+        socket.write(b"waiting\n")
+        socket.flush()
+        wait_for(lambda: ready)
+        monkeypatch.setattr(profile_handoff, "_CONNECT_TIMEOUT_MS", 50)
+        files = ["x" * profile_handoff._MAX_MESSAGE_BYTES] if failure == "oversized_item" else ["accepted.mp4"]
+        gate.prepare(files, [])
+        if failure == "disconnect":
+            socket.abort()
+        elif failure == "invalid_ack":
+            socket.write(b"invalid\n")
+            socket.flush()
+        wait_for(lambda: failures)
+        assert prepared == []
+        assert not gate.release()
+    finally:
+        socket.abort()
+        gate.close()
+        gate.deleteLater()
 
 
 def test_live_ipc_cannot_be_taken_over_and_repeated_cleanup_preserves_replacement():

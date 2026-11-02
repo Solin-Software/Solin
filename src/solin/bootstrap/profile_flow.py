@@ -41,6 +41,9 @@ class ProfileTransitionController(QObject):
         self._committing = False
         self._was_enabled = True
         self._paused_ipc = None
+        self._acknowledged_files: set[str] = set()
+        self._sending_files: list[str] = []
+        self._quit_on_close: bool | None = None
         window.switch_profile_requested.connect(self.open_selector)
 
     def open_selector(self) -> None:
@@ -122,8 +125,9 @@ class ProfileTransitionController(QObject):
                 prepare()
             handoff = ProfileHandoff(self)
             self._handoff = handoff
-            handoff.ready.connect(self._finish_transition)
-            handoff.failed.connect(self._recover_transition)
+            handoff.ready.connect(self._prepare_handoff)
+            handoff.prepared.connect(self._finish_transition)
+            handoff.failed.connect(self._handoff_failed)
             name = handoff.start()
             program, args, directory = detached_launch_command(
                 [*arguments, "--profile-handoff", name]
@@ -151,46 +155,87 @@ class ProfileTransitionController(QObject):
         self._window.cancel_profile_transition()
         self._window.setEnabled(self._was_enabled)
         self._transitioning = False
+        self._acknowledged_files.clear()
+        self._sending_files.clear()
+        self._restore_quit_policy()
         if self._notify_failure is not None:
             try:
                 self._notify_failure()
             except Exception:  # noqa: BLE001 - notification failure must not undo recovery
                 log.exception("Could not display the profile transition failure")
 
-    def _finish_transition(self) -> None:
+    def _prepare_handoff(self) -> None:
         if self._committing or not self._transitioning or self._handoff is None:
             return
-        self._committing = True
-        # Closing the last window must not run app cleanup before this handoff
-        # releases its peer. All shutdown here is synchronous and ordered.
-        quit_on_close = self._app.quitOnLastWindowClosed()
-        self._app.setQuitOnLastWindowClosed(False)
         try:
             ipc = getattr(self._app, "_solin_single_instance_server", None)
             if ipc is not None:
                 self._paused_ipc = ipc
                 ipc.pause()
-            if not self._window.close_for_profile_transition():
-                self._committing = False
-                self._recover_transition("Window closure was rejected.")
+            self._send_pending_files(force=True)
+        except Exception:  # noqa: BLE001 - preparation must preserve the current session
+            log.exception("Could not transfer the pending profile work")
+            self._recover_transition("Pending file transfer failed.")
+
+    def _send_pending_files(self, *, force: bool = False) -> bool:
+        self._sending_files = [
+            path for path in self._window.pending_files if path not in self._acknowledged_files
+        ]
+        if not self._sending_files and not force:
+            return False
+        assert self._handoff is not None
+        ipc = self._paused_ipc
+        self._handoff.prepare(self._sending_files, ipc.accepted_request_ids if ipc else [])
+        return True
+
+    def _restore_quit_policy(self) -> None:
+        if self._quit_on_close is not None:
+            self._app.setQuitOnLastWindowClosed(self._quit_on_close)
+            self._quit_on_close = None
+
+    def _handoff_failed(self, message: str) -> None:
+        if not self._committing:
+            self._recover_transition(message)
+            return
+        log.error("Profile handoff failed after runtime shutdown: %s", message)
+        if self._handoff is not None:
+            self._handoff.close()
+        self._app.quit()
+        self._restore_quit_policy()
+
+    def _finish_transition(self) -> None:
+        if not self._transitioning or self._handoff is None:
+            return
+        try:
+            self._acknowledged_files.update(self._sending_files)
+            self._sending_files = []
+            if self._send_pending_files():
                 return
-            if ipc is not None:
-                ipc.reserve_until_exit()
-            self._paused_ipc = None
-            self._shutdown()
-            if not self._handoff.release(
-                self._window.take_pending_files(),
-                ipc.accepted_request_ids if ipc else [],
-            ):
+            if not self._committing:
+                self._committing = True
+                # Keep capture and the event loop alive until late native files
+                # are acknowledged too; the successor still waits for release.
+                self._quit_on_close = self._app.quitOnLastWindowClosed()
+                self._app.setQuitOnLastWindowClosed(False)
+                if not self._window.close_for_profile_transition():
+                    self._committing = False
+                    self._recover_transition("Window closure was rejected.")
+                    return
+                if self._paused_ipc is not None:
+                    self._paused_ipc.reserve_until_exit()
+                self._shutdown()
+                if self._send_pending_files():
+                    return
+            if self._handoff.release():
+                self._window.remove_pending_files(self._acknowledged_files)
+            else:
                 log.error("Replacement process disconnected during profile shutdown.")
             self._handoff.close()
             self._app.quit()
+            self._restore_quit_policy()
         except Exception:  # noqa: BLE001 - irreversible shutdown must fail closed
             log.exception("Profile shutdown failed; replacement startup was blocked")
-            self._handoff.close()
-            self._app.quit()
-        finally:
-            self._app.setQuitOnLastWindowClosed(quit_on_close)
+            self._handoff_failed("Profile shutdown failed.")
 
 
 def detached_launch_command(runtime_args: list[str]) -> tuple[str, list[str], str]:

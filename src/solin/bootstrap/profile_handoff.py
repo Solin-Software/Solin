@@ -19,7 +19,9 @@ from solin.controllers.ipc_controller import MAX_RECENT_REQUESTS
 _CONNECT_TIMEOUT_MS = 15_000
 _SHUTDOWN_TIMEOUT_MS = 120_000
 _WAITING = b"waiting\n"
-_RELEASED = b"ready "
+_STATE = b"state "
+_PREPARED = b"prepared\n"
+_RELEASED = b"ready\n"
 _MAX_MESSAGE_BYTES = 1_048_576
 
 
@@ -27,6 +29,29 @@ _MAX_MESSAGE_BYTES = 1_048_576
 class ProfileHandoffState:
     pending_files: list[str]
     accepted_request_ids: list[str]
+
+
+def _state_frames(pending_files: list[str], accepted_request_ids: list[str]) -> Iterator[bytes]:
+    """Bound each transport frame, allowing multiple accepted requests per handoff."""
+    suffix = b',"accepted":' + json.dumps(accepted_request_ids).encode("ascii") + b"}\n"
+    prefix = _STATE + b'{"files":['
+    batch: list[bytes] = []
+    size = len(prefix) + 1 + len(suffix)
+    if size > _MAX_MESSAGE_BYTES:
+        raise ValueError("Request history exceeds handoff frame capacity.")
+    for path in pending_files:
+        encoded = json.dumps(path, ensure_ascii=True).encode("ascii")
+        if len(prefix) + len(encoded) + 1 + len(suffix) > _MAX_MESSAGE_BYTES:
+            raise ValueError("A pending file exceeds handoff frame capacity.")
+        extra = len(encoded) + bool(batch)
+        if size + extra > _MAX_MESSAGE_BYTES:
+            yield prefix + b",".join(batch) + b"]" + suffix
+            batch = []
+            size = len(prefix) + 1 + len(suffix)
+            extra = len(encoded)
+        batch.append(encoded)
+        size += extra
+    yield prefix + b",".join(batch) + b"]" + suffix
 
 
 @contextmanager
@@ -78,6 +103,7 @@ class ProfileHandoff(QObject):
     """Release a waiting successor only after the departing runtime is shut down."""
 
     ready = Signal()
+    prepared = Signal()
     failed = Signal(str)
 
     def __init__(self, parent: QObject) -> None:
@@ -88,10 +114,13 @@ class ProfileHandoff(QObject):
         self._socket: QLocalSocket | None = None
         self._buffer = bytearray()
         self._waiting = False
+        self._preparing = False
+        self._prepared = False
+        self._frames: Iterator[bytes] = iter(())
         self._finished = False
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(lambda: self._fail("Replacement process did not connect."))
+        self._timer.timeout.connect(lambda: self._fail("Replacement process did not acknowledge handoff."))
 
     def start(self) -> str:
         name = f"solin-profile-handoff-{os.getpid()}-{uuid4().hex}"
@@ -118,12 +147,19 @@ class ProfileHandoff(QObject):
         if self._socket is None or self._finished:
             return
         self._buffer.extend(bytes(self._socket.readAll().data()))
-        if not _WAITING.startswith(self._buffer):
+        expected = _PREPARED if self._preparing else _WAITING
+        if not expected.startswith(self._buffer):
             self._fail("Invalid replacement process handshake.")
-        elif self._buffer == _WAITING and not self._waiting:
-            self._waiting = True
+        elif self._buffer == expected:
+            self._buffer.clear()
             self._timer.stop()
-            self.ready.emit()
+            if self._preparing:
+                self._send_next_frame()
+            elif not self._waiting:
+                self._waiting = True
+                self.ready.emit()
+            else:
+                self._fail("Unexpected replacement process handshake.")
 
     def _on_disconnected(self) -> None:
         if not self._finished:
@@ -135,27 +171,48 @@ class ProfileHandoff(QObject):
         self.close()
         self.failed.emit(message)
 
-    def release(self, pending_files: list[str], accepted_request_ids: list[str]) -> bool:
+    def prepare(self, pending_files: list[str], accepted_request_ids: list[str]) -> None:
+        """Transfer bounded batches; emit prepared only after every batch is acknowledged."""
+        socket = self._socket
+        if (
+            self._finished or not self._waiting or self._preparing
+            or socket is None
+            or socket.state() != QLocalSocket.LocalSocketState.ConnectedState
+        ):
+            self._fail("Replacement process is not ready to receive pending files.")
+            return
+        self._preparing = True
+        self._prepared = False
+        self._frames = _state_frames(pending_files, accepted_request_ids)
+        self._send_next_frame()
+
+    def _send_next_frame(self) -> None:
+        try:
+            payload = next(self._frames)
+        except StopIteration:
+            self._preparing = False
+            self._prepared = True
+            self.prepared.emit()
+            return
+        except ValueError as exc:
+            self._fail(str(exc))
+            return
+        self._timer.start(_CONNECT_TIMEOUT_MS)
+        if self._socket is None or self._socket.write(payload) != len(payload):
+            self._fail("Could not transfer pending file requests.")
+
+    def release(self) -> bool:
         socket = self._socket
         if (
             self._finished
-            or not self._waiting
+            or not self._prepared
             or socket is None
             or socket.state() != QLocalSocket.LocalSocketState.ConnectedState
         ):
             return False
         self._finished = True
         self._timer.stop()
-        payload = (
-            _RELEASED
-            + json.dumps(
-                {"files": pending_files, "accepted": accepted_request_ids},
-                ensure_ascii=True,
-            ).encode("ascii")
-            + b"\n"
-        )
-        if len(payload) > _MAX_MESSAGE_BYTES:
-            return False
+        payload = _RELEASED
         written = socket.write(payload) == len(payload)
         deadline = time.monotonic() + 2
         while written and socket.bytesToWrite():
@@ -202,16 +259,21 @@ def _wait_for_release(name: str) -> tuple[ProfileHandoffState, float] | None:
         if socket.bytesToWrite() and not socket.waitForBytesWritten(2000):
             return None
         reply = bytearray()
+        prepared: ProfileHandoffState | None = None
+        seen_files: set[str] = set()
+        seen_ids: set[str] = set()
         deadline = time.monotonic() + _SHUTDOWN_TIMEOUT_MS / 1000
         while True:
             reply.extend(bytes(socket.readAll().data()))
             if len(reply) > _MAX_MESSAGE_BYTES:
                 return None
             if b"\n" in reply:
-                if not reply.startswith(_RELEASED) or not reply.endswith(b"\n"):
+                if reply == _RELEASED:
+                    return (prepared, deadline) if prepared is not None else None
+                if not reply.startswith(_STATE) or not reply.endswith(b"\n"):
                     return None
                 try:
-                    state = json.loads(reply[len(_RELEASED) : -1])
+                    state = json.loads(reply[len(_STATE) : -1])
                 except (ValueError, UnicodeError):
                     return None
                 if not isinstance(state, dict):
@@ -227,7 +289,24 @@ def _wait_for_release(name: str) -> tuple[ProfileHandoffState, float] | None:
                         for identifier in accepted
                     )
                 ):
-                    return ProfileHandoffState(files, accepted), deadline
+                    if prepared is None:
+                        prepared = ProfileHandoffState([], [])
+                    for path in files:
+                        if path not in seen_files:
+                            seen_files.add(path)
+                            prepared.pending_files.append(path)
+                    for identifier in accepted:
+                        if identifier not in seen_ids:
+                            seen_ids.add(identifier)
+                            prepared.accepted_request_ids.append(identifier)
+                    if len(prepared.accepted_request_ids) > MAX_RECENT_REQUESTS:
+                        return None
+                    if socket.write(_PREPARED) != len(_PREPARED):
+                        return None
+                    if socket.bytesToWrite() and not socket.waitForBytesWritten(2000):
+                        return None
+                    reply.clear()
+                    continue
                 return None
             remaining = max(0, int((deadline - time.monotonic()) * 1000))
             if remaining == 0 or socket.state() == QLocalSocket.LocalSocketState.UnconnectedState:

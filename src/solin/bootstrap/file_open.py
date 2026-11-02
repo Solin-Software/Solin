@@ -16,9 +16,11 @@ class ApplicationFileOpenRouter(QObject):
         self._app = app
         self._window_ref = window_ref
         self._pending_files = pending_files
+        self._closed = False
         app.installEventFilter(self)
 
     def close(self) -> None:
+        self._closed = True
         self._app.removeEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
@@ -40,10 +42,15 @@ class ApplicationFileOpenRouter(QObject):
             return
         window = self._window_ref[0] if self._window_ref else None
         open_media_files = getattr(window, "open_media_files", None)
-        if callable(open_media_files):
-            QTimer.singleShot(0, lambda: open_media_files([path]))
-            return
+        # Capture before deferring delivery so a transition can snapshot the file
+        # even when its callback has not run yet.
         self._pending_files.append(path)
+        if callable(open_media_files):
+            QTimer.singleShot(0, self, lambda: self._dispatch(window))
+
+    def _dispatch(self, window) -> None:
+        if not self._closed:
+            dispatch_pending_files(window, self._pending_files)
 
 
 def dispatch_pending_files(window, pending_files: list[str]) -> None:

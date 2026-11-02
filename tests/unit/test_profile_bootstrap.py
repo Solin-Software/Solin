@@ -8,6 +8,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
 from solin.bootstrap import application
+from solin.bootstrap.profile_handoff import ProfileHandoffState
 from solin.bootstrap.runtime_args import parse_runtime_args
 
 
@@ -46,6 +47,106 @@ def bootstrap(monkeypatch):
     finally:
         screen.close()
         screen.deleteLater()
+
+
+@pytest.fixture
+def main_bootstrap(bootstrap, monkeypatch, tmp_path):
+    from solin.core.i18n import manager
+
+    state = bootstrap
+    state.app = Mock()
+    state.app.exec.return_value = 7
+    state.server = Mock()
+    state.server.start.return_value = True
+    state.create_server = Mock(return_value=state.server)
+    state.forward = Mock(return_value=False)
+    state.standalone = Mock(return_value=11)
+    state.wait_for_handoff = Mock(return_value=None)
+    state.lang_manager = Mock()
+    state.container.lifecycle = Mock()
+    state.container.global_settings = Mock()
+    state.container.runtime_paths = SimpleNamespace(cache_dir=tmp_path)
+    state.container.jw_language_settings_store_factory = Mock()
+    monkeypatch.setattr(application, "QApplication", Mock(return_value=state.app))
+    monkeypatch.setattr(application, "default_app_config", Mock())
+    monkeypatch.setattr(application, "ApplicationFileOpenRouter", Mock())
+    monkeypatch.setattr(application, "SingleInstanceServer", state.create_server)
+    monkeypatch.setattr(application, "try_forward_to_running", state.forward)
+    monkeypatch.setattr(application, "wait_for_profile_handoff", state.wait_for_handoff)
+    monkeypatch.setattr(application, "prepare_application_catalogs", Mock(return_value=tmp_path))
+    monkeypatch.setattr(
+        application, "initialize_application_container", Mock(return_value=state.container)
+    )
+    monkeypatch.setattr(application, "application_asset_path", lambda _name: tmp_path / "missing.ico")
+    monkeypatch.setattr(application, "_run_zoom_poll_standalone", state.standalone)
+    monkeypatch.setattr(manager, "LanguageManager", Mock(return_value=state.lang_manager))
+    return state
+
+
+def test_handoff_csv_restores_ipc_and_reaches_profile_selector(main_bootstrap, monkeypatch, tmp_path):
+    state = main_bootstrap
+    csv_file = tmp_path / "queued.CSV"
+    csv_file.touch()
+    files = [str(csv_file)]
+    accepted_request_ids = ["a" * 32]
+    state.wait_for_handoff.return_value = ProfileHandoffState(files, accepted_request_ids)
+    monkeypatch.setattr(
+        application.sys, "argv", ["solin", "--select-profile", "--profile-handoff", "channel"]
+    )
+    monkeypatch.setattr(application.QTimer, "singleShot", lambda _delay, callback: callback())
+
+    with pytest.raises(SystemExit) as exited:
+        application.main()
+
+    assert exited.value.code == 7
+    state.wait_for_handoff.assert_called_once_with("channel")
+    state.standalone.assert_not_called()
+    state.server.restore_request_ids.assert_called_once_with(accepted_request_ids)
+    state.server.start.assert_called_once()
+    state.container.lifecycle.register_single_instance.assert_called_once_with(state.server)
+    state.screen.start.assert_called_once_with(force_selector=True)
+    state.launch.assert_not_called()
+    state.screen.profile_ready.emit("current")
+    state.launch.assert_called_once_with(state.container, state.lang_manager, files, "current")
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".CsV"])
+def test_command_line_csv_opens_standalone_without_profile_ipc(
+    main_bootstrap, monkeypatch, tmp_path, suffix
+):
+    state = main_bootstrap
+    csv_file = tmp_path / f"poll{suffix}"
+    csv_file.touch()
+    monkeypatch.setattr(application.sys, "argv", ["solin", str(csv_file)])
+
+    with pytest.raises(SystemExit) as exited:
+        application.main()
+
+    assert exited.value.code == 11
+    state.standalone.assert_called_once_with(state.app, str(csv_file), state.lang_manager)
+    state.forward.assert_not_called()
+    state.create_server.assert_not_called()
+    state.create_screen.assert_not_called()
+    state.launch.assert_not_called()
+
+
+@pytest.mark.parametrize("is_directory", [False, True])
+def test_invalid_command_line_csv_uses_profile_flow(
+    main_bootstrap, monkeypatch, tmp_path, is_directory
+):
+    state = main_bootstrap
+    csv_file = tmp_path / "poll.csv"
+    if is_directory:
+        csv_file.mkdir()
+    monkeypatch.setattr(application.sys, "argv", ["solin", str(csv_file)])
+
+    with pytest.raises(SystemExit) as exited:
+        application.main()
+
+    assert exited.value.code == 7
+    state.standalone.assert_not_called()
+    state.server.start.assert_called_once()
+    state.launch.assert_called_once_with(state.container, state.lang_manager, [], "current")
 
 
 def test_forced_selector_bypasses_one_profile_without_changing_next_launch(bootstrap):
@@ -143,7 +244,8 @@ def test_bootstrap_admission_precedes_container_and_rejected_entry_is_non_mutati
         router.close.assert_called_once()
 
 
-def test_container_failure_closes_admitted_ipc_and_file_router(monkeypatch):
+@pytest.mark.parametrize("error_type", [OSError, KeyboardInterrupt])
+def test_container_failure_closes_admitted_ipc_and_file_router(monkeypatch, error_type):
     events = []
     router = SimpleNamespace(close=lambda: events.append("router_closed"))
     server = SimpleNamespace(
@@ -161,9 +263,9 @@ def test_container_failure_closes_admitted_ipc_and_file_router(monkeypatch):
 
     def initialize(*_args):
         assert events == ["ipc_started"]
-        raise OSError("failed to initialize")
+        raise error_type("failed to initialize")
 
     monkeypatch.setattr(application, "initialize_application_container", initialize)
-    with pytest.raises(OSError, match="failed to initialize"):
+    with pytest.raises(error_type, match="failed to initialize"):
         application.main()
     assert events == ["ipc_started", "router_closed", "ipc_closed"]

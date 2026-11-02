@@ -47,11 +47,15 @@ class _Runtime(QWidget):
 
 class _Handoff(QObject):
     ready = Signal()
+    prepared = Signal()
     failed = Signal(str)
 
     def __init__(self, parent):
         super().__init__(parent)
         self.closed = False
+        self.acknowledge = True
+        self.pending_files = []
+        self.batches = []
         self.events = parent._window.runtime.events
 
     def start(self):
@@ -60,10 +64,15 @@ class _Handoff(QObject):
     def close(self):
         self.closed = True
 
-    def release(self, pending_files, accepted_request_ids):
-        self.events.append("release")
-        self.pending_files = pending_files
+    def prepare(self, pending_files, accepted_request_ids):
+        self.pending_files.extend(pending_files)
+        self.batches.append(list(pending_files))
         self.accepted_request_ids = accepted_request_ids
+        if self.acknowledge:
+            self.prepared.emit()
+
+    def release(self):
+        self.events.append("release")
         return True
 
 
@@ -71,12 +80,13 @@ class _Handoff(QObject):
 def transition(monkeypatch):
     application = QApplication.instance()
     events = []
+    pending_files = []
     window = ApplicationWindow(
         width=900,
         height=700,
         geometry=QByteArray(),
         save_geometry=lambda _geometry: events.append("geometry"),
-        pending_files=[],
+        pending_files=pending_files,
     )
     controller = None
     try:
@@ -121,6 +131,7 @@ def transition(monkeypatch):
             controller=controller,
             launch=launch,
             events=events,
+            pending_files=pending_files,
         )
     finally:
         if controller is not None and controller._handoff is not None:
@@ -350,6 +361,107 @@ def test_recovery_delivers_queued_file_requests_to_current_runtime(transition):
     state.controller._handoff.failed.emit("replacement disconnected")
     assert state.events == [("files", ["late.mp4"])]
     assert state.window.accepts_external_activation
+
+
+@pytest.mark.parametrize("failure", ["capacity exceeded", "write failed", "peer disconnected", "timeout"])
+def test_preparation_failure_preserves_the_current_session_and_accepted_files(transition, failure):
+    state = transition
+    ipc = Mock()
+    ipc.accepted_request_ids = ["a" * 32]
+    state.app._solin_single_instance_server = ipc
+    state.controller.logout()
+    paths = ["accepted.mp4"]
+    state.window.open_media_files(paths)
+    handoff = state.controller._handoff
+    handoff.acknowledge = False
+    handoff.ready.emit()
+    assert state.events == []
+    assert state.window.pending_files == paths
+    handoff.failed.emit(failure)
+
+    assert state.window.state is ApplicationWindowState.READY
+    assert state.window.isEnabled()
+    assert state.events == [("files", paths)]
+    state.controller._notify_failure.assert_called_once()
+    ipc.start.assert_called_once()
+    ipc.reserve_until_exit.assert_not_called()
+
+
+def test_shutdown_waits_for_successor_to_acknowledge_pending_work(transition):
+    state = transition
+    state.controller.logout()
+    state.window.open_media_files(["accepted.mp4"])
+    handoff = state.controller._handoff
+    handoff.acknowledge = False
+    handoff.ready.emit()
+
+    assert state.window.state is ApplicationWindowState.READY
+    assert state.window.pending_files == ["accepted.mp4"]
+    assert state.events == []
+    handoff.prepared.emit()
+    assert state.events == ["geometry", "runtime_shutdown", "app_shutdown", "release", "quit"]
+    assert state.window.pending_files == []
+
+
+def test_native_arrivals_follow_each_ack_and_shutdown_without_loss(transition, tmp_path):
+    from PySide6.QtGui import QFileOpenEvent
+    from solin.bootstrap.file_open import ApplicationFileOpenRouter
+
+    state = transition
+    router = ApplicationFileOpenRouter(QApplication.instance(), [state.window], state.pending_files)
+    paths = [str(tmp_path / f"arrival-{index}.mp4") for index in range(4)]
+    for index in range(4):
+        (tmp_path / f"arrival-{index}.mp4").touch()
+
+    def arrive(index):
+        router.eventFilter(QApplication.instance(), QFileOpenEvent(paths[index]))
+
+    try:
+        state.controller.logout()
+        state.window.open_media_files([paths[0]])
+        handoff = state.controller._handoff
+        handoff.acknowledge = False
+        handoff.ready.emit()
+        arrive(1)
+        handoff.prepared.emit()
+        assert handoff.batches == [[paths[0]], [paths[1]]]
+        assert state.events == []
+
+        state.runtime.on_shutdown = lambda: arrive(2)
+        handoff.prepared.emit()
+        assert handoff.batches[-1] == [paths[2]]
+        assert "quit" not in state.events
+        arrive(3)
+        handoff.prepared.emit()
+        assert handoff.batches[-1] == [paths[3]]
+        assert "release" not in state.events
+        handoff.prepared.emit()
+
+        assert handoff.pending_files == paths
+        assert state.pending_files == []
+        assert state.events == ["geometry", "runtime_shutdown", "app_shutdown", "release", "quit"]
+    finally:
+        router.close()
+
+
+def test_failed_late_ack_quits_without_releasing_an_unprepared_successor(transition):
+    state = transition
+    quit_policy = state.app.quitOnLastWindowClosed()
+    state.controller.logout()
+    handoff = state.controller._handoff
+
+    def during_shutdown():
+        handoff.acknowledge = False
+        state.window.open_media_files(["late.mp4"])
+
+    state.runtime.on_shutdown = during_shutdown
+    handoff.ready.emit()
+    assert "quit" not in state.events
+    handoff.failed.emit("peer exited after shutdown")
+    assert handoff.closed
+    assert "release" not in state.events
+    assert state.events[-1] == "quit"
+    assert state.app.quitOnLastWindowClosed() == quit_policy
 
 
 def test_wheel_installation_relaunches_an_installed_module(monkeypatch, tmp_path):

@@ -821,7 +821,7 @@ def main():
     window_ref = [None]
     file_open_router = ApplicationFileOpenRouter(app, window_ref, file_args)
     csv_args = [
-        path for path in file_args
+        path for path in runtime_args.media_files
         if os.path.isfile(path) and os.path.splitext(path)[1].lower() == ".csv"
     ]
     single_instance = None
@@ -858,13 +858,15 @@ def main():
             f"{exc}",
         )
         return
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - release admitted IPC and file routing on any startup failure, then re-raise
         file_open_router.close()
         if single_instance is not None:
             single_instance.close()
         raise
     container.window_ref = window_ref
-    container.lifecycle.register_cleanup(file_open_router.close)
+    # Native file capture must outlive synchronous lifecycle teardown while a
+    # profile successor acknowledges the final queued files.
+    app.aboutToQuit.connect(file_open_router.close)
     if single_instance is not None:
         container.lifecycle.register_single_instance(single_instance)
     startup_timeline().mark("container_ready")

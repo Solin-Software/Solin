@@ -188,10 +188,12 @@ class ApplicationWindow(QMainWindow):
             and self._state is not ApplicationWindowState.CLOSING
         )
 
-    def take_pending_files(self) -> list[str]:
-        paths = list(self._pending_files)
-        self._pending_files.clear()
-        return paths
+    @property
+    def pending_files(self) -> list[str]:
+        return list(self._pending_files)
+
+    def remove_pending_files(self, paths: set[str]) -> None:
+        self._pending_files[:] = [path for path in self._pending_files if path not in paths]
 
     def prepare_profile_transition(self) -> bool:
         """Approve closure once without shutting down a recoverable session."""
