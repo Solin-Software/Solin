@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 import json
+from math import ceil
 import os
 import re
 import sys
@@ -58,7 +59,7 @@ def _state_frames(pending_files: list[str], accepted_request_ids: list[str]) -> 
 
 @contextmanager
 def _parent_exit_guard(pid: int) -> Iterator[Callable[[float], bool]]:
-    """Pin Windows process identity; never infer approval from a timeout."""
+    """Pin process identity and observe exit independently of launcher reaping."""
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -85,20 +86,53 @@ def _parent_exit_guard(pid: int) -> Iterator[Callable[[float], bool]]:
             )
         finally:
             kernel.CloseHandle(handle)
+    elif sys.platform == "linux":
+        import select
+
+        descriptor = os.pidfd_open(pid)
+        try:
+            poller = select.poll()
+            poller.register(descriptor, select.POLLIN)
+
+            def wait(deadline: float) -> bool:
+                timeout = max(0, ceil((deadline - time.monotonic()) * 1000))
+                return any(
+                    observed == descriptor and events & select.POLLIN
+                    for observed, events in poller.poll(timeout)
+                )
+
+            yield wait
+        finally:
+            os.close(descriptor)
+    elif sys.platform == "darwin":
+        import select
+
+        with closing(select.kqueue()) as queue:
+            notification = select.kevent(
+                pid,
+                filter=select.KQ_FILTER_PROC,
+                flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                fflags=select.KQ_NOTE_EXIT,
+            )
+            queue.control([notification], 0, 0)
+            exited = False
+
+            def wait(deadline: float) -> bool:
+                nonlocal exited
+                if not exited:
+                    events = queue.control(None, 1, max(0, deadline - time.monotonic()))
+                    exited = any(
+                        event.ident == pid
+                        and event.filter == select.KQ_FILTER_PROC
+                        and event.fflags & select.KQ_NOTE_EXIT
+                        and not event.flags & select.KQ_EV_ERROR
+                        for event in events
+                    )
+                return exited
+
+            yield wait
     else:
-
-        def wait(deadline: float) -> bool:
-            while time.monotonic() < deadline:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    return True
-                except PermissionError:
-                    return False
-                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
-            return False
-
-        yield wait
+        raise OSError("Process termination observation is not supported on this platform.")
 
 
 class ProfileHandoff(QObject):

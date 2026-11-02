@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -112,6 +114,54 @@ def _stop(process: subprocess.Popen | None) -> None:
         if process.poll() is None:
             process.kill()
         process.communicate(timeout=5)
+
+
+def test_process_exit_is_observed_before_the_launcher_reaps_it():
+    from solin.bootstrap.profile_handoff import _parent_exit_guard
+
+    # Keep Popen unreaped throughout observation. Polling/waiting on it here
+    # would hide the Unix zombie condition this contract must exercise.
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.buffer.read(1)"],
+        stdin=subprocess.PIPE,
+    )
+    try:
+        with _parent_exit_guard(process.pid) as wait_for_exit:
+            assert not wait_for_exit(time.monotonic() + 0.02)
+            process.stdin.write(b"x")
+            process.stdin.flush()
+            assert wait_for_exit(time.monotonic() + 5)
+            if os.name == "posix":
+                os.kill(process.pid, 0)  # The PID still exists until Popen.wait().
+            assert wait_for_exit(time.monotonic())
+    finally:
+        _stop(process)
+
+
+@pytest.mark.parametrize("observation", ["unavailable", "timeout", "wait_error"])
+def test_handoff_never_starts_without_confirmed_process_exit(monkeypatch, observation):
+    from solin.bootstrap import profile_handoff
+
+    @contextmanager
+    def observe(_pid):
+        if observation == "unavailable":
+            raise PermissionError("Process exit cannot be observed")
+
+        def wait(_deadline):
+            if observation == "wait_error":
+                raise OSError("Process observer failed")
+            return False
+
+        yield wait
+
+    release = Mock(return_value=(profile_handoff.ProfileHandoffState([], []), time.monotonic() + 1))
+    monkeypatch.setattr(profile_handoff, "_parent_exit_guard", observe)
+    monkeypatch.setattr(profile_handoff, "_wait_for_release", release)
+    name = f"{profile_handoff._CHANNEL_PREFIX}-{os.getpid() + 1}-{'a' * 32}"
+
+    assert profile_handoff.wait_for_profile_handoff(name) is None
+    if observation == "unavailable":
+        release.assert_not_called()
 
 
 @pytest.mark.parametrize("temporary_root", ["/var/folders", "/private/var/folders"])
