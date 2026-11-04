@@ -40,8 +40,10 @@ work, including before and after physical repair. UI state uses assessments for
 the exact saved revision; controller recovery publishes the current eligible
 snapshot even when no new write is needed. Delivery rejects retired contexts and
 shutdown work. Publication failures are isolated, reported, and release pending
-maintenance so a later request can retry. Post-repair assessment does not start
-another physical repair.
+maintenance. Failed assessments are retained for their exact revision, preventing
+passive state reads or sibling revisions from repeating I/O and notifications.
+A changed revision or explicit maintenance or repair request permits another
+attempt. Post-repair assessment does not start another physical repair.
 Image repair checks the compressed local cache before downloading and accepts
 only the saved image's SHA-256. If that revision cannot be restored, automatic
 updates rebuild the saved meeting using the available publication, even without

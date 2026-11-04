@@ -238,11 +238,13 @@ class _SourceMaintenance:
         self.pending: dict[MeetingPreparationKey, CancellationFlag] = {}
         self.dirty: set[MeetingPreparationKey] = set()
         self.running: set[MeetingPreparationKey] = set()
+        self.refresh_requested: set[MeetingPreparationKey] = set()
         self.publish: dict[MeetingPreparationKey, set[str]] = {}
 
     def cancel(self, key: MeetingPreparationKey) -> None:
         self.dirty.discard(key)
         self.running.discard(key)
+        self.refresh_requested.discard(key)
         self.publish.pop(key, None)
         if (cancellation := self.pending.pop(key, None)) is not None:
             cancellation.set()
@@ -396,6 +398,8 @@ class MeetingPreparationService(QObject):
         lifetime = self._source_maintenance
         if self._stopped:
             return
+        if refresh:
+            lifetime.refresh_requested.add(key)
         if publish:
             lifetime.publish.setdefault(key, set()).update(publish)
         if key in lifetime.pending:
@@ -403,6 +407,7 @@ class MeetingPreparationService(QObject):
                 lifetime.dirty.add(key)
             return
         if not self.snapshots(key):
+            lifetime.refresh_requested.discard(key)
             return
         cancellation = CancellationFlag()
         lifetime.pending[key] = cancellation
@@ -416,7 +421,15 @@ class MeetingPreparationService(QObject):
         if self._stopped or lifetime.pending.get(key) is not cancellation:
             return
         lifetime.running.add(key)
-        snapshots = self.snapshots(key)
+        refresh = key in lifetime.refresh_requested
+        lifetime.refresh_requested.discard(key)
+        snapshots = {
+            pub_type: snapshot for pub_type, snapshot in self.snapshots(key).items()
+            if refresh or not (
+                (assessment := self._image_source_assessment(key, pub_type, snapshot))
+                and assessment.error
+            )
+        }
         store = self._store
         owner_ref = weakref.ref(self)
         job = self._jobs.get(key)
@@ -445,11 +458,13 @@ class MeetingPreparationService(QObject):
                 except (OSError, UnicodeError, ValueError) as exc:
                     results.append(_SourceMaintenanceResult(
                         pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                        revision=previous.revision,
                     ))
                 except Exception as exc:  # noqa: BLE001 - per-publication worker boundary
                     log.exception("Meeting source maintenance failed for %s", previous.tree_key)
                     results.append(_SourceMaintenanceResult(
                         pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                        revision=previous.revision,
                     ))
 
             def deliver() -> None:
@@ -491,6 +506,11 @@ class MeetingPreparationService(QObject):
             if result.error:
                 if matching_repair and job is not None and result.pub_type in job.publications:
                     job.errors[result.pub_type] = result.error
+                snapshot = self.snapshot(key, result.pub_type)
+                if snapshot is not None and (
+                    snapshot.tree_key == result.tree_key and snapshot.revision == result.revision
+                ):
+                    self._image_sources[(key, result.pub_type)] = result
                 self.error.emit(key, result.pub_type, result.error)
                 continue
             # Read the authoritative in-memory revision: operator writes may have
@@ -538,7 +558,7 @@ class MeetingPreparationService(QObject):
         if not self._source_maintenance.publish.get(key):
             self._source_maintenance.publish.pop(key, None)
         if rerun:
-            self._schedule_source_maintenance(key)
+            self._schedule_source_maintenance(key, refresh=False)
 
     def repair_meeting(self, key: MeetingPreparationKey, pub_type: str) -> MeetingPreparationState:
         return self._request_repair(key, pub_type, MeetingRequestOrigin.MANUAL)
@@ -561,7 +581,6 @@ class MeetingPreparationService(QObject):
         result = self._image_sources.get((key, pub_type))
         if result is not None and result.tree_key == snapshot.tree_key and result.revision == snapshot.revision:
             return result
-        self._schedule_source_maintenance(key, refresh=False)
         return None
 
     def _continue_image_repair(self, job: _PreparationJob) -> None:
@@ -956,8 +975,12 @@ class MeetingPreparationService(QObject):
     ) -> MeetingPreparationState:
         snapshot = self.snapshot(key, pub_type)
         image_sources = self._image_source_assessment(key, pub_type, snapshot) if snapshot else None
+        if snapshot is not None and image_sources is None:
+            self._schedule_source_maintenance(key, refresh=False)
         job = self._jobs.get(key)
         error = job.errors.get(pub_type, "") if job is not None else ""
+        if not error and image_sources is not None:
+            error = image_sources.error
         source_status = job.terminal_statuses.get(pub_type, "") if job is not None else ""
         refreshing = bool(job and job.active and pub_type in job.publications)
         if snapshot is not None:

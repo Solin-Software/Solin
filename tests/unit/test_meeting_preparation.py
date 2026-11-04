@@ -2329,8 +2329,10 @@ def test_source_maintenance_failure_keeps_snapshot_and_can_retry(monkeypatch, tm
     errors = []
     attempted = []
     crashed = []
+    error_states = []
     monkeypatch.setattr(threading, "excepthook", lambda args: crashed.append(args.exc_value))
     service.error.connect(lambda *args: errors.append(args))
+    service.error.connect(lambda *_: error_states.append(service.state(key, "mwb")))
     repair = store.repair_canonical_image_sources
     try:
         def fail(tree_key):
@@ -2344,14 +2346,192 @@ def test_source_maintenance_failure_keeps_snapshot_and_can_retry(monkeypatch, tm
         _spin_until(lambda: bool(errors or crashed))
         assert errors and not crashed
         assert errors[0][2]
+        assert error_states[0].error == errors[0][2]
         assert attempted == ["mwb", "wt"]
         assert key not in service._source_maintenance.pending
         assert store.snapshot(original.tree_key) == original
+        for _ in range(3):
+            service.state(key, "mwb")
+            service._emit_states(key)
+            _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert attempted == ["mwb", "wt"]
+        assert len(errors) == 1
+        assert service.state(key, "mwb").error == errors[0][2]
         monkeypatch.setattr(store, "repair_canonical_image_sources", repair)
         service.maintain_prepared(key)
         _spin_until(lambda: key not in service._source_maintenance.pending)
         assert store.snapshot(original.tree_key).revision > original.revision
+        assert not service.state(key, "mwb").error
     finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_source_failure_does_not_cache_an_assessment_for_a_newer_revision(monkeypatch, tmp_path):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    original = _save_detached_image(store, tmp_path / "image.jpg")
+    entered, release = threading.Event(), threading.Event()
+    repair = store.repair_canonical_image_sources
+    calls, errors = [], []
+
+    def fail_old_revision(tree_key):
+        calls.append(tree_key)
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(2)
+            raise OSError("Old revision could not be assessed")
+        return repair(tree_key)
+
+    monkeypatch.setattr(store, "repair_canonical_image_sources", fail_old_revision)
+    service.error.connect(lambda *args: errors.append(args))
+    try:
+        service.maintain_prepared(key)
+        _spin_until(entered.is_set)
+        edited = clone_nodes(original.nodes)
+        edited[0]["image_framing"] = {"scale": 1.4}
+        latest = store.save(original.tree_key, edited, original.canonical_hash)
+        release.set()
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert len(errors) == 1
+        assert latest.revision > original.revision
+
+        state = _assessed_state(service, key)
+        assert len(calls) == 2
+        assert not state.error
+        assert not state.repair_required
+        assert state.snapshot.revision == latest.revision
+        assert state.snapshot.nodes[0]["image_framing"] == {"scale": 1.4}
+        assert state.snapshot.canonical_hash == original.canonical_hash
+        assert state.snapshot.canonical_nodes == original.canonical_nodes
+    finally:
+        release.set()
+        service.shutdown(wait_ms=1000)
+
+
+def test_manual_repair_retries_a_failed_source_assessment(missing_image_meeting, monkeypatch):
+    service, publication, key, cache = missing_image_meeting
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    repair = service._store.repair_canonical_image_sources
+    errors = []
+    service.error.connect(lambda *args: errors.append(args))
+
+    def fail(_tree_key):
+        raise OSError("Temporary source read failure")
+
+    monkeypatch.setattr(service._store, "repair_canonical_image_sources", fail)
+    service.state(key, "mwb")
+    _spin_until(lambda: key not in service._source_maintenance.pending)
+    assert len(errors) == 1
+    assert not publication.loads
+    monkeypatch.setattr(service._store, "repair_canonical_image_sources", repair)
+
+    service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
+    request = publication.loads[0]
+    assert request["content_request"].operation == MeetingContentOperation.REPAIR
+    assert request["content_request"].publications == {"mwb"}
+    assert len(request["content_request"].repair_refs) == 1
+    publication.context_load_finished.emit(key.monday.isoformat(), "T", False, request["generation"])
+    _wait_for_preparation_idle(service, key)
+    assert not service.state(key, "mwb").error
+    assert service.state(key, "mwb").repair_required
+    assert len(errors) == len(publication.loads) == 1
+    assert not cache.prefetch_calls
+
+
+@pytest.mark.parametrize("edit_during_delivery", [False, True])
+def test_passive_sibling_refresh_does_not_repeat_unchanged_source_failures(
+    monkeypatch, tmp_path, edit_during_delivery
+):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    _save_detached_image(store, tmp_path / "image.jpg")
+    weekend = store.save("wt:2026-05-25:T:20260500", [], "weekend", canonical_nodes=[])
+    repair = store.repair_canonical_image_sources
+    attempts, errors = [], []
+    edit_pending = edit_during_delivery
+
+    def fail_midweek(tree_key):
+        attempts.append(tree_key.split(":")[0])
+        if tree_key.startswith("mwb:"):
+            raise OSError("Persistent midweek source failure")
+        return repair(tree_key)
+
+    def edit_weekend_on_delivery(_key, pub_type, state):
+        nonlocal edit_pending
+        if edit_pending and pub_type == "wt" and state.snapshot.revision > weekend.revision:
+            edit_pending = False
+            store.save(weekend.tree_key, [{"id": "note", "type": "text", "title": "Operator edit"}],
+                       weekend.canonical_hash)
+
+    monkeypatch.setattr(store, "repair_canonical_image_sources", fail_midweek)
+    service.error.connect(lambda *args: errors.append(args))
+    try:
+        service.state(key, "mwb")
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert attempts == ["mwb", "wt"]
+        service.state_changed.connect(edit_weekend_on_delivery)
+        store.save(weekend.tree_key, [], weekend.canonical_hash)
+        state = _assessed_state(service, key, "wt")
+
+        assert attempts.count("mwb") == 1
+        assert attempts.count("wt") == 2 + int(edit_during_delivery)
+        assert len(errors) == 1
+        assert not state.error
+        assert service.state(key, "mwb").error == errors[0][2]
+        assert state.snapshot.revision == store.snapshot(weekend.tree_key).revision
+        if edit_during_delivery:
+            assert state.snapshot.nodes[0]["title"] == "Operator edit"
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+@pytest.mark.parametrize("timing", ["before_start", "while_running"])
+def test_explicit_refresh_survives_coalescing_with_a_passive_source_scan(monkeypatch, tmp_path, timing):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    _save_detached_image(store, tmp_path / "image.jpg")
+    weekend = store.save("wt:2026-05-25:T:20260500", [], "weekend", canonical_nodes=[])
+    repair = store.repair_canonical_image_sources
+    entered, release = threading.Event(), threading.Event()
+    attempts, errors = [], []
+    block_weekend = False
+
+    def fail_midweek(tree_key):
+        nonlocal block_weekend
+        attempts.append(tree_key.split(":")[0])
+        if tree_key.startswith("mwb:"):
+            raise OSError("Persistent midweek source failure")
+        if block_weekend:
+            block_weekend = False
+            entered.set()
+            assert release.wait(2)
+        return repair(tree_key)
+
+    monkeypatch.setattr(store, "repair_canonical_image_sources", fail_midweek)
+    service.error.connect(lambda *args: errors.append(args))
+    try:
+        service.state(key, "mwb")
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert len(errors) == 1
+        store.save(weekend.tree_key, [], weekend.canonical_hash)
+        block_weekend = timing == "while_running"
+        service.state(key, "wt")
+        if block_weekend:
+            _spin_until(entered.is_set)
+        service.maintain_prepared(key)
+        release.set()
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+
+        assert attempts.count("mwb") == 2
+        assert len(errors) == 2
+        assert service.state(key, "mwb").error == errors[-1][2]
+        assert key not in service._source_maintenance.refresh_requested
+    finally:
+        release.set()
         service.shutdown(wait_ms=1000)
 
 
