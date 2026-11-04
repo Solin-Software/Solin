@@ -34,6 +34,21 @@ def _open(source, resolver=None):
     return JwpubPlaylistImportService(resolver).open(JwpubImportRequest(str(source), language="S"))
 
 
+@pytest.fixture
+def media_read_allowance(source, monkeypatch):
+    """Fit both archive layers exactly and return bytes not extracted by open."""
+    with zipfile.ZipFile(source) as outer:
+        outer_bytes = sum(member.file_size for member in outer.infolist())
+        contents = outer.read("contents")
+    with zipfile.ZipFile(io.BytesIO(contents)) as inner:
+        inner_bytes = sum(member.file_size for member in inner.infolist())
+        media_bytes = sum(
+            member.file_size for member in inner.infolist() if not member.filename.endswith(".db")
+        )
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", outer_bytes + inner_bytes)
+    return media_bytes
+
+
 def test_catalog_is_immutable_grouped_ordered_and_collapses_repeated_relations(source):
     with _open(source) as session:
         catalog = session.catalog
@@ -304,12 +319,121 @@ def test_shared_archive_budget_accounts_for_both_layers(source, monkeypatch, kin
     with zipfile.ZipFile(source) as outer:
         outer_bytes = sum(info.file_size for info in outer.infolist())
         outer_members = len(outer.infolist())
+        contents = outer.read("contents")
+    with zipfile.ZipFile(io.BytesIO(contents)) as inner:
+        inner_bytes = sum(info.file_size for info in inner.infolist())
+        inner_members = len(inner.infolist())
+    # Either layer fits alone; only their combined accounting exceeds the limit.
     if kind == "bytes":
-        monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", outer_bytes)
+        monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", max(outer_bytes, inner_bytes))
     else:
-        monkeypatch.setattr(archive_budget, "MAX_ARCHIVE_MEMBERS", outer_members)
+        monkeypatch.setattr(
+            archive_budget, "MAX_ARCHIVE_MEMBERS", max(outer_members, inner_members)
+        )
     with pytest.raises(ValueError, match="budget"):
         _open(source)
+
+
+def test_open_budget_counts_actual_reads_across_both_layers(
+    source, monkeypatch, media_read_allowance
+):
+    original = zipfile.ZipFile.open
+
+    def inflated_database(archive, member, *args, **kwargs):
+        name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+        if name.endswith(".db"):
+            with original(archive, member, *args, **kwargs) as stream:
+                # The database alone fits; prior outer-layer reads cause overflow.
+                return io.BytesIO(stream.read() + b"x" * (media_read_allowance + 1))
+        return original(archive, member, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", inflated_database)
+    with pytest.raises(ValueError, match="budget"):
+        _open(source)
+
+
+def test_evicted_previews_do_not_exhaust_materialization_budget(
+    source, tmp_path, monkeypatch, media_read_allowance
+):
+    monkeypatch.setattr(jwpub_import, "_PREVIEW_CACHE_BYTES", len(PREVIEW))
+    with _open(source) as session:
+        # Alternating images forces real archive reads instead of cache hits.
+        for _ in range(media_read_allowance // (len(PREVIEW) + len(IMAGE)) + 1):
+            assert session.preview("4") == PREVIEW
+            assert session.preview("1") == IMAGE
+        items, _ = session.materialize(
+            None, dest_images_dir=str(tmp_path / "media"), resolve_urls=False
+        )
+        assert {Path(item["url"]).read_bytes() for item in items if item["url"]} == {
+            IMAGE,
+            IMAGE + b"orphan",
+            b"embedded video bytes",
+        }
+
+
+def test_cancelled_materializations_do_not_exhaust_retry_budget(
+    source, tmp_path, media_read_allowance
+):
+    destination = tmp_path / "media"
+    created = ["previous-owned-output"]
+    with _open(source) as session:
+        for _ in range(media_read_allowance // len(IMAGE) + 1):
+            with pytest.raises(JwpubImportCancelled):
+                session.materialize(
+                    ["1", "9"],
+                    dest_images_dir=str(destination),
+                    created_paths=created,
+                    cancelled=lambda: destination.exists() and any(destination.glob("*.png")),
+                )
+            assert list(destination.iterdir()) == []
+            assert created == ["previous-owned-output"]
+        items, _ = session.materialize(
+            ["1", "9"], dest_images_dir=str(destination), created_paths=created
+        )
+        assert created == ["previous-owned-output", *(item["url"] for item in items)]
+        assert {Path(item["url"]).read_bytes() for item in items} == {IMAGE, IMAGE + b"orphan"}
+
+
+@pytest.mark.parametrize("operation", ["preview", "materialize"])
+def test_operation_budget_bounds_actual_reads_and_recovers_for_retry(
+    source, tmp_path, monkeypatch, operation
+):
+    destination = tmp_path / "media"
+    created = ["previous-owned-output"]
+    with _open(source) as session:
+        # Exceed the limit in one preview stream or cumulatively across a batch,
+        # without changing declared metadata, to exercise actual-read protection.
+        monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", 2 * len(IMAGE) - 1)
+        original = zipfile.ZipFile.open
+        oversized = True
+
+        def inflated(archive, member, *args, **kwargs):
+            name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+            if oversized and name in {"images/first.png", "orphan.png"}:
+                payload = IMAGE * 2 if operation == "preview" else IMAGE
+                return io.BytesIO(payload)
+            return original(archive, member, *args, **kwargs)
+
+        monkeypatch.setattr(zipfile.ZipFile, "open", inflated)
+        with pytest.raises(ValueError, match="budget"):
+            if operation == "preview":
+                session.preview("1")
+            else:
+                session.materialize(
+                    ["1", "9"], dest_images_dir=str(destination), created_paths=created
+                )
+        assert created == ["previous-owned-output"]
+        assert not destination.exists() or list(destination.iterdir()) == []
+        oversized = False
+        if operation == "preview":
+            assert session.preview("1") == IMAGE
+        else:
+            # A fresh operation gets its own allowance after the failed batch.
+            items, _ = session.materialize(
+                ["1"], dest_images_dir=str(destination), created_paths=created
+            )
+            assert Path(items[0]["url"]).read_bytes() == IMAGE
+            assert created == ["previous-owned-output", items[0]["url"]]
 
 
 def test_cancel_open_cleans_temporary_snapshot(source, monkeypatch):

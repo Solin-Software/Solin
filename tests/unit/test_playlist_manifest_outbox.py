@@ -58,6 +58,7 @@ def _outbox(store: _Store):
     controller = type("Controller", (), {})()
     controller._pending_manifest_saves = {}
     controller._manifest_state_generation = 0
+    controller._jwpub_origin_generation = 0
     controller._manifest_save_inflight = None
     controller._manifest_save_future = None
     controller._manifest_save_executor = _ImmediateExecutor()

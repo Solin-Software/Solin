@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from solin.bootstrap import application as main
 from solin.bootstrap.runtime_args import parse_runtime_args
 from solin.core.meetings.content_policy import MeetingContentPolicy
+from solin.core.profiles.settings import ProfileSettings
 
 
 def test_parse_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
@@ -68,7 +69,7 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
     runtime_paths.pdf_pages_dir = "pdf_pages"
     runtime_paths.pptx_pages_dir = "pptx_pages"
     runtime_paths.docx_pages_dir = "docx_pages"
-    profile_settings = object()
+    profile_settings = ProfileSettings.for_profile_id("profile-test")
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(
@@ -157,6 +158,7 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
             received_active_profile,
             *,
             talk_theme_output_settings,
+            jwpub_selection_factory,
             scene_workspace,
             scene_engine,
             ptz_executor,
@@ -191,6 +193,7 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
             self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.jwpub_selection_factory = jwpub_selection_factory
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory
@@ -306,6 +309,7 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
     assert str(window.profile_media_store.embedded_dir) == "embedded"
     assert str(window.profile_media_store.images_dir) == "images"
     assert window.jwpub_import_thread_factory.__class__.__name__ == "JwpubImportThreadFactory"
+    assert callable(window.jwpub_selection_factory.select)
     assert window.document_conversion_service.__class__.__name__ == "DocumentConversionService"
     assert str(window.document_conversion_service.pdf_pages_dir) == "profile_pdf_pages"
     assert str(window.document_conversion_service.pptx_pages_dir) == "profile_pptx_pages"
@@ -368,7 +372,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     runtime_paths.pdf_pages_dir = "pdf_pages"
     runtime_paths.pptx_pages_dir = "pptx_pages"
     runtime_paths.docx_pages_dir = "docx_pages"
-    profile_settings = object()
+    profile_settings = ProfileSettings.for_profile_id("profile-test")
     media_cache_manager = object()
     media_settings = object()
     profile_settings_bundle = SimpleNamespace(
@@ -451,6 +455,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             received_active_profile,
             *,
             talk_theme_output_settings,
+            jwpub_selection_factory,
             scene_workspace,
             scene_engine,
             ptz_executor,
@@ -485,6 +490,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
             self.meeting_linked_folder_sync = meeting_linked_folder_sync
             self.profile_media_store = profile_media_store
             self.jwpub_import_thread_factory = jwpub_import_thread_factory
+            self.jwpub_selection_factory = jwpub_selection_factory
             self.document_conversion_service = document_conversion_service
             self.clip_fetch_thread_factory = clip_fetch_thread_factory
             self.cache_scan_session_factory = cache_scan_session_factory

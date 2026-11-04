@@ -113,7 +113,6 @@ class JwpubPublication:
         self._fingerprint = _fingerprint(self._source)
         self._source_digest = _hash_file(self._source, cancelled)
         self._stem = self._source.stem
-        self._budget = ArchiveBudget()
         self._previews: OrderedDict[str, bytes] = OrderedDict()
         self._preview_bytes = 0
         self._resource_identities: dict[str, tuple[str, str]] = {}
@@ -138,15 +137,17 @@ class JwpubPublication:
         return self._catalog
 
     def _open(self, language: str, cancelled: Cancellation) -> JwpubCatalog:
+        # Both layers share one allowance for this opening operation.
+        budget = ArchiveBudget()
         root = Path(self._temporary.name)
         self._contents = root / "contents.zip"
         manifest: dict = {}
         with zipfile.ZipFile(self._source) as outer:
-            members = _members(outer, self._budget, cancelled)
+            members = _members(outer, budget, cancelled)
             if "contents" not in members:
                 raise ValueError("Not a valid .jwpub (no 'contents' entry)")
             with outer.open(members["contents"]) as source, self._contents.open("xb") as output:
-                self._budget.copy_stream(
+                budget.copy_stream(
                     source, output, check_cancelled=lambda: _check_cancelled(cancelled)
                 )
             if "manifest.json" in members:
@@ -154,7 +155,7 @@ class JwpubPublication:
                 if entry.file_size > _MANIFEST_MAX_BYTES:
                     raise ValueError("Publication manifest is too large")
                 with outer.open(entry) as source, io.BytesIO() as output:
-                    self._budget.copy_stream(
+                    budget.copy_stream(
                         source, output, check_cancelled=lambda: _check_cancelled(cancelled)
                     )
                     metadata = json.loads(output.getvalue())
@@ -166,7 +167,7 @@ class JwpubPublication:
 
         database = root / "publication.db"
         with zipfile.ZipFile(self._contents) as inner:
-            self._members = _members(inner, self._budget, cancelled)
+            self._members = _members(inner, budget, cancelled)
             databases = [name for name in self._members if name.lower().endswith(".db")]
             requested_db = manifest.get("fileName")
             if requested_db in databases:
@@ -176,7 +177,7 @@ class JwpubPublication:
             else:
                 raise ValueError("Publication must identify one SQLite database")
             with inner.open(self._members[db_name]) as source, database.open("xb") as output:
-                self._budget.copy_stream(
+                budget.copy_stream(
                     source, output, check_cancelled=lambda: _check_cancelled(cancelled)
                 )
         _check_cancelled(cancelled)
@@ -236,7 +237,7 @@ class JwpubPublication:
                 inner.open(member) as source,
                 io.BytesIO() as output,
             ):
-                self._budget.copy_stream(
+                ArchiveBudget().copy_stream(
                     source, output, check_cancelled=lambda: _check_cancelled(cancelled)
                 )
                 data = output.getvalue()
@@ -277,6 +278,7 @@ class JwpubPublication:
             created: list[Path] = []
             resources: dict[str, str] = {}
             items: list[dict] = []
+            budget = ArchiveBudget()
             try:
                 with zipfile.ZipFile(self._contents) as inner:
                     for media_id, media in self._media.items():
@@ -291,6 +293,7 @@ class JwpubPublication:
                                     media,
                                     Path(dest_images_dir),
                                     created,
+                                    budget,
                                     cancelled,
                                 )
                             item["url"] = resources[media.member_path]
@@ -341,6 +344,7 @@ class JwpubPublication:
         media: JwpubMedia,
         destination: Path,
         created: list[Path],
+        budget: ArchiveBudget,
         cancelled: Cancellation,
     ) -> str:
         destination.mkdir(parents=True, exist_ok=True)
@@ -360,7 +364,7 @@ class JwpubPublication:
             ) as output:
                 staging = Path(output.name)
                 with archive.open(self._members[media.member_path]) as source:
-                    self._budget.copy_stream(
+                    budget.copy_stream(
                         source, output, check_cancelled=lambda: _check_cancelled(cancelled)
                     )
             digest = _hash_file(staging, cancelled)

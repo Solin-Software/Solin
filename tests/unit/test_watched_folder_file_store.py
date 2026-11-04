@@ -24,12 +24,17 @@ def test_copy_rollback_preserves_preexisting_reused_and_replaced_files(tmp_path)
     reused = store.copy_file_transaction(WatchedFolderCopyRequest(source, folder, "reused"))
     store.rollback_copies(folder, [reused])
     assert created.destination.is_file()
-    replaced = store.copy_file_transaction(WatchedFolderCopyRequest(source, folder, "replaced"))
+    other_source = tmp_path / "other.mp4"
+    other_source.write_bytes(b"created")
+    replaced = store.copy_file_transaction(
+        WatchedFolderCopyRequest(other_source, folder, "replaced"),
+    )
     replaced.destination.write_bytes(b"changed")
     outside = WatchedFolderCopyResult(
         source, source, len(b"created"), content=created.content,
     )
     store.rollback_copies(folder, [created, reused, replaced, outside])
+    assert not created.destination.exists()
     assert replaced.destination.read_bytes() == b"changed"
     assert preexisting.read_bytes() == b"preexisting"
     assert source.read_bytes() == b"created"
