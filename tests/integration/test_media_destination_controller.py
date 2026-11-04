@@ -318,6 +318,7 @@ def test_meeting_preparation_forwards_the_selected_retry_policy(status, force, p
     assert not any(force for _monday, force in meetings.requested_weeks)
 
 
+@pytest.mark.usefixtures("all_controls_tab_focus")
 @pytest.mark.parametrize("status", ["download", "error"])
 @pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
 def test_meeting_preparation_action_is_keyboard_accessible(status, key) -> None:
