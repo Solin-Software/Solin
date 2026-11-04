@@ -17,12 +17,24 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # A QCoreApplication created by a model-only module cannot later be upgraded to
 # QApplication, which previously caused the complete QML host module to skip.
 from PySide6.QtCore import (  # noqa: E402
-    QCoreApplication, QEvent, QObject, QtMsgType, qFormatLogMessage, qInstallMessageHandler,
+    QCoreApplication, QEvent, QObject, Qt, QtMsgType, qFormatLogMessage, qInstallMessageHandler,
 )
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
 _QT_APPLICATION = QApplication.instance() or QApplication([])
+
+
+@pytest.fixture
+def all_controls_tab_focus() -> Iterator[None]:
+    """Enable full keyboard navigation for this test and restore the host preference."""
+    hints = QApplication.styleHints()
+    previous = hints.tabFocusBehavior()
+    hints.setTabFocusBehavior(Qt.TabFocusBehavior.TabFocusAllControls)
+    try:
+        yield
+    finally:
+        hints.setTabFocusBehavior(previous)
 
 
 @pytest.fixture(scope="session")

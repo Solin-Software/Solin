@@ -28,6 +28,38 @@ from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.foundation.thread_workers import CancellationFlag
 
 
+@pytest.mark.parametrize("field", ["canonical_nodes", "hidden_canonical_media"])
+def test_profile_cleanup_retains_media_outside_visible_tree(tmp_path, field):
+    path = tmp_path / "hidden.jpg"
+    node = {
+        "id": "hidden-image", "type": "media", "children": [],
+        "media_ref": {"file_path": str(path)},
+    }
+    record = {"nodes": [], field: {"source": node} if field == "hidden_canonical_media" else [node]}
+
+    references = playlist_cleanup.build_profile_cleanup_references([], {"trees": {"key": record}})
+
+    assert os.path.normcase(str(path)) in references.media_paths
+
+
+@pytest.mark.parametrize("field", ["canonical_nodes", "hidden_canonical_media"])
+def test_legacy_image_cleanup_preserves_retained_meeting_image(tmp_path, field):
+    paths = ProfilePaths.from_roots(data_dir=tmp_path / "Data", cache_dir=None, profile_id="Profile")
+    paths.ensure_dirs()
+    image = paths.images_dir / "RetainedImage.jpg"
+    image.write_bytes(b"image")
+    node = {"id": "image", "type": "media", "media_ref": {"file_path": str(image)}}
+    record = {"nodes": [], field: {"source": node} if field == "hidden_canonical_media" else [node]}
+    paths.meeting_trees_file.write_text(json.dumps({"version": 6, "trees": {"key": record}}), encoding="utf-8")
+
+    playlist_cleanup.flush_images_dir(
+        PlaylistStoragePaths(paths.playlists_file, paths.pending_deletions_file),
+        MeetingTreeStore(paths.meeting_trees_file), paths,
+    )
+
+    assert image.exists()
+
+
 def test_playlist_storage_roundtrips_playlists(tmp_path):
     playlists_file = tmp_path / "playlists.json"
     storage_paths = PlaylistStoragePaths(

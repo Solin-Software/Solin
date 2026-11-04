@@ -39,15 +39,18 @@ from PySide6.QtWidgets import (
 from ...core.meetings.meeting_weeks import (
     current_monday,
     is_selectable_meeting_week,
+    selectable_meeting_weeks,
 )
 from ...core.meetings.models import MemorialData, WeekData
 from ...core.meetings.preparation import (
     MeetingPreparationKey,
+    MeetingPreparationPhase,
     MeetingPreparationPriority,
     MeetingPreparationRequest,
     MeetingPreparationService,
     MeetingPreparationState,
 )
+from ...core.meetings.content_policy import MeetingRequestOrigin
 from ...core.i18n.date import week_label, format_single_date
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.runtime_paths import ProfilePaths, RuntimePaths
@@ -614,6 +617,13 @@ class _MemorialDetailView(QWidget):
         if hasattr(self, "controller"):
             self.controller.load_memorial(self._md)
 
+    def update_data(self, data: MemorialData) -> None:
+        if self._disposed or data == self._md:
+            return
+        self._md = data
+        self.controller.load_memorial(data)
+        self._sync_catalog_placement()
+
     def _sync_catalog_placement(self):
         if not hasattr(self, "controller"):
             return
@@ -781,6 +791,7 @@ class MeetingsWidget(QWidget):
     media_destination_requested = Signal(object)
     set_as_idle_requested = Signal(object)
     destinationTargetsChanged = Signal(str)
+    assets_collection_requested = Signal()
 
     def __init__(
         self,
@@ -880,9 +891,11 @@ class MeetingsWidget(QWidget):
 
         # ── Memorial service ───────────────────────────────────────────────────
         self._memorial_svc = memorial_service_factory(self)
+        self._memorial_svc.asset_changed.connect(self._cache_manager.notify_cached_threadsafe)
         self._set_memorial_lang_from_mgr()
         self._memorial_svc.memorial_ready.connect(self._on_memorial_ready)
         self._memorial_svc.memorial_status.connect(self._on_memorial_status)
+        self._memorial_svc.state_changed.connect(self._refresh_memorial_card)
         self._memorial_svc.memorial_progress.connect(self._on_memorial_progress)
         startup.mark("meetings_memorial_service_ready")
 
@@ -896,6 +909,10 @@ class MeetingsWidget(QWidget):
         self._auto_download_timer = QTimer(self)
         self._auto_download_timer.setSingleShot(True)
         self._auto_download_timer.timeout.connect(self.sync_automatic_downloads)
+        self._maintenance_timer = QTimer(self)
+        self._maintenance_timer.setInterval(6 * 60 * 60 * 1000)
+        self._maintenance_timer.timeout.connect(self._maintain_prepared_meetings)
+        self._maintenance_timer.start()
 
         self._folder_watcher = self._watched_folder_watcher_factory(self)
         self._folder_watcher.changed.connect(self._on_folder_changed)
@@ -973,8 +990,11 @@ class MeetingsWidget(QWidget):
         db_label = snapshots.get("mwb").overview.title if snapshots.get("mwb") else ""
         self._navbar.update_week(monday, db_label)
         self._refresh_overview_cards(monday)
-        self._ensure_week(monday)
-        if self._memorial_svc.is_memorial_week(monday):
+        self._refresh_week_content(monday)
+        if self._memorial_svc.is_memorial_week(monday) and (
+            self._media_settings.meetings_auto_download()
+            or self._memorial_svc.has_prepared_content()
+        ):
             self._memorial_svc.load()
 
     def _current_media_context(self) -> JWMediaLanguageContext:
@@ -993,6 +1013,7 @@ class MeetingsWidget(QWidget):
         force: bool = False,
         download_media: bool = False,
         priority: MeetingPreparationPriority = MeetingPreparationPriority.INTERACTIVE,
+        origin: MeetingRequestOrigin = MeetingRequestOrigin.AUTOMATIC,
     ) -> MeetingPreparationState:
         return self._preparation.ensure_week(
             MeetingPreparationRequest(
@@ -1000,10 +1021,44 @@ class MeetingsWidget(QWidget):
                 force_refresh=force,
                 download_media=download_media,
                 priority=priority,
+                origin=origin,
             )
         )
 
+    def _refresh_week_content(self, monday: date) -> None:
+        self._preparation.maintain_prepared(self._preparation_key(monday))
+        if self._media_settings.meetings_auto_download():
+            self._ensure_week(monday)
+
+    def _maintain_prepared_meetings(self) -> None:
+        oldest = selectable_meeting_weeks()[0]
+        for session in tuple(self._destination_sessions):
+            key = parse_meeting_tree_key(session.tree_key)
+            if key is not None and key.monday < oldest:
+                session.close()
+        try:
+            self._preparation.prune_expired()
+        except (OSError, UnicodeError, ValueError):
+            log_ignored_exception(__name__, "Meeting expiry deferred")
+            return
+        for detail_key in list(self._details):
+            try:
+                detail_day = date.fromisoformat(detail_key.split(":", 1)[1])
+            except (IndexError, ValueError):
+                continue
+            if detail_day < oldest:
+                self._discard_detail(detail_key)
+        self._saved_snapshots.clear()
+        if self._monday < oldest:
+            self._navigate_to(current_monday())
+        self.assets_collection_requested.emit()
+        if self._memorial_svc.has_prepared_content():
+            self._memorial_svc.load()
+        for monday in selectable_meeting_weeks():
+            self._preparation.maintain_prepared(self._preparation_key(monday))
+
     def sync_automatic_downloads(self) -> None:
+        self._maintain_prepared_meetings()
         if not self._media_settings.meetings_auto_download():
             self._preparation.cancel_automatic_downloads()
             return
@@ -1061,6 +1116,12 @@ class MeetingsWidget(QWidget):
         self._overview.open_mwb.connect(lambda: self._open_detail("mwb"))
         self._overview.open_wt.connect(lambda: self._open_detail("wt"))
         self._overview.open_memorial.connect(self._open_memorial_detail)
+        self._overview.update_mwb.connect(lambda: self._update_meeting("mwb"))
+        self._overview.update_wt.connect(lambda: self._update_meeting("wt"))
+        self._overview.repair_mwb.connect(lambda: self._repair_meeting("mwb"))
+        self._overview.repair_wt.connect(lambda: self._repair_meeting("wt"))
+        self._overview.update_memorial.connect(lambda: self._memorial_svc.load(force=True))
+        self._overview.repair_memorial.connect(self._memorial_svc.repair_saved)
 
     def _install_overview(self) -> None:
         self._stack.addWidget(self._overview)
@@ -1148,10 +1209,13 @@ class MeetingsWidget(QWidget):
         db_label = snapshots.get("mwb").overview.title if snapshots.get("mwb") else ""
         self._navbar.update_week(monday, db_label)
         self._refresh_overview_cards(monday)
-        self._ensure_week(monday, force=reload)
+        self._refresh_week_content(monday)
         # Load Memorial media if this is the correct week.
         # MemorialService checks the seven-day window internally.
-        if self._memorial_svc.is_memorial_week(monday):
+        if self._memorial_svc.is_memorial_week(monday) and (
+            self._media_settings.meetings_auto_download()
+            or self._memorial_svc.has_prepared_content()
+        ):
             self._memorial_svc.load(force=reload)
 
     def _refresh_overview_cards(self, monday: date):
@@ -1167,6 +1231,29 @@ class MeetingsWidget(QWidget):
         else:
             self._apply_unavailable_card_state(self._overview.wt_card, monday, "wt")
 
+        for pub_type, snapshot, card in (
+            ("mwb", mwb_snapshot, self._overview.mwb_card),
+            ("wt", wt_snapshot, self._overview.wt_card),
+        ):
+            if snapshot is not None:
+                state = self._preparation.state(self._preparation_key(monday), pub_type)
+                card.set_maintenance(
+                    update_available=(
+                        (
+                            state.repair_requires_update
+                            or state.update_available
+                            or not snapshot.canonical_hash
+                        )
+                        and not self._preparation.policy.auto_update
+                        and not state.refreshing
+                    ),
+                    repair_required=(
+                        state.repair_required
+                        and not self._preparation.policy.auto_recover_images
+                        and not state.refreshing
+                    ),
+                )
+
         # ── Memorial card ──────────────────────────────────────────────────────
         is_memorial_week = self._memorial_svc.is_memorial_week(monday)
         mc = self._overview.memorial_card
@@ -1176,9 +1263,13 @@ class MeetingsWidget(QWidget):
             mc.setVisible(True)
             md = self._memorial_svc.get_data()
             if md is None:
-                mc.set_loading()
+                if self._media_settings.meetings_auto_download():
+                    mc.set_loading()
+                else:
+                    mc.set_downloadable()
             elif md.status == "ready":
                 mc.set_ready(md)
+                self._apply_memorial_maintenance()
             elif md.status in ("not_yet", "past"):
                 mc.setVisible(False)
             elif md.status == "not_found":
@@ -1200,6 +1291,8 @@ class MeetingsWidget(QWidget):
             card.set_not_found()
         elif state.error:
             card.set_error()
+        elif state.phase == MeetingPreparationPhase.IDLE:
+            card.set_downloadable()
         else:
             card.set_loading()
 
@@ -1213,11 +1306,15 @@ class MeetingsWidget(QWidget):
                 self._preparation_key(self._monday),
                 pub_type,
             )
-            if not state.error:
+            if state.refreshing:
                 return
             card = self._overview.mwb_card if pub_type == "mwb" else self._overview.wt_card
             card.set_loading()
-            self._ensure_week(self._monday, force=True)
+            self._preparation.prepare_meeting(
+                self._preparation_key(self._monday),
+                pub_type,
+                force=bool(state.error or state.source_status == "not_found"),
+            )
             return
         wd = self._preparation.week_data(self._preparation_key(self._monday))
         if wd is None:
@@ -1228,6 +1325,16 @@ class MeetingsWidget(QWidget):
 
         self._navbar.setVisible(False)
         self._stack.setCurrentWidget(self._details[detail_key])
+
+    def _update_meeting(self, pub_type: str) -> None:
+        self._preparation.prepare_meeting(
+            self._preparation_key(self._monday),
+            pub_type,
+            force=True,
+        )
+
+    def _repair_meeting(self, pub_type: str) -> None:
+        self._preparation.repair_meeting(self._preparation_key(self._monday), pub_type)
 
     def _show_study_detail(
         self,
@@ -1303,7 +1410,7 @@ class MeetingsWidget(QWidget):
         md = self._memorial_svc.get_data()
 
         # Error / not-found: retry the load instead of silently ignoring the click.
-        if md and md.status in ("error", "not_found"):
+        if md is None or md.status in ("error", "not_found"):
             self._overview.memorial_card.set_loading()
             self._memorial_svc.load(force=True)
             return
@@ -1406,6 +1513,23 @@ class MeetingsWidget(QWidget):
 
     # ── Memorial callbacks ────────────────────────────────────────────────────
 
+    @Slot()
+    def _refresh_memorial_card(self) -> None:
+        if self._memorial_svc.is_memorial_week(self._monday):
+            self._refresh_overview_cards(self._monday)
+
+    def _apply_memorial_maintenance(self) -> None:
+        service = self._memorial_svc
+        self._overview.memorial_card.set_maintenance(
+            update_available=(
+                (service.repair_requires_update or service.update_available)
+                and not service.content_policy.auto_update
+            ),
+            repair_required=(
+                service.repair_required and not service.content_policy.auto_recover_images
+            ),
+        )
+
     @Slot(object)
     def _on_memorial_ready(self, md: "MemorialData"):
         """Memorial data loaded; update the card if this is the correct week."""
@@ -1413,8 +1537,10 @@ class MeetingsWidget(QWidget):
             mc = self._overview.memorial_card
             mc.setVisible(True)
             mc.set_ready(md)
-            # Invalidate cached details to rebuild with fresh data.
-            self._discard_detail(f"memorial:{self._monday.isoformat()}")
+            self._apply_memorial_maintenance()
+            detail = self._details.get(f"memorial:{self._monday.isoformat()}")
+            if isinstance(detail, _MemorialDetailView):
+                detail.update_data(md)
 
     @Slot(str)
     def _on_memorial_status(self, status: str):
@@ -1508,7 +1634,17 @@ class MeetingsWidget(QWidget):
             return
         self._refresh_saved_snapshots(monday)
         self.destinationTargetsChanged.emit(monday.isoformat())
-        self._ensure_week(monday, force=force)
+        if force:
+            self._ensure_week(monday, force=True, origin=MeetingRequestOrigin.MANUAL)
+        else:
+            self._refresh_week_content(monday)
+
+    def prepare_destination_meeting(
+        self, monday: date, pub_type: str, *, force: bool = False,
+    ) -> None:
+        if not is_selectable_meeting_week(monday) or pub_type not in {"mwb", "wt"}:
+            return
+        self._preparation.prepare_meeting(self._preparation_key(monday), pub_type, force=force)
 
     def destination_targets(self, monday: date) -> list[dict[str, object]]:
         if not is_selectable_meeting_week(monday):
@@ -1592,6 +1728,8 @@ class MeetingsWidget(QWidget):
             display_status = "unavailable"
         elif state.error:
             display_status = "error"
+        elif state.phase == MeetingPreparationPhase.IDLE:
+            display_status = "download"
         else:
             display_status = "loading"
 
@@ -1682,6 +1820,7 @@ class MeetingsWidget(QWidget):
         timer = getattr(self, "_auto_download_timer", None)
         if timer:
             timer.stop()
+        self._maintenance_timer.stop()
         for session in list(self._destination_sessions):
             session.close()
         self._destination_sessions.clear()

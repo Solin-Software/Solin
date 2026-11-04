@@ -9512,6 +9512,10 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>Media removed by JW.ORG</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Download</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -9770,6 +9774,18 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <location line="-2"/>
         <source>Not available this week</source>
         <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Download</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
     </message>
 </context>
 <context>

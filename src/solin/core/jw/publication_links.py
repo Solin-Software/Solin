@@ -71,18 +71,24 @@ class PublicationMediaResolver:
         )
 
     def resolve_jwpub(self, request: JwpubMediaRequest) -> JwpubMediaInfo:
-        data = fetch_pub_media_json(
-            {
-                "pub": request.pub,
-                "issue": request.issue,
-                "langwritten": request.language,
-                "fileformat": "JWPUB",
-                "output": "json",
-                "alllangs": "0",
-                "txtCMSLang": "E",
-            }
-        )
-        if not data:
+        try:
+            data = fetch_pub_media_json(
+                {
+                    "pub": request.pub,
+                    "issue": request.issue,
+                    "langwritten": request.language,
+                    "fileformat": "JWPUB",
+                    "output": "json",
+                    "alllangs": "0",
+                    "txtCMSLang": "E",
+                },
+                raise_errors=True,
+            )
+        except HttpStatusError as exc:
+            return JwpubMediaInfo(None, not_found=exc.status_code in {400, 404})
+        except HttpError:
+            return JwpubMediaInfo(None)
+        if data is None:
             return JwpubMediaInfo(None, "", False)
 
         media_file = select_pub_media_file(
@@ -106,12 +112,16 @@ def fetch_pub_media_json(
     base_url: str = PUB_MEDIA_URL,
     timeout: int = DEFAULT_TIMEOUT,
     user_agent: str = DEFAULT_USER_AGENT,
+    raise_errors: bool = False,
 ) -> dict | None:
+    """Fetch a media catalog, optionally propagating logged HTTP failures."""
     url = build_pub_media_url(params, base_url)
     try:
         data = get_json(url, timeout=timeout, headers={"User-Agent": user_agent})
     except HttpError as exc:
         log.warning("GET %s -> %s", url, exc)
+        if raise_errors:
+            raise
         return None
 
     return data if isinstance(data, dict) else None

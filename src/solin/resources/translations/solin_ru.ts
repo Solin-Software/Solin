@@ -2239,7 +2239,7 @@
     <message>
         <location line="+215"/>
         <source>Retry</source>
-        <translation>Попытка еще раз</translation>
+        <translation>Повторить</translation>
     </message>
     <message>
         <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
@@ -10887,6 +10887,10 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>Downloading… {}%</source>
         <translation type="vanished">Загрузка… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Загрузить</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11163,6 +11167,18 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Загрузка… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Загрузить</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Обновить</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
     </message>
 </context>
 <context>

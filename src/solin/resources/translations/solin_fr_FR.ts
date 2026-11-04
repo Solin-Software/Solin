@@ -10846,6 +10846,10 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Téléchargement… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Télécharger</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Téléchargement… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Télécharger</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Mettre à jour</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Réessayer</translation>
     </message>
 </context>
 <context>

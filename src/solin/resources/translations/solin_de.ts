@@ -10846,6 +10846,10 @@ Beide Geräte müssen im selben WLAN sein.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Wird heruntergeladen… {} %</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Herunterladen</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Wird heruntergeladen… {} %</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Herunterladen</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Aktualisieren</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Erneut versuchen</translation>
     </message>
 </context>
 <context>

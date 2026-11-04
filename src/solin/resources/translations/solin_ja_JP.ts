@@ -10804,6 +10804,10 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>Downloading… {}%</source>
         <translation type="vanished">ダウンロード中… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>ダウンロード</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11080,6 +11084,18 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">ダウンロード中… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>ダウンロード</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>更新</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>再試行</translation>
     </message>
 </context>
 <context>

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from solin.bootstrap import application as main
 from solin.bootstrap.runtime_args import parse_runtime_args
+from solin.core.meetings.content_policy import MeetingContentPolicy
 
 
 def test_parse_runtime_args_handles_profile_flags_and_existing_files(tmp_path):
@@ -235,7 +236,7 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda *args: events.append(("service_factories", args)) or service_factories,
+        lambda *args, **kwargs: events.append(("service_factories", args)) or service_factories,
     )
     monkeypatch.setattr(
         main,
@@ -271,6 +272,9 @@ def test_build_main_window_runtime_uses_libobs_despite_retired_engine_selection(
         active_profile=active_profile,
         talk_theme_output_settings=talk_theme_output_settings,
         window_host=window_host,
+        publication_assets=SimpleNamespace(),
+        meeting_content_policy=MeetingContentPolicy(),
+        meeting_asset_lifecycle=object(),
     )
 
     assert window.lang_manager == "lang"
@@ -526,7 +530,7 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
     monkeypatch.setattr(
         main,
         "_build_main_window_service_factories",
-        lambda *args: events.append(("service_factories", args)) or service_factories,
+        lambda *args, **kwargs: events.append(("service_factories", args)) or service_factories,
     )
     monkeypatch.setattr(
         main,
@@ -562,6 +566,9 @@ def test_build_main_window_runtime_does_not_mutate_native_window_lifecycle(monke
         active_profile=active_profile,
         talk_theme_output_settings=talk_theme_output_settings,
         window_host=window_host,
+        publication_assets=SimpleNamespace(),
+        meeting_content_policy=MeetingContentPolicy(),
+        meeting_asset_lifecycle=object(),
     )
 
     assert events == [

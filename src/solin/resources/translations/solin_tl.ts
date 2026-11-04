@@ -10846,6 +10846,10 @@ Dapat nakakonekta ang dalawang device sa iisang Wi-Fi network.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Dina-download… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>I-download</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Dina-download… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>I-download</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>I-update</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Subukang muli</translation>
     </message>
 </context>
 <context>

@@ -10804,6 +10804,10 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Mengunduh… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Unduh</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11080,6 +11084,18 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Mengunduh… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Unduh</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Perbarui</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Coba lagi</translation>
     </message>
 </context>
 <context>

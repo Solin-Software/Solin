@@ -36,13 +36,11 @@ class MediaCacheLookup(Protocol):
 @dataclass(frozen=True)
 class QueuedPrefetch:
     url: str
-    batch_id: str = ""
     retries: int = 0
 
 
 @dataclass
 class ActivePrefetch:
-    batch_id: str = ""
     retries: int = 0
     had_progress: bool = False
     last_progress_emit_at: float = 0.0
@@ -125,6 +123,8 @@ class MediaPrefetchQueue:
         self._queue: deque[QueuedPrefetch] = deque()
         self._queued: dict[str, QueuedPrefetch] = {}
         self._active: dict[str, ActivePrefetch] = {}
+        # Empty-string ownership represents an individual (non-batch) request.
+        self._consumers: dict[str, set[str]] = {}
         self._batches: dict[str, BatchState] = {}
         self._batch_signal_suppressed = 0
         self._dirty_batches: set[str] = set()
@@ -181,13 +181,15 @@ class MediaPrefetchQueue:
         queued = self._queued.pop(url, None)
         if queued is not None:
             self._queue = deque(entry for entry in self._queue if entry.url != url)
-            self._remove_from_batch(plan, queued.batch_id, url, was_queued=True)
+            for batch_id in self._consumers.pop(url, set()):
+                self._remove_from_batch(plan, batch_id, url, was_queued=True)
             plan.add("dequeued", url=url)
             return plan
 
         active = self._active.pop(url, None)
         if active is not None:
-            self._remove_from_batch(plan, active.batch_id, url, was_active=True)
+            for batch_id in self._consumers.pop(url, set()):
+                self._remove_from_batch(plan, batch_id, url, was_active=True)
             plan.add("cancel_active", url=url)
             plan.add("dequeued", url=url)
             plan.extend(self.pump())
@@ -207,23 +209,21 @@ class MediaPrefetchQueue:
         if not batch:
             return plan
         batch.canceled = True
-        for url in list(batch.queued):
-            plan.extend(self.cancel_prefetch(url))
-        for url in list(batch.active):
-            plan.extend(self.cancel_prefetch(url))
+        for url in batch.queued | batch.active:
+            self._release_consumer(plan, url, batch_id)
         self._emit_batch_changed(plan, batch_id)
+        plan.extend(self.pump())
         return plan
 
     def notify_cached(self, url: str) -> PrefetchPlan:
         plan = PrefetchPlan()
-        active = self._active.pop(url, None)
-        if active is not None:
-            self._mark_batch_done(plan, active.batch_id, url)
+        self._active.pop(url, None)
         queued = self._queued.pop(url, None)
         if queued is not None:
             self._queue = deque(entry for entry in self._queue if entry.url != url)
-            self._remove_from_batch(plan, queued.batch_id, url, was_queued=True)
             plan.add("dequeued", url=url)
+        for batch_id in self._consumers.pop(url, set()):
+            self._mark_batch_done(plan, batch_id, url)
         if url:
             plan.add("cache_changed", url=url)
         plan.extend(self.pump())
@@ -236,7 +236,8 @@ class MediaPrefetchQueue:
             if self._queued.pop(entry.url, None) is None:
                 continue
             if self._cache_lookup.is_cached(entry.url):
-                self._mark_batch_done(plan, entry.batch_id, entry.url)
+                for batch_id in self._consumers.pop(entry.url, set()):
+                    self._mark_batch_done(plan, batch_id, entry.url)
                 plan.add("cache_changed", url=entry.url)
                 plan.add("dequeued", url=entry.url)
                 continue
@@ -250,9 +251,10 @@ class MediaPrefetchQueue:
         active = self._active.get(url)
         if active is not None and downloaded > 0:
             active.had_progress = True
-            batch = self._batches.get(active.batch_id)
-            if batch is not None:
-                batch.consecutive_preprogress_failures = 0
+            for batch_id in self._consumers.get(url, ()):
+                batch = self._batches.get(batch_id)
+                if batch is not None:
+                    batch.consecutive_preprogress_failures = 0
         if active is None or self._should_emit_progress(active, downloaded, total):
             plan.add("progress", url=url, downloaded=downloaded, total=total)
         return plan
@@ -261,7 +263,8 @@ class MediaPrefetchQueue:
         plan = PrefetchPlan()
         active = self._active.pop(url, None)
         if active is not None:
-            self._mark_batch_done(plan, active.batch_id, url)
+            for batch_id in self._consumers.pop(url, set()):
+                self._mark_batch_done(plan, batch_id, url)
         plan.add("cache_changed", url=url)
         plan.extend(self.pump())
         return plan
@@ -272,38 +275,20 @@ class MediaPrefetchQueue:
         if active is None:
             return plan
 
-        self._remove_from_batch(plan, active.batch_id, url, was_active=True)
-
-        if self._is_fatal_cache_error(msg):
-            self._mark_batch_failed(
-                plan,
-                active.batch_id,
-                url,
-                preprogress=not active.had_progress,
-            )
-            plan.add("error", url=url, message=msg)
-            if active.batch_id:
-                self._abort_batch(plan, active.batch_id, msg)
+        consumers = self._consumers.get(url, set())
+        for batch_id in consumers:
+            self._remove_from_batch(plan, batch_id, url, was_active=True)
+        fatal = self._is_fatal_cache_error(msg)
+        if not fatal and active.retries < self._retry_limit:
+            self._queue_entry(plan, url, priority=True, retries=active.retries + 1)
             plan.extend(self.pump())
             return plan
 
-        if active.retries < self._retry_limit:
-            self._enqueue(
-                plan,
-                url,
-                batch_id=active.batch_id,
-                priority=True,
-                retries=active.retries + 1,
-            )
-            plan.extend(self.pump())
-            return plan
-
-        self._mark_batch_failed(
-            plan,
-            active.batch_id,
-            url,
-            preprogress=not active.had_progress,
-        )
+        self._consumers.pop(url, None)
+        for batch_id in consumers:
+            self._mark_batch_failed(plan, batch_id, url, preprogress=not active.had_progress)
+            if fatal and batch_id:
+                self._abort_batch(plan, batch_id, msg)
         plan.add("error", url=url, message=msg)
         plan.extend(self.pump())
         return plan
@@ -315,34 +300,48 @@ class MediaPrefetchQueue:
         *,
         batch_id: str = "",
         priority: bool = False,
-        retries: int = 0,
     ) -> bool:
         if not self._cache_lookup.is_remote(url):
             return False
         if self._cache_lookup.is_cached(url):
             plan.add("cache_changed", url=url)
             return False
+        consumers = self._consumers.setdefault(url, set())
+        added = batch_id not in consumers
+        consumers.add(batch_id)
+        if added and batch_id:
+            batch = self._batches.setdefault(batch_id, BatchState())
+            if url in self._active:
+                batch.active.add(url)
+            else:
+                batch.queued.add(url)
+            self._emit_batch_changed(plan, batch_id)
         if url in self._active:
-            return False
+            return added
         if url in self._queued:
             if priority:
                 self._promote_queued(plan, url)
-            return False
+            return added
 
-        entry = QueuedPrefetch(url=url, batch_id=batch_id, retries=retries)
+        self._queue_entry(plan, url, priority=priority)
+        return added
+
+    def _queue_entry(
+        self, plan: PrefetchPlan, url: str, *, priority: bool = False, retries: int = 0
+    ) -> None:
+        entry = QueuedPrefetch(url=url, retries=retries)
         if priority:
             self._queue.appendleft(entry)
         else:
             self._queue.append(entry)
         self._queued[url] = entry
 
-        if batch_id:
-            batch = self._batches.setdefault(batch_id, BatchState())
-            batch.queued.add(url)
-            self._emit_batch_changed(plan, batch_id)
+        for batch_id in self._consumers.get(url, ()):
+            if batch_id:
+                self._batches[batch_id].queued.add(url)
+                self._emit_batch_changed(plan, batch_id)
 
         plan.add("queued", url=url)
-        return True
 
     def _promote_queued(self, plan: PrefetchPlan, url: str) -> None:
         entry = self._queued.get(url)
@@ -354,16 +353,16 @@ class MediaPrefetchQueue:
 
     def _start_entry(self, plan: PrefetchPlan, entry: QueuedPrefetch) -> None:
         self._active[entry.url] = ActivePrefetch(
-            batch_id=entry.batch_id,
             retries=entry.retries,
         )
         plan.add("dequeued", url=entry.url)
 
-        if entry.batch_id:
-            batch = self._batches.setdefault(entry.batch_id, BatchState())
-            batch.queued.discard(entry.url)
-            batch.active.add(entry.url)
-            self._emit_batch_changed(plan, entry.batch_id)
+        for batch_id in self._consumers.get(entry.url, ()):
+            if batch_id:
+                batch = self._batches[batch_id]
+                batch.queued.discard(entry.url)
+                batch.active.add(entry.url)
+                self._emit_batch_changed(plan, batch_id)
 
         plan.add("start", url=entry.url, entry=entry)
 
@@ -428,22 +427,28 @@ class MediaPrefetchQueue:
         if not batch or batch.canceled:
             return
         batch.canceled = True
-        for queued_url in list(batch.queued):
-            queued = self._queued.pop(queued_url, None)
-            if queued is not None:
-                self._queue = deque(
-                    entry for entry in self._queue if entry.url != queued_url
-                )
-                plan.add("dequeued", url=queued_url)
-        batch.queued.clear()
-        for active_url in list(batch.active):
-            active = self._active.pop(active_url, None)
-            if active is not None:
-                plan.add("cancel_active", url=active_url)
-                plan.add("dequeued", url=active_url)
-        batch.active.clear()
+        for url in batch.queued | batch.active:
+            self._release_consumer(plan, url, batch_id)
         plan.add("batch_error", batch_id=batch_id, message=msg)
         self._emit_batch_changed(plan, batch_id)
+
+    def _release_consumer(self, plan: PrefetchPlan, url: str, batch_id: str) -> None:
+        consumers = self._consumers.get(url)
+        if consumers is None:
+            return
+        consumers.discard(batch_id)
+        self._remove_from_batch(
+            plan, batch_id, url, was_active=url in self._active, was_queued=url in self._queued
+        )
+        if consumers:
+            return
+        self._consumers.pop(url, None)
+        if self._queued.pop(url, None) is not None:
+            self._queue = deque(entry for entry in self._queue if entry.url != url)
+            plan.add("dequeued", url=url)
+        if self._active.pop(url, None) is not None:
+            plan.add("cancel_active", url=url)
+            plan.add("dequeued", url=url)
 
     def _emit_batch_changed(self, plan: PrefetchPlan, batch_id: str) -> None:
         if not batch_id:

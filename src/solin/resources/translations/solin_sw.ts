@@ -10846,6 +10846,10 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Inapakua… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Pakua</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Inapakua… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Pakua</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Sasisha</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Jaribu tena</translation>
     </message>
 </context>
 <context>

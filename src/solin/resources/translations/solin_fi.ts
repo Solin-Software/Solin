@@ -10846,6 +10846,10 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Ladataan… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Lataa</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Ladataan… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Lataa</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Päivitä</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Yritä uudelleen</translation>
     </message>
 </context>
 <context>

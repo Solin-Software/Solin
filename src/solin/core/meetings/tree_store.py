@@ -11,7 +11,7 @@ import copy
 import json
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path, PureWindowsPath
@@ -31,6 +31,70 @@ from .tree_types import Node, clone_nodes, count_media, iter_nodes, iter_nodes_s
 log = logging.getLogger(__name__)
 
 MEETING_TREE_STORE_VERSION = 6
+
+
+def _canonical_image_source_repairs(
+    nodes: list[Node],
+    canonical: list[Node],
+    hidden: dict[str, Node],
+    linked_sync: dict[str, Any],
+) -> Iterator[tuple[Node, dict[str, Any], str]]:
+    if linked_sync.get("enabled"):
+        return
+    originals = {
+        str(node["meeting_source_key"]): node
+        for node in iter_nodes(canonical)
+        if node.get("type") == "media" and node.get("meeting_generated")
+        and node.get("meeting_source_key")
+    }
+    for surface in (nodes, list(hidden.values())):
+        for node in iter_nodes(surface):
+            ref = node.get("media_ref") or {}
+            if (
+                node.get("type") != "media" or not node.get("meeting_generated")
+                or not isinstance(ref, dict)
+                or not str(ref.get("mime_type") or "").startswith("image/")
+            ):
+                continue
+            source = str(node.get("resolved_url") or ref.get("file_path") or "")
+            if source.startswith(("http://", "https://")) or (source and Path(source).is_file()):
+                continue
+            original = originals.get(str(node.get("meeting_source_key") or ""))
+            original_ref = original.get("media_ref") if original is not None else None
+            if not isinstance(original_ref, dict) or not str(
+                original_ref.get("mime_type") or ""
+            ).startswith("image/"):
+                continue
+            path = str(original_ref.get("file_path") or "")
+            if path and not path.startswith(("http://", "https://")) and Path(path).is_file():
+                yield node, original_ref, path
+
+
+def _normalize_canonical_image_sources(
+    nodes: list[Node],
+    canonical: list[Node],
+    hidden: dict[str, Node],
+    linked_sync: dict[str, Any],
+) -> bool:
+    changed = False
+    for node, original_ref, path in _canonical_image_source_repairs(
+        nodes, canonical, hidden, linked_sync
+    ):
+        ref = node["media_ref"]
+        for name in ("file_path", "publication_source", "asset_hash"):
+            if name in original_ref:
+                ref[name] = copy.deepcopy(original_ref[name])
+            else:
+                ref.pop(name, None)
+        if node.get("resolved_url"):
+            node["resolved_url"] = path
+        for name in ("thumbnail_local_path", "thumbnail_cache_key", "thumbnail_source_key"):
+            node.pop(name, None)
+        if node.get("thumbnail_binding") == "media_frame":
+            node.pop("thumbnail_binding", None)
+            node.pop("thumbnail_url", None)
+        changed = True
+    return changed
 
 
 def _migrate_thumbnail_binding(node: Node) -> None:
@@ -128,10 +192,18 @@ class MeetingTreeSnapshot:
     revision: int = 0
     is_sign_language: bool = False
     linked_sync: dict[str, Any] = field(default_factory=dict)
+    publication_dependencies: list[dict[str, str]] = field(default_factory=list)
+    observed_publication_checksums: dict[str, str] = field(default_factory=dict)
 
     @property
     def media_count(self) -> int:
         return count_media(self.nodes)
+
+    @property
+    def image_source_repair_required(self) -> bool:
+        return next(_canonical_image_source_repairs(
+            self.nodes, self.canonical_nodes, self.hidden_canonical_media, self.linked_sync
+        ), None) is not None
 
 
 class MeetingTreeStore:
@@ -180,6 +252,25 @@ class MeetingTreeStore:
             if isinstance(record, dict):
                 if "linked_sync" in record and not isinstance(record["linked_sync"], dict):
                     raise ValueError("Meeting linked sync binding must be an object")
+                dependencies = record.get("publication_dependencies", [])
+                if not isinstance(dependencies, list) or any(
+                    not isinstance(dependency, dict)
+                    or any(
+                        not isinstance(dependency.get(name), str)
+                        for name in ("pub", "language", "issue", "checksum")
+                    )
+                    or any(not dependency[name] for name in ("pub", "language", "issue"))
+                    for dependency in dependencies
+                ):
+                    raise ValueError(
+                        "Meeting publication dependencies must contain valid publication revisions"
+                    )
+                observed = record.get("observed_publication_checksums", {})
+                if not isinstance(observed, dict) or any(
+                    not isinstance(name, str) or not isinstance(value, str)
+                    for name, value in observed.items()
+                ):
+                    raise ValueError("Observed publication checksums must be a string mapping")
                 record.setdefault("revision", 0)
                 _migrate_record_metadata(record)
                 if version < 6:
@@ -398,6 +489,7 @@ class MeetingTreeStore:
         canonical_reset_generation: int | None = None,
         hidden_canonical_media: dict[str, Node] | None = None,
         linked_sync: dict[str, Any] | None = None,
+        publication_dependencies: list[dict[str, str]] | None = None,
     ) -> MeetingTreeSnapshot:
         with self._lock:
             snapshot = self._save_locked(
@@ -413,6 +505,7 @@ class MeetingTreeStore:
                 canonical_reset_generation=canonical_reset_generation,
                 hidden_canonical_media=hidden_canonical_media,
                 linked_sync=linked_sync,
+                publication_dependencies=publication_dependencies,
             )
         self._publish_changed()
         return snapshot
@@ -427,6 +520,7 @@ class MeetingTreeStore:
         fallback: MeetingTreeSnapshot | None = None,
         source_checksum: str | None = None,
         canonical_complete: bool = True,
+        publication_dependencies: list[dict[str, str]] | None = None,
     ) -> MeetingTreeSnapshot:
         """Atomically merge prepared data and confirm it only when complete."""
         with self._lock:
@@ -439,25 +533,24 @@ class MeetingTreeStore:
                 set(saved.deleted_source_keys) if saved is not None else set()
             )
             canonical_keys = canonical_source_keys(canonical)
-            merge_deleted_source_keys = saved_deleted_source_keys & canonical_keys
-            merged = MeetingTreeMerger(canonical, merge_deleted_source_keys).merge(
-                saved.nodes if saved is not None else None
+            merge_deleted_source_keys = (
+                saved_deleted_source_keys & canonical_keys
+                if canonical_complete else saved_deleted_source_keys
             )
-            durable_deleted_source_keys = (
-                merge_deleted_source_keys
-                if canonical_complete
-                else (set(current.deleted_source_keys) if current is not None else set())
-            )
-            durable_canonical_hash = (
-                canonical_hash
-                if canonical_complete
-                else (current.canonical_hash if current is not None else "")
-            )
+            merged = MeetingTreeMerger(
+                canonical, merge_deleted_source_keys, preserve_missing=not canonical_complete
+            ).merge(saved.nodes if saved is not None else None)
+            durable_canonical_hash = canonical_hash if canonical_complete else ""
+            durable_canonical = canonical
+            if not canonical_complete:
+                durable_canonical = MeetingTreeMerger(
+                    canonical, preserve_missing=True
+                ).merge(saved.canonical_nodes if saved is not None else None)
             snapshot = self._save_locked(
                 tree_key,
                 merged,
                 durable_canonical_hash,
-                durable_deleted_source_keys,
+                merge_deleted_source_keys,
                 dict(saved.linked_folder_files) if saved is not None else None,
                 (copy.deepcopy(saved.meeting_folder_imports) if saved is not None else None),
                 overview,
@@ -468,9 +561,13 @@ class MeetingTreeStore:
                         else (saved.source_checksum if saved is not None else "")
                     )
                     if canonical_complete
-                    else None
+                    else (saved.source_checksum if saved is not None else None)
                 ),
-                canonical_nodes=canonical if canonical_complete else None,
+                canonical_nodes=durable_canonical,
+                publication_dependencies=(
+                    publication_dependencies if canonical_complete
+                    else (saved.publication_dependencies if saved is not None else None)
+                ),
                 canonical_reset_generation=(
                     saved.canonical_reset_generation if saved is not None else 0
                 ),
@@ -481,9 +578,45 @@ class MeetingTreeStore:
                         if key in canonical_keys
                     }
                     if canonical_complete and saved is not None
-                    else None
+                    else (saved.hidden_canonical_media if saved is not None else None)
                 ),
             )
+        self._publish_changed()
+        return snapshot
+
+    def observe_publications(self, tree_key: str, checksums: dict[str, str]) -> None:
+        """Record remote observations without advancing the applied revision."""
+        with self._lock:
+            data = copy.deepcopy(self._runtime_data())
+            record = data.get("trees", {}).get(tree_key)
+            if not isinstance(record, dict):
+                return
+            observed = dict(record.get("observed_publication_checksums", {}))
+            observed.update({str(key): str(value) for key, value in checksums.items() if value})
+            if record.get("observed_publication_checksums", {}) == observed:
+                return
+            record["observed_publication_checksums"] = observed
+            self._write(data)
+        self._publish_changed()
+
+    def repair_canonical_image_sources(self, tree_key: str) -> MeetingTreeSnapshot | None:
+        """Rebind unavailable image sources without changing the saved official baseline."""
+        with self._lock:
+            data = copy.deepcopy(self._runtime_data())
+            record = data.get("trees", {}).get(tree_key)
+            current = _snapshot_from_record(tree_key, record)
+            if current is None:
+                return None
+            if not _normalize_canonical_image_sources(
+                current.nodes, current.canonical_nodes,
+                current.hidden_canonical_media, current.linked_sync,
+            ):
+                return current
+            record["nodes"] = current.nodes
+            record["hidden_canonical_media"] = current.hidden_canonical_media
+            record["revision"] = current.revision + 1
+            self._write(data)
+            snapshot = _snapshot_from_record(tree_key, record)
         self._publish_changed()
         return snapshot
 
@@ -581,6 +714,7 @@ class MeetingTreeStore:
         canonical_reset_generation: int | None,
         hidden_canonical_media: dict[str, Node] | None,
         linked_sync: dict[str, Any] | None = None,
+        publication_dependencies: list[dict[str, str]] | None = None,
     ) -> MeetingTreeSnapshot:
         data = copy.deepcopy(self._runtime_data())
         trees = data.setdefault("trees", {})
@@ -662,6 +796,16 @@ class MeetingTreeStore:
             record["linked_sync"] = copy.deepcopy(linked_sync)
         elif isinstance(existing, dict) and isinstance(existing.get("linked_sync"), dict):
             record["linked_sync"] = copy.deepcopy(existing["linked_sync"])
+        if publication_dependencies is not None:
+            record["publication_dependencies"] = copy.deepcopy(publication_dependencies)
+            record["observed_publication_checksums"] = {}
+        elif isinstance(existing, dict):
+            for name in ("publication_dependencies", "observed_publication_checksums"):
+                if name in existing:
+                    record[name] = copy.deepcopy(existing[name])
+        _normalize_canonical_image_sources(
+            record["nodes"], baseline or [], hidden_media, record.get("linked_sync", {})
+        )
         trees[tree_key] = record
         self._write(data)
         snapshot = _snapshot_from_record(tree_key, record)
@@ -832,6 +976,8 @@ def _snapshot_from_record(
         ),
         hidden_canonical_media=_node_mapping(record.get("hidden_canonical_media", {})),
         source_checksum=str(record.get("source_checksum", "")),
+        publication_dependencies=copy.deepcopy(record.get("publication_dependencies", [])),
+        observed_publication_checksums=dict(record.get("observed_publication_checksums", {})),
         revision=max(0, _int_or_default(record.get("revision"), 0)),
         is_sign_language=key.is_sign_language,
         linked_sync=copy.deepcopy(record.get("linked_sync", {})),

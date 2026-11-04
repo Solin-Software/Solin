@@ -4,20 +4,33 @@ from __future__ import annotations
 
 import itertools
 import logging
-from collections.abc import Iterator
-from dataclasses import dataclass, field
+import weakref
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field, replace
 from datetime import date
+from pathlib import Path
 from enum import Enum, IntEnum
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
+import shiboken6
 
 from solin.core.foundation.qt_threads import stop_owned_qthread
+from solin.core.foundation.thread_workers import CancellationFlag, ThreadedWorkerPool
 from solin.core.jw.language_context import JWMediaLanguageContext
 from solin.core.media.cache import MediaCacheManager
 
+from .content_policy import (
+    MeetingContentError,
+    MeetingContentPolicy,
+    MeetingContentOperation,
+    MeetingRequestOrigin,
+    PublicationContentRequest,
+    publication_dependency,
+)
 from .models import WeekData, media_type_for_mime_type
+from .meeting_weeks import meeting_week_bounds
 from .resolution_worker import MeetingMediaResolutionWorker
 from .tree_builder import MeetingTreeBuilder
 from .tree_merger import media_identity_signature
@@ -111,8 +124,9 @@ class MeetingPreparationRequest:
     force_refresh: bool = False
     download_media: bool = False
     priority: MeetingPreparationPriority = MeetingPreparationPriority.INTERACTIVE
-    recovery_publications: frozenset[str] = frozenset()
-    repair_cache_paths: tuple[str, ...] = ()
+    publications: frozenset[str] = frozenset({"mwb", "wt"})
+    operation: MeetingContentOperation = MeetingContentOperation.PREPARE
+    origin: MeetingRequestOrigin = MeetingRequestOrigin.MANUAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,33 +136,79 @@ class MeetingPreparationState:
     error: str = ""
     refreshing: bool = False
     source_status: str = ""
+    update_available: bool = False
+    repair_required: bool = False
+    repair_requires_update: bool = False
+
+
+@dataclass(slots=True)
+class _MediaDownloadBatch:
+    key: MeetingPreparationKey
+    pub_type: str
+    origin: MeetingRequestOrigin
+    batch_id: str = field(default_factory=lambda: f"meeting:{uuid4().hex}")
+    prefetched_urls: set[str] = field(default_factory=set)
+
+
+class _ImageRepairPhase(Enum):
+    SCAN = "scan"
+    WORKER = "worker"
+    REBIND = "rebind"
 
 
 @dataclass(slots=True)
 class _PreparationJob:
     key: MeetingPreparationKey
     generation: int
-    download_media: bool
     priority: MeetingPreparationPriority
+    publications: frozenset[str] = frozenset({"mwb", "wt"})
+    operation: MeetingContentOperation = MeetingContentOperation.PREPARE
+    origin: MeetingRequestOrigin = MeetingRequestOrigin.MANUAL
     active: bool = True
-    force_pending: bool = False
-    recovery_pending: bool = False
-    recovery_publications: set[str] = field(default_factory=set)
-    repair_cache_paths: set[str] = field(default_factory=set)
     completed_publications: set[str] = field(default_factory=set)
     errors: dict[str, str] = field(default_factory=dict)
     terminal_statuses: dict[str, str] = field(default_factory=dict)
+    repair_update_publications: set[str] = field(default_factory=set)
     pending_by_tree: dict[str, set[str]] = field(default_factory=dict)
     patches_by_tree: dict[
         str,
         dict[str, tuple[tuple, dict[str, Any]]],
     ] = field(default_factory=dict)
-    prefetched_urls: set[str] = field(default_factory=set)
+    downloads: dict[str, _MediaDownloadBatch] = field(default_factory=dict)
+    image_repair_phase: _ImageRepairPhase = _ImageRepairPhase.SCAN
 
     @property
-    def batch_id(self) -> str:
-        sign = "sign" if self.key.is_sign_language else "spoken"
-        return f"meeting:{self.key.monday.isoformat()}:{self.key.language_code}:{sign}"
+    def download_media(self) -> bool:
+        return bool(self.downloads)
+
+
+@dataclass(slots=True)
+class _QueuedPreparation:
+    request: MeetingPreparationRequest
+    # Keep the causal owner, not a copy of its grants, so later authorization
+    # upgrades and revocation remain effective while the command waits.
+    download_sources: dict[str, _PreparationJob] = field(default_factory=dict)
+
+    def bind_downloads(
+        self, source: _PreparationJob, publications: frozenset[str] | set[str]
+    ) -> None:
+        if source.key != self.request.key or not (
+            self.request.operation == MeetingContentOperation.UPDATE
+            or (self.request.operation == MeetingContentOperation.PREPARE and self.request.force_refresh)
+        ):
+            return
+        for pub_type in publications & self.request.publications:
+            previous = self.download_sources.get(pub_type)
+            previous_batch = previous.downloads.get(pub_type) if previous is not None else None
+            batch = source.downloads.get(pub_type)
+            if previous is None or (
+                batch is not None and (
+                    previous_batch is None
+                    or batch.origin == MeetingRequestOrigin.MANUAL
+                    or previous_batch.origin != MeetingRequestOrigin.MANUAL
+                )
+            ):
+                self.download_sources[pub_type] = source
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +232,47 @@ class _PendingResolution:
     targets: list[_ResolutionTarget] = field(default_factory=list)
 
 
+class _SourceMaintenance:
+    def __init__(self) -> None:
+        self.workers = ThreadedWorkerPool()
+        self.pending: dict[MeetingPreparationKey, CancellationFlag] = {}
+        self.dirty: set[MeetingPreparationKey] = set()
+        self.running: set[MeetingPreparationKey] = set()
+        self.refresh_requested: set[MeetingPreparationKey] = set()
+        self.publish: dict[MeetingPreparationKey, set[str]] = {}
+
+    def cancel(self, key: MeetingPreparationKey) -> None:
+        self.dirty.discard(key)
+        self.running.discard(key)
+        self.refresh_requested.discard(key)
+        self.publish.pop(key, None)
+        if (cancellation := self.pending.pop(key, None)) is not None:
+            cancellation.set()
+
+    def close(self) -> None:
+        for key in list(self.pending):
+            self.cancel(key)
+        self.workers.shutdown(timeout=0)
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceMaintenanceResult:
+    pub_type: str
+    tree_key: str
+    changed: bool = False
+    error: str = ""
+    revision: int = -1
+    repair_refs: tuple[dict[str, Any], ...] = ()
+    rebind_required: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceMaintenanceReport:
+    results: tuple[_SourceMaintenanceResult, ...]
+    repair_generation: int = 0
+    repair_phase: _ImageRepairPhase | None = None
+
+
 class MeetingPreparationService(QObject):
     """Prepare one durable meeting aggregate for every caller and policy."""
 
@@ -180,6 +281,7 @@ class MeetingPreparationService(QObject):
     progress = Signal(object, str, int)
     error = Signal(object, str, str)
     _resolve_requested = Signal(str, str, int, int, int, str, str, bool)
+    _source_maintenance_ready = Signal(object, object, object)
 
     def __init__(
         self,
@@ -187,13 +289,24 @@ class MeetingPreparationService(QObject):
         store: MeetingTreeStore,
         cache_manager: MediaCacheManager,
         parent: QObject | None = None,
+        *,
+        content_policy: MeetingContentPolicy | None = None,
     ) -> None:
         super().__init__(parent)
         self._publication_service = publication_service
+        self._policy = content_policy or getattr(
+            publication_service, "content_policy", MeetingContentPolicy()
+        )
+        self._pending_commands: dict[MeetingPreparationKey, list[_QueuedPreparation]] = {}
         self._store = store
         self._cache_manager = cache_manager
         self._builder = MeetingTreeBuilder()
+        self._today = date.today
+        self._repair_update_required: set[tuple[MeetingPreparationKey, str]] = set()
         self._jobs: dict[MeetingPreparationKey, _PreparationJob] = {}
+        # Downloads outlive metadata jobs; retain their owners until the queue settles.
+        self._download_batches: dict[str, _MediaDownloadBatch] = {}
+        cache_manager.prefetch_batch_changed.connect(self._on_download_batch_changed)
         self._generation = 0
         self._resolution_order = itertools.count()
         self._pending_resolutions: dict[tuple, _PendingResolution] = {}
@@ -205,11 +318,16 @@ class MeetingPreparationService(QObject):
         self._canonical_recovery_timer = QTimer(self)
         self._canonical_recovery_timer.setSingleShot(True)
         self._canonical_recovery_timer.setInterval(_CANONICAL_RECOVERY_BATCH_MS)
-        self._canonical_recovery_timer.timeout.connect(
-            self._flush_canonical_media_recoveries
-        )
+        self._canonical_recovery_timer.timeout.connect(self._flush_canonical_media_recoveries)
         self._stopped = False
+        self._source_maintenance = _SourceMaintenance()
+        self._image_sources: dict[tuple[MeetingPreparationKey, str], _SourceMaintenanceResult] = {}
+        self._source_maintenance_ready.connect(self._on_source_maintenance_ready)
+        self.destroyed.connect(self._source_maintenance.close)
+        weakref.finalize(self, self._source_maintenance.close)
 
+        if hasattr(publication_service, "content_checked"):
+            publication_service.content_checked.connect(self._on_content_checked)
         publication_service.mwb_ready.connect(self._on_mwb_ready)
         publication_service.wt_ready.connect(self._on_wt_ready)
         publication_service.cbs_ready.connect(self._on_cbs_ready)
@@ -225,97 +343,522 @@ class MeetingPreparationService(QObject):
         self._resolver.resolved.connect(self._on_media_resolved)
         self._resolver_thread.start()
 
+    @property
+    def policy(self) -> MeetingContentPolicy:
+        return self._policy
+
+    def prepare_meeting(
+        self,
+        key: MeetingPreparationKey,
+        pub_type: str,
+        *,
+        force: bool = False,
+        download_media: bool = False,
+        automatic: bool = False,
+    ) -> MeetingPreparationState:
+        if pub_type not in {"mwb", "wt"}:
+            raise ValueError(f"Unsupported meeting publication: {pub_type}")
+        self.ensure_week(
+            MeetingPreparationRequest(
+                key=key,
+                publications=frozenset({pub_type}),
+                force_refresh=force,
+                download_media=download_media,
+                operation=MeetingContentOperation.UPDATE
+                if force
+                else MeetingContentOperation.PREPARE,
+                origin=MeetingRequestOrigin.AUTOMATIC if automatic else MeetingRequestOrigin.MANUAL,
+            )
+        )
+        return self.state(key, pub_type)
+
+    def check_updates(self, key: MeetingPreparationKey) -> MeetingPreparationState:
+        selected = frozenset(self.snapshots(key)) & {"mwb", "wt"}
+        if selected:
+            self.ensure_week(
+                MeetingPreparationRequest(
+                    key=key,
+                    publications=selected,
+                    operation=MeetingContentOperation.CHECK,
+                    origin=MeetingRequestOrigin.MAINTENANCE,
+                    priority=MeetingPreparationPriority.BACKGROUND,
+                )
+            )
+        return self.state(key, "mwb")
+
+    def maintain_prepared(self, key: MeetingPreparationKey) -> MeetingPreparationState:
+        state = self.check_updates(key)
+        self._schedule_source_maintenance(key)
+        return state
+
+    def _schedule_source_maintenance(
+        self, key: MeetingPreparationKey, *, refresh: bool = True,
+        publish: frozenset[str] = frozenset(),
+    ) -> None:
+        lifetime = self._source_maintenance
+        if self._stopped:
+            return
+        if refresh:
+            lifetime.refresh_requested.add(key)
+        if publish:
+            lifetime.publish.setdefault(key, set()).update(publish)
+        if key in lifetime.pending:
+            if refresh and key in lifetime.running:
+                lifetime.dirty.add(key)
+            return
+        if not self.snapshots(key):
+            lifetime.refresh_requested.discard(key)
+            return
+        cancellation = CancellationFlag()
+        lifetime.pending[key] = cancellation
+        # Keep CHECK and its caller's download-grant attachment in this GUI turn.
+        QTimer.singleShot(0, self, lambda: self._start_source_maintenance(key, cancellation))
+
+    def _start_source_maintenance(
+        self, key: MeetingPreparationKey, cancellation: CancellationFlag,
+    ) -> None:
+        lifetime = self._source_maintenance
+        if self._stopped or lifetime.pending.get(key) is not cancellation:
+            return
+        lifetime.running.add(key)
+        refresh = key in lifetime.refresh_requested
+        lifetime.refresh_requested.discard(key)
+        snapshots = {
+            pub_type: snapshot for pub_type, snapshot in self.snapshots(key).items()
+            if refresh or not (
+                (assessment := self._image_source_assessment(key, pub_type, snapshot))
+                and assessment.error
+            )
+        }
+        store = self._store
+        owner_ref = weakref.ref(self)
+        job = self._jobs.get(key)
+        repair_generation = (
+            job.generation if job is not None and job.active
+            and job.operation == MeetingContentOperation.REPAIR
+            and job.image_repair_phase != _ImageRepairPhase.WORKER else 0
+        )
+        repair_phase = job.image_repair_phase if repair_generation and job is not None else None
+
+        def work() -> None:
+            results = []
+            for pub_type, previous in snapshots.items():
+                if cancellation.is_set():
+                    return
+                try:
+                    snapshot = store.repair_canonical_image_sources(previous.tree_key)
+                    results.append(_SourceMaintenanceResult(
+                        pub_type, previous.tree_key,
+                        changed=bool(snapshot and snapshot.revision != previous.revision),
+                        revision=snapshot.revision if snapshot is not None else -1,
+                        repair_refs=tuple(MeetingPreparationService._missing_image_refs(snapshot))
+                        if snapshot is not None else (),
+                        rebind_required=bool(snapshot and snapshot.image_source_repair_required),
+                    ))
+                except (OSError, UnicodeError, ValueError) as exc:
+                    results.append(_SourceMaintenanceResult(
+                        pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                        revision=previous.revision,
+                    ))
+                except Exception as exc:  # noqa: BLE001 - per-publication worker boundary
+                    log.exception("Meeting source maintenance failed for %s", previous.tree_key)
+                    results.append(_SourceMaintenanceResult(
+                        pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                        revision=previous.revision,
+                    ))
+
+            def deliver() -> None:
+                owner = owner_ref()
+                if owner is not None and shiboken6.isValid(owner):
+                    try:
+                        owner._source_maintenance_ready.emit(
+                            key, cancellation,
+                            _SourceMaintenanceReport(tuple(results), repair_generation, repair_phase),
+                        )
+                    except RuntimeError:
+                        log.debug("Meeting source-maintenance owner was destroyed before delivery")
+
+            cancellation.run_if_active(deliver)
+
+        if lifetime.workers.submit("solin-meeting-sources", work) is None:
+            lifetime.cancel(key)
+
+    @Slot(object, object, object)
+    def _on_source_maintenance_ready(
+        self, key: MeetingPreparationKey, cancellation: CancellationFlag,
+        report: _SourceMaintenanceReport,
+    ) -> None:
+        if self._source_maintenance.pending.get(key) is not cancellation:
+            return
+        cutoff, latest = meeting_week_bounds(self._today())
+        if self._stopped or cancellation.is_set() or not cutoff <= key.monday <= latest:
+            self._source_maintenance.cancel(key)
+            return
+        job = self._jobs.get(key)
+        repairing = bool(job and job.active and job.operation == MeetingContentOperation.REPAIR)
+        matching_repair = bool(
+            repairing and job is not None and job.generation == report.repair_generation
+            and job.image_repair_phase == report.repair_phase
+        )
+        for result in report.results:
+            if cancellation.is_set():
+                return
+            if result.error:
+                if matching_repair and job is not None and result.pub_type in job.publications:
+                    job.errors[result.pub_type] = result.error
+                snapshot = self.snapshot(key, result.pub_type)
+                if snapshot is not None and (
+                    snapshot.tree_key == result.tree_key and snapshot.revision == result.revision
+                ):
+                    self._image_sources[(key, result.pub_type)] = result
+                self.error.emit(key, result.pub_type, result.error)
+                continue
+            # Read the authoritative in-memory revision: operator writes may have
+            # completed after normalization, and active sync owns its bindings.
+            snapshot = self.snapshot(key, result.pub_type)
+            if snapshot is None:
+                continue
+            current = snapshot.tree_key == result.tree_key and snapshot.revision == result.revision
+            if current:
+                self._image_sources[(key, result.pub_type)] = result
+            publish = self._source_maintenance.publish.get(key, set())
+            if current and not snapshot.linked_sync.get("enabled") and (
+                result.changed or result.pub_type in publish
+            ):
+                publish.discard(result.pub_type)
+                self.tree_changed.emit(key, result.pub_type, snapshot)
+            elif current and snapshot.linked_sync.get("enabled"):
+                publish.discard(result.pub_type)
+            if (
+                current and not repairing and not cancellation.is_set()
+                and self._policy.auto_recover_images and result.repair_refs
+            ):
+                self._request_repair(key, result.pub_type, MeetingRequestOrigin.MAINTENANCE)
+        if cancellation.is_set():
+            return
+        if matching_repair and job is not None and self._jobs.get(key) is job:
+            self._continue_image_repair(job)
+        self._emit_states(key)
+        if self._source_maintenance.pending.get(key) is not cancellation:
+            return
+        # Delivery can synchronously flush operator edits. Assess that new
+        # revision in the worker instead of retaining an obsolete UI assessment.
+        for result in report.results:
+            if result.error:
+                continue
+            snapshot = self.snapshot(key, result.pub_type)
+            if snapshot is not None and (
+                snapshot.tree_key != result.tree_key or snapshot.revision != result.revision
+            ):
+                self._source_maintenance.dirty.add(key)
+        self._source_maintenance.pending.pop(key)
+        self._source_maintenance.running.discard(key)
+        rerun = key in self._source_maintenance.dirty
+        self._source_maintenance.dirty.discard(key)
+        if not self._source_maintenance.publish.get(key):
+            self._source_maintenance.publish.pop(key, None)
+        if rerun:
+            self._schedule_source_maintenance(key, refresh=False)
+
+    def repair_meeting(self, key: MeetingPreparationKey, pub_type: str) -> MeetingPreparationState:
+        return self._request_repair(key, pub_type, MeetingRequestOrigin.MANUAL)
+
+    def _request_repair(self, key, pub_type, origin) -> MeetingPreparationState:
+        if self.snapshot(key, pub_type) is not None:
+            self.ensure_week(
+                MeetingPreparationRequest(
+                    key=key,
+                    publications=frozenset({pub_type}),
+                    operation=MeetingContentOperation.REPAIR,
+                    origin=origin,
+                )
+            )
+        return self.state(key, pub_type)
+
+    def _image_source_assessment(
+        self, key: MeetingPreparationKey, pub_type: str, snapshot: MeetingTreeSnapshot,
+    ) -> _SourceMaintenanceResult | None:
+        result = self._image_sources.get((key, pub_type))
+        if result is not None and result.tree_key == snapshot.tree_key and result.revision == snapshot.revision:
+            return result
+        return None
+
+    def _continue_image_repair(self, job: _PreparationJob) -> None:
+        selected = set()
+        refs = []
+        for pub_type in job.publications - job.errors.keys():
+            snapshot = self.snapshot(job.key, pub_type)
+            if snapshot is None or snapshot.linked_sync.get("enabled"):
+                continue
+            result = self._image_source_assessment(job.key, pub_type, snapshot)
+            if result is None:
+                self._source_maintenance.dirty.add(job.key)
+                return
+            if result.repair_refs:
+                selected.add(pub_type)
+                refs.extend(dict(ref) for ref in result.repair_refs)
+        if (
+            job.image_repair_phase == _ImageRepairPhase.SCAN and selected
+            and (self._policy.auto_recover_images or job.origin == MeetingRequestOrigin.MANUAL)
+        ):
+            job.image_repair_phase = _ImageRepairPhase.WORKER
+            self._load_publications(job, publications=frozenset(selected), repair_refs=tuple(refs))
+            return
+        self._complete_image_repair(job)
+
+    def _complete_image_repair(self, job: _PreparationJob) -> None:
+        for pub_type in job.publications - job.errors.keys():
+            self._repair_update_required.discard((job.key, pub_type))
+        if self._policy.auto_update and job.repair_update_publications:
+            self._queue_automatic_update(job.key, job.repair_update_publications)
+        job.repair_update_publications.clear()
+        job.completed_publications.update(job.publications)
+        self._finish_or_revalidate(job)
+
+    @staticmethod
+    def _missing_image_refs(snapshot: MeetingTreeSnapshot) -> list[dict[str, Any]]:
+        from .tree_types import iter_nodes
+
+        if snapshot.linked_sync.get("enabled"):
+            return []
+        refs = []
+        seen: set[tuple] = set()
+        canonical = {
+            str(node["meeting_source_key"]): node
+            for node in iter_nodes(snapshot.canonical_nodes)
+            if node.get("meeting_generated") and node.get("meeting_source_key")
+            and node.get("type") == "media"
+            and str((node.get("media_ref") or {}).get("mime_type") or "").startswith("image/")
+        }
+        surfaces = [
+            snapshot.nodes,
+            snapshot.canonical_nodes,
+            list(snapshot.hidden_canonical_media.values()),
+        ]
+        for surface in surfaces:
+            for node in iter_nodes(surface):
+                ref = node.get("media_ref") or {}
+                if not isinstance(ref, dict) or not str(ref.get("mime_type", "")).startswith(
+                    "image/"
+                ):
+                    continue
+                if not node.get("meeting_generated") and not ref.get("publication_source"):
+                    continue
+                source = ref.get("publication_source") or {}
+                identity = (
+                    str(node.get("meeting_source_key") or node.get("id") or ""),
+                    str(source.get("pub") or ""), str(source.get("language") or ""),
+                    str(source.get("issue") or ""), str(source.get("member") or ""),
+                    str(ref.get("asset_hash") or ""),
+                )
+                source_key = str(node.get("meeting_source_key") or "")
+                identity = (source_key,) if source_key else identity
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                original = canonical.get(source_key)
+                original_ref = original.get("media_ref") or {} if original is not None else {}
+                original_path = str(original_ref.get("file_path") or "")
+                if (
+                    original_path and not original_path.startswith(("http://", "https://"))
+                    and not Path(original_path).is_file()
+                ):
+                    refs.append(dict(original_ref))
+                    continue
+                path = str(node.get("resolved_url") or ref.get("file_path") or "")
+                if path.startswith(("http://", "https://")) or (path and Path(path).is_file()):
+                    continue
+                if original is not None:
+                    ref = original_ref
+                    path = str(original.get("resolved_url") or ref.get("file_path") or "")
+                    if path.startswith(("http://", "https://")) or (path and Path(path).is_file()):
+                        continue
+                refs.append(dict(ref))
+        return refs
+
+    @Slot(object, str, object)
+    def _on_content_checked(
+        self, raw_context: object, pub_type: str, raw_checksums: object
+    ) -> None:
+        if self._stopped or not isinstance(raw_context, tuple) or len(raw_context) != 4:
+            return
+        monday, language, sign, generation = raw_context
+        key = MeetingPreparationKey(monday, language, sign)
+        job = self._jobs.get(key)
+        snapshot = self.snapshot(key, pub_type)
+        if job is None or generation != job.generation or snapshot is None:
+            return
+        checksums = dict(raw_checksums) if isinstance(raw_checksums, dict) else {}
+        try:
+            self._store.observe_publications(snapshot.tree_key, checksums)
+        except (OSError, UnicodeError, ValueError) as exc:
+            job.errors[pub_type] = str(exc)
+            self.error.emit(key, pub_type, str(exc))
+            return
+        if self._policy.auto_update and (
+            self.state(key, pub_type).update_available or not snapshot.canonical_hash
+        ):
+            self._queue_automatic_update(key, {pub_type})
+        self._emit_states(key)
+
+    def _queue_automatic_update(self, key: MeetingPreparationKey, publications: set[str]) -> None:
+        queue = self._pending_commands.setdefault(key, [])
+        job = self._jobs.get(key)
+        covered: set[str] = set()
+        for command in queue:
+            if command.request.operation != MeetingContentOperation.UPDATE:
+                continue
+            selected = publications & command.request.publications
+            covered.update(selected)
+            if job is not None:
+                command.bind_downloads(job, selected)
+        selected = publications - covered
+        if selected:
+            command = _QueuedPreparation(
+                MeetingPreparationRequest(
+                    key=key,
+                    publications=frozenset(selected),
+                    operation=MeetingContentOperation.UPDATE,
+                    origin=MeetingRequestOrigin.MAINTENANCE,
+                    priority=MeetingPreparationPriority.BACKGROUND,
+                )
+            )
+            if job is not None:
+                command.bind_downloads(job, selected)
+            queue.append(command)
+
     def ensure_week(self, request: MeetingPreparationRequest) -> MeetingPreparationState:
+        return self._ensure_week(request)
+
+    def _ensure_week(
+        self,
+        request: MeetingPreparationRequest,
+        *,
+        downloads: dict[str, _MediaDownloadBatch] | None = None,
+    ) -> MeetingPreparationState:
         if self._stopped:
             return self.state(request.key, "mwb")
         key = request.key
-        recovery_publications = {
-            str(pub_type)
-            for pub_type in request.recovery_publications
-            if pub_type in {"mwb", "wt"}
-        }
-        repair_cache_paths = {
-            str(path)
-            for path in request.repair_cache_paths
-            if str(path)
-        }
+        selected = frozenset(request.publications) & {"mwb", "wt"}
+        if request.operation == MeetingContentOperation.PREPARE and not request.force_refresh:
+            prepared = selected & self.snapshots(key).keys()
+            if prepared:
+                self.maintain_prepared(key)
+                maintenance = self._jobs.get(key)
+                if request.download_media and maintenance is not None:
+                    self._authorize_downloads(maintenance, prepared, request.origin)
+                    if request.origin == MeetingRequestOrigin.MANUAL:
+                        maintenance.origin = MeetingRequestOrigin.MANUAL
+                    for pub_type in prepared:
+                        snapshot = self.snapshot(key, pub_type)
+                        if snapshot is not None:
+                            self._schedule_snapshot_media(maintenance, pub_type, snapshot)
+                selected -= prepared
+                request = replace(request, publications=selected)
+        if request.operation in {MeetingContentOperation.CHECK, MeetingContentOperation.REPAIR}:
+            selected &= self.snapshots(key).keys()
+        if not selected:
+            return self.state(key, "mwb")
         existing = self._jobs.get(key)
         if existing is not None and existing.active:
+            if (
+                request.force_refresh
+                or existing.operation != request.operation
+                or not selected.issubset(existing.publications)
+            ):
+                queued = self._pending_commands.setdefault(key, [])
+                command = next((item for item in queued if item.request == request), None)
+                if command is None:
+                    command = _QueuedPreparation(request)
+                    queued.append(command)
+                command.bind_downloads(existing, selected)
+                return self.state(key, next(iter(selected)))
+            if request.origin == MeetingRequestOrigin.MANUAL:
+                existing.origin = MeetingRequestOrigin.MANUAL
             previous_priority = existing.priority
             existing.priority = max(existing.priority, request.priority)
             if existing.priority != previous_priority:
                 self._promote_publication(existing)
             self._promote_resolutions(existing)
-            if request.download_media and not existing.download_media:
-                existing.download_media = True
+            if request.download_media:
+                self._authorize_downloads(existing, selected, request.origin)
                 self._prefetch_existing_snapshots(existing)
-            if request.force_refresh:
-                existing.force_pending = True
-            if recovery_publications:
-                existing.recovery_pending = True
-                existing.recovery_publications.update(recovery_publications)
-                existing.repair_cache_paths.update(repair_cache_paths)
-                log.info(
-                    "Queued canonical media recovery for %s after active generation %d",
-                    key.monday.isoformat(),
-                    existing.generation,
-                )
-            return self.state(key, "mwb")
-
-        if existing is not None and not request.force_refresh and not recovery_publications:
-            existing.priority = max(existing.priority, request.priority)
-            self._promote_resolutions(existing)
-            if request.download_media and not existing.download_media:
-                existing.download_media = True
-                self._prefetch_existing_snapshots(existing)
-            for pub_type, snapshot in self.snapshots(key).items():
-                self._schedule_snapshot_media(existing, pub_type, snapshot)
             return self.state(key, "mwb")
 
         self._generation += 1
         job = _PreparationJob(
             key=key,
             generation=self._generation,
-            download_media=bool(request.download_media),
             priority=request.priority,
-            recovery_publications=recovery_publications,
-            repair_cache_paths=repair_cache_paths,
+            publications=selected,
+            operation=request.operation,
+            origin=request.origin,
         )
+        if downloads is not None:
+            job.downloads.update(downloads)
+        elif existing is not None:
+            # Only unresolved, already-authorized AV work survives an independent
+            # metadata check. Finished downloads do not authorize future updates.
+            job.downloads.update({
+                pub_type: batch for pub_type, batch in existing.downloads.items()
+                if any(
+                    pending and tree_key.startswith(f"{pub_type}:")
+                    for tree_key, pending in existing.pending_by_tree.items()
+                )
+            })
+        if request.download_media:
+            self._authorize_downloads(job, selected, request.origin)
+        if any(batch.origin == MeetingRequestOrigin.MANUAL
+               for pub_type, batch in job.downloads.items() if pub_type in selected):
+            job.origin = MeetingRequestOrigin.MANUAL
+        if existing is not None:
+            self._discard_resolution_targets(key, existing.generation)
         self._jobs[key] = job
-        if job.recovery_publications:
-            log.info(
-                "Starting canonical media recovery for %s publications=%s generation=%d",
-                key.monday.isoformat(),
-                ",".join(sorted(job.recovery_publications)),
-                job.generation,
-            )
         if job.download_media:
             self._prefetch_existing_snapshots(job)
         self._emit_states(key)
+        if job.operation == MeetingContentOperation.REPAIR:
+            self._schedule_source_maintenance(key)
+        else:
+            self._load_publications(job, force=request.force_refresh)
+        return self.state(key, "mwb")
+
+    def _load_publications(
+        self, job: _PreparationJob, *, force: bool = False,
+        publications: frozenset[str] | None = None,
+        repair_refs: tuple[dict[str, Any], ...] = (),
+    ) -> None:
+        key = job.key
+        selected = publications if publications is not None else job.publications
         snapshots = self.snapshots(key)
         wt_snapshot = snapshots.get("wt")
         self._publication_service.load_week(
             key.monday,
-            force=request.force_refresh,
+            force=force,
             language_code=key.language_code,
             is_sign_language=key.is_sign_language,
             generation=job.generation,
             priority=int(job.priority),
-            materialize_cached_publications=frozenset(
-                pub_type
-                for pub_type in ("mwb", "wt")
-                if (
-                    pub_type in job.recovery_publications
-                    or ((snapshot := snapshots.get(pub_type)) is None or not snapshot.canonical_nodes)
-                )
-            ),
             known_wt_issue=wt_snapshot.issue if wt_snapshot is not None else "",
-            persisted_source_checksums={
-                pub_type: snapshot.source_checksum for pub_type, snapshot in snapshots.items()
-            },
-            repair_cache_paths=tuple(sorted(job.repair_cache_paths)),
+            content_request=PublicationContentRequest(
+                publications=selected,
+                operation=job.operation,
+                dependencies={
+                    pub_type: snapshot.publication_dependencies
+                    or [
+                        publication_dependency(
+                            "mwb" if pub_type == "mwb" else "w",
+                            key.language_code,
+                            snapshot.issue,
+                            snapshot.source_checksum,
+                        )
+                    ]
+                    for pub_type, snapshot in snapshots.items()
+                    if pub_type in selected
+                },
+                repair_refs=repair_refs,
+            ),
         )
-        return self.state(key, "mwb")
 
     def recover_missing_canonical_media(
         self,
@@ -323,9 +866,16 @@ class MeetingPreparationService(QObject):
         pub_type: str,
         source_path: str,
     ) -> MeetingPreparationState:
-        """Batch a background rebuild after official local media vanishes."""
+        """Batch an exact-content repair after official local media vanishes."""
 
-        if self._stopped or pub_type not in {"mwb", "wt"}:
+        today = self._today()
+        cutoff, _ = meeting_week_bounds(today)
+        if (
+            self._stopped
+            or key.monday < cutoff
+            or pub_type not in {"mwb", "wt"}
+            or self.snapshot(key, pub_type) is None
+        ):
             return self.state(key, "mwb")
         publications = self._pending_canonical_recoveries.setdefault(key, {})
         paths = publications.setdefault(pub_type, set())
@@ -344,19 +894,42 @@ class MeetingPreparationService(QObject):
         pending = self._pending_canonical_recoveries
         self._pending_canonical_recoveries = {}
         for key, publications in pending.items():
+            self._schedule_source_maintenance(key, publish=frozenset(publications))
             self.ensure_week(
                 MeetingPreparationRequest(
                     key=key,
-                    recovery_publications=frozenset(publications),
-                    repair_cache_paths=tuple(
-                        sorted(
-                            path
-                            for paths in publications.values()
-                            for path in paths
-                        )
-                    ),
+                    publications=frozenset(publications),
+                    operation=MeetingContentOperation.REPAIR,
+                    origin=MeetingRequestOrigin.MAINTENANCE,
                 )
             )
+
+    def prune_expired(self) -> int:
+        """Retire expired jobs before removing their persisted meeting owners."""
+        cutoff, _ = meeting_week_bounds(self._today())
+        self._image_sources = {
+            identity: result for identity, result in self._image_sources.items()
+            if identity[0].monday >= cutoff
+        }
+        for key in list(self._source_maintenance.pending):
+            if key.monday < cutoff:
+                self._source_maintenance.cancel(key)
+        self._cancel_download_batches(lambda batch: batch.key.monday < cutoff)
+        for key, job in list(self._jobs.items()):
+            if key.monday >= cutoff:
+                continue
+            self._pending_commands.pop(key, None)
+            self._pending_canonical_recoveries.pop(key, None)
+            self._publication_service.cancel_pending_week(
+                key.monday,
+                language_code=key.language_code,
+                is_sign_language=key.is_sign_language,
+                generation=job.generation,
+            )
+            self._discard_resolution_targets(key, job.generation)
+            self._jobs.pop(key, None)
+            self._publication_service.clear_week(key.monday)
+        return self._store.prune_before(cutoff)
 
     def snapshots(self, key: MeetingPreparationKey) -> dict[str, MeetingTreeSnapshot]:
         return self._store.snapshots_for_week(
@@ -401,10 +974,15 @@ class MeetingPreparationService(QObject):
         pub_type: str,
     ) -> MeetingPreparationState:
         snapshot = self.snapshot(key, pub_type)
+        image_sources = self._image_source_assessment(key, pub_type, snapshot) if snapshot else None
+        if snapshot is not None and image_sources is None:
+            self._schedule_source_maintenance(key, refresh=False)
         job = self._jobs.get(key)
         error = job.errors.get(pub_type, "") if job is not None else ""
+        if not error and image_sources is not None:
+            error = image_sources.error
         source_status = job.terminal_statuses.get(pub_type, "") if job is not None else ""
-        refreshing = bool(job and job.active)
+        refreshing = bool(job and job.active and pub_type in job.publications)
         if snapshot is not None:
             phase = MeetingPreparationPhase.AVAILABLE
         elif error:
@@ -419,15 +997,60 @@ class MeetingPreparationService(QObject):
             error,
             refreshing,
             source_status,
+            bool(
+                snapshot
+                and any(
+                    dep.get("checksum")
+                    and (
+                        observed := snapshot.observed_publication_checksums.get(
+                            ":".join(
+                                (dep.get("pub", ""), dep.get("language", ""), dep.get("issue", ""))
+                            )
+                        )
+                    )
+                    and observed != dep["checksum"]
+                    for dep in (
+                        snapshot.publication_dependencies
+                        or [
+                            publication_dependency(
+                                "mwb" if pub_type == "mwb" else "w",
+                                key.language_code,
+                                snapshot.issue,
+                                snapshot.source_checksum,
+                            )
+                        ]
+                    )
+                )
+            ),
+            bool(image_sources and (image_sources.rebind_required or image_sources.repair_refs)),
+            (key, pub_type) in self._repair_update_required
+            and bool(image_sources and image_sources.repair_refs),
         )
 
     def cancel_automatic_downloads(self) -> None:
-        for job in self._jobs.values():
-            if not job.download_media:
-                continue
-            job.download_media = False
-            self._cache_manager.cancel_batch(job.batch_id)
-            job.prefetched_urls.clear()
+        self._cancel_download_batches(lambda batch: batch.origin != MeetingRequestOrigin.MANUAL)
+        for key, queued in list(self._pending_commands.items()):
+            retained = []
+            for command in queued:
+                request = command.request
+                if request.origin == MeetingRequestOrigin.AUTOMATIC:
+                    continue
+                if request.origin != MeetingRequestOrigin.MANUAL:
+                    command.request = replace(request, download_media=False)
+                retained.append(command)
+            self._pending_commands[key] = retained
+        for job in list(self._jobs.values()):
+            if job.origin == MeetingRequestOrigin.AUTOMATIC:
+                self._publication_service.cancel_pending_week(
+                    job.key.monday,
+                    language_code=job.key.language_code,
+                    is_sign_language=job.key.is_sign_language,
+                    generation=job.generation,
+                )
+                job.active = False
+                job.completed_publications.update(job.publications)
+                self._finish_or_revalidate(job)
+                self._emit_states(job.key)
 
     def cancel_other_language_contexts(
         self,
@@ -436,14 +1059,24 @@ class MeetingPreparationService(QObject):
         """Retire obsolete language work without touching the active context."""
         language = (context.api_code or "T").strip() or "T"
         is_sign = bool(context.is_sign_language)
-        for key in tuple(self._pending_canonical_recoveries):
+        self._image_sources = {
+            identity: result for identity, result in self._image_sources.items()
+            if (identity[0].language_code, identity[0].is_sign_language) == (language, is_sign)
+        }
+        for key in list(self._source_maintenance.pending):
             if (key.language_code, key.is_sign_language) != (language, is_sign):
+                self._source_maintenance.cancel(key)
+        self._cancel_download_batches(
+            lambda batch: (batch.key.language_code, batch.key.is_sign_language) != (language, is_sign)
+        )
+        pending_contexts = self._pending_commands.keys() | self._pending_canonical_recoveries.keys()
+        for key in pending_contexts:
+            if (key.language_code, key.is_sign_language) != (language, is_sign):
+                self._pending_commands.pop(key, None)
                 self._pending_canonical_recoveries.pop(key, None)
         for key, job in list(self._jobs.items()):
             if (key.language_code, key.is_sign_language) == (language, is_sign):
                 continue
-            if job.download_media:
-                self._cache_manager.cancel_batch(job.batch_id)
             cancel_pending = getattr(
                 self._publication_service,
                 "cancel_pending_week",
@@ -463,9 +1096,14 @@ class MeetingPreparationService(QObject):
         if self._stopped:
             return
         self._stopped = True
+        self._image_sources.clear()
+        self._source_maintenance.close()
+        self._source_maintenance.workers.shutdown(timeout=max(0, wait_ms) / 1000)
         self._canonical_recovery_timer.stop()
         self._pending_canonical_recoveries.clear()
+        self._pending_commands.clear()
         self.cancel_automatic_downloads()
+        self._cancel_download_batches(lambda _batch: True)
         for signal, callback in (
             (self._publication_service.mwb_ready, self._on_mwb_ready),
             (self._publication_service.wt_ready, self._on_wt_ready),
@@ -474,6 +1112,7 @@ class MeetingPreparationService(QObject):
             (self._publication_service.context_error, self._on_error),
             (self._publication_service.context_load_finished, self._on_load_finished),
             (self._resolver.resolved, self._on_media_resolved),
+            (self._cache_manager.prefetch_batch_changed, self._on_download_batch_changed),
         ):
             try:
                 signal.disconnect(callback)
@@ -515,15 +1154,18 @@ class MeetingPreparationService(QObject):
             bool(wd.is_sign_language),
         )
         job = self._jobs.get(key)
-        if job is None or wd.request_generation != job.generation:
+        if (
+            job is None
+            or not job.active
+            or job.operation in {MeetingContentOperation.CHECK, MeetingContentOperation.REPAIR}
+            or pub_type not in job.publications
+            or wd.request_generation != job.generation
+        ):
             return
         status = wd.mwb_status if pub_type == "mwb" else wd.wt_status
         job.terminal_statuses[pub_type] = status
         if status == "ready":
             self._reconcile_publication(job, pub_type, wd)
-        if pub_type == "wt" or wd.cbs_status in {"ready", "empty", "error", "idle"}:
-            job.completed_publications.add(pub_type)
-        self._finish_or_revalidate(job)
         self._emit_states(key)
 
     def _reconcile_publication(
@@ -559,21 +1201,7 @@ class MeetingPreparationService(QObject):
             job.key.language_code,
             job.key.is_sign_language,
         )
-        canonical_complete = (
-            pub_type != "mwb" or wd.cbs_status in {"idle", "ready", "empty"}
-        )
-        if (
-            not canonical_complete
-            and fallback is not None
-            and fallback.canonical_nodes
-        ):
-            log.debug(
-                "Keeping confirmed %s snapshot for %s while canonical references are %s",
-                pub_type,
-                job.key.monday.isoformat(),
-                wd.cbs_status or "incomplete",
-            )
-            return
+        canonical_complete = pub_type != "mwb" or wd.cbs_status in {"idle", "ready", "empty"}
         try:
             snapshot = self._store.reconcile(
                 tree_key,
@@ -585,6 +1213,9 @@ class MeetingPreparationService(QObject):
                     wd.mwb_source_checksum if pub_type == "mwb" else wd.wt_source_checksum
                 ),
                 canonical_complete=canonical_complete,
+                publication_dependencies=(
+                    wd.mwb_dependencies if pub_type == "mwb" else wd.wt_dependencies
+                ),
             )
         except (OSError, UnicodeError, ValueError) as exc:
             message = str(exc)
@@ -592,6 +1223,7 @@ class MeetingPreparationService(QObject):
             self.error.emit(job.key, pub_type, message)
             return
         job.errors.pop(pub_type, None)
+        self._repair_update_required.discard((job.key, pub_type))
         self.tree_changed.emit(job.key, pub_type, snapshot)
         self._schedule_snapshot_media(job, pub_type, snapshot)
 
@@ -636,7 +1268,7 @@ class MeetingPreparationService(QObject):
                 fallback_url=url,
             )
             self._enqueue_resolution(signature, ref, target, job.priority)
-        self._prefetch_urls(job, ready_urls)
+        self._prefetch_urls(job, pub_type, ready_urls)
 
     @staticmethod
     def _remote_url(node: Node) -> str:
@@ -806,7 +1438,9 @@ class MeetingPreparationService(QObject):
                     patch,
                 )
             elif target.fallback_url:
-                job.prefetched_urls.discard(target.fallback_url)
+                batch = job.downloads.get(target.pub_type)
+                if batch is not None:
+                    batch.prefetched_urls.discard(target.fallback_url)
             touched.add((target.key, target.pub_type, target.tree_key))
 
         for key, pub_type, tree_key in touched:
@@ -823,22 +1457,61 @@ class MeetingPreparationService(QObject):
                 continue
             if snapshot is not None:
                 self.tree_changed.emit(key, pub_type, snapshot)
-                self._prefetch_urls(job, _automatic_download_urls(snapshot.nodes))
+                self._prefetch_urls(job, pub_type, _automatic_download_urls(snapshot.nodes))
             self._emit_states(key)
         self._dispatch_resolution()
 
     def _prefetch_existing_snapshots(self, job: _PreparationJob) -> None:
         for pub_type, snapshot in self.snapshots(job.key).items():
-            self._schedule_snapshot_media(job, pub_type, snapshot)
+            if pub_type in job.publications or pub_type in job.downloads:
+                self._schedule_snapshot_media(job, pub_type, snapshot)
 
-    def _prefetch_urls(self, job: _PreparationJob, urls: set[str]) -> None:
-        if not job.download_media:
+    def _authorize_downloads(
+        self, job: _PreparationJob, publications: frozenset[str] | set[str],
+        origin: MeetingRequestOrigin,
+    ) -> None:
+        for pub_type in publications:
+            batch = job.downloads.get(pub_type)
+            if batch is None:
+                job.downloads[pub_type] = _MediaDownloadBatch(job.key, pub_type, origin)
+            elif origin == MeetingRequestOrigin.MANUAL:
+                batch.origin = origin
+        for command in self._pending_commands.get(job.key, []):
+            command.bind_downloads(job, publications)
+
+    @Slot(str, int, int, int, int)
+    def _on_download_batch_changed(
+        self, batch_id: str, queued: int, active: int, _done: int, _failed: int
+    ) -> None:
+        if not queued and not active:
+            self._download_batches.pop(batch_id, None)
+
+    def _cancel_download_batches(self, predicate: Callable[[_MediaDownloadBatch], bool]) -> None:
+        for job in self._jobs.values():
+            job.downloads = {
+                pub_type: batch for pub_type, batch in job.downloads.items() if not predicate(batch)
+            }
+        for queued in self._pending_commands.values():
+            for command in queued:
+                for pub_type, source in command.download_sources.items():
+                    batch = source.downloads.get(pub_type)
+                    if batch is not None and predicate(batch):
+                        source.downloads.pop(pub_type, None)
+        for batch_id, batch in list(self._download_batches.items()):
+            if predicate(batch):
+                self._download_batches.pop(batch_id, None)
+                self._cache_manager.cancel_batch(batch_id)
+
+    def _prefetch_urls(self, job: _PreparationJob, pub_type: str, urls: set[str]) -> None:
+        batch = job.downloads.get(pub_type)
+        if batch is None:
             return
-        candidates = sorted(url for url in urls if url and url not in job.prefetched_urls)
+        candidates = sorted(url for url in urls if url and url not in batch.prefetched_urls)
         if not candidates:
             return
-        self._cache_manager.prefetch_many(candidates, job.batch_id)
-        job.prefetched_urls.update(candidates)
+        self._download_batches[batch.batch_id] = batch
+        self._cache_manager.prefetch_many(candidates, batch.batch_id)
+        batch.prefetched_urls.update(candidates)
 
     @Slot(str, str, int, str, bool, int)
     def _on_progress(
@@ -879,13 +1552,27 @@ class MeetingPreparationService(QObject):
             return
         key = MeetingPreparationKey(monday, language, is_sign_language)
         job = self._jobs.get(key)
-        if job is None or job.generation != generation:
+        if (
+            job is None
+            or job.generation != generation
+            or not job.active
+            or pub_type not in job.publications
+        ):
             return
+        if message in {
+            MeetingContentError.IMAGE_REVISION_UNAVAILABLE,
+            MeetingContentError.LEGACY_REVISION_UNVERIFIABLE,
+        }:
+            self._repair_update_required.add((key, pub_type))
+            if job.operation == MeetingContentOperation.REPAIR:
+                job.repair_update_publications.add(pub_type)
+            message = "Image repair requires updating this meeting"
         job.errors[pub_type] = message
         job.terminal_statuses[pub_type] = "not_found" if message == "NOT_FOUND" else "error"
         job.completed_publications.add(pub_type)
         self.error.emit(key, pub_type, message)
-        self._finish_or_revalidate(job)
+        if job.operation != MeetingContentOperation.REPAIR:
+            self._finish_or_revalidate(job)
         self._emit_states(key)
 
     @Slot(str, str, bool, int)
@@ -906,50 +1593,29 @@ class MeetingPreparationService(QObject):
         job = self._jobs.get(key)
         if job is None or job.generation != generation or not job.active:
             return
-        job.completed_publications.update({"mwb", "wt"})
+        if job.operation == MeetingContentOperation.REPAIR:
+            if job.image_repair_phase != _ImageRepairPhase.WORKER:
+                return
+            job.image_repair_phase = _ImageRepairPhase.REBIND
+            self._schedule_source_maintenance(key)
+            return
+        job.completed_publications.update(job.publications)
         self._finish_or_revalidate(job)
         self._emit_states(key)
 
     def _finish_or_revalidate(self, job: _PreparationJob) -> None:
-        if not {"mwb", "wt"}.issubset(job.completed_publications):
+        if not job.publications.issubset(job.completed_publications):
             return
         job.active = False
-        if job.recovery_pending:
-            recovery_publications = frozenset(job.recovery_publications)
-            repair_cache_paths = tuple(sorted(job.repair_cache_paths))
-            force_after_recovery = job.force_pending
-            job.recovery_pending = False
-            job.force_pending = False
-            self.ensure_week(
-                MeetingPreparationRequest(
-                    key=job.key,
-                    download_media=job.download_media,
-                    priority=job.priority,
-                    recovery_publications=recovery_publications,
-                    repair_cache_paths=repair_cache_paths,
-                )
-            )
-            if force_after_recovery:
-                self.ensure_week(
-                    MeetingPreparationRequest(
-                        key=job.key,
-                        force_refresh=True,
-                        download_media=job.download_media,
-                        priority=job.priority,
-                    )
-                )
+        queued = self._pending_commands.get(job.key, [])
+        if queued:
+            command = queued.pop(0)
+            downloads = {
+                pub_type: batch for pub_type, source in command.download_sources.items()
+                if (batch := source.downloads.get(pub_type)) is not None
+            }
+            self._ensure_week(command.request, downloads=downloads)
             return
-        if not job.force_pending:
-            return
-        job.force_pending = False
-        self.ensure_week(
-            MeetingPreparationRequest(
-                key=job.key,
-                force_refresh=True,
-                download_media=job.download_media,
-                priority=job.priority,
-            )
-        )
 
     def _emit_states(self, key: MeetingPreparationKey) -> None:
         for pub_type in ("mwb", "wt"):

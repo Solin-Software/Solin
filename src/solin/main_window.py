@@ -832,6 +832,24 @@ class MainWindow(QWidget):
                 auto_share_workers=service_factories.auto_share_workers(),
             )
         )
+        from .core.media.publication_assets import PublicationAssetStore
+
+        publication_assets = PublicationAssetStore(runtime_paths.publication_assets_dir)
+        publication_owner = f"projection:{id(self)}"
+
+        def retain_projection_asset() -> None:
+            publication_assets.retain(publication_owner, (
+                str(self.projection_session.state.get("source_path") or ""),
+            ))
+
+        unsubscribe_publication_asset = self.projection_session.subscribe(retain_projection_asset)
+
+        def release_projection_asset(_object=None) -> None:
+            unsubscribe_publication_asset()
+            publication_assets.release(publication_owner)
+
+        self.destroyed.connect(release_projection_asset)
+        self._release_projection_asset = release_projection_asset
         self._media_projection = MediaProjectionController(
             MediaProjectionContext(
                 projection_session=self.projection_session,
@@ -848,6 +866,7 @@ class MainWindow(QWidget):
                 start_videos_paused=self._media_settings.start_videos_paused,
                 playback_protection=self.playback_protection,
                 content_frame_sink=self._program_content.submit_frame,
+                image_source_lease=lambda path: publication_assets.lease((path,)),
                 projection_aspect_ratio_provider=(
                     lambda: projection_aspect_ratio_from_windows(
                         tuple(self.projection_session.projection_windows)
@@ -1791,6 +1810,9 @@ class MainWindow(QWidget):
 
         if self._shutdown_controller is not None:
             self._shutdown_controller.shutdown()
+        release_asset = getattr(self, "_release_projection_asset", None)
+        if release_asset is not None:
+            release_asset()
 
     def commit_construction(self) -> None:
         if self._construction_finalized:
@@ -1805,6 +1827,9 @@ class MainWindow(QWidget):
         self._construction_finalized = True
 
     def _abort_partial_resources(self) -> None:
+        release_asset = getattr(self, "_release_projection_asset", None)
+        if release_asset is not None:
+            self._partial_cleanup_call("publication projection lease", release_asset)
         shutdown_controller = getattr(self, "_shutdown_controller", None)
         if shutdown_controller is not None:
             self._partial_cleanup_call(

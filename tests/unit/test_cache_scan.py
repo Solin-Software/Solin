@@ -41,3 +41,26 @@ def test_cache_scan_factory_creates_owned_session():
     assert isinstance(session, cache_scan.CacheScanSession)
     assert session.parent() is parent
     session.cancel()
+
+
+def test_cache_scan_combines_local_publication_assets_without_http_markers(tmp_path):
+    from solin.core.media.cache_listing import CachedMediaItem
+
+    asset = CachedMediaItem(str(tmp_path / "image.jpg"), "image.jpg", "Study image", 8, "image")
+    results = []
+    worker = cache_scan._CacheScanWorker(tmp_path / "empty", lambda: [asset])
+    worker.results_ready.connect(results.append)
+
+    worker.run()
+
+    assert results == [[asset]]
+
+
+def test_cancelled_cache_scan_does_not_read_additional_sources(tmp_path):
+    calls = []
+    worker = cache_scan._CacheScanWorker(tmp_path, lambda: calls.append("read") or [])
+    worker.cancel()
+
+    worker.run()
+
+    assert not calls

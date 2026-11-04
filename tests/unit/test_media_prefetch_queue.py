@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from solin.core.media.application import MediaPrefetchQueue, PrefetchPlan
 from tests._paths import REPO_ROOT
 
@@ -127,3 +129,48 @@ def test_media_prefetch_queue_application_service_has_no_qt_or_downloader_depend
     assert "QObject" not in source
     assert "Signal" not in source
     assert "SongDownloader" not in source
+
+
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("manual", [False, True])
+def test_cancel_batch_preserves_other_consumers_of_the_same_url(active, manual):
+    queue = MediaPrefetchQueue(_Lookup(), max_concurrent=int(active))
+    url = _urls(1)[0]
+    queue.prefetch_many([url], "automatic")
+    if manual:
+        queue.prefetch(url)
+    else:
+        queue.prefetch_many([url], "other-meeting")
+
+    released = queue.cancel_batch("automatic")
+
+    assert not _action_urls(released, "cancel_active")
+    assert queue.is_prefetching(url) is active
+    assert queue.is_queued(url) is not active
+    assert queue.batch_counts("automatic")[:2] == (0, 0)
+    if not manual:
+        assert queue.batch_counts("other-meeting")[:2] == (int(not active), int(active))
+        queue.cancel_batch("other-meeting")
+        assert not queue.is_prefetching(url)
+        assert not queue.is_queued(url)
+
+
+@pytest.mark.parametrize("outcome", ["complete", "retry", "fatal"])
+def test_shared_download_accounts_for_all_batches_after_owner_cancellation(outcome):
+    queue = MediaPrefetchQueue(_Lookup(), max_concurrent=1)
+    url, other = _urls(2)
+    queue.prefetch_many([url], "first")
+    queue.prefetch_many([url, other], "second")
+    queue.cancel_batch("first")
+    assert queue.is_prefetching(url)
+    if outcome == "retry":
+        queue.fail(url, "temporary")
+        assert queue.is_prefetching(url)
+    if outcome == "fatal":
+        queue.fail(url, "No space left on device")
+        assert queue.batch_counts("second") == (0, 0, 0, 1)
+        assert not queue.is_queued(other)
+    else:
+        queue.complete(url)
+        assert queue.batch_counts("second") == (0, 1, 1, 0)
+    assert queue.batch_counts("first") == (0, 0, 0, 0)

@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
+import pytest
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import QDialog, QMessageBox
 import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
 import solin.core.meetings.publications as publications_module
+import solin.core.meetings.publication_content as publication_content_module
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.meetings.meeting_folder_imports import (
     find_meeting_folder_import_record,
@@ -52,6 +54,192 @@ from tests._jwpub_fixture import build_synthetic_jwpub
 from solin.widgets.meetings.tree_controller import (
     MeetingTreeController,
 )
+
+
+@pytest.mark.parametrize("new_issue", ["20260500", "20260700"])
+def test_partial_reconcile_preserves_saved_ownership_and_finishes_with_normal_pruning(
+    tmp_path, new_issue
+):
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    builder = MeetingTreeBuilder()
+    canonical = builder.build_midweek(WeekData(mwb_all_media=[
+        MeetingMedia(multimedia_id=1, section="tgw", label="Healthy", mime_type="image/jpeg"),
+        MeetingMedia(multimedia_id=2, section="lac", label="Unavailable", mime_type="image/jpeg"),
+        MeetingMedia(multimedia_id=3, section="lac", label="Hidden", mime_type="image/jpeg"),
+    ]))
+    hidden = next(node for node in iter_nodes(canonical) if node.get("title") == "Hidden")
+    hidden_key = hidden["meeting_source_key"]
+    visible = copy.deepcopy(canonical)
+    for node in iter_nodes(visible):
+        if node.get("type") == "section":
+            node["children"] = [child for child in node["children"] if child["id"] != hidden["id"]]
+    original = store.save(
+        "mwb:2026-05-25:T:20260500", visible, builder.canonical_hash(canonical),
+        canonical_nodes=canonical, source_checksum="applied",
+        deleted_source_keys={hidden_key}, hidden_canonical_media={hidden_key: hidden},
+        publication_dependencies=[
+            {"pub": "mwb", "language": "T", "issue": "20260500", "checksum": "applied"}
+        ],
+    )
+    healthy = builder.build_midweek(WeekData(mwb_all_media=[
+        MeetingMedia(multimedia_id=1, section="tgw", label="Updated", mime_type="image/jpeg"),
+        MeetingMedia(multimedia_id=4, section="lac", label="Added", mime_type="image/jpeg"),
+    ]))
+    tree_key = f"mwb:2026-05-25:T:{new_issue}"
+    partial = store.reconcile(
+        tree_key, healthy, builder.canonical_hash(healthy), MeetingTreeOverview(),
+        fallback=original, canonical_complete=False, source_checksum="remote",
+    )
+    titles = {node.get("title") for node in iter_nodes(partial.nodes)}
+    assert {"Updated", "Added", "Unavailable"} <= titles
+    assert "Hidden" not in titles
+    assert partial.deleted_source_keys == original.deleted_source_keys
+    assert partial.hidden_canonical_media == original.hidden_canonical_media
+    assert {node["id"] for node in iter_nodes(original.canonical_nodes)} <= {
+        node["id"] for node in iter_nodes(partial.canonical_nodes)
+    }
+    assert partial.source_checksum == original.source_checksum
+    assert partial.publication_dependencies == original.publication_dependencies
+    assert partial.canonical_hash == ""
+
+    complete = store.reconcile(
+        tree_key, healthy, builder.canonical_hash(healthy), MeetingTreeOverview(),
+        canonical_complete=True, source_checksum="remote", publication_dependencies=[],
+    )
+    assert "Unavailable" not in {node.get("title") for node in iter_nodes(complete.nodes)}
+    assert complete.canonical_hash == builder.canonical_hash(healthy)
+    assert complete.hidden_canonical_media == {}
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("source", ["", "missing", "override"])
+def test_saved_image_sources_reuse_available_baseline_without_changing_operator_state(
+    tmp_path, enabled, source
+):
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    path = tmp_path / "original.jpg"
+    path.write_bytes(b"image")
+    canonical = {
+        "id": "original", "type": "media", "children": [], "meeting_generated": True,
+        "meeting_source_key": "media:original", "media_type": "image",
+        "media_ref": {"mime_type": "image/jpeg", "file_path": str(path),
+                      "asset_hash": "hash", "publication_source": {"member": "original.jpg"}},
+    }
+    visible = copy.deepcopy(canonical)
+    visible.update(id="operator-id", title="Operator title", image_framing={"zoom": 2},
+                   start_trim_ticks=10, end_trim_ticks=20)
+    visible["media_ref"]["file_path"] = str(path) if source == "override" else (
+        str(tmp_path / "missing.jpg") if source else ""
+    )
+    visible["media_ref"].pop("publication_source")
+    visible["media_ref"].pop("asset_hash")
+    visible["resolved_url"] = str(tmp_path / "missing.jpg") if source == "override" else ""
+    visible["thumbnail_local_path"] = str(tmp_path / "old-thumb.jpg")
+    visible["thumbnail_cache_key"] = "old-thumbnail"
+    visible["thumbnail_binding"] = "media_frame"
+    original = copy.deepcopy(visible)
+    snapshot = store.save(
+        "mwb:2026-05-25:T:20260500", [visible], "confirmed", canonical_nodes=[canonical],
+        source_checksum="applied", linked_sync={"enabled": enabled, "folder": "shared"},
+    )
+    actual = snapshot.nodes[0]
+    if enabled:
+        assert actual == original
+    else:
+        assert actual["media_ref"]["file_path"] == str(path)
+        assert actual["media_ref"]["asset_hash"] == "hash"
+        assert actual["media_ref"]["publication_source"] == {"member": "original.jpg"}
+        assert actual.get("resolved_url") in (None, "", str(path))
+        assert "thumbnail_local_path" not in actual
+        assert "thumbnail_cache_key" not in actual
+        assert "thumbnail_binding" not in actual
+        for name in ("id", "title", "image_framing", "start_trim_ticks", "end_trim_ticks"):
+            assert actual[name] == original[name]
+    assert snapshot.canonical_nodes == [canonical]
+    assert snapshot.canonical_hash == "confirmed"
+    assert snapshot.source_checksum == "applied"
+    assert snapshot.linked_sync == {"enabled": enabled, "folder": "shared"}
+
+
+def test_explicit_source_repair_preserves_hidden_nodes_and_latest_edits(tmp_path):
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    path = tmp_path / "available-later.jpg"
+    canonical = {
+        "id": "official", "type": "media", "children": [], "meeting_generated": True,
+        "meeting_source_key": "media:official", "media_type": "image",
+        "media_ref": {"mime_type": "image/jpeg", "file_path": str(path), "asset_hash": "hash"},
+    }
+    visible = copy.deepcopy(canonical)
+    visible["media_ref"]["file_path"] = ""
+    hidden = copy.deepcopy(visible)
+    visible.update(title="Latest edit", image_framing={"zoom": 3})
+    original = store.save(
+        "mwb:2026-05-25:T:20260500", [visible], "confirmed", canonical_nodes=[canonical],
+        hidden_canonical_media={"media:official": hidden}, deleted_source_keys={"media:official"},
+        source_checksum="applied", canonical_reset_generation=7,
+        linked_sync={"enabled": False, "snapshot": {"keep": "immutable"}},
+        publication_dependencies=[
+            {"pub": "mwb", "language": "T", "issue": "20260500", "checksum": "applied"}
+        ],
+    )
+    path.write_bytes(b"image")
+    repaired = store.repair_canonical_image_sources(original.tree_key)
+    assert repaired.nodes[0]["media_ref"]["file_path"] == str(path)
+    assert repaired.hidden_canonical_media["media:official"]["media_ref"]["file_path"] == str(path)
+    assert repaired.nodes[0]["title"] == "Latest edit"
+    assert repaired.nodes[0]["image_framing"] == {"zoom": 3}
+    for name in ("canonical_nodes", "canonical_hash", "source_checksum", "publication_dependencies",
+                 "deleted_source_keys", "linked_sync", "canonical_reset_generation"):
+        assert getattr(repaired, name) == getattr(original, name)
+    assert repaired.revision == original.revision + 1
+    assert store.repair_canonical_image_sources(original.tree_key).revision == repaired.revision
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_image_source_normalization_uses_sync_binding_from_current_write(tmp_path, enabled):
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    path = tmp_path / "original.jpg"
+    path.write_bytes(b"image")
+    canonical = {
+        "id": "image", "type": "media", "children": [], "meeting_generated": True,
+        "meeting_source_key": "media:image",
+        "media_ref": {"mime_type": "image/jpeg", "file_path": str(path)},
+    }
+    visible = copy.deepcopy(canonical)
+    visible["media_ref"]["file_path"] = ""
+    tree_key = "mwb:2026-05-25:T:20260500"
+    store.save(tree_key, [visible], "confirmed", canonical_nodes=[canonical],
+               linked_sync={"enabled": not enabled})
+    current = store.save(tree_key, [visible], "confirmed", linked_sync={"enabled": enabled})
+    assert current.nodes[0]["media_ref"]["file_path"] == ("" if enabled else str(path))
+
+
+@pytest.mark.parametrize("strict", [False, True])
+def test_publication_reference_parse_failure_never_commits_partial_media(monkeypatch, tmp_path, strict):
+    closed = []
+    connection = SimpleNamespace(
+        execute=lambda *_: SimpleNamespace(fetchone=lambda: (1,)),
+        close=lambda: closed.append(True),
+    )
+    monkeypatch.setattr(publication_content_module, "open_publication_database", lambda _: connection)
+    monkeypatch.setattr(publication_content_module, "query_multimedia", lambda *_: [1, 2])
+    monkeypatch.setattr(publication_content_module, "dedup_multimedia_rows", lambda _: [
+        {"KeySymbol": "first"}, {"KeySymbol": "broken"},
+    ])
+
+    def parse(row, *_):
+        if row["KeySymbol"] == "broken":
+            raise sqlite3.DatabaseError("corrupt reference")
+        return MeetingMedia(label="First")
+
+    monkeypatch.setattr(publication_content_module, "make_media_item", parse)
+    arguments = (tmp_path, tmp_path / "publication.db", 1, "cbs", "Study")
+    if strict:
+        with pytest.raises(sqlite3.DatabaseError):
+            publication_content_module.parse_publication_ref_items(*arguments, strict=True)
+    else:
+        assert publication_content_module.parse_publication_ref_items(*arguments) == []
+    assert closed == [True]
 
 
 def test_memorial_service_stays_alive_until_slow_thread_finishes() -> None:
@@ -238,10 +426,9 @@ def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> N
         False,
         1,
         0,
-        frozenset({"mwb", "wt"}),
         "",
-        {},
         0,
+        publications_module.PublicationContentRequest(),
     )
     interactive = publications_module._WeekLoadRequest(
         date(2026, 6, 8),
@@ -250,10 +437,9 @@ def test_jwpub_scheduler_dispatches_interactive_before_pending_background() -> N
         False,
         2,
         1,
-        frozenset({"mwb", "wt"}),
         "",
-        {},
         1,
+        publications_module.PublicationContentRequest(),
     )
     background_key = ("2026-06-01", "T", False, 1)
     interactive_key = ("2026-06-08", "T", False, 2)

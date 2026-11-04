@@ -241,6 +241,57 @@ def test_meeting_error_retry_reloads_selected_week() -> None:
     assert requested == [(bridge.weekMonday, True)]
 
 
+def test_manual_download_targets_one_meeting_and_coalesces_repeated_clicks() -> None:
+    bridge = _bridge()
+    downloads = []
+    bridge.meetingDownloadRequested.connect(lambda *args: downloads.append(args))
+    bridge.showMeetings()
+    bridge.update_meeting_targets(bridge.weekMonday, [
+        {"pub_type": "mwb", "available": False, "status": "download"},
+        {"pub_type": "wt", "available": False, "status": "download"},
+    ])
+
+    bridge.downloadMeeting("wt")
+    bridge.downloadMeeting("wt")
+    bridge.downloadMeeting("invalid")
+
+    assert downloads == [("wt", bridge.weekMonday, False)]
+    assert {target["pub_type"]: target["status"] for target in bridge.meetingTargets} == {
+        "mwb": "download", "wt": "loading",
+    }
+
+
+def test_download_does_not_replace_an_available_meeting() -> None:
+    bridge = _bridge()
+    downloads = []
+    bridge.meetingDownloadRequested.connect(lambda *args: downloads.append(args))
+    bridge.update_meeting_targets(bridge.weekMonday, [
+        {"pub_type": "mwb", "available": True, "status": "ready"},
+    ])
+
+    bridge.downloadMeeting("mwb")
+
+    assert not downloads
+
+
+@pytest.mark.parametrize(("status", "force"), [("download", False), ("error", True)])
+def test_meeting_retry_refreshes_metadata_for_only_the_selected_publication(status, force) -> None:
+    bridge = _bridge()
+    downloads = []
+    bridge.meetingDownloadRequested.connect(lambda *args: downloads.append(args))
+    bridge.showMeetings()
+    bridge.update_meeting_targets(bridge.weekMonday, [
+        {"pub_type": "mwb", "available": False, "status": status},
+        {"pub_type": "wt", "available": False, "status": "download"},
+    ])
+
+    bridge.downloadMeeting("mwb")
+    bridge.downloadMeeting("mwb")
+
+    assert downloads == [("mwb", bridge.weekMonday, force)]
+    assert bridge.meetingTargets[1]["status"] == "download"
+
+
 def test_preparation_retry_does_not_leave_error_page_in_back_history() -> None:
     bridge = _bridge(can_play=True)
 

@@ -10846,6 +10846,10 @@ Entrambi i dispositivi devono essere sulla stessa rete Wi-Fi.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Download in corso… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Scarica</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Download in corso… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Scarica</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Aggiorna</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Riprova</translation>
     </message>
 </context>
 <context>

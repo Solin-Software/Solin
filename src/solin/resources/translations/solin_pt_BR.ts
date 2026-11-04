@@ -10871,6 +10871,10 @@ Ambos precisam estar na mesma rede Wi-Fi.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Baixando… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Baixar</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11147,6 +11151,18 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Baixando… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Baixar</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Atualizar</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Tentar novamente</translation>
     </message>
 </context>
 <context>

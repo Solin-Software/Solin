@@ -396,7 +396,7 @@ Rectangle {
                             accentColor: modelData.color || root.accent
                             selectable: !!modelData.available && !destinationBridge.busy
                             onClicked: destinationBridge.chooseMeeting(modelData.pub_type)
-                            onRetry: destinationBridge.retryWeek()
+                            onRetry: destinationBridge.downloadMeeting(modelData.pub_type)
                         }
                     }
 
@@ -641,19 +641,36 @@ Rectangle {
                 sourceSize: Qt.size(14, 14)
             }
 
-            Text {
+            Button {
+                id: meetingAction
+                objectName: "meetingPreparationAction"
                 anchors.centerIn: parent
-                visible: meetingCard.status === "error"
-                text: qsTranslate("MediaDestinationDialog", "Retry")
-                color: root.accent
+                visible: meetingCard.status === "error" || meetingCard.status === "download"
+                text: meetingCard.status === "download"
+                    ? qsTranslate("_PubCard", "Download")
+                    : qsTranslate("MediaDestinationDialog", "Retry")
+                focusPolicy: Qt.StrongFocus
+                Accessible.name: text
                 font.pixelSize: 10
+                horizontalPadding: 8
+                implicitHeight: 32
 
-                MouseArea {
-                    anchors.fill: parent
-                    anchors.margins: -8
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: meetingCard.retry()
+                contentItem: Text {
+                    text: meetingAction.text
+                    font: meetingAction.font
+                    color: root.accent
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
+                background: Rectangle {
+                    radius: 6
+                    color: meetingAction.hovered ? root.hover : "transparent"
+                    border.width: 1
+                    border.color: meetingAction.activeFocus ? root.accent : "transparent"
+                }
+                Keys.onReturnPressed: meetingAction.click()
+                Keys.onEnterPressed: meetingAction.click()
+                onClicked: meetingCard.retry()
             }
         }
 

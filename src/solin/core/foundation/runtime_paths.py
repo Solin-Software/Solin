@@ -17,6 +17,11 @@ class RuntimePaths:
     pptx_pages_dir: Path
     docx_pages_dir: Path
 
+    @property
+    def publication_assets_dir(self) -> Path:
+        """Completed publication images shared by all profiles."""
+        return self.data_dir / "media_assets"
+
     @classmethod
     def from_roots(
         cls,

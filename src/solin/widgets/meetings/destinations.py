@@ -27,6 +27,10 @@ class MeetingDestinationSession(QObject):
         return self.controller.placement_playlist_ref()
 
     @property
+    def is_closed(self) -> bool:
+        return self._closed
+
+    @property
     def tree_key(self) -> str:
         return str(getattr(self.controller, "_tree_key", "") or "")
 

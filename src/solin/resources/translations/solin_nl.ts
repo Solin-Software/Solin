@@ -10846,6 +10846,10 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Downloaden… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Downloaden</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11122,6 +11126,18 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Downloaden… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Downloaden</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Bijwerken</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Opnieuw</translation>
     </message>
 </context>
 <context>

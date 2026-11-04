@@ -339,6 +339,64 @@ def test_received_deactivation_detaches_cache_before_internal_cleanup(tmp_path):
     assert not (folder / ".solin_sync").exists()
 
 
+def test_received_disable_with_deleted_transport_image_reuses_local_canonical_source(tmp_path):
+    from solin.core.meetings.tree_store import MeetingTreeStore
+
+    sender = MeetingLinkedFolderSync(lambda _: 0)
+    receiver = MeetingLinkedFolderSync(lambda _: 0)
+    folder = tmp_path / "2026-05-25 MW"
+    cache = folder / ".solin_cache"
+    cache.mkdir(parents=True)
+    shared_image = cache / "official.jpg"
+    shared_image.write_bytes(b"official image")
+    local_image = tmp_path / "assets" / "official.jpg"
+    local_image.parent.mkdir()
+    local_image.write_bytes(shared_image.read_bytes())
+    official = {
+        **_media("official", str(shared_image)),
+        "media_type": "image",
+        "meeting_generated": True,
+        "meeting_source_key": "media:mwb:official",
+        "media_ref": {"mime_type": "image/jpeg", "file_path": str(shared_image)},
+        "image_framing": {"scale": 1.4},
+        "title": "Operator title",
+        "user_title_override": True,
+    }
+    initial = _save(sender, folder, [official])
+    identity = MeetingSyncIdentity("mwb:2026-05-25:T:issue", "mwb", date(2026, 5, 25))
+    canonical = {
+        **official,
+        "media_ref": {**official["media_ref"], "file_path": str(local_image)},
+    }
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    store.save(
+        identity.tree_key,
+        initial.nodes,
+        "applied-hash",
+        canonical_nodes=[canonical],
+        source_checksum="applied-revision",
+        linked_sync={"enabled": True, "folder": str(folder)},
+    )
+
+    sender.deactivate_tree(folder, identity)
+    assert not shared_image.exists()
+    detached = receiver.detach_cache_references(initial.nodes, folder, tmp_path / "detached")
+    assert detached[0]["media_ref"]["file_path"] == ""
+    saved = store.save(
+        identity.tree_key,
+        detached,
+        "applied-hash",
+        linked_sync={"enabled": False, "folder": str(folder)},
+    )
+
+    assert saved.nodes[0]["media_ref"]["file_path"] == str(local_image)
+    assert saved.nodes[0]["title"] == "Operator title"
+    assert saved.nodes[0]["image_framing"] == {"scale": 1.4}
+    assert saved.canonical_hash == "applied-hash"
+    assert saved.source_checksum == "applied-revision"
+    assert not saved.linked_sync["enabled"]
+
+
 def test_delayed_legacy_manifest_cannot_reactivate_a_known_document(tmp_path):
     import json
     from solin.core.ingest.sync.activation import ActivationStore

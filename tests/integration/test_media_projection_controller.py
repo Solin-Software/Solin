@@ -1,3 +1,6 @@
+from contextlib import nullcontext
+
+import pytest
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice
 from PySide6.QtGui import QColor, QImage
 
@@ -289,7 +292,7 @@ class _WindowStub:
         return text
 
 
-def _controller(window, *, content_frame_sink=None):
+def _controller(window, *, content_frame_sink=None, image_source_lease=nullcontext):
     return MediaProjectionController(
         MediaProjectionContext(
             projection_session=window.projection_session,
@@ -308,6 +311,7 @@ def _controller(window, *, content_frame_sink=None):
             start_videos_paused=window.settings_widget.get_start_videos_paused,
             playback_protection=window.playback_protection,
             content_frame_sink=content_frame_sink or window.content_frames.append,
+            image_source_lease=image_source_lease,
         ),
         MediaProjectionHandlers(
             stop_browser_tab_projection=(window._navigation.stop_browser_tab_projection),
@@ -350,6 +354,60 @@ def test_image_identity_is_committed_before_first_frame():
     controller.project_image_bytes(_png_bytes())
 
     assert events[-2:] == [("state", 1), ("frame", 1)]
+
+
+def test_image_file_is_leased_until_projection_ownership_is_committed(tmp_path):
+    from solin.core.media.publication_assets import PublicationAssetStore
+
+    store = PublicationAssetStore(tmp_path / "assets")
+    source = tmp_path / "source.png"
+    _write_png(source)
+    path = store.materialize(source)
+    window = _WindowStub()
+    collected = []
+
+    def commit_owner():
+        collected.extend(store.collect(set))
+        store.retain("projection", [window.projection_session.state.get("source_path", "")])
+
+    unsubscribe = window.projection_session.subscribe(commit_owner)
+    controller = _controller(window, image_source_lease=lambda path: store.lease([path]))
+    try:
+        controller._project_image_path("Slide", path)
+        assert not collected
+        assert window.projection_session.state["source_path"] == path
+        assert store.collect(set) == []
+        with pytest.raises(OSError):
+            store.remove(path)
+    finally:
+        unsubscribe()
+        store.release("projection")
+    assert store.collect(set) == [path]
+
+
+def test_reframing_identical_bytes_transfers_the_projection_source_pin(tmp_path):
+    from solin.core.media.publication_assets import PublicationAssetStore
+
+    store = PublicationAssetStore(tmp_path / "assets")
+    source = tmp_path / "source.png"
+    _write_png(source)
+    path = store.materialize(source)
+    window = _WindowStub()
+    unsubscribe = window.projection_session.subscribe(lambda: store.retain(
+        "projection", [window.projection_session.state.get("source_path", "")],
+    ))
+    controller = _controller(window, image_source_lease=lambda path: store.lease([path]))
+    try:
+        controller._project_image_path("Original", str(source))
+        controller._project_image_path("Shared", path, image_framing={
+            "version": 1, "zoom": 2.0, "norm_x": 0.0, "norm_y": 0.0,
+        })
+
+        assert window.projection_session.state["source_path"] == path
+        assert store.collect(set) == []
+    finally:
+        unsubscribe()
+        store.release("projection")
 
 
 def test_video_identity_is_committed_before_decoder_can_emit():
@@ -699,6 +757,7 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
         "origin": None,
         "data": image_path.read_bytes(),
         "transform": (1.0, 0.0, 0.0),
+        "source_path": str(image_path),
     }
 
 

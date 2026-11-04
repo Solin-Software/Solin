@@ -82,6 +82,7 @@ running from source, validation, and the review workflow.
 | [Camera capture](docs/camera-capture.md) | Capability discovery, mode negotiation, caching, and capture health |
 | [Remote-control architecture](docs/remote-control.md) | Device trust, security, and the service contract |
 | [Linked-folder synchronization](docs/linked-folder-sync.md) | Shared-state protocol, conflict handling, and migration |
+| [Meeting content lifecycle](docs/meeting-content.md) | Preparation, publication caching, image ownership, and cleanup policies |
 | [Translations](docs/translations.md) | Catalogs and translation tooling |
 | [Development tools](docs/development-tools.md) | Optional repository utilities |
 | [Versioning and releases](docs/releases.md) | Release preparation and publication |

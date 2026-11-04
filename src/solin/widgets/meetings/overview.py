@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -82,8 +83,36 @@ def _card_arrow_slot(color: str) -> tuple[QWidget, QLabel]:
     return slot, arrow
 
 
+def _maintenance_buttons(layout, update_requested, repair_requested):
+    update = QPushButton(QCoreApplication.translate("_PubCard", "Update"))
+    repair = QPushButton(QCoreApplication.translate("_PubCard", "Retry"))
+    for button in (update, repair):
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setAutoDefault(True)
+        button.hide()
+        layout.addWidget(button)
+    update.clicked.connect(update_requested)
+    repair.clicked.connect(repair_requested)
+    return update, repair
+
+
+def _set_maintenance_buttons(update, repair, *, update_available, repair_required):
+    update.setVisible(update_available)
+    repair.setVisible(repair_required)
+    style = (
+        f"QPushButton{{background:{PALETTE.surface_hover_strong};"
+        f"color:{PALETTE.text_primary};border:1px solid {PALETTE.border_muted};"
+        "border-radius:6px;padding:4px 9px;font-size:11px;}"
+        f"QPushButton:hover{{border-color:{PALETTE.accent};}}"
+    )
+    update.setStyleSheet(style)
+    repair.setStyleSheet(style)
+
+
 class _PubCard(QFrame):
     open_requested = Signal()
+    update_requested = Signal()
+    repair_requested = Signal()
 
     _CW, _CH = 80, 108
 
@@ -96,6 +125,7 @@ class _PubCard(QFrame):
         self._style_active = False
         self.setObjectName("PubCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedHeight(148)
         self._apply_style(active=False)
         self._content_ready = False
@@ -118,6 +148,7 @@ class _PubCard(QFrame):
             f"border:1px solid {border};border-radius:16px;}}"
             f"QFrame#PubCard:hover{{background:{PALETTE.surface_hover_strong};"
             f"border-color:{accent};}}"
+            f"QFrame#PubCard:focus{{border:2px solid {accent};}}"
         )
 
     def apply_theme(self) -> None:
@@ -138,6 +169,10 @@ class _PubCard(QFrame):
         )
         self._sub_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
+        )
+        self.set_maintenance(
+            update_available=not self._update_button.isHidden(),
+            repair_required=not self._repair_button.isHidden(),
         )
 
     def _build(self):
@@ -196,6 +231,9 @@ class _PubCard(QFrame):
         arrow_col = PALETTE.accent if self._is_mwb else MEETING_PURPLE
         bot.addWidget(self._status_lbl)
         bot.addStretch()
+        self._update_button, self._repair_button = _maintenance_buttons(
+            bot, self.update_requested, self.repair_requested,
+        )
         rl.addLayout(bot)
 
         outer.addWidget(right, 1, Qt.AlignmentFlag.AlignTop)
@@ -211,7 +249,38 @@ class _PubCard(QFrame):
             self.open_requested.emit()
         super().mousePressEvent(event)
 
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.open_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def set_maintenance(self, *, update_available: bool = False, repair_required: bool = False):
+        _set_maintenance_buttons(
+            self._update_button, self._repair_button,
+            update_available=update_available, repair_required=repair_required,
+        )
+
+    def set_downloadable(self) -> None:
+        self._last_pct = -1
+        self._progress_style_set = False
+        self.setEnabled(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._pill.setText(self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY"))
+        self._title_lbl.setText(self.tr("Life & Ministry") if self._is_mwb else self.tr("Watchtower Study"))
+        self._sub_lbl.setText("")
+        self._status_lbl.setText(self.tr("Download"))
+        self._status_lbl.setStyleSheet(
+            f"color:{PALETTE.accent};font-size:11px;background:transparent;"
+        )
+        self._cover.setPixmap(QPixmap())
+        self._arrow.setVisible(True)
+        self.setAccessibleName(f"{self._title_lbl.text()} — {self._status_lbl.text()}")
+        self.set_maintenance()
+
     def set_loading(self):
+        self.set_maintenance()
         self._last_pct = -1
         self._progress_style_set = False
         self.setEnabled(False)
@@ -230,6 +299,8 @@ class _PubCard(QFrame):
         self._arrow.setVisible(False)
 
     def set_ready(self, wd: "WeekData"):
+        self.set_maintenance()
+        self.setAccessibleName("")
         self._last_pct = -1
         self._progress_style_set = False
         self.setEnabled(True)
@@ -266,6 +337,8 @@ class _PubCard(QFrame):
         self._cover.setPixmap(ph)
 
     def set_saved(self, snapshot: "MeetingTreeSnapshot"):
+        self.set_maintenance()
+        self.setAccessibleName("")
         self._last_pct = -1
         self._progress_style_set = False
         self.setEnabled(True)
@@ -295,6 +368,7 @@ class _PubCard(QFrame):
         self._cover.setPixmap(ph)
 
     def set_empty(self):
+        self.set_maintenance()
         pill_text = self.tr("LIFE & MINISTRY") if self._is_mwb else self.tr("WATCHTOWER STUDY")
         self._pill.setText(pill_text)
 
@@ -307,6 +381,7 @@ class _PubCard(QFrame):
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_error(self, _msg: str = ""):
+        self.set_maintenance()
         self._last_pct = -1
         self._progress_style_set = False
         self.setEnabled(True)
@@ -324,6 +399,7 @@ class _PubCard(QFrame):
         self._arrow.setVisible(True)
 
     def set_not_found(self):
+        self.set_maintenance()
         self._last_pct = -1
         self._progress_style_set = False
         self.setEnabled(True)
@@ -359,6 +435,8 @@ class _PubCard(QFrame):
 
 class _MemorialCard(QFrame):
     open_requested = Signal()
+    update_requested = Signal()
+    repair_requested = Signal()
 
     _CW, _CH = 80, 108
 
@@ -369,6 +447,7 @@ class _MemorialCard(QFrame):
         self._style_active = False
         self.setObjectName("MemCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedHeight(148)
         self._apply_style(active=False)
         self._content_ready = False
@@ -390,6 +469,7 @@ class _MemorialCard(QFrame):
             f"border:1px solid {border};border-radius:16px;}}"
             f"QFrame#MemCard:hover{{background:{PALETTE.surface_hover_strong};"
             f"border-color:{PALETTE.warning};}}"
+            f"QFrame#MemCard:focus{{border:2px solid {PALETTE.warning};}}"
         )
 
     def apply_theme(self) -> None:
@@ -409,6 +489,10 @@ class _MemorialCard(QFrame):
         )
         self._sub_lbl.setStyleSheet(
             f"color:{PALETTE.text_muted};font-size:11px;background:transparent;"
+        )
+        self.set_maintenance(
+            update_available=not self._update_button.isHidden(),
+            repair_required=not self._repair_button.isHidden(),
         )
 
     def _build(self):
@@ -465,6 +549,9 @@ class _MemorialCard(QFrame):
         )
         bot.addWidget(self._status_lbl)
         bot.addStretch()
+        self._update_button, self._repair_button = _maintenance_buttons(
+            bot, self.update_requested, self.repair_requested,
+        )
         rl.addLayout(bot)
 
         outer.addWidget(right, 1, Qt.AlignmentFlag.AlignTop)
@@ -480,7 +567,22 @@ class _MemorialCard(QFrame):
             self.open_requested.emit()
         super().mousePressEvent(event)
 
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.open_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def set_maintenance(self, *, update_available=False, repair_required=False):
+        _set_maintenance_buttons(
+            self._update_button, self._repair_button,
+            update_available=update_available, repair_required=repair_required,
+        )
+
     def set_loading(self):
+        self.set_maintenance()
+        self.setEnabled(False)
         self._last_pct = -1
         self._progress_style_set = False
         self._pill.setText(self.tr("MEMORIAL"))
@@ -494,7 +596,26 @@ class _MemorialCard(QFrame):
         self._arrow.setVisible(False)
         self._apply_style(active=False)
 
+    def set_downloadable(self):
+        self.set_maintenance()
+        self.setEnabled(True)
+        self._last_pct = -1
+        self._progress_style_set = False
+        self._pill.setText(self.tr("MEMORIAL"))
+        self._title_lbl.setText(self.tr("Memorial of Jesus’ Death"))
+        self._sub_lbl.setText("")
+        self._status_lbl.setText(self.tr("Download"))
+        self._status_lbl.setStyleSheet(
+            f"color:{PALETTE.warning};font-size:11px;background:transparent;"
+        )
+        self._cover.setPixmap(QPixmap())
+        self._arrow.setVisible(True)
+        self._apply_style(active=False)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
     def set_ready(self, md: "MemorialData"):
+        self.set_maintenance()
+        self.setEnabled(True)
         self._last_pct = -1
         self._progress_style_set = False
         self._pill.setText(self.tr("MEMORIAL"))
@@ -522,6 +643,8 @@ class _MemorialCard(QFrame):
         self._cover.setPixmap(ph)
 
     def set_empty(self):
+        self.set_maintenance()
+        self.setEnabled(False)
         self._pill.setText(self.tr("MEMORIAL"))
         self._title_lbl.setText(self.tr("Memorial of Jesus’ Death"))
         self._sub_lbl.setText("")
@@ -532,6 +655,8 @@ class _MemorialCard(QFrame):
         self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def set_error(self):
+        self.set_maintenance()
+        self.setEnabled(True)
         self._last_pct = -1
         self._progress_style_set = False
         self._pill.setText(self.tr("MEMORIAL"))
@@ -545,6 +670,8 @@ class _MemorialCard(QFrame):
         self._apply_style(active=False)
 
     def set_not_found(self):
+        self.set_maintenance()
+        self.setEnabled(True)
         self._last_pct = -1
         self._progress_style_set = False
         self._pill.setText(self.tr("MEMORIAL"))
@@ -559,6 +686,8 @@ class _MemorialCard(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def set_deleted(self):
+        self.set_maintenance()
+        self.setEnabled(False)
         self._last_pct = -1
         self._progress_style_set = False
         self._pill.setText(self.tr("MEMORIAL"))
@@ -594,6 +723,12 @@ class Overview(QWidget):
     open_mwb = Signal()
     open_wt = Signal()
     open_memorial = Signal()
+    update_mwb = Signal()
+    update_wt = Signal()
+    update_memorial = Signal()
+    repair_mwb = Signal()
+    repair_wt = Signal()
+    repair_memorial = Signal()
 
     def __init__(self, parent=None, *, defer_cards: bool = False):
         super().__init__(parent)
@@ -635,6 +770,8 @@ class Overview(QWidget):
     def build_mwb_card(self) -> None:
         self.mwb_card = _PubCard("mwb", defer_content=True)
         self.mwb_card.open_requested.connect(self.open_mwb)
+        self.mwb_card.update_requested.connect(self.update_mwb)
+        self.mwb_card.repair_requested.connect(self.repair_mwb)
         self._content_layout.addWidget(self.mwb_card)
 
     def populate_mwb_card(self) -> None:
@@ -643,6 +780,8 @@ class Overview(QWidget):
     def build_wt_card(self) -> None:
         self.wt_card = _PubCard("wt", defer_content=True)
         self.wt_card.open_requested.connect(self.open_wt)
+        self.wt_card.update_requested.connect(self.update_wt)
+        self.wt_card.repair_requested.connect(self.repair_wt)
         self._content_layout.addWidget(self.wt_card)
 
     def populate_wt_card(self) -> None:
@@ -651,6 +790,8 @@ class Overview(QWidget):
     def build_memorial_card(self) -> None:
         self.memorial_card = _MemorialCard(defer_content=True)
         self.memorial_card.open_requested.connect(self.open_memorial)
+        self.memorial_card.update_requested.connect(self.update_memorial)
+        self.memorial_card.repair_requested.connect(self.repair_memorial)
         self.memorial_card.setVisible(False)
         self._content_layout.addWidget(self.memorial_card)
 

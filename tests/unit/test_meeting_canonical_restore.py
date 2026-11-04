@@ -465,6 +465,43 @@ def test_diff_detects_every_official_divergence_category() -> None:
     assert diff.stale == 1
 
 
+@pytest.mark.parametrize("legacy_saved", [False, True])
+def test_restore_legacy_image_keeps_operator_edits_without_stale_runtime_state(legacy_saved):
+    canonical = {
+        "id": "canonical", "type": "media", "children": [], "meeting_generated": True,
+        "meeting_source_key": "media:mwb:mm7", "title": "Official image",
+        "media_ref": {"multimedia_id": 7, "mime_type": "image/jpeg",
+                      "file_path": "current.jpg", "publication_source": {
+                          "pub": "mwb", "language": "T", "issue": "20261100",
+                          "member": "illustration.jpg",
+                      }},
+        "resolved_url": "current.jpg", "thumbnail_url": "current-thumb.jpg",
+    }
+    saved = deepcopy(canonical)
+    legacy = saved if legacy_saved else canonical
+    legacy["media_ref"].pop("publication_source")
+    legacy["media_ref"]["file_path"] = "legacy.jpg"
+    saved.update(
+        id="operator-id", image_framing={"version": 1, "zoom": 2}, start_trim_ticks=100,
+        end_trim_ticks=200, linked_folder_source="operator-folder",
+        resolved_url="stale.jpg", thumbnail_url="stale-thumb.jpg",
+        thumbnail_local_path="stale-local.jpg", thumbnail_cache_key="stale-cache",
+        thumbnail_source_key="stale-source", thumbnail_binding="media_frame",
+        base_duration_ticks=900,
+    )
+
+    restored = restore_canonical_tree([canonical], [saved])[0]
+
+    assert restored["id"] == saved["id"]
+    for field in ("image_framing", "start_trim_ticks", "end_trim_ticks", "linked_folder_source"):
+        assert restored[field] == saved[field]
+    for field in ("media_ref", "resolved_url", "thumbnail_url"):
+        assert restored[field] == canonical[field]
+    for field in ("thumbnail_local_path", "thumbnail_cache_key", "thumbnail_source_key",
+                  "thumbnail_binding", "base_duration_ticks"):
+        assert field not in restored
+
+
 def test_restore_rebuilds_official_tree_and_preserves_manual_state() -> None:
     canonical = [
         _section(
@@ -849,7 +886,7 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     assert raw["version"] == 6
 
 
-def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
+def test_preliminary_reconciliation_preserves_known_content_and_marks_completion_pending(
     tmp_path: Path,
 ) -> None:
     tree_key = "mwb:2026-05-25:T:issue"
@@ -880,7 +917,7 @@ def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
     )
 
     assert pending.canonical_nodes == complete
-    assert pending.canonical_hash == "complete-hash"
+    assert pending.canonical_hash == ""
     assert pending.source_checksum == "complete-checksum"
     assert pending.deleted_source_keys == {"media:a"}
 
