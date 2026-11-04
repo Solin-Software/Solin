@@ -150,6 +150,12 @@ class _MediaDownloadBatch:
     prefetched_urls: set[str] = field(default_factory=set)
 
 
+class _ImageRepairPhase(Enum):
+    SCAN = "scan"
+    WORKER = "worker"
+    REBIND = "rebind"
+
+
 @dataclass(slots=True)
 class _PreparationJob:
     key: MeetingPreparationKey
@@ -169,6 +175,7 @@ class _PreparationJob:
         dict[str, tuple[tuple, dict[str, Any]]],
     ] = field(default_factory=dict)
     downloads: dict[str, _MediaDownloadBatch] = field(default_factory=dict)
+    image_repair_phase: _ImageRepairPhase = _ImageRepairPhase.SCAN
 
     @property
     def download_media(self) -> bool:
@@ -230,9 +237,13 @@ class _SourceMaintenance:
         self.workers = ThreadedWorkerPool()
         self.pending: dict[MeetingPreparationKey, CancellationFlag] = {}
         self.dirty: set[MeetingPreparationKey] = set()
+        self.running: set[MeetingPreparationKey] = set()
+        self.publish: dict[MeetingPreparationKey, set[str]] = {}
 
     def cancel(self, key: MeetingPreparationKey) -> None:
         self.dirty.discard(key)
+        self.running.discard(key)
+        self.publish.pop(key, None)
         if (cancellation := self.pending.pop(key, None)) is not None:
             cancellation.set()
 
@@ -248,6 +259,16 @@ class _SourceMaintenanceResult:
     tree_key: str
     changed: bool = False
     error: str = ""
+    revision: int = -1
+    repair_refs: tuple[dict[str, Any], ...] = ()
+    rebind_required: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceMaintenanceReport:
+    results: tuple[_SourceMaintenanceResult, ...]
+    repair_generation: int = 0
+    repair_phase: _ImageRepairPhase | None = None
 
 
 class MeetingPreparationService(QObject):
@@ -298,6 +319,7 @@ class MeetingPreparationService(QObject):
         self._canonical_recovery_timer.timeout.connect(self._flush_canonical_media_recoveries)
         self._stopped = False
         self._source_maintenance = _SourceMaintenance()
+        self._image_sources: dict[tuple[MeetingPreparationKey, str], _SourceMaintenanceResult] = {}
         self._source_maintenance_ready.connect(self._on_source_maintenance_ready)
         self.destroyed.connect(self._source_maintenance.close)
         weakref.finalize(self, self._source_maintenance.close)
@@ -367,30 +389,43 @@ class MeetingPreparationService(QObject):
         self._schedule_source_maintenance(key)
         return state
 
-    def _schedule_source_maintenance(self, key: MeetingPreparationKey) -> None:
+    def _schedule_source_maintenance(
+        self, key: MeetingPreparationKey, *, refresh: bool = True,
+        publish: frozenset[str] = frozenset(),
+    ) -> None:
         lifetime = self._source_maintenance
         if self._stopped:
             return
+        if publish:
+            lifetime.publish.setdefault(key, set()).update(publish)
         if key in lifetime.pending:
-            lifetime.dirty.add(key)
+            if refresh and key in lifetime.running:
+                lifetime.dirty.add(key)
             return
-        snapshots = self.snapshots(key)
-        if not snapshots:
+        if not self.snapshots(key):
             return
         cancellation = CancellationFlag()
         lifetime.pending[key] = cancellation
         # Keep CHECK and its caller's download-grant attachment in this GUI turn.
-        QTimer.singleShot(0, self, lambda: self._start_source_maintenance(key, cancellation, snapshots))
+        QTimer.singleShot(0, self, lambda: self._start_source_maintenance(key, cancellation))
 
     def _start_source_maintenance(
         self, key: MeetingPreparationKey, cancellation: CancellationFlag,
-        snapshots: dict[str, MeetingTreeSnapshot],
     ) -> None:
         lifetime = self._source_maintenance
         if self._stopped or lifetime.pending.get(key) is not cancellation:
             return
+        lifetime.running.add(key)
+        snapshots = self.snapshots(key)
         store = self._store
         owner_ref = weakref.ref(self)
+        job = self._jobs.get(key)
+        repair_generation = (
+            job.generation if job is not None and job.active
+            and job.operation == MeetingContentOperation.REPAIR
+            and job.image_repair_phase != _ImageRepairPhase.WORKER else 0
+        )
+        repair_phase = job.image_repair_phase if repair_generation and job is not None else None
 
         def work() -> None:
             results = []
@@ -402,15 +437,29 @@ class MeetingPreparationService(QObject):
                     results.append(_SourceMaintenanceResult(
                         pub_type, previous.tree_key,
                         changed=bool(snapshot and snapshot.revision != previous.revision),
+                        revision=snapshot.revision if snapshot is not None else -1,
+                        repair_refs=tuple(MeetingPreparationService._missing_image_refs(snapshot))
+                        if snapshot is not None else (),
+                        rebind_required=bool(snapshot and snapshot.image_source_repair_required),
                     ))
                 except (OSError, UnicodeError, ValueError) as exc:
-                    results.append(_SourceMaintenanceResult(pub_type, previous.tree_key, error=str(exc)))
+                    results.append(_SourceMaintenanceResult(
+                        pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                    ))
+                except Exception as exc:  # noqa: BLE001 - per-publication worker boundary
+                    log.exception("Meeting source maintenance failed for %s", previous.tree_key)
+                    results.append(_SourceMaintenanceResult(
+                        pub_type, previous.tree_key, error=str(exc) or type(exc).__name__,
+                    ))
 
             def deliver() -> None:
                 owner = owner_ref()
                 if owner is not None and shiboken6.isValid(owner):
                     try:
-                        owner._source_maintenance_ready.emit(key, cancellation, results)
+                        owner._source_maintenance_ready.emit(
+                            key, cancellation,
+                            _SourceMaintenanceReport(tuple(results), repair_generation, repair_phase),
+                        )
                     except RuntimeError:
                         log.debug("Meeting source-maintenance owner was destroyed before delivery")
 
@@ -422,29 +471,72 @@ class MeetingPreparationService(QObject):
     @Slot(object, object, object)
     def _on_source_maintenance_ready(
         self, key: MeetingPreparationKey, cancellation: CancellationFlag,
-        results: list[_SourceMaintenanceResult],
+        report: _SourceMaintenanceReport,
     ) -> None:
         if self._source_maintenance.pending.get(key) is not cancellation:
             return
-        self._source_maintenance.pending.pop(key)
-        rerun = key in self._source_maintenance.dirty
-        self._source_maintenance.dirty.discard(key)
         cutoff, latest = meeting_week_bounds(self._today())
         if self._stopped or cancellation.is_set() or not cutoff <= key.monday <= latest:
+            self._source_maintenance.cancel(key)
             return
-        for result in results:
+        job = self._jobs.get(key)
+        repairing = bool(job and job.active and job.operation == MeetingContentOperation.REPAIR)
+        matching_repair = bool(
+            repairing and job is not None and job.generation == report.repair_generation
+            and job.image_repair_phase == report.repair_phase
+        )
+        for result in report.results:
+            if cancellation.is_set():
+                return
             if result.error:
+                if matching_repair and job is not None and result.pub_type in job.publications:
+                    job.errors[result.pub_type] = result.error
                 self.error.emit(key, result.pub_type, result.error)
                 continue
             # Read the authoritative in-memory revision: operator writes may have
             # completed after normalization, and active sync owns its bindings.
-            snapshot = self._store.cached_snapshot(result.tree_key)
-            if snapshot is None or snapshot.linked_sync.get("enabled"):
+            snapshot = self.snapshot(key, result.pub_type)
+            if snapshot is None:
                 continue
-            if result.changed:
+            current = snapshot.tree_key == result.tree_key and snapshot.revision == result.revision
+            if current:
+                self._image_sources[(key, result.pub_type)] = result
+            publish = self._source_maintenance.publish.get(key, set())
+            if current and not snapshot.linked_sync.get("enabled") and (
+                result.changed or result.pub_type in publish
+            ):
+                publish.discard(result.pub_type)
                 self.tree_changed.emit(key, result.pub_type, snapshot)
-            if self._policy.auto_recover_images and self._missing_image_refs(snapshot):
+            elif current and snapshot.linked_sync.get("enabled"):
+                publish.discard(result.pub_type)
+            if (
+                current and not repairing and not cancellation.is_set()
+                and self._policy.auto_recover_images and result.repair_refs
+            ):
                 self._request_repair(key, result.pub_type, MeetingRequestOrigin.MAINTENANCE)
+        if cancellation.is_set():
+            return
+        if matching_repair and job is not None and self._jobs.get(key) is job:
+            self._continue_image_repair(job)
+        self._emit_states(key)
+        if self._source_maintenance.pending.get(key) is not cancellation:
+            return
+        # Delivery can synchronously flush operator edits. Assess that new
+        # revision in the worker instead of retaining an obsolete UI assessment.
+        for result in report.results:
+            if result.error:
+                continue
+            snapshot = self.snapshot(key, result.pub_type)
+            if snapshot is not None and (
+                snapshot.tree_key != result.tree_key or snapshot.revision != result.revision
+            ):
+                self._source_maintenance.dirty.add(key)
+        self._source_maintenance.pending.pop(key)
+        self._source_maintenance.running.discard(key)
+        rerun = key in self._source_maintenance.dirty
+        self._source_maintenance.dirty.discard(key)
+        if not self._source_maintenance.publish.get(key):
+            self._source_maintenance.publish.pop(key, None)
         if rerun:
             self._schedule_source_maintenance(key)
 
@@ -463,22 +555,46 @@ class MeetingPreparationService(QObject):
             )
         return self.state(key, pub_type)
 
-    def _repair_saved_image_sources(
-        self, key: MeetingPreparationKey, pub_type: str
-    ) -> MeetingTreeSnapshot | None:
-        previous = self.snapshot(key, pub_type)
-        if previous is None:
-            return None
-        if not previous.image_source_repair_required:
-            return previous
-        try:
-            snapshot = self._store.repair_canonical_image_sources(previous.tree_key)
-        except (OSError, UnicodeError, ValueError) as exc:
-            self.error.emit(key, pub_type, str(exc))
-            return None
-        if snapshot is not None and snapshot.revision != previous.revision:
-            self.tree_changed.emit(key, pub_type, snapshot)
-        return snapshot
+    def _image_source_assessment(
+        self, key: MeetingPreparationKey, pub_type: str, snapshot: MeetingTreeSnapshot,
+    ) -> _SourceMaintenanceResult | None:
+        result = self._image_sources.get((key, pub_type))
+        if result is not None and result.tree_key == snapshot.tree_key and result.revision == snapshot.revision:
+            return result
+        self._schedule_source_maintenance(key, refresh=False)
+        return None
+
+    def _continue_image_repair(self, job: _PreparationJob) -> None:
+        selected = set()
+        refs = []
+        for pub_type in job.publications - job.errors.keys():
+            snapshot = self.snapshot(job.key, pub_type)
+            if snapshot is None or snapshot.linked_sync.get("enabled"):
+                continue
+            result = self._image_source_assessment(job.key, pub_type, snapshot)
+            if result is None:
+                self._source_maintenance.dirty.add(job.key)
+                return
+            if result.repair_refs:
+                selected.add(pub_type)
+                refs.extend(dict(ref) for ref in result.repair_refs)
+        if (
+            job.image_repair_phase == _ImageRepairPhase.SCAN and selected
+            and (self._policy.auto_recover_images or job.origin == MeetingRequestOrigin.MANUAL)
+        ):
+            job.image_repair_phase = _ImageRepairPhase.WORKER
+            self._load_publications(job, publications=frozenset(selected), repair_refs=tuple(refs))
+            return
+        self._complete_image_repair(job)
+
+    def _complete_image_repair(self, job: _PreparationJob) -> None:
+        for pub_type in job.publications - job.errors.keys():
+            self._repair_update_required.discard((job.key, pub_type))
+        if self._policy.auto_update and job.repair_update_publications:
+            self._queue_automatic_update(job.key, job.repair_update_publications)
+        job.repair_update_publications.clear()
+        job.completed_publications.update(job.publications)
+        self._finish_or_revalidate(job)
 
     @staticmethod
     def _missing_image_refs(snapshot: MeetingTreeSnapshot) -> list[dict[str, Any]]:
@@ -622,13 +738,6 @@ class MeetingPreparationService(QObject):
                 request = replace(request, publications=selected)
         if request.operation in {MeetingContentOperation.CHECK, MeetingContentOperation.REPAIR}:
             selected &= self.snapshots(key).keys()
-        if request.operation == MeetingContentOperation.REPAIR:
-            selected = frozenset(
-                pub_type for pub_type in selected
-                if (snapshot := self._repair_saved_image_sources(key, pub_type)) is not None
-                and self._missing_image_refs(snapshot)
-                and (self._policy.auto_recover_images or request.origin == MeetingRequestOrigin.MANUAL)
-            )
         if not selected:
             return self.state(key, "mwb")
         existing = self._jobs.get(key)
@@ -689,11 +798,24 @@ class MeetingPreparationService(QObject):
         if job.download_media:
             self._prefetch_existing_snapshots(job)
         self._emit_states(key)
+        if job.operation == MeetingContentOperation.REPAIR:
+            self._schedule_source_maintenance(key)
+        else:
+            self._load_publications(job, force=request.force_refresh)
+        return self.state(key, "mwb")
+
+    def _load_publications(
+        self, job: _PreparationJob, *, force: bool = False,
+        publications: frozenset[str] | None = None,
+        repair_refs: tuple[dict[str, Any], ...] = (),
+    ) -> None:
+        key = job.key
+        selected = publications if publications is not None else job.publications
         snapshots = self.snapshots(key)
         wt_snapshot = snapshots.get("wt")
         self._publication_service.load_week(
             key.monday,
-            force=request.force_refresh,
+            force=force,
             language_code=key.language_code,
             is_sign_language=key.is_sign_language,
             generation=job.generation,
@@ -701,7 +823,7 @@ class MeetingPreparationService(QObject):
             known_wt_issue=wt_snapshot.issue if wt_snapshot is not None else "",
             content_request=PublicationContentRequest(
                 publications=selected,
-                operation=request.operation,
+                operation=job.operation,
                 dependencies={
                     pub_type: snapshot.publication_dependencies
                     or [
@@ -715,15 +837,9 @@ class MeetingPreparationService(QObject):
                     for pub_type, snapshot in snapshots.items()
                     if pub_type in selected
                 },
-                repair_refs=tuple(
-                    ref
-                    for pub_type, snapshot in snapshots.items()
-                    if pub_type in selected
-                    for ref in self._missing_image_refs(snapshot)
-                ),
+                repair_refs=repair_refs,
             ),
         )
-        return self.state(key, "mwb")
 
     def recover_missing_canonical_media(
         self,
@@ -759,11 +875,7 @@ class MeetingPreparationService(QObject):
         pending = self._pending_canonical_recoveries
         self._pending_canonical_recoveries = {}
         for key, publications in pending.items():
-            revisions = {
-                pub_type: snapshot.revision
-                for pub_type in publications
-                if (snapshot := self.snapshot(key, pub_type)) is not None
-            }
+            self._schedule_source_maintenance(key, publish=frozenset(publications))
             self.ensure_week(
                 MeetingPreparationRequest(
                     key=key,
@@ -772,17 +884,14 @@ class MeetingPreparationService(QObject):
                     origin=MeetingRequestOrigin.MAINTENANCE,
                 )
             )
-            for pub_type in publications:
-                snapshot = self.snapshot(key, pub_type)
-                if (
-                    snapshot is not None and not snapshot.linked_sync.get("enabled")
-                    and snapshot.revision == revisions.get(pub_type)
-                ):
-                    self.tree_changed.emit(key, pub_type, snapshot)
 
     def prune_expired(self) -> int:
         """Retire expired jobs before removing their persisted meeting owners."""
         cutoff, _ = meeting_week_bounds(self._today())
+        self._image_sources = {
+            identity: result for identity, result in self._image_sources.items()
+            if identity[0].monday >= cutoff
+        }
         for key in list(self._source_maintenance.pending):
             if key.monday < cutoff:
                 self._source_maintenance.cancel(key)
@@ -846,6 +955,7 @@ class MeetingPreparationService(QObject):
         pub_type: str,
     ) -> MeetingPreparationState:
         snapshot = self.snapshot(key, pub_type)
+        image_sources = self._image_source_assessment(key, pub_type, snapshot) if snapshot else None
         job = self._jobs.get(key)
         error = job.errors.get(pub_type, "") if job is not None else ""
         source_status = job.terminal_statuses.get(pub_type, "") if job is not None else ""
@@ -889,11 +999,9 @@ class MeetingPreparationService(QObject):
                     )
                 )
             ),
-            bool(snapshot and (
-                snapshot.image_source_repair_required or self._missing_image_refs(snapshot)
-            )),
+            bool(image_sources and (image_sources.rebind_required or image_sources.repair_refs)),
             (key, pub_type) in self._repair_update_required
-            and bool(snapshot and self._missing_image_refs(snapshot)),
+            and bool(image_sources and image_sources.repair_refs),
         )
 
     def cancel_automatic_downloads(self) -> None:
@@ -928,6 +1036,10 @@ class MeetingPreparationService(QObject):
         """Retire obsolete language work without touching the active context."""
         language = (context.api_code or "T").strip() or "T"
         is_sign = bool(context.is_sign_language)
+        self._image_sources = {
+            identity: result for identity, result in self._image_sources.items()
+            if (identity[0].language_code, identity[0].is_sign_language) == (language, is_sign)
+        }
         for key in list(self._source_maintenance.pending):
             if (key.language_code, key.is_sign_language) != (language, is_sign):
                 self._source_maintenance.cancel(key)
@@ -961,6 +1073,7 @@ class MeetingPreparationService(QObject):
         if self._stopped:
             return
         self._stopped = True
+        self._image_sources.clear()
         self._source_maintenance.close()
         self._source_maintenance.workers.shutdown(timeout=max(0, wait_ms) / 1000)
         self._canonical_recovery_timer.stop()
@@ -1458,13 +1571,11 @@ class MeetingPreparationService(QObject):
         if job is None or job.generation != generation or not job.active:
             return
         if job.operation == MeetingContentOperation.REPAIR:
-            for pub_type in job.publications:
-                self._repair_saved_image_sources(key, pub_type)
-            for pub_type in job.publications - job.errors.keys():
-                self._repair_update_required.discard((key, pub_type))
-            if self._policy.auto_update and job.repair_update_publications:
-                self._queue_automatic_update(key, job.repair_update_publications)
-            job.repair_update_publications.clear()
+            if job.image_repair_phase != _ImageRepairPhase.WORKER:
+                return
+            job.image_repair_phase = _ImageRepairPhase.REBIND
+            self._schedule_source_maintenance(key)
+            return
         job.completed_publications.update(job.publications)
         self._finish_or_revalidate(job)
         self._emit_states(key)

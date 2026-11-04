@@ -35,8 +35,13 @@ Unsynced saved trees reconnect missing image sources to available local canonica
 images without changing content or operator edits. This also prevents pending
 edits from overwriting recovered source bindings; active sync retains ownership
 of its portable paths.
-Routine source normalization runs in coalesced background work; delivery uses
-the latest saved revision and rejects retired language contexts or shutdown work.
+Image availability assessment and source normalization run in coalesced background
+work, including before and after physical repair. UI state uses assessments for
+the exact saved revision; controller recovery publishes the current eligible
+snapshot even when no new write is needed. Delivery rejects retired contexts and
+shutdown work. Publication failures are isolated, reported, and release pending
+maintenance so a later request can retry. Post-repair assessment does not start
+another physical repair.
 Image repair checks the compressed local cache before downloading and accepts
 only the saved image's SHA-256. If that revision cannot be restored, automatic
 updates rebuild the saved meeting using the available publication, even without

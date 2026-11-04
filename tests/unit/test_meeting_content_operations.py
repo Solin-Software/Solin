@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import time
 import zipfile
 from dataclasses import asdict
 from datetime import date
@@ -9,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtCore import QCoreApplication
 
 import solin.core.meetings.publication_worker as worker_module
 from solin.core.jw.publication_links import JwpubMediaInfo
@@ -563,19 +565,28 @@ def test_unrecoverable_image_automatically_rebuilds_saved_meeting_with_truthful_
     try:
         service.repair_meeting(key, "mwb")
         index = 0
-        while index < len(loads) and index < 3:
-            monday, force, context = loads[index]
-            worker.load_week(
-                monday,
-                force=force,
-                language=context["language_code"],
-                is_sign_language=context["is_sign_language"],
-                generation=context["generation"],
-                known_wt_issue=context["known_wt_issue"],
-                content_request=context["content_request"],
-            )
-            worker.release_assets((MONDAY.isoformat(), "T", False, context["generation"]))
-            index += 1
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            QCoreApplication.processEvents()
+            if index < len(loads):
+                assert index < 3, "Image recovery must not retry indefinitely"
+                monday, force, context = loads[index]
+                worker.load_week(
+                    monday,
+                    force=force,
+                    language=context["language_code"],
+                    is_sign_language=context["is_sign_language"],
+                    generation=context["generation"],
+                    known_wt_issue=context["known_wt_issue"],
+                    content_request=context["content_request"],
+                )
+                worker.release_assets((MONDAY.isoformat(), "T", False, context["generation"]))
+                index += 1
+            if not service._jobs[key].active and key not in service._source_maintenance.pending:
+                break
+            time.sleep(0.005)
+        assert not service._jobs[key].active
+        assert key not in service._source_maintenance.pending
 
         assert [context["content_request"].operation for _, _, context in loads] == [
             MeetingContentOperation.REPAIR,

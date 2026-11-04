@@ -165,6 +165,19 @@ def _spin_until(predicate, timeout: float = 2.0) -> None:
     assert predicate()
 
 
+def _assessed_state(service, key, pub_type="mwb"):
+    service.state(key, pub_type)
+    _spin_until(lambda: key not in service._source_maintenance.pending)
+    return service.state(key, pub_type)
+
+
+def _wait_for_preparation_idle(service, key):
+    _spin_until(lambda: (
+        not service.state(key, "mwb").refreshing
+        and key not in service._source_maintenance.pending
+    ))
+
+
 def _service(monkeypatch, tmp_path, resolver_class=_ImmediateResolver, cache_factory=_CacheManager):
     monkeypatch.setattr(
         preparation_module,
@@ -909,6 +922,7 @@ def test_repair_never_reconciles_publication_results_or_changes_the_saved_revisi
             "C:/cache/wcg_T/x_0/image-1.jpg",
         )
         service._flush_canonical_media_recoveries()
+        _spin_until(lambda: bool(publication.loads))
         generation = int(publication.loads[0]["generation"])
         partial = _week_data(
             generation,
@@ -973,6 +987,7 @@ def test_missing_canonical_media_recovery_materializes_only_the_affected_publica
         service.recover_missing_canonical_media(key, "mwb", missing_path)
         service._flush_canonical_media_recoveries()
 
+        _spin_until(lambda: bool(publication.loads))
         assert len(publication.loads) == 1
         request = publication.loads[0]["content_request"]
         assert request.operation == MeetingContentOperation.REPAIR
@@ -1025,6 +1040,7 @@ def test_recovery_waiting_on_unchanged_startup_runs_when_the_load_finishes(
             generation,
         )
 
+        _spin_until(lambda: len(publication.loads) == 2)
         assert len(publication.loads) == 2
         command = publication.loads[1]["content_request"]
         assert command.publications == {"mwb"}
@@ -1298,6 +1314,7 @@ def test_missing_images_with_automatic_repair_disabled_require_explicit_repair(
         assert len(publication.loads) == 1
         assert service.state(key, "mwb").repair_required
         service.repair_meeting(key, "mwb")
+        _spin_until(lambda: len(publication.loads) == 2)
         assert publication.loads[-1]["content_request"].operation == MeetingContentOperation.REPAIR
         assert service.snapshot(key, "mwb").nodes == original.nodes
     finally:
@@ -1362,11 +1379,18 @@ def test_prepared_maintenance_update_and_repair_flags_are_independent(
         service._on_content_checked(
             (key.monday, "T", False, generation), "mwb", {"mwb:T:20260500": "new"}
         )
-        for index in range(4):
-            if index >= len(publication.loads):
-                break
-            generation = publication.loads[index]["generation"]
-            publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
+        completed_loads = 0
+
+        def finish_dispatched_operations():
+            nonlocal completed_loads
+            assert len(publication.loads) <= 4, "Maintenance did not settle within its bounded operations"
+            while completed_loads < len(publication.loads):
+                generation = publication.loads[completed_loads]["generation"]
+                completed_loads += 1
+                publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
+            return not service._jobs[key].active and key not in service._source_maintenance.pending
+
+        _spin_until(finish_dispatched_operations)
         operations = [load["content_request"].operation for load in publication.loads]
         assert operations.count(MeetingContentOperation.CHECK) == 1
         assert (MeetingContentOperation.REPAIR in operations) is auto_recover
@@ -1577,9 +1601,14 @@ def test_canonical_image_repair_rebinds_empty_visible_sources_without_update(
     changed = []
     service.tree_changed.connect(lambda *_args: changed.append(_args[-1]))
     try:
-        assert service.state(key, "mwb").repair_required
+        if physical_missing:
+            assert _assessed_state(service, key).repair_required
+        else:
+            # An availability scan can itself restore an already usable binding.
+            assert service.snapshot(key, "mwb").nodes[0]["media_ref"]["file_path"] == ""
         service.repair_meeting(key, "mwb")
         if physical_missing:
+            _spin_until(lambda: bool(publication.loads))
             assert len(publication.loads) == 1
             command = publication.loads[0]["content_request"]
             assert command.operation == MeetingContentOperation.REPAIR
@@ -1589,7 +1618,8 @@ def test_canonical_image_repair_rebinds_empty_visible_sources_without_update(
             publication.context_load_finished.emit(
                 key.monday.isoformat(), "T", False, publication.loads[0]["generation"]
             )
-        else:
+        _wait_for_preparation_idle(service, key)
+        if not physical_missing:
             assert not publication.loads
         assert len(changed) == 1
         current = service.snapshot(key, "mwb")
@@ -1639,8 +1669,9 @@ def test_unknown_empty_image_sources_reuse_existing_typed_update_fallback(
     ]
     store.save("mwb:2026-05-25:T:20260500", images, "baseline", canonical_nodes=images)
     try:
-        assert service.state(key, "mwb").repair_required
+        assert _assessed_state(service, key).repair_required
         service.repair_meeting(key, "mwb")
+        _spin_until(lambda: bool(publication.loads))
         command = publication.loads[0]
         assert len(command["content_request"].repair_refs) == 2
         publication.context_error.emit(
@@ -1649,6 +1680,10 @@ def test_unknown_empty_image_sources_reuse_existing_typed_update_fallback(
         )
         publication.context_load_finished.emit(key.monday.isoformat(), "T", False,
                                                command["generation"])
+        if auto_update:
+            _spin_until(lambda: len(publication.loads) == 2)
+        else:
+            _wait_for_preparation_idle(service, key)
         assert len(publication.loads) == (2 if auto_update else 1)
         assert service.state(key, "mwb").repair_requires_update
         if auto_update:
@@ -1670,8 +1705,9 @@ def test_blank_image_file_path_with_usable_resolution_does_not_trigger_repair(
              "resolved_url": "https://example.test/image.jpg" if remote else str(path)}
     store.save("mwb:2026-05-25:T:20260500", [image], "baseline", canonical_nodes=[image])
     try:
-        assert not service.state(key, "mwb").repair_required
+        assert not _assessed_state(service, key).repair_required
         service.repair_meeting(key, "mwb")
+        _wait_for_preparation_idle(service, key)
         assert not publication.loads
     finally:
         service.shutdown(wait_ms=1000)
@@ -1700,8 +1736,12 @@ def test_usable_visible_image_does_not_hide_known_missing_canonical_asset(
     visible["media_ref"]["file_path"] = ""
     store.save("mwb:2026-05-25:T:20260500", [visible], "confirmed", canonical_nodes=[canonical])
     try:
-        assert service.state(key, "mwb").repair_required is known_canonical_source
+        assert _assessed_state(service, key).repair_required is known_canonical_source
         service.repair_meeting(key, "mwb")
+        if known_canonical_source:
+            _spin_until(lambda: bool(publication.loads))
+        else:
+            _wait_for_preparation_idle(service, key)
         assert len(publication.loads) == (1 if known_canonical_source else 0)
         if known_canonical_source:
             refs = publication.loads[0]["content_request"].repair_refs
@@ -1726,11 +1766,13 @@ def test_repair_finish_respects_sync_enabled_after_worker_dispatch(monkeypatch, 
     service.tree_changed.connect(lambda *_args: changed.append(_args[-1]))
     try:
         service.repair_meeting(key, "mwb")
+        _spin_until(lambda: bool(publication.loads))
         active = store.save(original.tree_key, [visible], "baseline", linked_sync={"enabled": True})
         path.write_bytes(b"restored")
         publication.context_load_finished.emit(
             key.monday.isoformat(), "T", False, publication.loads[0]["generation"]
         )
+        _wait_for_preparation_idle(service, key)
         current = store.snapshot(original.tree_key)
         assert current.revision == active.revision
         assert current.nodes[0]["media_ref"]["file_path"] == ""
@@ -1747,9 +1789,11 @@ def test_canonical_recovery_with_automatic_repair_disabled_keeps_physical_work_m
     service._policy = MeetingContentPolicy(auto_recover_images=False)
     service.recover_missing_canonical_media(key, "mwb", "")
     service._flush_canonical_media_recoveries()
+    _wait_for_preparation_idle(service, key)
     assert not publication.loads
     assert service.state(key, "mwb").repair_required
     service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
     assert publication.loads[0]["content_request"].operation == MeetingContentOperation.REPAIR
 
 
@@ -1781,6 +1825,7 @@ def test_canonical_recovery_delivers_repaired_source_while_other_image_is_missin
         service.recover_missing_canonical_media(key, "mwb", "")
         service._flush_canonical_media_recoveries()
 
+        _spin_until(lambda: bool(published) and bool(publication.loads))
         assert len(published) == 1
         assert published[0].revision == persisted.revision
         assert published[0].nodes[0]["media_ref"]["file_path"] == str(first)
@@ -1799,6 +1844,7 @@ def test_canonical_recovery_delivers_repaired_source_while_other_image_is_missin
         publication.context_load_finished.emit(
             key.monday.isoformat(), "T", False, command["generation"]
         )
+        _wait_for_preparation_idle(service, key)
         assert len(published) == 1
         assert published[0].source_checksum == "applied"
         assert len(publication.loads) == 1
@@ -1815,6 +1861,7 @@ def test_unrecoverable_image_uses_update_policy_after_repair_finishes(
     # Initial automatic downloads may be disabled; saved-content policy still applies.
     service._policy = MeetingContentPolicy(auto_update=auto_update, auto_recover_images=False)
     service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
     generation = publication.loads[-1]["generation"]
     for _ in range(2):
         publication.context_error.emit(key.monday.isoformat(), "mwb", failure, "T", False, generation)
@@ -1824,6 +1871,10 @@ def test_unrecoverable_image_uses_update_policy_after_repair_finishes(
 
     publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
 
+    if auto_update:
+        _spin_until(lambda: len(publication.loads) == 2)
+    else:
+        _wait_for_preparation_idle(service, key)
     assert len(publication.loads) == (2 if auto_update else 1)
     if auto_update:
         update = publication.loads[-1]
@@ -1840,7 +1891,36 @@ def test_unrecoverable_image_uses_update_policy_after_repair_finishes(
             key.monday.isoformat(), "mwb", failure, "T", False, next_generation
         )
         publication.context_load_finished.emit(key.monday.isoformat(), "T", False, next_generation)
+        _wait_for_preparation_idle(service, key)
         assert len(publication.loads) == 2
+    assert cache.prefetch_calls == []
+
+
+def test_silent_repair_with_missing_bytes_settles_without_rebuilding_or_retrying(missing_image_meeting):
+    service, publication, key, cache = missing_image_meeting
+    service._policy = MeetingContentPolicy(auto_update=True, auto_recover_images=True)
+    service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
+    generation = publication.loads[0]["generation"]
+
+    # A worker can finish without restoring the requested image or emitting a typed failure.
+    publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
+    _wait_for_preparation_idle(service, key)
+    for _ in range(3):
+        _APP.processEvents()
+
+    state = service.state(key, "mwb")
+    assert not state.refreshing
+    assert not service._jobs[key].active
+    assert state.repair_required
+    assert not state.repair_requires_update
+    assert not state.update_available
+    assert not state.error
+    assert len(publication.loads) == 1
+    request = publication.loads[0]["content_request"]
+    assert request.operation == MeetingContentOperation.REPAIR
+    assert request.publications == {"mwb"}
+    assert len(request.repair_refs) == 1
     assert cache.prefetch_calls == []
 
 
@@ -1848,6 +1928,7 @@ def test_unrecoverable_image_uses_update_policy_after_repair_finishes(
 def test_repair_fallback_coalesces_existing_manual_update(missing_image_meeting, combined):
     service, publication, key, _cache = missing_image_meeting
     service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
     generation = publication.loads[-1]["generation"]
     service.ensure_week(
         MeetingPreparationRequest(
@@ -1863,8 +1944,10 @@ def test_repair_fallback_coalesces_existing_manual_update(missing_image_meeting,
     )
     assert len(publication.loads) == 1
     publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
+    _spin_until(lambda: len(publication.loads) == 2)
     update = publication.loads[-1]
     publication.context_load_finished.emit(key.monday.isoformat(), "T", False, update["generation"])
+    _wait_for_preparation_idle(service, key)
     assert len(publication.loads) == 2
     assert update["force"]
     assert service._jobs[key].origin == MeetingRequestOrigin.MANUAL
@@ -1874,6 +1957,7 @@ def test_repair_fallback_coalesces_existing_manual_update(missing_image_meeting,
 def test_retired_repair_cannot_schedule_update(missing_image_meeting, retirement):
     service, publication, key, _cache = missing_image_meeting
     service.repair_meeting(key, "mwb")
+    _spin_until(lambda: bool(publication.loads))
     generation = publication.loads[-1]["generation"]
     publication.context_error.emit(
         key.monday.isoformat(), "mwb", MeetingContentError.IMAGE_REVISION_UNAVAILABLE,
@@ -2235,21 +2319,33 @@ def test_background_source_write_does_not_block_maintenance_return_or_qt_events(
         service.shutdown(wait_ms=1000)
 
 
-def test_source_maintenance_failure_keeps_snapshot_and_can_retry(monkeypatch, tmp_path):
+@pytest.mark.parametrize("failure", [OSError("storage failure"), RuntimeError("worker failure"), AttributeError()])
+def test_source_maintenance_failure_keeps_snapshot_and_can_retry(monkeypatch, tmp_path, failure):
     service, _publication, store, _cache = _service(monkeypatch, tmp_path)
     service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
     key = MeetingPreparationKey(date(2026, 5, 25), "T")
     original = _save_detached_image(store, tmp_path / "image.jpg")
+    store.save("wt:2026-05-25:T:20260500", [], "weekend", canonical_nodes=[])
     errors = []
+    attempted = []
+    crashed = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: crashed.append(args.exc_value))
     service.error.connect(lambda *args: errors.append(args))
     repair = store.repair_canonical_image_sources
     try:
-        def fail(_tree_key):
-            raise OSError("Synthetic source-store failure")
+        def fail(tree_key):
+            attempted.append(tree_key.split(":")[0])
+            if tree_key.startswith("mwb:"):
+                raise failure
+            return repair(tree_key)
 
         monkeypatch.setattr(store, "repair_canonical_image_sources", fail)
         service.maintain_prepared(key)
-        _spin_until(lambda: bool(errors))
+        _spin_until(lambda: bool(errors or crashed))
+        assert errors and not crashed
+        assert errors[0][2]
+        assert attempted == ["mwb", "wt"]
+        assert key not in service._source_maintenance.pending
         assert store.snapshot(original.tree_key) == original
         monkeypatch.setattr(store, "repair_canonical_image_sources", repair)
         service.maintain_prepared(key)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -743,9 +745,12 @@ def test_recovered_image_binding_survives_pending_operator_save(tmp_path, pendin
 
 @pytest.mark.parametrize("auto_recover", [False, True])
 @pytest.mark.parametrize("second_missing", [False, True])
+@pytest.mark.parametrize("pending_framing", [False, True])
 def test_canonical_recovery_delivers_already_repaired_snapshot_to_open_view(
-    tmp_path, monkeypatch, auto_recover, second_missing
+    tmp_path, monkeypatch, auto_recover, second_missing, pending_framing
 ):
+    from tests.unit.test_meeting_preparation import _spin_until
+
     image = tmp_path / "official.jpg"
     image.write_bytes(b"official image")
     canonical = {
@@ -779,7 +784,10 @@ def test_canonical_recovery_delivers_already_repaired_snapshot_to_open_view(
     stored = store.save(prepared.tree_key, prepared.nodes, prepared.canonical_hash)
     controller = SimpleNamespace(
         _store=store,
+        _tree_key=prepared.tree_key,
         _nodes=[{**canonical, "media_ref": {"mime_type": "image/jpeg", "file_path": ""}}],
+        _image_framing_save_pending=pending_framing,
+        _image_framing_save_timer=SimpleNamespace(stop=lambda: None),
         _refresh_sync_availability=lambda: None,
         _request_sync_refresh=lambda: None,
         _start_media_requests=lambda: None,
@@ -788,6 +796,14 @@ def test_canonical_recovery_delivers_already_repaired_snapshot_to_open_view(
         syncStateChanged=_Signal(),
         stateChanged=_Signal(),
     )
+    controller._nodes[0]["image_framing"] = {"scale": 1.4}
+
+    def save_pending_edit():
+        controller._image_framing_save_pending = False
+        store.save(prepared.tree_key, controller._nodes, prepared.canonical_hash)
+        return True
+
+    controller._save = save_pending_edit
     publication = JwpubService(tmp_path / "jwpub", JwpubChecksumStore(tmp_path / "checksums.json"))
     loads = []
     monkeypatch.setattr(publication, "load_week", lambda *_args, **_kwargs: loads.append(True))
@@ -810,15 +826,244 @@ def test_canonical_recovery_delivers_already_repaired_snapshot_to_open_view(
             MeetingPreparationKey(prepared.monday, "T"), "mwb", ""
         )
         service._flush_canonical_media_recoveries()
+        _spin_until(lambda: bool(delivered))
+        _spin_until(lambda: bool(loads) or not service._source_maintenance.pending)
 
         assert controller._nodes[0]["media_ref"]["file_path"] == str(image)
-        assert delivered and delivered[-1].revision == stored.revision
-        assert store.snapshot(prepared.tree_key).revision == stored.revision
+        assert delivered[-1].revision == stored.revision
+        current = store.snapshot(prepared.tree_key)
+        assert current.revision == stored.revision + int(pending_framing)
+        if pending_framing:
+            assert controller._nodes[0]["image_framing"] == {"scale": 1.4}
+            assert current.nodes[0]["image_framing"] == {"scale": 1.4}
         assert len(loads) == int(second_missing and auto_recover)
         assert (
             service.state(MeetingPreparationKey(prepared.monday, "T"), "mwb").repair_required
             is second_missing
         )
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_maintenance_reassesses_images_after_controller_flushes_pending_framing(
+    monkeypatch, tmp_path
+):
+    from tests.unit.test_meeting_preparation import _service, _spin_until
+    from solin.core.meetings.content_policy import MeetingContentOperation
+    from solin.core.meetings.tree_types import clone_nodes
+
+    service, publication, store, cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    restored, missing = tmp_path / "restored.jpg", tmp_path / "missing.jpg"
+    canonical = [
+        {"id": name, "type": "media", "children": [], "meeting_generated": True,
+         "meeting_source_key": f"media:{name}",
+         "media_ref": {"mime_type": "image/jpeg", "file_path": str(path)}}
+        for name, path in (("restored", restored), ("missing", missing))
+    ]
+    visible = clone_nodes(canonical)
+    visible[0]["media_ref"]["file_path"] = ""
+    original = store.save(
+        "mwb:2026-05-25:T:20260500", visible, "baseline",
+        canonical_nodes=canonical, source_checksum="applied",
+    )
+    restored.write_bytes(b"available after the saved view was loaded")
+    controller = SimpleNamespace(
+        _store=store,
+        _tree_key=original.tree_key,
+        _nodes=clone_nodes(visible),
+        _image_framing_save_pending=True,
+        _image_framing_save_timer=SimpleNamespace(stop=lambda: None),
+        _refresh_sync_availability=lambda: None,
+        _request_sync_refresh=lambda: None,
+        _start_media_requests=lambda: None,
+        _meeting_folder_pending_sources=set(),
+        chromeChanged=_Signal(), syncStateChanged=_Signal(), stateChanged=_Signal(),
+    )
+    controller._nodes[0]["image_framing"] = {"scale": 1.4}
+
+    def save_pending_edit():
+        controller._image_framing_save_pending = False
+        store.save(original.tree_key, controller._nodes, original.canonical_hash)
+        return True
+
+    controller._save = save_pending_edit
+    states = []
+
+    def reload_view(_key, _pub_type, snapshot):
+        # The real load flushes the operator edit, advancing the persisted revision
+        # inside the maintenance result's tree_changed delivery.
+        MeetingTreeController.load_saved_tree(controller, snapshot)
+
+    def observe_state(changed_key, pub_type, state):
+        if changed_key == key and pub_type == "mwb":
+            states.append(state)
+
+    service.tree_changed.connect(reload_view)
+    service.state_changed.connect(observe_state)
+    try:
+        service.maintain_prepared(key)
+        _spin_until(lambda: not service._source_maintenance.pending)
+
+        current = store.snapshot(original.tree_key)
+        assert current is not None
+        assert states and states[-1].repair_required
+        assert states[-1].snapshot.revision == current.revision
+        assert current.revision > original.revision
+        assert controller._nodes[0]["media_ref"]["file_path"] == str(restored)
+        assert controller._nodes[0]["image_framing"] == {"scale": 1.4}
+        assert current.nodes[0]["image_framing"] == {"scale": 1.4}
+        assert current.canonical_hash == original.canonical_hash
+        assert current.canonical_nodes == original.canonical_nodes
+        assert current.source_checksum == original.source_checksum
+        assert not missing.exists()
+        assert [load["content_request"].operation for load in publication.loads] == [
+            MeetingContentOperation.CHECK,
+        ]
+        assert not cache.prefetch_calls
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+@pytest.mark.parametrize("pub_type", ["mwb", "wt"])
+@pytest.mark.parametrize("surface", ["overview", "destination"])
+def test_saved_image_card_and_destination_state_do_not_probe_files_on_gui(
+    monkeypatch, tmp_path, pub_type, surface
+):
+    from tests.unit.test_meeting_preparation import _service, _spin_until
+
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    image = tmp_path / "official.jpg"
+    image.write_bytes(b"official image")
+    node = {"id": "image", "type": "media", "children": [], "meeting_generated": True,
+            "meeting_source_key": "media:image",
+            "media_ref": {"mime_type": "image/jpeg", "file_path": str(image)}}
+    snapshot = store.save(f"{pub_type}:2026-05-25:T:20260500", [node], "baseline",
+                          canonical_nodes=[node])
+    widget = SimpleNamespace(
+        _overview=_overview(),
+        _saved_snapshots_for=lambda _: {pub_type: snapshot},
+        _preparation=service,
+        _preparation_key=lambda day: MeetingPreparationKey(day, "T"),
+        _apply_unavailable_card_state=lambda *_: None,
+        _memorial_svc=SimpleNamespace(is_memorial_week=lambda _: False),
+    )
+    main_thread = threading.get_ident()
+    is_file = Path.is_file
+
+    def worker_only_image_probe(path):
+        if path == image:
+            assert threading.get_ident() != main_thread, "Image availability probed on GUI thread"
+        return is_file(path)
+
+    def read_ui_state():
+        if surface == "overview":
+            MeetingsWidget._refresh_overview_cards(widget, snapshot.monday)
+            assert getattr(widget._overview, f"{pub_type}_card").calls[-1] == (
+                "saved", snapshot.tree_key,
+            )
+        else:
+            target = MeetingsWidget._destination_target(
+                widget, pub_type, snapshot.monday, None, snapshot,
+            )
+            assert target["available"]
+            assert target["status"] == "ready"
+
+    monkeypatch.setattr(Path, "is_file", worker_only_image_probe)
+    try:
+        read_ui_state()
+        _spin_until(lambda: not service._source_maintenance.pending)
+        read_ui_state()
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_canonical_recovery_callback_keeps_enabled_sync_sources_authoritative(monkeypatch, tmp_path):
+    from tests.unit.test_meeting_preparation import _service, _spin_until
+
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    image = tmp_path / "official.jpg"
+    image.write_bytes(b"official image")
+    canonical = {"id": "image", "type": "media", "children": [], "meeting_generated": True,
+                 "meeting_source_key": "media:image",
+                 "media_ref": {"mime_type": "image/jpeg", "file_path": str(image)}}
+    detached = {**canonical, "media_ref": {"mime_type": "image/jpeg", "file_path": ""}}
+    original = store.save(
+        "mwb:2026-05-25:T:20260500", [detached], "baseline", canonical_nodes=[canonical],
+        linked_sync={"enabled": True},
+    )
+    delivered = []
+    service.tree_changed.connect(lambda *args: delivered.append(args))
+    widget = SimpleNamespace(_preparation=service)
+    try:
+        MeetingsWidget._on_canonical_media_recovery_requested(widget, original.tree_key, "")
+        service._flush_canonical_media_recoveries()
+        _spin_until(lambda: not service._source_maintenance.pending)
+        assert not delivered
+        assert not publication.loads
+        assert store.snapshot(original.tree_key) == original
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+@pytest.mark.parametrize("physical_missing", [False, True], ids=["predispatch", "postfinish"])
+def test_native_image_repair_writes_sources_off_gui_and_acknowledges_open_view(
+    monkeypatch, tmp_path, physical_missing
+):
+    from tests.unit.test_meeting_preparation import _save_detached_image, _service, _spin_until
+
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    image = tmp_path / "official.jpg"
+    original = _save_detached_image(store, image)
+    if physical_missing:
+        image.unlink()
+    controller = SimpleNamespace(
+        _store=store,
+        _nodes=original.nodes,
+        _refresh_sync_availability=lambda: None,
+        _request_sync_refresh=lambda: None,
+        _start_media_requests=lambda: None,
+        _meeting_folder_pending_sources=set(),
+        chromeChanged=_Signal(), syncStateChanged=_Signal(), stateChanged=_Signal(),
+    )
+    delivered = []
+
+    def reload_view(_key, _pub_type, snapshot):
+        delivered.append(snapshot)
+        MeetingTreeController.load_saved_tree(controller, snapshot)
+
+    service.tree_changed.connect(reload_view)
+    write_threads = []
+    write = store._write
+
+    def record_source_write(data):
+        write_threads.append(threading.get_ident())
+        write(data)
+
+    monkeypatch.setattr(store, "_write", record_source_write)
+    widget = SimpleNamespace(_monday=key.monday, _preparation=service,
+                             _preparation_key=lambda _: key)
+    try:
+        MeetingsWidget._repair_meeting(widget, "mwb")
+        if physical_missing:
+            _spin_until(lambda: bool(publication.loads))
+            request = publication.loads[0]
+            assert request["content_request"].publications == {"mwb"}
+            assert len(request["content_request"].repair_refs) == 1
+            image.write_bytes(b"restored by image repair")
+            publication.context_load_finished.emit(
+                key.monday.isoformat(), "T", False, request["generation"],
+            )
+        _spin_until(lambda: bool(delivered))
+        assert controller._nodes[0]["media_ref"]["file_path"] == str(image)
+        assert delivered[-1].canonical_hash == original.canonical_hash
+        assert delivered[-1].canonical_nodes == original.canonical_nodes
+        assert write_threads and all(thread != threading.get_ident() for thread in write_threads)
+        assert len(publication.loads) == int(physical_missing)
     finally:
         service.shutdown(wait_ms=1000)
 
