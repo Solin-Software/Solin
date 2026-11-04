@@ -266,15 +266,15 @@ class MediaDestinationController(QObject):
         )
         meetings.request_destination_week(monday, force=force)
 
-    @Slot(str, str)
-    def _download_meeting(self, pub_type: str, monday_text: str) -> None:
+    @Slot(str, str, bool)
+    def _download_meeting(self, pub_type: str, monday_text: str, force: bool) -> None:
         if self._active_bridge is None or pub_type not in {"mwb", "wt"}:
             return
         try:
             monday = date.fromisoformat(monday_text)
         except ValueError:
             return
-        self._context.meetings_widget.prepare_destination_meeting(monday, pub_type)
+        self._context.meetings_widget.prepare_destination_meeting(monday, pub_type, force=force)
 
     @Slot(str)
     def _on_destination_targets_changed(self, monday_text: str) -> None:

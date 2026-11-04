@@ -2239,7 +2239,7 @@
     <message>
         <location line="+215"/>
         <source>Retry</source>
-        <translation>Попытка еще раз</translation>
+        <translation>Повторить</translation>
     </message>
     <message>
         <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
@@ -11178,7 +11178,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <source>Retry</source>
-        <translation>Попытка еще раз</translation>
+        <translation>Повторить</translation>
     </message>
 </context>
 <context>

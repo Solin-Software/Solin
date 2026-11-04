@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QDialog
+import pytest
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt, Signal
+from PySide6.QtGui import QAccessible
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QDialog
 
 from solin.controllers.media_destination_controller import (
     MediaDestinationContext,
@@ -17,6 +20,7 @@ from solin.core.media.destinations import (
     PreparedMediaBatch,
 )
 from solin.core.media.insertion import MediaInsertResult
+from solin.ui.qml.media_destination import MediaDestinationBridge, MediaDestinationDialog
 
 
 class _MeetingsStub(QObject):
@@ -25,10 +29,14 @@ class _MeetingsStub(QObject):
     def __init__(self) -> None:
         super().__init__()
         self.requested_weeks = []
+        self.prepared_meetings = []
         self.session = _MeetingSession()
 
     def request_destination_week(self, monday, *, force=False):
         self.requested_weeks.append((monday, force))
+
+    def prepare_destination_meeting(self, monday, pub_type, *, force=False):
+        self.prepared_meetings.append((monday.isoformat(), pub_type, force))
 
     def destination_targets(self, _monday):
         return [
@@ -288,3 +296,75 @@ def test_meeting_duplicate_is_reported_as_warning_not_failure() -> None:
     assert meetings.session.is_closed is True
     assert outcomes == [MediaDestinationOutcome(0, (), ("clip.mp4",))]
     assert notifications.events == [("warning", "“Clip” is already added.")]
+
+
+@pytest.mark.parametrize(("status", "force"), [("download", False), ("error", True)])
+@pytest.mark.parametrize("pub_type", ["mwb", "wt"])
+def test_meeting_preparation_forwards_the_selected_retry_policy(status, force, pub_type) -> None:
+    selected_monday = []
+
+    def drive(bridge):
+        bridge.showMeetings()
+        selected_monday.append(bridge.weekMonday)
+        bridge.update_meeting_targets(bridge.weekMonday, [
+            {"pub_type": pub_type, "available": False, "status": status},
+        ])
+        bridge.downloadMeeting(pub_type)
+
+    controller, meetings, _imports, _notifications = _controller(drive)
+    controller.route(_request())
+
+    assert meetings.prepared_meetings == [(selected_monday[0], pub_type, force)]
+    assert not any(force for _monday, force in meetings.requested_weeks)
+
+
+@pytest.mark.parametrize("status", ["download", "error"])
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
+def test_meeting_preparation_action_is_keyboard_accessible(status, key) -> None:
+    app = QApplication.instance()
+    assert isinstance(app, QApplication)
+    bridge = MediaDestinationBridge(
+        media_title="Synthetic", item_count=1, can_play=False, playlists=(),
+    )
+    bridge.showMeetings()
+    bridge.update_meeting_targets(bridge.weekMonday, [
+        {"pub_type": "mwb", "title": "Midweek", "available": False, "status": status},
+        {"pub_type": "wt", "title": "Weekend", "available": True, "status": "ready"},
+    ])
+    requested = []
+    bridge.meetingDownloadRequested.connect(lambda *args: requested.append(args))
+    dialog = MediaDestinationDialog(bridge)
+    try:
+        dialog.show()
+        dialog.activateWindow()
+        app.processEvents()
+        root = dialog.qml_widget.rootObject()
+        assert root is not None
+
+        def items(item):
+            yield item
+            for child in item.childItems():
+                yield from items(child)
+
+        actions = [
+            item for item in items(root)
+            if item.objectName() == "meetingPreparationAction" and item.isVisible()
+        ]
+        assert len(actions) == 1
+        action = actions[0]
+        accessible = QAccessible.queryAccessibleInterface(action)
+        assert accessible is not None
+        assert accessible.role() == QAccessible.Role.Button
+        assert accessible.text(QAccessible.Text.Name) == action.property("text")
+
+        dialog.qml_widget.setFocus()
+        root.forceActiveFocus()
+        QTest.keyClick(dialog.qml_widget, Qt.Key.Key_Tab)
+        assert action.hasActiveFocus()
+        QTest.keyClick(dialog.qml_widget, key)
+
+        assert requested == [("mwb", bridge.weekMonday, status == "error")]
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

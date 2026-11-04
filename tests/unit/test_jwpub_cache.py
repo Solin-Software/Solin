@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from solin.core.meetings import jwpub_cache as cache_module
+from solin.core.storage import archive_budget
 
 from solin.core.meetings.jwpub_cache import (
     JwpubCache,
@@ -20,7 +21,7 @@ from solin.core.meetings.jwpub_cache import (
 )
 
 
-def _write_archive(cache, issue="0", files=None):
+def _write_archive(cache, issue="0", files=None, *, outer_files=None):
     archive = cache.jwpub_path("mwb", "T", issue)
     contents = io.BytesIO()
     with zipfile.ZipFile(contents, "w", compression=zipfile.ZIP_DEFLATED) as inner:
@@ -28,6 +29,8 @@ def _write_archive(cache, issue="0", files=None):
             inner.writestr(name, data)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as outer:
         outer.writestr("contents", contents.getvalue())
+        for name, data in (outer_files or {}).items():
+            outer.writestr(name, data)
     return archive
 
 
@@ -84,11 +87,72 @@ def test_extract_enforces_combined_temporary_disk_budget_and_preserves_previous(
     archive = _write_archive(cache)
     extracted = cache.extract("mwb", "T", "0")
     _write_archive(cache, files={"publication.db": b"new", "large.jpg": b"x" * 4096})
-    monkeypatch.setattr(cache_module, "_MAX_TEMP_BYTES", 2048, raising=False)
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", 2048)
 
     assert cache.extract("mwb", "T", "0") is None
     assert (extracted / "publication.db").read_bytes() == b"sqlite"
     assert set(archive.parent.iterdir()) == {archive, extracted}
+
+
+@pytest.mark.parametrize("limit", ["bytes", "members"])
+@pytest.mark.parametrize("headroom", [-1, 0])
+def test_extract_accounts_for_outer_extras_and_both_layers_at_budget_boundary(
+    tmp_path, monkeypatch, limit, headroom
+):
+    cache = JwpubCache(tmp_path)
+    _write_archive(cache)
+    previous = cache.extract("mwb", "T", "0")
+    files = {"publication.db": b"new", "image.jpg": b"x" * 64}
+    archive = _write_archive(cache, files=files, outer_files={"unused.bin": b"y" * 64})
+    with zipfile.ZipFile(archive) as outer:
+        expanded = sum(member.file_size for member in outer.infolist()) + sum(
+            map(len, files.values())
+        )
+        count = len(outer.infolist()) + len(files)
+    if limit == "bytes":
+        monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", expanded + headroom)
+    else:
+        monkeypatch.setattr(archive_budget, "MAX_ARCHIVE_MEMBERS", count + headroom)
+
+    extracted = cache.extract("mwb", "T", "0")
+
+    if headroom < 0:
+        assert extracted is None
+        assert (previous / "publication.db").read_bytes() == b"sqlite"
+    else:
+        assert extracted is not None
+        assert (extracted / "publication.db").read_bytes() == b"new"
+        assert (extracted / "image.jpg").read_bytes() == files["image.jpg"]
+        assert not (extracted / "unused.bin").exists()
+    assert set(archive.parent.iterdir()) == {archive, previous}
+
+
+@pytest.mark.parametrize("layer", ["outer", "inner", "combined"])
+def test_extract_rejects_member_count_before_opening_rejected_layer(tmp_path, monkeypatch, layer):
+    cache = JwpubCache(tmp_path)
+    _write_archive(cache)
+    previous = cache.extract("mwb", "T", "0")
+    files = {"publication.db": b"new"}
+    extras = {}
+    if layer == "inner":
+        files.update({f"empty-{index}/": b"" for index in range(4)})
+    elif layer == "outer":
+        extras = {f"empty-{index}/": b"" for index in range(4)}
+    archive = _write_archive(cache, files=files, outer_files=extras)
+    monkeypatch.setattr(archive_budget, "MAX_ARCHIVE_MEMBERS", 1)
+    original_open = zipfile.ZipFile.open
+    opened = []
+
+    def observe_open(archive, member, *args, **kwargs):
+        opened.append("outer" if "contents" in archive.namelist() else "inner")
+        return original_open(archive, member, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", observe_open)
+
+    assert cache.extract("mwb", "T", "0") is None
+    assert ("outer" if layer == "outer" else "inner") not in opened
+    assert (previous / "publication.db").read_bytes() == b"sqlite"
+    assert set(archive.parent.iterdir()) == {archive, previous}
 
 
 def test_operation_cleans_used_extracts_but_preserves_protected_legacy_sources(tmp_path):

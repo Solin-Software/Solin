@@ -9,7 +9,8 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
-from solin.widgets.meetings.overview import _PubCard
+from solin.core.meetings.models import MemorialData, WeekData
+from solin.widgets.meetings.overview import _MemorialCard, _PubCard
 
 
 _APP = QApplication.instance()
@@ -105,3 +106,29 @@ def test_absent_meeting_can_be_downloaded_from_the_keyboard() -> None:
     card.set_loading()
     assert not card.isEnabled()
     card.deleteLater()
+
+
+@pytest.mark.parametrize("kind", ["mwb", "wt", "memorial"])
+@pytest.mark.parametrize("action", ["update", "repair"])
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space])
+def test_focused_maintenance_action_does_not_open_the_meeting(kind, action, key) -> None:
+    card = _MemorialCard() if kind == "memorial" else _PubCard(kind)
+    try:
+        card.set_ready(MemorialData() if kind == "memorial" else WeekData())
+        card.set_maintenance(update_available=True, repair_required=True)
+        events = []
+        card.open_requested.connect(lambda: events.append("open"))
+        card.update_requested.connect(lambda: events.append("update"))
+        card.repair_requested.connect(lambda: events.append("repair"))
+        card.show()
+        card.activateWindow()
+        button = getattr(card, f"_{action}_button")
+        button.setFocus()
+        _APP.processEvents()
+
+        QTest.keyClick(button, key)
+
+        assert events == [action]
+    finally:
+        card.close()
+        card.deleteLater()

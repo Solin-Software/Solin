@@ -15,6 +15,7 @@ from types import TracebackType
 from typing import IO, Protocol
 
 from solin.core.network.http import HttpError, stream_get
+from solin.core.storage.archive_budget import ArchiveBudget
 
 from .publication_links import (
     DEFAULT_USER_AGENT,
@@ -52,7 +53,6 @@ class ArchiveStream(Protocol):
 StreamFactory = Callable[..., ArchiveStream]
 
 _PUBLICATION_MEDIA_RESOLVER = PublicationMediaResolver()
-_MAX_CONTENTS_BYTES = 2 * 1024**3
 
 
 def resolve_jwpub_archive(pub: str, lang: str, issue: str) -> JwpubMediaInfo:
@@ -181,16 +181,17 @@ def _check_cancelled(cancelled: Callable[[], bool] | None) -> None:
 
 def _validate_jwpub_archive(path: Path, cancelled: Callable[[], bool] | None) -> None:
     try:
+        budget = ArchiveBudget()
         with zipfile.ZipFile(path) as outer, tempfile.TemporaryFile(dir=path.parent) as contents:
+            budget.check_members(outer.infolist())
             payloads = [member for member in outer.infolist() if member.filename == "contents"]
             if len(payloads) != 1 or payloads[0].is_dir():
                 raise zipfile.BadZipFile("Publication archive must have one contents payload")
-            if payloads[0].file_size > _MAX_CONTENTS_BYTES:
-                raise zipfile.BadZipFile("Publication contents exceeds temporary disk budget")
-            _validate_archive_members(outer, cancelled, contents_output=contents)
+            _validate_archive_members(outer, cancelled, budget, contents_output=contents)
             contents.seek(0)
             with zipfile.ZipFile(contents) as inner:
-                _validate_archive_members(inner, cancelled)
+                budget.check_members(inner.infolist())
+                _validate_archive_members(inner, cancelled, budget)
     except JwpubArchiveDownloadError:
         raise
     except (
@@ -208,25 +209,18 @@ def _validate_jwpub_archive(path: Path, cancelled: Callable[[], bool] | None) ->
 def _validate_archive_members(
     archive: zipfile.ZipFile,
     cancelled: Callable[[], bool] | None,
+    budget: ArchiveBudget,
     *,
     contents_output: IO[bytes] | None = None,
 ) -> None:
-    contents_size = 0
     for member in archive.infolist():
         _check_cancelled(cancelled)
         with archive.open(member) as payload:
-            while True:
-                _check_cancelled(cancelled)
-                chunk = payload.read(1024 * 1024)
-                if not chunk:
-                    break
-                if contents_output is not None and member.filename == "contents":
-                    contents_size += len(chunk)
-                    if contents_size > _MAX_CONTENTS_BYTES:
-                        raise zipfile.BadZipFile(
-                            "Publication contents exceeds temporary disk budget"
-                        )
-                    contents_output.write(chunk)
+            budget.copy_stream(
+                payload,
+                contents_output if member.filename == "contents" else None,
+                check_cancelled=lambda: _check_cancelled(cancelled),
+            )
 
 
 __all__ = [

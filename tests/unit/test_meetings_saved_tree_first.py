@@ -8,6 +8,7 @@ import pytest
 
 import solin.widgets.meetings.widget as meetings_widget_module
 from solin.core.meetings.models import WeekData
+from solin.core.media.cache import MediaCacheManager
 from solin.core.meetings.content_policy import MeetingContentPolicy
 from solin.core.meetings.preparation import (
     MeetingPreparationKey,
@@ -18,6 +19,7 @@ from solin.core.meetings.preparation import (
 )
 from solin.core.meetings.publications import JwpubService
 from solin.core.meetings.jwpub_cache import JwpubChecksumStore
+from solin.core.meetings.meeting_weeks import current_monday
 from solin.core.meetings.tree_store import (
     MeetingTreeOverview,
     MeetingTreeSnapshot,
@@ -85,6 +87,32 @@ class _ConnectSignal:
         self.handlers.append(handler)
 
 
+@pytest.mark.parametrize("pub_type", ["mwb", "wt"])
+@pytest.mark.parametrize("error,source_status", [("", ""), ("Download failed", ""), ("", "not_found")])
+def test_absent_meeting_card_retry_refreshes_only_the_selected_publication(pub_type, error, source_status):
+    monday = date(2026, 5, 25)
+    calls = []
+    state = MeetingPreparationState(
+        MeetingPreparationPhase.ERROR if error else MeetingPreparationPhase.IDLE,
+        error=error, source_status=source_status,
+    )
+    widget = SimpleNamespace(
+        _monday=monday,
+        _saved_snapshot_for=lambda *_: None,
+        _preparation_key=lambda day: MeetingPreparationKey(day, "T"),
+        _preparation=SimpleNamespace(
+            state=lambda *_: state,
+            prepare_meeting=lambda *args, **kwargs: calls.append((args, kwargs)),
+        ),
+        _overview=_overview(),
+    )
+    MeetingsWidget._open_detail(widget, pub_type)
+    assert len(calls) == 1
+    args, options = calls[0]
+    assert args == (MeetingPreparationKey(monday, "T"), pub_type)
+    assert options.get("force", False) is bool(error or source_status == "not_found")
+
+
 def _snapshot(
     pub_type: str = "mwb",
     *,
@@ -112,6 +140,23 @@ def _overview() -> SimpleNamespace:
         wt_card=_Card(),
         memorial_card=_MemorialCard(),
     )
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_destination_preparation_preserves_the_publication_retry_scope(force) -> None:
+    monday = current_monday()
+    key = MeetingPreparationKey(monday, "T")
+    calls = []
+    widget = SimpleNamespace(
+        _preparation_key=lambda _monday: key,
+        _preparation=SimpleNamespace(
+            prepare_meeting=lambda *args, **kwargs: calls.append((args, kwargs)),
+        ),
+    )
+
+    MeetingsWidget.prepare_destination_meeting(widget, monday, "wt", force=force)
+
+    assert calls == [((key, "wt"), {"force": force})]
 
 
 def _preparation(*, week_data: WeekData | None = None) -> SimpleNamespace:
@@ -749,7 +794,7 @@ def test_canonical_recovery_delivers_already_repaired_snapshot_to_open_view(
     service = MeetingPreparationService(
         publication,
         store,
-        SimpleNamespace(),
+        MediaCacheManager(tmp_path / "media", downloader_factory=lambda *_: pytest.fail("Unexpected AV download")),
         content_policy=MeetingContentPolicy(auto_recover_images=auto_recover),
     )
     service._today = lambda: prepared.monday
@@ -1002,11 +1047,11 @@ def test_clicking_an_absent_meeting_prepares_only_that_card() -> None:
         _preparation_key=lambda day: MeetingPreparationKey(day, "T"),
         _preparation=SimpleNamespace(
             state=lambda *_args: MeetingPreparationState(MeetingPreparationPhase.IDLE),
-            prepare_meeting=lambda key, pub_type: requests.append((key, pub_type)),
+            prepare_meeting=lambda key, pub_type, *, force=False: requests.append((key, pub_type, force)),
         ),
         _overview=_overview(),
     )
 
     MeetingsWidget._open_detail(widget, "wt")
 
-    assert requests == [(MeetingPreparationKey(monday, "T"), "wt")]
+    assert requests == [(MeetingPreparationKey(monday, "T"), "wt", False)]

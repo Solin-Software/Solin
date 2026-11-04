@@ -12,6 +12,10 @@ The profile's automatic-download preference controls initial preparation and
 audio/video prefetch. When disabled, an absent meeting offers **Download**.
 Selecting it prepares that meeting's structure, covers, and images without
 prefetching audio or video. Navigation does not prepare absent meetings.
+Audio/video authorization remains scoped to the requested publications through
+metadata checks and updates. Downloads retain their own batch owners across
+metadata generations; canceling one consumer preserves other consumers of the
+same URL.
 
 Saved meetings remain available offline. Maintenance checks remote checksums
 for the parent publication and referenced publications. Observed checksums are
@@ -31,6 +35,8 @@ Unsynced saved trees reconnect missing image sources to available local canonica
 images without changing content or operator edits. This also prevents pending
 edits from overwriting recovered source bindings; active sync retains ownership
 of its portable paths.
+Routine source normalization runs in coalesced background work; delivery uses
+the latest saved revision and rejects retired language contexts or shutdown work.
 Image repair checks the compressed local cache before downloading and accepts
 only the saved image's SHA-256. If that revision cannot be restored, automatic
 updates rebuild the saved meeting using the available publication, even without
@@ -60,7 +66,7 @@ automatic image deletion is disabled.
 | --- | --- |
 | Original extracted images | `PublicationAssetStore` in the shared data directory's `media_assets` folder. Immutable content addressed objects, deduplicated by SHA-256, with filename/title sidecars. |
 | Compressed JWPUBs | Shared publication cache, with a 512 MiB budget and 30-day expiry. Least recently used entries are removed first; current/next-week dependencies are preferred. Active operations and unresolved legacy sources can temporarily exceed the budget. |
-| Extracted databases and members | Scoped scratch directories, removed after materialization. Extraction is serialized per cache root and bounded to 2 GiB. |
+| Extracted databases and members | Scoped scratch directories, removed after materialization. Extraction is serialized per cache root. Validation and extraction each enforce a shared 2 GiB expanded-byte budget and 100,000-member limit across the outer and inner archives. |
 | Meeting structures and provenance | Per-profile meeting store. Images record publication, language, issue, archive checksum, member, and expected image digest. |
 | Audio and video | Existing shared HTTP media cache, with its existing manual deletion workflow. |
 

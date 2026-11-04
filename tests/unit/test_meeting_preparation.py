@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import time
+import threading
 
 import pytest
 from datetime import date
 
-from PySide6.QtCore import QCoreApplication, QObject, Signal, Slot
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal, Slot
 
 import solin.core.meetings.preparation as preparation_module
 from solin.core.meetings.canonical_restore import canonical_tree_diff
@@ -30,6 +31,7 @@ from solin.core.meetings.tree_store import (
 )
 from solin.core.meetings.tree_types import clone_nodes, iter_nodes
 from solin.core.jw.language_context import JWMediaLanguageContext
+from solin.core.media.cache import MediaCacheManager
 
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
@@ -64,8 +66,11 @@ class _PublicationService(QObject):
         self.shutdown_calls += 1
 
 
-class _CacheManager:
+class _CacheManager(QObject):
+    prefetch_batch_changed = Signal(str, int, int, int, int)
+
     def __init__(self, store: MeetingTreeStore) -> None:
+        super().__init__()
         self.store = store
         self.prefetch_calls: list[tuple[list[str], str]] = []
         self.cancel_calls: list[str] = []
@@ -160,7 +165,7 @@ def _spin_until(predicate, timeout: float = 2.0) -> None:
     assert predicate()
 
 
-def _service(monkeypatch, tmp_path, resolver_class=_ImmediateResolver):
+def _service(monkeypatch, tmp_path, resolver_class=_ImmediateResolver, cache_factory=_CacheManager):
     monkeypatch.setattr(
         preparation_module,
         "MeetingMediaResolutionWorker",
@@ -168,7 +173,7 @@ def _service(monkeypatch, tmp_path, resolver_class=_ImmediateResolver):
     )
     store = MeetingTreeStore(tmp_path / "meeting_trees.json")
     publication = _PublicationService()
-    cache = _CacheManager(store)
+    cache = cache_factory(store)
     service = MeetingPreparationService(publication, store, cache)
     service._today = lambda: date(2026, 5, 25)
     return service, publication, store, cache
@@ -826,20 +831,23 @@ def test_persisted_week_skips_cached_materialization_and_passes_wt_issue(
 
 
 def test_language_context_change_retires_obsolete_jobs(monkeypatch, tmp_path) -> None:
-    service, _publication, _store, cache = _service(monkeypatch, tmp_path)
+    service, publication, _store, cache = _service(monkeypatch, tmp_path)
     old_key = MeetingPreparationKey(date(2026, 5, 25), "T")
     new_key = MeetingPreparationKey(date(2026, 5, 25), "E")
     try:
         service.ensure_week(MeetingPreparationRequest(key=old_key, download_media=True))
+        publication.mwb_ready.emit(
+            old_key.monday.isoformat(), _week_data(service._jobs[old_key].generation, with_media=True)
+        )
+        _spin_until(lambda: bool(cache.prefetch_calls))
+        old_batch = cache.prefetch_calls[0][1]
         service.ensure_week(MeetingPreparationRequest(key=new_key, download_media=True))
 
         service.cancel_other_language_contexts(JWMediaLanguageContext("E", "E", False))
 
         assert old_key not in service._jobs
         assert new_key in service._jobs
-        assert cache.cancel_calls == [
-            "meeting:2026-05-25:T:spoken:1",
-        ]
+        assert cache.cancel_calls == [old_batch]
     finally:
         service.shutdown(wait_ms=1000)
 
@@ -1284,6 +1292,7 @@ def test_missing_images_with_automatic_repair_disabled_require_explicit_repair(
     original = store.save("mwb:2026-05-25:T:20260500", [image], "baseline", canonical_nodes=[image])
     try:
         service.maintain_prepared(key)
+        _spin_until(lambda: key not in service._source_maintenance.pending)
         generation = publication.loads[0]["generation"]
         publication.context_load_finished.emit(key.monday.isoformat(), "T", False, generation)
         assert len(publication.loads) == 1
@@ -1348,6 +1357,7 @@ def test_prepared_maintenance_update_and_repair_flags_are_independent(
     )
     try:
         service.maintain_prepared(key)
+        _spin_until(lambda: key not in service._source_maintenance.pending)
         generation = publication.loads[0]["generation"]
         service._on_content_checked(
             (key.monday, "T", False, generation), "mwb", {"mwb:T:20260500": "new"}
@@ -1433,7 +1443,9 @@ def test_language_change_discards_obsolete_commands_without_replaying_updates(
         )
         service.prepare_meeting(active_key, "mwb", force=True)
         service._pending_commands[orphan_key] = [
-            MeetingPreparationRequest(key=orphan_key, operation=MeetingContentOperation.UPDATE)
+            preparation_module._QueuedPreparation(
+                MeetingPreparationRequest(key=orphan_key, operation=MeetingContentOperation.UPDATE)
+            )
         ]
 
         service.cancel_other_language_contexts(active_context)
@@ -1604,6 +1616,7 @@ def test_maintenance_rebinds_available_image_without_network_repair(monkeypatch,
     path.write_bytes(b"available")
     try:
         service.maintain_prepared(key)
+        _spin_until(lambda: key not in service._source_maintenance.pending)
         assert service.snapshot(key, "mwb").nodes[0]["media_ref"]["file_path"] == str(path)
         assert all(load["content_request"].operation == MeetingContentOperation.CHECK
                    for load in publication.loads)
@@ -1879,3 +1892,580 @@ def test_retired_repair_cannot_schedule_update(missing_image_meeting, retirement
         "T", False, generation,
     )
     assert len(publication.loads) == 1
+
+
+class _HeldDownloader(QObject):
+    progress = Signal(int, int)
+    finished = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.url = ""
+        self.cancelled = False
+
+    def start(self, url, persist=True):
+        self.url = url
+
+    def cancel(self):
+        self.cancelled = True
+
+
+@pytest.fixture
+def real_prefetch_meeting(monkeypatch, tmp_path):
+    downloaders = []
+
+    def create_downloader(parent):
+        downloader = _HeldDownloader(parent)
+        downloaders.append(downloader)
+        return downloader
+
+    cache = MediaCacheManager(tmp_path / "downloads", downloader_factory=create_downloader)
+    service, publication, store, _cache = _service(
+        monkeypatch, tmp_path, _DeferredResolver, cache_factory=lambda _store: cache
+    )
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    for pub in ("mwb", "wt"):
+        nodes = [_saved_video(pub, f"https://cdn.example/{pub}-old.mp4")]
+        store.save(f"{pub}:2026-05-25:T:20260500", nodes, "baseline", canonical_nodes=nodes,
+                   source_checksum="old")
+    try:
+        yield service, publication, store, cache, key, downloaders
+    finally:
+        service.shutdown(wait_ms=1000)
+        cache.cancel_all()
+
+
+def _saved_video(pub, url="", *, unresolved=False):
+    return {
+        "id": f"{pub}-video", "type": "media", "children": [], "meeting_generated": True,
+        "meeting_source_key": f"media:{pub}:video", "media_type": "video",
+        "resolved_url": url,
+        "media_ref": {"mime_type": "video/mp4", **(
+            {"key_symbol": "mwbv", "track": 1, "issue_tag": 20260500} if unresolved else {}
+        )},
+    }
+
+
+def _finish_preparation(service, publication, key):
+    generation = service._jobs[key].generation
+    publication.context_load_finished.emit(key.monday.isoformat(), key.language_code,
+                                           key.is_sign_language, generation)
+
+
+@pytest.mark.parametrize("retirement", ["automatic", "language", "prune"])
+@pytest.mark.parametrize("replacement_download", [False, True])
+def test_retired_generation_cancels_its_real_outstanding_downloads(
+    real_prefetch_meeting, retirement, replacement_download
+):
+    service, publication, _store, cache, key, downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=True)
+    _finish_preparation(service, publication, key)
+    service.ensure_week(MeetingPreparationRequest(
+        key, operation=MeetingContentOperation.CHECK, publications=frozenset({"mwb"}),
+        download_media=replacement_download, origin=MeetingRequestOrigin.MAINTENANCE,
+    ))
+    assert len(downloaders) == 1
+    assert cache.is_prefetching(downloaders[0].url)
+    if retirement == "automatic":
+        service.cancel_automatic_downloads()
+    elif retirement == "language":
+        service.cancel_other_language_contexts(JWMediaLanguageContext("E", "E", False))
+    else:
+        service._today = lambda: date(2026, 6, 22)
+        service.prune_expired()
+    assert downloaders[0].cancelled
+    assert not cache.is_prefetching(downloaders[0].url)
+
+
+@pytest.mark.parametrize("manual_consumer", ["meeting", "library", "other-batch"])
+def test_automatic_retirement_preserves_real_shared_manual_download(
+    real_prefetch_meeting, manual_consumer
+):
+    service, publication, _store, cache, key, downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=True)
+    _finish_preparation(service, publication, key)
+    service.maintain_prepared(key)
+    url = downloaders[0].url
+    if manual_consumer == "meeting":
+        service.prepare_meeting(key, "mwb", download_media=True)
+    elif manual_consumer == "library":
+        cache.prefetch(url)
+    else:
+        cache.prefetch_many([url], "manual-library-batch")
+    service.cancel_automatic_downloads()
+    assert not downloaders[0].cancelled
+    assert cache.is_prefetching(url)
+    assert len(downloaders) == 1
+
+
+@pytest.mark.parametrize("manual", [False, True])
+def test_saved_download_authorization_reaches_checked_update_and_current_resolution(
+    real_prefetch_meeting, manual
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=not manual)
+    checked_generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, checked_generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    assert publication.loads[-1]["content_request"].operation == MeetingContentOperation.UPDATE
+    generation = service._jobs[key].generation
+    wd = _week_data(generation, with_media=True, source_checksum="new")
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    _spin_until(lambda: bool(_DeferredResolver.latest and _DeferredResolver.latest.request_id))
+    _DeferredResolver.latest.complete()
+    _spin_until(lambda: any(n.get("resolved_url") == "https://cdn.example/meeting.mp4"
+                           for n in iter_nodes(service.snapshot(key, "mwb").nodes)))
+    assert cache.is_prefetching("https://cdn.example/meeting.mp4")
+    assert not cache.is_prefetching("https://cdn.example/wt-old.mp4")
+    service.cancel_automatic_downloads()
+    assert cache.is_prefetching("https://cdn.example/meeting.mp4") is manual
+
+
+@pytest.mark.parametrize("manual", [False, True])
+def test_cancelling_automatic_downloads_revokes_only_live_continuation_authorization(
+    real_prefetch_meeting, manual
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=not manual)
+    checked_generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, checked_generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    service.cancel_automatic_downloads()
+    _finish_preparation(service, publication, key)
+    generation = service._jobs[key].generation
+    wd = _week_data(generation, with_media=False, source_checksum="new")
+    url = "https://cdn.example/new-video.mp4"
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert (cache.is_prefetching(url) or cache.is_queued(url)) is manual
+
+
+def test_download_authorization_does_not_extend_to_unrequested_publication_or_future_check(
+    real_prefetch_meeting,
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True)
+    checked = service._jobs[key].generation
+    for pub, source in (("mwb", "mwb"), ("wt", "w")):
+        service._on_content_checked((key.monday, "T", False, checked), pub,
+                                    {f"{source}:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    # The unrelated WT continuation must not acquire MWB's manual AV permission.
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].publications == {"wt"}
+    wd = WeekData(monday=key.monday, language_code="T", wt_status="ready",
+                  request_generation=service._jobs[key].generation, wt_issue="20260500",
+                  wt_source_checksum="new", wt_all_media=[MeetingMedia(
+                      file_path="https://cdn.example/wt-new.mp4", mime_type="video/mp4")])
+    publication.wt_ready.emit(key.monday.isoformat(), wd)
+    assert not cache.is_prefetching("https://cdn.example/wt-new.mp4")
+    assert not cache.is_queued("https://cdn.example/wt-new.mp4")
+    _finish_preparation(service, publication, key)
+    # Outstanding old AV does not authorize an unrelated, later maintenance cycle.
+    service.maintain_prepared(key)
+    assert not service._jobs[key].download_media
+    checked = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, checked), "mwb",
+                                {"mwb:T:20260500": "newer"})
+    _finish_preparation(service, publication, key)
+    assert not service._jobs[key].download_media
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="newer")
+    url = "https://cdn.example/mwb-future.mp4"
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert not cache.is_prefetching(url)
+    assert not cache.is_queued(url)
+
+
+def test_queued_replacement_retargets_pending_resolution_without_accepting_stale_identity(
+    real_prefetch_meeting,
+):
+    service, publication, store, cache, key, _downloaders = real_prefetch_meeting
+    nodes = [_saved_video("mwb", unresolved=True)]
+    store.save("mwb:2026-05-25:T:20260500", nodes, "baseline", canonical_nodes=nodes,
+               source_checksum="old")
+    service.prepare_meeting(key, "mwb", download_media=True)
+    _spin_until(lambda: bool(_DeferredResolver.latest and _DeferredResolver.latest.request_id))
+    old_request = _DeferredResolver.latest.request_id
+    service.prepare_meeting(key, "mwb", force=True)
+    _finish_preparation(service, publication, key)
+    generation = service._jobs[key].generation
+    wd = _week_data(generation, with_media=True, source_checksum="new")
+    wd.mwb_all_media[0].track = 2
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    service._on_media_resolved(old_request, {"url": "https://cdn.example/stale.mp4"})
+    assert not any(n.get("resolved_url") == "https://cdn.example/stale.mp4"
+                   for n in iter_nodes(service.snapshot(key, "mwb").nodes))
+    _spin_until(lambda: _DeferredResolver.latest.request_id != old_request)
+    _DeferredResolver.latest.complete()
+    _spin_until(lambda: cache.is_prefetching("https://cdn.example/meeting.mp4"))
+
+
+def test_same_identity_pending_resolution_continues_in_new_generation(real_prefetch_meeting):
+    service, publication, store, cache, key, _downloaders = real_prefetch_meeting
+    nodes = [_saved_video("mwb", unresolved=True)]
+    store.save("mwb:2026-05-25:T:20260500", nodes, "baseline", canonical_nodes=nodes,
+               source_checksum="old")
+    service.prepare_meeting(key, "mwb", download_media=True)
+    _spin_until(lambda: bool(_DeferredResolver.latest and _DeferredResolver.latest.request_id))
+    previous_generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, previous_generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].generation != previous_generation
+    _DeferredResolver.latest.complete()
+    _spin_until(lambda: cache.is_prefetching("https://cdn.example/meeting.mp4"))
+    assert any(n.get("resolved_url") == "https://cdn.example/meeting.mp4"
+               for n in iter_nodes(service.snapshot(key, "mwb").nodes))
+
+
+def test_completed_real_batch_releases_retired_owner_tracking(real_prefetch_meeting):
+    service, publication, _store, _cache, key, downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=True)
+    _finish_preparation(service, publication, key)
+    service.maintain_prepared(key)
+    assert service._download_batches
+    downloaders[0].finished.emit("cached.mp4")
+    assert not service._download_batches
+
+
+def _save_detached_image(store, path):
+    canonical = {"id": "image", "type": "media", "children": [], "meeting_generated": True,
+                 "meeting_source_key": "media:image",
+                 "media_ref": {"mime_type": "image/jpeg", "file_path": str(path)}}
+    visible = clone_nodes([canonical])[0]
+    visible["media_ref"]["file_path"] = ""
+    original = store.save("mwb:2026-05-25:T:20260500", [visible], "confirmed",
+                          canonical_nodes=[canonical])
+    path.write_bytes(b"available")
+    return original
+
+
+@pytest.mark.parametrize("retire", [None, "language", "sign", "expiry", "shutdown"])
+def test_saved_source_maintenance_is_background_coalesced_and_context_guarded(
+    monkeypatch, tmp_path, retire
+):
+    service, publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    path = tmp_path / "available-later.jpg"
+    original = _save_detached_image(store, path)
+    entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+    calls = []
+    changed = []
+    repair = store.repair_canonical_image_sources
+
+    def slow_repair(tree_key):
+        calls.append(threading.get_ident())
+        entered.set()
+        try:
+            assert release.wait(2), "Test did not release the source-maintenance worker"
+            return repair(tree_key)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(store, "repair_canonical_image_sources", slow_repair)
+    service.tree_changed.connect(lambda *_: changed.append(threading.get_ident()))
+    try:
+        service.maintain_prepared(key)
+        _spin_until(entered.is_set)
+        assert calls[0] != threading.get_ident()
+        assert not finished.is_set()
+        assert publication.loads[0]["content_request"].operation == MeetingContentOperation.CHECK
+        service.maintain_prepared(key)
+        assert len(calls) == 1
+        if retire == "language":
+            service.cancel_other_language_contexts(JWMediaLanguageContext("E", "E", False))
+        elif retire == "sign":
+            service.cancel_other_language_contexts(JWMediaLanguageContext("T", "T", True))
+        elif retire == "expiry":
+            service._today = lambda: date(2026, 7, 6)
+            service.prune_expired()
+        elif retire == "shutdown":
+            service.shutdown(wait_ms=0)
+        release.set()
+        _spin_until(finished.is_set)
+        if retire is None:
+            _spin_until(lambda: bool(changed))
+            assert changed == [threading.get_ident()]
+            saved = store.snapshot(original.tree_key)
+            assert saved.nodes[0]["media_ref"]["file_path"] == str(path)
+            assert saved.canonical_hash == original.canonical_hash
+        else:
+            _APP.processEvents()
+            assert not changed
+    finally:
+        release.set()
+        service.shutdown(wait_ms=1000)
+
+
+def test_background_source_write_does_not_block_maintenance_return_or_qt_events(monkeypatch, tmp_path):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    _save_detached_image(store, tmp_path / "image.jpg")
+    entered, release = threading.Event(), threading.Event()
+    heartbeat = []
+    write = store._write
+    submit = service._source_maintenance.workers.submit
+
+    def blocked_write(data):
+        # The real normalization operation holds its store lock at this point.
+        entered.set()
+        assert release.wait(2), "Maintenance caller waited on its own background write"
+        write(data)
+
+    def start_before_return(name, target):
+        handle = submit(name, target)
+        assert entered.wait(1)
+        return handle
+
+    monkeypatch.setattr(store, "_write", blocked_write)
+    monkeypatch.setattr(service._source_maintenance.workers, "submit", start_before_return)
+    try:
+        state = service.maintain_prepared(key)
+        assert state.snapshot is not None
+        QTimer.singleShot(0, lambda: heartbeat.append(True))
+        _APP.processEvents()
+        assert heartbeat == [True]
+    finally:
+        release.set()
+        service.shutdown(wait_ms=1000)
+
+
+def test_source_maintenance_failure_keeps_snapshot_and_can_retry(monkeypatch, tmp_path):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    original = _save_detached_image(store, tmp_path / "image.jpg")
+    errors = []
+    service.error.connect(lambda *args: errors.append(args))
+    repair = store.repair_canonical_image_sources
+    try:
+        def fail(_tree_key):
+            raise OSError("Synthetic source-store failure")
+
+        monkeypatch.setattr(store, "repair_canonical_image_sources", fail)
+        service.maintain_prepared(key)
+        _spin_until(lambda: bool(errors))
+        assert store.snapshot(original.tree_key) == original
+        monkeypatch.setattr(store, "repair_canonical_image_sources", repair)
+        service.maintain_prepared(key)
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert store.snapshot(original.tree_key).revision > original.revision
+    finally:
+        service.shutdown(wait_ms=1000)
+
+
+def test_coalesced_maintenance_rechecks_sources_restored_after_its_first_scan(monkeypatch, tmp_path):
+    service, _publication, store, _cache = _service(monkeypatch, tmp_path)
+    service._policy = MeetingContentPolicy(auto_update=False, auto_recover_images=False)
+    key = MeetingPreparationKey(date(2026, 5, 25), "T")
+    path = tmp_path / "image.jpg"
+    original = _save_detached_image(store, path)
+    path.unlink()
+    entered, release = threading.Event(), threading.Event()
+    repair = store.repair_canonical_image_sources
+    calls, changed = [], []
+
+    def scan_before_restoration(tree_key):
+        result = repair(tree_key)
+        calls.append(tree_key)
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(2)
+        return result
+
+    monkeypatch.setattr(store, "repair_canonical_image_sources", scan_before_restoration)
+    service.tree_changed.connect(lambda *_: changed.append(True))
+    try:
+        service.maintain_prepared(key)
+        _spin_until(entered.is_set)
+        path.write_bytes(b"available again")
+        service.maintain_prepared(key)
+        release.set()
+        _spin_until(lambda: bool(changed))
+        _spin_until(lambda: key not in service._source_maintenance.pending)
+        assert len(calls) == 2
+        assert store.snapshot(original.tree_key).nodes[0]["media_ref"]["file_path"] == str(path)
+    finally:
+        release.set()
+        service.shutdown(wait_ms=1000)
+
+
+@pytest.mark.parametrize("manual", [False, True])
+def test_independent_queued_check_cannot_reuse_completed_update_download_authorization(
+    real_prefetch_meeting, manual
+):
+    service, publication, _store, cache, key, downloaders = real_prefetch_meeting
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=not manual)
+    generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.UPDATE
+    authorized = "https://cdn.example/authorized-update.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="new")
+    wd.mwb_all_media = [MeetingMedia(file_path=authorized, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert cache.is_prefetching(authorized)
+    assert len(downloaders) == 2
+    for downloader in list(downloaders):
+        downloader.finished.emit("cached.mp4")
+    assert not service._download_batches
+
+    # This public maintenance request arrives before the authorized UPDATE's finish.
+    service.check_updates(key)
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.CHECK
+    generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                {"mwb:T:20260500": "newer"})
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.UPDATE
+    unrequested = "https://cdn.example/unrequested-later-update.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="newer")
+    wd.mwb_all_media = [MeetingMedia(file_path=unrequested, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert any(n.get("media_ref", {}).get("file_path") == unrequested
+               for n in iter_nodes(service.snapshot(key, "mwb").nodes))
+    assert not cache.is_prefetching(unrequested)
+    assert not cache.is_queued(unrequested)
+    assert all(downloader.url != unrequested for downloader in downloaders)
+
+
+@pytest.mark.parametrize("manual", [False, True])
+@pytest.mark.parametrize("cancel_automatic", [False, True])
+def test_causal_update_keeps_only_its_own_authorization_across_an_independent_queued_check(
+    real_prefetch_meeting, manual, cancel_automatic
+):
+    service, publication, _store, cache, key, downloaders = real_prefetch_meeting
+    service.ensure_week(MeetingPreparationRequest(
+        key, publications=frozenset({"mwb"}), operation=MeetingContentOperation.CHECK,
+        download_media=True,
+        origin=MeetingRequestOrigin.MANUAL if manual else MeetingRequestOrigin.AUTOMATIC,
+    ))
+    first_check = service._jobs[key].generation
+    # A broader, independent CHECK queues before the first CHECK's causal UPDATE.
+    service.check_updates(key)
+    service._on_content_checked((key.monday, "T", False, first_check), "mwb",
+                                {"mwb:T:20260500": "new"})
+    downloaders[0].finished.emit("cached.mp4")
+    assert not service._download_batches
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.CHECK
+    assert not service._jobs[key].download_media
+    if cancel_automatic:
+        service.cancel_automatic_downloads()
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.UPDATE
+    assert service._jobs[key].publications == {"mwb"}
+    url = "https://cdn.example/original-causal-update.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="new")
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert (cache.is_prefetching(url) or cache.is_queued(url)) is (manual or not cancel_automatic)
+    assert not cache.is_prefetching("https://cdn.example/wt-old.mp4")
+
+
+@pytest.mark.parametrize("manual", [False, True])
+@pytest.mark.parametrize("cancel_before_authorization", [False, True])
+def test_queued_causal_update_observes_download_authorization_added_after_it_was_scheduled(
+    real_prefetch_meeting, manual, cancel_before_authorization
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    request = MeetingPreparationRequest(
+        key, publications=frozenset({"mwb"}), operation=MeetingContentOperation.CHECK,
+        origin=MeetingRequestOrigin.MAINTENANCE,
+    )
+    service.ensure_week(request)
+    generation = service._jobs[key].generation
+    service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    if cancel_before_authorization:
+        service.cancel_automatic_downloads()
+    service.ensure_week(MeetingPreparationRequest(
+        key, publications=frozenset({"mwb"}), operation=MeetingContentOperation.CHECK,
+        download_media=True,
+        origin=MeetingRequestOrigin.MANUAL if manual else MeetingRequestOrigin.AUTOMATIC,
+    ))
+    _finish_preparation(service, publication, key)
+    url = "https://cdn.example/authorized-after-queue.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="new")
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert cache.is_prefetching(url)
+    service.cancel_automatic_downloads()
+    assert cache.is_prefetching(url) is manual
+
+
+@pytest.mark.parametrize("grant_after_checked", [False, True])
+@pytest.mark.parametrize("manual", [False, True])
+def test_coalesced_update_uses_late_authorization_from_the_current_check_owner(
+    real_prefetch_meeting, grant_after_checked, manual
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    service.ensure_week(MeetingPreparationRequest(
+        key, publications=frozenset({"mwb"}), operation=MeetingContentOperation.CHECK,
+        origin=MeetingRequestOrigin.MAINTENANCE,
+    ))
+    original_generation = service._jobs[key].generation
+    service.check_updates(key)
+    service._on_content_checked((key.monday, "T", False, original_generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    current_generation = service._jobs[key].generation
+    assert current_generation != original_generation
+    assert service._jobs[key].operation == MeetingContentOperation.CHECK
+    assert not service._jobs[key].download_media
+    if grant_after_checked:
+        service._on_content_checked((key.monday, "T", False, current_generation), "mwb",
+                                    {"mwb:T:20260500": "new"})
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=not manual)
+    if not grant_after_checked:
+        service._on_content_checked((key.monday, "T", False, current_generation), "mwb",
+                                    {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    assert service._jobs[key].operation == MeetingContentOperation.UPDATE
+    assert service._jobs[key].publications == {"mwb"}
+    url = "https://cdn.example/late-current-owner-update.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="new")
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert cache.is_prefetching(url)
+    assert not cache.is_prefetching("https://cdn.example/wt-old.mp4")
+    service.cancel_automatic_downloads()
+    assert cache.is_prefetching(url) is manual
+
+
+@pytest.mark.parametrize("grant_after_checked", [False, True])
+def test_coalesced_update_preserves_existing_manual_grant_when_current_owner_is_automatic(
+    real_prefetch_meeting, grant_after_checked
+):
+    service, publication, _store, cache, key, _downloaders = real_prefetch_meeting
+    service.ensure_week(MeetingPreparationRequest(
+        key, publications=frozenset({"mwb"}), operation=MeetingContentOperation.CHECK,
+        origin=MeetingRequestOrigin.MANUAL, download_media=True,
+    ))
+    generation = service._jobs[key].generation
+    service.check_updates(key)
+    service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                {"mwb:T:20260500": "new"})
+    _finish_preparation(service, publication, key)
+    generation = service._jobs[key].generation
+    if grant_after_checked:
+        service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                    {"mwb:T:20260500": "new"})
+    service.prepare_meeting(key, "mwb", download_media=True, automatic=True)
+    if not grant_after_checked:
+        service._on_content_checked((key.monday, "T", False, generation), "mwb",
+                                    {"mwb:T:20260500": "new"})
+    service.cancel_automatic_downloads()
+    _finish_preparation(service, publication, key)
+    url = "https://cdn.example/original-manual-owner-update.mp4"
+    wd = _week_data(service._jobs[key].generation, with_media=False, source_checksum="new")
+    wd.mwb_all_media = [MeetingMedia(file_path=url, mime_type="video/mp4", section="tgw")]
+    publication.mwb_ready.emit(key.monday.isoformat(), wd)
+    assert cache.is_prefetching(url)

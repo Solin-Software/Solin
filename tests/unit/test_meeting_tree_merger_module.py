@@ -13,6 +13,7 @@ from solin.core.meetings.tree_merger import (
     MeetingTreeMerger,
     media_identity_signature,
     merge_persisted_meeting_trees,
+    overlay_durable_media_state,
 )
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
 from solin.core.meetings.tree_types import iter_nodes, source_hash
@@ -326,6 +327,105 @@ def test_merger_drops_prepared_framing_when_media_identity_changes() -> None:
     merged = MeetingTreeMerger(canonical).merge(saved)
 
     assert "image_framing" not in merged[0]
+
+
+def _legacy_publication_image_pair():
+    saved = {
+        "id": "operator-image", "type": "media", "children": [],
+        "meeting_generated": True, "meeting_source_key": "media:mwb:mm7",
+        "media_ref": {"multimedia_id": 7, "mime_type": "image/jpeg",
+                      "file_path": "legacy/illustration.jpg"},
+        "image_framing": {"version": 1, "zoom": 1.5},
+        "start_trim_ticks": 100, "end_trim_ticks": 200,
+        "linked_folder_source": "operator-folder",
+        "resolved_url": "legacy/illustration.jpg",
+        "thumbnail_url": "legacy-thumb.jpg", "thumbnail_local_path": "old-thumb.jpg",
+        "thumbnail_cache_key": "old-cache", "thumbnail_source_key": "old-source",
+        "thumbnail_binding": "media_frame", "base_duration_ticks": 900,
+    }
+    canonical = {
+        "id": "canonical-image", "type": "media", "children": [],
+        "meeting_generated": True, "meeting_source_key": saved["meeting_source_key"],
+        "media_ref": {"multimedia_id": 7, "mime_type": "image/jpeg",
+                      "file_path": "media_assets/original.jpg", "publication_source": {
+                          "pub": "mwb", "language": "T", "issue": "20261100",
+                          "member": "images/illustration.jpg",
+                      }},
+    }
+    return saved, canonical
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_legacy_image_update_retains_only_operator_edits_and_rejects_stale_patches(
+    tmp_path, complete
+):
+    saved, canonical = _legacy_publication_image_pair()
+    store = MeetingTreeStore(tmp_path / "trees.json")
+    key = "mwb:2026-11-02:T:20261100"
+    store.save(key, [saved], "legacy", canonical_nodes=[saved])
+    expected_identity = media_identity_signature(saved)
+    assert expected_identity != media_identity_signature(canonical)
+
+    updated = store.reconcile(
+        key, [canonical], "updated", MeetingTreeOverview(), canonical_complete=complete
+    )
+    actual = updated.nodes[0]
+    for field in ("image_framing", "start_trim_ticks", "end_trim_ticks", "linked_folder_source"):
+        assert actual[field] == saved[field]
+    for field in ("resolved_url", "thumbnail_url", "thumbnail_local_path", "thumbnail_cache_key",
+                  "thumbnail_source_key", "thumbnail_binding", "base_duration_ticks"):
+        assert field not in actual
+    assert actual["media_ref"] == canonical["media_ref"]
+    assert actual["id"] == saved["id"]
+    patched = store.patch_media_batch(
+        key, {actual["id"]: (expected_identity, {"resolved_url": "stale-result.jpg"})}
+    )
+    assert patched.revision == updated.revision
+    assert "resolved_url" not in patched.nodes[0]
+
+
+@pytest.mark.parametrize("guard", [
+    "different_key", "empty_key", "manual_saved", "manual_canonical", "zero_id", "missing_id",
+    "different_id", "different_mime", "different_track", "different_issue", "different_document",
+    "different_symbol", "both_legacy", "both_proven", "partial_provenance", "different_hash",
+])
+def test_legacy_image_overlay_rejects_unproven_identity(guard):
+    saved, canonical = _legacy_publication_image_pair()
+    if guard == "different_key":
+        saved["meeting_source_key"] = "other"
+    elif guard == "empty_key":
+        saved["meeting_source_key"] = canonical["meeting_source_key"] = ""
+    elif guard.startswith("manual_"):
+        (saved if guard == "manual_saved" else canonical)["meeting_generated"] = False
+    elif guard == "zero_id":
+        saved["media_ref"]["multimedia_id"] = canonical["media_ref"]["multimedia_id"] = 0
+    elif guard == "missing_id":
+        saved["media_ref"].pop("multimedia_id")
+        canonical["media_ref"].pop("multimedia_id")
+    elif guard in {"different_id", "different_mime", "different_track", "different_issue",
+                   "different_document", "different_symbol"}:
+        field, value = {
+            "different_id": ("multimedia_id", 8), "different_mime": ("mime_type", "image/png"),
+            "different_track": ("track", 1), "different_issue": ("issue_tag", 20261200),
+            "different_document": ("meps_doc_id", 123), "different_symbol": ("key_symbol", "other"),
+        }[guard]
+        saved["media_ref"][field] = value
+    elif guard == "both_legacy":
+        canonical["media_ref"].pop("publication_source")
+    elif guard == "both_proven":
+        saved["media_ref"]["publication_source"] = {
+            **canonical["media_ref"]["publication_source"], "member": "different.jpg"
+        }
+    elif guard == "partial_provenance":
+        canonical["media_ref"]["publication_source"].pop("language")
+    else:
+        saved["media_ref"]["asset_hash"] = "a" * 64
+        canonical["media_ref"]["asset_hash"] = "b" * 64
+
+    overlay_durable_media_state(saved, canonical)
+
+    assert "image_framing" not in canonical
+    assert "resolved_url" not in canonical
 
 
 def test_portable_merge_keeps_fresh_prepared_duration_for_official_media() -> None:

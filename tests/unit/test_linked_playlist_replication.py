@@ -107,6 +107,34 @@ def test_external_copy_does_not_prevent_staging_other_fields(tmp_path):
     assert len(loaded["items"]) == 2
 
 
+@pytest.mark.parametrize("payload", [
+    {}, {"items": None}, {"items": {}}, {"items": [None]},
+    {"items": [{"url": "image.jpg"}]}, {"items": [{"id": 7, "url": "image.jpg"}]},
+    {"items": [{"id": "image"}]}, {"items": [{"id": "image", "url": None}]},
+])
+@pytest.mark.parametrize("replace_pending", [False, True])
+def test_invalid_playlist_intent_cannot_write_or_replace_accepted_state(
+    tmp_path, payload, replace_pending
+):
+    from solin.core.playlists.linked_folder import INTENT, LinkedPlaylistSync
+
+    service = LinkedPlaylistSync(tmp_path / "folder", state_dir=tmp_path / "state")
+    accepted = {"items": []}
+    service.stage_intent(accepted)
+    before = {path: path.read_bytes() for path in (tmp_path / "state").rglob("*") if path.is_file()}
+    rejected = copy.deepcopy(payload)
+    if replace_pending:
+        rejected[INTENT] = copy.deepcopy(accepted[INTENT])
+    original = copy.deepcopy(rejected)
+
+    with pytest.raises(ValueError):
+        service.stage_intent(rejected)
+
+    assert rejected == original
+    assert {path: path.read_bytes() for path in (tmp_path / "state").rglob("*") if path.is_file()} == before
+    assert service.pending_intents() == [accepted]
+
+
 def test_staged_edits_replay_after_adapter_restart(tmp_path):
     from solin.core.playlists import linked_folder
 

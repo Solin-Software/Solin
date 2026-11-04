@@ -1313,6 +1313,7 @@ class MeetingsWidget(QWidget):
             self._preparation.prepare_meeting(
                 self._preparation_key(self._monday),
                 pub_type,
+                force=bool(state.error or state.source_status == "not_found"),
             )
             return
         wd = self._preparation.week_data(self._preparation_key(self._monday))
@@ -1638,10 +1639,12 @@ class MeetingsWidget(QWidget):
         else:
             self._refresh_week_content(monday)
 
-    def prepare_destination_meeting(self, monday: date, pub_type: str) -> None:
+    def prepare_destination_meeting(
+        self, monday: date, pub_type: str, *, force: bool = False,
+    ) -> None:
         if not is_selectable_meeting_week(monday) or pub_type not in {"mwb", "wt"}:
             return
-        self._preparation.prepare_meeting(self._preparation_key(monday), pub_type)
+        self._preparation.prepare_meeting(self._preparation_key(monday), pub_type, force=force)
 
     def destination_targets(self, monday: date) -> list[dict[str, object]]:
         if not is_selectable_meeting_week(monday):

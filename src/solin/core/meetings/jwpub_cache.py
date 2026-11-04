@@ -17,9 +17,9 @@ from collections.abc import Collection, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO
 from weakref import WeakValueDictionary
 
+from solin.core.storage.archive_budget import ArchiveBudget
 from solin.core.storage.json_repository import JsonFileRepository
 
 log = logging.getLogger(__name__)
@@ -27,9 +27,7 @@ log = logging.getLogger(__name__)
 _EXTRACTION_MARKER = ".solin-extraction-complete"
 _EXTRACTION_STALE_MARKER = ".solin-extraction-stale"
 _SCRATCH_MARKER = ".solin-extraction-transient"
-_MAX_TEMP_BYTES = 2 * 1024**3
 _MAX_RETAINED_BYTES = 512 * 1024**2
-_COPY_CHUNK_SIZE = 1024 * 1024
 _Publication = tuple[str, str, str]
 
 
@@ -512,23 +510,25 @@ class JwpubCache:
         staging_path: Path | None = None
         complete = False
         try:
+            budget = ArchiveBudget()
             staging_path = Path(
                 tempfile.mkdtemp(prefix=f".{extract_path.name}.", dir=extract_path.parent)
             )
             with tempfile.TemporaryFile(dir=extract_path.parent) as payload:
                 with zipfile.ZipFile(jwpub, "r") as outer:
+                    budget.check_members(outer.infolist())
                     contents = [info for info in outer.infolist() if info.filename == "contents"]
                     if len(contents) != 1:
                         raise RuntimeError("publication archive must have one contents payload")
                     member = contents[0]
                     _validate_member(member)
-                    if member.is_dir() or member.file_size > _MAX_TEMP_BYTES:
-                        raise RuntimeError("publication contents exceeds temporary disk budget")
+                    if member.is_dir():
+                        raise RuntimeError("publication contents must be a file")
                     with outer.open(member) as source:
-                        payload_size = _copy_limited(source, payload, _MAX_TEMP_BYTES)
+                        budget.copy_stream(source, payload)
                 payload.seek(0)
                 with zipfile.ZipFile(payload, "r") as inner:
-                    _safe_extract_all(inner, staging_path, _MAX_TEMP_BYTES - payload_size)
+                    _safe_extract_all(inner, staging_path, budget)
             if not any(staging_path.glob("*.db")):
                 raise RuntimeError("publication has no database")
             (staging_path / _EXTRACTION_MARKER).touch(exist_ok=False)
@@ -593,21 +593,11 @@ def _validate_member(member: zipfile.ZipInfo) -> tuple[str, ...]:
     return parts
 
 
-def _copy_limited(source: IO[bytes], destination: IO[bytes], max_bytes: int) -> int:
-    copied = 0
-    while chunk := source.read(min(_COPY_CHUNK_SIZE, max_bytes - copied + 1)):
-        copied += len(chunk)
-        if copied > max_bytes:
-            raise RuntimeError("publication exceeds temporary disk budget")
-        destination.write(chunk)
-    return copied
-
-
-def _safe_extract_all(archive: zipfile.ZipFile, target_dir: Path, max_bytes: int) -> None:
+def _safe_extract_all(archive: zipfile.ZipFile, target_dir: Path, budget: ArchiveBudget) -> None:
+    budget.check_members(archive.infolist())
     members: list[tuple[zipfile.ZipInfo, tuple[str, ...]]] = []
     names: dict[str, bool] = {}
     explicit_names: set[str] = set()
-    total = 0
     for member in archive.infolist():
         parts = _validate_member(member)
         name = "/".join(parts).casefold()
@@ -620,11 +610,7 @@ def _safe_extract_all(archive: zipfile.ZipFile, target_dir: Path, max_bytes: int
             names[parent] = True
         names[name] = member.is_dir()
         explicit_names.add(name)
-        total += member.file_size
-        if total > max_bytes:
-            raise RuntimeError("publication exceeds temporary disk budget")
         members.append((member, parts))
-    remaining = max_bytes
     for member, parts in members:
         destination = target_dir.joinpath(*parts)
         if member.is_dir():
@@ -632,7 +618,7 @@ def _safe_extract_all(archive: zipfile.ZipFile, target_dir: Path, max_bytes: int
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         with archive.open(member) as source, destination.open("xb") as output:
-            remaining -= _copy_limited(source, output, remaining)
+            budget.copy_stream(source, output)
 
 
 class JwpubChecksumStore:

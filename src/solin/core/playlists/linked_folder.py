@@ -354,13 +354,20 @@ class LinkedPlaylistSync:
 
     def stage_intent(self, playlist: dict) -> None:
         """Persist UI edits locally before the cloud/copy worker starts."""
+        if not isinstance(playlist, dict) or not isinstance(playlist.get("items"), list):
+            raise ValueError("Playlist intent must contain an items list")
+        for item in playlist["items"]:
+            if not isinstance(item, dict) or any(
+                not isinstance(item.get(field), str) for field in ("id", "url")
+            ):
+                raise ValueError("Playlist intent items must contain string id and url fields")
         previous = playlist.get(INTENT, {})
         key = str(previous.get("id") or uuid.uuid4().hex)
         generation = int(previous.get("generation", 0)) + 1
         playlist[INTENT] = {"id": key, "generation": generation}
         repository = JsonFileRepository(self.replica.state_dir / "intents" / f"{key}.json")
         # Preserve the raw local source before the operation can be published
-        # by a concurrent worker or validation can fail. Replay is idempotent.
+        # by a concurrent worker or causal staging can fail. Replay is idempotent.
         repository.write(playlist)
         value = playlist.get(STATE)
         if isinstance(value, dict):

@@ -88,6 +88,7 @@ def _maintenance_buttons(layout, update_requested, repair_requested):
     repair = QPushButton(QCoreApplication.translate("_PubCard", "Retry"))
     for button in (update, repair):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setAutoDefault(True)
         button.hide()
         layout.addWidget(button)
     update.clicked.connect(update_requested)

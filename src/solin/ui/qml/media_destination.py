@@ -66,7 +66,7 @@ class MediaDestinationBridge(QObject):
     weekRequested = Signal(str, bool)
     playlistTargetRequested = Signal(str, str)
     meetingTargetRequested = Signal(str, str)
-    meetingDownloadRequested = Signal(str, str)
+    meetingDownloadRequested = Signal(str, str, bool)
 
     def __init__(
         self,
@@ -297,14 +297,19 @@ class MediaDestinationBridge(QObject):
             (target for target in self._meeting_targets if target.get("pub_type") == pub_type),
             None,
         )
-        if target is None or target.get("available") or target.get("status") == "loading":
+        if (
+            target is None or target.get("available")
+            or target.get("status") not in {"download", "error"}
+        ):
             return
         self._meeting_targets = [
             dict(target, status="loading") if target.get("pub_type") == pub_type else target
             for target in self._meeting_targets
         ]
         self.changed.emit()
-        self.meetingDownloadRequested.emit(pub_type, self.weekMonday)
+        self.meetingDownloadRequested.emit(
+            pub_type, self.weekMonday, target.get("status") == "error",
+        )
 
     @Slot(str)
     def chooseMeeting(self, pub_type: str) -> None:  # noqa: N802 - QML API

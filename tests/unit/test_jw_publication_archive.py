@@ -16,6 +16,7 @@ from solin.core.jw.publication_archive import (
 )
 from solin.core.jw.publication_links import PubMediaFile
 from solin.core.network.http import HttpError
+from solin.core.storage import archive_budget
 from tests._jwpub_fixture import build_synthetic_jwpub
 
 
@@ -54,12 +55,24 @@ def _assert_preserved(destination, previous):
     assert set(destination.parent.iterdir()) == {destination}
 
 
-def _outer_archive(contents: bytes, *, compression=zipfile.ZIP_STORED) -> bytes:
+def _outer_archive(contents: bytes, *, compression=zipfile.ZIP_STORED, extra_members=None) -> bytes:
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=compression) as archive:
         archive.writestr("contents", contents)
         archive.writestr("manifest.json", b"{}")
+        for name, payload in (extra_members or {}).items():
+            archive.writestr(name, payload)
     return output.getvalue()
+
+
+def _nested_archive(files, *, extra_members=None):
+    contents = io.BytesIO()
+    with zipfile.ZipFile(contents, "w", compression=zipfile.ZIP_DEFLATED) as inner:
+        for name, payload in files.items():
+            inner.writestr(name, payload)
+    return _outer_archive(
+        contents.getvalue(), compression=zipfile.ZIP_DEFLATED, extra_members=extra_members
+    )
 
 
 def _corrupt_member(payload: bytes, name: str) -> bytes:
@@ -265,7 +278,7 @@ def test_download_limits_uncompressed_validation_spool(monkeypatch, destination,
     previous = destination.read_bytes()
     with zipfile.ZipFile(io.BytesIO(jwpub_bytes)) as outer:
         contents_size = outer.getinfo("contents").file_size
-    monkeypatch.setattr(publication_archive, "_MAX_CONTENTS_BYTES", contents_size - 1)
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", contents_size - 1)
 
     with pytest.raises(JwpubArchiveDownloadError, match="budget"):
         download_jwpub_archive(
@@ -274,6 +287,142 @@ def test_download_limits_uncompressed_validation_spool(monkeypatch, destination,
             stream_factory=lambda *_args, **_kwargs: _Stream(jwpub_bytes),
         )
 
+    _assert_preserved(destination, previous)
+
+
+@pytest.mark.parametrize("layer", ["outer", "inner"])
+def test_download_rejects_declared_expansion_before_opening_oversized_layer(
+    monkeypatch, destination, layer
+):
+    previous = destination.read_bytes()
+    payload = _nested_archive(
+        {"publication.db": b"sqlite", **({"image.jpg": b"x" * 4096} if layer == "inner" else {})},
+        extra_members={"unused.bin": b"x" * 4096} if layer == "outer" else {},
+    )
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", 2048)
+    original_open = zipfile.ZipFile.open
+    opened = []
+
+    def observe_open(archive, member, *args, **kwargs):
+        opened.append("outer" if "contents" in archive.namelist() else "inner")
+        return original_open(archive, member, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", observe_open)
+    with pytest.raises(JwpubArchiveDownloadError, match="budget"):
+        download_jwpub_archive(
+            "https://example.test/mwb.jwpub",
+            destination,
+            stream_factory=lambda *_args, **_kwargs: _Stream(payload),
+        )
+
+    assert layer not in opened
+    _assert_preserved(destination, previous)
+
+
+@pytest.mark.parametrize("headroom", [-1, 0, 1])
+def test_download_accounts_for_both_layers_and_outer_extras_at_budget_boundary(
+    monkeypatch, destination, headroom
+):
+    previous = destination.read_bytes()
+    files = {"publication.db": b"sqlite", "image.jpg": b"x" * 64}
+    extras = {"unused.bin": b"y" * 64}
+    payload = _nested_archive(files, extra_members=extras)
+    with zipfile.ZipFile(io.BytesIO(payload)) as outer:
+        outer_size = sum(member.file_size for member in outer.infolist())
+    expanded = outer_size + sum(map(len, files.values()))
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", expanded + headroom)
+
+    def download():
+        download_jwpub_archive(
+            "https://example.test/mwb.jwpub",
+            destination,
+            stream_factory=lambda *_args, **_kwargs: _Stream(payload, headers={}),
+        )
+
+    if headroom < 0:
+        with pytest.raises(JwpubArchiveDownloadError, match="budget"):
+            download()
+        _assert_preserved(destination, previous)
+    else:
+        download()
+        assert destination.read_bytes() == payload
+        assert set(destination.parent.iterdir()) == {destination}
+
+
+@pytest.mark.parametrize("layer", ["outer", "inner", "combined"])
+def test_download_bounds_member_count_before_opening_rejected_layer(
+    monkeypatch, destination, layer
+):
+    previous = destination.read_bytes()
+    files = {"publication.db": b"sqlite"}
+    extras = {}
+    if layer == "inner":
+        files.update({f"empty-{index}": b"" for index in range(4)})
+    elif layer == "outer":
+        extras = {f"empty-{index}": b"" for index in range(4)}
+    payload = _nested_archive(files, extra_members=extras)
+    # Even one inner member exceeds a combined allowance of two outer members.
+    monkeypatch.setattr(archive_budget, "MAX_ARCHIVE_MEMBERS", 2)
+    original_open = zipfile.ZipFile.open
+    opened = []
+
+    def observe_open(archive, member, *args, **kwargs):
+        opened.append("outer" if "contents" in archive.namelist() else "inner")
+        return original_open(archive, member, *args, **kwargs)
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", observe_open)
+    with pytest.raises(JwpubArchiveDownloadError, match="member.*budget"):
+        download_jwpub_archive(
+            "https://example.test/mwb.jwpub",
+            destination,
+            stream_factory=lambda *_args, **_kwargs: _Stream(payload),
+        )
+
+    assert ("outer" if layer == "outer" else "inner") not in opened
+    _assert_preserved(destination, previous)
+
+
+@pytest.mark.parametrize("layer", ["outer", "inner"])
+def test_download_stops_underdeclared_member_at_remaining_budget(monkeypatch, destination, layer):
+    previous = destination.read_bytes()
+    files = {"publication.db": b"sqlite", **({"image.jpg": b""} if layer == "inner" else {})}
+    extras = {"unused.bin": b""} if layer == "outer" else {}
+    payload = _nested_archive(files, extra_members=extras)
+    budget = 512
+    monkeypatch.setattr(archive_budget, "MAX_EXPANDED_BYTES", budget)
+    original_open = zipfile.ZipFile.open
+    original_read = zipfile.ZipExtFile.read
+    expanded = 0
+
+    class UnderdeclaredStream(io.BytesIO):
+        def read(self, size=-1):
+            nonlocal expanded
+            chunk = super().read(size)
+            expanded += len(chunk)
+            return chunk
+
+    def underdeclared_open(archive, member, *args, **kwargs):
+        name = member.filename if isinstance(member, zipfile.ZipInfo) else member
+        if name == ("unused.bin" if layer == "outer" else "image.jpg"):
+            return UnderdeclaredStream(b"x" * 8192)
+        return original_open(archive, member, *args, **kwargs)
+
+    def observe_read(member, size=-1):
+        nonlocal expanded
+        chunk = original_read(member, size)
+        expanded += len(chunk)
+        return chunk
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", underdeclared_open)
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", observe_read)
+    with pytest.raises(JwpubArchiveDownloadError, match="budget"):
+        download_jwpub_archive(
+            "https://example.test/mwb.jwpub",
+            destination,
+            stream_factory=lambda *_args, **_kwargs: _Stream(payload, headers={}),
+        )
+
+    assert expanded <= budget + 1
     _assert_preserved(destination, previous)
 
 

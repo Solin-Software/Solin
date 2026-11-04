@@ -13,6 +13,7 @@ import pytest
 import solin.core.meetings.publication_worker as worker_module
 from solin.core.jw.publication_links import JwpubMediaInfo
 from solin.core.media.publication_assets import PublicationAssetStore
+from solin.core.media.cache import MediaCacheManager
 from solin.core.meetings.content_policy import (
     MeetingContentOperation,
     MeetingContentPolicy,
@@ -552,7 +553,10 @@ def test_unrecoverable_image_automatically_rebuilds_saved_meeting_with_truthful_
         shutdown=lambda **_: None,
     )
     # A manual initial-download preference never authorizes audio/video prefetch here.
-    cache = SimpleNamespace(prefetch_many=lambda *_: pytest.fail("Unexpected AV prefetch"))
+    cache = MediaCacheManager(
+        tmp_path / "media", downloader_factory=lambda *_: pytest.fail("Unexpected AV download")
+    )
+    monkeypatch.setattr(cache, "prefetch_many", lambda *_: pytest.fail("Unexpected AV prefetch"))
     service = MeetingPreparationService(publication, store, cache)
     service._today = lambda: MONDAY
     key = MeetingPreparationKey(MONDAY, "T")

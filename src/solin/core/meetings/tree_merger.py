@@ -13,6 +13,12 @@ import copy
 
 from .tree_types import Node, clone_nodes, iter_nodes
 
+_OPERATOR_MEDIA_FIELDS = (
+    "start_trim_ticks",
+    "end_trim_ticks",
+    "image_framing",
+    "linked_folder_source",
+)
 _DURABLE_MEDIA_FIELDS = (
     "resolved_url",
     "thumbnail_url",
@@ -21,10 +27,7 @@ _DURABLE_MEDIA_FIELDS = (
     "thumbnail_source_key",
     "thumbnail_binding",
     "base_duration_ticks",
-    "start_trim_ticks",
-    "end_trim_ticks",
-    "image_framing",
-    "linked_folder_source",
+    *_OPERATOR_MEDIA_FIELDS,
 )
 _CANONICAL_RESOLUTION_FIELDS = (
     "resolved_url",
@@ -64,6 +67,38 @@ def media_identity_signature(node: Node) -> tuple:
     return tuple(_media_identity_value(ref, field) for field in _MEDIA_IDENTITY_FIELDS)
 
 
+def _matches_legacy_publication_image(saved: Node, node: Node) -> bool:
+    key = saved.get("meeting_source_key")
+    if (
+        not saved.get("meeting_generated") or not node.get("meeting_generated")
+        or not isinstance(key, str) or not key.strip() or key != node.get("meeting_source_key")
+    ):
+        return False
+    saved_ref = saved.get("media_ref") or {}
+    ref = node.get("media_ref") or {}
+    multimedia_id = str(ref.get("multimedia_id") or "")
+    mime = str(ref.get("mime_type") or "")
+    if not multimedia_id.isdecimal() or int(multimedia_id) <= 0 or not mime.startswith("image/"):
+        return False
+    if any(
+        _media_identity_value(saved_ref, field) != _media_identity_value(ref, field)
+        for field in _MEDIA_IDENTITY_FIELDS if field != "file_path"
+    ):
+        return False
+    saved_source, source = saved_ref.get("publication_source"), ref.get("publication_source")
+    # Bridge one legacy image to its proven identity, never two unrelated local
+    # files or two known publication identities that disagree.
+    if bool(saved_source) == bool(source):
+        return False
+    known_source = saved_source or source
+    if not isinstance(known_source, dict) or not all(
+        str(known_source.get(field) or "").strip() for field in ("pub", "language", "issue", "member")
+    ):
+        return False
+    saved_hash, asset_hash = saved_ref.get("asset_hash"), ref.get("asset_hash")
+    return not (saved_hash and asset_hash and saved_hash != asset_hash)
+
+
 def overlay_durable_media_state(
     saved: Node,
     node: Node,
@@ -73,9 +108,11 @@ def overlay_durable_media_state(
     """Overlay user/runtime media state when both nodes describe the same media."""
     if node.get("type") != "media" or saved.get("type") != "media":
         return
-    if media_identity_signature(saved) != media_identity_signature(node):
+    same_identity = media_identity_signature(saved) == media_identity_signature(node)
+    if not same_identity and not _matches_legacy_publication_image(saved, node):
         return
-    for field in _DURABLE_MEDIA_FIELDS:
+    fields = _DURABLE_MEDIA_FIELDS if same_identity else _OPERATOR_MEDIA_FIELDS
+    for field in fields:
         if (
             not prefer_saved_resolution
             and field in _CANONICAL_RESOLUTION_FIELDS
@@ -89,7 +126,8 @@ def overlay_durable_media_state(
     # Resolver-provided titles are derived presentation data, not a user
     # override. Keep them when the canonical source only had a placeholder.
     if (
-        node.get("auto_title")
+        same_identity
+        and node.get("auto_title")
         and saved.get("title")
         and not saved.get("auto_title")
         and not saved.get("user_title_override")
