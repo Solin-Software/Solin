@@ -12518,4 +12518,127 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Picha ya “%1” haikuweza kupigwa. Tumia Onyesha upya picha kujaribu tena.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Media za hotuba za watu wote…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Ingiza (%n)</numerusform>
+            <numerusform>Ingiza (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Chagua chapisho</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Inasoma chapisho…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Chagua chapisho la S-34mp.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>Chapisho halina media zinazoweza kutumika.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Inaingiza media…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>Eneo lililochaguliwa halipatikani. Chagua eneo jingine.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Huduma ya kuingiza haipatikani.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>Kipengee %n cha media hakikupatikana. Rejeleo lake limehifadhiwa.</numerusform>
+            <numerusform>Vipengee %n vya media havikupatikana. Marejeleo yake yamehifadhiwa.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>Chapisho la JW (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Ingiza media za chapisho</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Chagua chapisho ili kuanza.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Chagua faili kwenye kompyuta hii.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Badilisha faili</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Vinjari…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Chagua S-34mp mara moja kwa wasifu huu. Weka faili asili katika eneo lake; unaweza kuibadilisha hapa wakati wowote.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Tafuta maudhui…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Chagua yote</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Futa uteuzi</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Panua maudhui yaliyochaguliwa ili kurekebisha uteuzi wa media.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Rekebisha uteuzi wa media</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Hakuna maudhui yanayolingana.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Maudhui ya chapisho yataonekana hapa.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Ghairi</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Media za chapisho</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Picha: {images} · Video: {videos} · Sauti: {audio}</translation>
+    </message>
+</context>
 </TS>

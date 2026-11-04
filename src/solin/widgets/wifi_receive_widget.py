@@ -1182,6 +1182,7 @@ class WifiReceiveWidget(QWidget):
                     continue
                 self._received_files.append(
                     {
+                        **raw,
                         "path": item_path,
                         "title": item_title,
                         "orig_name": item_title,

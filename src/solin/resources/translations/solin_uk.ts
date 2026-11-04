@@ -12560,4 +12560,129 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Не вдалося зробити зображення «%1». Скористайтеся «Оновити зображення», щоб повторити.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Медіа для публічних промов…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Імпорт (%n)</numerusform>
+            <numerusform>Імпорт (%n)</numerusform>
+            <numerusform>Імпорт (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Вибрати публікацію</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Читання публікації…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Виберіть публікацію S-34mp.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>Публікація не містить придатних для використання медіа.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Імпорт медіа…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>Вибране місце недоступне. Виберіть інше місце.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Служба імпорту недоступна.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>Не вдалося знайти %n медіаелемент. Посилання на нього збережено.</numerusform>
+            <numerusform>Не вдалося знайти %n медіаелементи. Посилання на них збережено.</numerusform>
+            <numerusform>Не вдалося знайти %n медіаелементів. Посилання на них збережено.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>Публікація JW (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Імпортувати медіа з публікації</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Виберіть публікацію, щоб почати.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Виберіть файл на цьому комп’ютері.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Змінити файл</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Огляд…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Виберіть S-34mp один раз для цього профілю. Залиште вихідний файл у його розташуванні; тут його можна змінити будь-коли.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Пошук вмісту…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Вибрати все</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Зняти виділення</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Розгорніть вибраний вміст, щоб уточнити вибір медіа.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Уточнити вибір медіа</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Збігів не знайдено.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Тут з’явиться вміст публікації.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Скасувати</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Медіа публікації</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Зображення: {images} · Відео: {videos} · Аудіо: {audio}</translation>
+    </message>
+</context>
 </TS>

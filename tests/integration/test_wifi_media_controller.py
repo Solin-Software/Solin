@@ -134,6 +134,48 @@ def test_item_from_wifi_entry_preserves_jw_metadata_and_original_filename():
     assert "issue_tag" not in item or item["issue_tag"] is None
 
 
+def test_wifi_jwpub_expands_all_media_without_selector_and_preserves_metadata():
+    class Event:
+        def __init__(self):
+            self.handlers = []
+
+        def connect(self, handler):
+            self.handlers.append(handler)
+            return handler
+
+        def emit(self, *args):
+            for handler in self.handlers:
+                handler(*args)
+
+    raw = [
+        {"url": "https://example.invalid/resource", "title": "Audio", "type": "audio",
+         "key_symbol": "sound", "track": 2, "meps_language": 5},
+        {"url": "slide.png", "title": "Slide", "type": "image"},
+    ]
+    worker = SimpleNamespace(items_ready=Event(), failed=Event(), finished=Event())
+    worker.start = lambda: worker.items_ready.emit(raw, "Publication")
+    cards = []
+    widget = SimpleNamespace(
+        _lang=SimpleNamespace(media_api_code="T", jw_language="T"),
+        _jwpub_import_thread_factory=SimpleNamespace(create=lambda *args, **kwargs: worker),
+        _received_files=[], _jwpub_threads=[],
+        _notifications=SimpleNamespace(information=lambda *args: None,
+                                       success=lambda *args: None, warning=lambda *args: None),
+        _add_card=lambda *args, **kwargs: cards.append(args),
+        tr=lambda text, *args: text,
+    )
+    WifiReceiveWidget._expand_jwpub(widget, "publication.jwpub", "publication.jwpub")
+    assert len(cards) == len(raw)
+    window = _WindowStub()
+    controller = _controller(window)
+    controller.on_wifi_add_all(widget._received_files)
+    request, _callbacks = window.destination_controller.routes[0]
+    audio = request.assets[0].item
+    assert audio["type"] == "audio"
+    assert audio["key_symbol"] == "sound" and audio["track"] == 2
+    assert audio["meps_language"] == 5
+
+
 def test_single_destination_completion_transfers_only_referenced_file():
     window = _WindowStub()
     window.wifi_receive_widget._received_files = [

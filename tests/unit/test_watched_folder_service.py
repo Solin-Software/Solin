@@ -971,10 +971,145 @@ def test_jwpub_image_outputs_have_portable_content_identity(monkeypatch, tmp_pat
 
     monkeypatch.setattr(JwpubPlaylistImportService, "read", read)
     thread = _sync_thread(tmp_path)
-    first, _ = thread._process_jwpub(source, cache)
-    second, _ = thread._process_jwpub(source, cache)
+    first, first_items = thread._process_jwpub(source, cache)
+    second, second_items = thread._process_jwpub(source, cache)
     assert first == second
+    assert [item["id"] for item in first_items] == [item["id"] for item in second_items]
     assert len(list(cache.glob("*.jpg"))) == 1
+
+
+def test_jwpub_shared_images_reuse_output_and_preserve_metadata(tmp_path):
+    from tests._jwpub_catalog_fixture import IMAGE, build_catalog_jwpub
+
+    source = build_catalog_jwpub(
+        tmp_path / "images.jwpub",
+        schema_sql="DELETE FROM Multimedia WHERE MultimediaId NOT IN (1, 2);",
+    )
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    outputs, virtuals = _sync_thread(tmp_path)._process_jwpub(source, cache)
+
+    assert len(outputs) == 1
+    assert Path(outputs[0]).read_bytes() == IMAGE
+    assert len(virtuals) == 2
+    assert virtuals[0]["url"] == virtuals[1]["url"]
+    assert len({item["id"] for item in virtuals}) == 2
+    assert all(item["type"] == "image" for item in virtuals)
+    assert [item["title"] for item in virtuals] == ["First image", "Shared image"]
+    assert all(item["meps_language"] == 5 for item in virtuals)
+    assert set(cache.iterdir()) == {Path(outputs[0])}
+
+    _write_manifest(tmp_path, {"version": 1, "processed": {source.name: {
+        "type": "jwpub", **watched_folder_module._file_fingerprint(source),
+        "outputs": [Path(output).name for output in outputs], "virtual_items": virtuals,
+    }}})
+    items = watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]
+    # Linked playlists deliberately coalesce image occurrences by resource.
+    assert len(items) == 1
+    assert all(Path(item["url"]).is_file() for item in items)
+    assert items[0]["title"] in {item["title"] for item in virtuals}
+    assert items[0]["meps_language"] == 5
+
+
+def test_jwpub_embedded_av_and_remote_metadata_survive_whole_import(monkeypatch, tmp_path):
+    from solin.core.jw import jwpub_import
+    from solin.core.jw.publication_links import PubMediaFile
+    from tests._jwpub_catalog_fixture import build_catalog_jwpub
+
+    source = build_catalog_jwpub(
+        tmp_path / "media.jwpub",
+        schema_sql="""DELETE FROM Multimedia WHERE MultimediaId=2;
+            UPDATE Multimedia SET FilePath='embedded.m4a' WHERE MultimediaId=6;""",
+        extra_inner={"embedded.m4a": b"embedded audio bytes"},
+    )
+    calls = []
+
+    def resolve(symbol, track, issue, doc, language):
+        calls.append((symbol, track, issue, doc, language))
+        if symbol:
+            return PubMediaFile(url="https://example.test/video.mp4", title="Remote video")
+        return None
+
+    monkeypatch.setattr(jwpub_import, "_resolve_publication_media", resolve)
+    cache = tmp_path / ".solin_cache"
+    cache.mkdir()
+    outputs, virtuals = _sync_thread(tmp_path)._process_jwpub(source, cache)
+
+    local = {item["type"]: item for item in virtuals
+             if item["type"] != "image" and item["url"]
+             and not item["url"].startswith("https://")}
+    assert set(local) == {"audio", "video"}
+    assert (tmp_path / local["audio"]["url"]).read_bytes() == b"embedded audio bytes"
+    assert (tmp_path / local["video"]["url"]).read_bytes() == b"embedded video bytes"
+    assert all(not Path(item["url"]).is_absolute() for item in local.values())
+    assert local["audio"]["key_symbol"] == "sound"
+    assert local["audio"]["track"] == 6
+    assert local["audio"]["meps_language"] == 0
+    assert local["video"]["title"] == "Local video"
+    assert local["video"]["meps_language"] == 5
+    assert len(outputs) == 4
+    assert all(Path(output).is_file() for output in outputs)
+    assert {item["doc_id"] for item in virtuals if not item["url"]} == {990}
+    remote = next(item for item in virtuals if item["url"].startswith("https://"))
+    assert (remote["key_symbol"], remote["track"], remote["issue_tag"],
+            remote["doc_id"], remote["meps_language"]) == ("remote", 4, 20270300, 104, 5)
+    assert [call[-1] for call in calls] == ["T", "T"]
+    assert all(path.is_file() for path in cache.iterdir())
+
+
+def test_jwpub_whole_sync_commits_all_media_with_portable_local_references(monkeypatch, tmp_path):
+    from solin.core.jw import jwpub_import
+    from tests._jwpub_catalog_fixture import build_catalog_jwpub
+
+    source = build_catalog_jwpub(
+        tmp_path / "complete.jwpub",
+        schema_sql="UPDATE Multimedia SET FilePath='embedded.m4a' WHERE MultimediaId=6;",
+        extra_inner={"embedded.m4a": b"embedded audio bytes"},
+    )
+    monkeypatch.setattr(jwpub_import, "_resolve_publication_media", lambda *_args: None)
+    _sync_thread(tmp_path).run()
+
+    entry = _read_manifest(tmp_path)["processed"][source.name]
+    assert len(entry["virtual_items"]) == 7
+    assert len(entry["outputs"]) == 4
+    assert {item["type"] for item in entry["virtual_items"]} == {"image", "video", "audio"}
+    cache = tmp_path / ".solin_cache"
+    assert {path.name for path in cache.iterdir()} == set(entry["outputs"])
+    local = [item for item in entry["virtual_items"] if item["url"]]
+    assert all(not Path(item["url"]).is_absolute() for item in local)
+    assert all((tmp_path / item["url"]).is_file() for item in local)
+    playlist = watched_folder_module.load_manifest_playlist(str(tmp_path))
+    assert len(playlist["items"]) == 6
+    assert all(Path(item["url"]).is_file() for item in playlist["items"] if item["url"])
+    assert {item["doc_id"] for item in playlist["items"] if not item["url"]} == {104, 990}
+    unresolved = next(item for item in playlist["items"] if item["doc_id"] == 990)
+    remaining = [item for item in playlist["items"] if item["id"] != unresolved["id"]]
+    assert watched_folder_module.remove_item_from_manifest(
+        str(tmp_path), unresolved, remaining_items=remaining,
+    )
+    assert all(item["doc_id"] != 990 for item in
+               watched_folder_module.load_manifest_playlist(str(tmp_path))["items"])
+
+
+def test_cancelled_jwpub_import_does_not_publish_staging_files(monkeypatch, tmp_path):
+    from solin.core.jw import jwpub_import
+    from tests._jwpub_catalog_fixture import build_catalog_jwpub
+
+    source = build_catalog_jwpub(tmp_path / "cancelled.jwpub")
+    cancelled = False
+
+    def resolve(*_args):
+        nonlocal cancelled
+        cancelled = True
+        return None
+
+    monkeypatch.setattr(jwpub_import, "_resolve_publication_media", resolve)
+    thread = _sync_thread(tmp_path)
+    monkeypatch.setattr(thread, "isInterruptionRequested", lambda: cancelled)
+    thread.run()
+
+    assert source.name not in _read_manifest(tmp_path)["processed"]
+    assert list((tmp_path / ".solin_cache").iterdir()) == []
 
 
 @pytest.mark.parametrize("format_name", ["jwlplaylist", "jwpub"])

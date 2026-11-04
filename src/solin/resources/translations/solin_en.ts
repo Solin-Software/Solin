@@ -11105,4 +11105,127 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>No picture of “%1” could be taken. Use Refresh picture to try again.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Public talk media…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Import (%n)</numerusform>
+            <numerusform>Import (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Choose a publication</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Reading publication…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Choose an S-34mp publication.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>The publication contains no usable media.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Importing media…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>The selected location is unavailable. Choose another location.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>The import service is unavailable.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n media item could not be resolved. Its reference was retained.</numerusform>
+            <numerusform>%n media items could not be resolved. Their references were retained.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW Publication (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Import publication media</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Choose a publication to get started.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Select the file on this computer.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Change file</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Browse…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Search contents…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Select all</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Clear selection</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Expand selected contents to refine media.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Refine media</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>No matching contents.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Your publication contents will appear here.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Publication media</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Images: {images} · Videos: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
 </TS>

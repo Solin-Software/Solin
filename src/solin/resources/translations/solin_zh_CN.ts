@@ -12476,4 +12476,125 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>无法为“%1”拍摄图片。请使用“刷新图片”重试。</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>公众演讲媒体……</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>导入 (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>选择出版物</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>正在读取出版物……</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>请选择 S-34mp 出版物。</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>出版物中没有可用的媒体。</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>正在导入媒体……</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>所选位置不可用。请选择其他位置。</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>导入服务不可用。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>无法解析 %n 个媒体项目。已保留其引用。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW 出版物 (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>导入出版物媒体</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>请选择出版物以开始。</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>请选择此计算机上的文件。</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>更换文件</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>浏览……</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>为此配置文件选择一次 S-34mp。请将原始文件保留在原位置；可以随时在此更换文件。</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>搜索内容……</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>清除选择</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>展开所选内容以调整媒体选择。</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>调整媒体选择</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>没有匹配的内容。</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>出版物的内容将显示在这里。</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>出版物媒体</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>图片: {images} · 视频: {videos} · 音频: {audio}</translation>
+    </message>
+</context>
 </TS>

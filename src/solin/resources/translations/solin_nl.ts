@@ -12518,4 +12518,127 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <translation>Van ‘%1’ kon geen afbeelding worden gemaakt. Probeer het opnieuw met Afbeelding vernieuwen.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Media voor openbare lezingen…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Importeren (%n)</numerusform>
+            <numerusform>Importeren (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Een publicatie kiezen</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Publicatie lezen…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Kies een S-34mp-publicatie.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>De publicatie bevat geen bruikbare media.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Media importeren…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>De geselecteerde locatie is niet beschikbaar. Kies een andere locatie.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>De importservice is niet beschikbaar.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n media-item kon niet worden gevonden. De verwijzing is behouden.</numerusform>
+            <numerusform>%n media-items konden niet worden gevonden. De verwijzingen zijn behouden.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW-publicatie (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Publicatiemedia importeren</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Kies een publicatie om te beginnen.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Selecteer het bestand op deze computer.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Bestand wijzigen</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Bladeren…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Kies S-34mp eenmalig voor dit profiel. Bewaar het oorspronkelijke bestand op dezelfde locatie; je kunt het hier op elk moment wijzigen.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Inhoud zoeken…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Alles selecteren</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Selectie wissen</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Klap geselecteerde inhoud uit om de mediaselectie te verfijnen.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Mediaselectie verfijnen</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Geen overeenkomende inhoud.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>De inhoud van je publicatie verschijnt hier.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuleren</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Publicatiemedia</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Afbeeldingen: {images} · Video's: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
 </TS>

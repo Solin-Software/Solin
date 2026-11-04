@@ -58,23 +58,20 @@ def test_jwpub_reader_persists_images_and_removes_extraction_dir(
     assert all(not path.exists() for path in extraction_dirs)
 
 
-def test_jwpub_reader_removes_extraction_dir_when_image_copy_fails(
+def test_jwpub_reader_removes_extraction_dir_when_destination_is_invalid(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     synthetic_jwpub_fixture: Path,
 ):
     extraction_dirs = _track_extraction_dirs(monkeypatch)
 
-    def fail_copy(*_args, **_kwargs):
-        raise PermissionError("destination is not writable")
-
-    monkeypatch.setattr(jwpub_import.shutil, "copy2", fail_copy)
-
-    with pytest.raises(PermissionError):
+    destination = tmp_path / "images"
+    destination.write_bytes(b"a file blocks the output directory")
+    with pytest.raises(FileExistsError):
         jwpub_import.JwpubPlaylistImportService().read(
             jwpub_import.JwpubImportRequest(
                 jwpub_path=str(synthetic_jwpub_fixture),
-                dest_images_dir=str(tmp_path / "images"),
+                dest_images_dir=str(destination),
                 resolve_urls=False,
             )
         )
@@ -127,10 +124,9 @@ def test_jwpub_import_thread_factory_uses_default_and_override_destinations(
     monkeypatch.setattr(
         jwpub_import_thread.JwpubImportThread,
         "create",
-        lambda path, *, lang, dest_images_dir, service, parent: calls.append(
-            (path, lang, dest_images_dir, service, parent)
-        )
-        or threads.pop(0),
+        lambda path, *, lang, dest_images_dir, service, parent: (
+            calls.append((path, lang, dest_images_dir, service, parent)) or threads.pop(0)
+        ),
     )
 
     service = jwpub_import.JwpubPlaylistImportService()

@@ -20,6 +20,7 @@ class MeetingTreeControllerDependencies:
     meeting_thumbnail_store: Any
     watched_folder_file_store: Any
     jwpub_import_thread_factory: Any
+    jwpub_selection_factory: Any
     document_conversion_service: Any
     profile_paths: Any
     runtime_paths: Any
@@ -54,6 +55,7 @@ class MeetingTreeControllerFactory:
             meeting_thumbnail_store=dependencies.meeting_thumbnail_store,
             watched_folder_file_store=dependencies.watched_folder_file_store,
             jwpub_import_thread_factory=dependencies.jwpub_import_thread_factory,
+            jwpub_selection_factory=dependencies.jwpub_selection_factory,
             document_conversion_service=dependencies.document_conversion_service,
             profile_paths=dependencies.profile_paths,
             runtime_paths=dependencies.runtime_paths,

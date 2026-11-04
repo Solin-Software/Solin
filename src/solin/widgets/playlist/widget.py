@@ -147,11 +147,11 @@ __all__ = (
 )
 
 if TYPE_CHECKING:
+    from ...ui.qml.jwpub_selection import JwpubSelectionFactory
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog_service import JWMediaCatalogService
-    from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
@@ -191,7 +191,7 @@ class PlaylistEditView(
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
-        jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -217,7 +217,9 @@ class PlaylistEditView(
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
+        self._jwpub_origin_generation = 0
+        self._jwpub_copy_operations: set[str] = set()
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -368,6 +370,7 @@ class PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self._jwpub_origin_generation += 1
         self.qml_load_handle.cancel()
         self._wf_refresh_shutdown = True
         owner_id = self._tree_session.owner_id
@@ -695,6 +698,7 @@ class PlaylistEditView(
     def _connect_bridge_signals(self):
         self.bridge.backRequested.connect(self._on_back)
         self.bridge.addRequested.connect(self._add_dialog)
+        self.bridge.publicTalkMediaRequested.connect(self._import_public_talk_media)
         self.bridge.exportRequested.connect(self._export)
         self.bridge.saveTempRequested.connect(self._save_temp_playlist)
         self.bridge.playAllRequested.connect(self._do_play_all)
@@ -908,6 +912,7 @@ class PlaylistEditView(
     # ── Carga ──────────────────────────────────────────────────────────────
 
     def load_playlist(self, pl: dict):
+        self._jwpub_origin_generation += 1
         self._flush_image_framing_save()
         self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
@@ -927,6 +932,7 @@ class PlaylistEditView(
 
     def load_watched_folder(self, folder_path: str):
         """Open a linked folder without reading cloud-backed files on the Qt thread."""
+        self._jwpub_origin_generation += 1
         self._flush_image_framing_save()
         self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
@@ -1070,6 +1076,7 @@ class PlaylistEditView(
         key = os.path.normcase(os.path.abspath(self._watched_path))
         if (
             key in self._pending_manifest_saves
+            or self._jwpub_copy_operations
             or self._wf_sync_thread is not None
             or self._wf_refresh_inflight is not None
         ):
@@ -2185,7 +2192,7 @@ class PlaylistWidget(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
-        jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -2212,7 +2219,7 @@ class PlaylistWidget(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -2318,7 +2325,7 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
-            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+            jwpub_selection_factory=self._jwpub_selection_factory,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             watched_folder_playlist_store=self._watched_folder_playlist_store,
@@ -2402,6 +2409,7 @@ class PlaylistWidget(QWidget):
         edit_view = self._edit_view
         if edit_view is None:
             return
+        edit_view._jwpub_origin_generation += 1
         # If coming back from a watched folder, clear the watched state
         if edit_view._is_watched:
             edit_view._reset_watched_folder_refresh_retry()

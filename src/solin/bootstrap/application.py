@@ -496,6 +496,12 @@ def _build_main_window_runtime(
     jwpub_import_thread_factory = JwpubImportThreadFactory(
         profile_paths.images_dir,
     )
+    from solin.core.jw.public_talk_settings import PublicTalkSettingsStore
+    from solin.ui.qml.jwpub_selection import JwpubSelectionFactory
+
+    jwpub_selection_factory = JwpubSelectionFactory(
+        PublicTalkSettingsStore.for_profile_settings(profile_settings),
+    )
     document_conversion_service = DocumentConversionService(
         pdf_pages_dir=profile_paths.pdf_pages_dir,
         pptx_pages_dir=profile_paths.pptx_pages_dir,
@@ -607,6 +613,7 @@ def _build_main_window_runtime(
             timer_session,
             active_profile,
             talk_theme_output_settings=talk_theme_output_settings,
+            jwpub_selection_factory=jwpub_selection_factory,
             scene_workspace=scene_workspace,
             scene_engine=scene_engine,
             ptz_executor=ptz_services.executor,

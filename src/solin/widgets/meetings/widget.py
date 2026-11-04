@@ -104,6 +104,7 @@ from ...ui.loading_placeholder import DeferredLoadingPlaceholder
 _POST_FRAME_TASK_FALLBACK_MS = 500
 
 if TYPE_CHECKING:
+    from ...ui.qml.jwpub_selection import JwpubSelectionFactory
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.jw.catalog_service import JWMediaCatalogService
@@ -804,6 +805,7 @@ class MeetingsWidget(QWidget):
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         document_conversion_service: DocumentConversionService,
         watched_folder_watcher_factory: Callable[[QObject], WatchedFolderWatcher],
         profile_paths: ProfilePaths,
@@ -846,6 +848,7 @@ class MeetingsWidget(QWidget):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
         self._document_conversion_service = document_conversion_service
         self._watched_folder_watcher_factory = watched_folder_watcher_factory
         self._profile_paths = profile_paths
@@ -870,6 +873,7 @@ class MeetingsWidget(QWidget):
                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                 watched_folder_file_store=self._watched_folder_file_store,
                 jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+                jwpub_selection_factory=self._jwpub_selection_factory,
                 document_conversion_service=self._document_conversion_service,
                 profile_paths=self._profile_paths,
                 runtime_paths=self._runtime_paths,

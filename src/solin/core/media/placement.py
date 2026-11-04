@@ -32,10 +32,11 @@ def build_media_placement_options(
     structured_list: Mapping[str, Any] | None,
     *,
     translate: Callable[[str], str],
+    force_prompt: bool = False,
 ) -> list[MediaPlacementOption]:
-    """Return the user-facing choices required by the shared placement policy."""
+    """Offer list positions, optionally bypassing the small-list prompt threshold."""
 
-    if not structured_list:
+    if structured_list is None:
         return []
 
     items = _sequence_value(structured_list.get("items"))
@@ -44,7 +45,7 @@ def build_media_placement_options(
         for section in _mapping_sequence(structured_list.get("sections"))
         if not section.get("parent_id")
     ]
-    if len(items) <= PLACEMENT_PROMPT_ITEM_THRESHOLD and len(sections) < 2:
+    if not force_prompt and len(items) <= PLACEMENT_PROMPT_ITEM_THRESHOLD and len(sections) < 2:
         return []
 
     options: list[MediaPlacementOption] = [

@@ -1,3 +1,5 @@
+import pytest
+
 from solin.core.i18n.media_placement import (
     MEDIA_PLACEMENT_TRANSLATION_SOURCES,
 )
@@ -20,6 +22,36 @@ def test_small_single_section_tree_skips_placement_prompt() -> None:
     }
 
     assert build_media_placement_options(tree, translate=str) == []
+
+
+@pytest.mark.parametrize("tree", [{}, {"items": [], "sections": []}])
+def test_empty_tree_only_offers_positions_when_prompt_is_forced(tree) -> None:
+    assert build_media_placement_options(tree, translate=str) == []
+
+    options = build_media_placement_options(tree, translate=str, force_prompt=True)
+
+    assert [option["id"] for option in options] == ["top", "bottom"]
+
+
+def test_forced_prompt_includes_main_sections_in_small_tree() -> None:
+    tree = {
+        "items": [{}],
+        "sections": [
+            {"id": "one", "name": "One", "color_hue": 20},
+            {"id": "nested", "name": "Nested", "parent_id": "one"},
+        ],
+    }
+
+    options = build_media_placement_options(tree, translate=str, force_prompt=True)
+
+    assert [option["id"] for option in options] == ["top", "bottom", "section:one"]
+    assert options == build_media_placement_options(
+        {**tree, "items": [{} for _ in range(14)]}, translate=str
+    )
+
+
+def test_missing_tree_has_no_placement_target_even_when_prompt_is_forced() -> None:
+    assert build_media_placement_options(None, translate=str, force_prompt=True) == []
 
 
 def test_large_tree_offers_top_end_and_only_main_sections() -> None:

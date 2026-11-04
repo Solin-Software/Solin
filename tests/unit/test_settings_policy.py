@@ -56,6 +56,7 @@ EXPECTED_SETTINGS_KEYS = {
     "PLAYBACK_PROTECTION_ENABLED": "playback_protection_enabled",
     "TALK_THEME_CUSTOM_COLORS": "talk_theme/custom_colors",
     "TALK_THEME_FOLLOW_OUTPUT_ASPECT": "talk_theme/follow_output_aspect",
+    "PUBLIC_TALK_SOURCE_PATH": "public_talk/source_path",
     "LEGACY_TALK_THEME_CUSTOM_TEXT_COLORS": "talk_theme/custom_text_colors",
     "REMOTE_CONTROL_ENABLED": "remote_control/enabled",
     "REMOTE_CONTROL_NETWORK_SELECTION": "remote_control/network_selection",

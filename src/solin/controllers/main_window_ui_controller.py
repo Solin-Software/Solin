@@ -129,6 +129,7 @@ class MainWindowUiContext:
     meeting_linked_folder_sync: Any
     profile_media_store: Any
     jwpub_import_thread_factory: Any
+    jwpub_selection_factory: Any
     document_conversion_service: Any
     clip_fetch_thread_factory: Any
     cache_scan_session_factory: Any
@@ -499,7 +500,7 @@ class MainWindowUiController:
             storage_paths=context.playlist_storage_paths,
             playlist_repository=context.playlist_repository,
             profile_media_store=context.profile_media_store,
-            jwpub_import_thread_factory=context.jwpub_import_thread_factory,
+            jwpub_selection_factory=context.jwpub_selection_factory,
             playlist_thumbnail_store=context.playlist_thumbnail_store,
             watched_folder_file_store=context.watched_folder_file_store,
             watched_folder_playlist_store=context.watched_folder_playlist_store,
@@ -534,6 +535,7 @@ class MainWindowUiController:
             meeting_tree_store=context.meeting_tree_store,
             profile_media_store=context.profile_media_store,
             jwpub_import_thread_factory=context.jwpub_import_thread_factory,
+            jwpub_selection_factory=context.jwpub_selection_factory,
             document_conversion_service=context.document_conversion_service,
             meeting_thumbnail_store=context.meeting_thumbnail_store,
             watched_folder_file_store=context.watched_folder_file_store,

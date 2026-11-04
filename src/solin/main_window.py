@@ -181,6 +181,7 @@ def _native_scene_routing_supported() -> bool:
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from .ui.qml.jwpub_selection import JwpubSelectionFactory
     from .bootstrap.application_window import ApplicationWindow
     from .core.ingest.watched_folder import WatchedFolderWatcher
     from .core.ingest.watched_folder_files import WatchedFolderFileStore
@@ -256,6 +257,7 @@ class MainWindow(QWidget):
         timer_session: TimerSession,
         active_profile: ProfileInfo,
         *,
+        jwpub_selection_factory: JwpubSelectionFactory,
         talk_theme_output_settings: Any,
         scene_workspace: SceneWorkspaceService,
         window_host: ApplicationWindow,
@@ -668,6 +670,7 @@ class MainWindow(QWidget):
                 meeting_linked_folder_sync=self.meeting_linked_folder_sync,
                 profile_media_store=profile_media_store,
                 jwpub_import_thread_factory=jwpub_import_thread_factory,
+                jwpub_selection_factory=jwpub_selection_factory,
                 document_conversion_service=document_conversion_service,
                 clip_fetch_thread_factory=clip_fetch_thread_factory,
                 cache_scan_session_factory=cache_scan_session_factory,
@@ -784,7 +787,10 @@ class MainWindow(QWidget):
             OpenMediaContext(
                 dialog_parent=self,
                 document_conversion_service=document_conversion_service,
-                jwpub_import_thread_factory=jwpub_import_thread_factory,
+                jwpub_selection_factory=jwpub_selection_factory,
+                media_operations=self.media_tree_runtime.operations,
+                dest_images_dir=str(profile_paths.images_dir),
+                is_current=lambda: not getattr(self, "_closing", False),
                 language_manager=self.lang,
                 notifications=self.notifications,
                 thread_registry=self._conversion_threads,
@@ -805,7 +811,6 @@ class MainWindow(QWidget):
                         name=name,
                     )
                 ),
-                append_temp_playlist_items=(self.playlist_widget.append_temp_playlist_items),
                 import_native_playlists=self._import_native_playlists_from_shell,
             ),
         )

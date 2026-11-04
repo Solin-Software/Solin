@@ -12518,4 +12518,127 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
         <translation>Impossible de prendre une image de « %1 ». Utilisez Actualiser l’image pour réessayer.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Médias des discours publics…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Importer (%n)</numerusform>
+            <numerusform>Importer (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Choisir une publication</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Lecture de la publication…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Choisissez une publication S-34mp.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>La publication ne contient aucun média utilisable.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Importation des médias…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>L’emplacement sélectionné n’est pas disponible. Choisissez un autre emplacement.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Le service d’importation n’est pas disponible.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n média n’a pas pu être résolu. Sa référence a été conservée.</numerusform>
+            <numerusform>%n médias n’ont pas pu être résolus. Leurs références ont été conservées.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>Publication JW (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Importer les médias de la publication</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Choisissez une publication pour commencer.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Sélectionnez le fichier sur cet ordinateur.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Changer de fichier</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Parcourir…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Choisissez S-34mp une fois pour ce profil. Conservez le fichier d’origine à son emplacement ; vous pouvez le changer ici à tout moment.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Rechercher dans les contenus…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Tout sélectionner</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Effacer la sélection</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Développez les contenus sélectionnés pour affiner la sélection des médias.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Affiner la sélection des médias</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Aucun contenu correspondant.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Les contenus de votre publication apparaîtront ici.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Médias de la publication</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Images: {images} · Vidéos: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
 </TS>

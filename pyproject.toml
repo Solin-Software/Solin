@@ -129,6 +129,8 @@ include = [
     "src/solin/core/timer",
     "src/solin/core/windowing",
     "src/solin/ui/qml/quick_toolbar.py",
+    "src/solin/ui/qml/jwpub_selection.py",
+    "src/solin/ui/qml/jwpub_selection_model.py",
     "src/solin/ui/qml/scenes.py",
     "src/solin/ui/qml/scenes_bridge.py",
     "src/solin/ui/qml/scenes_models.py",

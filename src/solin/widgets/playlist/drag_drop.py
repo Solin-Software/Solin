@@ -132,7 +132,11 @@ class PlaylistDragDropMixin:
             if pdf_paths:
                 self._import_pdfs(pdf_paths, target_idx, section_id)
             if jwpub_paths:
-                self._import_jwpubs(jwpub_paths, target_idx, section_id)
+                self._import_jwpubs(
+                    jwpub_paths,
+                    list_id=list_id,
+                    insert_index=insert_idx if isinstance(insert_idx, int) else -1,
+                )
             if pptx_paths:
                 self._import_lo_files(pptx_paths, target_idx, section_id)
             if docx_paths:

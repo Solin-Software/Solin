@@ -1640,6 +1640,7 @@ def test_watched_folder_refresh_schedules_disk_snapshot_off_qt_thread():
         _is_watched=True,
         _watched_path=folder_path,
         _pending_manifest_saves={},
+        _jwpub_copy_operations=set(),
         _wf_sync_thread=None,
         _wf_refresh_inflight=None,
         _wf_refresh_pending=False,
@@ -1667,6 +1668,7 @@ def test_initial_watched_folder_open_defers_all_disk_reads():
     refreshes = []
     folder_path = "C:/linked/one"
     view = SimpleNamespace(
+        _jwpub_origin_generation=0,
         _flush_image_framing_save=lambda: None,
         _reset_watched_folder_refresh_retry=lambda: None,
         _wf_refresh_pending=False,

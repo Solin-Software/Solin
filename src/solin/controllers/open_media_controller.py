@@ -6,6 +6,7 @@ from zipfile import BadZipFile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import uuid4
 from typing import Any, TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -21,6 +22,7 @@ from ..core.foundation.constants import (
     SOLIN_PLAYLIST_EXTS,
 )
 from ..core.foundation.qt_threads import OwnedQThreadRegistry
+from ..core.foundation.exception_logging import log_ignored_exception
 from ..core.i18n.strings import (
     tr_document_page_title,
     tr_jw_playlist_title,
@@ -37,10 +39,10 @@ from ..core.media.formats import (
 )
 from ..core.playlists.jwl_files import read_jwlplaylist_document
 from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
-from ..core.playlists.items import create_playlist_item, playlist_items_from_jwpub
+from ..core.playlists.items import create_playlist_item
 
 if TYPE_CHECKING:
-    from ..core.jw.jwpub_import_thread import JwpubImportThreadFactory
+    from ..ui.qml.jwpub_selection import JwpubSelectionFactory
     from ..core.rendering.document_conversion import DocumentConversionService
 
 
@@ -65,22 +67,6 @@ _UNSUPPORTED_FILES_SOURCE = QT_TRANSLATE_NOOP(
     "OpenMediaNotifications",
     "File format not supported. Use videos (mp4, mkv, mov…) "
     "or images (jpg, png, webp…).\n\n{files}",
-)
-_NO_MEDIA_TITLE = QT_TRANSLATE_NOOP(
-    "OpenMediaNotifications",
-    "No media found",
-)
-_NO_MEDIA_SOURCE = QT_TRANSLATE_NOOP(
-    "OpenMediaNotifications",
-    "No media items found in {name}.",
-)
-_JWPUB_ERROR_TITLE = QT_TRANSLATE_NOOP(
-    "OpenMediaNotifications",
-    "Error opening .jwpub",
-)
-_OPEN_ERROR_SOURCE = QT_TRANSLATE_NOOP(
-    "OpenMediaNotifications",
-    "Could not open {name}.\n{error}",
 )
 _INVALID_PLAYLIST_SOURCE = QT_TRANSLATE_NOOP(
     "OpenMediaNotifications",
@@ -110,7 +96,10 @@ class OpenMediaContext:
 
     dialog_parent: Any
     document_conversion_service: DocumentConversionService
-    jwpub_import_thread_factory: JwpubImportThreadFactory
+    jwpub_selection_factory: JwpubSelectionFactory
+    media_operations: Any
+    dest_images_dir: str
+    is_current: Callable[[], bool]
     language_manager: Any
     notifications: Any
     thread_registry: OwnedQThreadRegistry
@@ -127,7 +116,6 @@ class OpenMediaHandlers:
     send_to_temp_playlist: Callable[[list], None]
     open_pdf_temp_playlist: Callable[[list, str], str]
     open_named_temp_playlist: Callable[[list, str], str]
-    append_temp_playlist_items: Callable[[str, list[dict]], bool]
     import_native_playlists: Callable[[list[str], bool], None]
 
 
@@ -194,8 +182,8 @@ class OpenMediaController:
             else:
                 unsupported.append(path)
 
-        for jwpub_path in jwpub_paths:
-            self.open_jwpub_as_temp(jwpub_path)
+        if jwpub_paths:
+            self.open_jwpubs_as_temp(jwpub_paths)
         for pdf_path in pdf_paths:
             self.open_pdf_as_temp(pdf_path)
         for lo_path in lo_paths:
@@ -250,47 +238,42 @@ class OpenMediaController:
         self._handlers.switch_to_playlist()
         self._handlers.open_pdf_temp_playlist(items, pdf_stem)
 
-    def open_jwpub_as_temp(self, jwpub_path: str) -> None:
+    def open_jwpubs_as_temp(self, paths: list[str]) -> None:
         context = self._context
-        stem = Path(jwpub_path).stem
-        self._handlers.switch_to_playlist()
-        playlist_id = self._handlers.open_named_temp_playlist([], f"📖  {stem}")
-        thread = context.jwpub_import_thread_factory.create(
-            jwpub_path,
-            lang=self._media_language_context().api_code,
+        language = self._media_language_context().api_code
+        names = [Path(path).stem for path in paths]
+        source_index = 0
+
+        def is_current() -> bool:
+            return context.is_current() and self._media_language_context().api_code == language
+
+        def insert(items, _list_id, _index, completed) -> None:
+            nonlocal source_index
+            if not is_current():
+                completed(False)
+                return
+            try:
+                stem = names[source_index]
+                self._handlers.switch_to_playlist()
+                self._handlers.open_named_temp_playlist(items, f"📖  {stem}")
+            except Exception:  # noqa: BLE001 - acknowledge failed temporary-playlist insertion
+                log_ignored_exception(__name__, "Could not open selected publication media")
+                completed(False)
+                return
+            source_index += 1
+            completed(True)
+
+        context.jwpub_selection_factory.select(
+            paths,
             parent=context.dialog_parent,
+            operations=context.media_operations,
+            language=language,
+            dest_images_dir=context.dest_images_dir,
+            scope_id=f"open-jwpub:{uuid4().hex}",
+            is_current=is_current,
+            placement_ref=lambda: None,
+            insert=insert,
         )
-        context.thread_registry.track(thread)
-
-        @thread.items_ready.connect
-        def _on_ready(items: list, file_stem: str) -> None:
-            new_items = playlist_items_from_jwpub(items, file_stem)
-            if not new_items:
-                QMessageBox.information(
-                    context.dialog_parent,
-                    _tr(_NO_MEDIA_TITLE),
-                    _tr(_NO_MEDIA_SOURCE).format(name=file_stem),
-                )
-                return
-            if not self._handlers.append_temp_playlist_items(
-                playlist_id,
-                new_items,
-            ):
-                return
-            loaded_count = sum(1 for item in new_items if item.get("url"))
-            context.notifications.success(
-                OpenMediaNotifications.items_added(file_stem, loaded_count)
-            )
-
-        @thread.failed.connect
-        def _on_fail(error: str) -> None:
-            QMessageBox.warning(
-                context.dialog_parent,
-                _tr(_JWPUB_ERROR_TITLE),
-                _tr(_OPEN_ERROR_SOURCE).format(name=stem, error=error),
-            )
-
-        thread.start()
 
     def open_lo_as_temp(self, lo_path: str) -> None:
         context = self._context
