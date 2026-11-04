@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
 from solin.core.jw.jwpub_import import JwpubPlaylistImportService
 from solin.core.jw.publication_links import PubMediaFile
+from solin.core.media.insertion import MediaInsertResult
 from solin.ui.qml.jwpub_selection import (
     JwpubSelectionBridge,
     JwpubSelectionDialog,
@@ -170,8 +171,36 @@ def test_placement_cancel_retains_refinement_and_commit_waits_for_ack(selector):
     bridge.cancel()
     assert finished == []
     assert all(Path(item["url"]).is_file() for item in items if item["type"] == "image")
-    selector.completions[0](True)
+    selector.completions[0](MediaInsertResult(added_items=tuple(items)))
     assert finished == [True]
+
+
+def test_successful_insertion_releases_only_materialized_files_that_are_referenced(selector):
+    load(selector)
+    bridge = selector.bridge
+    bridge.toggleDocument("10")
+    bridge.toggleMedia("10", "6")
+    bridge.importSelected()
+    bridge.confirmPlacement("bottom")
+    wait_for(lambda: bool(selector.insertions))
+
+    items = selector.insertions[0][0]
+    image = next(item for item in items if item["type"] == "image")
+    retained = next(item for item in items if item["type"] != "image")
+    image_path = Path(image["url"])
+    assert image_path.is_file()
+
+    finished = []
+    bridge.finished.connect(finished.append)
+    selector.completions[0](
+        MediaInsertResult(
+            added_items=(retained,),
+            duplicate_items=(image,),
+        )
+    )
+
+    assert finished == [True]
+    assert not image_path.exists()
 
 
 def test_rejected_target_reuses_prepared_batch_and_allows_new_placement(selector):
@@ -182,7 +211,7 @@ def test_rejected_target_reuses_prepared_batch_and_allows_new_placement(selector
     bridge.confirmPlacement("section:a")
     wait_for(lambda: bool(selector.insertions))
     selected = bridge.model.selected_ids
-    selector.completions.pop(0)(False)
+    selector.completions.pop(0)(MediaInsertResult(target_valid=False))
     assert bridge.showPlacement and not bridge.busy
     assert bridge.model.selected_ids == selected
     resolved_count = len(selector.resolver_calls)
@@ -190,7 +219,9 @@ def test_rejected_target_reuses_prepared_batch_and_allows_new_placement(selector
     wait_for(lambda: len(selector.insertions) == 2)
     assert len(selector.insertions) == 2
     assert len(selector.resolver_calls) == resolved_count
-    selector.completions.pop(0)(True)
+    selector.completions.pop(0)(
+        MediaInsertResult(added_items=tuple(selector.insertions[1][0]))
+    )
 
 
 def test_replacing_source_discards_prepared_media_from_previous_catalog(selector, tmp_path):
@@ -201,7 +232,7 @@ def test_replacing_source_discards_prepared_media_from_previous_catalog(selector
     bridge.confirmPlacement("bottom")
     wait_for(lambda: bool(selector.insertions))
     paths = [Path(item["url"]) for item in selector.insertions[0][0] if item["type"] == "image"]
-    selector.completions.pop(0)(False)
+    selector.completions.pop(0)(MediaInsertResult(target_valid=False))
     replacement = build_catalog_jwpub(tmp_path / "replacement.jwpub")
     bridge.cancelSelection()
     bridge.load_path(str(replacement))
@@ -218,7 +249,7 @@ def test_refining_after_rejected_target_materializes_the_new_selection(selector)
     bridge.importSelected()
     bridge.confirmPlacement("bottom")
     wait_for(lambda: bool(selector.insertions))
-    selector.completions.pop(0)(False)
+    selector.completions.pop(0)(MediaInsertResult(target_valid=False))
     bridge.cancelSelection()
     bridge.toggleMedia("10", "4")
     assert bridge._prepared is None
@@ -226,7 +257,9 @@ def test_refining_after_rejected_target_materializes_the_new_selection(selector)
     bridge.confirmPlacement("bottom")
     wait_for(lambda: len(selector.insertions) == 2)
     assert {item["type"] for item in selector.insertions[1][0]} == {"image", "audio"}
-    selector.completions.pop(0)(True)
+    selector.completions.pop(0)(
+        MediaInsertResult(added_items=tuple(selector.insertions[1][0]))
+    )
 
 
 def test_origin_change_discards_materialized_files_before_delivery(selector, monkeypatch):
@@ -290,7 +323,9 @@ def test_public_talk_forces_placement_unless_semantic_target_is_available(select
     wait_for(lambda: bool(selector.insertions))
     assert not bridge.showPlacement
     assert selector.insertions[0][1:] == ("section:official", 2**31 - 1)
-    selector.completions[0](True)
+    selector.completions[0](
+        MediaInsertResult(added_items=tuple(selector.insertions[0][0]))
+    )
 
 
 def test_qml_loads_catalog_and_refinement_without_eager_previews(selector, request):
@@ -348,7 +383,7 @@ def test_closed_dialog_retains_cleanup_owner_until_worker_finishes(selector, mon
     bridge.importSelected()
     bridge.confirmPlacement("bottom")
     wait_for(lambda: bool(selector.insertions))
-    selector.completions.pop()(False)
+    selector.completions.pop()(MediaInsertResult(target_valid=False))
     bridge.cancelSelection()
     created = [Path(path) for path in bridge._created_paths]
     assert created and all(path.exists() for path in created)
@@ -415,7 +450,7 @@ def test_factory_reports_unresolved_references_after_successful_insertion(select
 
     def insert(items, _list_id, _index, completed):
         inserted.extend(items)
-        completed(True)
+        completed(MediaInsertResult(added_items=tuple(items)))
 
     factory = JwpubSelectionFactory(
         selector.settings,

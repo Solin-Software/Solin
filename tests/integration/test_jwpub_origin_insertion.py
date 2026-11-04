@@ -82,9 +82,11 @@ def test_meeting_selection_waits_for_insertion_and_acknowledges_once(list_id):
     assert outcomes == []
     args, kwargs = pending[0]
     assert args[2][0]["meps_language"] == 5
-    kwargs["on_completed"]([])
+    kwargs["on_completed"](args[2])
     kwargs["on_completed"](None)
-    assert outcomes == [True]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is True
+    assert outcomes[0].added_count == 1
 
 
 @pytest.mark.parametrize("expiry", ["generation", "origin", "language"])
@@ -100,7 +102,8 @@ def test_meeting_selection_rejects_retired_origin(expiry):
         controller._language_code = "E"
     outcomes = []
     options["insert"]([{"title": "Selected"}], "root", 0, outcomes.append)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert options["placement_ref"]() is None
     assert pending == []
 
@@ -113,7 +116,8 @@ def test_meeting_selection_deleted_target_acknowledges_failure_once():
     MeetingTreeController._import_jwpubs(controller, ["one.jwpub"])
     outcomes = []
     selector.calls[0][1]["insert"]([], "section:removed", 0, outcomes.append)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
 
 
 def test_meeting_multiple_publications_preserve_explicit_drop_order():
@@ -126,7 +130,9 @@ def test_meeting_multiple_publications_preserve_explicit_drop_order():
     options["insert"]([{"id": "two"}], "root", 4, outcomes.append)
     assert pending[1][0][1] == 5
     pending[1][1]["on_completed"](pending[1][0][2])
-    assert outcomes == [True, True]
+    assert len(outcomes) == 2
+    assert all(result.target_valid for result in outcomes)
+    assert [result.added_count for result in outcomes] == [1, 1]
 
 
 def test_meeting_linked_copy_failure_completes_pending_insertion():
@@ -240,7 +246,9 @@ def test_playlist_selection_inserts_ordered_canonical_batch_once(tmp_path):
     ]
     options, outcomes = _choose(playlist, items)
     assert options["list_id"] is None
-    assert outcomes == [True]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is True
+    assert outcomes[0].added_count == 2
     assert [item["id"] for item in playlist._pl["items"]] == ["one", "two"]
     assert playlist._pl["items"][1]["meps_language"] == 5
     assert len(playlist.saves) == 1
@@ -254,7 +262,8 @@ def test_playlist_failed_save_restores_batch_and_acknowledges_failure(tmp_path):
 
     playlist._save = fail_save
     _, outcomes = _choose(playlist, [{"id": "one", "url": "one.jpg"}])
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert playlist._pl["items"] == []
 
 
@@ -274,7 +283,8 @@ def test_playlist_selection_rejects_stale_origin_or_target(tmp_path, expiry):
         playlist._pl["sections"].clear()
     outcomes = []
     options["insert"]([{"id": "one", "url": "slide.jpg"}], "section:talk", 0, outcomes.append)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert original["items"] == []
     assert playlist.saves == []
 
@@ -297,7 +307,9 @@ def test_playlist_linked_selection_waits_for_ordered_batch_copy(tmp_path):
     assert outcomes == []
     assert len(value.copies) == 1
     spec.commit(value)
-    assert outcomes == [True]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is True
+    assert outcomes[0].added_count == 3
     assert [item["id"] for item in playlist._pl["items"]] == ["one", "two", "three"]
     assert playlist._pl["items"][0]["title"] == "Original title"
     assert Path(playlist._pl["items"][0]["url"]).parent == Path(playlist._watched_path)
@@ -320,7 +332,8 @@ def test_playlist_linked_copy_failure_rolls_back_only_batch_files(tmp_path):
         spec.runner(lambda _: None, SimpleNamespace(is_set=lambda: False))
     spec.failed("copy failed", False)
     spec.cancelled()
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert list(Path(playlist._watched_path).iterdir()) == [preexisting]
     assert source.is_file()
     assert not playlist.pending
@@ -335,7 +348,9 @@ def test_playlist_multiple_publications_preserve_explicit_drop_order(tmp_path):
     options["insert"]([{"id": "one", "url": "one.jpg"}], "root", 0, outcomes.append)
     options["insert"]([{"id": "two", "url": "two.jpg"}], "root", 0, outcomes.append)
     assert [item["id"] for item in playlist._pl["items"]] == ["one", "two"]
-    assert outcomes == [True, True]
+    assert len(outcomes) == 2
+    assert all(result.target_valid for result in outcomes)
+    assert [result.added_count for result in outcomes] == [1, 1]
 
 
 def test_playlist_origin_retired_after_copy_completes_and_rolls_back(tmp_path):
@@ -350,7 +365,8 @@ def test_playlist_origin_retired_after_copy_completes_and_rolls_back(tmp_path):
     spec.cancelled()
     assert outcomes == []
     _finish_rollback(playlist)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert not value.copies[0].destination.exists()
     assert not playlist._pl["items"]
     assert source.is_file()
@@ -367,7 +383,8 @@ def test_playlist_deleted_target_after_copy_discards_only_new_files(tmp_path):
     spec.commit(value)
     assert outcomes == []
     _finish_rollback(playlist)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert playlist._pl["items"] == []
     assert not value.copies[0].destination.exists()
     assert source.is_file()

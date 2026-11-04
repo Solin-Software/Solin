@@ -18,6 +18,7 @@ from ...core.foundation.resource_keys import child_folder_resource_claim
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.ingest.watched_folder_files import WatchedFolderCopyRequest, WatchedFolderCopyResult
 from ...core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
+from ...core.media.insertion import MediaInsertResult
 from ...core.media.operations import (
     MediaOperationCancelled, MediaOperationPresentation, MediaOperationProgress,
     MediaOperationSpec, MediaOperationState,
@@ -147,20 +148,19 @@ class PlaylistEditImportMixin:
             acknowledged = False
             batch: list[dict] = []
 
-            def finish(success: bool) -> None:
+            def finish(result: MediaInsertResult) -> None:
                 nonlocal acknowledged, inserted_count
                 if not acknowledged:
                     acknowledged = True
-                    if success:
-                        inserted_count += len(batch)
-                    completed(success)
+                    inserted_count += result.added_count
+                    completed(result)
 
             if not is_current():
-                finish(False)
+                finish(MediaInsertResult(target_valid=False))
                 return
             tree = build_playlist_tree(playlist)
             if children_for_tree_target(tree, *parse_tree_list_id(target_list_id)) is None:
-                finish(False)
+                finish(MediaInsertResult(target_valid=False))
                 return
             partition = partition_media_items(
                 playlist.get("items", []), items,
@@ -173,14 +173,21 @@ class PlaylistEditImportMixin:
             ):
                 target_index += inserted_count
             if not batch:
-                finish(True)
+                finish(MediaInsertResult(duplicate_items=partition.duplicate_items))
                 return
             previous_playlist = None
             try:
                 if self._is_watched and folder_path:
+                    def linked_completed(result: MediaInsertResult) -> None:
+                        finish(MediaInsertResult(
+                            added_items=result.added_items,
+                            duplicate_items=partition.duplicate_items,
+                            target_valid=result.target_valid,
+                        ))
+
                     self._queue_jwpub_playlist_batch(
                         batch, target_list_id, target_index,
-                        is_current=is_current, completed=finish,
+                        is_current=is_current, completed=linked_completed,
                     )
                     return
                 previous_playlist = copy.deepcopy(playlist)
@@ -188,7 +195,15 @@ class PlaylistEditImportMixin:
                 if inserted:
                     self._save()
                     self._reconcile_playlist()
-                finish(inserted)
+                    finish(MediaInsertResult(
+                        added_items=tuple(batch),
+                        duplicate_items=partition.duplicate_items,
+                    ))
+                else:
+                    finish(MediaInsertResult(
+                        duplicate_items=partition.duplicate_items,
+                        target_valid=False,
+                    ))
             except Exception:  # noqa: BLE001 - complete the selector's origin insertion boundary
                 log_ignored_exception(__name__, "Could not insert selected publication media")
                 try:
@@ -197,7 +212,7 @@ class PlaylistEditImportMixin:
                         playlist.update(previous_playlist)
                         session.refresh()
                 finally:
-                    finish(False)
+                    finish(MediaInsertResult(target_valid=False))
 
         self._jwpub_selection_factory.select(
             paths,
@@ -224,7 +239,7 @@ class PlaylistEditImportMixin:
         insert_index: int,
         *,
         is_current: Callable[[], bool],
-        completed: Callable[[bool], None],
+        completed: Callable[[MediaInsertResult], None],
     ) -> None:
         """Copy one ordered batch before committing it to the linked playlist."""
         playlist = self._pl
@@ -279,7 +294,7 @@ class PlaylistEditImportMixin:
                 self._watched_folder_file_store.rollback_copies(folder_path, copies.values())
                 raise
 
-        def finish(success):
+        def finish(result: MediaInsertResult) -> None:
             nonlocal finished
             if finished:
                 return
@@ -292,7 +307,7 @@ class PlaylistEditImportMixin:
                 self._sync_playlist_chrome(emit_data_changed=False)
                 if self._wf_refresh_pending:
                     QTimer.singleShot(0, self.refresh_watched_folder)
-            completed(success)
+            completed(result)
 
         def discard(value=None):
             nonlocal rollback_started
@@ -315,8 +330,10 @@ class PlaylistEditImportMixin:
                     operation_type="linked_folder_rollback",
                     conflict_key=child_folder_resource_claim(folder_path),
                     presentation=MediaOperationPresentation.BACKGROUND,
-                    runner=rollback, commit=lambda _: finish(False),
-                    failed=lambda *_: finish(False), cancelled=lambda: finish(False),
+                    runner=rollback,
+                    commit=lambda _: finish(MediaInsertResult(target_valid=False)),
+                    failed=lambda *_: finish(MediaInsertResult(target_valid=False)),
+                    cancelled=lambda: finish(MediaInsertResult(target_valid=False)),
                 ))
                 if accepted:
                     return
@@ -325,7 +342,7 @@ class PlaylistEditImportMixin:
                     lambda: rollback(None, None),
                     conflict_key=child_folder_resource_claim(folder_path),
                 )
-            finish(False)
+            finish(MediaInsertResult(target_valid=False))
 
         def commit(value):
             if not isinstance(value, _PreparedJwpubPlaylistBatch):
@@ -343,7 +360,7 @@ class PlaylistEditImportMixin:
                 playlist.update(previous_playlist)
                 raise
             prepared_result.clear()
-            finish(True)
+            finish(MediaInsertResult(added_items=tuple(value.items)))
 
         submitted = self._media_tree_runtime.operations.submit(MediaOperationSpec(
             operation_id=operation_id, scope_id=session.owner_id,

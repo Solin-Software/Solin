@@ -37,6 +37,7 @@ from ..core.media.formats import (
     IMAGE_EXTS,
     VIDEO_EXTS,
 )
+from ..core.media.insertion import MediaInsertResult
 from ..core.playlists.jwl_files import read_jwlplaylist_document
 from ..core.playlists.jwl_import import playlist_items_from_jwl_document_items
 from ..core.playlists.items import create_playlist_item
@@ -250,7 +251,7 @@ class OpenMediaController:
         def insert(items, _list_id, _index, completed) -> None:
             nonlocal source_index
             if not is_current():
-                completed(False)
+                completed(MediaInsertResult(target_valid=False))
                 return
             try:
                 stem = names[source_index]
@@ -258,10 +259,10 @@ class OpenMediaController:
                 self._handlers.open_named_temp_playlist(items, f"📖  {stem}")
             except Exception:  # noqa: BLE001 - acknowledge failed temporary-playlist insertion
                 log_ignored_exception(__name__, "Could not open selected publication media")
-                completed(False)
+                completed(MediaInsertResult(target_valid=False))
                 return
             source_index += 1
-            completed(True)
+            completed(MediaInsertResult(added_items=tuple(items)))
 
         context.jwpub_selection_factory.select(
             paths,

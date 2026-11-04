@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 import io
 import logging
+import os
 from pathlib import Path
 import threading
 from typing import Any
@@ -23,6 +24,7 @@ from solin.core.jw.jwpub_import import (
     JwpubImportRequest,
     JwpubPlaylistImportService,
 )
+from solin.core.media.insertion import MediaInsertResult
 from solin.core.media.operations import (
     MediaOperationCancelled,
     MediaOperationPresentation,
@@ -448,13 +450,13 @@ class JwpubSelectionBridge(QObject):
         self._committing = True
         self.changed.emit()
 
-        def completed(success: bool) -> None:
+        def completed(result: MediaInsertResult) -> None:
             if not self._alive:
                 return
             self._busy = False
             self._committing = False
-            if success:
-                self._created_paths.clear()
+            if result.target_valid:
+                self._release_created_paths(result.added_items)
                 self.finished.emit(True)
             elif self._is_current():
                 self._error = self.tr(
@@ -574,8 +576,16 @@ class JwpubSelectionBridge(QObject):
         for operation_id in tuple(self._preview_ids.values()):
             self._operations.cancel(operation_id)
 
-    def _rollback(self) -> None:
+    def _release_created_paths(self, retained_items=()) -> None:
+        retained_paths: set[str] = set()
+        for item in retained_items:
+            for field in ("url", "file_path", "source_url", "download_url"):
+                location = str(item.get(field) or "")
+                if location and not location.startswith(("http://", "https://")):
+                    retained_paths.add(os.path.normcase(os.path.abspath(location)))
         for path in self._created_paths:
+            if os.path.normcase(os.path.abspath(path)) in retained_paths:
+                continue
             try:
                 Path(path).unlink(missing_ok=True)
             except OSError:
@@ -583,11 +593,17 @@ class JwpubSelectionBridge(QObject):
                     "Could not remove uncommitted publication media %s", path, exc_info=True
                 )
         self._created_paths.clear()
+        self._cleanup_import_directory()
+
+    def _cleanup_import_directory(self) -> None:
         if self._import_directory is not None and self._import_directory.is_dir():
             try:
                 self._import_directory.rmdir()
             except OSError:
                 log.debug("Publication import directory is still in use", exc_info=True)
+
+    def _rollback(self) -> None:
+        self._release_created_paths()
 
     @Slot()
     def cancel(self) -> None:

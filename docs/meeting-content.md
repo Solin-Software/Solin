@@ -99,6 +99,8 @@ the selected batch. Catalog inspection and lazy previews use local archive
 members; browsing does not resolve remote media or persist imported assets.
 Only selected media are materialized after confirmation. Wi-Fi reception and
 watched or linked folder imports retain automatic whole-publication import.
+Browser-downloaded JWPUBs choose the destination first, then use the same selector;
+placement is chosen after the publication contents are selected.
 
 `JwpubPlaylistImportService.open()` owns a scoped publication session with an
 immutable document/media catalog, local previews, and selective materialization.

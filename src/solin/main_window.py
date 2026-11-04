@@ -1576,7 +1576,9 @@ class MainWindow(QWidget):
                 can_play=can_play,
             )
         if not prepared:
-            return MediaDestinationRequest(title=title, can_play=can_play)
+            return MediaDestinationRequest(
+                title=title, can_play=can_play, select_import_contents=kind == "jwpub",
+            )
         return MediaDestinationRequest(
             title=title,
             assets=(
@@ -1588,6 +1590,7 @@ class MainWindow(QWidget):
                 ),
             ),
             can_play=can_play,
+            select_import_contents=kind == "jwpub",
         )
 
     # ── UI Build ──────────────────────────────────────────────────────────

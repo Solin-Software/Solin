@@ -400,7 +400,9 @@ def test_open_jwpub_selects_sequentially_before_creating_named_temp_playlists(mo
     items = [{"id": "one", "url": "slide.jpg", "meps_language": 5}]
     options["insert"](items, "root", 0, outcomes.append)
     options["insert"]([], "root", 0, outcomes.append)
-    assert outcomes == [True, True]
+    assert len(outcomes) == 2
+    assert all(result.target_valid for result in outcomes)
+    assert [result.added_count for result in outcomes] == [1, 0]
     assert window.playlist_widget.opened_named_playlists == [
         (items, "📖  first"), ([], "📖  second"),
     ]
@@ -415,7 +417,8 @@ def test_open_jwpub_rejects_expired_origin():
     options = factory.calls[0][1]
     outcomes = []
     options["insert"]([{"url": "slide.jpg"}], "root", 0, outcomes.append)
-    assert outcomes == [False]
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
     assert window.playlist_widget.opened_named_playlists == []
 
 
