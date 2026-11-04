@@ -849,7 +849,7 @@ def test_store_persists_baseline_and_legacy_waits_for_reconciliation(tmp_path: P
     assert raw["version"] == 6
 
 
-def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
+def test_preliminary_reconciliation_preserves_known_content_and_marks_completion_pending(
     tmp_path: Path,
 ) -> None:
     tree_key = "mwb:2026-05-25:T:issue"
@@ -880,7 +880,7 @@ def test_preliminary_reconciliation_preserves_confirmed_canonical_state(
     )
 
     assert pending.canonical_nodes == complete
-    assert pending.canonical_hash == "complete-hash"
+    assert pending.canonical_hash == ""
     assert pending.source_checksum == "complete-checksum"
     assert pending.deleted_source_keys == {"media:a"}
 

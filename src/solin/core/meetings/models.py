@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 from typing import Any
 
 
@@ -39,6 +38,8 @@ class MeetingMedia:
     origin_kind: str = ""
     origin_container_id: str = ""
     origin_item_id: str = ""
+    publication_source: dict[str, str] | None = None
+    asset_hash: str = ""
 
     @property
     def media_type(self) -> str:
@@ -64,7 +65,6 @@ class WeekData:
     language_code: str = ""
     is_sign_language: bool = False
     request_generation: int = 0
-    mwb_pub_dir: Path | None = None
     mwb_cover_bytes: bytes | None = None
     mwb_date_label: str = ""
     mwb_week_title: str = ""
@@ -73,15 +73,15 @@ class WeekData:
     mwb_status: str = "idle"
     mwb_issue: str = ""
     mwb_source_checksum: str = ""
-    wt_pub_dir: Path | None = None
+    mwb_dependencies: list[dict[str, str]] = field(default_factory=list)
     wt_cover_bytes: bytes | None = None
     wt_study_title: str = ""
     wt_issue: str = ""
     wt_source_checksum: str = ""
+    wt_dependencies: list[dict[str, str]] = field(default_factory=list)
     wt_all_media: list[MeetingMedia] = field(default_factory=list)
     wt_status: str = "idle"
     cbs_ref: dict[str, Any] | None = None
-    cbs_pub_dir: Path | None = None
     cbs_items: list[MeetingMedia] = field(default_factory=list)
     cbs_status: str = "idle"
 
@@ -89,10 +89,12 @@ class WeekData:
 @dataclass(slots=True)
 class MemorialData:
     year: int = 0
+    language_code: str = ""
+    source_checksum: str = ""
+    publication_dependencies: list[dict[str, str]] = field(default_factory=list)
     memorial_date: date | None = None
     memorial_week: date | None = None
     cover_bytes: bytes | None = None
     videos: list[MeetingMedia] = field(default_factory=list)
     thumb_url: str = ""
     status: str = "idle"
-    pub_dir: Path | None = None

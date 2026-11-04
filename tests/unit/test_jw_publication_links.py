@@ -1,3 +1,5 @@
+import pytest
+
 from solin.core.jw import publication_links
 from solin.core.jw.publication_links import (
     JwpubMediaRequest,
@@ -7,6 +9,12 @@ from solin.core.jw.publication_links import (
     build_pub_media_url,
     resolve_publication_media_link,
     select_pub_media_file,
+)
+from solin.core.network.http import (
+    HttpDecodeError,
+    HttpStatusError,
+    HttpTimeoutError,
+    HttpTransportError,
 )
 
 
@@ -466,7 +474,7 @@ def test_publication_media_resolver_returns_jwpub_info(monkeypatch) -> None:
     monkeypatch.setattr(
         publication_links,
         "fetch_pub_media_json",
-        lambda params: (
+        lambda params, **_options: (
             calls.append(params)
             or {
                 "files": {
@@ -503,3 +511,91 @@ def test_publication_media_resolver_returns_jwpub_info(monkeypatch) -> None:
             "txtCMSLang": "E",
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("failure", "not_found"),
+    [
+        (HttpStatusError("https://example.test/api", 400, "unsupported issue"), True),
+        (HttpStatusError("https://example.test/api", 404, "not found"), True),
+        (HttpStatusError("https://example.test/api", 429, "rate limited"), False),
+        (HttpStatusError("https://example.test/api", 500, "server failure"), False),
+        (HttpTimeoutError("request timed out"), False),
+        (HttpTransportError("connection unavailable"), False),
+        (HttpDecodeError("invalid JSON response"), False),
+    ],
+    ids=["unsupported", "missing", "rate-limit", "server", "timeout", "transport", "decode"],
+)
+def test_jwpub_resolution_distinguishes_confirmed_absence_from_request_failures(
+    monkeypatch, caplog, failure, not_found
+):
+    def get_json(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(publication_links, "get_json", get_json)
+
+    info = PublicationMediaResolver().resolve_jwpub(
+        JwpubMediaRequest(pub="w07", language="T", issue="20070601")
+    )
+
+    assert info.download_url is None
+    assert info.checksum == ""
+    assert info.not_found is not_found
+    assert any(record.levelname == "WARNING" for record in caplog.records)
+
+
+@pytest.mark.parametrize("payload", [{}, {"files": {}}, {"files": {"T": {"JWPUB": []}}}])
+def test_jwpub_resolution_confirms_successful_empty_responses(monkeypatch, payload):
+    monkeypatch.setattr(publication_links, "get_json", lambda *_args, **_kwargs: payload)
+
+    info = PublicationMediaResolver().resolve_jwpub(
+        JwpubMediaRequest(pub="w07", language="T", issue="20070601")
+    )
+
+    assert info.download_url is None
+    assert info.not_found
+
+
+@pytest.mark.parametrize("payload", [None, []])
+def test_jwpub_resolution_does_not_confirm_malformed_responses(monkeypatch, payload):
+    monkeypatch.setattr(publication_links, "get_json", lambda *_args, **_kwargs: payload)
+
+    info = PublicationMediaResolver().resolve_jwpub(
+        JwpubMediaRequest(pub="w07", language="T", issue="20070601")
+    )
+
+    assert info.download_url is None
+    assert not info.not_found
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [HttpStatusError("https://example.test/api", 404, "missing"), HttpTimeoutError("timeout")],
+)
+def test_generic_media_resolution_continues_to_tolerate_http_errors(monkeypatch, failure):
+    def get_json(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(publication_links, "get_json", get_json)
+
+    assert (
+        PublicationMediaResolver().resolve_media(
+            PublicationMediaRequest("mwbv", 1, 20261100, 0, "T")
+        )
+        is None
+    )
+
+
+def test_pub_media_fetch_can_propagate_http_errors_after_logging(monkeypatch, caplog):
+    failure = HttpStatusError("https://example.test/api", 400, "unsupported issue")
+
+    def get_json(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(publication_links, "get_json", get_json)
+
+    with pytest.raises(HttpStatusError) as raised:
+        publication_links.fetch_pub_media_json({"pub": "w07"}, raise_errors=True)
+
+    assert raised.value is failure
+    assert any(record.levelname == "WARNING" for record in caplog.records)

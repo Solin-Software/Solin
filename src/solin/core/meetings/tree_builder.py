@@ -6,6 +6,7 @@ Transforms already parsed meeting data into canonical playlist-shaped trees.
 This module intentionally does not parse .jwpub files.  It consumes WeekData,
 MemorialData, and MeetingMedia produced by the existing services.
 """
+
 from __future__ import annotations
 
 import re
@@ -44,6 +45,11 @@ def _media_identity(item: MeetingMedia) -> str:
         return f"{item.key_symbol}:{item.track}:{item.issue_tag}"
     if item.meps_doc_id:
         return f"doc{item.meps_doc_id}"
+    if item.publication_source:
+        return "publication:" + ":".join(
+            item.publication_source.get(field, "")
+            for field in ("pub", "language", "issue", "member")
+        )
     if item.file_path:
         return f"path:{source_hash(item.file_path)[:16]}"
     return source_hash(clean_dict(item))[:20]
@@ -60,6 +66,25 @@ def _media_to_ref(item: MeetingMedia) -> dict[str, Any]:
     if item.key_symbol or item.meps_doc_id:
         ref["jw_identity_authoritative"] = True
     return ref
+
+
+def canonical_media_source_hash(node: Node) -> str:
+    """Hash semantic publication content independently of its storage location."""
+    ref = dict(node.get("media_ref") or {})
+    source = ref.get("publication_source")
+    if isinstance(source, dict) and source.get("member"):
+        ref.pop("file_path", None)
+        ref["publication_source"] = {
+            key: value for key, value in source.items() if key != "checksum"
+        }
+    return source_hash(
+        {
+            "type": "media",
+            "title": node.get("title", ""),
+            "media_type": node.get("media_type", ""),
+            "media_ref": ref,
+        }
+    )
 
 
 def _section_node(
@@ -165,6 +190,7 @@ def _media_node(
         value = int(getattr(item, field, 0) or 0)
         if value:
             node[field] = value
+    node["meeting_source_hash"] = canonical_media_source_hash(node)
     return node
 
 
@@ -196,8 +222,7 @@ class MeetingTreeBuilder:
 
         publication_subsections = self._build_publication_subsections(wd)
         has_cbs_publication_refs = any(
-            bool(_ref_attr(ref, "is_cbs", False))
-            and bool(list(_ref_attr(ref, "items", []) or []))
+            bool(_ref_attr(ref, "is_cbs", False)) and bool(list(_ref_attr(ref, "items", []) or []))
             for ref in getattr(wd, "mwb_publication_refs", []) or []
         )
 
@@ -206,16 +231,18 @@ class MeetingTreeBuilder:
             entries: list[tuple[int, int, Node]] = []
             seq = 0
             for item in grouped.get(code, []):
-                entries.append((
-                    int(item.begin_ordinal or 0),
-                    seq,
-                    _media_node(
-                        f"media:mwb:{code}:{_media_identity(item)}",
-                        item,
-                        scope=f"mwb:{code}",
-                        fallback_title=self._media_fallback_title(),
-                    ),
-                ))
+                entries.append(
+                    (
+                        int(item.begin_ordinal or 0),
+                        seq,
+                        _media_node(
+                            f"media:mwb:{code}:{_media_identity(item)}",
+                            item,
+                            scope=f"mwb:{code}",
+                            fallback_title=self._media_fallback_title(),
+                        ),
+                    )
+                )
                 seq += 1
             for ordinal, subsection in publication_subsections.get(code, []):
                 entries.append((ordinal, seq, subsection))
@@ -225,7 +252,8 @@ class MeetingTreeBuilder:
                 if cbs_subsection:
                     entries.append((cbs_start, seq, cbs_subsection))
             children = [
-                node for _, _, node in sorted(
+                node
+                for _, _, node in sorted(
                     entries,
                     key=lambda entry: (entry[0], entry[1]),
                 )
@@ -287,9 +315,7 @@ class MeetingTreeBuilder:
         title = " ".join(str(ref.get("publication_title") or pub).split()) or pub
         doc_titles = ref.get("doc_titles") or {}
         title_to_doc_id = {
-            _strip(str(value)): int(key)
-            for key, value in doc_titles.items()
-            if str(value).strip()
+            _strip(str(value)): int(key) for key, value in doc_titles.items() if str(value).strip()
         }
 
         grouped: "OrderedDict[str, list[MeetingMedia]]" = OrderedDict()
@@ -304,15 +330,14 @@ class MeetingTreeBuilder:
         for idx, (story_title, items) in enumerate(grouped.items()):
             story_id = title_to_doc_id.get(story_title, 0)
             marker_key = (
-                f"marker:cbs:{story_id}" if story_id else
-                f"marker:cbs:{source_hash(story_title)[:16]}:{idx}"
+                f"marker:cbs:{story_id}"
+                if story_id
+                else f"marker:cbs:{source_hash(story_title)[:16]}:{idx}"
             )
             if story_title:
                 children.append(_marker_node(marker_key, story_title))
             for item in items:
-                media_key = (
-                    f"media:cbs:{pub}:{story_id or idx}:{_media_identity(item)}"
-                )
+                media_key = f"media:cbs:{pub}:{story_id or idx}:{_media_identity(item)}"
                 children.append(
                     _media_node(
                         media_key,
@@ -342,9 +367,7 @@ class MeetingTreeBuilder:
             is_cbs = bool(_ref_attr(ref, "is_cbs", False))
             section = str(_ref_attr(ref, "section", "") or "lac")
             pub = str(_ref_attr(ref, "pub", "") or "ref").strip() or "ref"
-            title = " ".join(
-                str(_ref_attr(ref, "publication_title", "") or pub).split()
-            ) or pub
+            title = " ".join(str(_ref_attr(ref, "publication_title", "") or pub).split()) or pub
             key = (is_cbs, section, pub, title)
             grouped.setdefault(key, []).append(ref)
 
@@ -352,10 +375,12 @@ class MeetingTreeBuilder:
         for (is_cbs, section, pub, title), refs in grouped.items():
             children: list[Node] = []
             first_ordinal = 999999
-            for idx, ref in enumerate(sorted(
-                refs,
-                key=lambda item: int(_ref_attr(item, "begin_ordinal", 0) or 0),
-            )):
+            for idx, ref in enumerate(
+                sorted(
+                    refs,
+                    key=lambda item: int(_ref_attr(item, "begin_ordinal", 0) or 0),
+                )
+            ):
                 ordinal = int(_ref_attr(ref, "begin_ordinal", 0) or 0)
                 first_ordinal = min(first_ordinal, ordinal)
                 meps_doc_id = int(_ref_attr(ref, "meps_doc_id", 0) or 0)
@@ -363,23 +388,20 @@ class MeetingTreeBuilder:
                 if is_cbs:
                     marker_key = (
                         f"marker:cbs:{meps_doc_id}"
-                        if meps_doc_id else
-                        f"marker:cbs:{source_hash(caption)[:16]}:{idx}"
+                        if meps_doc_id
+                        else f"marker:cbs:{source_hash(caption)[:16]}:{idx}"
                     )
                 else:
                     marker_key = (
                         f"marker:ref:{section}:{pub}:{meps_doc_id}"
-                        if meps_doc_id else
-                        f"marker:ref:{section}:{pub}:{source_hash(caption)[:16]}:{idx}"
+                        if meps_doc_id
+                        else f"marker:ref:{section}:{pub}:{source_hash(caption)[:16]}:{idx}"
                     )
                 if caption:
                     children.append(_marker_node(marker_key, caption))
                 for item in list(_ref_attr(ref, "items", []) or []):
                     if is_cbs:
-                        media_key = (
-                            f"media:cbs:{pub}:{meps_doc_id or idx}:"
-                            f"{_media_identity(item)}"
-                        )
+                        media_key = f"media:cbs:{pub}:{meps_doc_id or idx}:{_media_identity(item)}"
                         scope = f"cbs:{pub}"
                     else:
                         media_key = (
@@ -399,9 +421,7 @@ class MeetingTreeBuilder:
                 continue
             hue = 275 if is_cbs else SECTION_META.get(section, ("", 215))[1]
             subsection_key = (
-                f"subsection:cbs:{pub}"
-                if is_cbs else
-                f"subsection:ref:{section}:{pub}"
+                f"subsection:cbs:{pub}" if is_cbs else f"subsection:ref:{section}:{pub}"
             )
             subsection = _subsection_node(
                 publication_subsection_key(subsection_key, title),

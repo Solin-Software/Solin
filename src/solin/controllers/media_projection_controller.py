@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,7 @@ class MediaProjectionContext:
     playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
     content_frame_sink: Callable[[object], None] = _discard_content_frame
+    image_source_lease: Callable[[str], AbstractContextManager] = nullcontext
 
 
 @dataclass(frozen=True, slots=True)
@@ -702,21 +704,23 @@ class MediaProjectionController:
         if user_initiated and not self._allow_manual_projection_change():
             return
         try:
-            with open(path, "rb") as handle:
-                data = handle.read()
+            with self._context.image_source_lease(path):
+                with open(path, "rb") as handle:
+                    data = handle.read()
+                self._project_image_data(
+                    title,
+                    data,
+                    playlist=playlist,
+                    playback_order=playback_order,
+                    from_saved_playlist=from_saved_playlist,
+                    index=index,
+                    keep_expanded=keep_expanded,
+                    image_framing=image_framing,
+                    user_initiated=False,
+                    source_path=path,
+                )
         except OSError:
             return
-        self._project_image_data(
-            title,
-            data,
-            playlist=playlist,
-            playback_order=playback_order,
-            from_saved_playlist=from_saved_playlist,
-            index=index,
-            keep_expanded=keep_expanded,
-            image_framing=image_framing,
-            user_initiated=False,
-        )
 
     def _project_image_data(
         self,
@@ -735,6 +739,7 @@ class MediaProjectionController:
         persist_operator_copy: bool = True,
         allow_image_actions: bool = True,
         auto_keys_media: bool = True,
+        source_path: str = "",
     ) -> bool:
         if user_initiated and not self._allow_manual_projection_change():
             return False
@@ -744,6 +749,7 @@ class MediaProjectionController:
         context = self._context
         initial_transform = self._prepared_image_transform(data, image_framing)
         if self._update_active_image_framing(data, initial_transform):
+            self._session.update_state(source_path=source_path)
             return True
 
         self._session.set_tab_projection_active(False)
@@ -787,6 +793,8 @@ class MediaProjectionController:
         }
         if generated_kind:
             state["generated_kind"] = generated_kind
+        if source_path:
+            state["source_path"] = source_path
         if fingerprint:
             state["fingerprint"] = fingerprint
         self._session.set_state(state)

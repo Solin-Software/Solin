@@ -10845,6 +10845,10 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Hämtar… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Ladda ned</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11121,6 +11125,18 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Hämtar… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Ladda ned</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Uppdatera</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Försök igen</translation>
     </message>
 </context>
 <context>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QThread, Signal
 
@@ -13,11 +14,17 @@ class _CacheDeletionWorker(QObject):
     completed = Signal(list, list)
     finished = Signal()
 
-    def __init__(self, media_cache_dir: str | Path, paths: list[str]) -> None:
+    def __init__(
+        self,
+        media_cache_dir: str | Path,
+        paths: list[str],
+        additional_remover: Callable[[str], bool | None] | None = None,
+    ) -> None:
         super().__init__()
         self._media_cache_dir = media_cache_dir
         self._paths = list(dict.fromkeys(paths))
         self._cancelled = False
+        self._additional_remover = additional_remover
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -30,7 +37,14 @@ class _CacheDeletionWorker(QObject):
                 if self._cancelled:
                     break
                 try:
-                    if remove_cached_entry(self._media_cache_dir, path):
+                    removed = (
+                        self._additional_remover(path)
+                        if self._additional_remover is not None
+                        else None
+                    )
+                    if removed is None:
+                        removed = remove_cached_entry(self._media_cache_dir, path)
+                    if removed:
                         deleted.append(path)
                 except (OSError, ValueError) as exc:
                     failed.append((path, str(exc)))
@@ -48,9 +62,11 @@ class CacheDeletionSession(QObject):
         media_cache_dir: str | Path,
         paths: list[str],
         parent=None,
+        *,
+        additional_remover: Callable[[str], bool | None] | None = None,
     ) -> None:
         super().__init__(parent)
-        self._worker = _CacheDeletionWorker(media_cache_dir, paths)
+        self._worker = _CacheDeletionWorker(media_cache_dir, paths, additional_remover)
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
         self._worker.completed.connect(self.completed.emit)
@@ -79,6 +95,13 @@ class CacheDeletionSession(QObject):
 
 
 class CacheDeletionSessionFactory:
+    def __init__(
+        self,
+        *,
+        additional_remover: Callable[[str], bool | None] | None = None,
+    ) -> None:
+        self._additional_remover = additional_remover
+
     def create(
         self,
         media_cache_dir: str | Path,
@@ -86,4 +109,6 @@ class CacheDeletionSessionFactory:
         *,
         parent=None,
     ) -> CacheDeletionSession:
-        return CacheDeletionSession(media_cache_dir, paths, parent)
+        return CacheDeletionSession(
+            media_cache_dir, paths, parent, additional_remover=self._additional_remover,
+        )

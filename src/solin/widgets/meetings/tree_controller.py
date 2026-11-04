@@ -4077,6 +4077,7 @@ class MeetingTreeController(QObject):
             root
             for root in (
                 os.fspath(self._runtime_paths.cache_dir),
+                os.fspath(self._runtime_paths.publication_assets_dir),
                 os.fspath(self._profile_paths.images_dir),
                 os.fspath(self._profile_paths.embedded_dir),
                 os.fspath(self._meeting_thumbnail_store.root),
@@ -4724,6 +4725,15 @@ class MeetingTreeController(QObject):
 
     def _canonical_media_recovery_key(self, node: Node) -> tuple[str, str]:
         source = self._url_for_node(node)
+        ref = node.get("media_ref") or {}
+        publication = ref.get("publication_source") or {}
+        if publication:
+            return (
+                ":".join(str(publication.get(field) or "") for field in (
+                    "pub", "language", "issue", "checksum",
+                )),
+                source,
+            )
         source_key = str(node.get("meeting_source_key") or node.get("id") or "")
         if source and not source.startswith(("http://", "https://")):
             for parent in Path(source).parents:
@@ -5020,6 +5030,10 @@ class MeetingTreeController(QObject):
             if node.get("type") != "media":
                 continue
             url = self._url_for_node(node)
+            if url and not MediaCacheManager.is_remote(url):
+                if os.path.normcase(os.path.abspath(url)) == removed:
+                    self._tree_session.request_source(url)
+                continue
             if not MediaCacheManager.is_remote(url):
                 continue
             cached_path = cached_path_for(

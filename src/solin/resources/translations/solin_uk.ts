@@ -10888,6 +10888,10 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>Downloading… {}%</source>
         <translation type="vanished">Завантаження… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Завантажити</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11164,6 +11168,18 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Завантаження… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Завантажити</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Оновити</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторити</translation>
     </message>
 </context>
 <context>

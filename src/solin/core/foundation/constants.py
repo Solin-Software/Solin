@@ -117,6 +117,12 @@ ALLOW_ZOOM_PAN_ON_LIVE_TAB: bool = False
 # select a different return destination for the current session.
 MEMORIZE_PRE_MEDIA_SCENE: bool = True
 
+# Prepared meetings have a lifecycle independent of initial automatic preparation.
+# These installation-wide policies also govern images shared by several profiles.
+KEEP_MEETING_IMAGES_FOR_MANUAL_CLEANUP: bool = False
+AUTO_RECOVER_PREPARED_MEETING_IMAGES: bool = True
+AUTO_UPDATE_PREPARED_MEETINGS: bool = True
+
 JWL_PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
 SOLIN_PLAYLIST_EXTS: frozenset[str] = frozenset({".solinplaylist"})
 # Legacy dispatch remains JWL-only. Native packages are accepted exclusively by

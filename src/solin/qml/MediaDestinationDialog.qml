@@ -396,7 +396,7 @@ Rectangle {
                             accentColor: modelData.color || root.accent
                             selectable: !!modelData.available && !destinationBridge.busy
                             onClicked: destinationBridge.chooseMeeting(modelData.pub_type)
-                            onRetry: destinationBridge.retryWeek()
+                            onRetry: destinationBridge.downloadMeeting(modelData.pub_type)
                         }
                     }
 
@@ -643,8 +643,10 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent
-                visible: meetingCard.status === "error"
-                text: qsTranslate("MediaDestinationDialog", "Retry")
+                visible: meetingCard.status === "error" || meetingCard.status === "download"
+                text: meetingCard.status === "download"
+                    ? qsTranslate("_PubCard", "Download")
+                    : qsTranslate("MediaDestinationDialog", "Retry")
                 color: root.accent
                 font.pixelSize: 10
 

@@ -25,6 +25,9 @@ if TYPE_CHECKING:
     from solin.core.jw.language_settings import JWLanguageSettingsStore
     from solin.core.jw.songs import JWSongsStore
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
+    from solin.core.media.publication_assets import PublicationAssetStore
+    from solin.core.meetings.asset_lifecycle import MeetingAssetLifecycle
+    from solin.core.meetings.content_policy import MeetingContentPolicy
     from solin.core.onboarding.application import OnboardingService
     from solin.core.profiles.application import ProfileService
     from solin.core.profiles.infrastructure import ProfileRuntimeContextFactory
@@ -56,6 +59,9 @@ class ApplicationContainer:
     onboarding_service: OnboardingService
     lifecycle: ApplicationLifecycle
     deferred_maintenance: DeferredApplicationMaintenance
+    publication_assets: PublicationAssetStore
+    meeting_content_policy: MeetingContentPolicy
+    meeting_asset_lifecycle: MeetingAssetLifecycle
     window_ref: list[Any | None] = field(default_factory=lambda: [None])
 
 
@@ -68,6 +74,9 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.jw.language_settings import JWLanguageSettingsStore
     from solin.core.jw.songs import JWSongsStore
     from solin.core.meetings.jwpub_cache import JwpubChecksumStore
+    from solin.core.media.publication_assets import PublicationAssetStore
+    from solin.core.meetings.asset_lifecycle import MeetingAssetLifecycle
+    from solin.core.meetings.content_policy import MeetingContentPolicy
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
     from solin.core.integrations.automation.settings import (
@@ -145,6 +154,11 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     jwpub_checksum_store = JwpubChecksumStore(
         runtime_paths.jwpub_cache_dir / "checksums.json"
     )
+    publication_assets = PublicationAssetStore(runtime_paths.publication_assets_dir)
+    meeting_content_policy = MeetingContentPolicy.from_defaults()
+    meeting_asset_lifecycle = MeetingAssetLifecycle(
+        runtime_paths, publication_assets, meeting_content_policy,
+    )
 
     lifecycle = ApplicationLifecycle(app)
     lifecycle.install()
@@ -153,6 +167,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     lifecycle.register_cleanup(shutdown_media_extract_service)
     lifecycle.register_cleanup(font_manager.shutdown)
     lifecycle.register_cleanup(jw_songs_store.shutdown)
+    lifecycle.register_cleanup(meeting_asset_lifecycle.shutdown)
     deferred_maintenance = DeferredApplicationMaintenance(
         installation_settings,
         runtime_paths,
@@ -179,4 +194,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
         onboarding_service=onboarding_service,
         lifecycle=lifecycle,
         deferred_maintenance=deferred_maintenance,
+        publication_assets=publication_assets,
+        meeting_content_policy=meeting_content_policy,
+        meeting_asset_lifecycle=meeting_asset_lifecycle,
     )

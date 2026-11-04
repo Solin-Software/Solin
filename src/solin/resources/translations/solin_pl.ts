@@ -10888,6 +10888,10 @@ Oba urządzenia muszą być w tej samej sieci Wi-Fi.</translation>
         <source>Downloading… {}%</source>
         <translation type="vanished">Pobieranie… {}%</translation>
     </message>
+    <message>
+        <source>Download</source>
+        <translation>Pobierz</translation>
+    </message>
 </context>
 <context>
     <name>_OfflineDownload</name>
@@ -11164,6 +11168,18 @@ Użyj przycisku odtwarzania, aby rozpocząć projekcję · Przeciągnij uchwyt �
     <message>
         <source>Downloading… {}%</source>
         <translation type="vanished">Pobieranie… {}%</translation>
+    </message>
+    <message>
+        <source>Download</source>
+        <translation>Pobierz</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Aktualizuj</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Spróbuj ponownie</translation>
     </message>
 </context>
 <context>

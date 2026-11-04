@@ -53,11 +53,12 @@ class _MeetingsStub(QObject):
 class _MeetingSession(QObject):
     completed = Signal(object)
     failed = Signal(str)
+    closed = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
         self.added = []
-        self.closed = False
+        self.is_closed = False
 
     def placement_ref(self):
         return {"items": [], "sections": []}
@@ -67,7 +68,9 @@ class _MeetingSession(QObject):
         self.completed.emit(MediaInsertResult(added_items=tuple(items)))
 
     def close(self):
-        self.closed = True
+        if not self.is_closed:
+            self.is_closed = True
+            self.closed.emit(self)
 
 
 class _PlaylistImportsStub:
@@ -240,9 +243,30 @@ def test_meeting_route_loads_week_and_inserts_through_session() -> None:
 
     assert len(meetings.requested_weeks) == 1
     assert meetings.session.added[0][1:] == ("root", 2**31 - 1)
-    assert meetings.session.closed is True
+    assert meetings.session.is_closed is True
     assert outcomes == [MediaDestinationOutcome(1, ("clip.mp4",), ("clip.mp4",))]
     assert notifications.events[0][0] == "success"
+
+
+def test_expired_meeting_rejects_assets_prepared_after_session_closure() -> None:
+    def drive(bridge):
+        bridge.showMeetings()
+        bridge.chooseMeeting("mwb")
+
+    controller, meetings, imports, notifications = _controller(drive)
+    pending = []
+    imports.prepare_destination_assets = lambda _assets, callback: pending.append(callback)
+    outcomes = []
+    controller.route(_request(), completed=outcomes.append)
+
+    meetings.session.close()
+    pending[0](PreparedMediaBatch(
+        ({"url": "clip.mp4", "type": "video"},), ("clip.mp4",),
+    ))
+
+    assert not meetings.session.added
+    assert outcomes == [MediaDestinationOutcome(0, destination_accepted=False)]
+    assert notifications.events[0][0] == "error"
 
 
 def test_meeting_duplicate_is_reported_as_warning_not_failure() -> None:
@@ -261,6 +285,6 @@ def test_meeting_duplicate_is_reported_as_warning_not_failure() -> None:
     meetings.session.add_items = reject_duplicate
     controller.route(_request(), completed=outcomes.append)
 
-    assert meetings.session.closed is True
+    assert meetings.session.is_closed is True
     assert outcomes == [MediaDestinationOutcome(0, (), ("clip.mp4",))]
     assert notifications.events == [("warning", "“Clip” is already added.")]

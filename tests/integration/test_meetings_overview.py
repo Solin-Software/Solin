@@ -6,6 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 
 from solin.widgets.meetings.overview import _PubCard
 
@@ -67,3 +69,39 @@ def test_publication_card_arrow_stays_centered_for_wrapped_titles() -> None:
 
     for card in cards:
         card.deleteLater()
+
+
+def test_manual_maintenance_actions_remain_independent() -> None:
+    card = _PubCard("mwb")
+    card.set_downloadable()
+    card.set_maintenance(update_available=True, repair_required=True)
+    events = []
+    card.update_requested.connect(lambda: events.append("update"))
+    card.repair_requested.connect(lambda: events.append("repair"))
+    card.open_requested.connect(lambda: events.append("open"))
+    card.show()
+    _APP.processEvents()
+
+    QTest.mouseClick(card._repair_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(card._update_button, Qt.MouseButton.LeftButton)
+
+    assert events == ["repair", "update"]
+    assert not card._repair_button.isHidden()
+    assert not card._update_button.isHidden()
+    card.deleteLater()
+
+
+def test_absent_meeting_can_be_downloaded_from_the_keyboard() -> None:
+    card = _PubCard("wt")
+    card.set_downloadable()
+    events = []
+    card.open_requested.connect(lambda: events.append("download"))
+    card.show()
+    _APP.processEvents()
+
+    QTest.keyClick(card, Qt.Key.Key_Return)
+
+    assert events == ["download"]
+    card.set_loading()
+    assert not card.isEnabled()
+    card.deleteLater()

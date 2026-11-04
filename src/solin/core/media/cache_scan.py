@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from .cache_listing import scan_cached_media_items
+from .cache_listing import CachedMediaItem, scan_cached_media_items
 
 
 class _CacheScanWorker(QObject):
@@ -15,10 +16,15 @@ class _CacheScanWorker(QObject):
     failed = Signal(str)
     completed = Signal()
 
-    def __init__(self, media_cache_dir: str | Path) -> None:
+    def __init__(
+        self,
+        media_cache_dir: str | Path,
+        additional_items: Callable[[], list[CachedMediaItem]] | None = None,
+    ) -> None:
         super().__init__()
         self._media_cache_dir = media_cache_dir
         self._cancelled = False
+        self._additional_items = additional_items
 
     def cancel(self) -> None:
         self._cancelled = True
@@ -30,6 +36,12 @@ class _CacheScanWorker(QObject):
                 is_cancelled=lambda: self._cancelled,
                 on_batch=self.batch_ready.emit,
             )
+            if self._additional_items is not None and not self._cancelled:
+                additional = self._additional_items()
+                if not self._cancelled:
+                    items.extend(additional)
+                    if additional:
+                        self.batch_ready.emit(additional)
         except OSError as exc:
             self.failed.emit(str(exc))
         else:
@@ -46,9 +58,15 @@ class CacheScanSession(QObject):
     failed = Signal(str)
     finished = Signal()
 
-    def __init__(self, media_cache_dir: str | Path, parent=None) -> None:
+    def __init__(
+        self,
+        media_cache_dir: str | Path,
+        parent=None,
+        *,
+        additional_items: Callable[[], list[CachedMediaItem]] | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._worker = _CacheScanWorker(media_cache_dir)
+        self._worker = _CacheScanWorker(media_cache_dir, additional_items)
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)
         self._worker.batch_ready.connect(self.batch_ready.emit)
@@ -81,10 +99,19 @@ class CacheScanSession(QObject):
 class CacheScanSessionFactory:
     """Create cache scan sessions with explicit Qt ownership."""
 
+    def __init__(
+        self,
+        *,
+        additional_items: Callable[[], list[CachedMediaItem]] | None = None,
+    ) -> None:
+        self._additional_items = additional_items
+
     def create(
         self,
         media_cache_dir: str | Path,
         *,
         parent=None,
     ) -> CacheScanSession:
-        return CacheScanSession(media_cache_dir, parent)
+        return CacheScanSession(
+            media_cache_dir, parent, additional_items=self._additional_items,
+        )

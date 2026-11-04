@@ -4,8 +4,8 @@ import os
 from pathlib import Path, PureWindowsPath
 import shutil
 import time
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, replace
 from typing import Any, TYPE_CHECKING
 
 from solin.core.foundation.exception_logging import log_ignored_exception
@@ -25,12 +25,13 @@ from solin.core.foundation.resource_keys import (
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.meetings.thumbnails import meeting_thumb_cache_key, meeting_thumb_dir
+from solin.core.scenes.repository import SceneRepositoryError
 
 if TYPE_CHECKING:
     from solin.core.meetings.tree_store import MeetingTreeStore
 
 
-_REFERENCE_STATE_ERRORS = (OSError, UnicodeError, TypeError, ValueError)
+_REFERENCE_STATE_ERRORS = (OSError, UnicodeError, TypeError, ValueError, SceneRepositoryError)
 _MISSING = object()
 
 
@@ -48,6 +49,76 @@ class ProfileCleanupReferences:
     media_paths: frozenset[str]
     playlist_thumbnail_ids: frozenset[str]
     meeting_thumbnail_names: frozenset[str]
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileSceneReferences:
+    media_paths: frozenset[str]
+    asset_ids: frozenset[str]
+    repository_paths: tuple[Path, ...]
+
+
+def load_profile_scene_references(paths: ProfilePaths) -> ProfileSceneReferences:
+    """Read every scene collection and recovery point without forward writes."""
+    from solin.core.scenes.collections import SceneCollectionCatalog
+    from solin.core.scenes.model import SourceKind
+    from solin.core.scenes.repository import (
+        SceneCollectionDocumentRepository,
+        SceneDocumentRepository,
+    )
+    from solin.core.scenes.resources import SceneResourceCatalog
+    from solin.core.storage.json_repository import JsonFileRepository
+
+    repository_paths = {
+        paths.scene_profiles_catalog_file, paths.scene_resources_file,
+        paths.scene_profiles_dir, paths.scenes_file,
+    }
+    resources = (
+        SceneResourceCatalog.from_record(JsonFileRepository(paths.scene_resources_file).read())
+        if paths.scene_resources_file.exists() else SceneResourceCatalog(revision=0)
+    )
+    document_paths = {paths.scenes_file}
+    required: set[Path] = set()
+    if paths.scene_profiles_catalog_file.exists():
+        catalog = SceneCollectionCatalog.from_record(
+            JsonFileRepository(paths.scene_profiles_catalog_file).read()
+        )
+        required = {paths.scene_profiles_dir / f"{collection.id}.json" for collection in catalog.collections}
+        document_paths.update(required)
+    if paths.scene_profiles_dir.exists():
+        document_paths.update(paths.scene_profiles_dir.glob("*.json"))
+    for path in tuple(document_paths):
+        if not path.stem.endswith(".backup"):
+            document_paths.add(path.with_name(f"{path.stem}.backup{path.suffix}"))
+    repository_paths.update(document_paths)
+    media_paths: set[str] = set()
+    asset_ids: set[str] = set()
+    for path in sorted(document_paths):
+        if not path.exists():
+            if path in required:
+                raise FileNotFoundError(path)
+            continue
+        if path.parent == paths.scene_profiles_dir:
+            repository = SceneCollectionDocumentRepository(path, resources=lambda: resources)
+        else:
+            repository = SceneDocumentRepository(path, seed_factory=_no_scene_seed)
+        document = repository.load()
+        media_paths.update(collect_media_paths(document.to_record()))
+        for source in document.sources:
+            if source.kind != SourceKind.IMAGE:
+                continue
+            asset_id = str(source.configuration.to_record()["asset_id"])
+            asset_ids.add(asset_id)
+            for root in (paths.images_dir, paths.scenes_assets_dir):
+                media_paths.add(str(root / asset_id))
+                media_paths.update(str(path) for path in root.glob(f"{asset_id}.*"))
+    return ProfileSceneReferences(
+        frozenset(media_paths), frozenset(asset_ids), tuple(sorted(repository_paths))
+    )
+
+
+def _no_scene_seed():
+    raise RuntimeError("Cleanup never creates scene documents")
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +165,7 @@ class ProfileMaintenanceService:
             resource_lanes=resource_lanes,
         )
         self._inventory = capture_profile_maintenance_inventory(profile_paths)
+        self._scene_repository_paths = load_profile_scene_references(profile_paths).repository_paths
 
     @property
     def resource_claim(self) -> ResourceClaim:
@@ -102,6 +174,7 @@ class ProfileMaintenanceService:
             shared_keys=(
                 file_resource_key(self._playlist_repository.path),
                 file_resource_key(self._meeting_tree_store.path),
+                *(file_resource_key(path) for path in self._scene_repository_paths),
             ),
         )
 
@@ -110,14 +183,24 @@ class ProfileMaintenanceService:
             self._playlist_repository.path,
             self._meeting_tree_store.path,
             self._storage_paths.pending_deletions_file,
+            *self._scene_repository_paths,
         )
         generation = tuple(_file_generation(path) for path in paths)
         playlists = self._playlist_repository.load_strict()
         meeting_data = self._meeting_tree_store.load_all_strict()
         pending = self._pending_repository.load_strict()
+        scenes = load_profile_scene_references(self._profile_paths)
+        if scenes.repository_paths != self._scene_repository_paths:
+            raise MaintenanceSnapshotChanged("Scene owners changed during maintenance")
         _raise_if_maintenance_cancelled(cancellation)
         self._ensure_generation(paths, generation)
         references = build_profile_cleanup_references(playlists, meeting_data)
+        references = replace(
+            references,
+            media_paths=references.media_paths | frozenset(
+                _normalized_path(path) for path in scenes.media_paths
+            ),
+        )
         file_candidates, directory_candidates = self._candidates(references)
 
         for candidate in file_candidates:
@@ -224,12 +307,14 @@ class ProfileMaintenanceService:
 def build_profile_cleanup_references(
     playlists: list[dict],
     meeting_data: dict[str, Any],
+    *,
+    scene_data: Any = (),
 ) -> ProfileCleanupReferences:
     playlist_items = _playlist_items_for_cleanup(playlists)
     media_paths = {
-        _normalized_path(item["url"])
-        for item in playlist_items
-        if item["url"] and os.path.isabs(item["url"])
+        _normalized_path(path)
+        for data in (playlists, meeting_data, scene_data)
+        for path in collect_media_paths(data)
     }
     playlist_thumbnail_ids = {
         thumbnail_storage_id(item["id"], item["url"])
@@ -237,7 +322,7 @@ def build_profile_cleanup_references(
         if item["id"]
     }
     meeting_thumbnail_names: set[str] = set()
-    for _tree_key, node in _strict_meeting_nodes(meeting_data):
+    for _tree_key, node in iter_meeting_nodes_strict(meeting_data):
         if node.get("type") != "media":
             continue
         ref = node.get("media_ref")
@@ -332,7 +417,8 @@ def _run_maintenance_action(
         raise ProfileMaintenanceCancelled
 
 
-def _strict_meeting_nodes(meeting_data: dict[str, Any]):
+def iter_meeting_nodes_strict(meeting_data: dict[str, Any]) -> Iterator[tuple[str, dict]]:
+    """Visit visible trees and every retained canonical recovery node."""
     from solin.core.meetings.tree_types import iter_nodes_strict
 
     if not isinstance(meeting_data, dict):
@@ -343,11 +429,60 @@ def _strict_meeting_nodes(meeting_data: dict[str, Any]):
     for tree_key, record in trees.items():
         if not isinstance(record, dict) or "nodes" not in record:
             raise ValueError(f"Meeting tree '{tree_key}' must contain nodes")
-        for node in iter_nodes_strict(
-            record["nodes"],
-            context=f"trees[{tree_key!r}].nodes",
-        ):
-            yield tree_key, node
+        for field in ("nodes", "canonical_nodes"):
+            for node in iter_nodes_strict(
+                record.get(field, []), context=f"trees[{tree_key!r}].{field}"
+            ):
+                yield tree_key, node
+        hidden = record.get("hidden_canonical_media", {})
+        if not isinstance(hidden, dict):
+            raise ValueError(f"Meeting tree '{tree_key}' hidden media must be an object")
+        for source_key, root in hidden.items():
+            for node in iter_nodes_strict(
+                [root], context=f"trees[{tree_key!r}].hidden_canonical_media[{source_key!r}]"
+            ):
+                yield tree_key, node
+
+
+def iter_media_path_fields(value: Any) -> Iterator[tuple[dict, str]]:
+    """Locate local media fields, including snapshots, framing, and scene sources.
+
+    Provenance is deliberately excluded: an original publication path describes
+    identity, rather than ownership of an extraction after successful migration.
+    """
+    fields = {
+        "url", "source_url", "file_path", "resolved_url", "thumbnail_local_path",
+        "thumbnail_source_key", "asset_id", "source",
+    }
+    for mapping in _media_mappings(value):
+        for key, child in mapping.items():
+            if key in fields:
+                if child is not None and not isinstance(child, str) and key != "source":
+                    raise ValueError(f"Media field '{key}' has an invalid value")
+                if isinstance(child, str) and os.path.isabs(child):
+                    yield mapping, key
+
+
+def collect_media_paths(value: Any) -> set[str]:
+    """Collect local owners without interpreting immutable sync metadata."""
+    paths = {owner[field] for owner, field in iter_media_path_fields(value)}
+    for mapping in _media_mappings(value):
+        linked = mapping.get("linked_folder_files", {})
+        if not isinstance(linked, dict):
+            raise ValueError("Linked folder files must be an object")
+        paths.update(path for path in linked if isinstance(path, str) and os.path.isabs(path))
+    return paths
+
+
+def _media_mappings(value: Any) -> Iterator[dict]:
+    if isinstance(value, dict):
+        yield value
+        for key, child in value.items():
+            if key != "publication_source":
+                yield from _media_mappings(child)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from _media_mappings(child)
 
 
 def _file_generation(path: Path) -> _FileGeneration:
@@ -498,6 +633,10 @@ def flush_images_dir(
             meeting_tree_store,
             normalize=True,
         )
+        referenced.update(
+            _normalized_path(path)
+            for path in load_profile_scene_references(profile_paths).media_paths
+        )
     except _REFERENCE_STATE_ERRORS:
         log_ignored_exception(__name__, "Could not validate image references")
         return
@@ -506,7 +645,7 @@ def flush_images_dir(
         fpath = os.path.join(images_dir, fname)
         if not os.path.isfile(fpath):
             continue
-        if os.path.normpath(fpath) not in referenced:
+        if _normalized_path(fpath) not in referenced:
             try:
                 os.remove(fpath)
             except OSError:
@@ -598,6 +737,10 @@ def flush_embedded_dir(
             meeting_tree_store,
             normalize=True,
         )
+        referenced.update(
+            _normalized_path(path)
+            for path in load_profile_scene_references(profile_paths).media_paths
+        )
     except _REFERENCE_STATE_ERRORS:
         log_ignored_exception(__name__, "Could not validate embedded media references")
         return
@@ -606,7 +749,7 @@ def flush_embedded_dir(
         fpath = os.path.join(embedded_dir, fname)
         if not os.path.isfile(fpath):
             continue
-        if os.path.normpath(fpath) not in referenced:
+        if _normalized_path(fpath) not in referenced:
             try:
                 os.remove(fpath)
             except OSError:
@@ -686,7 +829,7 @@ def _referenced_media_urls(
 ) -> set[str]:
     referenced = _referenced_playlist_urls(storage_paths, normalize=normalize)
     referenced.update(_meeting_tree_referenced_urls(meeting_tree_store))
-    return referenced
+    return {_normalized_path(path) for path in referenced} if normalize else referenced
 
 
 def _referenced_playlist_urls(
@@ -733,23 +876,6 @@ def _playlist_items_for_cleanup(playlists: list[dict]) -> list[dict]:
 def _meeting_tree_referenced_urls(
     meeting_tree_store: MeetingTreeStore,
 ) -> set[str]:
-    referenced: set[str] = set()
-    from solin.core.meetings.tree_types import iter_nodes_strict
-
     data = meeting_tree_store.load_all_strict()
-    for tree_key, record in data.get("trees", {}).items():
-        if not isinstance(record, dict):
-            raise ValueError(f"Meeting tree '{tree_key}' must be an object")
-        if "nodes" not in record:
-            raise ValueError(f"Meeting tree '{tree_key}' must contain nodes")
-        for node in iter_nodes_strict(
-            record["nodes"],
-            context=f"trees[{tree_key!r}].nodes",
-        ):
-            if node.get("type") != "media":
-                continue
-            ref = node.get("media_ref") or {}
-            url = str(ref.get("file_path") or "")
-            if url:
-                referenced.add(os.path.normpath(url))
-    return referenced
+    build_profile_cleanup_references([], data)
+    return {os.path.normpath(path) for path in collect_media_paths(data)}

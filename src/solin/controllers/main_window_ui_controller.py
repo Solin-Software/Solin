@@ -518,6 +518,9 @@ class MainWindowUiController:
         )
         timeline.mark("page_playlist_constructed")
         meeting_publication_service = context.jwpub_service_factory(context.parent)
+        meeting_publication_service.asset_changed.connect(
+            context.media_cache_manager.notify_cached_threadsafe
+        )
         meeting_preparation_service = MeetingPreparationService(
             meeting_publication_service,
             context.meeting_tree_store,
@@ -556,6 +559,9 @@ class MainWindowUiController:
             media_info_queue_factory=self._media_info_queue_factory,
             projection_aspect_ratio_provider=(context.projection_aspect_ratio_provider),
             parent=context.parent,
+        )
+        meetings_widget.assets_collection_requested.connect(
+            meeting_publication_service.content_settled
         )
         timeline.mark("page_meetings_constructed")
         scenes_widget = DeferredScenesWidget(

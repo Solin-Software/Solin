@@ -48,8 +48,14 @@ def _has_jw_media_identity(ref: dict) -> bool:
 
 
 def _media_identity_value(ref: dict, field: str) -> str:
-    if field == "file_path" and _has_jw_media_identity(ref):
-        return ""
+    if field == "file_path":
+        if _has_jw_media_identity(ref):
+            return ""
+        source = ref.get("publication_source")
+        if isinstance(source, dict) and source.get("member"):
+            return "publication:" + ":".join(
+                str(source.get(key) or "") for key in ("pub", "language", "issue", "member")
+            )
     return str(ref.get(field, ""))
 
 
@@ -236,9 +242,16 @@ class _PersistedManualNodeMerger:
 class MeetingTreeMerger:
     """Merge canonical meeting nodes with the user's saved tree."""
 
-    def __init__(self, canonical: list[Node], deleted_source_keys: set[str] | None = None):
+    def __init__(
+        self,
+        canonical: list[Node],
+        deleted_source_keys: set[str] | None = None,
+        *,
+        preserve_missing: bool = False,
+    ):
         self._canonical = clone_nodes(canonical)
         self._deleted_source_keys = deleted_source_keys or set()
+        self._preserve_missing = preserve_missing
         self._canonical_by_key = {
             node.get("meeting_source_key"): node
             for node in iter_nodes(self._canonical)
@@ -247,10 +260,19 @@ class MeetingTreeMerger:
             and node.get("meeting_source_key") not in self._deleted_source_keys
         }
         self._used: set[str] = set()
+        self._saved_keys: set[str] = set()
 
     def merge(self, saved: list[Node] | None) -> list[Node]:
+        self._used.clear()
         if not saved:
             return clone_nodes(self._canonical)
+        # Reserve operator placements before inserting canonical children, including
+        # media moved into a later section or a manually created container.
+        self._saved_keys = {
+            str(node["meeting_source_key"])
+            for node in iter_nodes(saved)
+            if node.get("meeting_generated") and node.get("meeting_source_key")
+        }
         return self._merge_level(saved, self._canonical, insert_missing=True)
 
     def _merge_level(
@@ -274,7 +296,12 @@ class MeetingTreeMerger:
         if insert_missing:
             for canonical in canonical_children:
                 key = canonical.get("meeting_source_key")
-                if not key or key in self._used or key in self._deleted_source_keys:
+                if (
+                    not key
+                    or key in self._used
+                    or key in self._saved_keys
+                    or key in self._deleted_source_keys
+                ):
                     continue
                 self._insert_missing_canonical(output, canonical, canonical_children)
 
@@ -296,8 +323,18 @@ class MeetingTreeMerger:
         key = saved.get("meeting_source_key")
         if key in self._deleted_source_keys:
             return self._salvage_children(saved)
+        if key and key in self._used:
+            return self._salvage_children(saved)
         canonical = self._canonical_by_key.get(key or "")
         if not key or canonical is None:
+            if self._preserve_missing and key:
+                self._used.add(key)
+                node = copy.deepcopy(saved)
+                if node.get("type") in ("section", "subsection"):
+                    node["children"] = self._merge_level(
+                        saved.get("children", []), [], insert_missing=False
+                    )
+                return [node]
             return self._salvage_children(saved)
 
         self._used.add(key)
@@ -318,6 +355,8 @@ class MeetingTreeMerger:
                 canonical.get("children", []),
                 insert_missing=True,
             )
+            if node.get("type") == "subsection" and canonical.get("children") and not node["children"]:
+                return []
         return [node]
 
     def _salvage_children(self, stale_node: Node) -> list[Node]:
@@ -336,6 +375,12 @@ class MeetingTreeMerger:
         key = node.get("meeting_source_key")
         if key:
             self._used.add(key)
+        if node.get("type") in ("section", "subsection"):
+            node["children"] = self._merge_level(
+                [], canonical.get("children", []), insert_missing=True
+            )
+            if node.get("type") == "subsection" and canonical.get("children") and not node["children"]:
+                return
 
         previous_keys: list[str] = []
         next_keys: list[str] = []

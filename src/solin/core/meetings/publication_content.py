@@ -614,7 +614,10 @@ def parse_publication_ref_items(
     meps_doc_id: int,
     section: str,
     marker_title: str,
+    *,
+    strict: bool = False,
 ) -> list[meeting_models.MeetingMedia]:
+    """Parse one reference atomically; strict callers receive the underlying failure."""
     result = []
     try:
         conn = open_publication_database(db_path)
@@ -639,7 +642,10 @@ def parse_publication_ref_items(
         finally:
             conn.close()
     except (IndexError, KeyError, OSError, sqlite3.Error, TypeError, ValueError):
+        if strict:
+            raise
         log.exception("Could not parse publication reference media")
+        return []
     return result
 
 

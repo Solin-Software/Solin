@@ -157,10 +157,18 @@ def _import_main_window_class():
     return MainWindow
 
 
-def _prepare_profile_main_window(profile_paths, cancellation=None):
+def _prepare_profile_main_window(profile_paths, cancellation=None, *, asset_lifecycle=None):
     """Prepare code and fail-closed housekeeping before profile UI is mutable."""
 
     main_window_class = _import_main_window_class()
+    if asset_lifecycle is not None:
+        try:
+            if cancellation is None:
+                asset_lifecycle.maintain()
+            else:
+                cancellation.run_if_active(asset_lifecycle.maintain)
+        except (OSError, UnicodeError, ValueError):
+            log.warning("Publication image migration/collection deferred", exc_info=True)
     from solin.core.playlists.cleanup import (
         ProfileMaintenanceCancelled,
         ProfileMaintenanceService,
@@ -227,6 +235,11 @@ def _build_main_window_service_factories(
     jwpub_checksum_store,
     installation_settings,
     application_maintenance,
+    *,
+    publication_assets,
+    meeting_content_policy,
+    meeting_asset_lifecycle,
+    meeting_tree_store,
 ):
     startup_timeline().mark("service_factories_started")
     from solin.controllers.main_window_service_factories import (
@@ -348,6 +361,31 @@ def _build_main_window_service_factories(
             update_dialog_factory=create_update_dialog,
         )
 
+    def create_publication_service(parent):
+        service = JwpubService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+            asset_store=publication_assets,
+            content_policy=meeting_content_policy,
+            protected_publication_sources=meeting_asset_lifecycle.protected_publication_sources,
+        )
+        service.content_settled.connect(meeting_asset_lifecycle.request_collection)
+        return service
+
+    def create_memorial_service(parent):
+        service = MemorialService(
+            runtime_paths.jwpub_cache_dir,
+            jwpub_checksum_store,
+            parent,
+            asset_store=publication_assets,
+            content_policy=meeting_content_policy,
+            protected_publication_sources=meeting_asset_lifecycle.protected_publication_sources,
+            tree_store=meeting_tree_store,
+        )
+        service.content_settled.connect(meeting_asset_lifecycle.request_collection)
+        return service
+
     factories = MainWindowServiceFactories(
         auto_key_dispatcher=AutoKeyDispatcher,
         obs_websocket=OBSWebSocketService,
@@ -359,16 +397,8 @@ def _build_main_window_service_factories(
             parent=parent,
         ),
         congregation_lookup=CongregationLookupService,
-        jwpub=lambda parent: JwpubService(
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            parent,
-        ),
-        memorial=lambda parent: MemorialService(
-            runtime_paths.jwpub_cache_dir,
-            jwpub_checksum_store,
-            parent,
-        ),
+        jwpub=create_publication_service,
+        memorial=create_memorial_service,
         remote_services=create_remote_services,
         about_settings=create_about_settings,
         auto_share_workers=ThreadedWorkerPool,
@@ -396,6 +426,9 @@ def _build_main_window_runtime(
     talk_theme_output_settings,
     window_host,
     main_window_class=None,
+    publication_assets,
+    meeting_content_policy,
+    meeting_asset_lifecycle,
 ):
     """Build application content for an already visible native window host."""
     timeline = startup_timeline()
@@ -476,8 +509,24 @@ def _build_main_window_runtime(
         jw_catalog_cache_paths,
     )
     clip_fetch_thread_factory = ClipFetchThreadFactory()
-    cache_scan_session_factory = CacheScanSessionFactory()
-    cache_deletion_session_factory = CacheDeletionSessionFactory()
+    cache_scan_session_factory = CacheScanSessionFactory(
+        additional_items=(
+            publication_assets.list_items
+            if meeting_content_policy.keep_images_for_manual_cleanup else None
+        ),
+    )
+
+    def remove_publication_asset(path: str) -> bool | None:
+        if not publication_assets.owns(path):
+            return None
+        return publication_assets.remove(path)
+
+    cache_deletion_session_factory = CacheDeletionSessionFactory(
+        additional_remover=(
+            remove_publication_asset
+            if meeting_content_policy.keep_images_for_manual_cleanup else None
+        ),
+    )
     qr_generation_session_factory = QrGenerationSessionFactory()
     playlist_thumbnail_store = ThumbnailStore(profile_paths.thumb_cache_dir)
     meeting_thumbnail_store = ThumbnailStore(
@@ -505,6 +554,10 @@ def _build_main_window_runtime(
         jwpub_checksum_store,
         installation_settings,
         application_maintenance,
+        publication_assets=publication_assets,
+        meeting_content_policy=meeting_content_policy,
+        meeting_asset_lifecycle=meeting_asset_lifecycle,
+        meeting_tree_store=meeting_tree_store,
     )
     media_controller = media.create_playback(main_window_profile_settings.media)
     background_media_controller = media.create_playback(main_window_profile_settings.media)
@@ -661,6 +714,13 @@ def _launch_profile_window(
         from solin.core.timer.application import TimerSession
         from solin.core.timer.infrastructure import QSettingsTimerRepository
 
+        release_profile_owner = container.meeting_asset_lifecycle.register_profile_owner(profile_id)
+
+        def close_profile_owner() -> None:
+            container.meeting_asset_lifecycle.shutdown()
+            release_profile_owner()
+
+        container.lifecycle.register_cleanup(close_profile_owner)
         timer_session = TimerSession(
             QSettingsTimerRepository.for_profile_settings(profile_context.settings),
             current_week_monday=current_monday(),
@@ -682,6 +742,9 @@ def _launch_profile_window(
             talk_theme_output_settings=container.talk_theme_output_settings,
             window_host=window,
             main_window_class=main_window_class,
+            publication_assets=container.publication_assets,
+            meeting_content_policy=container.meeting_content_policy,
+            meeting_asset_lifecycle=container.meeting_asset_lifecycle,
         )
         window.install_runtime(runtime)
         wire_profile_switch(
@@ -718,6 +781,7 @@ def _launch_profile_window(
             lambda: _prepare_profile_main_window(
                 profile_context.paths,
                 startup_cancellation,
+                asset_lifecycle=container.meeting_asset_lifecycle,
             ),
             install_main_window,
             window,

@@ -66,6 +66,7 @@ class MediaDestinationBridge(QObject):
     weekRequested = Signal(str, bool)
     playlistTargetRequested = Signal(str, str)
     meetingTargetRequested = Signal(str, str)
+    meetingDownloadRequested = Signal(str, str)
 
     def __init__(
         self,
@@ -287,6 +288,23 @@ class MediaDestinationBridge(QObject):
     @Slot()
     def retryWeek(self) -> None:  # noqa: N802 - QML API
         self.request_current_week(force=True)
+
+    @Slot(str)
+    def downloadMeeting(self, pub_type: str) -> None:  # noqa: N802 - QML API
+        if self._busy or pub_type not in {"mwb", "wt"}:
+            return
+        target = next(
+            (target for target in self._meeting_targets if target.get("pub_type") == pub_type),
+            None,
+        )
+        if target is None or target.get("available") or target.get("status") == "loading":
+            return
+        self._meeting_targets = [
+            dict(target, status="loading") if target.get("pub_type") == pub_type else target
+            for target in self._meeting_targets
+        ]
+        self.changed.emit()
+        self.meetingDownloadRequested.emit(pub_type, self.weekMonday)
 
     @Slot(str)
     def chooseMeeting(self, pub_type: str) -> None:  # noqa: N802 - QML API

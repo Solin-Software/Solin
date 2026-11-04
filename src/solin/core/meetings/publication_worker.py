@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import time
 import sqlite3
 import threading
-from collections.abc import Iterable, Mapping
-from datetime import date
+from copy import deepcopy
+from collections.abc import Callable, Iterable
+from datetime import date, timedelta
 from os import PathLike
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
+from uuid import uuid4
+
+if TYPE_CHECKING:
+    from solin.core.media.publication_assets import PublicationAssetStore
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -19,10 +26,18 @@ from solin.core.jw.publication_archive import (
     resolve_jwpub_archive,
     resolve_meeting_media,
 )
+from solin.core.jw.publication_links import JwpubMediaInfo
 
 from . import models as meeting_models
-from .jwpub_cache import JwpubCache, JwpubChecksumStore, needs_jwpub_download
-from .meeting_weeks import mwb_issue_for_week, watchtower_issue_candidates
+from .content_policy import (
+    MeetingContentError,
+    MeetingContentPolicy,
+    MeetingContentOperation,
+    PublicationContentRequest,
+    publication_dependency,
+)
+from .jwpub_cache import JwpubCache, JwpubChecksumStore, local_jwpub_checksum, needs_jwpub_download
+from .meeting_weeks import current_monday, mwb_issue_for_week, watchtower_issue_candidates
 from .publication_content import (
     parse_publication_ref_items,
     read_mwb_week_content,
@@ -52,6 +67,8 @@ class JwpubWorker(QObject):
       media_resolved(request_id, metadata)
     """
 
+    asset_changed = Signal(str)
+    content_checked = Signal(object, str, object)
     mwb_done = Signal(str, object)
     wt_done = Signal(str, object)
     cbs_done = Signal(str, object)
@@ -65,10 +82,25 @@ class JwpubWorker(QObject):
         jwpub_cache_dir: str | PathLike[str],
         checksum_store: JwpubChecksumStore,
         parent=None,
+        *,
+        asset_store: PublicationAssetStore | None = None,
+        content_policy: MeetingContentPolicy | None = None,
+        protected_publication_sources: Callable[[], Iterable[str]] | None = None,
     ) -> None:
         super().__init__(parent)
         self._cache = JwpubCache(jwpub_cache_dir)
+        self._asset_store = asset_store
+        self._protected_sources = protected_publication_sources or (lambda: ())
+        self._asset_namespace = uuid4().hex
+        self._asset_paths: set[str] = set()
+        self._legacy_restored: set[str] = set()
+        self._cancelled_requests: set[tuple[str, str, bool, int]] = set()
+        self._request_lock = threading.Lock()
+        self._current_request: tuple[str, str, bool, int] | None = None
+        self._content_policy = content_policy or MeetingContentPolicy()
+        self._remote_observations: dict[tuple[str, str, str], tuple[float, Any]] = {}
         self._checksum_store = checksum_store
+        self._downloaded_publications: set[tuple[str, str, str]] = set()
         self._lang = "T"
         self._is_sign_language = False
         self._request_generation = 0
@@ -79,8 +111,34 @@ class JwpubWorker(QObject):
         self._cancelled.set()
 
     def _emit_if_active(self, signal, *args) -> None:
-        if not self._cancelled.is_set():
+        if not self._is_cancelled():
             signal.emit(*args)
+
+    def cancel_request(self, key: tuple[str, str, bool, int]) -> None:
+        with self._request_lock:
+            self._cancelled_requests.add(key)
+
+    def _is_cancelled(self) -> bool:
+        with self._request_lock:
+            return self._cancelled.is_set() or self._current_request in self._cancelled_requests
+
+    def release_assets(self, key: tuple[str, str, bool, int]) -> None:
+        with self._request_lock:
+            self._cancelled_requests.discard(key)
+        if self._asset_store is not None:
+            self._asset_store.release(self._asset_namespace + repr(key))
+
+    def _publish_image(self, source: Path, *, title: str, expected_hash: str) -> str:
+        if self._asset_store is None:
+            raise RuntimeError("A publication asset store is required to prepare meeting images")
+        candidate = str(self._asset_store.root / (expected_hash + source.suffix.lower()))
+        with self._asset_store.lease([candidate]):
+            destination = self._asset_store.materialize(source, title=title)
+            self._asset_paths.add(destination)
+            self._asset_store.retain(
+                self._asset_namespace + repr(self._current_request), self._asset_paths
+            )
+        return destination
 
     def _new_week_data(self, monday: date, **values) -> meeting_models.WeekData:
         return meeting_models.WeekData(
@@ -124,7 +182,7 @@ class JwpubWorker(QObject):
 
     # ── Load week ─────────────────────────────────────────────────────────────
 
-    @Slot(object, bool, str, bool, int, object, str, object, object)
+    @Slot(object, bool, str, bool, int, str, object)
     def load_week(
         self,
         monday: date,
@@ -132,218 +190,486 @@ class JwpubWorker(QObject):
         language: str = "T",
         is_sign_language: bool = False,
         generation: int = 0,
-        materialize_cached_publications: object = None,
         known_wt_issue: str = "",
-        persisted_source_checksums: object = None,
-        repair_cache_paths: object = None,
-    ):
-        """
-        Entry point: load MWB + WT for the given week.
-
-        Stale-while-revalidate (SWR):
-        Phase 1 — MATERIALIZE: if the persisted publication tree is missing or lacks
-                  a canonical baseline, use a confirmed local copy. A tree with a
-                  persisted baseline is authoritative and is not rebuilt from cached JWPUB.
-        Phase 2 — REVALIDATE: query the API in the background (worker thread). Download,
-                  read, and emit again only when the server checksum actually changes.
-                  Older trees without a baseline receive one confirmed materialization
-                  to record the official structure.
-
-        force=True (error retry / language change) skips serving cached content and
-        performs a clean revalidation, preserving a full reload's semantics.
-        """
+        content_request: PublicationContentRequest | None = None,
+    ) -> None:
+        """Execute one explicit content operation for the selected publications."""
         if self._cancelled.is_set():
             return
+        request = content_request or PublicationContentRequest()
         self._lang = language or "T"
         self._is_sign_language = bool(is_sign_language)
         self._request_generation = max(0, int(generation))
-        cached_publications = (
-            materialize_cached_publications
-            if isinstance(materialize_cached_publications, Iterable)
-            and not isinstance(materialize_cached_publications, (str, bytes))
-            else ()
+        self._current_request = (
+            monday.isoformat(),
+            self._lang,
+            self._is_sign_language,
+            self._request_generation,
         )
-        materialize_cached = frozenset(
-            str(pub_type) for pub_type in cached_publications if pub_type in {"mwb", "wt"}
-        )
-        persisted_checksums = (
-            persisted_source_checksums if isinstance(persisted_source_checksums, Mapping) else {}
-        )
-        mwb_source_checksum = str(persisted_checksums.get("mwb") or "")
-        wt_source_checksum = str(persisted_checksums.get("wt") or "")
-        repair_paths = (
-            repair_cache_paths
-            if isinstance(repair_cache_paths, Iterable)
-            and not isinstance(repair_cache_paths, (str, bytes))
-            else ()
-        )
-        self._cache.repair_extracts_for_sources(
-            source
-            for source in repair_paths
-            if isinstance(source, (str, PathLike))
-        )
+        self._asset_paths = set()
+        self._legacy_restored = set()
+        self._legacy_archive_proofs: dict[Path, str] = {}
+        self._loaded_publications: set[tuple[str, str, str]] = set()
+        self._downloaded_publications.clear()
+        if force:
+            self._remote_observations.clear()
         try:
-            mwb_served = False
-            wt_served: Optional[str] = None
-            if not force:
-                if "mwb" in materialize_cached:
-                    mwb_served = self._serve_mwb_cached(monday)
-                if "wt" in materialize_cached:
-                    wt_served = self._serve_wt_cached(monday)
-            self._revalidate_mwb(
-                monday,
-                mwb_served,
-                materialize_cached="mwb" in materialize_cached,
-                persisted_source_checksum=mwb_source_checksum,
-            )
-            self._revalidate_wt(
-                monday,
-                wt_served,
-                materialize_cached="wt" in materialize_cached,
-                known_issue=str(known_wt_issue or ""),
-                persisted_source_checksum=wt_source_checksum,
-            )
+            operation = self._cache.operation(protected_sources=tuple(self._protected_sources()))
+            with operation:
+                self._execute_content_request(monday, str(known_wt_issue), request)
+        except Exception as exc:  # noqa: BLE001 - Qt worker boundary always terminates failed requests
+            log.exception("Meeting content operation failed")
+            for pub_type in request.publications:
+                self._emit_error(monday.isoformat(), pub_type, str(exc))
         finally:
-            self._emit_if_active(
-                self.load_finished,
-                monday.isoformat(),
-                self._lang,
-                self._is_sign_language,
-                self._request_generation,
+            self._prune_publications(monday, request)
+            self.load_finished.emit(
+                monday.isoformat(), self._lang, self._is_sign_language, self._request_generation
             )
 
-    # ── MWB ───────────────────────────────────────────────────────────────────
+    def _prune_publications(self, monday: date, request: PublicationContentRequest) -> None:
+        if self._asset_store is None:
+            return
+        preferred = set()
+        anchor = current_monday()
+        for week in (anchor, anchor + timedelta(weeks=1)):
+            preferred.add(("mwb", self._lang, mwb_issue_for_week(week)))
+            preferred.update(
+                ("w", self._lang, issue) for issue in watchtower_issue_candidates(week)
+            )
+        if monday in {anchor, anchor + timedelta(weeks=1)}:
+            preferred.update(self._loaded_publications)
+            preferred.update(
+                (dep["pub"], dep["language"], dep["issue"])
+                for dependencies in request.dependencies.values()
+                for dep in dependencies
+            )
+        try:
+            self._cache.prune(
+                protected_sources=tuple(set(self._protected_sources()) | self._legacy_restored),
+                preferred_publications=preferred,
+            )
+        except Exception:  # noqa: BLE001 - optional maintenance must fail closed without failing committed content
+            log.warning("Could not prune publication cache", exc_info=True)
 
-    def _serve_mwb_cached(self, monday: date) -> bool:
-        """Phase 1 (SWR): render MWB from local cache without network access. True if served."""
-        issue = mwb_issue_for_week(monday)
-        lang = self._lang
-        if not self._cache.can_materialize("mwb", lang, issue):
-            return False
-        self._parse_mwb(
-            self._new_week_data(
-                monday,
-                mwb_status="loading",
-                mwb_issue=issue,
-                mwb_source_checksum=self._checksum_store.get("mwb", lang, issue),
-            ),
-            monday,
-            issue,
-            lang,
-        )
-        return True
+    def _resolve_archive(self, pub: str, language: str, issue: str):
+        key = (pub, language, issue)
+        now = time.monotonic()
+        cached = self._remote_observations.get(key)
+        if cached is not None and now - cached[0] < 6 * 60 * 60:
+            return cached[1]
+        info = resolve_jwpub_archive(pub, language, issue)
+        if info.checksum:
+            self._remote_observations[key] = (now, info)
+        return info
 
-    def _revalidate_mwb(
+    def _execute_content_request(
+        self, monday: date, known_wt_issue: str, request: PublicationContentRequest
+    ) -> None:
+        if request.operation == MeetingContentOperation.REPAIR:
+            self._repair_images(monday, request)
+            return
+        cached: dict[str, meeting_models.WeekData] = {}
+        if request.operation != MeetingContentOperation.CHECK:
+            for pub_type in sorted(request.publications):
+                if self._is_cancelled():
+                    return
+                try:
+                    data = self._serve_cached_publication(monday, known_wt_issue, pub_type, request)
+                    if data is not None:
+                        cached[pub_type] = data
+                except Exception:  # noqa: BLE001 - a damaged cache must not prevent revalidation
+                    log.warning("Could not serve cached %s", pub_type, exc_info=True)
+        for pub_type in sorted(request.publications):
+            if self._is_cancelled():
+                return
+            try:
+                self._execute_publication_request(
+                    monday, known_wt_issue, pub_type, request, cached.get(pub_type)
+                )
+            except Exception as exc:  # noqa: BLE001 - independent publications must fail separately
+                log.exception("Meeting %s operation failed for %s", request.operation, pub_type)
+                if pub_type not in cached:
+                    self._emit_error(monday.isoformat(), pub_type, str(exc))
+                elif pub_type == "mwb":
+                    self._revalidate_midweek_references(
+                        monday, cached[pub_type], request.dependencies.get(pub_type, [])
+                    )
+
+    def _source_matches_applied(
         self,
-        monday: date,
-        served: bool,
-        *,
-        materialize_cached: bool,
-        persisted_source_checksum: str,
-    ):
-        """
-        Phase 2 (SWR): query the API and emit again only if server content changed.
-        ``served`` indicates whether phase 1 already displayed a cached copy.
-        """
-        key = monday.isoformat()
-        issue = mwb_issue_for_week(monday)
-        lang = self._lang
+        pub: str,
+        issue: str,
+        dependencies: Iterable[dict[str, str]],
+        remote_checksum: str = "",
+    ) -> bool:
+        applied = [
+            dependency
+            for dependency in dependencies
+            if (dependency["pub"], dependency["language"]) == (pub, self._lang)
+            and dependency.get("checksum")
+        ]
+        cached = self._checksum_store.get(pub, self._lang, issue)
+        return (
+            not applied
+            or (pub, self._lang, issue) in self._downloaded_publications
+            or any(
+                dependency["issue"] == issue and dependency["checksum"] == cached
+                for dependency in applied
+            )
+            or bool(remote_checksum and cached == remote_checksum)
+        )
 
-        archive_info = resolve_jwpub_archive("mwb", lang, issue)
-        url = archive_info.download_url
-        checksum = archive_info.checksum
-        not_found = archive_info.not_found
-
-        if not url:
-            # API unreachable, or publication unavailable for this week/language.
-            if served or not materialize_cached:
-                return  # Cache already displayed; nothing to do.
-            if self._cache.can_materialize("mwb", lang, issue):
-                log.warning("mwb %s: API unreachable, falling back to cached copy", issue)
-                self._parse_mwb(
+    def _serve_cached_publication(
+        self, monday: date, known_wt_issue: str, pub_type: str, request: PublicationContentRequest
+    ) -> meeting_models.WeekData | None:
+        dependencies = request.dependencies.get(pub_type, [])
+        if pub_type == "mwb":
+            issue = mwb_issue_for_week(monday)
+            if self._cache.can_materialize(
+                "mwb", self._lang, issue
+            ) and self._source_matches_applied("mwb", issue, dependencies):
+                return self._parse_mwb(
                     self._new_week_data(
                         monday,
                         mwb_status="loading",
                         mwb_issue=issue,
-                        mwb_source_checksum=self._checksum_store.get("mwb", lang, issue),
+                        mwb_source_checksum=self._checksum_store.get("mwb", self._lang, issue),
                     ),
                     monday,
                     issue,
-                    lang,
+                    self._lang,
+                    dependencies,
+                    cache_only=True,
                 )
-                return
-            self._emit_error(key, "mwb", "NOT_FOUND" if not_found else f"No URL for mwb {issue}")
-            return
+        elif pub_type == "wt":
+            candidates = [known_wt_issue] if known_wt_issue else watchtower_issue_candidates(monday)
+            for issue in dict.fromkeys(candidates):
+                if self._is_cancelled():
+                    return None
+                if not self._cache.can_materialize(
+                    "w", self._lang, issue
+                ) or not self._source_matches_applied("w", issue, dependencies):
+                    continue
+                data = self._new_week_data(
+                    monday,
+                    wt_status="loading",
+                    wt_source_checksum=self._checksum_store.get("w", self._lang, issue),
+                )
+                if self._try_wt_cached(data, monday, issue, self._lang, emit_errors=False):
+                    return data
+        return None
 
-        needs_materialization_download = materialize_cached and not served
-        if not needs_materialization_download and not self._needs_jwpub_refresh(
-            "mwb",
-            lang,
-            issue,
-            checksum,
-            persisted_source_checksum=persisted_source_checksum,
-        ):
-            if (not served and materialize_cached) or (
-                checksum and checksum != persisted_source_checksum
+    def _revalidate_midweek_references(
+        self,
+        monday: date,
+        cached: meeting_models.WeekData,
+        dependencies: Iterable[dict[str, str]],
+    ) -> None:
+        data = deepcopy(cached)
+        if data.mwb_publication_refs:
+            self._load_mwb_publication_refs(monday, data, data.mwb_publication_refs, dependencies)
+        else:
+            data.cbs_status = "idle"
+            self._emit_if_active(self.mwb_done, monday.isoformat(), deepcopy(data))
+
+    def _execute_publication_request(
+        self,
+        monday: date,
+        known_wt_issue: str,
+        pub_type: str,
+        request: PublicationContentRequest,
+        cached: meeting_models.WeekData | None = None,
+    ) -> None:
+        if request.operation == MeetingContentOperation.CHECK:
+            observed = {}
+            for dep in request.dependencies.get(pub_type, []):
+                if self._is_cancelled():
+                    return
+                info = self._resolve_archive(dep["pub"], dep["language"], dep["issue"])
+                if info.checksum:
+                    observed[":".join((dep["pub"], dep["language"], dep["issue"]))] = info.checksum
+            self._emit_if_active(
+                self.content_checked,
+                (monday, self._lang, self._is_sign_language, self._request_generation),
+                pub_type,
+                observed,
+            )
+        elif pub_type == "mwb":
+            issue = mwb_issue_for_week(monday)
+            info = self._resolve_archive("mwb", self._lang, issue)
+            if self._is_cancelled():
+                return
+            obtained = self._obtain_publication(
+                "mwb",
+                self._lang,
+                issue,
+                monday.isoformat(),
+                "mwb",
+                emit_error=cached is None,
+                archive_info=info,
+                refresh_unverified=not self._source_matches_applied(
+                    "mwb", issue, request.dependencies.get("mwb", []), info.checksum
+                ),
+            )
+            if cached is not None and (
+                not obtained
+                or cached.mwb_source_checksum == self._checksum_store.get("mwb", self._lang, issue)
+            ):
+                self._revalidate_midweek_references(
+                    monday, cached, request.dependencies.get("mwb", [])
+                )
+            elif obtained and self._source_matches_applied(
+                "mwb", issue, request.dependencies.get("mwb", []), info.checksum
             ):
                 self._parse_mwb(
                     self._new_week_data(
                         monday,
                         mwb_status="loading",
                         mwb_issue=issue,
-                        mwb_source_checksum=checksum,
+                        mwb_source_checksum=self._checksum_store.get("mwb", self._lang, issue),
                     ),
                     monday,
                     issue,
-                    lang,
+                    self._lang,
+                    request.dependencies.get("mwb", []),
                 )
-            return
+        elif pub_type == "wt":
+            candidates = [known_wt_issue] if known_wt_issue else watchtower_issue_candidates(monday)
+            if cached is not None:
+                candidates = [cached.wt_issue]
+            for issue in dict.fromkeys(candidates):
+                if self._is_cancelled():
+                    return
+                info = self._resolve_archive("w", self._lang, issue)
+                if self._is_cancelled():
+                    return
+                if self._obtain_publication(
+                    "w",
+                    self._lang,
+                    issue,
+                    monday.isoformat(),
+                    "wt",
+                    emit_error=False,
+                    archive_info=info,
+                    refresh_unverified=not self._source_matches_applied(
+                        "w", issue, request.dependencies.get("wt", []), info.checksum
+                    ),
+                ):
+                    if not self._source_matches_applied(
+                        "w", issue, request.dependencies.get("wt", []), info.checksum
+                    ):
+                        continue
+                    if cached is not None and cached.wt_source_checksum == self._checksum_store.get(
+                        "w", self._lang, issue
+                    ):
+                        return
+                    if self._try_wt_cached(
+                        self._new_week_data(
+                            monday,
+                            wt_status="loading",
+                            wt_source_checksum=self._checksum_store.get("w", self._lang, issue),
+                        ),
+                        monday,
+                        issue,
+                        self._lang,
+                    ):
+                        break
+            else:
+                if cached is None:
+                    self._emit_error(monday.isoformat(), "wt", "NOT_FOUND")
 
-        # Server content changed (or cache still empty): download and render again.
-        if not self._download(
-            "mwb",
-            lang,
-            issue,
-            url,
-            key,
-            "mwb",
-            emit_error=not (served or not materialize_cached),
+    def _obtain_publication(
+        self,
+        pub,
+        lang,
+        issue,
+        key,
+        pub_ui,
+        *,
+        emit_error=True,
+        archive_info: JwpubMediaInfo | None = None,
+        refresh_unverified: bool = False,
+    ) -> bool:
+        self._loaded_publications.add((pub, lang, issue))
+        info = archive_info if archive_info is not None else self._resolve_archive(pub, lang, issue)
+        cached = self._cache.can_materialize(pub, lang, issue)
+        if not info.download_url:
+            if not cached and emit_error:
+                self._emit_error(
+                    key, pub_ui, "NOT_FOUND" if info.not_found else "Publication unavailable"
+                )
+            return cached
+        if (refresh_unverified and not info.checksum) or needs_jwpub_download(
+            self._cache, self._checksum_store, pub, lang, issue, info.checksum
         ):
-            return  # Failed; if cached content was already served, it stays on screen.
-        self._checksum_store.save("mwb", lang, issue, checksum)
-        self._parse_mwb(
-            self._new_week_data(
-                monday,
-                mwb_status="loading",
-                mwb_issue=issue,
-                mwb_source_checksum=checksum,
-            ),
-            monday,
-            issue,
-            lang,
-        )
+            if not self._download(
+                pub,
+                lang,
+                issue,
+                info.download_url,
+                key,
+                pub_ui,
+                emit_error=emit_error,
+                expected_checksum=info.checksum,
+            ):
+                return False
+            self._record_downloaded_revision(pub, lang, issue, info.checksum)
+        return True
 
-    def _parse_mwb(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
+    def _record_downloaded_revision(self, pub: str, lang: str, issue: str, checksum: str) -> None:
+        checksum = checksum or local_jwpub_checksum(self._cache.jwpub_path(pub, lang, issue))
+        if not checksum:
+            self._checksum_store.delete(pub, lang, issue)
+            raise OSError("Downloaded publication revision could not be verified")
+        self._checksum_store.save(pub, lang, issue, checksum)
+        self._downloaded_publications.add((pub, lang, issue))
+
+    def _materialize_images(self, items, pub_dir: Path, pub: str, lang: str, issue: str) -> None:
+        checksum = self._checksum_store.get(pub, lang, issue)
+        for item in items:
+            if item.media_type != "image" or not item.file_path:
+                continue
+            source = Path(item.file_path)
+            member = source.resolve().relative_to(pub_dir.resolve()).as_posix()
+            item.publication_source = {
+                **publication_dependency(pub, lang, issue, checksum),
+                "member": member,
+            }
+            with source.open("rb") as stream:
+                item.asset_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+            item.file_path = self._publish_image(
+                source, title=item.label or item.caption, expected_hash=item.asset_hash
+            )
+            self._emit_if_active(self.asset_changed, item.file_path)
+
+    def _repair_images(self, monday: date, request: PublicationContentRequest) -> None:
+        if self._asset_store is None:
+            return
+        grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        for ref in request.repair_refs:
+            source = ref.get("publication_source")
+            if not isinstance(source, dict) or not ref.get("asset_hash"):
+                if not self._repair_legacy_image(ref, request):
+                    for pub_type in request.publications:
+                        self._emit_error(
+                            monday.isoformat(),
+                            pub_type,
+                            MeetingContentError.LEGACY_REVISION_UNVERIFIABLE,
+                        )
+                continue
+            identity = (
+                str(source.get("pub") or ""),
+                str(source.get("language") or ""),
+                str(source.get("issue") or ""),
+            )
+            if all(identity):
+                grouped.setdefault(identity, []).append(ref)
+        for (pub, lang, issue), refs in grouped.items():
+            unresolved = self._repair_from_local(pub, lang, issue, refs)
+            if not unresolved or self._is_cancelled():
+                continue
+            info = self._resolve_archive(pub, lang, issue)
+            if info.download_url and self._download(
+                pub,
+                lang,
+                issue,
+                info.download_url,
+                monday.isoformat(),
+                next(iter(request.publications)),
+                emit_error=False,
+                expected_checksum=info.checksum,
+            ):
+                self._record_downloaded_revision(pub, lang, issue, info.checksum)
+                unresolved = self._repair_from_local(pub, lang, issue, unresolved)
+            if unresolved:
+                for pub_type in request.publications:
+                    self._emit_error(
+                        monday.isoformat(), pub_type, MeetingContentError.IMAGE_REVISION_UNAVAILABLE
+                    )
+
+    def _repair_legacy_image(self, ref: dict[str, Any], request: PublicationContentRequest) -> bool:
+        """Bridge persisted extraction references only when the saved revision is proven."""
+        path = Path(str(ref.get("file_path") or "")).resolve()
+        for dependencies in request.dependencies.values():
+            for dependency in dependencies:
+                pub, language, issue = (dependency[name] for name in ("pub", "language", "issue"))
+                root = self._cache.extract_dir(pub, language, issue).resolve()
+                expected = dependency.get("checksum")
+                if not expected or not path.is_relative_to(root):
+                    continue
+                archive = self._cache.jwpub_path(pub, language, issue)
+                actual = self._legacy_archive_proofs.get(archive)
+                if actual is None:
+                    actual = local_jwpub_checksum(archive)
+                    self._legacy_archive_proofs[archive] = actual
+                if actual.casefold() != expected.casefold():
+                    continue
+                if path.is_file() or (
+                    self._cache.repair_extract_for_source(str(path)) and path.is_file()
+                ):
+                    self._legacy_restored.add(str(path))
+                    self._emit_if_active(self.asset_changed, str(path))
+                    return True
+        return False
+
+    def _repair_from_local(self, pub, lang, issue, refs):
+        pub_dir = self._ensure_extract(pub, lang, issue)
+        if pub_dir is None:
+            return refs
+        unresolved = []
+        for ref in refs:
+            source = ref["publication_source"]
+            path = (pub_dir / source["member"]).resolve()
+            if not path.is_relative_to(pub_dir.resolve()) or not path.is_file():
+                unresolved.append(ref)
+                continue
+            with path.open("rb") as stream:
+                actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+            if actual_hash != ref["asset_hash"]:
+                unresolved.append(ref)
+                continue
+            destination = self._publish_image(
+                path, title=str(ref.get("label") or ""), expected_hash=ref["asset_hash"]
+            )
+            self._emit_if_active(self.asset_changed, destination)
+            if Path(destination) != Path(str(ref.get("file_path") or "")):
+                unresolved.append(ref)
+        return unresolved
+
+    def _parse_mwb(
+        self,
+        wd: meeting_models.WeekData,
+        monday: date,
+        issue: str,
+        lang: str,
+        applied_dependencies: Iterable[dict[str, str]] = (),
+        *,
+        cache_only: bool = False,
+    ) -> meeting_models.WeekData | None:
         key = monday.isoformat()
         pub_dir = self._ensure_extract("mwb", lang, issue)
         db_path = self._cache.db_path("mwb", lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
             wd.mwb_status = "error"
-            self._emit_error(key, "mwb", "Extraction failed")
-            return
+            if not cache_only:
+                self._emit_error(key, "mwb", "Extraction failed")
+            return None
         try:
             content = read_mwb_week_content(pub_dir, db_path, monday)
         except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
             log.exception("Could not parse MWB publication %s/%s", lang, issue)
             wd.mwb_status = "error"
-            self._emit_error(key, "mwb", str(exc))
-            return
+            if not cache_only:
+                self._emit_error(key, "mwb", str(exc))
+            return None
         if content is None:
             wd.mwb_status = "empty"
-            self._emit_if_active(self.mwb_done, key, wd)
-            return
+            self._emit_if_active(self.mwb_done, key, deepcopy(wd))
+            return wd
 
-        wd.mwb_pub_dir = pub_dir
+        self._materialize_images(content.media_items, pub_dir, "mwb", lang, issue)
+        wd.mwb_dependencies = [publication_dependency("mwb", lang, issue, wd.mwb_source_checksum)]
         wd.mwb_date_label = content.date_label
         wd.mwb_week_title = content.date_label
         wd.mwb_all_media = content.media_items
@@ -352,124 +678,31 @@ class JwpubWorker(QObject):
         wd.mwb_status = "ready"
         wd.cbs_ref = content.cbs_ref
         sync_cbs_from_publication_refs(wd)
-        if content.publication_refs:
+        if cache_only or content.publication_refs:
             wd.cbs_status = "loading"
-        self._emit_if_active(self.mwb_done, key, wd)
+        # Queued Qt signals carry Python objects by reference. Publish an independent
+        # base snapshot before enrichment mutates reference items and dependencies.
+        self._emit_if_active(self.mwb_done, key, deepcopy(wd))
         if content.publication_refs:
-            try:
+            self._load_mwb_publication_refs(
+                monday, wd, content.publication_refs, applied_dependencies, cache_only=True
+            )
+            if not cache_only and not self._is_cancelled():
                 self._load_mwb_publication_refs(
-                    monday,
-                    wd,
-                    content.publication_refs,
+                    monday, wd, content.publication_refs, applied_dependencies
                 )
-            except Exception:  # noqa: BLE001 - worker boundary must terminate the context
-                log.exception(
-                    "Could not load MWB publication references for %s/%s",
-                    lang,
-                    issue,
-                )
-                wd.cbs_status = "error"
-                self._emit_if_active(self.cbs_done, key, wd)
+        return wd
 
     # ── WT ────────────────────────────────────────────────────────────────────
 
-    def _serve_wt_cached(self, monday: date) -> Optional[str]:
-        """
-        Phase 1 (SWR): render WT from local cache without network access.
-
-        The Watchtower issue containing the study week is not deterministic
-        (one month's issue may contain studies for another). Try each candidate
-        in order and serve the FIRST cached issue containing the week.
-        Return the issue served, or None if no local copy is suitable.
-        """
-        lang = self._lang
-        for issue in watchtower_issue_candidates(monday):
-            if not self._cache.can_materialize("w", lang, issue):
-                continue
-            wd = self._new_week_data(
-                monday,
-                wt_status="loading",
-                wt_source_checksum=self._checksum_store.get("w", lang, issue),
-            )
-            if self._try_wt_cached(wd, monday, issue, lang):
-                return issue
-        return None
-
-    def _revalidate_wt(
-        self,
-        monday: date,
-        served_issue: Optional[str],
-        *,
-        materialize_cached: bool,
-        known_issue: str,
-        persisted_source_checksum: str,
-    ):
-        """
-        Phase 2 (SWR): revalidate the issue served from cache or recorded in the
-        persisted tree and emit again only if it changed. Without a known issue,
-        fall back to the cold resolver that probes candidates over the network.
-        """
-        lang = self._lang
-        issue = served_issue or known_issue
-        if issue:
-            key = monday.isoformat()
-            archive_info = resolve_jwpub_archive("w", lang, issue)
-            url = archive_info.download_url
-            checksum = archive_info.checksum
-            needs_materialization_download = materialize_cached and served_issue is None
-            if url and (
-                needs_materialization_download
-                or self._needs_jwpub_refresh(
-                    "w",
-                    lang,
-                    issue,
-                    checksum,
-                    persisted_source_checksum=persisted_source_checksum,
-                )
-            ):
-                if self._download(
-                    "w",
-                    lang,
-                    issue,
-                    url,
-                    key,
-                    "wt",
-                    emit_error=materialize_cached,
-                ):
-                    self._checksum_store.save("w", lang, issue, checksum)
-                    self._try_wt_cached(
-                        self._new_week_data(
-                            monday,
-                            wt_status="loading",
-                            wt_source_checksum=checksum,
-                        ),
-                        monday,
-                        issue,
-                        lang,
-                    )
-            elif checksum and checksum != persisted_source_checksum:
-                self._try_wt_cached(
-                    self._new_week_data(
-                        monday,
-                        wt_status="loading",
-                        wt_source_checksum=checksum,
-                    ),
-                    monday,
-                    issue,
-                    lang,
-                )
-            return
-        if not materialize_cached:
-            return
-        # Cold path: no usable cache; probe candidates and download over the network.
-        self._download_wt_chain(
-            monday,
-            lang,
-            watchtower_issue_candidates(monday)[:],
-        )
-
     def _try_wt_cached(
-        self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str
+        self,
+        wd: meeting_models.WeekData,
+        monday: date,
+        issue: str,
+        lang: str,
+        *,
+        emit_errors: bool = True,
     ) -> bool:
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
@@ -480,232 +713,149 @@ class JwpubWorker(QObject):
                 return False
         except (OSError, sqlite3.Error):
             return False
-        self._parse_wt(wd, monday, issue, lang)
-        return True
+        self._parse_wt(wd, monday, issue, lang, emit_errors=emit_errors)
+        return wd.wt_status in {"ready", "empty"}
 
-    def _download_wt_chain(
+    def _parse_wt(
         self,
+        wd: meeting_models.WeekData,
         monday: date,
-        lang: str,
-        candidates: list[str],
-        _had_api_response: bool = False,
-    ):
-        """
-        Try each WT issue candidate in order.  Each candidate is independently
-        cache/ checksum gated so a valid local issue is never downloaded again.
-
-        When all candidates are exhausted:
-          • _had_api_response=True  → at least one API call replied but had no files
-                                       → emit NOT_FOUND (pub absent for this week)
-          • _had_api_response=False → all calls failed with network errors
-                                       → emit generic error (connectivity problem)
-        """
-        key = monday.isoformat()
-        had_api = _had_api_response
-
-        for issue in candidates:
-            is_cached = self._cache.can_materialize("w", lang, issue)
-            archive_info = resolve_jwpub_archive("w", lang, issue)
-            url = archive_info.download_url
-            checksum = archive_info.checksum
-            not_found = archive_info.not_found
-            had_api = had_api or not_found or bool(url)
-
-            if not url:
-                if is_cached:
-                    log.warning(
-                        "wt %s: API unreachable, falling back to cached copy",
-                        issue,
-                    )
-                    wd = self._new_week_data(
-                        monday,
-                        wt_status="loading",
-                        wt_source_checksum=self._checksum_store.get("w", lang, issue),
-                    )
-                    if self._try_wt_cached(wd, monday, issue, lang):
-                        return
-                continue
-
-            if needs_jwpub_download(self._cache, self._checksum_store, "w", lang, issue, checksum):
-                if not self._download("w", lang, issue, url, key, "wt"):
-                    continue
-                self._checksum_store.save("w", lang, issue, checksum)
-
-            wd = self._new_week_data(
-                monday,
-                wt_status="loading",
-                wt_source_checksum=checksum,
-            )
-            if self._try_wt_cached(wd, monday, issue, lang):
-                return
-
-        wd = self._new_week_data(
-            monday,
-            wt_status="not_found" if had_api else "error",
-        )
-        msg = "NOT_FOUND" if had_api else "No WT issue found for this week"
-        self._emit_error(key, "wt", msg)
-
-    def _needs_jwpub_refresh(
-        self,
-        publication: str,
-        language: str,
         issue: str,
-        checksum: str,
+        lang: str,
         *,
-        persisted_source_checksum: str,
-    ) -> bool:
-        """Return whether a confirmed remote revision requires tree rebuilding."""
-
-        if checksum and persisted_source_checksum and persisted_source_checksum == checksum:
-            return False
-        return needs_jwpub_download(
-            self._cache,
-            self._checksum_store,
-            publication,
-            language,
-            issue,
-            checksum,
-        )
-
-    def _parse_wt(self, wd: meeting_models.WeekData, monday: date, issue: str, lang: str):
+        emit_errors: bool = True,
+    ):
         key = monday.isoformat()
         pub_dir = self._ensure_extract("w", lang, issue)
         db_path = self._cache.db_path("w", lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
             wd.wt_status = "error"
-            self._emit_error(key, "wt", "Extraction failed")
+            if emit_errors:
+                self._emit_error(key, "wt", "Extraction failed")
             return
         try:
             content = read_watchtower_study_content(pub_dir, db_path, monday)
         except Exception as exc:  # noqa: BLE001 - Qt worker boundary reports failures to the UI
             log.exception("Could not parse WT publication %s/%s", lang, issue)
             wd.wt_status = "error"
-            self._emit_error(key, "wt", str(exc))
+            if emit_errors:
+                self._emit_error(key, "wt", str(exc))
             return
         if content is None:
             wd.wt_status = "empty"
-            self._emit_if_active(self.wt_done, key, wd)
+            self._emit_if_active(self.wt_done, key, deepcopy(wd))
             return
-        wd.wt_pub_dir = pub_dir
+        self._materialize_images(content.media_items, pub_dir, "w", lang, issue)
+        wd.wt_dependencies = [publication_dependency("w", lang, issue, wd.wt_source_checksum)]
         wd.wt_issue = issue
         wd.wt_study_title = content.title
         wd.wt_all_media = content.media_items
         wd.wt_cover_bytes = content.cover_bytes
         wd.wt_status = "ready"
-        self._emit_if_active(self.wt_done, key, wd)
-
-    def _sync_loaded_publication_refs(self, wd: meeting_models.WeekData, lang: str) -> None:
-        sync_cbs_from_publication_refs(wd)
-        cbs_ref = next(
-            (ref for ref in (wd.mwb_publication_refs or []) if getattr(ref, "is_cbs", False)),
-            None,
-        )
-        if cbs_ref:
-            wd.cbs_pub_dir = self._cache.extract_dir(
-                cbs_ref.pub,
-                lang,
-                cbs_ref.issue or "0",
-            )
+        self._emit_if_active(self.wt_done, key, deepcopy(wd))
 
     def _load_mwb_publication_refs(
         self,
         monday: date,
         wd: meeting_models.WeekData,
         refs: list[meeting_models.MeetingPublicationRef],
+        applied_dependencies: Iterable[dict[str, str]] = (),
+        *,
+        cache_only: bool = False,
     ):
         key = monday.isoformat()
         lang = self._lang
-
-        def build(cache_only: bool) -> tuple[list[meeting_models.MeetingPublicationRef], bool]:
-            out: list[meeting_models.MeetingPublicationRef] = []
-            downloaded = False
-            for ref in refs:
-                items, did_dl = self._load_publication_ref_items(
-                    key, lang, ref, cache_only=cache_only
+        dependencies = list(applied_dependencies)
+        wd.mwb_dependencies = [
+            publication_dependency("mwb", lang, wd.mwb_issue, wd.mwb_source_checksum)
+        ]
+        loaded = []
+        incomplete = False
+        for ref in deepcopy(refs):
+            if self._is_cancelled():
+                return
+            ref.items = []
+            try:
+                result, failed = self._load_publication_ref(
+                    key, ref, dependencies, cache_only=cache_only
                 )
-                downloaded = downloaded or did_dl
-                if items:
-                    ref.items = items
-                    out.append(ref)
-            return out, downloaded
+            except Exception:  # noqa: BLE001 - one reference must not suppress healthy siblings
+                log.warning("Could not load MWB reference %s/%s", ref.pub, ref.issue, exc_info=True)
+                result, failed = None, True
+            incomplete = incomplete or failed
+            if result is None:
+                if cache_only:
+                    loaded.append(ref)
+                continue
+            loaded.append(result)
+            dependency = publication_dependency(
+                result.pub,
+                lang,
+                result.issue or "0",
+                self._checksum_store.get(result.pub, lang, result.issue or "0"),
+            )
+            if dependency not in wd.mwb_dependencies:
+                wd.mwb_dependencies.append(dependency)
+        wd.mwb_publication_refs = loaded
+        sync_cbs_from_publication_refs(wd)
+        wd.cbs_status = (
+            "loading"
+            if cache_only
+            else ("error" if incomplete else ("ready" if loaded else "empty"))
+        )
+        self._emit_if_active(self.cbs_done, key, deepcopy(wd))
 
-        # Phase 1 (SWR): build references from cache, without network access.
-        cached, _ = build(cache_only=True)
-        if cached:
-            wd.mwb_publication_refs = list(cached)
-            self._sync_loaded_publication_refs(wd, lang)
-            wd.cbs_status = "ready"
-            self._emit_if_active(self.cbs_done, key, wd)
-
-        # Phase 2 (SWR): revalidate/download; emit again only if something changed.
-        loaded, downloaded = build(cache_only=False)
-        if loaded and (downloaded or len(loaded) != len(cached)):
-            wd.mwb_publication_refs = loaded
-            self._sync_loaded_publication_refs(wd, lang)
-            wd.cbs_status = "ready"
-            self._emit_if_active(self.cbs_done, key, wd)
-        elif not cached and not loaded:
-            wd.mwb_publication_refs = []
-            wd.cbs_status = "empty"
-            self._emit_if_active(self.cbs_done, key, wd)
-
-    def _load_publication_ref_items(
+    def _load_publication_ref(
         self,
         key: str,
-        lang: str,
         ref: meeting_models.MeetingPublicationRef,
-        cache_only: bool = False,
-    ) -> tuple[list[meeting_models.MeetingMedia], bool]:
-        """
-        Resolve media items for a publication reference.
-
-        cache_only=True → SWR serving phase: use local cache only, no network.
-        cache_only=False → revalidation phase: query the API and download if changed.
-
-        Return (items, downloaded). downloaded indicates whether this call downloaded
-        a new file, which determines whether to emit the batch again.
-        """
-        pub = ref.pub
-        issue = ref.issue or "0"
-
-        if cache_only:
-            for cand in [issue] if issue == "0" else [issue, "0"]:
-                if self._cache.can_materialize(pub, lang, cand):
-                    if cand != issue:
-                        ref.issue = cand
-                    return self._parse_ref_items(pub, lang, cand, ref), False
-            return [], False
-
-        archive_info = resolve_jwpub_archive(pub, lang, issue)
-        url = archive_info.download_url
-        checksum = archive_info.checksum
-        if not url and issue != "0":
-            fallback_info = resolve_jwpub_archive(pub, lang, "0")
-            fallback_url = fallback_info.download_url
-            fallback_checksum = fallback_info.checksum
-            if fallback_url or self._cache.can_materialize(pub, lang, "0"):
-                url = fallback_url
-                checksum = fallback_checksum
-                issue = "0"
-                ref.issue = "0"
-
-        is_cached = self._cache.can_materialize(pub, lang, issue)
-        if not url and not is_cached:
-            return [], False
-
-        downloaded = False
-        if url and needs_jwpub_download(
-            self._cache, self._checksum_store, pub, lang, issue, checksum
-        ):
-            if not self._download(pub, lang, issue, url, key, "mwb", emit_error=False):
-                return [], False
-            self._checksum_store.save(pub, lang, issue, checksum)
-            downloaded = True
-        elif not url and is_cached:
-            log.warning("mwb ref %s/%s: API unreachable, using stale cache", pub, issue)
-
-        return self._parse_ref_items(pub, lang, issue, ref), downloaded
+        dependencies: list[dict[str, str]],
+        *,
+        cache_only: bool,
+    ) -> tuple[meeting_models.MeetingPublicationRef | None, bool]:
+        candidates = [ref.issue or "0"]
+        if candidates[0] != "0":
+            candidates.append("0")
+        unavailable = True
+        for issue in candidates:
+            if self._is_cancelled():
+                return None, True
+            remote_checksum = ""
+            if cache_only:
+                if not self._cache.can_materialize(ref.pub, self._lang, issue):
+                    continue
+            else:
+                info = self._resolve_archive(ref.pub, self._lang, issue)
+                if self._is_cancelled():
+                    return None, True
+                if not self._obtain_publication(
+                    ref.pub,
+                    self._lang,
+                    issue,
+                    key,
+                    "mwb",
+                    emit_error=False,
+                    archive_info=info,
+                    refresh_unverified=not self._source_matches_applied(
+                        ref.pub, issue, dependencies, info.checksum
+                    ),
+                ):
+                    unavailable = unavailable and info.not_found
+                    continue
+                remote_checksum = info.checksum
+            if not self._source_matches_applied(ref.pub, issue, dependencies, remote_checksum):
+                unavailable = False
+                continue
+            ref.issue = issue
+            ref.items = self._parse_ref_items(ref.pub, self._lang, issue, ref)
+            return ref, False
+        previously_applied = any(
+            (dependency["pub"], dependency["language"], dependency["issue"])
+            == (ref.pub, self._lang, issue)
+            for dependency in dependencies
+            for issue in candidates
+        )
+        return None, cache_only or previously_applied or not unavailable
 
     def _parse_ref_items(
         self, pub: str, lang: str, issue: str, ref: meeting_models.MeetingPublicationRef
@@ -713,14 +863,17 @@ class JwpubWorker(QObject):
         pub_dir = self._ensure_extract(pub, lang, issue)
         db_path = self._cache.db_path(pub, lang, issue) if pub_dir else None
         if not pub_dir or not db_path:
-            return []
-        return parse_publication_ref_items(
+            raise ValueError("Referenced publication could not be extracted")
+        items = parse_publication_ref_items(
             pub_dir,
             db_path,
             ref.meps_doc_id,
             "cbs" if ref.is_cbs else ref.section,
             ref.caption,
+            strict=True,
         )
+        self._materialize_images(items, pub_dir, pub, lang, issue)
+        return items
 
     # ── Media URL resolution (async, called from main thread via signal) ──────
 
@@ -763,6 +916,8 @@ class JwpubWorker(QObject):
         key: str,
         pub_ui: str,
         emit_error: bool = True,
+        *,
+        expected_checksum: str = "",
     ) -> bool:
         """
         Download the file, emitting progress. Return True on success.
@@ -778,7 +933,8 @@ class JwpubWorker(QObject):
                 url,
                 dest,
                 progress=lambda pct: self._emit_progress(key, pub_ui, pct),
-                cancelled=self._cancelled.is_set,
+                cancelled=self._is_cancelled,
+                expected_checksum=expected_checksum,
             )
             # Keep the currently presented files available until a complete
             # replacement has been extracted in staging.

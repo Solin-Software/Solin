@@ -156,6 +156,7 @@ class MediaDestinationController(QObject):
         bridge.playlistTargetRequested.connect(self._request_playlist_target)
         bridge.weekRequested.connect(self._request_week)
         bridge.meetingTargetRequested.connect(self._request_meeting_target)
+        bridge.meetingDownloadRequested.connect(self._download_meeting)
 
         dialog = self._context.dialog_factory(bridge, self._context.dialog_parent)
         if not request.can_play:
@@ -265,6 +266,16 @@ class MediaDestinationController(QObject):
         )
         meetings.request_destination_week(monday, force=force)
 
+    @Slot(str, str)
+    def _download_meeting(self, pub_type: str, monday_text: str) -> None:
+        if self._active_bridge is None or pub_type not in {"mwb", "wt"}:
+            return
+        try:
+            monday = date.fromisoformat(monday_text)
+        except ValueError:
+            return
+        self._context.meetings_widget.prepare_destination_meeting(monday, pub_type)
+
     @Slot(str)
     def _on_destination_targets_changed(self, monday_text: str) -> None:
         bridge = self._active_bridge
@@ -329,6 +340,7 @@ class MediaDestinationController(QObject):
             return
         self._pending_meeting_session = session
         self._pending_meeting_key = (monday_text, pub_type)
+        session.closed.connect(self._on_meeting_session_closed)
         options = build_media_placement_options(
             session.placement_ref(),
             translate=translate_media_placement,
@@ -338,6 +350,14 @@ class MediaDestinationController(QObject):
             pub_type=pub_type,
             placement_options=options,
         )
+
+    def _on_meeting_session_closed(self, session: MeetingDestinationSession) -> None:
+        if self._pending_meeting_session is not session:
+            return
+        self._pending_meeting_session = None
+        self._pending_meeting_key = None
+        if self._active_bridge is not None:
+            self._active_bridge.show_meeting_error(_tr(_MEETING_UNAVAILABLE_SOURCE))
 
     def _add_to_playlist(
         self,
@@ -405,6 +425,11 @@ class MediaDestinationController(QObject):
         self._pending_meeting_key = None
 
         def add_prepared(batch: PreparedMediaBatch) -> None:
+            if session.is_closed:
+                self._context.notifications.error(_tr(_MEETING_UNAVAILABLE_SOURCE))
+                if completed is not None:
+                    completed(MediaDestinationOutcome(0, destination_accepted=False))
+                return
             if not batch.items:
                 session.close()
                 if completed is not None:

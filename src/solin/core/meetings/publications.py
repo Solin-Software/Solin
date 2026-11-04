@@ -23,13 +23,17 @@ This eliminates:
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import itertools
-from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, replace
 from datetime import date
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from solin.core.media.publication_assets import PublicationAssetStore
 
 from PySide6.QtCore import (
     QObject,
@@ -42,6 +46,7 @@ from solin.core.jw.publication_archive import resolve_meeting_media
 from . import models as meeting_models
 from .jwpub_cache import JwpubChecksumStore
 from .publication_worker import JwpubWorker
+from .content_policy import MeetingContentOperation, MeetingContentPolicy, PublicationContentRequest
 
 log = logging.getLogger(__name__)
 _STOPPING_PUBLICATION_SERVICES: set[object] = set()
@@ -55,11 +60,9 @@ class _WeekLoadRequest:
     is_sign_language: bool
     generation: int
     priority: int
-    materialize_cached_publications: frozenset[str]
     known_wt_issue: str
-    persisted_source_checksums: dict[str, str]
     order: int
-    repair_cache_paths: tuple[str, ...] = ()
+    content_request: PublicationContentRequest
 
 
 # JwpubService: runs on the main thread and manages the worker thread.
@@ -90,9 +93,12 @@ class JwpubService(QObject):
     context_error = Signal(str, str, str, str, bool, int)
     context_load_finished = Signal(str, str, bool, int)
     media_resolved = Signal(str, object)  # request_id, resolved metadata
+    content_settled = Signal()
+    asset_changed = Signal(str)
+    content_checked = Signal(object, str, object)
 
     # Internal signals dispatched to the worker thread
-    _sig_load_week = Signal(object, bool, str, bool, int, object, str, object, object)
+    _sig_load_week = Signal(object, bool, str, bool, int, str, object)
     _sig_set_lang = Signal(str)
     _sig_set_sign_language = Signal(bool)
     _sig_resolve = Signal(str, str, int, int, int, str, str, bool)
@@ -102,8 +108,14 @@ class JwpubService(QObject):
         jwpub_cache_dir: str | os.PathLike[str],
         checksum_store: JwpubChecksumStore,
         parent=None,
+        *,
+        asset_store: PublicationAssetStore | None = None,
+        content_policy: MeetingContentPolicy | None = None,
+        protected_publication_sources: Callable[[], Iterable[str]] | None = None,
     ) -> None:
         super().__init__(parent)
+        self.content_policy = content_policy or MeetingContentPolicy()
+        self.asset_store = asset_store
         self._active: dict[tuple[str, str, bool, int], meeting_models.WeekData] = {}
         self._lang = "T"
         self._is_sign_language = False
@@ -113,17 +125,23 @@ class JwpubService(QObject):
             _WeekLoadRequest,
         ] = {}
         self._active_load_key: tuple[str, str, bool, int] | None = None
+        self._cancelled_loads: set[tuple[str, str, bool, int]] = set()
 
         # Create the worker and its dedicated thread.
         self._thread = QThread(self)
         self._worker = JwpubWorker(
             jwpub_cache_dir,
             checksum_store,
+            asset_store=asset_store,
+            content_policy=self.content_policy,
+            protected_publication_sources=protected_publication_sources,
         )
         self._worker.moveToThread(self._thread)
         self._thread.finished.connect(self._worker.deleteLater)
 
         # Worker → JwpubService (main thread, automatic QueuedConnection)
+        self._worker.asset_changed.connect(self.asset_changed)
+        self._worker.content_checked.connect(self.content_checked)
         self._worker.mwb_done.connect(self._on_mwb_done)
         self._worker.wt_done.connect(self._on_wt_done)
         self._worker.cbs_done.connect(self._on_cbs_done)
@@ -209,79 +227,54 @@ class JwpubService(QObject):
         is_sign_language: bool | None = None,
         generation: int = 0,
         priority: int = 1,
-        materialize_cached_publications: Collection[str] | None = None,
         known_wt_issue: str = "",
-        persisted_source_checksums: Mapping[str, str] | None = None,
-        repair_cache_paths: Collection[str] | None = None,
-    ):
+        content_request: PublicationContentRequest | None = None,
+    ) -> None:
+        request = content_request or PublicationContentRequest()
         language = (language_code or self._lang).strip() or "T"
         is_sign = self._is_sign_language if is_sign_language is None else bool(is_sign_language)
         key = self._active_key(monday, language, is_sign, generation)
         pending = self._pending_loads.get(key)
         if pending is not None:
+            if pending.content_request.operation != request.operation:
+                raise ValueError("A content generation cannot contain different operations")
             pending.priority = max(pending.priority, int(priority))
-            pending.materialize_cached_publications |= frozenset(
-                str(pub_type)
-                for pub_type in (materialize_cached_publications or ())
-                if pub_type in {"mwb", "wt"}
-            )
-            pending.repair_cache_paths = tuple(
-                sorted(
+            pending.force |= force
+            pending.content_request = replace(
+                request,
+                publications=pending.content_request.publications | request.publications,
+                dependencies={**pending.content_request.dependencies, **request.dependencies},
+                repair_refs=tuple(
                     {
-                        *pending.repair_cache_paths,
-                        *(
-                            str(path)
-                            for path in (repair_cache_paths or ())
-                            if isinstance(path, (str, os.PathLike)) and str(path)
-                        ),
-                    }
-                )
+                        str(ref.get("file_path")): ref
+                        for ref in (*pending.content_request.repair_refs, *request.repair_refs)
+                    }.values()
+                ),
             )
             return
         if self._active_load_key == key:
             return
-        if not force and key in self._active:
-            # Entry already exists; reload only if either half of the week failed.
-            existing = self._active[key]
-            if existing.mwb_status not in ("error",) and existing.wt_status not in ("error",):
-                return
-        wd = meeting_models.WeekData(
-            monday=monday,
-            language_code=language,
-            is_sign_language=is_sign,
-            request_generation=max(0, int(generation)),
-        )
-        self._active[key] = wd
-        self._pending_loads[key] = _WeekLoadRequest(
-            monday,
-            force,
-            language,
-            is_sign,
-            max(0, int(generation)),
-            int(priority),
-            frozenset(
-                {"mwb", "wt"}
-                if materialize_cached_publications is None
-                else {
-                    str(pub_type)
-                    for pub_type in materialize_cached_publications
-                    if pub_type in {"mwb", "wt"}
-                }
-            ),
-            str(known_wt_issue or ""),
-            {
-                str(pub_type): str(checksum or "")
-                for pub_type, checksum in (persisted_source_checksums or {}).items()
-                if pub_type in {"mwb", "wt"}
-            },
-            next(self._load_order),
-            tuple(
-                sorted(
-                    str(path)
-                    for path in (repair_cache_paths or ())
-                    if isinstance(path, (str, os.PathLike)) and str(path)
+        if request.operation not in {MeetingContentOperation.CHECK, MeetingContentOperation.REPAIR}:
+            previous = self.get_week_data(monday, language_code=language, is_sign_language=is_sign)
+            wd = (
+                copy.copy(previous)
+                if previous is not None
+                else meeting_models.WeekData(
+                    monday=monday, language_code=language, is_sign_language=is_sign
                 )
-            ),
+            )
+            wd.request_generation = max(0, int(generation))
+            self._active[key] = wd
+        self._pending_loads[key] = _WeekLoadRequest(
+            monday=monday,
+            force=force,
+            language=language,
+            is_sign_language=is_sign,
+            generation=max(0, int(generation)),
+            priority=int(priority),
+            known_wt_issue=str(known_wt_issue or ""),
+            order=next(self._load_order),
+            content_request=request,
         )
         self._dispatch_week_load()
 
@@ -319,6 +312,10 @@ class JwpubService(QObject):
             generation,
         )
         self._pending_loads.pop(key, None)
+        self._active.pop(key, None)
+        if self._active_load_key == key:
+            self._cancelled_loads.add(key)
+            self._worker.cancel_request(key)
 
     def _dispatch_week_load(self) -> None:
         if self._active_load_key is not None or not self._pending_loads:
@@ -335,10 +332,8 @@ class JwpubService(QObject):
             request.language,
             request.is_sign_language,
             request.generation,
-            request.materialize_cached_publications,
             request.known_wt_issue,
-            request.persisted_source_checksums,
-            request.repair_cache_paths,
+            request.content_request,
         )
 
     def get_week_data(
@@ -423,9 +418,10 @@ class JwpubService(QObject):
     @Slot(str, object)
     def _on_mwb_done(self, key: str, wd: meeting_models.WeekData):
         active_key = self._active_key_for_week_data(wd)
+        if active_key != self._active_load_key or active_key in self._cancelled_loads:
+            return
         existing = self._active.get(active_key)
         if existing:
-            existing.mwb_pub_dir = wd.mwb_pub_dir
             existing.mwb_cover_bytes = wd.mwb_cover_bytes
             existing.mwb_date_label = wd.mwb_date_label
             existing.mwb_week_title = wd.mwb_week_title
@@ -434,6 +430,7 @@ class JwpubService(QObject):
             existing.mwb_status = wd.mwb_status
             existing.mwb_issue = wd.mwb_issue
             existing.mwb_source_checksum = wd.mwb_source_checksum
+            existing.mwb_dependencies = wd.mwb_dependencies
             existing.cbs_ref = wd.cbs_ref
             existing.cbs_status = wd.cbs_status
             self.mwb_ready.emit(key, existing)
@@ -446,13 +443,15 @@ class JwpubService(QObject):
     @Slot(str, object)
     def _on_wt_done(self, key: str, wd: meeting_models.WeekData):
         active_key = self._active_key_for_week_data(wd)
+        if active_key != self._active_load_key or active_key in self._cancelled_loads:
+            return
         existing = self._active.get(active_key)
         if existing:
-            existing.wt_pub_dir = wd.wt_pub_dir
             existing.wt_cover_bytes = wd.wt_cover_bytes
             existing.wt_study_title = wd.wt_study_title
             existing.wt_issue = wd.wt_issue
             existing.wt_source_checksum = wd.wt_source_checksum
+            existing.wt_dependencies = wd.wt_dependencies
             existing.wt_all_media = wd.wt_all_media
             existing.wt_status = wd.wt_status
             self.wt_ready.emit(key, existing)
@@ -465,9 +464,18 @@ class JwpubService(QObject):
     @Slot(str, object)
     def _on_cbs_done(self, key: str, wd: meeting_models.WeekData):
         active_key = self._active_key_for_week_data(wd)
+        if active_key != self._active_load_key or active_key in self._cancelled_loads:
+            return
         existing = self._active.get(active_key)
         if existing:
-            existing.cbs_pub_dir = wd.cbs_pub_dir
+            existing.mwb_cover_bytes = wd.mwb_cover_bytes
+            existing.mwb_date_label = wd.mwb_date_label
+            existing.mwb_week_title = wd.mwb_week_title
+            existing.mwb_all_media = wd.mwb_all_media
+            existing.mwb_status = wd.mwb_status
+            existing.mwb_issue = wd.mwb_issue
+            existing.mwb_source_checksum = wd.mwb_source_checksum
+            existing.mwb_dependencies = wd.mwb_dependencies
             existing.cbs_items = wd.cbs_items
             existing.mwb_publication_refs = wd.mwb_publication_refs
             existing.cbs_status = wd.cbs_status
@@ -486,6 +494,9 @@ class JwpubService(QObject):
         is_sign_language: bool,
         generation: int,
     ):
+        request_key = (key, language, bool(is_sign_language), max(0, int(generation)))
+        if request_key != self._active_load_key or request_key in self._cancelled_loads:
+            return
         self.progress.emit(key, pub, pct)
         self.context_progress.emit(
             key,
@@ -509,6 +520,9 @@ class JwpubService(QObject):
         # "NOT_FOUND" is a sentinel emitted by the worker when the JW API
         # confirmed the publication does not exist (empty files list).
         # Any other message means a generic connectivity / extraction failure.
+        request_key = (key, language, bool(is_sign_language), max(0, int(generation)))
+        if request_key != self._active_load_key or request_key in self._cancelled_loads:
+            return
         status = "not_found" if msg == "NOT_FOUND" else "error"
         wd = self._active.get(
             (key, language, bool(is_sign_language), max(0, int(generation))),
@@ -550,6 +564,15 @@ class JwpubService(QObject):
             is_sign_language,
             generation,
         )
+        self._worker.release_assets(key)
+        self._cancelled_loads.discard(key)
+        same_context = [candidate for candidate in self._active if candidate[:3] == key[:3]]
+        if same_context:
+            newest = max(same_context, key=lambda candidate: candidate[3])
+            for candidate in same_context:
+                if candidate != newest:
+                    self._active.pop(candidate, None)
+        self.content_settled.emit()
         self._dispatch_week_load()
 
     def _check_complete(self, key: str, wd: meeting_models.WeekData):

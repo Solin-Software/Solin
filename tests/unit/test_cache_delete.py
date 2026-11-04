@@ -115,3 +115,25 @@ def test_cache_deletion_session_reports_stable_paths(tmp_path):
     assert completed == [([str(first), str(second)], [])]
     assert not first.exists()
     assert not second.exists()
+
+
+def test_cache_deletion_routes_explicit_local_source_and_preserves_its_failure(tmp_path):
+    from solin.core.media.cache_delete import _CacheDeletionWorker
+
+    cache = tmp_path / "media"
+    cache.mkdir()
+    video = _cached_file(cache, "video.mp4")
+    image = str(tmp_path / "assets" / "image.jpg")
+    results = []
+
+    def remove_image(path):
+        if path == image:
+            raise OSError("asset is in use")
+        return None
+
+    worker = _CacheDeletionWorker(cache, [str(video), image], remove_image)
+    worker.completed.connect(lambda deleted, failures: results.append((deleted, failures)))
+    worker.run()
+
+    assert results == [([str(video)], [(image, "asset is in use")])]
+    assert not video.exists()
