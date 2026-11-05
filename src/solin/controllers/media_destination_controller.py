@@ -179,6 +179,9 @@ class MediaDestinationController(QObject):
             if play is not None:
                 play()
             return
+        if prepared_request.select_import_contents:
+            self._select_import_contents(prepared_request, selection.target, completed)
+            return
         if selection.destination == MediaDestinationKind.PLAYLIST:
             self._close_pending_meeting_session()
             self._add_to_playlist(prepared_request, selection.target, completed)
@@ -307,7 +310,7 @@ class MediaDestinationController(QObject):
                 _tr(_PLAYLIST_UNAVAILABLE_SOURCE)
             )
             return
-        options = build_media_placement_options(
+        options = [] if self._selects_import_contents() else build_media_placement_options(
             playlist_ref,
             translate=translate_media_placement,
         )
@@ -341,7 +344,7 @@ class MediaDestinationController(QObject):
         self._pending_meeting_session = session
         self._pending_meeting_key = (monday_text, pub_type)
         session.closed.connect(self._on_meeting_session_closed)
-        options = build_media_placement_options(
+        options = [] if self._selects_import_contents() else build_media_placement_options(
             session.placement_ref(),
             translate=translate_media_placement,
         )
@@ -358,6 +361,58 @@ class MediaDestinationController(QObject):
         self._pending_meeting_key = None
         if self._active_bridge is not None:
             self._active_bridge.show_meeting_error(_tr(_MEETING_UNAVAILABLE_SOURCE))
+
+    def _selects_import_contents(self) -> bool:
+        return bool(self._active_request and self._active_request.select_import_contents)
+
+    def _select_import_contents(
+        self,
+        request: MediaDestinationRequest,
+        target: object,
+        completed: CompletionCallback | None,
+    ) -> None:
+        paths = [asset.import_path for asset in request.assets if asset.import_path]
+        if isinstance(target, PlaylistDestinationTarget):
+            self._close_pending_meeting_session()
+            outcome = self._context.playlist_widget.import_publications_to_playlist_target(
+                paths, target,
+            )
+        elif isinstance(target, MeetingDestinationTarget):
+            session = self._take_meeting_session(target)
+            if session is None:
+                return
+            try:
+                outcome = session.import_publications(paths)
+            finally:
+                session.close()
+        else:
+            self._close_pending_meeting_session()
+            return
+        if outcome is not None and completed is not None:
+            completed(MediaDestinationOutcome(
+                outcome.added_count,
+                outcome.referenced_urls,
+                tuple(asset.source_id for asset in request.assets)
+                if outcome.destination_accepted else (),
+                outcome.destination_accepted,
+            ))
+
+    def _take_meeting_session(
+        self, target: MeetingDestinationTarget,
+    ) -> MeetingDestinationSession | None:
+        session = self._pending_meeting_session
+        if self._pending_meeting_key != (target.monday, target.pub_type):
+            self._close_pending_meeting_session()
+            try:
+                monday = date.fromisoformat(target.monday)
+            except ValueError:
+                return None
+            session = self._context.meetings_widget.open_destination_session(monday, target.pub_type)
+        self._pending_meeting_session = None
+        self._pending_meeting_key = None
+        if session is None:
+            self._context.notifications.error(_tr(_MEETING_UNAVAILABLE_SOURCE))
+        return session
 
     def _add_to_playlist(
         self,
@@ -404,25 +459,9 @@ class MediaDestinationController(QObject):
         if not isinstance(raw_target, MeetingDestinationTarget):
             self._close_pending_meeting_session()
             return
-        session = self._pending_meeting_session
-        if self._pending_meeting_key != (raw_target.monday, raw_target.pub_type):
-            self._close_pending_meeting_session()
-            try:
-                monday = date.fromisoformat(raw_target.monday)
-            except ValueError:
-                return
-            session = self._context.meetings_widget.open_destination_session(
-                monday,
-                raw_target.pub_type,
-            )
+        session = self._take_meeting_session(raw_target)
         if session is None:
-            self._context.notifications.error(
-                _tr(_MEETING_UNAVAILABLE_SOURCE)
-            )
             return
-
-        self._pending_meeting_session = None
-        self._pending_meeting_key = None
 
         def add_prepared(batch: PreparedMediaBatch) -> None:
             if session.is_closed:

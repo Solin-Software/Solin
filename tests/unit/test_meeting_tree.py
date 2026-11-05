@@ -2530,6 +2530,16 @@ class JwpubImportFactoryWiringTests(unittest.TestCase):
 
     def test_manual_import_uses_dynamic_linked_folder_destination(self):
         controller, factory = self.controller()
+        selections = []
+        controller._tree_session = SimpleNamespace(owner_id="meeting:test", generation=1)
+        controller._tree_key = "test"
+        controller._folder_mutation_pending = False
+        controller._jwpub_origin_generation = 0
+        controller._media_tree_runtime = SimpleNamespace(operations=object())
+        controller._jwpub_selection_factory = SimpleNamespace(
+            select=lambda paths, **options: selections.append((paths, options)),
+        )
+        controller.parent = lambda: None
 
         MeetingTreeController._import_jwpubs(
             controller,
@@ -2538,20 +2548,13 @@ class JwpubImportFactoryWiringTests(unittest.TestCase):
             4,
         )
 
-        self.assertEqual(
-            factory.calls,
-            [
-                (
-                    "publication.jwpub",
-                    {
-                        "lang": "T",
-                        "dest_images_dir": "linked-folder-cache",
-                        "parent": controller,
-                    },
-                )
-            ],
-        )
-        self.assertTrue(factory.threads[0].started)
+        self.assertEqual(factory.calls, [])
+        self.assertEqual(len(selections), 1)
+        paths, options = selections[0]
+        self.assertEqual(paths, ["publication.jwpub"])
+        self.assertEqual(options["language"], "T")
+        self.assertEqual(options["dest_images_dir"], "linked-folder-cache")
+        self.assertEqual((options["list_id"], options["insert_index"]), ("root", 4))
 
     def test_meeting_folder_import_uses_factory_default_destination(self):
         controller, factory = self.controller()

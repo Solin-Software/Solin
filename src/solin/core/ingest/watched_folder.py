@@ -7,7 +7,7 @@ Responsibilities:
   - Scan the configured root folder and return immediate subfolders as playlists.
   - Scan a subfolder and return its media files as playlist items.
   - Convert documents (PDF/PPTX/DOCX), saving JPEGs in the subfolder cache.
-  - Process .jwpub files (extract images and resolve videos).
+  - Process .jwpub files (publish embedded media and resolve remote references).
   - Process .jwlplaylist files (extract embedded media and resolve URLs).
   - Watch filesystem changes with QFileSystemWatcher.
   - Record imports and organization in the shared journal.
@@ -27,7 +27,7 @@ Journal (.solin_sync/playlist/):
 
 Cache (.solin_cache/):
   - A subdirectory within each watched subfolder.
-  - Stores generated outputs (PDF JPEGs, JWPUB images, embedded JWLPLAYLIST media).
+  - Stores generated outputs (PDF JPEGs and embedded JWPUB/JWLPLAYLIST media).
 """
 from __future__ import annotations
 
@@ -264,7 +264,7 @@ def _scan_subfolder(sub: Path, manifest: dict) -> list[dict]:
                     item["_source"], item["_source_output"] = sources[0]
                 items.append(item)
 
-    # 3. Manifest-backed occurrences (remote media and embedded JWL assets).
+    # 3. Manifest-backed occurrences (remote media and embedded archive assets).
     for src_name, entry in manifest.get("processed", {}).items():
         for occurrence_index, vi in enumerate(entry.get("virtual_items", [])):
             vid = vi.get("id") or _path_id(
@@ -440,15 +440,20 @@ def remove_item_from_manifest(
     Returns True if something was actually cleaned up.
     """
     sub = Path(subfolder_path)
+
+    def resource_key(candidate: Mapping[str, Any]) -> str:
+        url = str(candidate.get("url") or "")
+        return portable_resource_key(url, sub) if url else ""
+
     service = playlist_sync(sub)
     with service.lock:
         playlist = load_manifest_playlist(subfolder_path)
         item_id = str(item.get("id") or "")
-        key = portable_resource_key(str(item.get("url") or ""), sub)
+        key = resource_key(item)
         before = playlist["items"]
         playlist["items"] = [candidate for candidate in before if (
             str(candidate.get("id") or "") != item_id if item_id
-            else portable_resource_key(str(candidate.get("url") or ""), sub) != key
+            else resource_key(candidate) != key
         )]
         changed = len(playlist["items"]) != len(before)
         snapshot = service.save(playlist)
@@ -467,8 +472,7 @@ def remove_item_from_manifest(
                                           if str(candidate.get("id") or "") != item_id]
                 snapshot = service.update_processed(snapshot, source, entry)
         # Preserve references inserted locally but not yet published by the UI.
-        remaining_keys = {portable_resource_key(str(other.get("url") or ""), sub)
-                          for other in remaining_items}
+        remaining_keys = {resource_key(other) for other in remaining_items}
         if key not in remaining_keys:
             service.reconcile_resources(snapshot)
         return changed or bool(key)
@@ -947,37 +951,41 @@ class WatchedFolderSyncThread(QThread):
                     resolve_urls=True,
                 )
             )
-            outputs = []
+            staged_assets: dict[str, str] = {}
             virtuals = []
             ordinals: dict[str, int] = {}
             for item in items:
                 self._check_interrupted()
-                if item.get("type") == "image" and item.get("url"):
-                    image_path = Path(item["url"])
-                    if image_path.parent != staging_dir or not image_path.is_file():
-                        raise RuntimeError(
-                            f"JWPUB image was not staged correctly: '{image_path.name}'"
-                        )
-                    digest = content_signature(image_path)["sha256"]
-                    name = f"image_{digest}{image_path.suffix.lower()}"
-                    target = staging_dir / name
-                    if not target.exists():
-                        os.replace(image_path, target)
-                    if name not in outputs:
-                        outputs.append(name)
-                else:
-                    virtuals.append({
-                        "id":            _imported_occurrence_id(jwpub_path, item, ordinals),
-                        "title":         item.get("title", stem),
-                        "url":           item.get("url", ""),
-                        "type":          item.get("type", "video"),
-                        "key_symbol":    item.get("key_symbol"),
-                        "track":         item.get("track"),
-                        "issue_tag":     item.get("issue_tag"),
-                        "doc_id":        item.get("doc_id"),
-                        "meps_language": item.get("meps_language", 0),
-                    })
+                url = item.get("url") or ""
+                if url and not url.startswith(("http://", "https://")):
+                    name = staged_assets.get(url)
+                    if name is None:
+                        media_path = Path(url)
+                        if media_path.parent != staging_dir or not media_path.is_file():
+                            raise RuntimeError(
+                                f"JWPUB media was not staged correctly: '{media_path.name}'"
+                            )
+                        digest = content_signature(media_path)["sha256"]
+                        prefix = "image" if item.get("type") == "image" else "embedded"
+                        name = f"{prefix}_{digest}{media_path.suffix.lower()}"
+                        target = staging_dir / name
+                        if not target.exists():
+                            os.replace(media_path, target)
+                        staged_assets[url] = name
+                    url = (Path(CACHE_DIR_NAME) / name).as_posix()
+                virtuals.append({
+                    "id":            _imported_occurrence_id(jwpub_path, dict(item, url=url), ordinals),
+                    "title":         item.get("title", stem),
+                    "url":           url,
+                    "type":          item.get("type", "video"),
+                    "key_symbol":    item.get("key_symbol"),
+                    "track":         item.get("track"),
+                    "issue_tag":     item.get("issue_tag"),
+                    "doc_id":        item.get("doc_id"),
+                    "meps_language": item.get("meps_language", 0),
+                })
             self._check_interrupted()
+            outputs = list(dict.fromkeys(staged_assets.values()))
             return _publish_staged_outputs(staging_dir, cache, outputs), virtuals
 
     def _process_jwlplaylist(self, jwl_path: Path, cache: Path) -> tuple[list[str], list[dict]]:

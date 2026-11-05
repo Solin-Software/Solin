@@ -12518,4 +12518,127 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <translation>Von „%1“ konnte kein Bild aufgenommen werden. Versuche es mit „Bild aktualisieren“ erneut.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Medien für öffentliche Vorträge…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Importieren (%n)</numerusform>
+            <numerusform>Importieren (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Publikation auswählen</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Publikation wird gelesen…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Eine S-34mp-Publikation auswählen.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>Die Publikation enthält keine verwendbaren Medien.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Medien werden importiert…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>Der ausgewählte Speicherort ist nicht verfügbar. Einen anderen Speicherort auswählen.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Der Importdienst ist nicht verfügbar.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n Medienelement konnte nicht aufgelöst werden. Sein Verweis wurde beibehalten.</numerusform>
+            <numerusform>%n Medienelemente konnten nicht aufgelöst werden. Ihre Verweise wurden beibehalten.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW-Publikation (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Publikationsmedien importieren</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Zum Starten eine Publikation auswählen.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Die Datei auf diesem Computer auswählen.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Datei ändern</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Durchsuchen…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>S-34mp einmal für dieses Profil auswählen. Die Originaldatei an ihrem Speicherort belassen; sie kann hier jederzeit geändert werden.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Inhalte suchen…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Alle auswählen</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Auswahl aufheben</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Ausgewählte Inhalte aufklappen, um die Medienauswahl anzupassen.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Medienauswahl anpassen</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Keine passenden Inhalte.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Die Inhalte der Publikation werden hier angezeigt.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Abbrechen</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Publikationsmedien</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Bilder: {images} · Videos: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
 </TS>

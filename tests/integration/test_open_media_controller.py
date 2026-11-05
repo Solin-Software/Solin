@@ -89,16 +89,12 @@ class _ThreadStub:
         self.started = True
 
 
-class _JwpubImportThreadFactoryStub:
+class _JwpubSelectionFactoryStub:
     def __init__(self):
         self.calls = []
-        self.threads = []
 
-    def create(self, path, **kwargs):
-        thread = _ThreadStub()
-        self.calls.append((path, kwargs))
-        self.threads.append(thread)
-        return thread
+    def select(self, paths, **kwargs):
+        self.calls.append((paths, kwargs))
 
 
 class _DocumentConversionServiceStub:
@@ -160,7 +156,7 @@ class _WindowStub:
 
 def _controller(
     window,
-    jwpub_import_thread_factory=None,
+    jwpub_selection_factory=None,
     document_conversion_service=None,
 ):
     return OpenMediaController(
@@ -170,10 +166,13 @@ def _controller(
                 document_conversion_service
                 or _DocumentConversionServiceStub()
             ),
-            jwpub_import_thread_factory=(
-                jwpub_import_thread_factory
-                or _JwpubImportThreadFactoryStub()
+            jwpub_selection_factory=(
+                jwpub_selection_factory
+                or _JwpubSelectionFactoryStub()
             ),
+            media_operations=SimpleNamespace(),
+            dest_images_dir="profile-images",
+            is_current=lambda: not getattr(window, "closed", False),
             language_manager=window.lang,
             notifications=window.notifications,
             thread_registry=OwnedQThreadRegistry(),
@@ -191,9 +190,6 @@ def _controller(
                     window.lang,
                     name=name,
                 )
-            ),
-            append_temp_playlist_items=(
-                window.playlist_widget.append_temp_playlist_items
             ),
             import_native_playlists=window.playlist_widget.import_native_playlists,
         ),
@@ -323,13 +319,13 @@ def test_open_media_files_routes_pdf_and_jwpub_to_conversion_methods(tmp_path):
     controller = _controller(window)
     routed = []
     controller.open_pdf_as_temp = lambda path: routed.append(("pdf", path))
-    controller.open_jwpub_as_temp = lambda path: routed.append(("jwpub", path))
+    controller.open_jwpubs_as_temp = lambda path: routed.append(("jwpub", path))
     pdf_path = str(tmp_path / "document.pdf")
     jwpub_path = str(tmp_path / "publication.jwpub")
 
     controller.open_media_files([pdf_path, jwpub_path])
 
-    assert routed == [("jwpub", jwpub_path), ("pdf", pdf_path)]
+    assert routed == [("jwpub", [jwpub_path]), ("pdf", pdf_path)]
     assert window.projected is None
     assert window._playlist_imports.temp_playlists == []
 
@@ -339,7 +335,7 @@ def test_open_media_files_routes_conversions_without_blocking_media_playlist(tmp
     controller = _controller(window)
     routed = []
     controller.open_pdf_as_temp = lambda path: routed.append(("pdf", path))
-    controller.open_jwpub_as_temp = lambda path: routed.append(("jwpub", path))
+    controller.open_jwpubs_as_temp = lambda path: routed.append(("jwpub", path))
     video_path = str(tmp_path / "clip.mp4")
     pdf_path = str(tmp_path / "document.pdf")
     audio_path = str(tmp_path / "song.mp3")
@@ -347,7 +343,7 @@ def test_open_media_files_routes_conversions_without_blocking_media_playlist(tmp
 
     controller.open_media_files([video_path, pdf_path, audio_path, jwpub_path])
 
-    assert routed == [("jwpub", jwpub_path), ("pdf", pdf_path)]
+    assert routed == [("jwpub", [jwpub_path]), ("pdf", pdf_path)]
     assert window.projected is None
     assert window._playlist_imports.temp_playlists == [[
         {"url": video_path, "title": "clip.mp4", "type": "video"},
@@ -386,33 +382,44 @@ def test_open_pdf_uses_injected_document_conversion_service():
     assert window._navigation.pages == [7]
 
 
-def test_open_jwpub_uses_injected_worker_factory(monkeypatch):
+def test_open_jwpub_selects_sequentially_before_creating_named_temp_playlists(monkeypatch):
     window = _WindowStub()
-    factory = _JwpubImportThreadFactoryStub()
-    controller = _controller(
-        window,
-        jwpub_import_thread_factory=factory,
-    )
-    monkeypatch.setattr(
-        controller,
-        "_media_language_context",
-        lambda: SimpleNamespace(api_code="T"),
-    )
-
-    controller.open_jwpub_as_temp("publication.jwpub")
-
-    assert factory.calls == [
-        (
-            "publication.jwpub",
-            {"lang": "T", "parent": window},
-        )
-    ]
-    assert factory.threads[0].started is True
-    assert controller._context.thread_registry.active_count == 1
-    assert window._navigation.pages == [7]
+    factory = _JwpubSelectionFactoryStub()
+    controller = _controller(window, jwpub_selection_factory=factory)
+    monkeypatch.setattr(controller, "_media_language_context", lambda: SimpleNamespace(api_code="T"))
+    controller.open_jwpubs_as_temp(["first.jwpub", "second.jwpub"])
+    assert len(factory.calls) == 1
+    paths, options = factory.calls[0]
+    assert paths == ["first.jwpub", "second.jwpub"]
+    assert options["language"] == "T"
+    assert options["operations"] is controller._context.media_operations
+    assert options["placement_ref"]() is None
+    assert window.playlist_widget.opened_named_playlists == []
+    assert controller._context.thread_registry.active_count == 0
+    outcomes = []
+    items = [{"id": "one", "url": "slide.jpg", "meps_language": 5}]
+    options["insert"](items, "root", 0, outcomes.append)
+    options["insert"]([], "root", 0, outcomes.append)
+    assert len(outcomes) == 2
+    assert all(result.target_valid for result in outcomes)
+    assert [result.added_count for result in outcomes] == [1, 0]
     assert window.playlist_widget.opened_named_playlists == [
-        ([], "📖  publication")
+        (items, "📖  first"), ([], "📖  second"),
     ]
+
+
+def test_open_jwpub_rejects_expired_origin():
+    window = _WindowStub()
+    factory = _JwpubSelectionFactoryStub()
+    controller = _controller(window, jwpub_selection_factory=factory)
+    controller.open_jwpubs_as_temp(["first.jwpub"])
+    window.closed = True
+    options = factory.calls[0][1]
+    outcomes = []
+    options["insert"]([{"url": "slide.jpg"}], "root", 0, outcomes.append)
+    assert len(outcomes) == 1
+    assert outcomes[0].target_valid is False
+    assert window.playlist_widget.opened_named_playlists == []
 
 
 def test_expand_jwlplaylist_returns_jworg_and_local_items(monkeypatch):

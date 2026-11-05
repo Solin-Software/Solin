@@ -63,6 +63,7 @@ from ...ui.helpers import (
 )
 from ...ui.media_insertion_feedback import connect_media_picker_feedback
 from ...core.media.cache import MediaCacheManager
+from ...core.media.destinations import MediaDestinationOutcome
 from ...core.media.formats import media_type_from_path
 from ...core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from ...core.media.insertion import MediaInsertResult
@@ -147,11 +148,12 @@ __all__ = (
 )
 
 if TYPE_CHECKING:
+    from ...core.media.destinations import PlaylistDestinationTarget
+    from ...ui.qml.jwpub_selection import JwpubSelectionFactory
     from ...core.ingest.watched_folder import WatchedFolderWatcher
     from ...core.ingest.watched_folder_files import WatchedFolderFileStore
     from ...core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
     from ...core.jw.catalog_service import JWMediaCatalogService
-    from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ...core.jw.thumbnail_fetch import JWCatalogThumbnailSessionFactory
     from ...core.media.profile_store import ProfileMediaStore
     from ...core.media.thumbnail_store import ThumbnailStore
@@ -191,7 +193,7 @@ class PlaylistEditView(
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
-        jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -217,7 +219,9 @@ class PlaylistEditView(
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
+        self._jwpub_origin_generation = 0
+        self._jwpub_copy_operations: set[str] = set()
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -368,6 +372,7 @@ class PlaylistEditView(
 
     def cleanup(self) -> None:
         """Stop background work owned by the edit view before teardown."""
+        self._jwpub_origin_generation += 1
         self.qml_load_handle.cancel()
         self._wf_refresh_shutdown = True
         owner_id = self._tree_session.owner_id
@@ -695,6 +700,7 @@ class PlaylistEditView(
     def _connect_bridge_signals(self):
         self.bridge.backRequested.connect(self._on_back)
         self.bridge.addRequested.connect(self._add_dialog)
+        self.bridge.publicTalkMediaRequested.connect(self._import_public_talk_media)
         self.bridge.exportRequested.connect(self._export)
         self.bridge.saveTempRequested.connect(self._save_temp_playlist)
         self.bridge.playAllRequested.connect(self._do_play_all)
@@ -908,6 +914,7 @@ class PlaylistEditView(
     # ── Carga ──────────────────────────────────────────────────────────────
 
     def load_playlist(self, pl: dict):
+        self._jwpub_origin_generation += 1
         self._flush_image_framing_save()
         self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
@@ -927,6 +934,7 @@ class PlaylistEditView(
 
     def load_watched_folder(self, folder_path: str):
         """Open a linked folder without reading cloud-backed files on the Qt thread."""
+        self._jwpub_origin_generation += 1
         self._flush_image_framing_save()
         self._reset_watched_folder_refresh_retry()
         self._wf_refresh_pending = False
@@ -1070,6 +1078,7 @@ class PlaylistEditView(
         key = os.path.normcase(os.path.abspath(self._watched_path))
         if (
             key in self._pending_manifest_saves
+            or self._jwpub_copy_operations
             or self._wf_sync_thread is not None
             or self._wf_refresh_inflight is not None
         ):
@@ -2185,7 +2194,7 @@ class PlaylistWidget(QWidget):
         storage_paths: PlaylistStoragePaths,
         playlist_repository: PlaylistRepository,
         profile_media_store: ProfileMediaStore,
-        jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         playlist_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         watched_folder_playlist_store: WatchedFolderPlaylistStore,
@@ -2212,7 +2221,7 @@ class PlaylistWidget(QWidget):
         self._storage_paths = storage_paths
         self._playlist_repository = playlist_repository
         self._profile_media_store = profile_media_store
-        self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
         self._playlist_thumbnail_store = playlist_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._watched_folder_playlist_store = watched_folder_playlist_store
@@ -2241,6 +2250,8 @@ class PlaylistWidget(QWidget):
         self._playlist_transfers = None
         self._folder_watcher = None
         self._pending_native_imports: list[tuple[list[str], bool]] = []
+        self._jwpub_destination_generation = 0
+        self._jwpub_destination_scopes: set[str] = set()
         if defer_build:
             from ...ui.incremental_load import IncrementalLoadHandle
 
@@ -2318,7 +2329,7 @@ class PlaylistWidget(QWidget):
             storage_paths=self._storage_paths,
             playlist_repository=self._playlist_repository,
             profile_media_store=self._profile_media_store,
-            jwpub_import_thread_factory=self._jwpub_import_thread_factory,
+            jwpub_selection_factory=self._jwpub_selection_factory,
             playlist_thumbnail_store=self._playlist_thumbnail_store,
             watched_folder_file_store=self._watched_folder_file_store,
             watched_folder_playlist_store=self._watched_folder_playlist_store,
@@ -2402,6 +2413,7 @@ class PlaylistWidget(QWidget):
         edit_view = self._edit_view
         if edit_view is None:
             return
+        edit_view._jwpub_origin_generation += 1
         # If coming back from a watched folder, clear the watched state
         if edit_view._is_watched:
             edit_view._reset_watched_folder_refresh_retry()
@@ -2663,6 +2675,310 @@ class PlaylistWidget(QWidget):
         playlist = next((p for p in self._playlists if p["id"] == pl_id), None)
         return copy.deepcopy(playlist) if playlist is not None else None
 
+    def import_publications_to_playlist_target(
+        self,
+        paths: list[str],
+        target: PlaylistDestinationTarget,
+    ) -> MediaDestinationOutcome | None:
+        """Select JWPUB contents and commit them to one saved playlist destination."""
+        if not paths:
+            return None
+
+        playlists = self._playlists
+        origin_generation = self._jwpub_destination_generation
+        language = jw_media_language_context(self.lang).api_code
+        existing_playlist = None
+        if not target.create_new:
+            existing_playlist = next(
+                (
+                    playlist
+                    for playlist in playlists
+                    if str(playlist.get("id") or "") == target.playlist_id
+                ),
+                None,
+            )
+            if existing_playlist is None:
+                return None
+
+        created_playlist: dict | None = None
+        committed_items: list[dict] = []
+        terminal_failure = False
+        scope_id = f"playlist-destination:{uuid.uuid4().hex}"
+        snapshots = self._media_tree_runtime.snapshots
+        repository = self._playlist_repository
+        snapshot_key = f"playlists:{repository.path}"
+
+        def playlist_is_present(playlist: dict) -> bool:
+            return any(candidate is playlist for candidate in playlists)
+
+        def is_current() -> bool:
+            if (
+                terminal_failure
+                or self._jwpub_destination_generation != origin_generation
+                or self._playlists is not playlists
+                or jw_media_language_context(self.lang).api_code != language
+            ):
+                return False
+            if target.create_new:
+                return created_playlist is None or playlist_is_present(created_playlist)
+            return existing_playlist is not None and playlist_is_present(existing_playlist)
+
+        def placement_ref() -> dict | None:
+            if not is_current():
+                return None
+            destination = created_playlist if target.create_new else existing_playlist
+            if destination is None:
+                return {
+                    "id": "",
+                    "name": target.playlist_name,
+                    "items": [],
+                    "sections": [],
+                    "markers": [],
+                }
+            return copy.deepcopy(destination)
+
+        def refresh_destination(playlist: dict) -> None:
+            if self._list_view is not None:
+                self._list_view.refresh()
+            edit_view = self._edit_view
+            if (
+                edit_view is not None
+                and edit_view._pl is playlist
+                and self._stack.currentIndex() == 1
+            ):
+                edit_view._reconcile_playlist()
+
+        def insert(items, target_list_id, target_index, completed) -> None:
+            nonlocal created_playlist, terminal_failure
+            acknowledged = False
+            partition = None
+            batch: list[dict] = []
+
+            def finish(result: MediaInsertResult) -> None:
+                nonlocal acknowledged
+                if acknowledged:
+                    return
+                acknowledged = True
+                completed(result)
+
+            def committed_result() -> MediaInsertResult:
+                return MediaInsertResult(
+                    added_items=tuple(batch),
+                    duplicate_items=(
+                        partition.duplicate_items if partition is not None else ()
+                    ),
+                )
+
+            if not is_current():
+                finish(MediaInsertResult(target_valid=False))
+                return
+
+            destination = created_playlist if target.create_new else existing_playlist
+            appended_new = False
+            previous_playlist: dict | None = None
+            try:
+                if destination is None:
+                    name = ensure_unique_playlist_name(target.playlist_name, playlists)
+                    destination = {
+                        "id": str(uuid.uuid4()),
+                        "name": name,
+                        "items": [],
+                        "sections": [],
+                        "markers": [],
+                    }
+
+                partition = partition_media_items(
+                    destination.get("items", []),
+                    items,
+                    occurrence_policy=PLAYLIST_MEDIA_OCCURRENCES,
+                )
+                batch = distinct_playlist_item_ids(
+                    destination.get("items", []),
+                    partition.unique_items,
+                )
+                if not batch:
+                    finish(MediaInsertResult(duplicate_items=partition.duplicate_items))
+                    return
+
+                if playlist_is_present(destination):
+                    previous_playlist = copy.deepcopy(destination)
+                if not insert_playlist_media(
+                    destination,
+                    target_list_id,
+                    target_index,
+                    batch,
+                ):
+                    finish(MediaInsertResult(target_valid=False))
+                    return
+
+                if target.create_new and created_playlist is None:
+                    playlists.append(destination)
+                    created_playlist = destination
+                    appended_new = True
+
+                snapshot = copy.deepcopy(playlists)
+            except PlaylistNameConflictError as exc:
+                terminal_failure = True
+                self._notifications.warning(
+                    self.tr('A playlist named "{name}" already exists.').replace(
+                        "{name}", exc.name
+                    )
+                )
+                finish(MediaInsertResult(target_valid=False))
+                return
+            except Exception:  # noqa: BLE001 - selector insertion must always be acknowledged
+                terminal_failure = True
+                log_ignored_exception(
+                    __name__, "Could not prepare selected publication media for playlist"
+                )
+                finish(MediaInsertResult(target_valid=False))
+                return
+
+            request_generation = 0
+            rollback_generation = 0
+            settled = False
+
+            def disconnect_snapshot_signals() -> None:
+                for signal, slot in (
+                    (snapshots.writeCompleted, on_write_completed),
+                    (snapshots.writeFailed, on_write_failed),
+                ):
+                    try:
+                        signal.disconnect(slot)
+                    except (RuntimeError, TypeError):
+                        pass
+
+            def rollback_memory() -> None:
+                nonlocal created_playlist
+                if appended_new:
+                    playlists[:] = [
+                        candidate for candidate in playlists if candidate is not destination
+                    ]
+                    if created_playlist is destination:
+                        created_playlist = None
+                elif previous_playlist is not None:
+                    destination.clear()
+                    destination.update(previous_playlist)
+
+            def request_rollback_snapshot() -> int:
+                rollback_snapshot = copy.deepcopy(playlists)
+                return snapshots.request(
+                    snapshot_key,
+                    lambda: repository.save_strict(rollback_snapshot),
+                    conflict_key=file_resource_key(repository.path),
+                )
+
+            def fail_commit(message: str = "") -> None:
+                nonlocal settled, terminal_failure, rollback_generation
+                if settled:
+                    return
+                terminal_failure = True
+                rollback_memory()
+                rollback_generation = request_rollback_snapshot()
+                settled = True
+                disconnect_snapshot_signals()
+                if message:
+                    log.error("Could not persist selected publication media: %s", message)
+                if self._edit_view is None:
+                    self._notifications.error(
+                        self.tr("Could not save playlist changes. Retrying automatically.")
+                    )
+                finish(MediaInsertResult(target_valid=False))
+
+            def finish_rollback() -> None:
+                nonlocal settled
+                if settled:
+                    return
+                settled = True
+                disconnect_snapshot_signals()
+                finish(MediaInsertResult(target_valid=False))
+
+            def preserve_durable_commit() -> None:
+                nonlocal settled
+                if settled:
+                    return
+                settled = True
+                disconnect_snapshot_signals()
+                committed_items.extend(batch)
+                finish(committed_result())
+
+            def on_write_completed(key: str, generation: int) -> None:
+                nonlocal settled, terminal_failure, rollback_generation
+                if settled or key != snapshot_key:
+                    return
+                if rollback_generation:
+                    if generation >= rollback_generation:
+                        finish_rollback()
+                    return
+                if generation < request_generation:
+                    return
+                if not is_current():
+                    terminal_failure = True
+                    rollback_memory()
+                    rollback_generation = request_rollback_snapshot()
+                    if rollback_generation == 0:
+                        log.warning(
+                            "Could not queue rollback after a persisted publication import; "
+                            "preserving imported assets"
+                        )
+                        preserve_durable_commit()
+                    return
+                settled = True
+                disconnect_snapshot_signals()
+                committed_items.extend(batch)
+                refresh_destination(destination)
+                finish(committed_result())
+
+            def on_write_failed(key: str, generation: int, message: str) -> None:
+                if settled or key != snapshot_key:
+                    return
+                if rollback_generation:
+                    if generation >= rollback_generation:
+                        log.error("Could not persist publication import rollback: %s", message)
+                    return
+                if generation < request_generation:
+                    return
+                fail_commit(message)
+
+            snapshots.writeCompleted.connect(on_write_completed)
+            snapshots.writeFailed.connect(on_write_failed)
+            request_generation = snapshots.request(
+                snapshot_key,
+                lambda: repository.save_strict(snapshot),
+                conflict_key=file_resource_key(repository.path),
+            )
+            if request_generation == 0:
+                fail_commit()
+
+        self._jwpub_destination_scopes.add(scope_id)
+        try:
+            self._jwpub_selection_factory.select(
+                paths,
+                parent=self,
+                operations=self._media_tree_runtime.operations,
+                language=language,
+                dest_images_dir=os.fspath(self._profile_paths.images_dir),
+                scope_id=scope_id,
+                is_current=is_current,
+                placement_ref=placement_ref,
+                insert=insert,
+                list_id=None,
+            )
+        finally:
+            self._jwpub_destination_scopes.discard(scope_id)
+
+        if not committed_items:
+            return None
+        return MediaDestinationOutcome(
+            len(committed_items),
+            tuple(
+                url
+                for item in committed_items
+                if (url := str(item.get("url") or ""))
+            ),
+            destination_accepted=True,
+        )
+
     def add_items_to_playlist(
         self,
         pl_id: str,
@@ -2759,6 +3075,10 @@ class PlaylistWidget(QWidget):
 
     def cleanup(self) -> None:
         """Stop background work owned by child views."""
+        self._jwpub_destination_generation += 1
+        for scope_id in tuple(self._jwpub_destination_scopes):
+            self._media_tree_runtime.operations.cancel_scope(scope_id)
+        self._jwpub_destination_scopes.clear()
         if self.preparation_handle is not None:
             self.preparation_handle.cancel()
         self._cleanup_timer.stop()

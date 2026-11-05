@@ -12476,4 +12476,125 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>「%1」の画像を撮影できませんでした。「画像を更新」でもう一度お試しください。</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>公開講演のメディア…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>インポート (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>出版物を選択</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>出版物を読み込んでいます…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>S-34mp の出版物を選択してください。</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>この出版物には利用できるメディアがありません。</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>メディアをインポートしています…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>選択した場所は利用できません。別の場所を選択してください。</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>インポートサービスを利用できません。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n 件のメディアを解決できませんでした。参照情報は保持されています。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW 出版物 (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>出版物のメディアをインポート</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>最初に出版物を選択してください。</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>このコンピューター上のファイルを選択してください。</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>ファイルを変更</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>参照…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>このプロファイルで使用する S-34mp を一度選択してください。元のファイルは同じ場所に保管してください。ここでいつでもファイルを変更できます。</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>内容を検索…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>すべて選択</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>選択を解除</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>選択した内容を展開して、メディアの選択を調整できます。</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>メディアの選択を調整</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>一致する内容がありません。</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>出版物の内容がここに表示されます。</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>出版物のメディア</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>画像: {images} · 動画: {videos} · オーディオ: {audio}</translation>
+    </message>
+</context>
 </TS>

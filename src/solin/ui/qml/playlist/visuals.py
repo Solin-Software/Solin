@@ -29,6 +29,7 @@ from solin.styles.icons import (
     ICON_PLUS,
     ICON_REFRESH,
     ICON_SAVE_PLAYLIST,
+    ICON_SEC_PUBLIC_TALK,
     ICON_SECTION,
     ICON_SET_AS_IDLE,
     ICON_TRASH,
@@ -156,6 +157,7 @@ PLAYLIST_ICON_SVGS = {
     "media_image":    ICON_IMAGE,
     "media_audio":    ICON_MUSIC,
     "media_video":    ICON_VIDEO,
+    "public_talk":    ICON_SEC_PUBLIC_TALK,
 }
 
 

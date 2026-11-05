@@ -222,6 +222,111 @@ def test_playlist_route_requests_placement_for_a_structured_playlist() -> None:
     )
 
 
+def _publication_request(*, select_contents=True):
+    return MediaDestinationRequest(
+        title="Publication",
+        assets=(MediaDestinationAsset(
+            title="Publication", source_id="source.jwpub", import_path="source.jwpub",
+            import_kind="jwpub",
+        ),),
+        select_import_contents=select_contents,
+    )
+
+
+@pytest.mark.parametrize("new_playlist", [False, True])
+def test_publication_target_defers_position_until_shared_content_selection(new_playlist):
+    events = []
+
+    def drive(bridge):
+        bridge.showPlaylists()
+        if new_playlist:
+            bridge.createPlaylist("New")
+        else:
+            bridge.choosePlaylist("saved", "Saved")
+        assert not bridge.showPlacement
+        events.append("destination")
+
+    controller, _meetings, imports, _notifications = _controller(
+        drive, playlist_ref={"items": [{}] * 14, "sections": [{"id": "talk"}]},
+    )
+    imports.prepare_destination_assets = lambda *_args: pytest.fail("Premature whole import")
+    outcomes = []
+
+    def select(paths, target):
+        assert controller._active_bridge is None
+        assert paths == ["source.jwpub"]
+        assert target.create_new == new_playlist
+        events.append("contents")
+        return MediaDestinationOutcome(2, ("one.png", "two.mp4"))
+
+    controller._context.playlist_widget.import_publications_to_playlist_target = select
+    controller.route(_publication_request(), completed=outcomes.append)
+
+    assert events == ["destination", "contents"]
+    assert imports.calls == []
+    assert outcomes == [MediaDestinationOutcome(2, ("one.png", "two.mp4"), ("source.jwpub",))]
+
+
+def test_cancelled_publication_selection_does_not_import_or_report_success():
+    controller, _meetings, imports, notifications = _controller(
+        lambda bridge: bridge.choosePlaylist("saved", "Saved"),
+    )
+    controller._context.playlist_widget.import_publications_to_playlist_target = lambda *_args: None
+    outcomes = []
+    controller.route(_publication_request(), completed=outcomes.append)
+    assert imports.calls == []
+    assert outcomes == []
+    assert notifications.events == []
+
+
+def test_publication_meeting_session_stays_open_through_selection_then_closes():
+    def drive(bridge):
+        bridge.showMeetings()
+        bridge.chooseMeeting("mwb")
+        assert not bridge.showPlacement
+
+    controller, meetings, imports, _notifications = _controller(drive)
+    meetings.session.placement_ref = lambda: {"items": [{}] * 14, "sections": [{"id": "talk"}]}
+    selected = []
+
+    def select(paths):
+        assert not meetings.session.is_closed
+        assert controller._active_bridge is None
+        selected.extend(paths)
+        return MediaDestinationOutcome(1, ("selected.png",))
+
+    meetings.session.import_publications = select
+    outcomes = []
+    controller.route(_publication_request(), completed=outcomes.append)
+    assert selected == ["source.jwpub"]
+    assert meetings.session.is_closed
+    assert meetings.session.added == []
+    assert imports.calls == []
+    assert outcomes == [MediaDestinationOutcome(1, ("selected.png",), ("source.jwpub",))]
+
+
+def test_automatic_publication_request_keeps_whole_import_and_existing_position_policy():
+    def drive(bridge):
+        bridge.choosePlaylist("saved", "Saved")
+        assert bridge.showPlacement
+        bridge.confirmPlacement("top")
+
+    controller, _meetings, imports, _notifications = _controller(
+        drive, playlist_ref={"items": [{}] * 14, "sections": []},
+    )
+    prepared = []
+
+    def prepare(assets, completed):
+        prepared.extend(assets)
+        completed(PreparedMediaBatch(({"url": "all.png", "type": "image"},), ("source.jwpub",)))
+
+    imports.prepare_destination_assets = prepare
+    controller.route(_publication_request(select_contents=False))
+    assert prepared and prepared[0].import_kind == "jwpub"
+    assert imports.calls[0][0].insert_index == 0
+    assert imports.calls[0][1] == [{"url": "all.png", "type": "image"}]
+
+
 def test_preparation_stays_in_same_wizard_before_playlist_selection() -> None:
     def drive(bridge):
         bridge.requestAdd()

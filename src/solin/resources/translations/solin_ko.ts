@@ -12476,4 +12476,125 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>“%1”의 이미지를 찍을 수 없습니다. 이미지 새로 고침으로 다시 시도하세요.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>공개 강연 미디어…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>가져오기 (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>출판물 선택</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>출판물을 읽는 중…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>S-34mp 출판물을 선택하세요.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>출판물에 사용할 수 있는 미디어가 없습니다.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>미디어를 가져오는 중…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>선택한 위치를 사용할 수 없습니다. 다른 위치를 선택하세요.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>가져오기 서비스를 사용할 수 없습니다.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>미디어 항목 %n개를 확인할 수 없습니다. 참조 정보는 유지되었습니다.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW 출판물 (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>출판물 미디어 가져오기</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>시작하려면 출판물을 선택하세요.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>이 컴퓨터에서 파일을 선택하세요.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>파일 변경</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>찾아보기…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>이 프로필에 사용할 S-34mp를 한 번 선택하세요. 원본 파일을 같은 위치에 보관하세요. 여기에서 언제든지 파일을 변경할 수 있습니다.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>콘텐츠 검색…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>모두 선택</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>선택 해제</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>선택한 콘텐츠를 펼쳐 미디어 선택을 조정하세요.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>미디어 선택 조정</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>일치하는 콘텐츠가 없습니다.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>출판물의 콘텐츠가 여기에 표시됩니다.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>취소</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>출판물 미디어</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>이미지: {images} · 비디오: {videos} · 오디오: {audio}</translation>
+    </message>
+</context>
 </TS>

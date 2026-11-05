@@ -188,11 +188,13 @@ class LinkedPlaylistSync:
         additions = []
         for item in items:
             candidate = deepcopy(item)
-            resource = portable_resource_key(str(candidate.get("url") or ""), self.folder)
+            url = str(candidate.get("url") or "")
+            resource = portable_resource_key(url, self.folder) if url else ""
             resource_identity = resource_identity_key(resource)
-            if not resource:
+            if not resource and not candidate.get("_virtual"):
                 continue
-            candidate[RESOURCE] = resource
+            if resource:
+                candidate[RESOURCE] = resource
             candidate["url"] = resource
             if not candidate.get("_virtual"):
                 if resource_identity in claims or resource_identity in blocked:

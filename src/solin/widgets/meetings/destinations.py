@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QObject, Signal
+from shiboken6 import isValid
 
+from solin.core.media.destinations import MediaDestinationOutcome
 from solin.core.meetings.catalog_placement import MeetingCatalogPlaylistRef
 from solin.core.meetings.tree_store import parse_meeting_tree_key
 
@@ -75,6 +77,17 @@ class MeetingDestinationSession(QObject):
             self.completed.emit(result)
         else:
             self.failed.emit(self.tr("No media could be added."))
+
+    def import_publications(self, paths: list[str]) -> MediaDestinationOutcome | None:
+        """Select publication contents and placement within this meeting session."""
+
+        def is_current() -> bool:
+            return not self._closed and isValid(self) and isValid(self.controller)
+
+        if not paths or not is_current():
+            return None
+        outcome = self.controller.import_publications(paths, is_current=is_current)
+        return outcome if is_current() else None
 
     def close(self) -> None:
         if self._closed:

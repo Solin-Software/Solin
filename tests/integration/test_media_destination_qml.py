@@ -109,7 +109,7 @@ def test_media_destination_qml_loads_and_follows_bridge_steps() -> None:
         placement_options=[{"id": "top", "label": "Top", "type": "position", "color": ""}],
     )
     _APP.processEvents()
-    assert "Top" in _visible_texts(root)
+    assert "Top" in _visible_texts(widget.quickWindow().contentItem())
 
     widget.close()
 

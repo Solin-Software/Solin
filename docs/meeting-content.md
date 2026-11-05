@@ -91,6 +91,33 @@ preparation coordinator expires its own trees; background maintenance expires
 only unowned profiles and coalesces collection requests. Unreadable or malformed
 owners defer collection and protect publication sources.
 
+## Manual publication imports
+
+Manual JWPUB imports use a shared selector: inspect the publication's content
+catalog, select whole contents or individual media, then materialize and insert
+the selected batch. Catalog inspection and lazy previews use local archive
+members; browsing does not resolve remote media or persist imported assets.
+Only selected media are materialized after confirmation. Wi-Fi reception and
+watched or linked folder imports retain automatic whole-publication import.
+Browser-downloaded JWPUBs choose the destination first, then use the same selector;
+placement is chosen after the publication contents are selected.
+
+`JwpubPlaylistImportService.open()` owns a scoped publication session with an
+immutable document/media catalog, local previews, and selective materialization.
+Whole-publication `read()` uses the same pipeline. Materialization records newly
+created files; the selector keeps its private outputs until the origin confirms
+insertion, including completion of linked-folder copies and persistence.
+
+The public-talk shortcut references an external S-34mp publication. Each profile
+stores only its source path through `PublicTalkSettingsStore`; the importing
+workflow validates a replacement before saving it. A missing or inaccessible
+source does not erase the configured path. Previews and extraction scratch files
+belong to the active import operation; imported media use existing asset stores.
+Only this shortcut targets the official weekend public-talk section automatically,
+using its semantic identity and current node ID. Otherwise it always requests a
+position within the originating meeting or playlist. Ordinary imports retain
+explicit drop positions and the shared placement policy.
+
 ## Validation
 
 Unit and integration coverage lives in the publication asset, archive/cache,
@@ -100,4 +127,13 @@ P50/P95 for cold publication, warm reuse, and collection across two profiles:
 
 ```text
 python scripts/benchmark_meeting_assets.py --images 128 --size-kib 256 --runs 15
+```
+
+For manual imports, the local JWPUB benchmark reports P50/P95 for new catalog
+sessions, selection expansion, first/reused previews, and first/reused selected
+materialization. It uses temporary outputs without network resolution or flushing
+the operating system's disk cache:
+
+```text
+python scripts/benchmark_jwpub_import.py publication.jwpub --runs 15
 ```

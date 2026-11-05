@@ -1,5 +1,7 @@
+import copy
 from types import SimpleNamespace
 
+from solin.core.media.destinations import MediaDestinationOutcome, PlaylistDestinationTarget
 from solin.widgets.playlist.widget import PlaylistWidget
 
 
@@ -35,6 +37,355 @@ def _widget(tmp_path, playlist):
         _stack=SimpleNamespace(currentIndex=lambda: 0),
     )
     return widget, saves
+
+
+class _Signal:
+    def __init__(self):
+        self._slots = []
+
+    def connect(self, slot):
+        self._slots.append(slot)
+
+    def disconnect(self, slot):
+        self._slots.remove(slot)
+
+    def emit(self, *args):
+        for slot in tuple(self._slots):
+            slot(*args)
+
+
+class _Snapshots:
+    def __init__(self):
+        self.writeCompleted = _Signal()
+        self.writeFailed = _Signal()
+        self.requests = []
+        self._generations = {}
+
+    def request(self, key, writer, *, conflict_key=None):
+        generation = self._generations.get(key, 0) + 1
+        self._generations[key] = generation
+        self.requests.append((key, generation, writer, conflict_key))
+        return generation
+
+    def complete_latest(self):
+        key, generation, writer, _conflict_key = self.requests[-1]
+        writer()
+        self.writeCompleted.emit(key, generation)
+
+    def fail_latest(self, message="disk full"):
+        key, generation, _writer, _conflict_key = self.requests[-1]
+        self.writeFailed.emit(key, generation, message)
+
+
+class _Repository:
+    def __init__(self, path):
+        self.path = path
+        self.saved = []
+
+    def save_strict(self, playlists):
+        self.saved.append(copy.deepcopy(playlists))
+
+
+class _Selector:
+    def __init__(self, action):
+        self._action = action
+        self.calls = []
+
+    def select(self, paths, **options):
+        self.calls.append((list(paths), options))
+        self._action(options)
+
+
+def _selection_widget(tmp_path, playlists, selector, snapshots):
+    repository = _Repository(tmp_path / "playlists.json")
+    errors = []
+    warnings = []
+    widget = SimpleNamespace(
+        _playlists=playlists,
+        _jwpub_destination_generation=0,
+        _jwpub_destination_scopes=set(),
+        _jwpub_selection_factory=selector,
+        _playlist_repository=repository,
+        _media_tree_runtime=SimpleNamespace(
+            snapshots=snapshots,
+            operations=SimpleNamespace(cancel_scope=lambda _scope_id: None),
+        ),
+        _profile_paths=SimpleNamespace(images_dir=tmp_path / "images"),
+        _notifications=SimpleNamespace(
+            error=errors.append,
+            warning=warnings.append,
+        ),
+        _list_view=None,
+        _edit_view=None,
+        _stack=SimpleNamespace(currentIndex=lambda: 0),
+        lang=SimpleNamespace(api_code="T", media_api_code="T"),
+        tr=lambda text: text,
+    )
+    return widget, repository, errors, warnings
+
+
+def test_publication_selector_uses_shared_placement_and_waits_for_persist_ack(tmp_path):
+    playlist = _playlist()
+    snapshots = _Snapshots()
+    completed = []
+
+    def select(options):
+        assert options["list_id"] is None
+        placement = options["placement_ref"]()
+        assert placement["id"] == "saved"
+        placement["name"] = "Mutated copy"
+        options["insert"](
+            [{"id": "new", "title": "New", "url": "new.mp4", "type": "video"}],
+            "section:talk",
+            0,
+            completed.append,
+        )
+        assert completed == []
+        snapshots.complete_latest()
+        assert len(completed) == 1
+        assert completed[0].target_valid is True
+        assert completed[0].added_count == 1
+
+    selector = _Selector(select)
+    widget, repository, errors, _warnings = _selection_widget(
+        tmp_path, [playlist], selector, snapshots
+    )
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("saved", "Saved"),
+    )
+
+    assert outcome is not None
+    assert outcome.added_count == 1
+    assert outcome.referenced_urls == ("new.mp4",)
+    assert outcome.destination_accepted is True
+    assert playlist["name"] == "Saved"
+    assert [item["id"] for item in playlist["items"]] == ["new", "existing"]
+    assert repository.saved[-1][0]["items"][0]["id"] == "new"
+    assert errors == []
+
+
+def test_publication_selector_accepts_newer_persisted_generation(tmp_path):
+    playlist = _playlist()
+    snapshots = _Snapshots()
+    completed = []
+
+    def select(options):
+        options["insert"](
+            [{"id": "new", "url": "new.mp4", "type": "video"}],
+            "root",
+            0,
+            completed.append,
+        )
+        assert completed == []
+        key = snapshots.requests[-1][0]
+        snapshots.request(key, lambda: None, conflict_key="same-playlist-file")
+        snapshots.complete_latest()
+        assert len(completed) == 1
+        assert completed[0].target_valid is True
+        assert completed[0].added_count == 1
+
+    selector = _Selector(select)
+    widget, repository, errors, _warnings = _selection_widget(
+        tmp_path, [playlist], selector, snapshots
+    )
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("saved", "Saved"),
+    )
+
+    assert outcome == MediaDestinationOutcome(1, ("new.mp4",))
+    assert snapshots.requests[0][0] == f"playlists:{repository.path}"
+    assert errors == []
+
+
+def test_publication_selector_waits_for_durable_rollback_after_context_retire(tmp_path):
+    playlist = _playlist()
+    snapshots = _Snapshots()
+    completed = []
+    widget_holder = {}
+
+    def select(options):
+        options["insert"](
+            [{"id": "new", "url": "new.mp4", "type": "video"}],
+            "root",
+            0,
+            completed.append,
+        )
+        widget_holder["widget"]._jwpub_destination_generation += 1
+        snapshots.complete_latest()
+        assert completed == []
+        assert [item["id"] for item in playlist["items"]] == ["existing"]
+        assert len(snapshots.requests) == 2
+        snapshots.complete_latest()
+        assert len(completed) == 1
+        assert completed[0].target_valid is False
+
+    selector = _Selector(select)
+    widget, repository, errors, _warnings = _selection_widget(
+        tmp_path, [playlist], selector, snapshots
+    )
+    widget_holder["widget"] = widget
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("saved", "Saved"),
+    )
+
+    assert outcome is None
+    assert repository.saved[0][0]["items"][0]["id"] == "new"
+    assert repository.saved[-1][0]["items"][0]["id"] == "existing"
+    assert errors == []
+
+
+def test_publication_selector_preserves_durable_commit_when_rollback_cannot_queue(tmp_path):
+    playlist = _playlist()
+    snapshots = _Snapshots()
+    completed = []
+    widget_holder = {}
+
+    def select(options):
+        options["insert"](
+            [{"id": "new", "url": "new.mp4", "type": "video"}],
+            "root",
+            0,
+            completed.append,
+        )
+        widget_holder["widget"]._jwpub_destination_generation += 1
+        request = snapshots.request
+        snapshots.request = lambda *_args, **_kwargs: 0
+        try:
+            snapshots.complete_latest()
+        finally:
+            snapshots.request = request
+        assert len(completed) == 1
+        assert completed[0].target_valid is True
+        assert completed[0].added_count == 1
+
+    selector = _Selector(select)
+    widget, repository, errors, _warnings = _selection_widget(
+        tmp_path, [playlist], selector, snapshots
+    )
+    widget_holder["widget"] = widget
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("saved", "Saved"),
+    )
+
+    assert outcome == MediaDestinationOutcome(1, ("new.mp4",))
+    assert [item["id"] for item in playlist["items"]] == ["existing"]
+    assert repository.saved[0][0]["items"][0]["id"] == "new"
+    assert len(snapshots.requests) == 1
+    assert errors == []
+
+
+def test_publication_selector_creates_playlist_only_after_selected_batch(tmp_path):
+    snapshots = _Snapshots()
+    completed = []
+    playlists = []
+
+    def select(options):
+        assert playlists == []
+        assert options["placement_ref"]()["items"] == []
+        options["insert"](
+            [
+                {"id": "one", "url": "one.png", "type": "image"},
+                {"id": "two", "url": "two.mp4", "type": "video"},
+            ],
+            "root",
+            2**31 - 1,
+            completed.append,
+        )
+        assert len(playlists) == 1
+        assert completed == []
+        snapshots.complete_latest()
+        assert len(completed) == 1
+        assert completed[0].target_valid is True
+        assert completed[0].added_count == 2
+
+    selector = _Selector(select)
+    widget, repository, errors, warnings = _selection_widget(
+        tmp_path, playlists, selector, snapshots
+    )
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("", "Imported", create_new=True),
+    )
+
+    assert outcome is not None
+    assert outcome.added_count == 2
+    assert outcome.referenced_urls == ("one.png", "two.mp4")
+    assert [item["id"] for item in playlists[0]["items"]] == ["one", "two"]
+    assert playlists[0]["name"] == "Imported"
+    assert repository.saved[-1][0]["name"] == "Imported"
+    assert errors == []
+    assert warnings == []
+
+
+def test_publication_selector_cancel_does_not_create_new_playlist(tmp_path):
+    snapshots = _Snapshots()
+    playlists = []
+    selector = _Selector(lambda _options: None)
+    widget, repository, errors, warnings = _selection_widget(
+        tmp_path, playlists, selector, snapshots
+    )
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("", "Imported", create_new=True),
+    )
+
+    assert outcome is None
+    assert playlists == []
+    assert repository.saved == []
+    assert errors == []
+    assert warnings == []
+
+
+def test_publication_selector_rolls_back_when_snapshot_save_fails(tmp_path):
+    playlist = _playlist()
+    snapshots = _Snapshots()
+    completed = []
+
+    def select(options):
+        options["insert"](
+            [{"id": "new", "url": "new.mp4", "type": "video"}],
+            "root",
+            0,
+            completed.append,
+        )
+        assert [item["id"] for item in playlist["items"]] == ["new", "existing"]
+        snapshots.fail_latest()
+        assert len(completed) == 1
+        assert completed[0].target_valid is False
+
+    selector = _Selector(select)
+    widget, repository, errors, _warnings = _selection_widget(
+        tmp_path, [playlist], selector, snapshots
+    )
+
+    outcome = PlaylistWidget.import_publications_to_playlist_target(
+        widget,
+        ["source.jwpub"],
+        PlaylistDestinationTarget("saved", "Saved"),
+    )
+
+    assert outcome is None
+    assert [item["id"] for item in playlist["items"]] == ["existing"]
+    assert len(snapshots.requests) == 2
+    snapshots.complete_latest()
+    assert repository.saved[-1][0]["items"][0]["id"] == "existing"
+    assert len(errors) == 1
 
 
 def test_playlist_destination_inserts_into_section_and_saves_once(tmp_path):

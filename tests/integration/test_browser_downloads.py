@@ -3,11 +3,26 @@ from __future__ import annotations
 from pathlib import Path
 import threading
 
+import pytest
+
 import solin.widgets.browser.widget as browser_widget
 from solin.core.media.browser_downloads import BrowserDownloadService
 from solin.core.media.download_storage import cached_path_for
 from solin.core.network.http import HttpError
 from solin.widgets.browser.downloads import BrowserDownloadsMixin
+
+
+@pytest.mark.parametrize("prepared", [False, True])
+@pytest.mark.parametrize("kind", ["jwpub", "pdf", "jwlplaylist", "image", "video"])
+def test_browser_publication_requests_select_contents_after_download(kind, prepared):
+    from solin.main_window import MainWindow
+
+    request = MainWindow._browser_destination_request(
+        url="source.jwpub", title="Source", kind=kind, can_play=False, prepared=prepared,
+    )
+    assert request.select_import_contents == (kind == "jwpub")
+    if kind == "jwpub" and prepared:
+        assert request.assets[0].import_path == "source.jwpub"
 
 
 class _ByteStream:

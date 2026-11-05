@@ -12518,4 +12518,127 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <translation>Hindi makakuha ng larawan ng “%1”. Gamitin ang I-refresh ang larawan para subukang muli.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Media para sa mga pahayag pangmadla…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>I-import (%n)</numerusform>
+            <numerusform>I-import (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Pumili ng publikasyon</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Binabasa ang publikasyon…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Pumili ng publikasyong S-34mp.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>Walang magagamit na media sa publikasyon.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Ini-import ang media…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>Hindi available ang napiling lokasyon. Pumili ng ibang lokasyon.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Hindi available ang serbisyo ng pag-import.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>Hindi natagpuan ang %n item ng media. Napanatili ang reference nito.</numerusform>
+            <numerusform>Hindi natagpuan ang %n item ng media. Napanatili ang mga reference ng mga ito.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>Publikasyon ng JW (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>I-import ang media ng publikasyon</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Pumili ng publikasyon para makapagsimula.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Piliin ang file sa computer na ito.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Palitan ang file</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Mag-browse…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Piliin ang S-34mp nang isang beses para sa profile na ito. Panatilihin ang orihinal na file sa lokasyon nito; maaari mo itong palitan dito anumang oras.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Maghanap ng nilalaman…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Piliin ang lahat</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Alisin ang pagpili</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Palawakin ang napiling nilalaman para ayusin ang pagpili ng media.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Ayusin ang pagpili ng media</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Walang tumutugmang nilalaman.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Lilitaw dito ang nilalaman ng publikasyon.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Kanselahin</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Media ng publikasyon</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Mga Larawan: {images} · Mga Video: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
 </TS>

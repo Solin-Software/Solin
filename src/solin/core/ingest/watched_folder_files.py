@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 import hashlib
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -30,6 +31,7 @@ _DEFAULT_COPY_CHUNK_SIZE = 4 * 1024 * 1024
 _SAFE_OPERATION_ID = re.compile(r"[^A-Za-z0-9._-]+")
 _WINDOWS_PUBLISH_RETRY_DELAYS_SECONDS = (0.025, 0.05, 0.1, 0.2, 0.4)
 _WINDOWS_TRANSIENT_FILE_ERRORS = {5, 32, 33}
+log = logging.getLogger(__name__)
 
 
 class CancellationProbe(Protocol):
@@ -155,6 +157,37 @@ class WatchedFolderFileStore:
             safe_remove(staging)
             raise
         return WatchedFolderCopyResult(source, destination, copied, content=(copied, digest.hexdigest()))
+
+    def rollback_copies(
+        self,
+        folder: str | Path,
+        results: Iterable[WatchedFolderCopyResult],
+    ) -> None:
+        """Remove only unchanged files created by these copy transactions."""
+        for result in reversed(tuple(results)):
+            path = result.destination
+            if result.already_present or result.content is None:
+                continue
+            try:
+                if (
+                    path.is_symlink() or path.is_junction()
+                    or not self.is_inside(path, folder) or not path.is_file()
+                ):
+                    continue
+                before = path.stat()
+                if before.st_size != result.content[0]:
+                    continue
+                with path.open("rb") as stream:
+                    digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                after = path.stat()
+                if (
+                    digest == result.content[1]
+                    and (before.st_ino, before.st_size, before.st_mtime_ns)
+                    == (after.st_ino, after.st_size, after.st_mtime_ns)
+                ):
+                    path.unlink()
+            except OSError:
+                log.warning("Could not roll back media copy %s", path, exc_info=True)
 
     def folder_entry_names(self, folder: str | Path) -> tuple[str, ...]:
         """Read sibling names without opening any cloud-backed file contents."""

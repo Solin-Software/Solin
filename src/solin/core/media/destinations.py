@@ -43,6 +43,7 @@ class MediaDestinationRequest:
     title: str
     assets: tuple[MediaDestinationAsset, ...] = field(default_factory=tuple)
     can_play: bool = False
+    select_import_contents: bool = False
 
     @property
     def item_count(self) -> int:

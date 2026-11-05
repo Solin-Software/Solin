@@ -8,7 +8,49 @@ from solin.core.foundation.thread_workers import CancellationFlag
 from solin.core.ingest.staging import WATCHED_FOLDER_STAGING_SUFFIX
 from solin.core.ingest.watched_folder import scan_subfolder
 from solin.core.ingest.watched_folder_files import WatchedFolderCopyRequest
+from solin.core.ingest.watched_folder_files import WatchedFolderCopyResult
 from solin.core.media.operations import MediaOperationCancelled
+
+
+def test_copy_rollback_preserves_preexisting_reused_and_replaced_files(tmp_path):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"created")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    preexisting = folder / "preexisting.mp4"
+    preexisting.write_bytes(b"preexisting")
+    store = WatchedFolderFileStore()
+    created = store.copy_file_transaction(WatchedFolderCopyRequest(source, folder, "created"))
+    reused = store.copy_file_transaction(WatchedFolderCopyRequest(source, folder, "reused"))
+    store.rollback_copies(folder, [reused])
+    assert created.destination.is_file()
+    other_source = tmp_path / "other.mp4"
+    other_source.write_bytes(b"created")
+    replaced = store.copy_file_transaction(
+        WatchedFolderCopyRequest(other_source, folder, "replaced"),
+    )
+    replaced.destination.write_bytes(b"changed")
+    outside = WatchedFolderCopyResult(
+        source, source, len(b"created"), content=created.content,
+    )
+    store.rollback_copies(folder, [created, reused, replaced, outside])
+    assert not created.destination.exists()
+    assert replaced.destination.read_bytes() == b"changed"
+    assert preexisting.read_bytes() == b"preexisting"
+    assert source.read_bytes() == b"created"
+
+
+def test_copy_rollback_removes_owned_file_and_is_idempotent(tmp_path):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"created")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    store = WatchedFolderFileStore()
+    created = store.copy_file_transaction(WatchedFolderCopyRequest(source, folder, "created"))
+    store.rollback_copies(folder, [created])
+    store.rollback_copies(folder, [created])
+    assert not created.destination.exists()
+    assert source.is_file()
 
 
 def test_watched_folder_file_store_copies_with_unique_name(tmp_path):

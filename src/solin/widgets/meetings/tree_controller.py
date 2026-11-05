@@ -33,10 +33,10 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QDialog, QWidget
 
 from ...core.media.cache import MediaCacheManager
-from ...core.media.destinations import create_media_destination_request
+from ...core.media.destinations import MediaDestinationOutcome, create_media_destination_request
 from ...core.i18n.strings import tr_document_page_title, tr_item_count
 from ...core.media.profile_store import ProfileMediaStore
 from ...core.media.thumbnail_store import ThumbnailStore
@@ -171,6 +171,7 @@ from ...ui.qml.media_tree.meeting_session import MeetingTreeSession
 from ...ui.qml.media_tree.state import MediaAvailability
 
 if TYPE_CHECKING:
+    from ...ui.qml.jwpub_selection import JwpubSelectionFactory
     from ...core.jw.jwpub_import_thread import JwpubImportThreadFactory
     from ...core.rendering.document_conversion import DocumentConversionService
 
@@ -359,6 +360,7 @@ class MeetingTreeController(QObject):
         meeting_thumbnail_store: ThumbnailStore,
         watched_folder_file_store: WatchedFolderFileStore,
         jwpub_import_thread_factory: JwpubImportThreadFactory,
+        jwpub_selection_factory: JwpubSelectionFactory,
         document_conversion_service: DocumentConversionService,
         profile_paths: ProfilePaths,
         runtime_paths: RuntimePaths,
@@ -381,6 +383,8 @@ class MeetingTreeController(QObject):
         self._meeting_thumbnail_store = meeting_thumbnail_store
         self._watched_folder_file_store = watched_folder_file_store
         self._jwpub_import_thread_factory = jwpub_import_thread_factory
+        self._jwpub_selection_factory = jwpub_selection_factory
+        self._jwpub_origin_generation = 0
         self._document_conversion_service = document_conversion_service
         self._profile_paths = profile_paths
         self._runtime_paths = runtime_paths
@@ -1798,6 +1802,7 @@ class MeetingTreeController(QObject):
         return None
 
     def cleanup(self) -> None:
+        self._jwpub_origin_generation += 1
         self._folder_delete_timer.stop()
         self._pending_folder_delete = None
         self._folder_mutation_pending = False
@@ -1884,7 +1889,7 @@ class MeetingTreeController(QObject):
         self._thumb_cache[item_id] = QPixmap.fromImage(image)
 
     def add_files(
-        self, paths: list[str], list_id: str = "root", insert_index: int = _BIG_INDEX
+        self, paths: list[str], list_id: str | None = None, insert_index: int = _BIG_INDEX
     ) -> None:
         if getattr(self, "_folder_mutation_pending", False):
             return
@@ -1931,7 +1936,7 @@ class MeetingTreeController(QObject):
         if pdf_paths:
             self._import_pdfs(pdf_paths, list_id or "root", cursor)
         if jwpub_paths:
-            self._import_jwpubs(jwpub_paths, list_id or "root", cursor)
+            self._import_jwpubs(jwpub_paths, list_id, cursor)
         if jwl_paths:
             self._import_jwlplaylists(jwl_paths, list_id or "root", cursor)
         if lo_paths:
@@ -2128,26 +2133,138 @@ class MeetingTreeController(QObject):
         if nodes:
             self._insert_nodes(list_id or "root", insert_index, nodes)
 
-    def _import_jwpubs(self, paths: list[str], list_id: str, insert_index: int) -> None:
-        for path in paths:
-            stem = Path(path).stem
-            thread = self._jwpub_import_thread_factory.create(
-                path,
-                lang=self._language_code,
-                dest_images_dir=self._jwpub_image_dir(),
-                parent=self,
+    def import_publications(
+        self,
+        paths: list[str],
+        *,
+        is_current: Callable[[], bool] | None = None,
+    ) -> MediaDestinationOutcome | None:
+        """Import selected publication contents using the manual placement workflow."""
+        if not paths:
+            return None
+        return self._import_jwpubs(paths, origin_is_current=is_current)
+
+    def _import_jwpubs(
+        self,
+        paths: list[str],
+        list_id: str | None = None,
+        insert_index: int = _BIG_INDEX,
+        *,
+        public_talk: bool = False,
+        origin_is_current: Callable[[], bool] | None = None,
+    ) -> MediaDestinationOutcome | None:
+        session = self._tree_session
+        owner_id, generation = session.owner_id, session.generation
+        tree_key, language = self._tree_key, self._language_code
+        origin_generation = self._jwpub_origin_generation
+        inserted_count = 0
+        committed_nodes: list[Node] = []
+        destination_accepted = False
+        if not owner_id or not tree_key or self._folder_mutation_pending:
+            return None
+
+        def is_current() -> bool:
+            return (
+                (origin_is_current is None or origin_is_current())
+                and self._jwpub_origin_generation == origin_generation
+                and self._tree_session is session
+                and session.owner_id == owner_id
+                and session.generation == generation
+                and self._tree_key == tree_key
+                and self._language_code == language
             )
-            self._jwpub_threads.append(thread)
-            thread.items_ready.connect(
-                lambda items, file_stem, _list=list_id, _index=insert_index: (
-                    self._on_playlist_items_ready(items, file_stem, _list, _index)
+
+        def insert(items, target_list_id, target_index, completed) -> None:
+            acknowledged = False
+            submitted_items = [dict(item) for item in items]
+
+            def finish(committed: list[Node] | None) -> None:
+                nonlocal acknowledged, inserted_count, destination_accepted
+                if not acknowledged:
+                    acknowledged = True
+                    if committed is not None:
+                        inserted_count += len(committed)
+                        committed_nodes.extend(committed)
+                        destination_accepted = True
+                        completed(MediaInsertResult(added_items=tuple(
+                            dict(node.get("media_ref") or {}) for node in committed
+                        )))
+                    else:
+                        completed(MediaInsertResult(target_valid=False))
+
+            if not is_current():
+                finish(None)
+                return
+            try:
+                nodes = [
+                    self._node_from_playlist_item(item, str(item.get("title") or ""))
+                    for item in submitted_items
+                ]
+                if (
+                    list_id is not None
+                    and target_list_id == list_id
+                    and target_index == insert_index
+                    and target_index < _BIG_INDEX
+                ):
+                    target_index += inserted_count
+                accepted = self._insert_nodes(
+                    target_list_id,
+                    target_index,
+                    nodes,
+                    on_completed=finish,
                 )
-            )
-            thread.failed.connect(lambda error, _name=stem: self._warn_import_failed(_name, error))
-            thread.finished.connect(
-                lambda t=thread: self._jwpub_threads.remove(t) if t in self._jwpub_threads else None
-            )
-            thread.start()
+                if not accepted:
+                    finish(None)
+            except Exception:  # noqa: BLE001 - complete the selector's origin insertion boundary
+                log_ignored_exception(__name__, "Could not insert selected publication media")
+                finish(None)
+
+        if not is_current():
+            return None
+        dialog_parent = self.parent()
+        while dialog_parent is not None and not isinstance(dialog_parent, QWidget):
+            dialog_parent = dialog_parent.parent()
+
+        self._jwpub_selection_factory.select(
+            paths,
+            parent=dialog_parent,
+            operations=self._media_tree_runtime.operations,
+            language=language,
+            dest_images_dir=self._jwpub_image_dir(),
+            scope_id=owner_id,
+            is_current=is_current,
+            placement_ref=lambda: self.placement_playlist_ref() if is_current() else None,
+            insert=insert,
+            list_id=list_id,
+            insert_index=insert_index,
+            public_talk=public_talk,
+            auto_target=self._public_talk_target if public_talk else None,
+        )
+        if not destination_accepted or not is_current():
+            return None
+        urls = (
+            str((node.get("media_ref") or {}).get("file_path") or "") for node in committed_nodes
+        )
+        return MediaDestinationOutcome(
+            inserted_count,
+            tuple(dict.fromkeys(url for url in urls if url)),
+        )
+
+    def _public_talk_target(self) -> tuple[str, int] | None:
+        if self._meeting_type != "wt":
+            return None
+        for node in iter_nodes(self._nodes):
+            if (
+                node.get("type") == "section"
+                and node.get("meeting_source_key") == "section:wt:public_talk"
+                and node.get("id")
+            ):
+                return f"section:{node['id']}", _BIG_INDEX
+        return None
+
+    @Slot()
+    def publicTalkMediaClicked(self) -> None:
+        self._import_jwpubs([], public_talk=True)
 
     def _import_jwlplaylists(
         self,
@@ -4155,6 +4272,7 @@ class MeetingTreeController(QObject):
             return False
         operation_id = f"meeting-copy:{uuid.uuid4().hex}"
         pending_nodes = clone_nodes(nodes)
+        prepared_result: list[_PreparedMeetingNodes] = []
         stage = QCoreApplication.translate("MediaDestinationDialog", "Preparing media")
         self._tree_session.add_pending(
             operation_id,
@@ -4181,11 +4299,13 @@ class MeetingTreeController(QObject):
             if cancellation.is_set():
                 self._sync_service.rollback_materialized_files(Path(sync_folder), created_files)
                 raise MediaOperationCancelled("Meeting media copy cancelled")
-            return _PreparedMeetingNodes(
+            value = _PreparedMeetingNodes(
                 prepared,
                 linked_files,
                 tuple(created_files),
             )
+            prepared_result.append(value)
+            return value
 
         def commit(value: object) -> None:
             if not isinstance(value, _PreparedMeetingNodes):
@@ -4249,9 +4369,14 @@ class MeetingTreeController(QObject):
                     raise RuntimeError("Meeting insertion target is no longer available")
             if on_completed is not None:
                 on_completed(accepted_nodes)
+            prepared_result.clear()
             self._tree_session.remove_pending(operation_id)
 
         def discard(value: object | None) -> None:
+            if value is None and prepared_result:
+                value = prepared_result.pop()
+            else:
+                prepared_result.clear()
             self._tree_session.remove_pending(operation_id)
             if on_completed is not None:
                 on_completed(None)
@@ -4274,7 +4399,8 @@ class MeetingTreeController(QObject):
                 commit=commit,
                 priority=100,
                 initial_stage=stage,
-                retryable=True,
+                retryable=on_completed is None,
+                failed=(lambda *_args: discard(None)) if on_completed is not None else None,
                 discarded=discard,
                 cancelled=lambda: discard(None),
             )
@@ -4342,7 +4468,8 @@ class MeetingTreeController(QObject):
                 runner=run,
                 commit=commit,
                 priority=100,
-                retryable=True,
+                retryable=on_completed is None,
+                failed=(lambda *_args: discard()) if on_completed is not None else None,
                 discarded=discard,
                 cancelled=discard,
             )
@@ -4364,9 +4491,17 @@ class MeetingTreeController(QObject):
         if target_children is None:
             return False
         index = max(0, min(insert_index, len(target_children)))
+        previous_children = list(target_children)
         for offset, node in enumerate(nodes):
             target_children.insert(index + offset, node)
-        saved = self._save()
+        saved = False
+        try:
+            saved = self._save()
+        finally:
+            if not saved:
+                target_children[:] = previous_children
+        if not saved:
+            return False
         self._start_media_requests(nodes)
         self._emit_section_counts()
         return saved

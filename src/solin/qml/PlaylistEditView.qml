@@ -168,13 +168,21 @@ Rectangle {
                     Menu {
                         id: addMenu
                         y: parent.height + 4
-                        width: 182
+                        width: 244
                         background: MenuPanel {}
 
                         MenuItem {
                             text: qsTranslate("_PlaylistEditView", "Local File...")
                             icon.source: root.picon("plus", 13, root.iconHex(root.textMuted))
                             onTriggered: if (root.hasController) controller.addClicked()
+                            contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
+                            background: MenuBg { hovered: parent.hovered }
+                        }
+
+                        MenuItem {
+                            text: qsTranslate("JwpubSelectionBridge", "Public talk media…")
+                            icon.source: root.picon("public_talk", 13, root.iconHex(root.textMuted))
+                            onTriggered: if (root.hasController) controller.publicTalkMediaClicked()
                             contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source }
                             background: MenuBg { hovered: parent.hovered }
                         }

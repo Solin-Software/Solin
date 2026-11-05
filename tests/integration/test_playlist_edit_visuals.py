@@ -33,7 +33,7 @@ def test_playlist_edit_visual_helpers_stay_stable():
 
 
 def test_playlist_icons_stay_embedded_in_python():
-    expected = {
+    required = {
         "grip",
         "more",
         "play_all",
@@ -62,10 +62,19 @@ def test_playlist_icons_stay_embedded_in_python():
         "media_image",
         "media_audio",
         "media_video",
+        "public_talk",
     }
-
-    assert set(PLAYLIST_ICON_SVGS) == expected
-    assert all(svg.startswith("<svg") for svg in PLAYLIST_ICON_SVGS.values())
+    assert required <= PLAYLIST_ICON_SVGS.keys()
+    provider = PlaylistIconProvider()
+    for name, svg in PLAYLIST_ICON_SVGS.items():
+        assert svg.startswith("<svg")
+        pixmap = provider.requestPixmap(f"{name}/16/ffffff", None, QSize(16, 16))
+        rendered = pixmap.toImage()
+        assert any(
+            rendered.pixelColor(x, y).alpha() > 0
+            for x in range(rendered.width())
+            for y in range(rendered.height())
+        ), f"Icon {name} did not render"
 
 
 def test_meeting_restore_button_visibility_tooltip_and_action_are_wired():

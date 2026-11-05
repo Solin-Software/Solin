@@ -12517,4 +12517,127 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Ingen bild av ”%1” kunde tas. Använd Uppdatera bild för att försöka igen.</translation>
     </message>
 </context>
+<context>
+    <name>JwpubSelectionBridge</name>
+    <message>
+        <source>Public talk media…</source>
+        <translation>Media för offentliga tal…</translation>
+    </message>
+    <message numerus="yes">
+        <source>Import (%n)</source>
+        <translation>
+            <numerusform>Importera (%n)</numerusform>
+            <numerusform>Importera (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Choose a publication</source>
+        <translation>Välj en publikation</translation>
+    </message>
+    <message>
+        <source>Reading publication…</source>
+        <translation>Läser publikation…</translation>
+    </message>
+    <message>
+        <source>Choose an S-34mp publication.</source>
+        <translation>Välj en S-34mp-publikation.</translation>
+    </message>
+    <message>
+        <source>The publication contains no usable media.</source>
+        <translation>Publikationen innehåller inga användbara medier.</translation>
+    </message>
+    <message>
+        <source>Importing media…</source>
+        <translation>Importerar media…</translation>
+    </message>
+    <message>
+        <source>The selected location is unavailable. Choose another location.</source>
+        <translation>Den valda platsen är inte tillgänglig. Välj en annan plats.</translation>
+    </message>
+    <message>
+        <source>The import service is unavailable.</source>
+        <translation>Importtjänsten är inte tillgänglig.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n media item(s) could not be resolved. Their references were retained.</source>
+        <translation>
+            <numerusform>%n medieobjekt kunde inte hittas. Referensen har behållits.</numerusform>
+            <numerusform>%n medieobjekt kunde inte hittas. Referenserna har behållits.</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>JW Publication (*.jwpub)</source>
+        <translation>JW-publikation (*.jwpub)</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionDialog</name>
+    <message>
+        <source>Import publication media</source>
+        <translation>Importera publikationens media</translation>
+    </message>
+    <message>
+        <source>Choose a publication to get started.</source>
+        <translation>Välj en publikation för att komma igång.</translation>
+    </message>
+    <message>
+        <source>Select the file on this computer.</source>
+        <translation>Välj filen på den här datorn.</translation>
+    </message>
+    <message>
+        <source>Change file</source>
+        <translation>Byt fil</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Bläddra…</translation>
+    </message>
+    <message>
+        <source>Choose S-34mp once for this profile. Keep the original file in its location; you can change it here at any time.</source>
+        <translation>Välj S-34mp en gång för den här profilen. Behåll originalfilen på dess plats; du kan byta den här när som helst.</translation>
+    </message>
+    <message>
+        <source>Search contents…</source>
+        <translation>Sök innehåll…</translation>
+    </message>
+    <message>
+        <source>Select all</source>
+        <translation>Markera alla</translation>
+    </message>
+    <message>
+        <source>Clear selection</source>
+        <translation>Rensa markering</translation>
+    </message>
+    <message>
+        <source>Expand selected contents to refine media.</source>
+        <translation>Expandera markerat innehåll för att anpassa medievalet.</translation>
+    </message>
+    <message>
+        <source>Refine media</source>
+        <translation>Anpassa medievalet</translation>
+    </message>
+    <message>
+        <source>No matching contents.</source>
+        <translation>Inget matchande innehåll.</translation>
+    </message>
+    <message>
+        <source>Your publication contents will appear here.</source>
+        <translation>Publikationens innehåll visas här.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Avbryt</translation>
+    </message>
+</context>
+<context>
+    <name>JwpubSelectionModel</name>
+    <message>
+        <source>Publication media</source>
+        <translation>Publikationens media</translation>
+    </message>
+    <message>
+        <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
+        <translation>Bilder: {images} · Videor: {videos} · Ljud: {audio}</translation>
+    </message>
+</context>
 </TS>

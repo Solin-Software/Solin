@@ -25,6 +25,7 @@ class SettingsKey:
     REMOTE_CONTROL_ONBOARDING_SEEN: Final = "remote_control/onboarding_seen"
     MEDIA_LANGUAGE_CODE: Final = "media_language_code"
     LEGACY_JW_LANGUAGE: Final = "jw_language"
+    PUBLIC_TALK_SOURCE_PATH: Final = "public_talk/source_path"
 
     WINDOW_GEOMETRY: Final = "geometry"
     LEGACY_WINDOW_WIDTH: Final = "size/width"
