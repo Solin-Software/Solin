@@ -33,6 +33,7 @@ class ObsCameraCaptureProbe:
 
     def __init__(
         self, runtime: Any, source: Any, *, width: int, height: int,
+        initial_generation: int = 1,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._runtime = runtime
@@ -40,7 +41,7 @@ class ObsCameraCaptureProbe:
         self._clock = monotonic
         self._lock = threading.Lock()
         self._expected = (width, height)
-        self._state = CameraCaptureState(1, "starting")
+        self._state = CameraCaptureState(initial_generation, "starting")
         self._awaiting_update = False
         self._skip_frame = False
         self._last_timestamp = 0
@@ -66,9 +67,15 @@ class ObsCameraCaptureProbe:
         with self._lock:
             return self._state
 
-    def update(self, settings: dict[str, object], *, width: int, height: int) -> None:
+    def update(
+        self, settings: dict[str, object], *, width: int, height: int,
+        minimum_generation: int = 0,
+    ) -> None:
+        """Advance past both native updates and earlier metadata-failure generations."""
         with self._lock:
-            source = self._prepare_update_locked(width=width, height=height)
+            source = self._prepare_update_locked(
+                width=width, height=height, minimum_generation=minimum_generation,
+            )
         self._apply_update(source, settings)
 
     def reconnect(
@@ -89,13 +96,16 @@ class ObsCameraCaptureProbe:
         self._apply_update(source, settings)
         return True
 
-    def _prepare_update_locked(self, *, width: int, height: int) -> Any:
+    def _prepare_update_locked(
+        self, *, width: int, height: int, minimum_generation: int = 0,
+    ) -> Any:
         source = self._source
         if source is None:
             raise RuntimeError("Cannot update a closed camera capture probe")
         self._expected = (width, height)
         self._state = CameraCaptureState(
-            self._state.generation + 1, "starting", frame_sequence=self._state.frame_sequence,
+            max(self._state.generation + 1, minimum_generation), "starting",
+            frame_sequence=self._state.frame_sequence,
         )
         self._awaiting_update = True
         self._last_tick = None

@@ -1234,6 +1234,221 @@ def test_camera_document_forwards_full_capture_mode_to_runtime(mode):
         graph.clear()
 
 
+@pytest.mark.parametrize("reason", [
+    "device_unavailable", "permission_denied", "capability_query_failed",
+    "format_unavailable", "ambiguous_format",
+])
+def test_saved_macos_camera_failure_is_local_and_arrival_rebinds_existing_scenes(monkeypatch, reason):
+    import base64
+
+    from solin.core.media.obs_camera_capture import CameraCaptureState
+    from solin.core.media.obs_runtime import ObsRuntime
+    from solin.core.scenes import avfoundation_camera_discovery as discovery
+
+    runtime = _CompositingRuntime()
+    capture = ObsRuntime()
+    capture._pylibobs = runtime.ob
+    monkeypatch.setattr(capture, "ensure_started", lambda: None)
+    monkeypatch.setattr(capture, "watch_camera_video", lambda _source, **values:
+        types.SimpleNamespace(state=CameraCaptureState(values["initial_generation"], "starting"), close=lambda: None))
+    monkeypatch.setattr(runtime, "camera_source", capture.camera_source)
+    monkeypatch.setattr(runtime, "camera_capture_state", capture.camera_capture_state, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    def unavailable(*_args):
+        raise discovery.AVFoundationDiscoveryError(reason)
+
+    monkeypatch.setattr(discovery, "resolve_avfoundation_format", unavailable)
+    engine = LibobsSidecarEngine(runtime_factory=lambda: runtime)
+    engine.handle(_request("hello"))
+    document = {
+        "sources": [
+            {"id": "camera", "type": "local_camera", "configuration": {
+                "device_id": "saved-camera", "width": 1920, "height": 1080,
+                "fps_numerator": 30, "fps_denominator": 1,
+                "media_type": "video/x-raw", "pixel_format": "420v", "native_format": "",
+            }},
+            {"id": "color", "type": "color", "configuration": {"color": "#123456"}},
+        ],
+        "scenes": [{"id": scene, "layers": [
+            {"id": "camera-layer", "source_id": "camera", "visible": True,
+             "rect": {"x": 0.25, "y": 0.25, "width": 0.5, "height": 0.5},
+             "rotation_degrees": 45, "mirror_x": True, "crop": {"left": 0.1}},
+            {"id": "color-layer", "source_id": "color", "visible": True},
+        ]} for scene in ("active", "inactive")],
+    }
+    try:
+        ack = engine.handle(_request("hydrate", {
+            "document": document, "active_scenes": {"virtual_camera": "active"},
+        }))
+        assert ack.payload["applied"] and not ack.payload.get("error_code")
+        graph = engine._scene_graph
+        scenes = tuple(graph._scenes.values())
+        placeholders = [graph._layer_items[(scene, "camera-layer")]["item"]
+                        for scene in ("active", "inactive")]
+        colors = [graph._layer_items[(scene, "color-layer")]["item"]
+                  for scene in ("active", "inactive")]
+        failed = capture.camera_capture_state("saved-camera")
+        assert failed.status == "failed"
+        # No unrelated device or stale generation may activate this source.
+        assert not engine._reconnect_local_camera("other-device", failed.generation)
+        assert not engine._reconnect_local_camera("saved-camera", failed.generation - 1)
+        assert all(not item.removed for item in placeholders)
+        identity = base64.b64encode(b"1920x1080 30.000-30.000 2 875704438").decode()
+        monkeypatch.setattr(discovery, "resolve_avfoundation_format", lambda *_: identity)
+        assert engine._reconnect_local_camera("saved-camera", failed.generation)
+        assert tuple(graph._scenes.values()) == scenes
+        source = capture.camera_source("saved-camera", **{
+            key: value for key, value in document["sources"][0]["configuration"].items()
+            if key != "device_id"
+        })
+        for scene, old, color in zip(("active", "inactive"), placeholders, colors, strict=True):
+            item = graph._layer_items[(scene, "camera-layer")]["item"]
+            assert item.source is source and item is not old and old.removed
+            assert item.order_position == old.order_position
+            assert item.pos == old.pos and item.bounds == old.bounds
+            assert item.rotation == 45 and item.scale == (-1.0, 1.0)
+            assert item.crop == (192, 0, 0, 0)
+            assert not color.removed
+            assert id(old) not in graph._cropped_items
+        recovered = capture.camera_capture_state("saved-camera")
+        assert recovered.status == "starting" and recovered.generation > failed.generation
+        assert not engine._reconnect_local_camera("saved-camera", failed.generation)
+    finally:
+        engine.shutdown()
+        capture._release_camera_sources()
+
+
+@pytest.fixture
+def unavailable_camera_content_graph(monkeypatch):
+    from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
+
+    runtime = _CompositingRuntime()
+    monkeypatch.setattr(runtime, "camera_source", Mock(return_value=None))
+    graph = LibobsSceneGraph(runtime)
+    document = {
+        "sources": [
+            {"id": "camera", "type": "local_camera", "configuration": {"device_id": "device"}},
+            {"id": "content", "type": "solin_content", "configuration": {}},
+        ],
+        "scenes": [{"id": "scene", "layers": [
+            {"id": "camera-layer", "source_id": "camera",
+             "rect": {"x": 0.1, "y": 0.2, "width": 0.5, "height": 0.5},
+             "rotation_degrees": 45, "mirror_x": True, "crop": {"left": 0.1}},
+            {"id": "content-layer", "source_id": "content"},
+        ]}],
+    }
+    try:
+        graph.hydrate(document, {"virtual_camera": "scene"}, object())
+        yield graph, runtime
+    finally:
+        graph.shutdown()
+
+
+def test_camera_arrival_recovers_retained_output_compositions_and_retires_their_crops(
+    unavailable_camera_content_graph,
+):
+    graph, runtime = unavailable_camera_content_graph
+    origin = graph._scenes["scene"]
+    original_content = origin.items[1].source
+    replacement_content = object()
+    with graph.content_presentation(replacement_content) as presentation:
+        presentation.commit()
+    current = graph._scenes["scene"]
+    placeholders = [scene.items[0] for scene in (origin, current)]
+    camera = _FakeColorSource("camera", "shared-camera", {"width": 0, "height": 0})
+    runtime.camera_source.reset_mock()
+    runtime.camera_source.return_value = camera
+
+    assert graph.retry_unavailable_camera("device")
+    assert graph.active_scene_source is origin.as_source()
+    assert origin.items[1].source is camera
+    assert current.items[1].source is camera
+    assert origin.items[0].source is original_content
+    assert current.items[0].source is replacement_content
+    assert runtime.camera_source.call_count == 1
+    assert not graph.has_unavailable_camera("device")
+    for scene, placeholder in zip((origin, current), placeholders, strict=True):
+        item = scene.items[1]
+        assert placeholder.removed
+        assert item.pos == placeholder.pos and item.bounds == placeholder.bounds
+        assert item.rotation == placeholder.rotation and item.scale == placeholder.scale
+        assert item.order_position == placeholder.order_position
+        assert id(placeholder) not in graph._cropped_items
+
+    camera.width, camera.height = 1920, 1080
+    assert graph.refresh_source_crops()
+    assert origin.items[1].crop == current.items[1].crop == (192, 0, 0, 0)
+    graph.collect_retired_scenes((origin.as_source(),))
+    assert origin.released == 0
+    retired_item = origin.items[1]
+    prepared = graph.prepare("scene", "cut", 0)
+    assert graph.take(prepared["token"])
+    assert graph.active_scene_source is current.as_source()
+    graph.collect_retired_scenes(())
+    assert origin.released == 1 and current.released == 0
+    assert id(retired_item) not in graph._cropped_items
+    assert id(current.items[1]) in graph._cropped_items
+    assert graph.refresh_source_crops()
+
+
+@pytest.mark.parametrize("fault", ["add", "geometry"])
+def test_camera_install_failure_recovers_retired_placeholder_after_capture_is_ready(
+    unavailable_camera_content_graph, monkeypatch, fault,
+):
+    from solin.core.media.obs_camera_capture import CameraCaptureState
+
+    graph, runtime = unavailable_camera_content_graph
+    origin = graph._scenes["scene"]
+    placeholder = origin.items[0]
+    with graph.content_presentation(object()) as presentation:
+        presentation.commit()
+    current = graph._scenes["scene"]
+    camera = _FakeColorSource("camera", "shared-camera", {})
+    state = [CameraCaptureState(1, "failed", "camera_create_failed")]
+
+    def resolve_camera(*_args, **_kwargs):
+        if state[0].generation == 1:
+            state[0] = CameraCaptureState(2, "starting")
+        return camera
+
+    runtime.camera_source.side_effect = resolve_camera
+    monkeypatch.setattr(runtime, "camera_capture_state", lambda _device: state[0], raising=False)
+    reconnect = Mock(return_value=False)
+    monkeypatch.setattr(runtime, "reconnect_camera", reconnect, raising=False)
+    engine = LibobsSidecarEngine()
+    engine._runtime = runtime
+    engine._scene_graph = graph
+    apply_geometry = graph._apply_item_geometry
+
+    def reject_retired_geometry(item, *args):
+        apply_geometry(item, *args)
+        if item.scene is origin:
+            raise RuntimeError("native camera installation failed")
+
+    with monkeypatch.context() as failure:
+        if fault == "add":
+            failure.setattr(origin, "add", Mock(side_effect=RuntimeError("native camera installation failed")))
+        else:
+            failure.setattr(graph, "_apply_item_geometry", reject_retired_geometry)
+        with pytest.raises(RuntimeError, match="native camera installation failed"):
+            engine._reconnect_local_camera("device", 1)
+    assert current.items[1].source is camera
+    assert origin.items[0] is placeholder and not placeholder.removed
+    assert len(origin.items) == 2
+    assert graph.has_unavailable_camera("device")
+    assert not graph.has_unavailable_camera("other-device")
+    assert all(not item.removed for item, _crop, _size in graph._cropped_items.values())
+
+    state[0] = CameraCaptureState(2, "ready", width=1920, height=1080, frame_sequence=1)
+    assert engine._reconnect_local_camera("device", 2)
+    assert placeholder.removed and origin.items[1].source is camera
+    assert state[0].status == "ready"
+    reconnect.assert_not_called()
+    assert not graph.has_unavailable_camera("device")
+    assert not graph.retry_unavailable_camera("device")
+
+
 def test_color_source_uses_the_configured_color():
     from solin.core.scenes.libobs_scene_builder import LibobsSceneGraph
 

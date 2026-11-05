@@ -663,18 +663,18 @@ def camera_runtime(monkeypatch):
         return source
 
     class Probe:
-        def __init__(self, source, *, width, height):
+        def __init__(self, source, *, width, height, initial_generation=1):
             self.source = source
             self.dimensions = (width, height)
-            self.state = CameraCaptureState(1, "starting")
+            self.state = CameraCaptureState(initial_generation, "starting")
             self.updates = []
             self.closed = False
 
-        def update(self, settings, *, width, height):
+        def update(self, settings, *, width, height, minimum_generation=0):
             assert not self.closed and self.source.releases == 0
             self.dimensions = (width, height)
             self.updates.append((dict(settings), width, height))
-            self.state = CameraCaptureState(self.state.generation + 1, "starting")
+            self.state = CameraCaptureState(max(self.state.generation + 1, minimum_generation), "starting")
             try:
                 self.source.update(settings)
             except RuntimeError:
@@ -832,6 +832,131 @@ def test_camera_empty_device_does_not_start_runtime(camera_runtime):
     runtime, created, events, _modes = camera_runtime
     assert runtime.camera_source("") is None
     assert not created and not events
+
+
+@pytest.mark.parametrize("reason", [
+    "device_unavailable", "permission_denied", "capability_query_failed",
+    "format_unavailable", "ambiguous_format",
+])
+def test_unavailable_saved_camera_preserves_other_sources_and_can_retry(
+    monkeypatch, camera_runtime, reason,
+):
+    import base64
+
+    from solin.core.scenes import avfoundation_camera_discovery as discovery
+
+    runtime, created, events, _modes = camera_runtime
+    monkeypatch.setattr(sys, "platform", "darwin")
+    mode = _exact_camera_mode(media_type="video/x-raw", pixel_format="420v")
+
+    def unavailable(*_args):
+        raise discovery.AVFoundationDiscoveryError(reason)
+
+    monkeypatch.setattr(discovery, "resolve_avfoundation_format", unavailable)
+    try:
+        assert runtime.camera_source("missing", **mode) is None
+        first = runtime.camera_capture_state("missing")
+        assert first.status == "failed"
+        assert first.error_code == "camera_configuration_unavailable"
+        assert not created and not events
+        assert runtime.camera_source("missing", **mode) is None
+        assert runtime.camera_capture_state("missing").generation > first.generation
+        # A failed legacy selector cannot prevent another device from starting.
+        assert runtime.camera_source("another") is not None
+        identity = base64.b64encode(b"1920x1080 29.970-30.000 2 875704438").decode()
+        monkeypatch.setattr(discovery, "resolve_avfoundation_format", lambda *_: identity)
+        failed = runtime.camera_capture_state("missing")
+        source = runtime.camera_source("missing", **mode)
+        assert source is not None
+        assert source.settings["supported_format"] == identity
+        assert runtime.camera_capture_state("missing").generation > failed.generation
+        assert runtime.camera_capture_state("missing").status == "starting"
+        assert runtime.camera_source("missing", **mode) is source
+        assert len(created) == 2
+    finally:
+        runtime._release_camera_sources()
+
+
+def test_invalid_saved_camera_mode_remains_a_validation_error(monkeypatch, camera_runtime):
+    runtime, created, events, _modes = camera_runtime
+    monkeypatch.setattr(sys, "platform", "darwin")
+    with pytest.raises(ValueError):
+        runtime.camera_source("device", **_exact_camera_mode(pixel_format="invalid"))
+    assert not created and not events
+    assert runtime.camera_capture_state("device") is None
+
+
+@pytest.mark.parametrize("reject_update", [False, True])
+def test_camera_metadata_failure_fences_existing_capture_health_and_mode_retry(
+    monkeypatch, camera_runtime, reject_update,
+):
+    import base64
+
+    from solin.core.scenes import avfoundation_camera_discovery as discovery
+
+    runtime, created, _events, _modes = camera_runtime
+    monkeypatch.setattr(sys, "platform", "darwin")
+    identity = base64.b64encode(b"1920x1080 25.000-30.000 2 875704438").decode()
+    mode = _exact_camera_mode(media_type="video/x-raw", pixel_format="420v", native_format=identity)
+    source = runtime.camera_source("device", **mode)
+    requested = mode | {"native_format": "", "fps_numerator": 25, "fps_denominator": 1}
+
+    def unavailable(*_args):
+        raise discovery.AVFoundationDiscoveryError("format_unavailable")
+
+    monkeypatch.setattr(discovery, "resolve_avfoundation_format", unavailable)
+    try:
+        for _ in range(3):
+            assert runtime.camera_source("device", **requested) is None
+        failed = runtime.camera_capture_state("device")
+        assert failed.error_code == "camera_configuration_unavailable"
+        assert not source.updates and source.releases == 0
+        monkeypatch.setattr(discovery, "resolve_avfoundation_format", lambda *_: identity)
+        source.reject_update = reject_update
+        if reject_update:
+            with pytest.raises(obs_runtime.ObsRuntimeError):
+                runtime.camera_source("device", **requested)
+            assert runtime.camera_capture_state("device").error_code == "camera_update_failed"
+        else:
+            assert runtime.camera_source("device", **requested) is source
+            assert runtime.camera_capture_state("device").status == "starting"
+        assert runtime.camera_capture_state("device").generation > failed.generation
+        assert len(created) == 1
+    finally:
+        runtime._release_camera_sources()
+
+
+@pytest.mark.parametrize("already_created", [False, True])
+def test_obsolete_metadata_failure_cannot_invalidate_a_newer_capture_mode(
+    monkeypatch, camera_runtime, already_created,
+):
+    import base64
+
+    from solin.core.scenes import avfoundation_camera_discovery as discovery
+
+    runtime, created, _events, _modes = camera_runtime
+    monkeypatch.setattr(sys, "platform", "darwin")
+    identity = base64.b64encode(b"1920x1080 25.000-30.000 2 875704438").decode()
+    mode = _exact_camera_mode(media_type="video/x-raw", pixel_format="420v", native_format=identity)
+    if already_created:
+        runtime.camera_source("device", **mode)
+    newer = mode | {"fps_numerator": 25, "fps_denominator": 1}
+
+    def superseded(*_args):
+        runtime.camera_source("device", **newer)
+        raise discovery.AVFoundationDiscoveryError("device_unavailable")
+
+    monkeypatch.setattr(discovery, "resolve_avfoundation_format", superseded)
+    try:
+        assert runtime.camera_source("device", **(mode | {"native_format": ""})) is None
+        assert runtime.camera_capture_state("device").status == "starting"
+        assert len(created) == 1
+        source = runtime.camera_source("device", **newer)
+        assert source is created[0][2]
+        assert source.settings["frame_rate"] == {"numerator": 25, "denominator": 1}
+        assert len(source.updates) == int(already_created)
+    finally:
+        runtime._release_camera_sources()
 
 
 def test_camera_reconnect_does_not_restart_frames_recovered_after_policy_snapshot(

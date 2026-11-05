@@ -944,8 +944,10 @@ class LibobsSidecarEngine:
             self._camera_recovery = LocalCameraRecovery(
                 discover=lambda: (device.device_id for device in camera_catalog().devices(refresh=True)),
                 state=runtime.camera_capture_state,
-                reconnect=lambda device, generation: runtime.reconnect_camera(
-                    device, expected_generation=generation,
+                reconnect=self._reconnect_local_camera,
+                attachment_pending=lambda device: (
+                    self._scene_graph is not None
+                    and self._scene_graph.has_unavailable_camera(device)
                 ),
                 cancel_discovery=camera_catalog().cancel_discovery,
             )
@@ -953,6 +955,18 @@ class LibobsSidecarEngine:
         if self._camera_recovery.changed(revision):
             camera_catalog().invalidate()
         return _ack(request, applied=True)
+
+    def _reconnect_local_camera(self, device: str, generation: int) -> bool:
+        runtime = cast(Any, self._runtime)
+        graph, output = self._scene_graph, self._window_output
+        guard = output.hydrate_lock if output is not None else nullcontext()
+        with guard:
+            state = runtime.camera_capture_state(device)
+            if state is None or state.generation != generation:
+                return False
+            if graph is not None and graph.retry_unavailable_camera(device):
+                return True
+            return state.status == "failed" and runtime.reconnect_camera(device, expected_generation=generation)
 
     def _local_camera_list(self) -> dict[str, object]:
         from solin.core.scenes.camera_catalog import camera_catalog

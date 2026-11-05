@@ -145,6 +145,31 @@ def test_capture_failures_retry_after_backoff_at_most_three_times(recovery):
     assert len(recovery.calls) == 3
 
 
+@pytest.mark.parametrize("code", ["camera_create_failed", "camera_configuration_unavailable"])
+def test_uncreated_capture_retries_only_after_arrival_and_keeps_the_retry_budget(recovery, code):
+    recovery.state["camera"] = CameraCaptureState(1, "failed", code)
+
+    def unavailable(device, generation):
+        recovery.calls.append((device, generation))
+        recovery.state[device] = CameraCaptureState(generation + 1, "failed", code)
+        return True
+
+    recovery.owner._reconnect = unavailable
+    recovery.owner.poll()
+    assert not recovery.calls
+    _inventory(recovery)
+    assert recovery.calls == [("camera", 1)]
+    for delay in (1, 3):
+        recovery.owner.poll()
+        before = len(recovery.calls)
+        recovery.clock[0] += delay
+        recovery.owner.poll()
+        assert len(recovery.calls) == before + 1
+    recovery.clock[0] += 10
+    recovery.owner.poll()
+    assert len(recovery.calls) == 3
+
+
 def test_native_update_exception_retries_from_the_advanced_failed_generation(recovery):
     reconnect = recovery.owner._reconnect
 
@@ -160,6 +185,46 @@ def test_native_update_exception_retries_from_the_advanced_failed_generation(rec
     recovery.clock[0] += 1
     recovery.owner.poll()
     assert recovery.calls == [("camera", 1), ("camera", 2)]
+
+
+def test_retry_uses_the_actual_generation_after_multiple_saved_modes_fail(recovery):
+    def unavailable(device, generation):
+        recovery.calls.append((device, generation))
+        recovery.state[device] = CameraCaptureState(generation + 2, "failed", "camera_configuration_unavailable")
+        return True
+
+    recovery.owner._reconnect = unavailable
+    _inventory(recovery)
+    recovery.owner.poll()
+    recovery.clock[0] += 1
+    recovery.owner.poll()
+    assert recovery.calls == [("camera", 1), ("camera", 3)]
+
+
+@pytest.mark.parametrize("status", ["starting", "ready"])
+def test_pending_attachment_retries_without_restarting_a_healthy_capture(recovery, status):
+    pending = {"camera"}
+    recovery.state["camera"] = CameraCaptureState(4, status, frame_sequence=9)
+    recovery.owner._attachment_pending = lambda device: device in pending
+
+    def attach(device, generation):
+        recovery.calls.append((device, generation))
+        if len(recovery.calls) == 1:
+            raise RuntimeError("scene allocation temporarily unavailable")
+        pending.remove(device)
+        return True
+
+    recovery.owner._reconnect = attach
+    _inventory(recovery)
+    recovery.owner.poll()
+    assert recovery.calls == [("camera", 4)]
+    recovery.clock[0] += 1
+    recovery.owner.poll()
+    assert recovery.calls == [("camera", 4), ("camera", 4)]
+    for _ in range(5):
+        recovery.owner.poll()
+    assert len(recovery.calls) == 2 and not pending
+    assert recovery.state["camera"].generation == 4
 
 
 @pytest.mark.parametrize("change", ["topology", "generation", "configuration"])

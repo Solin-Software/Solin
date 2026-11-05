@@ -342,14 +342,15 @@ class ObsRuntime:
 
         The complete requested mode identifies the cache entry. Automatic is
         selected from completed metadata when entering that mode or creating a
-        source. An absent snapshot uses the plugin's native preference; scene
-        preparation never starts or waits on driver enumeration. Updating a rejected mode
+        source. An absent snapshot uses the plugin's native preference. Legacy
+        macOS modes resolve their missing native identity from metadata;
+        unavailable metadata leaves a retryable placeholder. Updating a rejected mode
         raises and invalidates the cached request so a subsequent selection is
         explicitly reapplied, including a return to the previous working mode.
         """
         if not device_path:
             return None
-        from .camera_source import camera_source_spec
+        from .camera_source import CameraSourceUnavailableError, camera_source_spec
 
         # DShow names may change, but the device path identifies the capture.
         # AVFoundation IDs and Linux paths retain their native case sensitivity.
@@ -359,13 +360,27 @@ class ObsRuntime:
             existing = self._camera_sources.get(device_key)
             if existing is not None and existing.signature == signature:
                 return existing.source
+            observed_signature = existing.signature if existing is not None else None
 
         # Validate the whole request before resolving Automatic or mutating OBS.
-        kind, settings = camera_source_spec(
-            device_path, device_name, pixel_format=pixel_format, width=width, height=height,
-            fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
-            native_format=native_format,
-        )
+        try:
+            kind, settings = camera_source_spec(
+                device_path, device_name, pixel_format=pixel_format, width=width, height=height,
+                fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
+                native_format=native_format,
+            )
+        except CameraSourceUnavailableError:
+            log.warning("Camera configuration unavailable for %s", device_path, exc_info=True)
+            with self._lock:
+                current = self._camera_sources.get(device_key)
+                if current is not existing or (
+                    current is not None and current.signature != observed_signature
+                ):
+                    return None  # A newer consumer superseded this metadata request.
+                if existing is not None:
+                    existing.signature = None
+                self._camera_creation_failed(device_key, "camera_configuration_unavailable")
+            return None
         self.ensure_started()
         capture_width, capture_height = width, height
         if width == 0:
@@ -393,18 +408,23 @@ class ObsRuntime:
         with self._lock:
             # Another consumer may have created the device while preparing settings.
             existing = self._camera_sources.get(device_key)
+            failure = self._camera_failures.get(device_key)
+            next_generation = failure.generation + 1 if failure is not None else 1
             if existing is not None:
                 if existing.signature != signature:
                     try:
                         self._camera_probes[device_key].update(
                             settings, width=capture_width, height=capture_height,
+                            minimum_generation=next_generation,
                         )
                     except Exception as error:  # noqa: BLE001 - native update boundary
                         existing.signature = None
+                        self._camera_failures.pop(device_key, None)
                         raise ObsRuntimeError(f"Could not update camera mode for {device_path}") from error
                     self._camera_sources[device_key] = _CameraSource(
                         existing.source, signature, dict(settings), capture_width, capture_height,
                     )
+                self._camera_failures.pop(device_key, None)
                 return existing.source
             self._camera_source_seq += 1
             try:
@@ -419,7 +439,10 @@ class ObsRuntime:
                 self._camera_creation_failed(device_key)
                 return None
             try:
-                probe = self.watch_camera_video(source, width=capture_width, height=capture_height)
+                probe = self.watch_camera_video(
+                    source, width=capture_width, height=capture_height,
+                    initial_generation=next_generation,
+                )
             except Exception:  # noqa: BLE001 - release unobserved source before propagating
                 source.release()
                 raise
@@ -456,25 +479,34 @@ class ObsRuntime:
             except Exception as error:  # noqa: BLE001 - native update boundary
                 raise ObsRuntimeError(f"Could not reconnect camera for {device_path}") from error
 
-    def _camera_creation_failed(self, device_key: str) -> None:
+    def _camera_creation_failed(self, device_key: str, error_code: str = "camera_create_failed") -> None:
         from .obs_camera_capture import CameraCaptureState
 
         previous = self._camera_failures.get(device_key)
+        probe = self._camera_probes.get(device_key)
         self._camera_failures[device_key] = CameraCaptureState(
-            previous.generation + 1 if previous is not None else 1,
-            "failed", "camera_create_failed",
+            max(previous.generation if previous is not None else 0,
+                probe.state.generation if probe is not None else 0) + 1,
+            "failed", error_code,
         )
 
-    def watch_camera_video(self, source: Any, *, width: int, height: int):
+    def watch_camera_video(
+        self, source: Any, *, width: int, height: int, initial_generation: int = 1,
+    ):
         from .obs_camera_capture import ObsCameraCaptureProbe
 
-        return ObsCameraCaptureProbe(self, source, width=width, height=height)
+        return ObsCameraCaptureProbe(
+            self, source, width=width, height=height, initial_generation=initial_generation,
+        )
 
     def camera_capture_state(self, device_path: str):
         key = local_camera_device_key(device_path)
         with self._lock:
+            failure = self._camera_failures.get(key)
+            if failure is not None:
+                return failure
             probe = self._camera_probes.get(key)
-            return probe.state if probe is not None else self._camera_failures.get(key)
+            return probe.state if probe is not None else None
 
     def observe_source_video(self, source: Any, callback: Any):
         from .obs_video_observer import ObsVideoObserverRegistration

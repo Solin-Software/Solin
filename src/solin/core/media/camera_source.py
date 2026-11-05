@@ -24,6 +24,10 @@ _ENUM_SOURCE_ID = {
 }
 
 
+class CameraSourceUnavailableError(RuntimeError):
+    """The requested capture cannot currently be resolved from device metadata."""
+
+
 def v4l2_fourcc(pixel_format: str) -> int:
     """Pack a V4L2 fourcc string (e.g. ``"MJPG"``) into its ``__u32`` code."""
     padded = (pixel_format + "    ")[:4]
@@ -197,4 +201,4 @@ def camera_target(option) -> tuple[str, str]:
     return device_path, getattr(option, "name", "") or ""
 
 
-__all__ = ["camera_source_spec", "camera_target", "libobs_cameras"]
+__all__ = ["CameraSourceUnavailableError", "camera_source_spec", "camera_target", "libobs_cameras"]

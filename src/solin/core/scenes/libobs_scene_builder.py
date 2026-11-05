@@ -10,11 +10,13 @@ import logging
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from itertools import chain
 from threading import RLock, Thread
 import time
 from urllib.parse import quote, urlsplit, urlunsplit
 from typing import Any, Protocol
 
+from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.scenes.model import DEFAULT_LAYER_FIT_MODE, BusId, Crop, NormalizedRect
 from solin.core.scenes.engine import SceneSourcePreview
 from solin.core.scenes.libobs_scene_morph import (
@@ -55,6 +57,13 @@ class PreparedContentPresentation:
     def scene_source(self, scene_id: str) -> Any | None:
         scene = self.scenes.get(scene_id)
         return scene.as_source() if scene is not None else None
+
+
+@dataclass(slots=True, eq=False)
+class _RetiredPresentation:
+    scenes: dict[str, Any]
+    content_sources: tuple[Any, ...]
+    layers: dict[str, list[dict[str, Any]]]
 
 
 def _parse_color(hex_color: str) -> int:
@@ -133,7 +142,7 @@ class LibobsSceneGraph:
         # updated live (obs_sceneitem transform) without rebuilding the graph.
         self._layer_items: dict[tuple[str, str], Any] = {}
         self._scene_layers: dict[str, list[dict[str, Any]]] = {}
-        self._retired_presentations: list[tuple[dict[str, Any], tuple[Any, ...]]] = []
+        self._retired_presentations: list[_RetiredPresentation] = []
         self._content_generation = 0
         # source id -> {"username", "password"}; never persisted, see hydrate().
         self._source_credentials: dict[str, Any] = {}
@@ -221,7 +230,8 @@ class LibobsSceneGraph:
             record["content_source"] for record in self._content_items
             if record["content_source"] is not None
         ) + ((self._content_source,) if self._content_source is not None else ()) + tuple(
-            source for _scenes, sources in self._retired_presentations for source in sources
+            source for presentation in self._retired_presentations
+            for source in presentation.content_sources
         ) + morphing
 
     @property
@@ -233,7 +243,8 @@ class LibobsSceneGraph:
         def same_source(left, right):
             return getattr(left, "_ptr", left) == getattr(right, "_ptr", right)
 
-        for scenes, sources in tuple(self._retired_presentations):
+        for presentation in tuple(self._retired_presentations):
+            scenes = presentation.scenes
             views = [scene.as_source() for scene in scenes.values()]
             if any(
                 source.showing or any(same_source(source, borrowed) for borrowed in borrowed_sources)
@@ -241,9 +252,13 @@ class LibobsSceneGraph:
             ):
                 continue
             for scene_id, scene in tuple(scenes.items()):
-                scene.release()
-                del scenes[scene_id]
-            self._retired_presentations.remove((scenes, sources))
+                with self._crop_lock:
+                    for record in presentation.layers[scene_id]:
+                        self._cropped_items.pop(id(record["item"]), None)
+                    scene.release()
+                    del scenes[scene_id]
+                    del presentation.layers[scene_id]
+            self._retired_presentations.remove(presentation)
 
     def scene_source(self, scene_id: str) -> Any | None:
         """Borrowed source of a built scene (for off-screen preview readback)."""
@@ -486,6 +501,62 @@ class LibobsSceneGraph:
             self._layer_items[(scene_id, layer_id)] = record
         if is_content:
             self._content_items.append(record)
+
+    def _unavailable_camera_layers(self, device_id: str) -> dict[str, list[dict[str, Any]]]:
+        definitions = {source["id"]: source for source in self._document_record.get("sources", ())}
+        pending: dict[str, list[dict[str, Any]]] = {}
+        device_key = local_camera_device_key(device_id)
+        for records in chain(
+            self._scene_layers.values(),
+            *(presentation.layers.values() for presentation in self._retired_presentations),
+        ):
+            for record in records:
+                source_id = record["layer"].get("source_id", "")
+                definition = definitions.get(source_id, {})
+                config = definition.get("configuration") or {}
+                if (not record["source_available"] and definition.get("type") == "local_camera"
+                        and local_camera_device_key(str(config.get("device_id", "")))
+                        == device_key):
+                    pending.setdefault(source_id, []).append(record)
+        return pending
+
+    def has_unavailable_camera(self, device_id: str) -> bool:
+        """Whether a current or retained composition still needs this camera."""
+        return bool(self._unavailable_camera_layers(device_id))
+
+    def retry_unavailable_camera(self, device_id: str) -> bool:
+        """Retry missing camera layers in current and retained compositions.
+
+        Return whether a retry was attempted, including an unavailable result.
+        The caller holds the window-output hydrate lock on the control thread.
+        Existing capture sources retain their native reconnection ownership.
+        """
+        pending = self._unavailable_camera_layers(device_id)
+        if not pending:
+            return False
+        definitions = {source["id"]: source for source in self._document_record.get("sources", ())}
+        for records in pending.values():
+            source, _owned = self._resolve_source(
+                self._runtime.ob, records[0]["layer"], self._runtime.video,
+                definitions, self._content_source,
+            )
+            if source is None:
+                continue
+            with self._crop_lock:
+                for record in records:
+                    old = record["item"]
+                    item = record["scene"].add(source)
+                    try:
+                        self._apply_item_geometry(item, record["layer"], self._runtime.video, self._runtime.ob)
+                        item.order_position = old.order_position
+                    except Exception:  # noqa: BLE001 - leave the placeholder intact if installation fails
+                        self._cropped_items.pop(id(item), None)
+                        item.remove()
+                        raise
+                    old.remove()
+                    self._cropped_items.pop(id(old), None)
+                    record.update(item=item, source_available=True)
+        return True
 
     def apply_layer_geometry(self, scene_id: str, layer_id: str, layer: dict) -> bool:
         """Update one layer's geometry on the live scene item (no rebuild).
@@ -835,11 +906,13 @@ class LibobsSceneGraph:
                         for record in self._scene_layers.get(scene_id, [])
                         if record["content_source"] is not None
                     )
-                    self._retired_presentations.append((retired, retired_sources))
+                    self._retired_presentations.append(_RetiredPresentation(
+                        retired, retired_sources,
+                        {scene_id: self._scene_layers[scene_id] for scene_id in candidates},
+                    ))
                     for scene_id in candidates:
                         records = self._scene_layers.get(scene_id, [])
                         for record in records:
-                            self._cropped_items.pop(id(record["item"]), None)
                             if record["is_content"]:
                                 self._content_items.remove(record)
                         for record in candidate_records[scene_id]:
@@ -1202,8 +1275,8 @@ class LibobsSceneGraph:
                 scene.release()
             except Exception:  # noqa: BLE001 - libobs boundary
                 log.debug("scene release errored", exc_info=True)
-        for scenes, _sources in self._retired_presentations:
-            for scene in scenes.values():
+        for presentation in self._retired_presentations:
+            for scene in presentation.scenes.values():
                 try:
                     scene.release()
                 except Exception:  # noqa: BLE001 - libobs boundary

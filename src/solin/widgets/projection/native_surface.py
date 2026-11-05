@@ -182,6 +182,7 @@ class NativeVideoSurface(QWidget):
         return self._cocoa_presenter.endpoint
 
     def hideEvent(self, event) -> None:
+        self._geometry_timer.stop()
         if self._cocoa_presenter is not None:
             self._cocoa_presenter.set_visible(False)
         super().hideEvent(event)
@@ -211,7 +212,8 @@ class NativeVideoSurface(QWidget):
             self._input_overlay.setCursor(cursor)
 
     def _schedule_geometry_changed(self) -> None:
-        self._geometry_timer.start()
+        if self.isVisible():
+            self._geometry_timer.start()
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)

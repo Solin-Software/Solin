@@ -391,6 +391,8 @@ def _health_engine():
     engine._runtime_started = True
     engine._scene_graph = cast(Any, SimpleNamespace(
         media_only_source=None, content_source=None, hydrate=lambda *a, **kw: None,
+        has_unavailable_camera=lambda _device: False,
+        retry_unavailable_camera=lambda _device: False,
     ))
     engine.set_event_sink(events.append)
     return engine, runtime, events

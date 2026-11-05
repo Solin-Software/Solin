@@ -1,6 +1,6 @@
 """AVFoundation device metadata without capture sessions or device configuration.
 
-The OBS 32.2 mac-avcapture plugin identifies formats by dimensions, all frame
+The OBS 33 mac-avcapture plugin identifies formats by dimensions, all frame
 rate ranges, colorspace and subtype, encoded as base64. This adapter implements
 that versioned native setting contract, separately from the pixel format label.
 """
@@ -11,6 +11,8 @@ import logging
 from importlib import import_module
 from fractions import Fraction
 from typing import Any
+
+from solin.core.media.camera_source import CameraSourceUnavailableError
 
 from .engine import (
     MAXIMUM_LOCAL_CAMERA_CAPABILITIES, MAXIMUM_LOCAL_CAMERA_DEVICES,
@@ -25,7 +27,7 @@ _USUAL_FPS = tuple(map(Fraction, (60, 50, 30, 25, 24, 20, 15, 10, 5, 1))) + (
 )
 
 
-class AVFoundationDiscoveryError(RuntimeError):
+class AVFoundationDiscoveryError(CameraSourceUnavailableError):
     def __init__(self, error_code: str):
         super().__init__(error_code)
         self.error_code = error_code

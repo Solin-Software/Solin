@@ -38,6 +38,21 @@ def test_creation_requires_a_frame_and_reports_negotiated_dimensions():
         probe.close()
 
 
+def test_metadata_failure_generations_remain_fenced_when_native_capture_resumes():
+    probe, source, _runtime, _now, tick, updated = _probe()
+    try:
+        probe.update({}, width=1920, height=1080, minimum_generation=10)
+        assert probe.state.generation == 10 and probe.state.status == "starting"
+        assert not probe.reconnect({}, expected_generation=1, width=1920, height=1080)
+        updated()
+        tick(1920, 1080)
+        probe.update({}, width=1920, height=1080, minimum_generation=2)
+        assert probe.state.generation == 11
+        assert source.update.call_count == 2
+    finally:
+        probe.close()
+
+
 def test_frame_sequence_distinguishes_fresh_capture_from_cached_ready_and_survives_reconnect():
     probe, _source, runtime, now, tick, updated = _probe()
     receive = runtime.observe_source_video.call_args.args[1]
