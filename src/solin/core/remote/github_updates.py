@@ -15,6 +15,8 @@ from pathlib import Path
 from threading import Event, Lock, RLock
 from weakref import WeakValueDictionary
 
+from packaging.version import Version
+
 from solin.core.network.http import (
     HttpDecodeError,
     HttpError,
@@ -27,6 +29,7 @@ from solin.core.releases.manifest import (
     MAX_MANIFEST_BYTES,
     MANIFEST_FILENAME,
     RELEASE_REPOSITORY,
+    REQUIRED_ASSETS,
     ReleaseManifest,
     release_asset_url,
 )
@@ -301,13 +304,13 @@ class GitHubReleases:
             if query.backed_off():
                 return []
             result = []
+            uncovered_targets = set(REQUIRED_ASSETS)
             for release in query.releases():
                 if not is_update_candidate(release.version, current_version=current, channel=channel):
                     continue
-                # Validated manifests share the complete package inventory and
-                # OS floors. Once a target exists, older versions cannot improve
-                # compatibility or contribute to an upgrade's incremental notes.
-                if release.version < current and result:
+                # Older manifests can declare lower OS requirements. Stop only
+                # once every currently supported target has a compatible option.
+                if release.version < current and not uncovered_targets:
                     break
                 try:
                     manifest = query.manifest(release)
@@ -320,6 +323,10 @@ class GitHubReleases:
                     continue
                 if manifest is not None:
                     result.append(manifest)
+                    for asset in manifest.assets:
+                        key = (asset.platform, asset.architecture, asset.kind)
+                        if Version(asset.minimum_os) <= Version(REQUIRED_ASSETS[key][1]):
+                            uncovered_targets.discard(key)
             return result
 
     def history(

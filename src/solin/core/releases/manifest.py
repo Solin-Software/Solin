@@ -22,6 +22,7 @@ REQUIRED_ASSETS = {
 _HASH = re.compile(r"^[a-f0-9]{64}$")
 _SHA = re.compile(r"^[a-f0-9]{40}$")
 _LOCALE = re.compile(r"^[a-z]{2,3}(?:_[A-Za-z0-9]{2,8})*$")
+_OS_VERSION = re.compile(r"[0-9]+(?:\.[0-9]+){0,3}")
 
 
 def asset_filename(version: ReleaseVersion, platform: str, architecture: str, kind: str) -> str:
@@ -89,9 +90,13 @@ class ReleaseManifest:
         for item in raw_assets:
             if not isinstance(item, dict):
                 return None
-            key = (item.get("platform"), item.get("architecture"), item.get("kind"))
-            if not all(isinstance(part, str) for part in key):
+            platform = item.get("platform")
+            architecture = item.get("architecture")
+            kind = item.get("kind")
+            if (not isinstance(platform, str) or not isinstance(architecture, str)
+                    or not isinstance(kind, str)):
                 return None
+            key = (platform, architecture, kind)
             if key not in REQUIRED_ASSETS or key in seen:
                 return None
             if item.get("filename") != asset_filename(version, *key):
@@ -101,9 +106,11 @@ class ReleaseManifest:
                 return None
             if not isinstance(digest, str) or not _HASH.fullmatch(digest):
                 return None
-            if item.get("minimum_os") != REQUIRED_ASSETS[key][1]:
+            minimum_os = item.get("minimum_os")
+            if (not isinstance(minimum_os, str) or len(minimum_os) > 64
+                    or not _OS_VERSION.fullmatch(minimum_os)):
                 return None
-            assets.append(ReleaseAsset(*key, item["filename"], size, digest, item["minimum_os"]))
+            assets.append(ReleaseAsset(*key, item["filename"], size, digest, minimum_os))
             seen.add(key)
         notes: list[LocalizedReleaseNotes] = []
         seen_versions: set[ReleaseVersion] = set()

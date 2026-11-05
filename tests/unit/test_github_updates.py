@@ -148,8 +148,7 @@ def test_discovery_stops_before_historical_manifests_can_exhaust_deadline(
     releases = GitHubReleases(tmp_path).discover(current, UpdateChannel.STABLE)
     assert requested == expected
     assert [release.version.canonical for release in releases] == expected
-    # A parsed manifest includes every supported package and the same OS floors;
-    # the cutoff must retain the best target for every supported computer.
+    # The cutoff must retain the best target for every supported computer.
     for (platform, architecture, kind), (_, minimum_os) in REQUIRED_ASSETS.items():
         info = evaluate_update(
             releases, current_version=current, channel=UpdateChannel.STABLE,
@@ -160,6 +159,38 @@ def test_discovery_stops_before_historical_manifests_can_exhaust_deadline(
         assert info.asset.kind == kind
         assert info.is_downgrade is (len(expected) == 1)
         assert [note.version.canonical for note in info.changelog] == expected
+
+
+@pytest.mark.parametrize("platform,architecture,kind", REQUIRED_ASSETS)
+def test_discovery_retains_a_compatible_return_when_newer_releases_raise_os_requirements(
+    monkeypatch, tmp_path, platform, architecture, kind,
+):
+    manifests = [payload(f"26.32.{patch}") for patch in (3, 4, 5)]
+    newest = manifests[-1]
+    target = next(asset for asset in newest["assets"]
+                  if (asset["platform"], asset["architecture"], asset["kind"])
+                  == (platform, architecture, kind))
+    target["minimum_os"] = str(int(target["minimum_os"].split(".")[0]) + 1)
+    by_tag = {manifest["tag"]: manifest for manifest in manifests}
+    requested = []
+
+    def get(url, **kwargs):
+        if "api.github" in url:
+            return Response(json.dumps([published(manifest) for manifest in manifests]).encode())
+        tag = url.split("/")[-2]
+        requested.append(tag)
+        return Response(json.dumps(by_tag[tag]).encode())
+
+    monkeypatch.setattr(github_updates, "stream_get", get)
+    releases = GitHubReleases(tmp_path).discover("26.33.0b1", UpdateChannel.STABLE)
+    assert requested == ["26.32.5", "26.32.4"]
+    minimum_os = REQUIRED_ASSETS[(platform, architecture, kind)][1]
+    info = evaluate_update(
+        releases, current_version="26.33.0b1", channel=UpdateChannel.STABLE,
+        platform=platform, architecture=architecture, os_version=minimum_os,
+    )
+    assert info is not None
+    assert info.version.canonical == "26.32.4"
 
 
 @pytest.mark.parametrize("invalid", ["schema", "os_floor", "inventory", "missing"])
@@ -173,7 +204,7 @@ def test_discovery_keeps_searching_until_a_return_manifest_passes_validation(
     if invalid == "schema":
         newest["schema_version"] = 99
     elif invalid == "os_floor":
-        newest["assets"][0]["minimum_os"] = "11"
+        newest["assets"][0]["minimum_os"] = "invalid"
     elif invalid == "inventory":
         newest["assets"][0]["size"] += 1
     requested = []
