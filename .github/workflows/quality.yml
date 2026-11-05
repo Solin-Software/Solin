@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PYTHON_VERSION: "3.13.12"
+  PYTHON_VERSION: "3.13.18"
   QT_QPA_PLATFORM: offscreen
   PYTHONFAULTHANDLER: "1"
 
@@ -102,6 +102,7 @@ jobs:
             qt_platform: cocoa
     runs-on: ${{ matrix.runner }}
     env:
+      PYTHON_VERSION: ${{ matrix.platform == 'Linux' && '3.13.18' || '3.13.17' }}
       QT_QPA_PLATFORM: ${{ matrix.qt_platform }}
       SOLIN_TEST_PROGRESS_LOG: build/test-progress-${{ matrix.runner }}.jsonl
     timeout-minutes: 40

@@ -32,7 +32,7 @@ concurrency:
 env:
   SOLIN_E2E_STRICT: "1"
   APP_NAME: Solin
-  PYTHON_VERSION: "3.13.12"
+  PYTHON_VERSION: "3.13.17"
   MACOSX_DEPLOYMENT_TARGET: "13.0"
   BUILD_DIR: build
   DIST_DIR: dist

@@ -37,7 +37,7 @@ concurrency:
 env:
   SOLIN_E2E_STRICT: "1"
   APP_NAME: Solin
-  PYTHON_VERSION: "3.13.12"
+  PYTHON_VERSION: "3.13.18"
   NUITKA_CACHE_DIR: ${{ github.workspace }}/.cache/nuitka
   DIST_DIR: dist
 
