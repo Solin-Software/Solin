@@ -7,9 +7,8 @@ from concurrent.futures import Future
 import logging
 import sys
 import threading
-from typing import TypeVar
+from typing import Any, TypeVar
 
-from .pylibobs_compat import ObsTaskBridgeCompat
 
 log = logging.getLogger(__name__)
 _T = TypeVar("_T")
@@ -39,6 +38,55 @@ def _retain_mta() -> Callable[[], None]:
     return release
 
 
+class _NativeTaskBridge:
+    """Own the application callbacks submitted to the native destruction lane."""
+
+    def __init__(self, dispatch: Callable[[Callable[[], None], bool], None]) -> None:
+        from pylibobs._ffi import ffi, get_lib
+
+        self._lib: Any = get_lib()
+        self._ffi: Any = ffi
+        self._handles: dict[int, Any] = {}
+        self._lock = threading.Lock()
+
+        @ffi.callback("obs_task_handler_t")
+        def handler(task: Any, param: Any, wait: bool) -> None:
+            dispatch(lambda: task(param), wait)
+
+        self._callback: Any = handler
+
+        @ffi.callback("obs_task_t")
+        def execute(param: Any) -> None:
+            try:
+                ffi.from_handle(param)()
+            except BaseException:  # noqa: BLE001 - native queue must signal its waiter
+                log.exception("OBS task trampoline failed")
+            finally:
+                with self._lock:
+                    self._handles.pop(int(ffi.cast("uintptr_t", param)), None)
+
+        self._task_callback: Any = execute
+
+    def install(self) -> None:
+        """Register after startup; retain this owner until native shutdown ends."""
+        self._lib.obs_set_ui_task_handler(self._callback)
+
+    def inside(self) -> bool:
+        return bool(self._lib.obs_in_task_thread(3))  # OBS_TASK_DESTROY
+
+    def queue(self, callback: Callable[[], None], *, wait: bool) -> None:
+        handle = self._ffi.new_handle(callback)
+        key = int(self._ffi.cast("uintptr_t", handle))
+        with self._lock:
+            self._handles[key] = handle
+        try:
+            self._lib.obs_queue_task(3, self._task_callback, handle, wait)
+        except BaseException:  # noqa: BLE001 - release the retained handle before propagating enqueue failure
+            with self._lock:
+                self._handles.pop(key, None)
+            raise
+
+
 class ObsTaskDispatcher:
     """Route UI tasks and monitoring changes onto OBS_TASK_DESTROY.
 
@@ -54,7 +102,7 @@ class ObsTaskDispatcher:
         self._accepting = False
         self._quiesced = False
         self._closed = False
-        self._bridge: ObsTaskBridgeCompat | None = None
+        self._bridge: _NativeTaskBridge | None = None
         self._release_mta: Callable[[], None] | None = None
 
     def install(self) -> None:
@@ -65,7 +113,7 @@ class ObsTaskDispatcher:
             return
         try:
             self._release_mta = _retain_mta()
-            self._bridge = ObsTaskBridgeCompat(self._dispatch)
+            self._bridge = _NativeTaskBridge(self._dispatch)
             with self._condition:
                 self._accepting = True
             self._bridge.install()

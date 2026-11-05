@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from solin.core.foundation.constants import (
-    CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
+    CAMERA_DISCOVERY_ARGUMENT, IS_DEV, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT,
 )
 
 from .startup_timeline import startup_timeline
@@ -16,6 +16,11 @@ def run() -> None:
     """Dispatch the process role before importing application services or Qt."""
 
     arguments = sys.argv[1:]
+    if any(argument.split("=", 1)[0] == "--verify-macos-runtime" for argument in arguments):
+        from .macos_runtime_verification import main as verify_macos_runtime
+
+        raise SystemExit(verify_macos_runtime(arguments))
+
     if any(argument.split("=", 1)[0] == "--verify-zoom-runtime" for argument in arguments):
         from .zoom_runtime_verification import main as verify_zoom_runtime
 
@@ -50,6 +55,11 @@ def run() -> None:
         from solin.core.scenes.libobs_sidecar import main as run_sidecar
 
         raise SystemExit(run_sidecar())
+
+    if IS_DEV and sys.platform == "darwin":
+        from .macos_dev_host import ensure_development_bundle
+
+        ensure_development_bundle()
 
     from .application import run as run_application
 

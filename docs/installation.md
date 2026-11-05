@@ -25,9 +25,10 @@ Open Solin from Applications. If macOS blocks the first launch, follow the
 
 ## Linux
 
-Download the 64-bit AppImage. Ubuntu 24.04 is the reference system. In your file
-manager, open the downloaded file's properties, allow it to run as a program,
-and then open it.
+Download the 64-bit AppImage for an Intel/AMD system with glibc 2.43 or newer.
+Ubuntu 26.04 is the reference system; Ubuntu 24.04 and older are unsupported.
+In your file manager, open the downloaded file's properties, allow it to run as
+a program, and then open it.
 
 The AppImage uses WebKitGTK 4.1, GTK 3, and libsoup 3 from your Linux system.
 If Solin reports missing libraries at launch, install the packages listed in
@@ -37,6 +38,11 @@ the message using your distribution's package manager.
 
 - Install LibreOffice to import Office documents and presentations as static
   pages. Animations and embedded-media playback are not preserved.
+- For macOS virtual-camera output, install OBS and enable **OBS Virtual Camera**
+  through OBS and the macOS approval flow.
+  Stop OBS's virtual-camera output before enabling Solin's output, then select
+  **OBS Virtual Camera** in your meeting application. Solin does not install a
+  separate camera device.
 
 ## macOS first launch
 

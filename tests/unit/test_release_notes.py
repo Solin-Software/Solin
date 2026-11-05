@@ -121,6 +121,10 @@ def test_generated_beta_manifest_reaches_existing_updater_without_changing_sourc
     manifest = release.create_manifest(artifacts, target.tag, HEAD, credits=credits)
     parsed = ReleaseManifest.parse(json.loads((artifacts / MANIFEST_FILENAME).read_text(encoding="utf-8")))
     assert parsed == manifest
+    assert {(asset.platform, asset.architecture, asset.kind): asset.minimum_os
+            for asset in manifest.assets} == {
+        key: minimum_os for key, (_, minimum_os) in REQUIRED_ASSETS.items()
+    }
     markdown = manifest.notes[0].translations["en"]
     assert markdown == credits.content_markdown().strip()
     assert "#### Bug fixes" in markdown and "Related issue: [#3]" in markdown

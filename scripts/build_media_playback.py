@@ -23,11 +23,23 @@ if __package__:
         prepare_sdk,
         target,
     )
-    from .package_libobs_runtime import _publish_runtime, _relocate_macos, _retry_windows_sharing
+    from .package_libobs_runtime import (
+        _publish_runtime,
+        _relocate_macos,
+        _retry_windows_sharing,
+        module_binary_path,
+        module_data_path,
+    )
 else:
     import obs_sources
     from build_media_extract import SDK_SPECS, _download_sdk, installed_runtime, prepare_sdk, target
-    from package_libobs_runtime import _publish_runtime, _relocate_macos, _retry_windows_sharing
+    from package_libobs_runtime import (
+        _publish_runtime,
+        _relocate_macos,
+        _retry_windows_sharing,
+        module_binary_path,
+        module_data_path,
+    )
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIRECTORY = ROOT / "native" / "media_playback"
@@ -141,6 +153,7 @@ def prepare_playback_sdk(platform: str, architecture: str, cache: Path) -> Path:
 
 _VERIFY_MODULE = """
 import sys, tempfile
+from pathlib import Path
 from pylibobs.context import OBSContext
 from pylibobs.source import Source
 from pylibobs._ffi import ffi, get_lib
@@ -149,7 +162,8 @@ with tempfile.TemporaryDirectory(prefix='solin-playback-qualification-') as conf
         context.set_audio(samples_per_sec=48000)
         library = get_lib()
         module = ffi.new('obs_module_t **')
-        result = library.obs_open_module(module, sys.argv[1].encode(), sys.argv[2].encode())
+        result = library.obs_open_module(module, Path(sys.argv[1]).as_posix().encode(),
+                                         Path(sys.argv[2]).as_posix().encode())
         if result != 0 or not library.obs_init_module(module[0]):
             raise RuntimeError('Solin media module could not be initialized')
         source = Source.create('solin_media_source', 'solin-playback-qualification',
@@ -181,10 +195,9 @@ def verify_module(binary: Path, data: Path) -> None:
 
 
 def install_module(binary: Path, sources: Path, runtime: Path, platform: str) -> Path:
-    plugins = runtime / "obs-plugins"
-    plugins.mkdir(exist_ok=True)
-    destination = plugins / f"{MODULE_NAME}{SUFFIXES[platform]}"
-    data = runtime / "data" / "obs-plugins" / MODULE_NAME
+    destination = module_binary_path(runtime, platform, MODULE_NAME)
+    data = module_data_path(runtime, platform, MODULE_NAME)
+    destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.is_symlink() or data.is_symlink():
         raise MediaPlaybackBuildError("Owned module destinations must not be symbolic links")
     with tempfile.TemporaryDirectory(prefix=".solin-media-", dir=runtime) as directory:

@@ -10,7 +10,7 @@ This module is deliberately framework-free (no PySide6) so it can be unit- and
 smoke-tested headlessly.  Qt-side concerns (attaching a ``Display`` to a window
 handle) live in the projection layer.
 
-Key libobs facts encoded here (validated against pylibobs 0.0.1 / libobs 32.1.2):
+Key libobs facts encoded here:
 
 * ``set_video`` must be given an **absolute** ``graphics_module`` path, otherwise
   libobs' internal loader fails to find ``libobs-opengl.so`` unless the bundled
@@ -31,7 +31,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .pylibobs_compat import set_video_compat
 from .camera_identity import local_camera_device_key
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -41,7 +40,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 log = logging.getLogger(__name__)
 
-# libobs monitoring types (obs_monitoring_type enum).
+# Solin audio routing modes. OBS monitoring itself is an on/off switch.
 MONITORING_NONE = 0
 MONITORING_MONITOR_ONLY = 1
 MONITORING_MONITOR_AND_OUTPUT = 2
@@ -135,14 +134,8 @@ def _graphics_module_path() -> str | None:
     if sys.platform.startswith("linux"):
         candidates = ["linux/x86_64/libobs-opengl.so", "linux/x86_64/libobs-opengl.so.0"]
     elif sys.platform == "darwin":
-        # pylibobs keeps the macOS bundle in a .app-style layout —
-        # macos/<arch>/Frameworks/ — so the module is NOT at the arch root. Without
-        # the Frameworks/ component this never matched and the absolute-path
-        # guarantee silently degraded to libobs' bare default name.
-        candidates = [
-            f"macos/{arch}/Frameworks/libobs-opengl.dylib"
-            for arch in ("arm64", "universal", "x86_64")
-        ]
+        # The binding resolves the renderer relative to its loaded framework.
+        return None
     elif sys.platform == "win32":
         # D3D11 first: it is OBS's default Windows renderer. OpenGL stays as a
         # last resort for the rare box where D3D11 is unavailable.
@@ -277,7 +270,6 @@ class ObsRuntime:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._context: Any | None = None
-        self._graphics_module_owner: Any | None = None
         self._native_tasks: ObsTaskDispatcher | None = None
         self._pylibobs: Any | None = None
         self._video = ObsVideoConfig()
@@ -339,6 +331,7 @@ class ObsRuntime:
         device_name: str = "",
         *,
         pixel_format: str = "",
+        native_format: str = "",
         width: int = 0,
         height: int = 0,
         fps_numerator: int = 0,
@@ -349,29 +342,45 @@ class ObsRuntime:
 
         The complete requested mode identifies the cache entry. Automatic is
         selected from completed metadata when entering that mode or creating a
-        source. An absent snapshot uses the plugin's native preference; scene
-        preparation never starts or waits on driver enumeration. Updating a rejected mode
+        source. An absent snapshot uses the plugin's native preference. Legacy
+        macOS modes resolve their missing native identity from metadata;
+        unavailable metadata leaves a retryable placeholder. Updating a rejected mode
         raises and invalidates the cached request so a subsequent selection is
         explicitly reapplied, including a return to the previous working mode.
         """
         if not device_path:
             return None
-        from .camera_source import camera_source_spec
+        from .camera_source import CameraSourceUnavailableError, camera_source_spec
 
         # DShow names may change, but the device path identifies the capture.
         # AVFoundation IDs and Linux paths retain their native case sensitivity.
         device_key = local_camera_device_key(device_path)
-        signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator)
+        signature = (media_type, pixel_format, width, height, fps_numerator, fps_denominator, native_format)
         with self._lock:
             existing = self._camera_sources.get(device_key)
             if existing is not None and existing.signature == signature:
                 return existing.source
+            observed_signature = existing.signature if existing is not None else None
 
         # Validate the whole request before resolving Automatic or mutating OBS.
-        kind, settings = camera_source_spec(
-            device_path, device_name, pixel_format=pixel_format, width=width, height=height,
-            fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
-        )
+        try:
+            kind, settings = camera_source_spec(
+                device_path, device_name, pixel_format=pixel_format, width=width, height=height,
+                fps_numerator=fps_numerator, fps_denominator=fps_denominator, media_type=media_type,
+                native_format=native_format,
+            )
+        except CameraSourceUnavailableError:
+            log.warning("Camera configuration unavailable for %s", device_path, exc_info=True)
+            with self._lock:
+                current = self._camera_sources.get(device_key)
+                if current is not existing or (
+                    current is not None and current.signature != observed_signature
+                ):
+                    return None  # A newer consumer superseded this metadata request.
+                if existing is not None:
+                    existing.signature = None
+                self._camera_creation_failed(device_key, "camera_configuration_unavailable")
+            return None
         self.ensure_started()
         capture_width, capture_height = width, height
         if width == 0:
@@ -391,7 +400,7 @@ class ObsRuntime:
                     device_path, device_name,
                     pixel_format=selected.pixel_format, width=selected.width, height=selected.height,
                     fps_numerator=selected.fps_numerator, fps_denominator=selected.fps_denominator,
-                    media_type=selected.media_type,
+                    media_type=selected.media_type, native_format=selected.native_format,
                 )
             else:
                 log.info("No cached automatic camera mode; using the native preference")
@@ -399,18 +408,23 @@ class ObsRuntime:
         with self._lock:
             # Another consumer may have created the device while preparing settings.
             existing = self._camera_sources.get(device_key)
+            failure = self._camera_failures.get(device_key)
+            next_generation = failure.generation + 1 if failure is not None else 1
             if existing is not None:
                 if existing.signature != signature:
                     try:
                         self._camera_probes[device_key].update(
                             settings, width=capture_width, height=capture_height,
+                            minimum_generation=next_generation,
                         )
                     except Exception as error:  # noqa: BLE001 - native update boundary
                         existing.signature = None
+                        self._camera_failures.pop(device_key, None)
                         raise ObsRuntimeError(f"Could not update camera mode for {device_path}") from error
                     self._camera_sources[device_key] = _CameraSource(
                         existing.source, signature, dict(settings), capture_width, capture_height,
                     )
+                self._camera_failures.pop(device_key, None)
                 return existing.source
             self._camera_source_seq += 1
             try:
@@ -425,7 +439,10 @@ class ObsRuntime:
                 self._camera_creation_failed(device_key)
                 return None
             try:
-                probe = self.watch_camera_video(source, width=capture_width, height=capture_height)
+                probe = self.watch_camera_video(
+                    source, width=capture_width, height=capture_height,
+                    initial_generation=next_generation,
+                )
             except Exception:  # noqa: BLE001 - release unobserved source before propagating
                 source.release()
                 raise
@@ -462,25 +479,34 @@ class ObsRuntime:
             except Exception as error:  # noqa: BLE001 - native update boundary
                 raise ObsRuntimeError(f"Could not reconnect camera for {device_path}") from error
 
-    def _camera_creation_failed(self, device_key: str) -> None:
+    def _camera_creation_failed(self, device_key: str, error_code: str = "camera_create_failed") -> None:
         from .obs_camera_capture import CameraCaptureState
 
         previous = self._camera_failures.get(device_key)
+        probe = self._camera_probes.get(device_key)
         self._camera_failures[device_key] = CameraCaptureState(
-            previous.generation + 1 if previous is not None else 1,
-            "failed", "camera_create_failed",
+            max(previous.generation if previous is not None else 0,
+                probe.state.generation if probe is not None else 0) + 1,
+            "failed", error_code,
         )
 
-    def watch_camera_video(self, source: Any, *, width: int, height: int):
+    def watch_camera_video(
+        self, source: Any, *, width: int, height: int, initial_generation: int = 1,
+    ):
         from .obs_camera_capture import ObsCameraCaptureProbe
 
-        return ObsCameraCaptureProbe(self, source, width=width, height=height)
+        return ObsCameraCaptureProbe(
+            self, source, width=width, height=height, initial_generation=initial_generation,
+        )
 
     def camera_capture_state(self, device_path: str):
         key = local_camera_device_key(device_path)
         with self._lock:
+            failure = self._camera_failures.get(key)
+            if failure is not None:
+                return failure
             probe = self._camera_probes.get(key)
-            return probe.state if probe is not None else self._camera_failures.get(key)
+            return probe.state if probe is not None else None
 
     def observe_source_video(self, source: Any, callback: Any):
         from .obs_video_observer import ObsVideoObserverRegistration
@@ -571,12 +597,7 @@ class ObsRuntime:
         from pylibobs._ffi import ffi, get_lib
 
         lib: Any = get_lib()
-        # The generated binding declares this pointer-returning API as void(void).
-        # Use the public libobs signature at this native boundary.
-        get_frame = ffi.cast(
-            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
-        )
-        frame = get_frame(source._ptr)
+        frame = lib.obs_source_get_frame(source._ptr)
         if frame != ffi.NULL:
             try:
                 lib.obs_source_set_video_frame(source._ptr, frame)
@@ -622,7 +643,7 @@ class ObsRuntime:
 
         errors: list[BaseException] = []
 
-        @ffi.callback("void(void *, obs_scene_t *)")
+        @ffi.callback("obs_scene_atomic_update_func")
         def apply(_data, _scene):
             try:
                 update()
@@ -630,11 +651,7 @@ class ObsRuntime:
                 errors.append(exc)
 
         lib: Any = get_lib()
-        atomic = ffi.cast(
-            "void(*)(obs_scene_t *, void(*)(void *, obs_scene_t *), void *)",
-            lib.obs_scene_atomic_update,
-        )
-        atomic(scene._ptr, apply, ffi.NULL)
+        lib.obs_scene_atomic_update(scene._ptr, apply, ffi.NULL)
         if errors:
             raise errors[0]
 
@@ -643,10 +660,7 @@ class ObsRuntime:
         from pylibobs._ffi import ffi, get_lib
 
         lib: Any = get_lib()
-        get_frame = ffi.cast(
-            "struct obs_source_frame *(*)(obs_source_t *)", lib.obs_source_get_frame,
-        )
-        frame = get_frame(source._ptr)
+        frame = lib.obs_source_get_frame(source._ptr)
         if frame != ffi.NULL:
             lib.obs_source_release_frame(source._ptr, frame)
 
@@ -712,9 +726,7 @@ class ObsRuntime:
                 graphics_module = _graphics_module_path()
 
                 def _init_video(ctx=context, gm=graphics_module):
-                    self._graphics_module_owner = set_video_compat(
-                        ctx,
-                        binding=ob,
+                    ctx.set_video(
                         width=width,
                         height=height,
                         fps_num=fps,
@@ -741,7 +753,6 @@ class ObsRuntime:
                         ctx.shutdown()
                 except Exception:  # noqa: BLE001 - teardown must not mask the root cause
                     log.warning("libobs teardown after failed startup errored", exc_info=True)
-                self._graphics_module_owner = None
                 self._close_native_tasks()
                 self._release_owned_x11_display()
                 raise ObsRuntimeError(f"Failed to start libobs runtime: {exc}") from exc
@@ -779,7 +790,6 @@ class ObsRuntime:
             finally:
                 self._context = None
                 self._video_observers = None
-                self._graphics_module_owner = None
                 self._close_native_tasks()
                 self._release_owned_x11_display()
 
@@ -959,27 +969,26 @@ class ObsRuntime:
     # ── Source helpers ────────────────────────────────────────────────────
 
     def set_source_monitoring(self, source: Any, monitoring_type: int) -> None:
-        """Set a source's monitoring type (route its audio to the speakers).
+        """Apply Solin's routing policy using OBS 33's monitoring switch.
 
-        ``MONITORING_MONITOR_ONLY`` also clears the source's mixer tracks. Stock
-        libobs 32 keeps a monitor-only source out of every mix by itself, but
-        newer libobs deprecates monitoring *types*: any monitoring becomes
-        "monitor and output" and only ``audio_mixers`` decides what reaches the
-        mixes. Without this, media would land directly in the recording track
-        on those builds — on top of the speaker loopback that the system-audio
-        capture already records. A caller that later wants the source in a mix
-        sets its tracks explicitly.
+        Both monitor modes enable speaker output; ``MONITORING_NONE`` disables
+        it. ``MONITORING_MONITOR_ONLY`` first clears every mixer track to avoid
+        recording media twice through direct mixing and system-audio capture.
+        Other modes preserve the tracks selected by the caller, including when
+        leaving monitor-only. Muting and volume remain independent controls.
         """
         from pylibobs._ffi import get_lib  # type: ignore[import-not-found]
 
         lib: Any = get_lib()
-        monitor_only = int(monitoring_type) == MONITORING_MONITOR_ONLY
+        monitoring_type = int(monitoring_type)
+        monitor_only = monitoring_type == MONITORING_MONITOR_ONLY
+        monitoring_enabled = monitoring_type != MONITORING_NONE
 
         def apply() -> None:
             if monitor_only:
                 # Clear the tracks first so the source never reaches a mix in between.
                 lib.obs_source_set_audio_mixers(source._ptr, NO_AUDIO_MIXERS)
-            lib.obs_source_set_monitoring_type(source._ptr, int(monitoring_type))
+            lib.obs_source_set_monitoring_enabled(source._ptr, monitoring_enabled)
 
         # Windows resets must share the native destruction queue with monitor
         # creation and teardown; its monitoring mutex alone does not protect

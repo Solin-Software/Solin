@@ -1,0 +1,10 @@
+---
+- module-name: 'pylibobs'
+  dlls:
+    - from_filenames:
+        relative_path: 'native'
+        prefixes:
+          - ''
+        suffixes:
+          - 'dylib'
+      when: 'macos and standalone'

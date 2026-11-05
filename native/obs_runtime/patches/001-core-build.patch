@@ -14,10 +14,11 @@
  
  include(compilerconfig)
  include(defaults)
-@@ -20,18 +15,8 @@
+@@ -20,18 +15,9 @@
  option(ENABLE_HEVC "Enable HEVC encoders" ON)
  
  add_subdirectory(libobs)
++set_obs_core_modules()
 -if(OS_WINDOWS)
 -  add_subdirectory(libobs-d3d11)
 -  add_subdirectory(libobs-winrt)

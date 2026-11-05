@@ -11,9 +11,9 @@ import subprocess
 import tempfile
 import urllib.request
 
-OBS_VERSION = "32.1.2"
+OBS_VERSION = "33.0.0"
 SOURCE_URL = f"https://codeload.github.com/obsproject/obs-studio/tar.gz/refs/tags/{OBS_VERSION}"
-SOURCE_SHA256 = "b4a59410cddb46d0e31df1ee13b8ec66f30862d7e980c1a8c4e3b5d16fae6053"
+SOURCE_SHA256 = "55c6767b209a00f1859b315bf977df907b19890d132723731e00fd589f6860c0"
 
 
 class ObsSourceError(RuntimeError):

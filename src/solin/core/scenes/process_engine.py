@@ -136,6 +136,7 @@ _LOCAL_VIDEO_FORMAT_FIELDS = frozenset(
     {
         "media_type",
         "pixel_format",
+        "native_format",
         "width",
         "height",
         "fps_numerator",
@@ -1957,6 +1958,7 @@ def _local_camera_discovery_from_envelope(
                             "local video pixel format",
                             maximum=80,
                         ),
+                        native_format=require_text(video_format["native_format"], "native camera format", maximum=4096),
                         width=require_non_negative_int(video_format["width"], "local video width"),
                         height=require_non_negative_int(
                             video_format["height"], "local video height"
@@ -2067,7 +2069,7 @@ def _local_frame_rate_ranges(raw: object) -> tuple[LocalVideoFrameRateRange, ...
     if not isinstance(raw, list) or len(raw) > MAXIMUM_LOCAL_CAMERA_CAPABILITIES:
         raise SceneIpcMessageError("Invalid local camera frame rate ranges")
     fields = frozenset({"media_type", "pixel_format", "width", "height", "min_interval",
-                        "max_interval", "step_interval"})
+                        "max_interval", "step_interval", "native_format"})
     result = []
     for entry in raw:
         item = require_payload_fields(entry, fields, message_type="camera frame rate range")
@@ -2078,6 +2080,7 @@ def _local_frame_rate_ranges(raw: object) -> tuple[LocalVideoFrameRateRange, ...
             require_non_negative_int(item["height"], "range height"),
             _local_frame_interval(item["min_interval"]), _local_frame_interval(item["max_interval"]),
             None if item["step_interval"] is None else _local_frame_interval(item["step_interval"]),
+            require_text(item["native_format"], "native camera format", maximum=4096),
         ))
     return tuple(result)
 
@@ -2292,6 +2295,7 @@ def _window_target_record(target: OutputWindowTarget) -> dict[str, object]:
         "target_id": target.target_id,
         "screen_id": target.screen_id,
         "native_handle": target.native_handle,
+        "surface_endpoint": target.surface_endpoint,
         "x": target.x,
         "y": target.y,
         "width": target.width,

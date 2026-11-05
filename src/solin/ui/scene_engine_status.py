@@ -92,6 +92,7 @@ _OUTPUT_CODES: Final = frozenset(
         "media_graph_stopped",
         "frame_output_failed",
         "native_window_output_failed",
+        "window_targets_failed",
         "preview_output_failed",
         "program_output_failed",
         "virtual_camera_output_failed",

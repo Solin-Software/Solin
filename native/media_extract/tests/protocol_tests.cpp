@@ -298,7 +298,7 @@ void test_invalid_results() {
     }
     for (const auto& kind : {"", "Cover", "video", "cover\n"}) {
         auto result = valid;
-        result.image->kind = kind;
+        result.image.value().kind = kind;
         require_failure([&] { success_header(result); }, "invalid_result", "invalid image kind");
     }
 }

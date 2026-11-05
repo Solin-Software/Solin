@@ -21,9 +21,12 @@ timestamps. EOF drains its queued tail. An empty
 endpoint after an expired submission is rearmed before new audio is submitted.
 The reserve does not compensate for persistent clock drift or arbitrary stalls.
 
+Monitoring and output muting are independent: muting removes a source from
+outputs while monitoring continues at its configured volume.
+
 CTest exercises the patched submission functions with a simulated device clock,
-including delivery gaps, capacity, failures and reset. The candidate is qualified
-in a separate process before installation; its binary and source/patch hashes are
+including delivery gaps, capacity, failures, reset and output mute independence.
+The candidate is qualified in a separate process before installation; its binary and source/patch hashes are
 recorded in `obs-runtime-manifest.json`. Packaging rejects a core that differs
 from its receipt or the current patch series. Source provenance and license
 headers are retained.

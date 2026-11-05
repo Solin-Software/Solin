@@ -1,5 +1,9 @@
 import re
 from pathlib import Path
+import sys
+
+import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -93,7 +97,8 @@ def test_linux_workflow_packages_and_smokes_the_same_appimage_recipe():
 
     assert "scripts/package_solin_appimage.sh" in workflow
     assert "SOLIN_APPIMAGE_SKIP_BUILD: \"1\"" in workflow
-    assert "runs-on: ubuntu-24.04" in workflow
+    configuration = yaml.load(workflow, Loader=yaml.BaseLoader)
+    assert configuration["jobs"]["build"]["runs-on"] == "ubuntu-26.04"
     assert 'APPIMAGE_EXTRACT_AND_RUN: "1"' in workflow
     assert "test_packaged_app_smoke.py::test_packaged_app_survives_startup_window" in workflow
     assert "test_packaged_app_smoke.py::test_packaged_http_runtime" in workflow
@@ -110,7 +115,7 @@ def test_windows_wrapper_delegates_to_wsl_and_propagates_failures():
     assert "build_solin_appimage.ps1" in batch_wrapper
     assert "exit /b %ERRORLEVEL%" in batch_wrapper
     assert '"--distribution", $Distribution' in powershell_wrapper
-    assert '$Distribution = "Ubuntu-24.04"' in powershell_wrapper
+    assert '$Distribution = "Ubuntu-26.04"' in powershell_wrapper
     assert '"--cd", $ProjectRoot' in powershell_wrapper
     assert "SOLIN_APPIMAGE_SKIP_BUILD=1" in powershell_wrapper
     assert '"xvfb-run", "--auto-servernum"' in powershell_wrapper
@@ -122,17 +127,18 @@ def test_linux_ci_installs_all_pinned_obs_direct_dependency_providers():
     packages = re.search(r"libobs_runtime_packages=\(\n(.*?)\n\)", script, re.DOTALL)
     assert packages is not None
     declared = packages[1].split()
-    # Direct runtime providers for the wheel and Solin's native modules.
+    # Direct DT_NEEDED providers inspected in the official OBS 33 Ubuntu 26.04
+    # asset and published wheel; libavfilter also serves Solin's native playback.
     # libc6 supplies the loader, libc and libm; apt resolves transitive providers.
     required = {
-        "libasound2t64", "libavcodec60", "libavdevice60", "libavfilter9", "libavformat60", "libavutil58",
+        "libasound2t64", "libavcodec62", "libavdevice62", "libavfilter11", "libavformat62", "libavutil60",
         "libc6", "libcurl4t64", "libdrm2", "libegl1", "libfontconfig1", "libfreetype6",
-        "libgcc-s1", "libglib2.0-0t64", "libjansson4", "libmbedcrypto7t64",
-        "libmbedtls14t64", "libmbedx509-1t64", "libpci3", "libpipewire-0.3-0t64",
+        "libgcc-s1", "libglib2.0-0t64", "libjansson4", "libmbedcrypto16",
+        "libmbedtls21", "libmbedx509-7", "libpci3", "libpipewire-0.3-0t64",
         "libpulse0", "librist4", "libspeexdsp1", "libsrt1.5-openssl", "libstdc++6",
-        "libswresample4", "libswscale7", "libudev1", "libuuid1", "libv4l-0t64",
+        "libswresample6", "libswscale9", "libudev1", "libuuid1", "libv4l-0t64",
         "libva-drm2", "libva2", "libvpl2", "libwayland-client0", "libwayland-egl1",
-        "libx11-6", "libx11-xcb1", "libx264-164", "libxcb-composite0", "libxcb-randr0",
+        "libx11-6", "libx11-xcb1", "libx264-165", "libxcb-composite0", "libxcb-randr0",
         "libxcb-shm0", "libxcb-xfixes0", "libxcb-xinerama0", "libxcb1", "libxkbcommon0",
         "zlib1g",
     }
@@ -141,7 +147,6 @@ def test_linux_ci_installs_all_pinned_obs_direct_dependency_providers():
     assert script.index("--print-native-packages") < script.index('PYTHON="$(resolve_python)"')
     for relative in (".github/workflows/build-solin-linux.yml", ".github/workflows/quality.yml"):
         workflow = _read(relative)
-        assert "runs-on: ubuntu-24.04" in workflow
         assert "bash scripts/build_solin.sh --print-native-packages" in workflow
         assert '"${libobs_packages[@]}"' in workflow
         assert "add-apt-repository" not in workflow
@@ -162,11 +167,35 @@ def test_linux_ci_bounds_package_mirror_failures():
         assert 'sudo apt-get "${apt_options[@]}" install' in block
 
 
+def test_linux_build_and_platform_tests_use_the_reference_runner():
+    build = yaml.load(_read(".github/workflows/build-solin-linux.yml"), Loader=yaml.BaseLoader)
+    assert build["jobs"]["build"]["runs-on"] == "ubuntu-26.04"
+    quality = yaml.load(_read(".github/workflows/quality.yml"), Loader=yaml.BaseLoader)
+    platforms = quality["jobs"]["platforms"]
+    linux = [row for row in platforms["strategy"]["matrix"]["include"] if row["platform"] == "Linux"]
+    assert len(linux) == 1
+    assert linux[0]["runner"] == "ubuntu-26.04"
+    assert platforms["runs-on"] == "${{ matrix.runner }}"
+
+
+def test_workflow_validator_explicitly_recognizes_the_new_runner_label():
+    quality = yaml.load(_read(".github/workflows/quality.yml"), Loader=yaml.BaseLoader)
+    validator = next(step["run"] for step in quality["jobs"]["static"]["steps"]
+                     if step.get("name") == "Validate workflows")
+    # actionlint 1.7.12 predates this hosted label. Allow it explicitly without
+    # suppressing diagnostics for other unknown runner labels.
+    config = validator.split("<<'YAML'\n", 1)[1].split("\nYAML", 1)[0]
+    build = yaml.load(_read(".github/workflows/build-solin-linux.yml"), Loader=yaml.BaseLoader)
+    assert yaml.safe_load(config)["self-hosted-runner"]["labels"] == [build["jobs"]["build"]["runs-on"]]
+    assert '-config-file "$config"' in validator
+    assert "-ignore" not in validator
+
+
 def test_linux_mux_comes_from_the_checksum_pinned_official_release():
     script = _read("scripts/build_solin.sh")
-    assert 'OBS_RUNTIME_VERSION="32.1.2"' in script
-    assert 'OBS_RUNTIME_SHA256="a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8"' in script
-    assert 'OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-24.04-x86_64.deb' in script
+    assert 'OBS_RUNTIME_VERSION="33.0.0"' in script
+    assert 'OBS_RUNTIME_SHA256="f5844914eadd560314f3a9db020afa7a8afbefb67a26c488f2956dc339704918"' in script
+    assert 'OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-26.04-x86_64.deb' in script
     assert "https://github.com/obsproject/obs-studio/releases/download/" in script
     assert "sha256sum --check --status" in script
     assert script.index('"${OBS_RUNTIME_SHA256}" "${OBS_DOWNLOAD}"') < script.index(
@@ -186,6 +215,30 @@ def test_linux_build_rejects_platforms_below_the_dependency_abi_floor():
     script = _read("scripts/build_solin.sh")
     assert 'platform.machine() != "x86_64"' in script
     floor = tuple(map(int, REQUIRED_ASSETS[("linux", "x86_64", "appimage")][1].split(".")))
-    assert floor == (2, 38)
+    assert floor == (2, 43)
     assert f'tuple(map(int, version.split("."))) < {floor}' in script
-    assert script.index("Ubuntu 22.04 is unsupported") < script.index('"${PYTHON}" -m nuitka')
+    assert script.index('tuple(map(int, version.split(".")))') < script.index('"${PYTHON}" scripts/build_media_extract.py')
+
+
+@pytest.mark.parametrize("machine,libc,version,python_version,supported", [
+    ("x86_64", "glibc", "2.43", (3, 13), True),
+    ("x86_64", "glibc", "2.44", (3, 14), True),
+    ("x86_64", "glibc", "2.42", (3, 13), False),
+    ("x86_64", "musl", "1.2.5", (3, 13), False),
+    ("aarch64", "glibc", "2.43", (3, 13), False),
+    ("x86_64", "glibc", "2.43", (3, 12), False),
+])
+def test_linux_build_platform_guard(machine, libc, version, python_version, supported, monkeypatch):
+    import platform
+
+    script = _read("scripts/build_solin.sh")
+    guard = script.split('"${PYTHON}" - <<\'PY\'\n', 1)[1].split("\nPY\n", 1)[0]
+    with monkeypatch.context() as patch:
+        patch.setattr(platform, "machine", lambda: machine)
+        patch.setattr(platform, "libc_ver", lambda: (libc, version))
+        patch.setattr(sys, "version_info", python_version)
+        if supported:
+            exec(compile(guard, "build_solin platform guard", "exec"), {})
+        else:
+            with pytest.raises(SystemExit):
+                exec(compile(guard, "build_solin platform guard", "exec"), {})

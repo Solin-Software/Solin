@@ -37,11 +37,13 @@ class LocalCameraRecovery:
         self, *, discover: Callable[[], Iterable[str]],
         state: Callable[[str], CameraCaptureState | None],
         reconnect: Callable[[str, int], bool], cancel_discovery: Callable[[], None],
+        attachment_pending: Callable[[str], bool] | None = None,
         monotonic: Callable[[], float] = time.monotonic, executor: Executor | None = None,
     ) -> None:
         self._discover = discover
         self._state = state
         self._reconnect = reconnect
+        self._attachment_pending = attachment_pending or (lambda _device: False)
         self._cancel_discovery = cancel_discovery
         self._clock = monotonic
         self._executor = executor or ThreadPoolExecutor(max_workers=1, thread_name_prefix="camera-recovery")
@@ -139,7 +141,8 @@ class LocalCameraRecovery:
             if state is None or state.generation != capture.generation:
                 self._captures.pop(key, None)
                 continue
-            if state.status == "ready":
+            attachment_pending = self._attachment_pending(capture.device_id)
+            if state.status == "ready" and not attachment_pending:
                 if state.frame_sequence != capture.frame_sequence:
                     self._captures.pop(key, None)
                     self._reactivated.pop(key, None)
@@ -149,14 +152,17 @@ class LocalCameraRecovery:
                 # A quick unplug/replug may precede the probe's timeout. Wait
                 # for its fresh-frame check instead of interrupting healthy video.
                 continue
-            if state.error_code not in {"", "camera_no_frames", "camera_update_failed"}:
+            if not attachment_pending and state.error_code not in {
+                "", "camera_no_frames", "camera_update_failed", "camera_create_failed",
+                "camera_configuration_unavailable",
+            }:
                 self._captures.pop(key, None)
                 continue
             if (state.error_code == "camera_update_failed" and not capture.attempts
                     and self._reactivated.get(key) != state.generation):
                 self._captures.pop(key, None)
                 continue
-            if state.status != "failed":
+            if state.status != "failed" and not attachment_pending:
                 continue
             if capture.attempts:
                 if capture.attempts >= 3:
@@ -179,7 +185,13 @@ class LocalCameraRecovery:
                 result = "update_failed"
                 log.warning("Local camera reactivation failed", exc_info=True)
             if applied:
-                capture.generation += 1
+                # One device may serve several saved definitions, or a healthy
+                # capture may only need attaching. Neither implies exactly +1.
+                updated = self._read_state(capture.device_id)
+                if updated is None:
+                    self._captures.pop(key, None)
+                    continue
+                capture.generation = updated.generation
                 self._reactivated[key] = capture.generation
             else:
                 # Native-managed platforms need no competing reactivation;

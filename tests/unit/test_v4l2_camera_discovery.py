@@ -62,7 +62,7 @@ def test_serialize_ready_device_has_wire_shape():
     assert len(payload["formats"]) == 1
     fmt = payload["formats"][0]
     assert fmt == {"media_type": "video/x-raw", "pixel_format": "YUYV",
-                   "width": 640, "height": 480, "fps_numerator": 30, "fps_denominator": 1}
+                   "width": 640, "height": 480, "fps_numerator": 30, "fps_denominator": 1, "native_format": ""}
 
 
 def test_serialize_unverified_device_carries_failure_fields():

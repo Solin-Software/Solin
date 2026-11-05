@@ -62,9 +62,8 @@ def test_decoder_rejects_a_sidecar_from_the_previous_protocol_generation() -> No
         decode_envelope(json.dumps(record).encode())
 
 
-def test_camera_reconnection_requires_protocol_eleven() -> None:
-    assert PROTOCOL_VERSION == 11
-    for version in (10, 12, True, 11.0):
+def test_camera_native_format_identity_requires_current_protocol() -> None:
+    for version in (PROTOCOL_VERSION - 1, PROTOCOL_VERSION + 1, True, float(PROTOCOL_VERSION)):
         with pytest.raises(SceneIpcMessageError, match="protocol version"):
             _envelope(protocol_version=version)
 

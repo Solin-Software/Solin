@@ -1475,8 +1475,9 @@ def test_retired_native_presentations_unload_inputs_and_release_scenes(
                     assert time.monotonic() < deadline, (
                         "Retired native scene/decoder is still alive",
                         [bool(lib.obs_weak_source_expired(weak)) for weak in previous],
-                        [[(key, scene.as_source().showing) for key, scene in scenes.items()]
-                         for scenes, _ in engine._scene_graph._retired_presentations],
+                        [[(key, scene.as_source().showing)
+                          for key, scene in presentation.scenes.items()]
+                         for presentation in engine._scene_graph._retired_presentations],
                         len(engine._retired_media_sources),
                     )
                     # This headless output needs its own render, like a room display.
@@ -2069,8 +2070,8 @@ def _assert_unified_content_modes(directory: Path, arrangement: str) -> None:
                         engine._preview_egress.scene_source, previous),
                     "preview_active": engine._preview_egress.active,
                     "retired_scenes": [[(name, scene.as_source().showing)
-                                        for name, scene in scenes.items()]
-                                       for scenes, _sources in graph._retired_presentations],
+                                        for name, scene in presentation.scenes.items()]
+                                       for presentation in graph._retired_presentations],
                 }) from error
             if len(retired_at) > 1:
                 retirement_ms.append((time.perf_counter() - retired_at[-2]) * 1000)

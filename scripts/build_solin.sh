@@ -25,14 +25,15 @@ fail() {
 }
 
 # Direct DT_NEEDED providers for the pinned pylibobs Linux wheel and OBS mux.
-# Apt supplies their transitive dependencies from the same Ubuntu archive.
+# Verified against the official OBS 33 Ubuntu 26.04 asset and published wheel.
+# Apt supplies transitive dependencies; libavfilter also serves Solin playback.
 libobs_runtime_packages=(
     libasound2t64
-    libavcodec60
-    libavdevice60
-    libavfilter9
-    libavformat60
-    libavutil58
+    libavcodec62
+    libavdevice62
+    libavfilter11
+    libavformat62
+    libavutil60
     libc6
     libcurl4t64
     libdrm2
@@ -42,9 +43,9 @@ libobs_runtime_packages=(
     libgcc-s1
     libglib2.0-0t64
     libjansson4
-    libmbedcrypto7t64
-    libmbedtls14t64
-    libmbedx509-1t64
+    libmbedcrypto16
+    libmbedtls21
+    libmbedx509-7
     libpci3
     libpipewire-0.3-0t64
     libpulse0
@@ -52,8 +53,8 @@ libobs_runtime_packages=(
     libspeexdsp1
     libsrt1.5-openssl
     libstdc++6
-    libswresample4
-    libswscale7
+    libswresample6
+    libswscale9
     libudev1
     libuuid1
     libv4l-0t64
@@ -64,7 +65,7 @@ libobs_runtime_packages=(
     libwayland-egl1
     libx11-6
     libx11-xcb1
-    libx264-164
+    libx264-165
     libxcb-composite0
     libxcb-randr0
     libxcb-shm0
@@ -142,10 +143,10 @@ if sys.version_info < (3, 13):
 if platform.machine() != "x86_64":
     raise SystemExit("Solin Linux builds require x86_64.")
 libc, version = platform.libc_ver()
-if libc != "glibc" or tuple(map(int, version.split("."))) < (2, 38):
+if libc != "glibc" or tuple(map(int, version.split("."))) < (2, 43):
     raise SystemExit(
-        "The Ubuntu 24.04 libobs dependency runtime requires glibc 2.38 or newer. "
-        "Use Ubuntu 24.04 x86_64 (including WSL 2). Ubuntu 22.04 is unsupported."
+        "The Ubuntu 26.04 libobs dependency runtime requires glibc 2.43 or newer. "
+        "Use Ubuntu 26.04 x86_64 (including WSL 2). Ubuntu 24.04 and older are unsupported."
     )
 PY
 
@@ -157,11 +158,11 @@ done
 "${PYTHON}" scripts/build_media_extract.py --build-dir "${WORK_ROOT}/native/media-extract"
 "${PYTHON}" scripts/build_media_playback.py --build-dir "${WORK_ROOT}/native/media-playback"
 
-# The published Linux wheel omits usr/local/bin/obs-ffmpeg-mux. Extract the
+# The Linux runtime excludes usr/local/bin/obs-ffmpeg-mux. Extract the
 # matching official release without installing OBS or changing apt sources.
-OBS_RUNTIME_VERSION="32.1.2"
-OBS_RUNTIME_SHA256="a3bb1b0176604dad9e22710e057f0fdd76e8afb600e0e1914c30464ae49908e8"
-OBS_RUNTIME_NAME="OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-24.04-x86_64.deb"
+OBS_RUNTIME_VERSION="33.0.0"
+OBS_RUNTIME_SHA256="f5844914eadd560314f3a9db020afa7a8afbefb67a26c488f2956dc339704918"
+OBS_RUNTIME_NAME="OBS-Studio-${OBS_RUNTIME_VERSION}-Ubuntu-26.04-x86_64.deb"
 OBS_RUNTIME_URL="https://github.com/obsproject/obs-studio/releases/download/${OBS_RUNTIME_VERSION}/${OBS_RUNTIME_NAME}"
 OBS_CACHE_ROOT="${WORK_ROOT}/dependencies/libobs"
 OBS_RUNTIME_ARCHIVE="${OBS_CACHE_ROOT}/${OBS_RUNTIME_NAME}"
@@ -277,9 +278,8 @@ find "${DIST_DIR}/solin/qml" -maxdepth 1 -type f \
     \( -name '*.qml' -o -name '*.qmlc' -o -name qmldir \) -delete
 find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -type f -name '*.qml' -delete
 
-# PySide6 6.10 currently ships a TIFF image plugin linked against libtiff.so.5.
-# Ubuntu 24.04 provides libtiff.so.6; omitting the optional plugin avoids an
-# invalid ABI shim and keeps startup free of a misleading loader warning.
+# Omit the optional TIFF plugin: some PySide6 wheels require libtiff.so.5,
+# while Ubuntu 26.04 supplies libtiff.so.6. Never alias incompatible ABIs.
 rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"
 
 find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep -q . && fail \

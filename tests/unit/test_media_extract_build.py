@@ -159,7 +159,7 @@ def test_qualification_requires_matching_versions_and_actual_private_library_ori
     root = tmp_path / "runtime"
     root.mkdir()
     abi = {}
-    for name, major in packaging._MEDIA_EXTRACT_ABI["windows"].items():
+    for name, major in packaging._MEDIA_EXTRACT_ABI.items():
         library = root / f"{name}-{major}.dll"
         library.write_bytes(b"runtime")
         abi[name] = {
@@ -216,7 +216,7 @@ def test_real_helper_qualification_disables_external_cli_and_graphics_lookup(tmp
     for filename in ("video.mp4", "video-cover.mp4", "audio-cover.mp3"):
         (fixtures / filename).write_bytes(b"fixture")
     abi = {}
-    for name, major in packaging._MEDIA_EXTRACT_ABI["windows"].items():
+    for name, major in packaging._MEDIA_EXTRACT_ABI.items():
         path = helper.parent / f"{name}-{major}.dll"
         path.write_bytes(b"runtime")
         abi[name] = {

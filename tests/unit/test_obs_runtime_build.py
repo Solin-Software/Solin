@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
+from contextlib import redirect_stdout
 from pathlib import Path
 import subprocess
+import sys
+import traceback
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -212,6 +217,207 @@ def test_runtime_qualification_binds_the_candidate_and_installed_plugin_data(tmp
     monkeypatch.setattr(builder.subprocess, "run", qualify)
     builder.verify_runtime(binary, runtime)
     assert os.environ["PATH"] == inherited_path
+
+
+@pytest.fixture
+def qualification_runtime(tmp_path, monkeypatch):
+    """Execute the child qualification script against an isolated OBS module ABI."""
+    runtime = tmp_path / "selected runtime"
+    modules = {
+        "obs-ffmpeg": "ffmpeg_source",
+        "win-wasapi": "wasapi_output_capture",
+    }
+    paths = {}
+    for name in modules:
+        directory = runtime / "core" / name
+        (directory / "data").mkdir(parents=True)
+        binary = directory / f"{name}.dll"
+        binary.write_bytes(b"synthetic module")
+        paths[name] = (binary, directory / "data")
+    candidate = tmp_path / "candidate" / "obs.dll"
+    state = SimpleNamespace(
+        version=33 << 24,
+        opened=[],
+        initialized=[],
+        registered=set(),
+        open_error=0,
+        null_handle=False,
+        init_ok=True,
+        omitted_source=None,
+        post_loaded=False,
+        context_closed=False,
+    )
+
+    class Library:
+        def obs_get_version(self):
+            return state.version
+
+        def obs_open_module(self, pointer, binary, data):
+            # libobs derives its module name by splitting only on '/'.
+            module_name = binary.decode().rsplit("/", 1)[-1].removesuffix(".dll")
+            binary, data = Path(binary.decode()), Path(data.decode())
+            name = binary.stem
+            assert (binary, data) == paths[name]
+            assert binary.is_file() and data.is_dir()
+            state.opened.append((binary, data))
+            if name == "win-wasapi":
+                if state.open_error:
+                    return state.open_error
+                if state.null_handle:
+                    return 0
+            pointer[0] = module_name
+            return 0
+
+        def obs_init_module(self, module):
+            assert module in modules
+            state.initialized.append(module)
+            if module == "win-wasapi" and not state.init_ok:
+                return False
+            source = modules[module]
+            if source != state.omitted_source:
+                state.registered.add(source)
+            return True
+
+        def obs_post_load_modules(self):
+            state.post_loaded = True
+
+        # Registering paths cannot make the OBS 33 bulk loader initialize modules.
+        def obs_add_module_path(self, *_args):
+            pass
+
+        def obs_load_all_modules(self):
+            pass
+
+    class Context:
+        def __init__(self, *, module_config_path):
+            assert Path(module_config_path).is_dir()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            state.context_closed = True
+
+        def set_audio(self, *, samples_per_sec):
+            assert samples_per_sec == 48000
+
+    def allocate(declaration):
+        assert declaration == "obs_module_t **"
+        return [None]
+
+    library = Library()
+    package = ModuleType("pylibobs")
+    package.enum_source_types = lambda: sorted(state.registered)
+    context_module = ModuleType("pylibobs.context")
+    context_module.OBSContext = Context
+    ffi_module = ModuleType("pylibobs._ffi")
+    ffi_module.ffi = SimpleNamespace(NULL=None, new=allocate)
+    ffi_module.get_lib = lambda: library
+    for module in (package, context_module, ffi_module):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setattr(os, "add_dll_directory", lambda path: object(), raising=False)
+    monkeypatch.setattr(builder.obs_sources, "OBS_VERSION", "33.0.0")
+
+    def execute(command, **options):
+        assert Path(options["env"]["LIBOBS_PATH"]) == candidate
+        assert candidate.parent != runtime
+        stdout = io.StringIO()
+        stderr = ""
+        returncode = 0
+        with monkeypatch.context() as child:
+            child.setattr(sys, "argv", ["-c", *command[4:]])
+            with redirect_stdout(stdout):
+                try:
+                    exec(compile(command[3], "<obs-core-qualification>", "exec"), {})
+                except RuntimeError:
+                    returncode = 1
+                    stderr = traceback.format_exc()
+        return subprocess.CompletedProcess(command, returncode, stdout.getvalue(), stderr)
+
+    monkeypatch.setattr(builder.subprocess, "run", execute)
+    return SimpleNamespace(
+        state=state, paths=paths, qualify=lambda: builder.verify_runtime(candidate, runtime)
+    )
+
+
+def test_qualification_initializes_selected_runtime_modules_with_their_own_data(
+    qualification_runtime,
+):
+    qualification_runtime.qualify()
+    state = qualification_runtime.state
+    assert set(state.opened) == set(qualification_runtime.paths.values())
+    assert set(state.initialized) == set(qualification_runtime.paths)
+    assert state.registered == {"ffmpeg_source", "wasapi_output_capture"}
+    assert state.post_loaded and state.context_closed
+
+
+def test_qualification_uses_shared_module_path_resolvers(qualification_runtime, monkeypatch):
+    paths = qualification_runtime.paths
+    for name, (binary, data) in list(paths.items()):
+        directory = binary.parents[2] / "resolved modules" / name
+        directory.mkdir(parents=True)
+        resolved_binary, resolved_data = directory / binary.name, directory / "resources"
+        binary.rename(resolved_binary)
+        data.rename(resolved_data)
+        paths[name] = (resolved_binary, resolved_data)
+    monkeypatch.setattr(builder, "module_binary_path", lambda root, platform, name: paths[name][0])
+    monkeypatch.setattr(builder, "module_data_path", lambda root, platform, name: paths[name][1])
+    qualification_runtime.qualify()
+    assert set(qualification_runtime.state.opened) == set(paths.values())
+
+
+@pytest.mark.parametrize("missing", ["binary", "data"])
+def test_qualification_rejects_missing_required_module_files(qualification_runtime, missing):
+    binary, data = qualification_runtime.paths["win-wasapi"]
+    path = binary if missing == "binary" else data
+    if missing == "binary":
+        path.unlink()
+    else:
+        path.rmdir()
+    with pytest.raises(builder.ObsRuntimeBuildError) as failure:
+        qualification_runtime.qualify()
+    assert str(path) in str(failure.value)
+    assert "win-wasapi" not in qualification_runtime.state.initialized
+
+
+@pytest.mark.parametrize(
+    "setting, value, diagnostic",
+    [
+        ("open_error", -4, "-4"),
+        ("open_error", -99, "-99"),
+        ("null_handle", True, "NULL"),
+        ("init_ok", False, "obs_init_module"),
+    ],
+)
+def test_qualification_rejects_module_loader_failures(
+    qualification_runtime, setting, value, diagnostic
+):
+    setattr(qualification_runtime.state, setting, value)
+    with pytest.raises(builder.ObsRuntimeBuildError) as failure:
+        qualification_runtime.qualify()
+    message = str(failure.value)
+    assert str(qualification_runtime.paths["win-wasapi"][0]) in message
+    assert diagnostic in message
+    assert qualification_runtime.state.context_closed
+
+
+@pytest.mark.parametrize("missing", ["ffmpeg_source", "wasapi_output_capture"])
+def test_qualification_requires_source_registration_after_successful_init(
+    qualification_runtime, missing
+):
+    qualification_runtime.state.omitted_source = missing
+    with pytest.raises(builder.ObsRuntimeBuildError) as failure:
+        qualification_runtime.qualify()
+    assert missing in str(failure.value)
+    assert set(qualification_runtime.state.initialized) == set(qualification_runtime.paths)
+    assert qualification_runtime.state.context_closed
+
+
+def test_qualification_rejects_wrong_core_abi_before_loading_plugins(qualification_runtime):
+    qualification_runtime.state.version = 32 << 24
+    with pytest.raises(builder.ObsRuntimeBuildError, match="ABI"):
+        qualification_runtime.qualify()
+    assert not qualification_runtime.state.opened
 
 
 @pytest.mark.parametrize(

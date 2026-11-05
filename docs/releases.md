@@ -206,7 +206,7 @@ quality gate, then builds and tests all required packages:
 
 - Windows x86-64 setup, which also installs and registers the virtual camera;
 - ad-hoc signed macOS 13+ DMGs for Intel and Apple Silicon;
-- Linux x86-64 AppImage requiring glibc 2.38 or newer.
+- Linux x86-64 AppImage requiring glibc 2.43 or newer.
 
 The publisher runs only after every required job succeeds. It verifies the exact
 asset inventory, sizes, SHA-256 hashes, source commit, architecture, and release
@@ -373,7 +373,7 @@ to finish before tagging when immediate reuse matters. See GitHub's
 ## Qualifying a branch before tagging
 
 Run the same platform build workflows on a pushed working branch before preparing
-another beta. These runs build the full packages and exercise the packaged runtime
+a release. These runs build the full packages and exercise the packaged runtime
 and verified-predecessor upgrade tests, but do not invoke the release publisher:
 
 ```text
@@ -387,6 +387,8 @@ gh run list --branch <branch>
 Inspect failed job logs, fix the cause on that branch, push, and dispatch the
 affected workflow again. Qualify all platforms and Quality on the final commit.
 Download successful packages from the run's artifacts for additional testing.
+For binding or OBS changes, also follow the
+[native dependency upgrade checklist](building.md#native-media-dependencies).
 Only after qualification should the normal review, release preparation, and tag
 publication flow proceed. Diagnostic artifacts are not published releases and
 do not require a version bump or tag.
@@ -419,7 +421,6 @@ the old SolinAV version endpoint so existing installations can migrate. New
 versions use GitHub only for update discovery; the SolinAV notification service
 remains independent.
 
-macOS packages currently use free ad-hoc signing. This seals the bundle but does
+macOS packages use ad-hoc signing. This seals the bundle but does
 not establish a Developer ID identity or provide notarization, so Gatekeeper may
-require explicit user approval. Developer ID signing, hardened runtime, and
-notarization remain future distribution work.
+require explicit user approval. See [macOS first launch](installation.md#macos-first-launch).

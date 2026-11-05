@@ -106,6 +106,35 @@ def test_manifest_accepts_exact_cross_platform_inventory() -> None:
     assert len(parsed.assets) == 4
 
 
+@pytest.mark.parametrize("minimum_os", [None, True, "", "-1", "2..43", "v2.43", "2.43rc1", "2.43\n"])
+def test_manifest_rejects_malformed_os_requirements(minimum_os) -> None:
+    payload = manifest_payload()
+    payload["assets"][-1]["minimum_os"] = minimum_os
+    assert ReleaseManifest.parse(payload) is None
+
+
+@pytest.mark.parametrize("platform,architecture,kind", REQUIRED_ASSETS)
+def test_predecessor_preserves_historical_os_requirements(
+    monkeypatch, platform, architecture, kind,
+) -> None:
+    payload = manifest_payload("26.33.0b6")
+    next(asset for asset in payload["assets"] if asset["platform"] == "linux")["minimum_os"] = "2.38"
+    manifest = ReleaseManifest.parse(payload)
+    assert manifest is not None
+    monkeypatch.setattr(release_script, "read_remote_manifest", lambda _tag: manifest)
+
+    result = resolve_predecessor(
+        platform, architecture, version("26.33.0b7"),
+        [{"draft": False, "tag_name": manifest.tag,
+          "assets": [{"name": release_script.MANIFEST_FILENAME}]}],
+    )
+
+    asset = next(asset for asset in manifest.assets if asset.kind == kind
+                 and asset.platform == platform and asset.architecture == architecture)
+    assert result == (asset.download_url(manifest.tag), asset.sha256)
+    assert next(asset for asset in manifest.assets if asset.platform == "linux").minimum_os == "2.38"
+
+
 def test_first_centralized_release_uses_pinned_transition_predecessor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -80,7 +80,7 @@ if(WIN32)
         "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     runtime_library(obs obs.dll)
     runtime_library(pthreads w32-pthreads.dll)
-    foreach(pair avcodec-61 avdevice-61 avfilter-10 avformat-61 avutil-59 swscale-8)
+    foreach(pair avcodec-62 avdevice-62 avfilter-11 avformat-62 avutil-60 swscale-9)
         runtime_library(${pair} "${pair}.dll")
     endforeach()
 elseif(APPLE)
@@ -92,25 +92,32 @@ elseif(APPLE)
         BUILD_RPATH "@loader_path/../Frameworks" INSTALL_RPATH "@loader_path/../Frameworks")
 else()
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(AVDEVICE REQUIRED libavdevice>=60.1.100)
     find_path(SIMDE_INCLUDE_DIR simde/x86/sse2.h REQUIRED)
     target_include_directories(solin-media-runtime SYSTEM INTERFACE
-        ${AVDEVICE_INCLUDE_DIRS} "${SIMDE_INCLUDE_DIR}")
-    runtime_library(obs libobs.so.0)
-    # The pinned Linux wheel obtains FFmpeg from the Ubuntu 24.04 runtime.
+        "${SIMDE_INCLUDE_DIR}")
+    runtime_library(obs libobs.so.30)
+    # The pinned Linux wheel obtains FFmpeg from the Ubuntu 26.04 runtime.
     # Reuse its installed providers; packaging stages/relocates the same graph.
     pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-        libavcodec>=60.31.102 libavdevice>=60.1.100 libavfilter>=9.12.100 libavformat>=60.16.100
-        libavutil>=58.29.100 libswscale>=7.5.100)
+        libavcodec>=62 libavdevice>=62 libavfilter>=11 libavformat>=62
+        libavutil>=60 libswscale>=9)
     target_link_libraries(solin-media-runtime INTERFACE PkgConfig::FFMPEG m)
     target_link_options(solin-media-source PRIVATE "LINKER:--no-undefined")
-    set_target_properties(solin-media-source PROPERTIES BUILD_RPATH "$ORIGIN/.."
-        INSTALL_RPATH "$ORIGIN/..")
+    set_target_properties(solin-media-source PROPERTIES BUILD_RPATH "$ORIGIN/../.."
+        INSTALL_RPATH "$ORIGIN/../..")
 endif()
 find_package(Threads REQUIRED)
 target_link_libraries(solin-media-runtime INTERFACE Threads::Threads)
 target_link_libraries(solin-media-source PRIVATE solin-media-runtime)
-install(TARGETS solin-media-source LIBRARY DESTINATION obs-plugins RUNTIME DESTINATION obs-plugins)
+if(WIN32)
+    set(module_destination "core/solin-media-source")
+elseif(APPLE)
+    set(module_destination "obs-plugins")
+else()
+    set(module_destination "obs-modules/core")
+endif()
+install(TARGETS solin-media-source
+    LIBRARY DESTINATION "${module_destination}" RUNTIME DESTINATION "${module_destination}")
 
 # Compile the actual patched seek function with controlled FFmpeg/decoder
 # boundaries. This exercises failure handling without a network or GPU.
