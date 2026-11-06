@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from solin.core.media.operations import MediaOperationRecord
+from solin.core.media.removal import media_counts_by_container
 from solin.core.meetings.colors import (
     ThemeScheme,
     accent_from_hue,
@@ -67,6 +68,7 @@ class PlaylistTreePresenter:
         scheme = theme_scheme or current_theme_scheme()
         badges = dict(media_badges or {})
         tree = build_playlist_tree(playlist)
+        additional_counts = media_counts_by_container(tree)
         for pending in pending_media:
             kind, target_id = parse_tree_list_id(pending.target_list_id)
             target = children_for_tree_target(tree, kind, target_id)
@@ -90,6 +92,7 @@ class PlaylistTreePresenter:
                 source_versions,
                 scheme,
                 badges,
+                additional_counts,
             )
             for node in tree
         )
@@ -105,6 +108,7 @@ class PlaylistTreePresenter:
         source_revisions: Mapping[str, int],
         scheme: ThemeScheme,
         badges: dict[str, str],
+        additional_counts: Mapping[str, int],
     ) -> MediaTreeNodeSnapshot:
         node_id = str(node["id"])
         node_type = str(node["type"])
@@ -120,6 +124,7 @@ class PlaylistTreePresenter:
                     source_revisions,
                     scheme,
                     badges,
+                    additional_counts,
                 )
                 for child in node.get("children", [])
             )
@@ -131,6 +136,7 @@ class PlaylistTreePresenter:
             title = str(ref.get("name") or "")
             collapsed = bool(ref.get("collapsed", False))
             item_count = _media_count(node)
+            additional_count = additional_counts.get(node_id, 0)
             key = (
                 presented_type,
                 source_revision,
@@ -139,6 +145,7 @@ class PlaylistTreePresenter:
                 scheme,
                 collapsed,
                 item_count,
+                additional_count,
                 tuple(id(child) for child in children),
             )
             return self._cache.resolve(
@@ -155,6 +162,7 @@ class PlaylistTreePresenter:
                         "badgeBg": badge_bg_from_hue(hue, scheme),
                         "collapsed": collapsed,
                         "itemCount": item_count,
+                        "additionalMediaCount": additional_count,
                         "canDrag": True,
                         "canEdit": True,
                         "canProject": False,

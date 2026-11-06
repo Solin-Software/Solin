@@ -4249,16 +4249,6 @@ Detenga la proyección e inténtelo de nuevo.</translation>
         <source>Rename media</source>
         <translation>Renombrar elemento</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>No se puede eliminar la sección</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Mueva o elimine primero las subsecciones y los marcadores añadidos manualmente.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,31 @@ Use el botón de reproducción para proyectar · Arrastre el control ⠿ para re
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Imágenes: {images} · Videos: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Eliminar medios adicionales</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>¿Eliminar los medios adicionales de &quot;{name}&quot;?
+Elementos multimedia: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>¿Eliminar &quot;{name}&quot; y sus medios?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Eliminar medios</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Conservar medios</translation>
     </message>
 </context>
 </TS>

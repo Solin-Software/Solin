@@ -4249,16 +4249,6 @@ Stoppa projiceringen och försök igen.</translation>
         <source>Rename media</source>
         <translation>Byt namn på media</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Det går inte att ta bort avsnittet</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Flytta eller ta bort de manuellt tillagda underavsnitten och markörerna först.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12663,6 +12653,31 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Bilder: {images} · Videor: {videos} · Ljud: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Ta bort ytterligare media</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Ta bort ytterligare media från &quot;{name}&quot;?
+Medieobjekt: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Ta bort &quot;{name}&quot; och dess media?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Ta bort media</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Behåll media</translation>
     </message>
 </context>
 </TS>

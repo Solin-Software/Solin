@@ -1061,34 +1061,43 @@ def test_restore_materialization_failure_never_persists_or_publishes() -> None:
     assert controller.storageSaveFailed.calls == [("mwb:2026-05-25:T:issue", "copy failed")]
 
 
-def test_deleting_official_section_with_manual_structure_is_blocked() -> None:
-    class FakeController:
-        pass
+@pytest.mark.parametrize("flag_enabled", [False, True])
+def test_deleting_official_section_keeps_media_and_removes_manual_structure(
+    monkeypatch, flag_enabled,
+) -> None:
+    from types import SimpleNamespace
+    from solin.core.foundation import constants
 
+    manual_media = {"id": "manual-media", "type": "media", "children": []}
+    official_media = _media("media:a", "Official media")
     manual_subsection = {
-        "id": "manual-subsection",
-        "type": "subsection",
-        "title": "Manual",
-        "children": [],
-        "meeting_generated": False,
+        "id": "manual-subsection", "type": "subsection", "title": "Manual",
+        "children": [{"id": "marker", "type": "marker"}, manual_media],
     }
-    section = _section("section:a", "Official", [manual_subsection])
-    controller = FakeController()
-    controller._nodes = [section]
-    controller._deleted_source_keys = set()
-    controller._find_node = lambda node_id: next(
-        (node for node in iter_nodes(controller._nodes) if node["id"] == node_id),
-        None,
+    section = _section("section:a", "Official", [official_media, manual_subsection])
+    controller = SimpleNamespace(
+        _nodes=[section], _tree_key="test", _tree_session=SimpleNamespace(generation=1),
+        _deleted_source_keys=set(), _linked_folder_files={}, _meeting_folder_imports={},
+        parent=lambda: None, _save=lambda: True, _emit_section_counts=lambda: None,
     )
-    controller.parent = lambda: None
-
+    controller._find_node = lambda node_id: next(
+        (node for node in iter_nodes(controller._nodes) if node["id"] == node_id), None,
+    )
+    controller._remember_deleted_sources = lambda node, **kwargs: (
+        MeetingTreeController._remember_deleted_sources(controller, node, **kwargs)
+    )
+    monkeypatch.setattr(constants, "CONFIRM_CONTAINER_MEDIA_DELETION", flag_enabled)
+    if flag_enabled:
+        from solin.ui.dialogs.media_removal import ContainerRemovalChoice
+        monkeypatch.setattr(
+            "solin.widgets.meetings.tree_controller.confirm_container_removal",
+            lambda *_args, **_kwargs: ContainerRemovalChoice.KEEP_MEDIA,
+        )
     with (
         patch.object(QMessageBox, "warning") as warning,
-        patch.object(QMessageBox, "question") as question,
+        patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
     ):
         MeetingTreeController.deleteSection(controller, section["id"])
-
-    warning.assert_called_once()
-    question.assert_not_called()
-    assert controller._nodes == [section]
-    assert controller._deleted_source_keys == set()
+    warning.assert_not_called()
+    assert controller._nodes == [official_media, manual_media]
+    assert controller._deleted_source_keys == {"section:a"}

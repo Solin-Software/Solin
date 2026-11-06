@@ -123,6 +123,10 @@ KEEP_MEETING_IMAGES_FOR_MANUAL_CLEANUP: bool = False
 AUTO_RECOVER_PREPARED_MEETING_IMAGES: bool = True
 AUTO_UPDATE_PREPARED_MEETINGS: bool = True
 
+# Offer deletion of contained media when removing sections or subsections.
+# Independent of the additional-media action, which is always available.
+CONFIRM_CONTAINER_MEDIA_DELETION: bool = True
+
 JWL_PLAYLIST_EXTS: frozenset[str] = frozenset({".jwlplaylist"})
 SOLIN_PLAYLIST_EXTS: frozenset[str] = frozenset({".solinplaylist"})
 # Legacy dispatch remains JWL-only. Native packages are accepted exclusively by

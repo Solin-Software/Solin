@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import mimetypes
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +17,11 @@ from ..playlists.items import (
 )
 from .models import MeetingMedia, media_type_for_mime_type
 from .tree_types import Node, new_node_id
+
+
+def additional_meeting_media(node: Mapping[str, Any]) -> bool:
+    """Official provenance, rather than media origin, defines canonical content."""
+    return not node.get("meeting_generated")
 
 
 def clean_media_title(value: str) -> str:

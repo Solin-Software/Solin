@@ -10,8 +10,9 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.core.media.operations import MediaOperationRecord
+from solin.core.media.removal import media_counts_by_container
 from solin.core.meetings.colors import ThemeScheme, section_colors
-from solin.core.meetings.media_nodes import media_ref_title
+from solin.core.meetings.media_nodes import additional_meeting_media, media_ref_title
 from solin.core.meetings.tree_editing import children_for_tree_target, parse_tree_list_id
 from solin.core.meetings.tree_types import clone_nodes
 from solin.styles.theme import current_theme_scheme
@@ -72,6 +73,7 @@ class MeetingTreePresenter:
         self._cache.begin(snapshot_tree_id)
         scheme = theme_scheme or current_theme_scheme()
         badges = dict(media_badges or {})
+        additional_counts = media_counts_by_container(nodes, eligible=additional_meeting_media)
         presented_nodes = clone_nodes(list(nodes))
         for pending in pending_groups:
             kind, target_id = parse_tree_list_id(pending.target_list_id)
@@ -94,6 +96,7 @@ class MeetingTreePresenter:
                 resolved,
                 scheme,
                 badges,
+                additional_counts,
             )
             for node in presented_nodes
         )
@@ -110,6 +113,7 @@ class MeetingTreePresenter:
         resolved_urls: Mapping[str, str],
         scheme: ThemeScheme,
         badges: dict[str, str],
+        additional_counts: Mapping[str, int],
     ) -> MediaTreeNodeSnapshot:
         node_id = str(node.get("id") or "")
         node_type = str(node.get("type") or "")
@@ -125,6 +129,7 @@ class MeetingTreePresenter:
                     resolved_urls,
                     scheme,
                     badges,
+                    additional_counts,
                 )
                 for child in node.get("children", [])
             )
@@ -136,6 +141,7 @@ class MeetingTreePresenter:
             title = display_meeting_section_title(node)
             collapsed = bool(node.get("collapsed", False))
             item_count = _media_count(node)
+            additional_count = additional_counts.get(node_id, 0)
             key = (
                 presented_type,
                 source_revision,
@@ -144,6 +150,7 @@ class MeetingTreePresenter:
                 scheme,
                 collapsed,
                 item_count,
+                additional_count,
                 tuple(id(child) for child in children),
             )
 
@@ -160,6 +167,7 @@ class MeetingTreePresenter:
                         "badgeBg": colors["badge"],
                         "collapsed": collapsed,
                         "itemCount": item_count,
+                        "additionalMediaCount": additional_count,
                         "canDrag": True,
                         "canEdit": True,
                         "canProject": False,

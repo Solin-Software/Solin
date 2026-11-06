@@ -4249,16 +4249,6 @@ Ihinto ang projection at subukang muli.</translation>
         <source>Rename media</source>
         <translation>I-rename ang media</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Hindi mabura ang seksyon</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Ilipat o burahin muna ang manual na idinagdag na mga subseksyon at marker.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,31 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Mga Larawan: {images} · Mga Video: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Tanggalin ang karagdagang media</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Tanggalin ang karagdagang media mula sa &quot;{name}&quot;?
+Mga media item: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Tanggalin ang &quot;{name}&quot; kasama ang media nito?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Tanggalin ang media</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Panatilihin ang media</translation>
     </message>
 </context>
 </TS>

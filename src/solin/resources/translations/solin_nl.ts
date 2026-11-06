@@ -4249,16 +4249,6 @@ Stop de projectie en probeer het opnieuw.</translation>
         <source>Rename media</source>
         <translation>Media hernoemen</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Kan de sectie niet verwijderen</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Verplaats of verwijder eerst de handmatig toegevoegde subsecties en markeringen.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,31 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Afbeeldingen: {images} · Video's: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Extra media verwijderen</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Extra media uit &quot;{name}&quot; verwijderen?
+Media-items: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>&quot;{name}&quot; en de media verwijderen?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Media verwijderen</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Media behouden</translation>
     </message>
 </context>
 </TS>

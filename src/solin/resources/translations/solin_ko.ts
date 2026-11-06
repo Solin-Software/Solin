@@ -4222,16 +4222,6 @@ Stop the projection and try again.</source>
         <source>Rename media</source>
         <translation>미디어 이름 바꾸기</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>구역을 삭제할 수 없음</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>먼저 수동으로 추가한 하위 구역과 표시를 옮기거나 삭제하십시오.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12620,6 +12610,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>이미지: {images} · 비디오: {videos} · 오디오: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>추가 미디어 삭제</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>&quot;{name}&quot;의 추가 미디어를 삭제하시겠습니까?
+미디어 항목: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>&quot;{name}&quot;과(와) 미디어를 삭제하시겠습니까?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>미디어 삭제</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>미디어 유지</translation>
     </message>
 </context>
 </TS>

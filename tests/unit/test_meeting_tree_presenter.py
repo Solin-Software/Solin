@@ -52,6 +52,30 @@ def test_meeting_presenter_uses_the_shared_snapshot_contract() -> None:
     assert media.thawed_roles()["canSetAsIdle"] is True
 
 
+def test_additional_count_changes_when_provenance_changes_without_topology_change():
+    nodes = _nodes()
+    presenter = MeetingTreePresenter()
+    initial = presenter.build("meeting", nodes, revision=1)
+    assert initial.roots[0].thawed_roles()["additionalMediaCount"] == 1
+    nodes[0]["children"][0]["meeting_generated"] = True
+    updated = presenter.build("meeting", nodes, revision=2)
+    assert updated.roots[0].thawed_roles()["itemCount"] == 1
+    assert updated.roots[0].thawed_roles()["additionalMediaCount"] == 0
+
+
+def test_pending_meeting_import_does_not_enable_additional_media_removal():
+    from solin.ui.qml.media_tree.meeting_presenter import PendingMeetingNodes
+
+    nodes = _nodes()
+    media = nodes[0]["children"].pop()
+    snapshot = MeetingTreePresenter().build(
+        "meeting", nodes, revision=1,
+        pending_groups=(PendingMeetingNodes("pending", (media,), "section:section-1"),),
+    )
+    assert snapshot.roots[0].thawed_roles()["itemCount"] == 1
+    assert snapshot.roots[0].thawed_roles()["additionalMediaCount"] == 0
+
+
 def test_meeting_presenter_counts_offline_virtual_media() -> None:
     nodes = _nodes()
     nodes[0]["children"].append(

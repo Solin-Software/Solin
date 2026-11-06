@@ -646,9 +646,9 @@ def test_removing_repeated_video_occurrence_keeps_shared_file_and_manifest_node(
         {"items": [first, second], "sections": [], "markers": []},
     )
 
-    changed = watched_folder_module.remove_item_from_manifest(
+    changed = watched_folder_module.remove_items_from_manifest(
         str(tmp_path),
-        first,
+        [first],
         remaining_items=[second],
     )
 
@@ -667,9 +667,9 @@ def test_removing_last_video_occurrence_deletes_shared_file(tmp_path):
         {"items": [item], "sections": [], "markers": []},
     )
 
-    changed = watched_folder_module.remove_item_from_manifest(
+    changed = watched_folder_module.remove_items_from_manifest(
         str(tmp_path),
-        item,
+        [item],
         remaining_items=[],
     )
 
@@ -1084,8 +1084,8 @@ def test_jwpub_whole_sync_commits_all_media_with_portable_local_references(monke
     assert {item["doc_id"] for item in playlist["items"] if not item["url"]} == {104, 990}
     unresolved = next(item for item in playlist["items"] if item["doc_id"] == 990)
     remaining = [item for item in playlist["items"] if item["id"] != unresolved["id"]]
-    assert watched_folder_module.remove_item_from_manifest(
-        str(tmp_path), unresolved, remaining_items=remaining,
+    assert watched_folder_module.remove_items_from_manifest(
+        str(tmp_path), [unresolved], remaining_items=remaining,
     )
     assert all(item["doc_id"] != 990 for item in
                watched_folder_module.load_manifest_playlist(str(tmp_path))["items"])
@@ -1253,8 +1253,8 @@ def test_linked_jwl_import_preserves_repeated_embedded_video_occurrences(
     assert len(watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]) == 2
     first, second = playlist["items"]
 
-    watched_folder_module.remove_item_from_manifest(
-        str(tmp_path), first, remaining_items=[second]
+    watched_folder_module.remove_items_from_manifest(
+        str(tmp_path), [first], remaining_items=[second]
     )
     assert len(_read_manifest(tmp_path)["processed"][source.name]["virtual_items"]) == 1
     assert Path(first["url"]).is_file()
@@ -1262,8 +1262,8 @@ def test_linked_jwl_import_preserves_repeated_embedded_video_occurrences(
         item["id"] for item in watched_folder_module.load_manifest_playlist(str(tmp_path))["items"]
     ] == [second["id"]]
 
-    watched_folder_module.remove_item_from_manifest(
-        str(tmp_path), second, remaining_items=[]
+    watched_folder_module.remove_items_from_manifest(
+        str(tmp_path), [second], remaining_items=[]
     )
     assert not Path(first["url"]).exists()
 

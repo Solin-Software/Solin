@@ -276,7 +276,7 @@ def test_playlist_widgets_use_watched_folder_playlist_store_boundary():
         "get_pending_files",
         "load_manifest_playlist",
         "local_file_availability_signature",
-        "remove_item_from_manifest",
+        "remove_items_from_manifest",
         "save_manifest_playlist",
         "scan_root",
     }
