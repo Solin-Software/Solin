@@ -1083,13 +1083,22 @@ def _release_entry(version, *, expanded=False, beta=False, installed=False):
 
 @pytest.mark.parametrize("theme", ["dark", "light"])
 @pytest.mark.parametrize("width", [360, 1000])
-def test_about_requirements_remain_visible_and_download_page_is_explicit(create_view, theme, width):
+@pytest.mark.parametrize(
+    "compatibility,requirements_text",
+    [
+        ("unverified", "Requires glibc 2.43 or later. Your version could not be detected; check before updating."),
+        ("system_too_old", "Requires glibc 2.43 or later; detected 2.38."),
+    ],
+)
+def test_about_requirements_remain_visible_and_download_page_is_explicit(
+    create_view, theme, width, compatibility, requirements_text
+):
     view = create_view(width=width, theme=theme)
     domain = view.domains["about"]
     entry = _release_entry("26.33.0")
     entry.update(
-        compatibility="unverified",
-        requirementsText="Requires glibc 2.43 or later. Your version could not be detected; check before updating.",
+        compatibility=compatibility,
+        requirementsText=requirements_text,
         html="<p>Complete notes remain available.</p>",
     )
     domain.publish(historyEntries=[entry], historyLoaded=True)
@@ -1114,7 +1123,9 @@ def test_about_requirements_remain_visible_and_download_page_is_explicit(create_
     button.forceActiveFocus()
     key_click(view.widget, Qt.Key.Key_Space)
     assert ("openLink", entry["releaseUrl"]) in domain.calls
-    assert _find(view.root, "releaseNotes_26.33.0") is not None
+    notes = _find(view.root, "releaseNotes_26.33.0")
+    assert notes is not None and notes.isVisible()
+    assert "Complete notes remain available." in notes.property("text")
     assert view.warnings == []
 
 

@@ -56,11 +56,11 @@ History renders notes without fetching embedded images or external resources;
 links open only after URL validation. The complete history remains available on
 GitHub.
 
-Each history entry shows the requirement for the current platform and
-architecture, identifying a detected version below the minimum or an unverified
-version. Neither status hides the notes. Entries with a package for the current
-platform and architecture link to the GitHub release for manual downloads;
-automatic update offers still require a compatible package.
+When a package matches the current platform and architecture, its history entry
+shows the minimum requirement, identifies a detected version below the minimum
+or an unverified version, and links to the GitHub release for manual downloads.
+Otherwise, the entry reports that no download is available. All entries retain
+their notes; automatic update offers still require a compatible package.
 
 ## Preparing a release pull request
 
