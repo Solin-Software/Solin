@@ -4222,16 +4222,6 @@ Stop the projection and try again.</source>
         <source>Rename media</source>
         <translation>重命名媒体</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>无法删除该分段</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>请先移动或删除手动添加的子分段和标记。</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12620,6 +12610,31 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>图片: {images} · 视频: {videos} · 音频: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>删除附加媒体</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>删除“{name}”中的附加媒体吗？
+媒体项目：{count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>删除“{name}”及其中的媒体吗？</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>删除媒体</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>保留媒体</translation>
     </message>
 </context>
 </TS>

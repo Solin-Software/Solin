@@ -2273,6 +2273,7 @@ Item {
         property string displayTextColor: node ? node.textColor : root.textPrimary
         property string displayBadgeBg: node ? node.badgeBg : root.hover
         property int displayItemCount: node ? node.itemCount : 0
+        property int additionalMediaCount: node ? (node.additionalMediaCount || 0) : 0
 
         Component.onCompleted: {
             dragArea.parent = sectionDragZone
@@ -2295,6 +2296,7 @@ Item {
             displayTextColor = nextNode.textColor || root.textPrimary
             displayBadgeBg = nextNode.badgeBg || root.hover
             displayItemCount = nextNode.itemCount || 0
+            additionalMediaCount = nextNode.additionalMediaCount || 0
             collapsed = nextNode.collapsed === true
         }
 
@@ -2440,7 +2442,16 @@ Item {
                             onClicked: sectionMenu.open()
                             Menu {
                                 id: sectionMenu
-                                width: sectionRoot.isSubsection ? 158 : 176
+                                objectName: "sectionMenu-" + sectionRoot.nodeId
+                                width: {
+                                    let preferredWidth = 220
+                                    for (let index = 0; index < count; ++index) {
+                                        const entry = itemAt(index)
+                                        if (entry && entry.visible)
+                                            preferredWidth = Math.max(preferredWidth, entry.implicitWidth + leftPadding + rightPadding)
+                                    }
+                                    return preferredWidth
+                                }
                                 background: MenuPanel {}
                                 MenuItem {
                                     text: sectionRoot.isSubsection
@@ -2479,6 +2490,16 @@ Item {
                                     background: MenuBg { hovered: parent.hovered }
                                 }
                                 MenuSeparator { contentItem: Rectangle { implicitHeight: 1; color: root.borderStrong } }
+                                MenuItem {
+                                    objectName: "removeAdditionalMedia-" + sectionRoot.nodeId
+                                    text: qsTranslate("MediaRemoval", "Delete additional media")
+                                    enabled: sectionRoot.additionalMediaCount > 0
+                                    icon.source: root.picon("trash", 13, root.iconHex(enabled ? root.danger : root.textMuted))
+                                    onTriggered: if (root.hasController) root.playlistController.removeAdditionalMedia(
+                                        (sectionRoot.isSubsection ? "subsection:" : "section:") + sectionRoot.nodeId)
+                                    contentItem: MenuLabel { label: parent.text; iconSrc: parent.icon.source; danger: parent.enabled; active: parent.enabled }
+                                    background: MenuBg { hovered: parent.hovered && parent.enabled; danger: true }
+                                }
                                 MenuItem {
                                     text: sectionRoot.isSubsection
                                           ? qsTranslate("_PlaylistEditView", "Delete subsection")
@@ -2618,6 +2639,7 @@ Item {
         property string label: ""
         property string iconSrc: ""
         property bool danger: false
+        property bool active: true
         spacing: 8
         anchors.leftMargin: 8
         Image {
@@ -2628,7 +2650,7 @@ Item {
         Text {
             Layout.fillWidth: true
             text: label
-            color: danger ? root.danger : root.textSecondary
+            color: !active ? root.textMuted : danger ? root.danger : root.textSecondary
             font.pixelSize: 12
         }
     }

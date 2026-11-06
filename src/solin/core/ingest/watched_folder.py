@@ -422,60 +422,61 @@ def _manifest_resource_key(url: str, folder: Path) -> str:
     return os.path.normcase(os.path.normpath(os.path.abspath(resolved)))
 
 
-def remove_item_from_manifest(
+def remove_items_from_manifest(
     subfolder_path: str,
-    item: Mapping[str, Any],
+    items: Iterable[Mapping[str, Any]],
     *,
     remaining_items: Iterable[Mapping[str, Any]] = (),
 ) -> bool:
-    """
-    Remove one playlist occurrence from a watched folder's manifest. Delete
-    its physical file only when no remaining occurrence references the media
-    and the file resides inside the watched folder.
-    
-    If the item is a virtual item (e.g. from a `.jwlplaylist`), it is removed
-    specifically from the `virtual_items` list of its source file, ensuring
-    it doesn't reappear unless the user re-adds the source file.
-
-    Returns True if something was actually cleaned up.
-    """
+    """Remove occurrences in one manifest edit and reconcile shared resources once."""
+    removed = tuple(items)
+    if not removed:
+        return False
     sub = Path(subfolder_path)
 
     def resource_key(candidate: Mapping[str, Any]) -> str:
         url = str(candidate.get("url") or "")
         return portable_resource_key(url, sub) if url else ""
 
+    item_ids = {str(item["id"]) for item in removed if item.get("id")}
+    anonymous_keys = {resource_key(item) for item in removed if not item.get("id")}
+    keys = {resource_key(item) for item in removed} - {""}
     service = playlist_sync(sub)
     with service.lock:
         playlist = load_manifest_playlist(subfolder_path)
-        item_id = str(item.get("id") or "")
-        key = resource_key(item)
         before = playlist["items"]
+        existing_ids = {str(item.get("id") or "") for item in before}
         playlist["items"] = [candidate for candidate in before if (
-            str(candidate.get("id") or "") != item_id if item_id
-            else resource_key(candidate) != key
+            str(candidate.get("id") or "") not in item_ids
+            and resource_key(candidate) not in anonymous_keys
         )]
         changed = len(playlist["items"]) != len(before)
         snapshot = service.save(playlist)
-        # A stale UI occurrence can already have been deleted remotely. Persist
-        # resource suppression as well so remaining bytes cannot reimport it.
-        if not changed and key:
-            desired = dict(snapshot.entities)
-            deletion_id, deletion = suppression_record(item_id, key)
-            desired[deletion_id] = deletion
+        # Persist suppression for stale UI occurrences as well, so remaining
+        # source bytes cannot turn a completed deletion into a fresh import.
+        desired = dict(snapshot.entities)
+        for item in removed:
+            item_id = str(item.get("id") or "")
+            key = resource_key(item)
+            if item_id not in existing_ids and key:
+                deletion_id, deletion = suppression_record(item_id, key)
+                desired[deletion_id] = deletion
+        if desired != snapshot.entities:
             snapshot = service.replica.commit(snapshot, desired)
-        if item.get("_virtual") and item.get("_source"):
-            source = str(item["_source"])
+        virtual_sources = {
+            str(item["_source"]) for item in removed
+            if item.get("_virtual") and item.get("_source")
+        }
+        for source in virtual_sources:
             entry = service.manifest(snapshot)["processed"].get(source)
             if entry:
                 entry["virtual_items"] = [candidate for candidate in entry.get("virtual_items", [])
-                                          if str(candidate.get("id") or "") != item_id]
+                                          if str(candidate.get("id") or "") not in item_ids]
                 snapshot = service.update_processed(snapshot, source, entry)
-        # Preserve references inserted locally but not yet published by the UI.
         remaining_keys = {resource_key(other) for other in remaining_items}
-        if key not in remaining_keys:
+        if keys - remaining_keys:
             service.reconcile_resources(snapshot)
-        return changed or bool(key)
+        return changed or bool(keys)
 
 
 def _document_cache_key(doc_path: str | Path) -> str:

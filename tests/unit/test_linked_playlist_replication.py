@@ -11,7 +11,7 @@ import pytest
 from solin.core.ingest.manifest import MANIFEST_REPOSITORY
 from solin.core.ingest.watched_folder import (
     load_manifest_playlist,
-    remove_item_from_manifest,
+    remove_items_from_manifest,
     save_manifest_playlist,
     stage_manifest_playlist,
     WatchedFolderWatcher,
@@ -25,12 +25,33 @@ def test_stale_playlist_edit_cannot_resurrect_deleted_occurrence(tmp_path):
         {"id": "slide", "url": str(image), "type": "image", "title": "Slide"},
     ]})
     stale = copy.deepcopy(load_manifest_playlist(str(tmp_path)))
-    remove_item_from_manifest(str(tmp_path), stale["items"][0])
+    remove_items_from_manifest(str(tmp_path), [stale["items"][0]])
     stale["sections"] = [{"id": "new-section", "title": "Other edit"}]
     save_manifest_playlist(str(tmp_path), stale)
     loaded = load_manifest_playlist(str(tmp_path))
     assert loaded["items"] == []
     assert [section["id"] for section in loaded["sections"]] == ["new-section"]
+
+
+def test_bulk_removal_preserves_shared_survivors_and_cannot_be_resurrected(tmp_path):
+    shared = tmp_path / "shared.mp4"
+    removed = tmp_path / "removed.jpg"
+    shared.write_bytes(b"shared")
+    removed.write_bytes(b"removed")
+    save_manifest_playlist(str(tmp_path), {"items": [
+        {"id": "shared-a", "url": str(shared), "type": "video"},
+        {"id": "shared-b", "url": str(shared), "type": "video"},
+        {"id": "removed", "url": str(removed), "type": "image"},
+    ]})
+    stale = copy.deepcopy(load_manifest_playlist(str(tmp_path)))
+    first, survivor, last = stale["items"]
+    assert remove_items_from_manifest(str(tmp_path), [first, last], remaining_items=[survivor])
+    assert shared.is_file()
+    assert not removed.exists()
+    assert [item["id"] for item in load_manifest_playlist(str(tmp_path))["items"]] == ["shared-b"]
+    stale["sections"] = [{"id": "section", "name": "Changed elsewhere"}]
+    save_manifest_playlist(str(tmp_path), stale)
+    assert [item["id"] for item in load_manifest_playlist(str(tmp_path))["items"]] == ["shared-b"]
 
 
 def test_metadata_before_source_preserves_referenced_converted_output(tmp_path):
@@ -66,7 +87,7 @@ def test_failed_physical_removal_does_not_reimport_item(tmp_path, monkeypatch):
         return original(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, "unlink", locked)
-    remove_item_from_manifest(str(tmp_path), item)
+    remove_items_from_manifest(str(tmp_path), [item])
     assert load_manifest_playlist(str(tmp_path))["items"] == []
 
 
@@ -283,7 +304,7 @@ def test_deleted_page_does_not_return_when_source_is_reconverted(tmp_path):
     service = playlist_sync(tmp_path)
     service.update_processed(service.read(), "source.pdf", {"outputs": ["old.jpg"]})
     item = load_manifest_playlist(str(tmp_path))["items"][0]
-    remove_item_from_manifest(str(tmp_path), item)
+    remove_items_from_manifest(str(tmp_path), [item])
     (cache / "new.jpg").write_bytes(b"new page")
     service.update_processed(service.read(), "source.pdf", {"outputs": ["new.jpg"]})
     assert load_manifest_playlist(str(tmp_path))["items"] == []

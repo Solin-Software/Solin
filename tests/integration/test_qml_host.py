@@ -398,6 +398,11 @@ class _PlaylistTreeControllerProbe(QObject):
         self.idle_requests: list[str] = []
         self.moves: list[tuple[str, str, int, int]] = []
         self.collapsed: list[str] = []
+        self.media_removals: list[str] = []
+
+    @Slot(str)
+    def removeAdditionalMedia(self, scope_id: str) -> None:  # noqa: N802
+        self.media_removals.append(scope_id)
 
     @Slot(str)
     def projectItem(self, item_id: str) -> None:  # noqa: N802 - QML API
@@ -2099,6 +2104,59 @@ def test_playlist_tree_media_menu_forwards_add_to_destination(playlist_tree_host
         assert controller.destination_requests == ["media-1"]
     finally:
         _dispose_qml_host(widget)
+
+
+@pytest.mark.parametrize("node_type", ["section", "subsection"])
+def test_additional_media_menu_tracks_snapshot_count_and_forwards_scope(
+    playlist_tree_host, node_type,
+) -> None:
+    section = {
+        "id": "scope", "type": node_type, "title": "Media scope",
+        "collapsed": False, "itemCount": 1, "additionalMediaCount": 1,
+        "children": [_playlist_media_node("media-1", "Additional")],
+    }
+    nodes = [section] if node_type == "section" else [{
+        "id": "parent", "type": "section", "title": "Parent",
+        "collapsed": False, "itemCount": 1, "children": [section],
+    }]
+    widget, controller, model, _protection = playlist_tree_host(nodes)
+    root = widget.rootObject()
+    action = root.findChild(QObject, "removeAdditionalMedia-scope")
+    assert action is not None
+    assert action.property("enabled") is True
+    menu = root.findChild(QObject, "sectionMenu-scope")
+    assert menu is not None
+    assert QMetaObject.invokeMethod(menu, "open")
+    wait_until(lambda: menu.property("visible"), description="additional media menu")
+    assert menu.property("width") >= action.property("implicitWidth")
+    assert QMetaObject.invokeMethod(action, "triggered")
+    assert controller.media_removals == [f"{node_type}:scope"]
+    section["additionalMediaCount"] = 0
+    model.publish_snapshot(MediaTreeSnapshot.create("qml-test", 2, tuple(map(_snapshot_node, nodes))))
+    wait_until(lambda: not action.property("enabled"), description="empty additional media scope")
+    assert widget.errors() == []
+    QMetaObject.invokeMethod(menu, "close")
+
+
+def test_additional_media_menu_fits_long_translations(playlist_tree_host, compiled_translation_catalogs):
+    translator = QTranslator()
+    assert translator.load(str(compiled_translation_catalogs / "solin_ru.qm"))
+    assert _APP.installTranslator(translator)
+    try:
+        widget, _controller, _model, _protection = playlist_tree_host([{
+            "id": "scope", "type": "section", "title": "Scope",
+            "collapsed": False, "itemCount": 0, "additionalMediaCount": 0, "children": [],
+        }])
+        root = widget.rootObject()
+        action = root.findChild(QObject, "removeAdditionalMedia-scope")
+        menu = root.findChild(QObject, "sectionMenu-scope")
+        assert QMetaObject.invokeMethod(menu, "open")
+        wait_until(lambda: menu.property("visible"), description="translated menu")
+        assert menu.property("width") >= action.property("implicitWidth")
+        assert action.property("enabled") is False
+        QMetaObject.invokeMethod(menu, "close")
+    finally:
+        assert _APP.removeTranslator(translator)
 
 
 def test_playlist_tree_media_menu_forwards_set_as_idle(playlist_tree_host) -> None:

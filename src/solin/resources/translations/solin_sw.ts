@@ -4249,16 +4249,6 @@ Acha kuonyesha na ujaribu tena.</translation>
         <source>Rename media</source>
         <translation>Badili jina la media</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Haiwezi kufuta sehemu</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Hamisha au futa kwanza sehemu ndogo na alama zilizoongezwa kwa mkono.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,31 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Picha: {images} · Video: {videos} · Sauti: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Futa midia ya ziada</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Futa midia ya ziada kutoka &quot;{name}&quot;?
+Vipengee vya midia: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Futa &quot;{name}&quot; pamoja na midia yake?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Futa midia</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Hifadhi midia</translation>
     </message>
 </context>
 </TS>

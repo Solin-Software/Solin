@@ -30,7 +30,7 @@ from solin.core.ingest.watched_folder import (
     WatchedFolderSyncThread,
     get_pending_files,
     load_manifest_playlist,
-    remove_item_from_manifest,
+    remove_items_from_manifest,
     save_manifest_playlist,
     stage_manifest_playlist,
     scan_root,
@@ -147,19 +147,20 @@ class WatchedFolderPlaylistStore:
         self._run_claimed(child_folder_resource_claim(folder_path), delete)
         self._publish_changed()
 
-    def remove_item(
+    def remove_items(
         self,
         folder_path: str,
-        item: dict[str, Any],
+        items: Iterable[dict[str, Any]],
         *,
         remaining_items: Iterable[dict[str, Any]] = (),
     ) -> bool:
+        removed_snapshot = tuple(items)
         remaining_snapshot = tuple(remaining_items)
         removed = self._run_claimed(
             child_folder_resource_claim(folder_path),
-            lambda: remove_item_from_manifest(
+            lambda: remove_items_from_manifest(
                 folder_path,
-                item,
+                removed_snapshot,
                 remaining_items=remaining_snapshot,
             ),
         )

@@ -62,6 +62,12 @@ from ...core.media.operations import (
     MediaOperationSpec,
     MediaOperationState,
 )
+from ...core.media.removal import (
+    MediaRemovalResult, select_media_ids, without_media,
+)
+from ...ui.dialogs.media_removal import (
+    ContainerRemovalChoice, confirm_additional_media_removal, confirm_container_removal,
+)
 from ...core.media.playback_request import MediaTrim
 from ...core.foundation.exception_logging import log_ignored_exception
 from ...core.foundation.resource_keys import (
@@ -109,6 +115,7 @@ from ...core.meetings.canonical_restore import (
     restore_canonical_tree,
 )
 from ...core.meetings.media_nodes import (
+    additional_meeting_media,
     create_jw_media_node,
     create_manual_media_node,
     create_playlist_media_node,
@@ -316,14 +323,6 @@ _RESTORE_CONFIRM_SOURCE = QT_TRANSLATE_NOOP(
 _RESTORE_TITLE_SOURCE = QT_TRANSLATE_NOOP(
     "MeetingCanonicalRestore",
     "Restore official meeting content",
-)
-_CANNOT_DELETE_OFFICIAL_SECTION_SOURCE = QT_TRANSLATE_NOOP(
-    "PlaylistEditView",
-    "Cannot delete section",
-)
-_MOVE_MANUAL_STRUCTURE_SOURCE = QT_TRANSLATE_NOOP(
-    "PlaylistEditView",
-    "Move or delete the manually added subsections and markers first.",
 )
 
 
@@ -3439,33 +3438,101 @@ class MeetingTreeController(QObject):
             return
         if self._tree_session.remove_pending_node(item_id):
             return
-        node = self._find_node(item_id)
-        if not node:
+        MeetingTreeController._remove_media_ids(self, {item_id})
+
+    def remove_additional_media(self, scope_id: str = "root") -> MediaRemovalResult:
+        """Remove additional committed occurrences, without confirmation UI."""
+        return MeetingTreeController._remove_media_ids(self, set(select_media_ids(
+            self._nodes, scope_id, eligible=additional_meeting_media,
+        )))
+
+    @Slot(str)
+    def removeAdditionalMedia(self, scope_id: str) -> None:
+        kind, _, node_id = scope_id.partition(":")
+        node = self._find_node(node_id)
+        if kind not in {"section", "subsection"} or not node or node.get("type") != kind:
             return
-        self._cancel_media_info_requests_for_item(item_id)
-        MeetingTreeController._remember_hidden_canonical_media(self, node)
-        # Official meeting media is recoverable canonical content. Its linked
-        # copy must remain available. A manual item only owns a source file when
-        # that file was imported directly by the meeting-folder workflow.
-        linked_source = node.get("linked_folder_source", "")
-        if linked_source and not node.get("meeting_generated"):
-            file_path = self._url_for_node(node)
-            if MeetingTreeController._is_direct_meeting_folder_media(
-                self,
-                item_id,
-                file_path,
-            ):
+        selected = set(select_media_ids(
+            self._nodes, scope_id, eligible=additional_meeting_media,
+        ))
+        if not selected:
+            return
+        context = (self._tree_key, self._tree_session.generation)
+        if not confirm_additional_media_removal(
+            self.parent(), display_meeting_section_title(node), len(selected),
+        ):
+            return
+        if context != (self._tree_key, self._tree_session.generation):
+            return
+        selected.intersection_update(select_media_ids(
+            self._nodes, scope_id, eligible=additional_meeting_media,
+        ))
+        MeetingTreeController._remove_media_ids(self, selected)
+
+    def _remove_media_ids(
+        self, item_ids: set[str], *, container_id: str = "",
+    ) -> MediaRemovalResult:
+        """Commit one logical edit before scheduling owned-file cleanup."""
+        if getattr(self, "_folder_mutation_pending", False):
+            return MediaRemovalResult(blocked_ids=tuple(sorted(item_ids)))
+        selected = [
+            node for node in iter_nodes(self._nodes)
+            if node.get("type") == "media" and node.get("id") in item_ids
+        ]
+        removed_ids = {str(node["id"]) for node in selected}
+        container = self._find_node(container_id) if container_id else None
+        if not selected and container is None:
+            return MediaRemovalResult(missing_ids=tuple(sorted(item_ids)))
+        previous_nodes = self._nodes
+        previous_deleted = set(self._deleted_source_keys)
+        previous_linked = dict(self._linked_folder_files)
+        previous_imports = copy.deepcopy(self._meeting_folder_imports)
+        previous_hidden = copy.deepcopy(getattr(self, "_hidden_canonical_media", {}))
+        cleanup = []
+        for node in selected:
+            item_id = str(node["id"])
+            MeetingTreeController._remember_hidden_canonical_media(self, node)
+            linked_source = node.get("linked_folder_source", "")
+            if linked_source and not node.get("meeting_generated"):
+                file_path = self._url_for_node(node)
+                if MeetingTreeController._is_direct_meeting_folder_media(self, item_id, file_path):
+                    cleanup.append((node, file_path, linked_source))
+                self._linked_folder_files.pop(file_path, None)
+                self._cleanup_meeting_folder_import_for_removed_node(
+                    item_id, file_path, source_removed=False,
+                )
+            self._remember_deleted_sources(node, include_media=True)
+        self._nodes = without_media(self._nodes, removed_ids)
+        if container is not None:
+            self._remember_deleted_sources(container, include_media=False)
+            surviving = self._find_node(container_id)
+            replace_tree_node(self._nodes, container_id, media_descendants(surviving))
+        saved = False
+        try:
+            saved = self._save()
+        finally:
+            if not saved:
+                self._nodes = previous_nodes
+                self._deleted_source_keys = previous_deleted
+                self._linked_folder_files = previous_linked
+                self._meeting_folder_imports = previous_imports
+                self._hidden_canonical_media = previous_hidden
+                MeetingTreeController._refresh_canonical_restore_state(self)
+        if not saved:
+            return MediaRemovalResult(failed_ids=tuple(node["id"] for node in selected))
+        for node in selected:
+            self._cancel_media_info_requests_for_item(str(node["id"]))
+        self._emit_section_counts()
+        scheduled_sources = set()
+        for node, file_path, linked_source in cleanup:
+            source = os.path.normcase(os.path.normpath(file_path))
+            if source not in scheduled_sources:
+                scheduled_sources.add(source)
                 self._queue_linked_media_removal(node, file_path, linked_source)
-                return
-            self._linked_folder_files.pop(file_path, None)
-            self._cleanup_meeting_folder_import_for_removed_node(
-                item_id,
-                file_path,
-                source_removed=False,
-            )
-        self._remember_deleted_sources(node, include_media=True)
-        if self._replace_node(item_id, []):
-            self._save_and_emit_replace(item_id, [])
+        return MediaRemovalResult(
+            removed_ids=tuple(str(node["id"]) for node in selected),
+            missing_ids=tuple(sorted(item_ids - removed_ids)),
+        )
 
     def _queue_linked_media_removal(
         self,
@@ -3477,15 +3544,7 @@ class MeetingTreeController(QObject):
         owner_id = self._tree_session.owner_id
         if not item_id or not owner_id:
             return
-        # The durable logical deletion is accepted before touching source bytes.
-        self._linked_folder_files.pop(file_path, None)
-        self._cleanup_meeting_folder_import_for_removed_node(
-            item_id, file_path, source_removed=False,
-        )
-        self._remember_deleted_sources(node, include_media=True)
-        if not self._replace_node(item_id, []):
-            return
-        self._save_and_emit_replace(item_id, [])
+        # Logical removal has already been accepted by the snapshot writer.
         referenced = any(
             other.get("type") == "media" and same_local_source(self._url_for_node(other), file_path)
             for other in iter_nodes(self._nodes)
@@ -3694,37 +3753,26 @@ class MeetingTreeController(QObject):
         node = self._find_node(section_id)
         if not node or node.get("type") not in ("section", "subsection"):
             return
-        has_manual_structure = any(
-            not child.get("meeting_generated") and child.get("type") != "media"
-            for child in iter_nodes(node.get("children", []))
+        scope_id = f"{node['type']}:{section_id}"
+        selected = set(select_media_ids(self._nodes, scope_id))
+        context = (self._tree_key, self._tree_session.generation)
+        choice = confirm_container_removal(
+            self.parent(), display_meeting_section_title(node),
+            subsection=node.get("type") == "subsection",
         )
-        if node.get("meeting_generated") and has_manual_structure:
-            QMessageBox.warning(
-                self.parent(),
-                QCoreApplication.translate(
-                    _PLAYLIST_EDIT_CONTEXT,
-                    _CANNOT_DELETE_OFFICIAL_SECTION_SOURCE,
-                ),
-                QCoreApplication.translate(
-                    _PLAYLIST_EDIT_CONTEXT,
-                    _MOVE_MANUAL_STRUCTURE_SOURCE,
-                ),
-            )
+        if choice is ContainerRemovalChoice.CANCEL:
             return
-        reply = QMessageBox.question(
-            self.parent(),
-            QCoreApplication.translate(_PLAYLIST_EDIT_CONTEXT, "Delete section"),
-            QCoreApplication.translate(
-                _PLAYLIST_EDIT_CONTEXT, 'Delete section "{name}"?\nItems inside will be kept.'
-            ).replace("{name}", display_meeting_section_title(node)),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        if context != (self._tree_key, self._tree_session.generation):
+            return
+        node = self._find_node(section_id)
+        if not node or node.get("type") not in ("section", "subsection"):
+            return
+        selected.intersection_update(select_media_ids(self._nodes, scope_id))
+        MeetingTreeController._remove_media_ids(
+            self,
+            selected if choice is ContainerRemovalChoice.DELETE_MEDIA else set(),
+            container_id=section_id,
         )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        self._remember_deleted_sources(node, include_media=False)
-        replacement = self._media_descendants(node)
-        if self._replace_node(section_id, replacement):
-            self._save_and_emit_replace(section_id, replacement)
 
     @Slot(str)
     def recolorSection(self, section_id: str):
@@ -4531,9 +4579,6 @@ class MeetingTreeController(QObject):
 
     def _replace_node(self, node_id: str, replacement: list[Node]) -> bool:
         return replace_tree_node(self._nodes, node_id, replacement)
-
-    def _media_descendants(self, node: Node) -> list[Node]:
-        return media_descendants(node)
 
     def _save_and_emit_replace(self, node_id: str, replacement: list[Node]) -> None:
         self._save()

@@ -60,6 +60,7 @@ class PlaylistEditBridge(QObject):
 
     renameSectionSignal  = Signal(str)          # section_id
     deleteSectionSignal  = Signal(str)          # section_id
+    removeAdditionalMediaSignal = Signal(str)  # scoped tree list ID
     recolorSectionSignal = Signal(str)          # section_id
 
     collapseSectionSignal = Signal(str)         # section_id
@@ -318,6 +319,10 @@ class PlaylistEditBridge(QObject):
     @Slot(str)
     def deleteSection(self, section_id: str):
         self.deleteSectionSignal.emit(section_id)
+
+    @Slot(str)
+    def removeAdditionalMedia(self, scope_id: str):
+        self.removeAdditionalMediaSignal.emit(scope_id)
 
     @Slot(str)
     def recolorSection(self, section_id: str):
