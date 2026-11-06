@@ -54,6 +54,9 @@ ColumnLayout {
             required property string html
             required property string language
             required property bool expanded
+            required property string compatibility
+            required property string requirementsText
+            required property string releaseUrl
             Layout.fillWidth: true
             implicitHeight: contentColumn.implicitHeight
             objectName: "release_" + version
@@ -88,7 +91,8 @@ ColumnLayout {
                     Accessible.name: release.version
                         + (release.isBeta ? " · " + qsTr("Beta") : "")
                         + (release.isInstalled ? " · " + qsTr("Installed") : "")
-                    Accessible.description: release.expanded ? qsTr("Collapse") : qsTr("Expand")
+                    Accessible.description: release.requirementsText + " · "
+                        + (release.expanded ? qsTr("Collapse") : qsTr("Expand"))
                     onClicked: root.domain.setReleaseExpanded(release.version, !release.expanded)
                     Keys.onLeftPressed: root.domain.setReleaseExpanded(release.version, false)
                     Keys.onRightPressed: root.domain.setReleaseExpanded(release.version, true)
@@ -142,6 +146,17 @@ ColumnLayout {
                                 }
                             }
                         }
+                        Text {
+                            objectName: "releaseRequirements_" + release.version
+                            Layout.fillWidth: true
+                            text: release.requirementsText
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                            font.pixelSize: 12
+                            color: release.compatibility === "system_too_old" ? appTheme.dangerText
+                                : release.compatibility === "compatible" ? appTheme.textSecondary
+                                : appTheme.textPrimary
+                        }
                     }
                     background: Rectangle {
                         radius: 11
@@ -178,29 +193,40 @@ ColumnLayout {
                         width: Math.max(0, release.width - 24)
                         // Keep the notes alive until the closing animation ends.
                         active: release.expanded || bodyClip.animatedHeight > 0
-                        sourceComponent: TextEdit {
-                            id: notes
-                            objectName: "releaseNotes_" + release.version
-                            readOnly: true
-                            selectByMouse: true
-                            activeFocusOnTab: release.expanded && visible
-                            textFormat: TextEdit.RichText
-                            text: "<style>a { color: " + appTheme.accent + "; }</style>" + release.html
-                            wrapMode: TextEdit.Wrap
-                            color: appTheme.textPrimary
-                            selectionColor: appTheme.accent
-                            selectedTextColor: appTheme.textOnAccent
-                            font.pixelSize: 14
-                            Accessible.name: qsTr("Release notes") + " · " + release.version
-                            onLinkActivated: link => root.domain.openLink(link)
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: -4
-                                z: -1
-                                color: "transparent"
-                                radius: 4
-                                border.width: notes.activeFocus ? 2 : 0
-                                border.color: appTheme.accent
+                        sourceComponent: ColumnLayout {
+                            spacing: 12
+                            TextEdit {
+                                id: notes
+                                Layout.fillWidth: true
+                                objectName: "releaseNotes_" + release.version
+                                readOnly: true
+                                selectByMouse: true
+                                activeFocusOnTab: release.expanded && visible
+                                textFormat: TextEdit.RichText
+                                text: "<style>a { color: " + appTheme.accent + "; }</style>" + release.html
+                                wrapMode: TextEdit.Wrap
+                                color: appTheme.textPrimary
+                                selectionColor: appTheme.accent
+                                selectedTextColor: appTheme.textOnAccent
+                                font.pixelSize: 14
+                                Accessible.name: qsTr("Release notes") + " · " + release.version
+                                onLinkActivated: link => root.domain.openLink(link)
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    z: -1
+                                    color: "transparent"
+                                    radius: 4
+                                    border.width: notes.activeFocus ? 2 : 0
+                                    border.color: appTheme.accent
+                                }
+                            }
+                            SettingsButton {
+                                objectName: "releaseDownload_" + release.version
+                                visible: release.compatibility !== "unavailable"
+                                text: qsTr("Open download page")
+                                activeFocusOnTab: release.expanded && visible
+                                onClicked: root.domain.openLink(release.releaseUrl)
                             }
                         }
                     }

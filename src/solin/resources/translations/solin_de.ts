@@ -8782,6 +8782,31 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Sendet Tastenkombinationen bei ausgewählten Ereignissen in der Anwendung.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Erfordert {system} {minimum} oder neuer.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Erfordert {system} {minimum} oder neuer; erkannt wurde {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Erfordert {system} {minimum} oder neuer. Ihre Version konnte nicht erkannt werden; prüfen Sie sie vor der Aktualisierung.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Für dieses System ist kein Download verfügbar.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Download-Seite öffnen</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

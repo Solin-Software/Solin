@@ -262,6 +262,7 @@ def _build_main_window_service_factories(
     def create_about_settings(parent):
         from solin.core.foundation.constants import APP_VERSION
         from solin.core.remote.github_updates import GitHubReleases
+        from solin.core.remote.release_target import current_release_target
         from solin.ui.qml.settings.about import AboutSettings
 
         return AboutSettings(
@@ -271,6 +272,7 @@ def _build_main_window_service_factories(
             ),
             language_code_provider=lambda: lang_manager.current_code,
             installed_version=APP_VERSION,
+            target_provider=current_release_target,
             parent=parent,
         )
 

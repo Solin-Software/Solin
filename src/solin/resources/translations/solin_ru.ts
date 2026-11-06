@@ -8813,6 +8813,31 @@ Add content, a camera, or another scene.</source>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Отправляет сочетания клавиш при наступлении выбранных событий приложения.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Требуется {system} {minimum} или более поздняя версия.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Требуется {system} {minimum} или более поздняя версия; обнаружена версия {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Требуется {system} {minimum} или более поздняя версия. Не удалось определить вашу версию; проверьте её перед обновлением.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Для этой системы нет доступных загрузок.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Открыть страницу загрузки</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

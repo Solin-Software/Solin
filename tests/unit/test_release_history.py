@@ -152,6 +152,19 @@ def test_history_ignores_current_version_and_platform_eligibility(repository, tm
     assert versions(client.history()) == ["26.31.0"]
 
 
+def test_history_retains_each_releases_assets_across_cached_continuations(repository, tmp_path):
+    for value, minimum in (("26.32.0", "2.38"), ("26.33.0", "2.43")):
+        manifest = repository.add(value)
+        next(asset for asset in manifest["assets"] if asset["platform"] == "linux")["minimum_os"] = minimum
+    first = GitHubReleases(tmp_path).history(page_size=1)
+    second = GitHubReleases(tmp_path).history(cursor=first.next_cursor, page_size=1)
+    for page, minimum in ((first, "2.43"), (second, "2.38")):
+        entry, = page.items
+        assert len(entry.assets) == 4
+        assert next(asset for asset in entry.assets if asset.platform == "linux").minimum_os == minimum
+        assert entry.markdown and entry.language == "en"
+
+
 @pytest.mark.parametrize("first", ["history", "discover"])
 def test_update_and_history_share_persisted_validated_manifests(repository, tmp_path, first):
     repository.add("26.32.0")

@@ -8750,6 +8750,31 @@ Add content, a camera, or another scene.</source>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>選択したアプリのイベントが発生したときにキーボードショートカットを送信します。</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>{system} {minimum}以降が必要です。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>{system} {minimum}以降が必要です。検出されたバージョン: {current}。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>{system} {minimum}以降が必要です。バージョンを検出できませんでした。更新前に確認してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>このシステム向けのダウンロードはありません。</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>ダウンロードページを開く</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

@@ -1076,7 +1076,63 @@ def test_meeting_time_picker_applies_clock_selection(create_view):
 def _release_entry(version, *, expanded=False, beta=False, installed=False):
     return dict(version=version, isBeta=beta, isInstalled=installed,
                 html="<h2>Changes</h2>" + "<p>Readable release notes with wrapping and selection.</p>" * 24,
-                language="en", expanded=expanded)
+                language="en", expanded=expanded, compatibility="compatible",
+                requirementsText="Requires glibc 2.43 or later.",
+                releaseUrl=f"https://github.com/Solin-Software/Solin/releases/tag/{version}")
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+@pytest.mark.parametrize("width", [360, 1000])
+def test_about_requirements_remain_visible_and_download_page_is_explicit(create_view, theme, width):
+    view = create_view(width=width, theme=theme)
+    domain = view.domains["about"]
+    entry = _release_entry("26.33.0")
+    entry.update(
+        compatibility="unverified",
+        requirementsText="Requires glibc 2.43 or later. Your version could not be detected; check before updating.",
+        html="<p>Complete notes remain available.</p>",
+    )
+    domain.publish(historyEntries=[entry], historyLoaded=True)
+    view.navigation.openSection("about", "", "")
+    _settle(view)
+    requirements = _find(view.root, "releaseRequirements_26.33.0")
+    assert requirements.isVisible()
+    assert requirements.property("text") == entry["requirementsText"]
+    assert requirements.height() >= requirements.property("contentHeight")
+    assert _find(view.root, "releaseNotes_26.33.0") is None
+    assert not any(call[0] == "openLink" for call in domain.calls)
+    left = requirements.mapToItem(view.root, QPointF(0, 0)).x()
+    assert left >= 0 and left + requirements.width() <= width
+
+    heading = _find(view.root, "releaseHeading_26.33.0")
+    heading.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Right)
+    _wait_until(lambda: _expanded_body_settled(_find(view.root, "releaseBody_26.33.0")))
+    _settle(view)
+    button = _find(view.root, "releaseDownload_26.33.0")
+    assert button is not None and button.isVisible()
+    button.forceActiveFocus()
+    key_click(view.widget, Qt.Key.Key_Space)
+    assert ("openLink", entry["releaseUrl"]) in domain.calls
+    assert _find(view.root, "releaseNotes_26.33.0") is not None
+    assert view.warnings == []
+
+
+def test_about_unavailable_package_keeps_notes_without_offering_a_download(create_view):
+    view = create_view(width=360)
+    entry = _release_entry("26.33.0", expanded=True)
+    entry.update(compatibility="unavailable", requirementsText="No download is available for this system.",
+                 html="<p>Release notes remain readable.</p>")
+    domain = view.domains["about"]
+    domain.publish(historyEntries=[entry], historyLoaded=True)
+    view.navigation.openSection("about", "", "")
+    _wait_until(lambda: _expanded_body_settled(_find(view.root, "releaseBody_26.33.0")))
+    _settle(view)
+    assert _find(view.root, "releaseNotes_26.33.0").isVisible()
+    assert _find(view.root, "releaseRequirements_26.33.0").isVisible()
+    assert not _find(view.root, "releaseDownload_26.33.0").isVisible()
+    assert not any(call[0] == "openLink" for call in domain.calls)
+    assert view.warnings == []
 
 
 @pytest.mark.parametrize("theme", ["dark", "light"])

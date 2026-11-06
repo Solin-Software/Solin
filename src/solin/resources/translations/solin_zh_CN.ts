@@ -8750,6 +8750,31 @@ Add content, a camera, or another scene.</source>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>在所选应用事件发生时发送键盘快捷键。</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>需要 {system} {minimum} 或更高版本。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>需要 {system} {minimum} 或更高版本；检测到的版本：{current}。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>需要 {system} {minimum} 或更高版本。无法检测您的版本；请在更新前检查。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>没有适用于此系统的下载。</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>打开下载页面</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

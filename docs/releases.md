@@ -56,6 +56,12 @@ History renders notes without fetching embedded images or external resources;
 links open only after URL validation. The complete history remains available on
 GitHub.
 
+Each history entry shows the requirement for the current platform and
+architecture, identifying a detected version below the minimum or an unverified
+version. Neither status hides the notes. Entries with a package for the current
+platform and architecture link to the GitHub release for manual downloads;
+automatic update offers still require a compatible package.
+
 ## Preparing a release pull request
 
 Release preparation runs from a clean checkout of `main` with one explicit

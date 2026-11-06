@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import platform
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from threading import Event
@@ -13,6 +11,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from solin.core.foundation.constants import APP_VERSION
 from solin.core.releases.channel import UpdateChannel
 from solin.core.remote.github_updates import GitHubReleases
+from solin.core.remote.release_target import current_release_target
 from solin.core.remote.update_policy import UpdateInfo, evaluate_update
 
 
@@ -47,26 +46,14 @@ class UpdateWorker(QThread):
             manifests = GitHubReleases(self.cache_directory, self.cancelled).discover(
                 APP_VERSION, self.channel
             )
-            operating_system = {"win32": "windows", "darwin": "macos"}.get(sys.platform, "linux")
-            architecture = {"amd64": "x86_64", "aarch64": "arm64"}.get(
-                platform.machine().lower(), platform.machine().lower()
-            )
-            os_version = (
-                platform.mac_ver()[0]
-                if sys.platform == "darwin"
-                else platform.version()
-                if sys.platform == "win32"
-                else platform.libc_ver()[1]
-                if platform.libc_ver()[0] == "glibc"
-                else ""
-            )
+            target = current_release_target()
             info = evaluate_update(
                 manifests,
                 current_version=APP_VERSION,
                 channel=self.channel,
-                platform=operating_system,
-                architecture=architecture,
-                os_version=os_version,
+                platform=target.platform,
+                architecture=target.architecture,
+                os_version=target.os_version,
                 installed_windows=self.installed_windows,
                 automatic_windows=self.automatic_windows,
                 language=self.language,

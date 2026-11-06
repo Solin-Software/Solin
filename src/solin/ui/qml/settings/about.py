@@ -11,8 +11,10 @@ from PySide6.QtGui import QDesktopServices
 
 from solin.core.foundation.settings_store import InstallationSettingsStore
 from solin.core.releases.channel import UpdateChannel
+from solin.core.releases.compatibility import ReleaseCompatibility, ReleaseTarget
+from solin.core.releases.manifest import release_page_url
 from solin.core.releases.version import ReleaseVersion
-from solin.core.remote.release_history import ReleaseHistoryCursorError
+from solin.core.remote.release_history import ReleaseHistoryCursorError, ReleaseHistoryEntry
 from solin.core.remote.urls import is_safe_remote_url
 from solin.ui.async_load import AsyncLoadHandle
 from solin.ui.release_notes import release_notes_html
@@ -33,10 +35,13 @@ class AboutSettings(SettingsDomain):
         language_code_provider: Callable[[], str],
         installed_version: str,
         parent: QObject | None = None,
+        *,
+        target_provider: Callable[[], ReleaseTarget],
     ) -> None:
         super().__init__(parent)
         self._settings = installation_settings
         self._history_factory = history_client_factory
+        self._target_provider = target_provider
         self._language_provider = language_code_provider
         self._installed = ReleaseVersion.parse(installed_version) or ReleaseVersion.from_tag(
             installed_version
@@ -136,10 +141,11 @@ class AboutSettings(SettingsDomain):
         generation, language = self._generation, self._language
         include_beta, cursor = self._state["includeBetaNotes"], self._cursor
         cancelled = Event()
-        factory, installed = self._history_factory, self._installed
+        factory, target_provider = self._history_factory, self._target_provider
 
         def load():
             client = factory(cancelled)
+            target = target_provider()
             reset = False
             try:
                 page = client.history(include_beta=include_beta, language=language,
@@ -150,11 +156,8 @@ class AboutSettings(SettingsDomain):
                 page = client.history(include_beta=include_beta, language=language,
                                       cursor=None, page_size=5)
                 reset = True
-            entries = [{
-                "version": item.version.display_version, "isBeta": item.version.is_beta,
-                "isInstalled": item.version == installed,
-                "html": release_notes_html(item.markdown), "language": item.language,
-            } for item in page.items if not cancelled.is_set()]
+            entries = [self._history_entry(item, target)
+                       for item in page.items if not cancelled.is_set()]
             return entries, page.next_cursor, reset
 
         def current() -> bool:
@@ -191,6 +194,36 @@ class AboutSettings(SettingsDomain):
         self._load = handle
         self.publish(historyBusy=True, historyError="")
         handle.start()
+
+    def _history_entry(self, item: ReleaseHistoryEntry, target: ReleaseTarget) -> dict:
+        asset = target.matching_asset(item.assets)
+        compatibility = target.compatibility(asset)
+        if asset is None:
+            requirements = QCoreApplication.translate(
+                "SettingsWidget", "No download is available for this system.",
+            )
+        else:
+            system = {"windows": "Windows", "macos": "macOS", "linux": "glibc"}[target.platform]
+            if compatibility == ReleaseCompatibility.SYSTEM_TOO_OLD:
+                requirements = QCoreApplication.translate(
+                    "SettingsWidget", "Requires {system} {minimum} or later; detected {current}.",
+                ).format(system=system, minimum=asset.minimum_os, current=target.os_version)
+            elif compatibility == ReleaseCompatibility.UNVERIFIED:
+                requirements = QCoreApplication.translate(
+                    "SettingsWidget",
+                    "Requires {system} {minimum} or later. Your version could not be detected; check before updating.",
+                ).format(system=system, minimum=asset.minimum_os)
+            else:
+                requirements = QCoreApplication.translate(
+                    "SettingsWidget", "Requires {system} {minimum} or later.",
+                ).format(system=system, minimum=asset.minimum_os)
+        return {
+            "version": item.version.display_version, "isBeta": item.version.is_beta,
+            "isInstalled": item.version == self._installed,
+            "html": release_notes_html(item.markdown), "language": item.language,
+            "compatibility": compatibility.value, "requirementsText": requirements,
+            "releaseUrl": release_page_url(item.version.tag),
+        }
 
     def _forget_load(self, handle: AsyncLoadHandle) -> None:
         if self._load is handle:

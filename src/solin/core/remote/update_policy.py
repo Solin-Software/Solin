@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from packaging.version import InvalidVersion, Version
 
 from solin.core.releases.channel import UpdateChannel
+from solin.core.releases.compatibility import ReleaseCompatibility, ReleaseTarget
 from solin.core.releases.manifest import ReleaseAsset, ReleaseManifest
 from solin.core.releases.version import ReleaseVersion
 
@@ -68,11 +68,7 @@ def evaluate_update(
     )
     if current is None:
         return None
-    kind = {
-        "windows": "installer",
-        "macos": "dmg",
-        "linux": "appimage",
-    }.get(platform)
+    target = ReleaseTarget(platform, architecture, os_version)
     eligible = [
         m
         for m in manifests
@@ -80,12 +76,7 @@ def evaluate_update(
     ]
     for manifest in sorted(eligible, key=lambda m: m.version, reverse=True):
         for asset in manifest.assets:
-            if (asset.platform, asset.architecture, asset.kind) != (platform, architecture, kind):
-                continue
-            try:
-                if asset.minimum_os and Version(os_version) < Version(asset.minimum_os):
-                    continue
-            except InvalidVersion:
+            if target.compatibility(asset) != ReleaseCompatibility.COMPATIBLE:
                 continue
             is_downgrade = manifest.version < current
             notes: dict[ReleaseVersion, ReleaseNote] = {}

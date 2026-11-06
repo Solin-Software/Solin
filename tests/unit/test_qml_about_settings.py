@@ -12,23 +12,30 @@ from PySide6.QtTest import QSignalSpy
 
 from solin.core.foundation.settings_store import InstallationSettingsStore, SettingsStore
 from solin.core.releases.channel import UpdateChannel
+from solin.core.releases.compatibility import ReleaseTarget
+from solin.core.releases.manifest import ReleaseAsset
 from solin.core.releases.version import ReleaseVersion
 from solin.core.remote.release_history import ReleaseHistoryCursorError
 from solin.ui.qml.settings.about import AboutSettings
 from tests._qt import dispose_qobject, wait_until
 
 
-def _page(*versions, next_cursor=None, language="en"):
+def _page(*versions, next_cursor=None, language="en", assets=None):
+    if assets is None:
+        assets = (ReleaseAsset("windows", "x86_64", "installer", "Solin.exe", 3, "a" * 64, "10"),)
     return SimpleNamespace(items=[
         SimpleNamespace(version=ReleaseVersion.parse(version),
-                        markdown=f"## {version}\n\nNotes in {language}.", language=language)
+                        markdown=f"## {version}\n\nNotes in {language}.", language=language,
+                        assets=assets)
         for version in versions
     ], next_cursor=next_cursor)
 
 
 @pytest.fixture
 def make_about(request):
-    def create(installed="26.33.0b2", channel=UpdateChannel.STABLE, handler=None):
+    def create(installed="26.33.0b2", channel=UpdateChannel.STABLE, handler=None,
+               target=None):
+        target = target or ReleaseTarget("windows", "x86_64", "10.0.22631")
         store = SettingsStore.for_namespace(f"about_settings_{uuid4().hex}", "tests")
         settings = InstallationSettingsStore(store)
         settings.set_update_channel(channel)
@@ -45,7 +52,8 @@ def make_about(request):
 
             return SimpleNamespace(history=history)
 
-        about = AboutSettings(settings, factory, lambda: backend.language, installed)
+        about = AboutSettings(settings, factory, lambda: backend.language, installed,
+                              target_provider=lambda: target)
 
         def cleanup():
             about.cleanup()
@@ -326,3 +334,35 @@ def test_note_links_use_the_validated_remote_opener(make_about, monkeypatch, url
     monkeypatch.setattr(QDesktopServices, "openUrl", lambda value: opened.append(value.toString()))
     about.openLink(url)
     assert opened == ([url] if allowed else [])
+
+
+@pytest.mark.parametrize("detected,status", [
+    ("2.38", "system_too_old"), ("2.43", "compatible"), ("", "unverified"),
+])
+def test_history_identifies_requirements_without_filtering_notes(make_about, detected, status):
+    asset = ReleaseAsset("linux", "x86_64", "appimage", "Solin.AppImage", 3, "a" * 64, "2.43")
+    about, _, _ = make_about(
+        installed="26.32.0", target=ReleaseTarget("linux", "x86_64", detected),
+        handler=lambda **kwargs: _page("26.33.0", assets=(asset,)),
+    )
+    about.activate()
+    _ready(about)
+
+    entry, = about.state["historyEntries"]
+    assert entry["version"] == "26.33.0"
+    assert entry["compatibility"] == status
+    assert "glibc" in entry["requirementsText"] and "2.43" in entry["requirementsText"]
+    if detected and status == "system_too_old":
+        assert detected in entry["requirementsText"]
+    assert "Notes in en." in entry["html"]
+    assert entry["releaseUrl"].endswith("/releases/tag/26.33.0")
+
+
+def test_history_keeps_unsupported_architectures_visible_without_mislabeling_requirements(make_about):
+    about, _, _ = make_about(target=ReleaseTarget("windows", "arm64", "10.0.22631"))
+    about.activate()
+    _ready(about)
+    entry, = about.state["historyEntries"]
+    assert entry["compatibility"] == "unavailable"
+    assert entry["requirementsText"]
+    assert entry["html"] and entry["releaseUrl"]

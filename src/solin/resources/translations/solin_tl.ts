@@ -8782,6 +8782,31 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Nagpapadala ng mga keyboard shortcut kapag nangyari ang mga napiling event ng app.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Nangangailangan ng {system} {minimum} o mas bago.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Nangangailangan ng {system} {minimum} o mas bago; natukoy na bersyon: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Nangangailangan ng {system} {minimum} o mas bago. Hindi matukoy ang iyong bersyon; suriin ito bago mag-update.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Walang available na download para sa system na ito.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Buksan ang download page</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

@@ -8750,6 +8750,31 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Mengirim pintasan papan tik saat peristiwa aplikasi yang dipilih terjadi.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Memerlukan {system} {minimum} atau yang lebih baru.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Memerlukan {system} {minimum} atau yang lebih baru; versi terdeteksi: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Memerlukan {system} {minimum} atau yang lebih baru. Versi Anda tidak dapat dideteksi; periksa sebelum memperbarui.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Tidak ada unduhan yang tersedia untuk sistem ini.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Buka halaman unduhan</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

@@ -8782,6 +8782,31 @@ Ajouter du contenu, une caméra ou une autre scène.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Envoie des raccourcis clavier lorsque les événements sélectionnés de l’application se produisent.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Nécessite {system} {minimum} ou une version ultérieure.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Nécessite {system} {minimum} ou une version ultérieure ; version détectée : {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Nécessite {system} {minimum} ou une version ultérieure. Votre version n’a pas pu être détectée ; vérifiez-la avant la mise à jour.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Aucun téléchargement n’est disponible pour ce système.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Ouvrir la page de téléchargement</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

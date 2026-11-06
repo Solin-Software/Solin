@@ -8782,6 +8782,31 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Hutuma njia za mkato za kibodi matukio yaliyochaguliwa ya programu yanapotokea.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Inahitaji {system} {minimum} au toleo jipya zaidi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Inahitaji {system} {minimum} au toleo jipya zaidi; toleo lililogunduliwa: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Inahitaji {system} {minimum} au toleo jipya zaidi. Toleo lako halikuweza kugunduliwa; angalia kabla ya kusasisha.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Hakuna upakuaji unaopatikana kwa mfumo huu.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Fungua ukurasa wa kupakua</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>
