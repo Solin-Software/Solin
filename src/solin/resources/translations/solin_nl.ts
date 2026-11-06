@@ -8782,6 +8782,31 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Verstuurt sneltoetsen wanneer geselecteerde gebeurtenissen in de app plaatsvinden.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Vereist {system} {minimum} of nieuwer.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Vereist {system} {minimum} of nieuwer; gedetecteerde versie: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Vereist {system} {minimum} of nieuwer. Je versie kon niet worden gedetecteerd; controleer deze voordat je bijwerkt.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Er is geen download beschikbaar voor dit systeem.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Downloadpagina openen</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

@@ -8781,6 +8781,31 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Skickar kortkommandon när valda händelser i appen inträffar.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Kräver {system} {minimum} eller senare.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Kräver {system} {minimum} eller senare; identifierad version: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Kräver {system} {minimum} eller senare. Din version kunde inte identifieras; kontrollera den innan du uppdaterar.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Ingen nedladdning är tillgänglig för det här systemet.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Öppna nedladdningssidan</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

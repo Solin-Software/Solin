@@ -8750,6 +8750,31 @@ Add content, a camera, or another scene.</source>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>선택한 앱 이벤트가 발생하면 키보드 단축키를 전송합니다.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>{system} {minimum} 이상이 필요합니다.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>{system} {minimum} 이상이 필요합니다. 감지된 버전: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>{system} {minimum} 이상이 필요합니다. 버전을 감지하지 못했습니다. 업데이트 전에 확인하세요.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>이 시스템에서 사용할 수 있는 다운로드가 없습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>다운로드 페이지 열기</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

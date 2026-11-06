@@ -34,8 +34,10 @@ from solin.core.releases.manifest import (
     release_asset_url,
 )
 from solin.core.releases.version import ReleaseVersion
-from solin.core.remote.release_history import ReleaseHistoryCursorError, ReleaseHistoryPage
-from solin.core.remote.update_policy import ReleaseNote, is_update_candidate
+from solin.core.remote.release_history import (
+    ReleaseHistoryCursorError, ReleaseHistoryEntry, ReleaseHistoryPage,
+)
+from solin.core.remote.update_policy import is_update_candidate
 from solin.core.storage.json_files import write_json_atomic
 
 _LOGGER = logging.getLogger(__name__)
@@ -370,7 +372,7 @@ class GitHubReleases:
             releases = [release for release in releases if include_beta or not release.version.is_beta]
             if offset > len(releases):
                 raise ReleaseHistoryCursorError("Invalid release-history cursor offset")
-            items: list[ReleaseNote] = []
+            items: list[ReleaseHistoryEntry] = []
             for index in range(offset, len(releases)):
                 try:
                     manifest = query.manifest(releases[index])
@@ -393,5 +395,7 @@ class GitHubReleases:
                     )
                 note = next(note for note in manifest.notes if note.version == manifest.version)
                 locale = language if language in note.translations else "en"
-                items.append(ReleaseNote(note.version, note.translations[locale], locale))
+                items.append(ReleaseHistoryEntry(
+                    note.version, note.translations[locale], locale, manifest.assets,
+                ))
             return ReleaseHistoryPage(tuple(items))

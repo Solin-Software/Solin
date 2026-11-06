@@ -37,6 +37,10 @@ def release_asset_url(tag: str, filename: str) -> str:
     )
 
 
+def release_page_url(tag: str) -> str:
+    return f"https://github.com/{RELEASE_REPOSITORY}/releases/tag/{quote(tag, safe='')}"
+
+
 @dataclass(frozen=True, slots=True)
 class ReleaseAsset:
     platform: str

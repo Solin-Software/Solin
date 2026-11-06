@@ -8814,6 +8814,31 @@ Dodaj treść, kamerę lub inną scenę.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Wysyła skróty klawiszowe po wystąpieniu wybranych zdarzeń w aplikacji.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Wymaga {system} {minimum} lub nowszej wersji.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Wymaga {system} {minimum} lub nowszej wersji; wykryta wersja: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Wymaga {system} {minimum} lub nowszej wersji. Nie udało się wykryć używanej wersji; sprawdź ją przed aktualizacją.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Brak pliku do pobrania dla tego systemu.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Otwórz stronę pobierania</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

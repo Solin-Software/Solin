@@ -8782,6 +8782,31 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <source>Sends keyboard shortcuts when selected app events occur.</source>
         <translation>Lähettää pikanäppäinkomentoja sovelluksen valittujen tapahtumien yhteydessä.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="217"/>
+        <source>Requires {system} {minimum} or later.</source>
+        <translation>Vaatii version {system} {minimum} tai uudemman.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="208"/>
+        <source>Requires {system} {minimum} or later; detected {current}.</source>
+        <translation>Vaatii version {system} {minimum} tai uudemman; havaittu versio: {current}.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="212"/>
+        <source>Requires {system} {minimum} or later. Your version could not be detected; check before updating.</source>
+        <translation>Vaatii version {system} {minimum} tai uudemman. Versiotasi ei voitu tunnistaa; tarkista se ennen päivittämistä.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/about.py" line="202"/>
+        <source>No download is available for this system.</source>
+        <translation>Tälle järjestelmälle ei ole ladattavaa tiedostoa.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <source>Open download page</source>
+        <translation>Avaa lataussivu</translation>
+    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>
