@@ -3919,7 +3919,7 @@ class MeetingTreeController(QObject):
             previous_snapshot = self._sync_snapshot
             try:
                 self._schedule_sync_manifest_save()
-            except MeetingSyncError as exc:
+            except (MeetingSyncError, OSError) as exc:
                 # The local edit was accepted; keep the sync request for retry.
                 log.warning("Failed to stage meeting sync intent: %s", exc)
                 self._arm_sync_save_timer()

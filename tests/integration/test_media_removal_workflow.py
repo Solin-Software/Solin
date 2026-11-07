@@ -216,7 +216,8 @@ def test_meeting_removal_checkpoints_sync_after_accepted_local_edit(meeting):
     assert events == [("local", "previous"), ("sync", "previous"), ("local", "staged")]
 
 
-def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meeting):
+@pytest.mark.parametrize("error_type", [MeetingSyncError, OSError])
+def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meeting, error_type):
     events = []
     meeting._sync_enabled = True
     meeting._sync_snapshot = "previous"
@@ -226,7 +227,7 @@ def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meetin
     meeting.syncStateChanged = SimpleNamespace(emit=lambda: events.append("signal"))
 
     def fail_stage():
-        raise MeetingSyncError("temporary sync journal failure")
+        raise error_type("temporary sync journal failure")
 
     meeting._schedule_sync_manifest_save = fail_stage
     meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
@@ -236,6 +237,73 @@ def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meetin
     assert result.removed_ids == ("nested",)
     assert meeting._find_node("nested") is None
     assert events == ["local", "retry", "signal"]
+
+
+def test_meeting_removal_preserves_pending_sync_when_journal_write_fails(meeting, tmp_path, monkeypatch):
+    from solin.core.ingest.sync import journal
+
+    folder = tmp_path / "2026-11-02 MW"
+    folder.mkdir()
+    identity = MeetingSyncIdentity("test", "mwb", date(2026, 11, 2))
+    service = MeetingLinkedFolderSync(lambda _pub_type: 0)
+    initial = service.save_tree(
+        folder, identity, nodes=deepcopy(meeting._nodes), deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={}, enable=True,
+    )
+    local_writes = []
+    timer_starts = []
+    meeting._sync_enabled = True
+    meeting._sync_folder = str(folder)
+    meeting._sync_identity = identity
+    meeting._sync_snapshot = initial.snapshot
+    meeting._sync_revision = initial.revision
+    meeting._sync_service = service
+    meeting._pending_sync_saves = {}
+    meeting._sync_save_inflight = None
+    meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
+    meeting._sync_save_timer = SimpleNamespace(
+        start=timer_starts.append, stop=lambda: None,
+    )
+    meeting._save_local_cache = lambda: local_writes.append(deepcopy(meeting._nodes)) or True
+    meeting._arm_sync_save_timer = lambda: MeetingTreeController._arm_sync_save_timer(meeting)
+    meeting._schedule_sync_manifest_save = lambda: (
+        MeetingTreeController._schedule_sync_manifest_save(meeting)
+    )
+    meeting.syncStateChanged = SimpleNamespace(emit=lambda: None)
+    meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+
+    original_publish = journal.publish_bytes_immutable
+    failed_writes = []
+
+    def inaccessible_outbox(path, payload, **kwargs):
+        if "outbox" in path.parts:
+            failed_writes.append(path)
+            raise PermissionError("Journal outbox is inaccessible")
+        return original_publish(path, payload, **kwargs)
+
+    monkeypatch.setattr(journal, "publish_bytes_immutable", inaccessible_outbox)
+    result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+
+    assert failed_writes
+    assert result.removed_ids == ("nested",)
+    assert meeting._find_node("nested") is None
+    assert len(local_writes) == 1
+    assert timer_starts and len(meeting._pending_sync_saves) == 1
+    pending = next(iter(meeting._pending_sync_saves.values()))
+    assert pending.snapshot == initial.snapshot
+    assert "nested" not in {node["id"] for node in iter_nodes(pending.nodes)}
+
+    monkeypatch.setattr(journal, "publish_bytes_immutable", original_publish)
+    saved = service.save_tree(
+        pending.folder, pending.identity, nodes=pending.nodes,
+        deleted_source_keys=pending.deleted_source_keys,
+        linked_folder_files=pending.linked_folder_files,
+        meeting_folder_imports=pending.meeting_folder_imports,
+        canonical_reset_generation=pending.canonical_reset_generation,
+        hidden_canonical_media=pending.hidden_canonical_media,
+        base_snapshot=pending.snapshot,
+    )
+    assert "nested" not in {node["id"] for node in iter_nodes(saved.nodes)}
 
 
 def test_meeting_folder_mutation_blocks_batch(meeting):
