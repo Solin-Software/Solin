@@ -145,7 +145,7 @@ def test_rejected_meeting_save_rolls_back_before_cleanup(meeting):
     assert meeting.cancellations == meeting.notifications == meeting.cleanup == []
 
 
-def test_rejected_meeting_local_snapshot_does_not_stage_sync_deletion(meeting, tmp_path):
+def test_rejected_meeting_local_snapshot_keeps_durable_sync_deletion(meeting, tmp_path):
     before = deepcopy(meeting._nodes)
     folder = tmp_path / "2026-11-02 MW"
     folder.mkdir()
@@ -176,36 +176,45 @@ def test_rejected_meeting_local_snapshot_does_not_stage_sync_deletion(meeting, t
     )
     meeting._media_tree_runtime = SimpleNamespace(snapshots=snapshots)
     meeting._save_local_cache = lambda: MeetingTreeController._save_local_cache(meeting)
-    meeting._schedule_sync_manifest_save = lambda: (
-        MeetingTreeController._schedule_sync_manifest_save(meeting)
+    meeting._schedule_sync_manifest_save = lambda **kwargs: (
+        MeetingTreeController._schedule_sync_manifest_save(meeting, **kwargs)
     )
+    meeting._arm_sync_save_timer = lambda: None
+    meeting.syncStateChanged = SimpleNamespace(emit=lambda: None)
+    storage_failures = []
+    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: storage_failures.append(args))
     meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
 
     result = MeetingTreeController.remove_additional_media(meeting)
 
-    assert set(result.failed_ids) == {"outside", "manual", "nested"}
-    assert meeting._nodes == before
+    assert set(result.removed_ids) == {"outside", "manual", "nested"}
+    assert set(select_media_ids(meeting._nodes)) == {"official"}
     assert meeting._local_edit_revision == 1
-    assert meeting._pending_sync_saves == {}
-    assert meeting._sync_snapshot == baseline
+    assert len(meeting._pending_sync_saves) == 1
+    assert meeting._sync_snapshot != baseline
     assert journal_path.read_bytes() == journal_before
-    persisted = service.load_tree(str(tmp_path), identity)
-    assert persisted is not None and persisted.snapshot == baseline
-    assert set(select_media_ids(persisted.nodes)) == set(select_media_ids(before))
+    # Recovery must work even if the local queue was never written and its
+    # in-memory retry request disappears on process exit.
+    persisted = MeetingLinkedFolderSync(lambda _pub_type: 0).load_tree(str(tmp_path), identity)
+    assert persisted is not None
+    assert set(select_media_ids(persisted.nodes)) == {"official"}
     assert not meeting._store.path.exists()
-    assert meeting.cancellations == meeting.notifications == meeting.cleanup == []
+    assert storage_failures == []
+    assert set(meeting.cancellations) == {"outside", "manual", "nested"}
+    assert len(meeting.notifications) == 1
 
 
-def test_meeting_removal_checkpoints_sync_after_accepted_local_edit(meeting):
+def test_meeting_removal_stages_sync_before_local_cache(meeting):
     events = []
     meeting._sync_enabled = True
     meeting._sync_snapshot = "previous"
     meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
     meeting._save_local_cache = lambda: events.append(("local", meeting._sync_snapshot)) or True
 
-    def stage():
+    def stage(**_kwargs):
         events.append(("sync", meeting._sync_snapshot))
         meeting._sync_snapshot = "staged"
+        return True
 
     meeting._schedule_sync_manifest_save = stage
     meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
@@ -213,20 +222,22 @@ def test_meeting_removal_checkpoints_sync_after_accepted_local_edit(meeting):
     result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
 
     assert result.removed_ids == ("nested",)
-    assert events == [("local", "previous"), ("sync", "previous"), ("local", "staged")]
+    assert events == [("sync", "previous"), ("local", "staged")]
 
 
 @pytest.mark.parametrize("error_type", [MeetingSyncError, OSError])
-def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meeting, error_type):
+def test_meeting_removal_sync_stage_error_rolls_back_unstaged_edit(meeting, error_type):
     events = []
+    failures = []
     meeting._sync_enabled = True
     meeting._sync_snapshot = "previous"
     meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
     meeting._save_local_cache = lambda: events.append("local") or True
     meeting._arm_sync_save_timer = lambda: events.append("retry")
     meeting.syncStateChanged = SimpleNamespace(emit=lambda: events.append("signal"))
+    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: failures.append(args))
 
-    def fail_stage():
+    def fail_stage(**_kwargs):
         raise error_type("temporary sync journal failure")
 
     meeting._schedule_sync_manifest_save = fail_stage
@@ -234,12 +245,36 @@ def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meetin
 
     result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
 
-    assert result.removed_ids == ("nested",)
-    assert meeting._find_node("nested") is None
-    assert events == ["local", "retry", "signal"]
+    assert result.failed_ids == ("nested",)
+    assert meeting._find_node("nested") is not None
+    assert events == []
+    assert len(failures) == 1
 
 
-def test_meeting_removal_preserves_pending_sync_when_journal_write_fails(meeting, tmp_path, monkeypatch):
+def test_meeting_removal_refuses_sync_edit_without_journal(meeting):
+    failures = []
+    meeting._sync_enabled = True
+    meeting._sync_folder = ""
+    meeting._sync_identity = None
+    meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
+    meeting._schedule_sync_manifest_save = lambda **kwargs: (
+        MeetingTreeController._schedule_sync_manifest_save(meeting, **kwargs)
+    )
+    meeting._save_local_cache = lambda: pytest.fail("Unstaged removal reached local persistence")
+    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: failures.append(args))
+    meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+
+    result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+
+    assert result.failed_ids == ("nested",)
+    assert meeting._find_node("nested") is not None
+    assert len(failures) == 1
+
+
+@pytest.mark.parametrize("prior_pending", [False, True])
+def test_meeting_removal_rejects_edit_when_journal_write_fails(
+    meeting, tmp_path, monkeypatch, prior_pending,
+):
     from solin.core.ingest.sync import journal
 
     folder = tmp_path / "2026-11-02 MW"
@@ -266,11 +301,16 @@ def test_meeting_removal_preserves_pending_sync_when_journal_write_fails(meeting
     )
     meeting._save_local_cache = lambda: local_writes.append(deepcopy(meeting._nodes)) or True
     meeting._arm_sync_save_timer = lambda: MeetingTreeController._arm_sync_save_timer(meeting)
-    meeting._schedule_sync_manifest_save = lambda: (
-        MeetingTreeController._schedule_sync_manifest_save(meeting)
+    meeting._schedule_sync_manifest_save = lambda **kwargs: (
+        MeetingTreeController._schedule_sync_manifest_save(meeting, **kwargs)
     )
     meeting.syncStateChanged = SimpleNamespace(emit=lambda: None)
+    failures = []
+    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: failures.append(args))
     meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+    if prior_pending:
+        MeetingTreeController._schedule_sync_manifest_save(meeting)
+    pending_before = dict(meeting._pending_sync_saves)
 
     original_publish = journal.publish_bytes_immutable
     failed_writes = []
@@ -285,25 +325,18 @@ def test_meeting_removal_preserves_pending_sync_when_journal_write_fails(meeting
     result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
 
     assert failed_writes
-    assert result.removed_ids == ("nested",)
-    assert meeting._find_node("nested") is None
-    assert len(local_writes) == 1
-    assert timer_starts and len(meeting._pending_sync_saves) == 1
-    pending = next(iter(meeting._pending_sync_saves.values()))
-    assert pending.snapshot == initial.snapshot
-    assert "nested" not in {node["id"] for node in iter_nodes(pending.nodes)}
+    assert result.failed_ids == ("nested",)
+    assert meeting._find_node("nested") is not None
+    assert local_writes == []
+    assert len(failures) == 1
+    assert meeting._pending_sync_saves == pending_before
+    assert meeting._sync_snapshot == initial.snapshot
 
     monkeypatch.setattr(journal, "publish_bytes_immutable", original_publish)
-    saved = service.save_tree(
-        pending.folder, pending.identity, nodes=pending.nodes,
-        deleted_source_keys=pending.deleted_source_keys,
-        linked_folder_files=pending.linked_folder_files,
-        meeting_folder_imports=pending.meeting_folder_imports,
-        canonical_reset_generation=pending.canonical_reset_generation,
-        hidden_canonical_media=pending.hidden_canonical_media,
-        base_snapshot=pending.snapshot,
-    )
-    assert "nested" not in {node["id"] for node in iter_nodes(saved.nodes)}
+    # A fresh process sees the original media because the deletion was rejected.
+    reloaded = MeetingLinkedFolderSync(lambda _pub_type: 0).load_tree(str(tmp_path), identity)
+    assert reloaded is not None
+    assert "nested" in {node["id"] for node in iter_nodes(reloaded.nodes)}
 
 
 def test_meeting_folder_mutation_blocks_batch(meeting):

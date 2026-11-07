@@ -3542,7 +3542,7 @@ class MeetingTreeController(QObject):
             replace_tree_node(self._nodes, container_id, media_descendants(surviving))
         saved = False
         try:
-            saved = self._save(sync_after_local=True)
+            saved = self._save(require_staged_sync=True)
         finally:
             if not saved:
                 self._nodes = previous_nodes
@@ -3581,7 +3581,7 @@ class MeetingTreeController(QObject):
         owner_id = self._tree_session.owner_id
         if not item_id or not owner_id:
             return
-        # Logical removal has already been accepted by the snapshot writer.
+        # Logical removal has been accepted by the local store or sync journal.
         referenced = any(
             other.get("type") == "media" and same_local_source(self._url_for_node(other), file_path)
             for other in iter_nodes(self._nodes)
@@ -3904,30 +3904,41 @@ class MeetingTreeController(QObject):
         mgr.prefetch_progress.connect(self._on_prefetch_progress)
         mgr.prefetch_error.connect(self._on_prefetch_error)
 
-    def _save(self, *, sync_after_local: bool = False) -> bool:
+    def _save(self, *, require_staged_sync: bool = False) -> bool:
         self._image_framing_save_timer.stop()
         self._image_framing_save_pending = False
         MeetingTreeController._prune_deleted_source_keys(self)
         MeetingTreeController._refresh_canonical_restore_state(self)
         if not self._tree_key:
             return True
-        if self._sync_enabled and not sync_after_local:
-            self._schedule_sync_manifest_save()
-        if not self._save_local_cache():
-            return False
-        if self._sync_enabled and sync_after_local:
-            previous_snapshot = self._sync_snapshot
-            try:
-                self._schedule_sync_manifest_save()
-            except (MeetingSyncError, OSError) as exc:
-                # The local edit was accepted; keep the sync request for retry.
-                log.warning("Failed to stage meeting sync intent: %s", exc)
-                self._arm_sync_save_timer()
-                self.syncStateChanged.emit()
+        if self._sync_enabled:
+            if require_staged_sync:
+                try:
+                    if not self._schedule_sync_manifest_save(require_staged=True):
+                        log.warning("Cannot remove meeting media without a durable sync journal")
+                        self.storageSaveFailed.emit(
+                            self._tree_key, "Meeting sync journal is unavailable",
+                        )
+                        return False
+                except (MeetingSyncError, OSError) as exc:
+                    log.warning("Could not stage meeting media removal: %s", exc)
+                    self.storageSaveFailed.emit(self._tree_key, str(exc))
+                    return False
             else:
-                if self._sync_snapshot != previous_snapshot:
-                    self._save_local_cache()
-        return True
+                self._schedule_sync_manifest_save()
+        # Once a synced removal is staged, its journal is authoritative.
+        # A rejected local cache request cannot undo the durable edit.
+        try:
+            local_saved = self._save_local_cache()
+        except OSError as exc:
+            if not (require_staged_sync and self._sync_enabled):
+                raise
+            log.warning("Could not queue local snapshot for staged meeting removal: %s", exc)
+            return True
+        if not local_saved and require_staged_sync and self._sync_enabled:
+            log.warning("Local snapshot queue rejected a staged meeting removal")
+            return True
+        return local_saved
 
     def _save_local_cache(self) -> bool:
         self._local_edit_revision = getattr(self, "_local_edit_revision", 0) + 1
@@ -4022,17 +4033,18 @@ class MeetingTreeController(QObject):
             cover_bytes=self._overview.cover_bytes,
         )
 
-    def _schedule_sync_manifest_save(self, *, delay_ms: int = _SYNC_SAVE_DEBOUNCE_MS) -> None:
+    def _schedule_sync_manifest_save(
+        self, *, delay_ms: int = _SYNC_SAVE_DEBOUNCE_MS,
+        require_staged: bool = False,
+    ) -> bool:
         if not self._sync_identity or not self._sync_folder:
-            return
+            return False
         cancel_refresh = getattr(self, "_cancel_sync_refresh", None)
-        if callable(cancel_refresh):
-            cancel_refresh()
         folder = Path(self._sync_folder)
         key = os.path.normcase(os.path.abspath(folder))
         now = time.monotonic()
         previous = self._pending_sync_saves.get(key)
-        self._pending_sync_saves[key] = _PendingSyncSave(
+        request = _PendingSyncSave(
             folder=folder,
             identity=self._sync_identity,
             nodes=clone_nodes(self._nodes),
@@ -4052,23 +4064,35 @@ class MeetingTreeController(QObject):
             first_attempt_at=previous.first_attempt_at if previous else None,
             retry_index=previous.retry_index if previous else 0,
         )
-        request = self._pending_sync_saves[key]
         service = getattr(self, "_sync_service", None)
+        staged_successfully = False
         if isinstance(service, MeetingLinkedFolderSync):
-            staged = service.save_tree(
-                request.folder, request.identity, nodes=request.nodes,
-                deleted_source_keys=request.deleted_source_keys,
-                linked_folder_files=request.linked_folder_files,
-                meeting_folder_imports=request.meeting_folder_imports,
-                canonical_reset_generation=request.canonical_reset_generation,
-                hidden_canonical_media=request.hidden_canonical_media,
-                base_snapshot=request.snapshot, stage_only=True,
-            )
+            try:
+                staged = service.save_tree(
+                    request.folder, request.identity, nodes=request.nodes,
+                    deleted_source_keys=request.deleted_source_keys,
+                    linked_folder_files=request.linked_folder_files,
+                    meeting_folder_imports=request.meeting_folder_imports,
+                    canonical_reset_generation=request.canonical_reset_generation,
+                    hidden_canonical_media=request.hidden_canonical_media,
+                    base_snapshot=request.snapshot, stage_only=True,
+                )
+            except (MeetingSyncError, OSError):
+                if not require_staged:
+                    self._pending_sync_saves[key] = request
+                raise
             request.snapshot = staged.snapshot
             request.nodes = clone_nodes(staged.nodes)
             self._sync_snapshot = staged.snapshot
+            staged_successfully = True
+        if require_staged and not staged_successfully:
+            return False
+        self._pending_sync_saves[key] = request
+        if callable(cancel_refresh):
+            cancel_refresh()
         self._arm_sync_save_timer()
         self.syncStateChanged.emit()
+        return staged_successfully
 
     def _arm_sync_save_timer(self) -> None:
         if self._sync_save_inflight is not None:
