@@ -12724,5 +12724,21 @@ Elementy multimedialne: {count}</translation>
         <source>Keep media</source>
         <translation>Zachowaj multimedia</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Czy usunąć podsekcję „{name}”?
+Elementy znajdujące się wewnątrz zostaną zachowane.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Multimedia są odtwarzane</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Nie można usunąć „{title}&quot;, gdy jest aktualnie odtwarzany.
+Zatrzymaj prezentację i spróbuj ponownie.</translation>
+    </message>
 </context>
 </TS>

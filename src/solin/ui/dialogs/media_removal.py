@@ -20,10 +20,22 @@ def confirm_additional_media_removal(parent: QWidget | None, name: str, count: i
         QCoreApplication.translate("MediaRemoval", "Delete additional media"),
         QCoreApplication.translate(
             "MediaRemoval", 'Delete additional media from "{name}"?\nMedia items: {count}',
-        ).replace("{name}", name).replace("{count}", str(count)),
+        ).replace("{count}", str(count)).replace("{name}", name),
         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         QMessageBox.StandardButton.Cancel,
     ) == QMessageBox.StandardButton.Yes
+
+
+def warn_playing_media_removal(parent: QWidget | None, titles: str) -> None:
+    QMessageBox.warning(
+        parent,
+        QCoreApplication.translate("MediaRemoval", "Media is playing"),
+        QCoreApplication.translate(
+            "MediaRemoval",
+            'Cannot remove "{title}" while it is currently playing.\n'
+            'Stop the projection and try again.',
+        ).replace("{title}", titles),
+    )
 
 
 def confirm_container_removal(
@@ -34,12 +46,17 @@ def confirm_container_removal(
         if subsection else QCoreApplication.translate("_PlaylistEditView", "Delete section")
     )
     if not constants.CONFIRM_CONTAINER_MEDIA_DELETION:
+        message = (
+            QCoreApplication.translate(
+                "MediaRemoval", 'Delete subsection "{name}"?\nItems inside will be kept.',
+            ) if subsection else QCoreApplication.translate(
+                "PlaylistEditView", 'Delete section "{name}"?\nItems inside will be kept.',
+            )
+        ).replace("{name}", name)
         reply = QMessageBox.question(
             parent,
             title,
-            QCoreApplication.translate(
-                "PlaylistEditView", 'Delete section "{name}"?\nItems inside will be kept.',
-            ).replace("{name}", name),
+            message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         return (

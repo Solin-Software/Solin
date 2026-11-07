@@ -2143,6 +2143,9 @@ def test_additional_media_menu_fits_long_translations(playlist_tree_host, compil
     assert translator.load(str(compiled_translation_catalogs / "solin_ru.qm"))
     assert _APP.installTranslator(translator)
     try:
+        source_text = "Delete additional media"
+        translated_text = QCoreApplication.translate("MediaRemoval", source_text)
+        assert translated_text != source_text
         widget, _controller, _model, _protection = playlist_tree_host([{
             "id": "scope", "type": "section", "title": "Scope",
             "collapsed": False, "itemCount": 0, "additionalMediaCount": 0, "children": [],
@@ -2150,6 +2153,7 @@ def test_additional_media_menu_fits_long_translations(playlist_tree_host, compil
         root = widget.rootObject()
         action = root.findChild(QObject, "removeAdditionalMedia-scope")
         menu = root.findChild(QObject, "sectionMenu-scope")
+        assert action.property("text") == translated_text
         assert QMetaObject.invokeMethod(menu, "open")
         wait_until(lambda: menu.property("visible"), description="translated menu")
         assert menu.property("width") >= action.property("implicitWidth")

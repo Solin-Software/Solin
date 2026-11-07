@@ -1078,7 +1078,7 @@ def test_deleting_official_section_keeps_media_and_removes_manual_structure(
     controller = SimpleNamespace(
         _nodes=[section], _tree_key="test", _tree_session=SimpleNamespace(generation=1),
         _deleted_source_keys=set(), _linked_folder_files={}, _meeting_folder_imports={},
-        parent=lambda: None, _save=lambda: True, _emit_section_counts=lambda: None,
+            parent=lambda: None, _save=lambda **_kwargs: True, _emit_section_counts=lambda: None,
     )
     controller._find_node = lambda node_id: next(
         (node for node in iter_nodes(controller._nodes) if node["id"] == node_id), None,

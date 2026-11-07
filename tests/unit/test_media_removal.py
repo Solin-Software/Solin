@@ -1,5 +1,8 @@
+import pytest
+
 from solin.core.meetings.media_nodes import additional_meeting_media
 from solin.core.media.removal import (
+    media_counts_by_container,
     select_media_ids,
     without_media,
 )
@@ -42,3 +45,26 @@ def test_filter_preserves_structure_markers_and_unselected_occurrences():
     assert select_media_ids(filtered) == ("root-media", "official")
     assert filtered[1]["children"][1]["children"] == [{"id": "marker", "type": "marker"}]
     assert select_media_ids(tree) == ("root-media", "official", "manual", "nested")
+
+
+def test_media_counts_include_only_eligible_descendants():
+    assert media_counts_by_container(_tree(), eligible=additional_meeting_media) == {
+        "section": 2,
+        "sub": 1,
+    }
+
+
+def test_media_counts_reject_duplicate_node_ids():
+    tree = _tree()
+    tree[1]["children"].append({"id": "manual", "type": "media"})
+    with pytest.raises(ValueError, match="Duplicate node ID"):
+        media_counts_by_container(tree)
+
+
+@pytest.mark.parametrize("leaf_type", ["media", "marker"])
+def test_media_counts_reject_leaf_nodes_with_children(leaf_type):
+    tree = [{"id": "leaf", "type": leaf_type, "children": [
+        {"id": "nested", "type": "media"},
+    ]}]
+    with pytest.raises(ValueError, match="cannot have children"):
+        media_counts_by_container(tree)

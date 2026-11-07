@@ -12636,5 +12636,21 @@ Media items: {count}</source>
         <source>Keep media</source>
         <translation>メディアを残す</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>サブセクション「{name}」を削除しますか？
+中の項目は保持されます。</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>メディアを再生中</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>「{title}」は再生中のため削除できません。
+投影を停止してからやり直してください。</translation>
+    </message>
 </context>
 </TS>

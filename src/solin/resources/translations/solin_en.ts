@@ -11267,5 +11267,21 @@ Media items: {count}</translation>
         <source>Keep media</source>
         <translation>Keep media</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Media is playing</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</translation>
+    </message>
 </context>
 </TS>

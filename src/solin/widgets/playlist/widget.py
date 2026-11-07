@@ -73,6 +73,7 @@ from ...ui.dialogs.media_removal import (
     ContainerRemovalChoice,
     confirm_additional_media_removal,
     confirm_container_removal,
+    warn_playing_media_removal,
 )
 from ...core.media.thumbnail_identity import (
     thumbnail_source_fingerprint,
@@ -2129,13 +2130,7 @@ class PlaylistEditView(
             str(item.get("title") or item.get("url") or "")
             for item in self._pl.get("items", []) if item["id"] in blocked
         )
-        QMessageBox.warning(
-            self,
-            self.tr("Media is playing"),
-            self.tr(
-                'Cannot remove "{title}" while it is currently playing.\nStop the projection and try again.'
-            ).replace("{title}", titles),
-        )
+        warn_playing_media_removal(self, titles)
 
     def _remove_watched_items(
         self,

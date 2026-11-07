@@ -232,9 +232,20 @@ def record_discovery_edits(
                     continue
                 _record_override(after, after, key)
     for node_id, node in result.items():
-        if node_id in base or node.get(DISCOVERED) or node.get(AUXILIARY):
+        if node.get(DISCOVERED) or node.get(AUXILIARY):
             continue
         resource = resource_identity_key(str(node.get(RESOURCE) or ""))
+        previous = base.get(node_id)
+        if previous is not None:
+            # An acknowledgement belongs to the explicit occurrence at this
+            # resource. Rebuilding its domain view may omit sync-owned fields;
+            # that omission must not undo an earlier deliberate restoration.
+            if resource and resource == resource_identity_key(str(previous.get(RESOURCE) or "")):
+                if ACKNOWLEDGED in previous:
+                    node.setdefault(ACKNOWLEDGED, deepcopy(previous[ACKNOWLEDGED]))
+            else:
+                node.pop(ACKNOWLEDGED, None)
+            continue
         acknowledged = sorted(
             key
             for key, value in base.items()

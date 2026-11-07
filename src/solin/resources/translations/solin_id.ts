@@ -12636,5 +12636,21 @@ Item media: {count}</translation>
         <source>Keep media</source>
         <translation>Pertahankan media</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Hapus subbagian &quot;{name}&quot;?
+Isi di dalamnya akan tetap disimpan.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Media sedang diputar</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Tidak dapat menghapus &quot;{title}&quot; saat sedang diputar.
+Hentikan proyeksi dan coba lagi.</translation>
+    </message>
 </context>
 </TS>

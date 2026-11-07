@@ -12723,5 +12723,21 @@ Media items: {count}</source>
         <source>Keep media</source>
         <translation>Сохранить медиафайлы</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Удалить подраздел «{name}»?
+Содержимое подраздела будет сохранено.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Воспроизводимое медиа</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Невозможно удалить «{title}», пока он воспроизводится.
+Остановите проекцию и попробуйте снова.</translation>
+    </message>
 </context>
 </TS>

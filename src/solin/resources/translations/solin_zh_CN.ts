@@ -12636,5 +12636,21 @@ Media items: {count}</source>
         <source>Keep media</source>
         <translation>保留媒体</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>要删除“{name}”小节吗？
+其中的内容将被保留。</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>媒体正在播放</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>无法移除正在播放的“{title}”。
+请先停止投影，然后重试。</translation>
+    </message>
 </context>
 </TS>

@@ -658,6 +658,23 @@ def test_removing_repeated_video_occurrence_keeps_shared_file_and_manifest_node(
     assert video.read_bytes() == b"video"
 
 
+def test_anonymous_removal_without_source_preserves_unresolved_manifest_items(tmp_path):
+    unresolved = {"id": "unresolved", "type": "image", "url": ""}
+    watched_folder_module.save_manifest_playlist(
+        str(tmp_path), {"items": [unresolved], "sections": [], "markers": []},
+    )
+
+    changed = watched_folder_module.remove_items_from_manifest(
+        str(tmp_path), [{"type": "image", "url": ""}],
+        remaining_items=[unresolved],
+    )
+
+    assert not changed
+    assert [item["id"] for item in _read_manifest(tmp_path)["playlist"]["items"]] == [
+        "unresolved",
+    ]
+
+
 def test_removing_last_video_occurrence_deletes_shared_file(tmp_path):
     video = tmp_path / "clip.mp4"
     video.write_bytes(b"video")

@@ -1,12 +1,17 @@
 """Removal contracts shared by single, scoped and global commands."""
 
 from copy import deepcopy
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
 from PySide6.QtWidgets import QMessageBox
 
+from solin.controllers.snapshot_write_coordinator import SnapshotWriteCoordinator
 from solin.core.meetings.tree_types import iter_nodes
+from solin.core.meetings.linked_folder_sync import (
+    MeetingLinkedFolderSync, MeetingSyncError, MeetingSyncIdentity,
+)
 from solin.core.media.removal import select_media_ids
 from solin.ui.dialogs.media_removal import ContainerRemovalChoice
 from solin.widgets.meetings.tree_controller import MeetingTreeController
@@ -39,7 +44,7 @@ def meeting():
     controller._find_node = lambda node_id: next(
         (node for node in iter_nodes(controller._nodes) if node["id"] == node_id), None,
     )
-    controller._save = lambda: controller.writes.append(deepcopy(controller._nodes)) or True
+    controller._save = lambda **_kwargs: controller.writes.append(deepcopy(controller._nodes)) or True
     controller._emit_section_counts = lambda: controller.notifications.append(True)
     controller._cancel_media_info_requests_for_item = controller.cancellations.append
     controller._remember_deleted_sources = lambda node, **kwargs: (
@@ -86,9 +91,52 @@ def test_delete_container_with_media_hides_official_and_removes_manual_structure
     assert len(meeting.writes) == len(meeting.notifications) == 1
 
 
+def test_meeting_container_removal_preserves_active_media_and_commits_once(meeting, monkeypatch):
+    meeting._find_node("manual")["media_ref"] = {"file_path": "C:/video/live.mp4"}
+    meeting._active_media_paths_provider = lambda: ("C:/video/live.mp4",)
+    warnings = []
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.confirm_container_removal",
+        lambda *_args, **_kwargs: ContainerRemovalChoice.DELETE_MEDIA,
+    )
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.warn_playing_media_removal",
+        lambda _parent, titles: warnings.append(titles),
+    )
+
+    MeetingTreeController.deleteSection(meeting, "section")
+
+    assert select_media_ids(meeting._nodes) == ("outside", "manual")
+    assert meeting._find_node("section") is None
+    assert meeting._hidden_canonical_media["media:official"]["id"] == "official"
+    assert len(meeting.writes) == len(meeting.notifications) == 1
+    assert len(warnings) == 1 and "live.mp4" in warnings[0]
+
+
+def test_meeting_container_removal_with_only_active_media_commits_structure(meeting, monkeypatch):
+    meeting._find_node("nested")["media_ref"] = {"file_path": "C:/video/live.mp4"}
+    meeting._active_media_paths_provider = lambda: ("C:/video/live.mp4",)
+    warnings = []
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.confirm_container_removal",
+        lambda *_args, **_kwargs: ContainerRemovalChoice.DELETE_MEDIA,
+    )
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.warn_playing_media_removal",
+        lambda _parent, titles: warnings.append(titles),
+    )
+
+    MeetingTreeController.deleteSection(meeting, "sub")
+
+    assert meeting._find_node("sub") is None
+    assert meeting._find_node("nested") is not None
+    assert len(meeting.writes) == len(meeting.notifications) == 1
+    assert len(warnings) == 1
+
+
 def test_rejected_meeting_save_rolls_back_before_cleanup(meeting):
     before = deepcopy(meeting._nodes)
-    meeting._save = lambda: False
+    meeting._save = lambda **_kwargs: False
     result = MeetingTreeController._remove_media_ids(meeting, {"official", "manual"})
     assert result.failed_ids == ("official", "manual")
     assert meeting._nodes == before
@@ -97,11 +145,133 @@ def test_rejected_meeting_save_rolls_back_before_cleanup(meeting):
     assert meeting.cancellations == meeting.notifications == meeting.cleanup == []
 
 
+def test_rejected_meeting_local_snapshot_does_not_stage_sync_deletion(meeting, tmp_path):
+    before = deepcopy(meeting._nodes)
+    folder = tmp_path / "2026-11-02 MW"
+    folder.mkdir()
+    identity = MeetingSyncIdentity("test", "mwb", date(2026, 11, 2))
+    service = MeetingLinkedFolderSync(lambda _pub_type: 0)
+    initial = service.save_tree(
+        folder, identity, nodes=deepcopy(before), deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={}, enable=True,
+    )
+    journal_path = folder / ".solin_sync" / "meeting" / "snapshot.json"
+    journal_before = journal_path.read_bytes()
+    snapshots = SnapshotWriteCoordinator()
+    snapshots.shutdown()
+    baseline = initial.snapshot
+    meeting._sync_enabled = True
+    meeting._sync_folder = str(folder)
+    meeting._sync_identity = identity
+    meeting._sync_snapshot = baseline
+    meeting._sync_revision = initial.revision
+    meeting._pending_sync_saves = {}
+    meeting._sync_service = service
+    meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
+    meeting._store = SimpleNamespace(path=tmp_path / "trees.json")
+    meeting._canonical_hash = ""
+    meeting._current_overview = lambda: None
+    meeting._snapshot_storage_key = lambda tree_key=None: (
+        MeetingTreeController._snapshot_storage_key(meeting, tree_key)
+    )
+    meeting._media_tree_runtime = SimpleNamespace(snapshots=snapshots)
+    meeting._save_local_cache = lambda: MeetingTreeController._save_local_cache(meeting)
+    meeting._schedule_sync_manifest_save = lambda: (
+        MeetingTreeController._schedule_sync_manifest_save(meeting)
+    )
+    meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+
+    result = MeetingTreeController.remove_additional_media(meeting)
+
+    assert set(result.failed_ids) == {"outside", "manual", "nested"}
+    assert meeting._nodes == before
+    assert meeting._local_edit_revision == 1
+    assert meeting._pending_sync_saves == {}
+    assert meeting._sync_snapshot == baseline
+    assert journal_path.read_bytes() == journal_before
+    persisted = service.load_tree(str(tmp_path), identity)
+    assert persisted is not None and persisted.snapshot == baseline
+    assert set(select_media_ids(persisted.nodes)) == set(select_media_ids(before))
+    assert not meeting._store.path.exists()
+    assert meeting.cancellations == meeting.notifications == meeting.cleanup == []
+
+
+def test_meeting_removal_checkpoints_sync_after_accepted_local_edit(meeting):
+    events = []
+    meeting._sync_enabled = True
+    meeting._sync_snapshot = "previous"
+    meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
+    meeting._save_local_cache = lambda: events.append(("local", meeting._sync_snapshot)) or True
+
+    def stage():
+        events.append(("sync", meeting._sync_snapshot))
+        meeting._sync_snapshot = "staged"
+
+    meeting._schedule_sync_manifest_save = stage
+    meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+
+    result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+
+    assert result.removed_ids == ("nested",)
+    assert events == [("local", "previous"), ("sync", "previous"), ("local", "staged")]
+
+
+def test_meeting_removal_sync_stage_error_does_not_rollback_accepted_edit(meeting):
+    events = []
+    meeting._sync_enabled = True
+    meeting._sync_snapshot = "previous"
+    meeting._image_framing_save_timer = SimpleNamespace(stop=lambda: None)
+    meeting._save_local_cache = lambda: events.append("local") or True
+    meeting._arm_sync_save_timer = lambda: events.append("retry")
+    meeting.syncStateChanged = SimpleNamespace(emit=lambda: events.append("signal"))
+
+    def fail_stage():
+        raise MeetingSyncError("temporary sync journal failure")
+
+    meeting._schedule_sync_manifest_save = fail_stage
+    meeting._save = lambda **kwargs: MeetingTreeController._save(meeting, **kwargs)
+
+    result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+
+    assert result.removed_ids == ("nested",)
+    assert meeting._find_node("nested") is None
+    assert events == ["local", "retry", "signal"]
+
+
 def test_meeting_folder_mutation_blocks_batch(meeting):
     meeting._folder_mutation_pending = True
     result = MeetingTreeController.remove_additional_media(meeting)
-    assert set(result.blocked_ids) == {"outside", "manual", "nested"}
+    assert set(result.failed_ids) == {"outside", "manual", "nested"}
+    assert result.blocked_ids == ()
     assert meeting.writes == []
+
+
+def test_meeting_folder_mutation_prevents_removal_prompts(meeting, monkeypatch):
+    meeting._folder_mutation_pending = True
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.confirm_additional_media_removal",
+        lambda *_args, **_kwargs: pytest.fail("Cannot confirm during a folder mutation"),
+    )
+    monkeypatch.setattr(
+        "solin.widgets.meetings.tree_controller.confirm_container_removal",
+        lambda *_args, **_kwargs: pytest.fail("Cannot confirm during a folder mutation"),
+    )
+
+    MeetingTreeController.removeAdditionalMedia(meeting, "section:section")
+    MeetingTreeController.deleteSection(meeting, "section")
+
+    assert meeting.writes == []
+    assert meeting._find_node("section") is not None
+
+
+def test_meeting_bulk_removal_keeps_active_local_media(meeting):
+    meeting._find_node("manual")["media_ref"] = {"file_path": "C:/video/live.mp4"}
+    meeting._active_media_paths_provider = lambda: ("C:/video/live.mp4",)
+    result = MeetingTreeController.remove_additional_media(meeting, "section:section")
+    assert result.blocked_ids == ("manual",)
+    assert result.removed_ids == ("nested",)
+    assert meeting._find_node("manual") is not None
+    assert meeting._find_node("nested") is None
 
 
 @pytest.mark.parametrize("change", ["context", "move", "insert", "cancel"])
@@ -206,6 +376,55 @@ def test_playlist_container_removal_uses_same_media_policy(playlist, monkeypatch
         assert [item["id"] for item in playlist._pl["items"]] == expected
         assert all(not item.get("section_id") for item in playlist._pl["items"])
         assert len(playlist.writes) == 1
+
+
+def test_playlist_container_removal_preserves_active_media_and_publishes_once(playlist, monkeypatch):
+    playlist._media_ctrl = SimpleNamespace(
+        current_occurrence_id="playing", current_occurrence_container_id="playlist",
+    )
+    warnings = []
+    monkeypatch.setattr(
+        "solin.widgets.playlist.widget.confirm_container_removal",
+        lambda *_args, **_kwargs: ContainerRemovalChoice.DELETE_MEDIA,
+    )
+    monkeypatch.setattr(
+        "solin.widgets.playlist.widget.warn_playing_media_removal",
+        lambda _parent, titles: warnings.append(titles),
+    )
+
+    PlaylistEditView._delete_section(playlist, "section")
+
+    assert playlist._pl["sections"] == playlist._pl["markers"] == []
+    assert [item["id"] for item in playlist._pl["items"]] == ["outside", "playing"]
+    assert playlist._pl["items"][1]["section_id"] is None
+    assert [item["id"] for item in playlist.cleanup] == ["nested"]
+    assert len(playlist.writes) == len(playlist.publications) == 1
+    assert len(warnings) == 1
+
+
+def test_playlist_container_removal_with_only_active_media_commits_structure(playlist, monkeypatch):
+    playlist._media_ctrl = SimpleNamespace(
+        current_occurrence_id="nested", current_occurrence_container_id="playlist",
+    )
+    warnings = []
+    monkeypatch.setattr(
+        "solin.widgets.playlist.widget.confirm_container_removal",
+        lambda *_args, **_kwargs: ContainerRemovalChoice.DELETE_MEDIA,
+    )
+    monkeypatch.setattr(
+        "solin.widgets.playlist.widget.warn_playing_media_removal",
+        lambda _parent, titles: warnings.append(titles),
+    )
+
+    PlaylistEditView._delete_section(playlist, "sub")
+
+    assert [section["id"] for section in playlist._pl["sections"]] == ["section"]
+    assert playlist._pl["markers"] == []
+    assert playlist._pl["items"][-1]["section_id"] == "section"
+    assert [item["id"] for item in playlist._pl["items"]] == ["outside", "playing", "nested"]
+    assert playlist.cleanup == []
+    assert len(playlist.writes) == len(playlist.publications) == 1
+    assert len(warnings) == 1
 
 
 def test_single_playlist_removal_and_batch_use_identical_occurrence_policy(playlist, monkeypatch):

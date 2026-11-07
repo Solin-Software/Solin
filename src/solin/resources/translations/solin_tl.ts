@@ -12680,5 +12680,21 @@ Mga media item: {count}</translation>
         <source>Keep media</source>
         <translation>Panatilihin ang media</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Buburahin ba ang subseksiyong &quot;{name}&quot;?
+Mananatili ang mga item sa loob nito.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Nagpi-play ang media</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Hindi maalis ang &quot;{title}&quot; habang nagpi-play ito.
+Ihinto ang projection at subukang muli.</translation>
+    </message>
 </context>
 </TS>

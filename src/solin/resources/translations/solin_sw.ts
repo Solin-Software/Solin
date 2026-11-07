@@ -12680,5 +12680,21 @@ Vipengee vya midia: {count}</translation>
         <source>Keep media</source>
         <translation>Hifadhi midia</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Je, ufute sehemu ndogo ya &quot;{name}&quot;?
+Vitu vilivyomo ndani vitahifadhiwa.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Media inachezwa</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Haiwezi kuondoa &quot;{title}&quot; wakati inachezwa.
+Acha kuonyesha na ujaribu tena.</translation>
+    </message>
 </context>
 </TS>

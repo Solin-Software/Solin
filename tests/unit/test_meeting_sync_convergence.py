@@ -5,6 +5,7 @@ import shutil
 import pytest
 
 from solin.core.ingest.meeting_folder_sources import scan_meeting_folder_sources
+from solin.core.meetings.canonical_restore import restore_canonical_tree
 from solin.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync,
     MeetingSyncError,
@@ -41,6 +42,65 @@ def test_stale_terminal_does_not_restore_deleted_manual_node(tmp_path):
     service.save_tree(folder, identity, nodes=[], expected_revision=initial.revision, base_snapshot=initial.snapshot, **args)
     stale = service.save_tree(folder, identity, nodes=initial.nodes, expected_revision=initial.revision, base_snapshot=initial.snapshot, **args)
     assert stale.nodes == []
+
+
+def test_restored_official_media_survives_subsequent_sync_save(tmp_path):
+    """A restored occurrence must keep its acknowledgement of an earlier deletion."""
+    from solin.core.meetings.tree_types import iter_nodes
+
+    folder = tmp_path / "2026-11-05 MW"
+    folder.mkdir()
+    photo = folder / "official.jpg"
+    photo.write_bytes(b"official image")
+    identity = MeetingSyncIdentity("mwb:2026-11-02:T:issue", "mwb", date(2026, 11, 2))
+    service = MeetingLinkedFolderSync(lambda _: 3)
+    canonical = [{
+        "id": "section", "type": "section", "title": "Section",
+        "meeting_generated": True, "meeting_source_key": "section:official",
+        "children": [{
+            "id": "subsection", "type": "subsection", "title": "Subsection",
+            "meeting_generated": True, "meeting_source_key": "subsection:official",
+            "children": [{
+                **_media("official", str(photo)),
+                "meeting_generated": True, "meeting_source_key": "media:official",
+            }],
+        }],
+    }]
+    metadata = dict(linked_folder_files={}, meeting_folder_imports={})
+    initial = service.save_tree(
+        folder, identity, nodes=canonical, deleted_source_keys=set(),
+        enable=True, **metadata,
+    )
+    deleted = service.save_tree(
+        folder, identity, nodes=[],
+        deleted_source_keys={"subsection:official", "media:official"},
+        base_snapshot=initial.snapshot, **metadata,
+    )
+    first = service.save_tree(
+        folder, identity, nodes=restore_canonical_tree(canonical, deleted.nodes),
+        deleted_source_keys=set(), canonical_reset_generation=1,
+        base_snapshot=deleted.snapshot, **metadata,
+    )
+    assert "official" in {node["id"] for node in iter_nodes(first.nodes)}
+
+    # Canonical reconstruction uses a clean publication baseline; sync-only
+    # acknowledgement fields must survive ordinary saves and later resets.
+    second = service.save_tree(
+        folder, identity, nodes=restore_canonical_tree(canonical, first.nodes),
+        deleted_source_keys=set(), canonical_reset_generation=1,
+        base_snapshot=first.snapshot, **metadata,
+    )
+    assert "official" in {node["id"] for node in iter_nodes(second.nodes)}
+    third = service.save_tree(
+        folder, identity, nodes=restore_canonical_tree(canonical, second.nodes),
+        deleted_source_keys=set(), canonical_reset_generation=2,
+        base_snapshot=second.snapshot, **metadata,
+    )
+    assert "official" in {node["id"] for node in iter_nodes(third.nodes)}
+    reopened = service.load_tree(str(tmp_path), identity)
+    assert reopened is not None
+    assert "official" in {node["id"] for node in iter_nodes(reopened.nodes)}
+    assert photo.read_bytes() == b"official image"
 
 
 def _save(service, folder, nodes, base=None):

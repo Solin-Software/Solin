@@ -50,17 +50,28 @@ def media_counts_by_container(
     *,
     eligible: Callable[[MediaNode], bool] = lambda _node: True,
 ) -> dict[str, int]:
-    """Count eligible descendants bottom-up, once per committed tree node."""
+    """Count eligible descendants while enforcing unique IDs and leaf nodes."""
     counts: dict[str, int] = {}
+    seen_ids: set[str] = set()
 
     def visit(children: Sequence[MediaNode]) -> int:
         total = 0
         for node in children:
-            count = visit(node.get("children", ()))
-            if node.get("type") == "media":
+            node_id = str(node.get("id") or "")
+            if not node_id:
+                raise ValueError("Media-tree nodes need non-empty IDs")
+            if node_id in seen_ids:
+                raise ValueError(f"Duplicate node ID {node_id!r}")
+            seen_ids.add(node_id)
+            kind = node.get("type")
+            descendants = node.get("children", ())
+            if kind in {"media", "marker"} and descendants:
+                raise ValueError(f"{kind!r} node {node_id!r} cannot have children")
+            count = visit(descendants)
+            if kind == "media":
                 count += int(eligible(node))
-            elif node.get("type") in {"section", "subsection"}:
-                counts[str(node["id"])] = count
+            elif kind in {"section", "subsection"}:
+                counts[node_id] = count
             total += count
         return total
 

@@ -2604,7 +2604,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         controller._tree_key = "mwb:2026-05-25:T:issue"
         controller._sync_enabled = False
         controller._sync_identity = None
-        controller._save = lambda: setattr(controller, "saved", True) or True
+        controller._save = lambda **_kwargs: setattr(controller, "saved", True) or True
         controller._tree_session = SimpleNamespace(
             owner_id="meeting:test",
             remove_pending_node=lambda _item_id: False,

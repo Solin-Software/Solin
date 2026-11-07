@@ -12679,5 +12679,21 @@ Medieobjekt: {count}</translation>
         <source>Keep media</source>
         <translation>Behåll media</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Ska underavsnittet ”{name}” tas bort?
+Innehållet kommer att behållas.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Media som spelas upp</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Kan inte ta bort ”{title}” medan det spelas upp.
+Stoppa projiceringen och försök igen.</translation>
+    </message>
 </context>
 </TS>

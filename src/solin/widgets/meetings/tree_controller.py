@@ -67,6 +67,7 @@ from ...core.media.removal import (
 )
 from ...ui.dialogs.media_removal import (
     ContainerRemovalChoice, confirm_additional_media_removal, confirm_container_removal,
+    warn_playing_media_removal,
 )
 from ...core.media.playback_request import MediaTrim
 from ...core.foundation.exception_logging import log_ignored_exception
@@ -3438,7 +3439,8 @@ class MeetingTreeController(QObject):
             return
         if self._tree_session.remove_pending_node(item_id):
             return
-        MeetingTreeController._remove_media_ids(self, {item_id})
+        result = MeetingTreeController._remove_media_ids(self, {item_id})
+        MeetingTreeController._warn_blocked_removal(self, result)
 
     def remove_additional_media(self, scope_id: str = "root") -> MediaRemovalResult:
         """Remove additional committed occurrences, without confirmation UI."""
@@ -3448,6 +3450,8 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def removeAdditionalMedia(self, scope_id: str) -> None:
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         kind, _, node_id = scope_id.partition(":")
         node = self._find_node(node_id)
         if kind not in {"section", "subsection"} or not node or node.get("type") != kind:
@@ -3467,22 +3471,51 @@ class MeetingTreeController(QObject):
         selected.intersection_update(select_media_ids(
             self._nodes, scope_id, eligible=additional_meeting_media,
         ))
-        MeetingTreeController._remove_media_ids(self, selected)
+        result = MeetingTreeController._remove_media_ids(self, selected)
+        MeetingTreeController._warn_blocked_removal(self, result)
+
+    def _warn_blocked_removal(self, result: MediaRemovalResult) -> None:
+        if not result.blocked_ids:
+            return
+        blocked = set(result.blocked_ids)
+        titles = ", ".join(
+            str(node.get("title") or self._url_for_node(node))
+            for node in iter_nodes(self._nodes)
+            if node.get("type") == "media" and node.get("id") in blocked
+        )
+        warn_playing_media_removal(self.parent(), titles)
 
     def _remove_media_ids(
         self, item_ids: set[str], *, container_id: str = "",
     ) -> MediaRemovalResult:
         """Commit one logical edit before scheduling owned-file cleanup."""
         if getattr(self, "_folder_mutation_pending", False):
-            return MediaRemovalResult(blocked_ids=tuple(sorted(item_ids)))
+            return MediaRemovalResult(failed_ids=tuple(sorted(item_ids)))
         selected = [
             node for node in iter_nodes(self._nodes)
             if node.get("type") == "media" and node.get("id") in item_ids
         ]
+        active_sources = tuple(
+            QUrl(source).toLocalFile() if QUrl(source).isLocalFile() else source
+            for source in getattr(self, "_active_media_paths_provider", lambda: ())()
+            if source
+        )
+        blocked_ids = tuple(
+            str(node["id"]) for node in selected
+            if any(
+                same_local_source(self._url_for_node(node), source)
+                for source in active_sources
+            )
+        )
+        blocked = set(blocked_ids)
+        selected = [node for node in selected if str(node["id"]) not in blocked]
         removed_ids = {str(node["id"]) for node in selected}
         container = self._find_node(container_id) if container_id else None
         if not selected and container is None:
-            return MediaRemovalResult(missing_ids=tuple(sorted(item_ids)))
+            return MediaRemovalResult(
+                blocked_ids=blocked_ids,
+                missing_ids=tuple(sorted(item_ids - blocked)),
+            )
         previous_nodes = self._nodes
         previous_deleted = set(self._deleted_source_keys)
         previous_linked = dict(self._linked_folder_files)
@@ -3509,7 +3542,7 @@ class MeetingTreeController(QObject):
             replace_tree_node(self._nodes, container_id, media_descendants(surviving))
         saved = False
         try:
-            saved = self._save()
+            saved = self._save(sync_after_local=True)
         finally:
             if not saved:
                 self._nodes = previous_nodes
@@ -3519,7 +3552,10 @@ class MeetingTreeController(QObject):
                 self._hidden_canonical_media = previous_hidden
                 MeetingTreeController._refresh_canonical_restore_state(self)
         if not saved:
-            return MediaRemovalResult(failed_ids=tuple(node["id"] for node in selected))
+            return MediaRemovalResult(
+                blocked_ids=blocked_ids,
+                failed_ids=tuple(str(node["id"]) for node in selected),
+            )
         for node in selected:
             self._cancel_media_info_requests_for_item(str(node["id"]))
         self._emit_section_counts()
@@ -3531,7 +3567,8 @@ class MeetingTreeController(QObject):
                 self._queue_linked_media_removal(node, file_path, linked_source)
         return MediaRemovalResult(
             removed_ids=tuple(str(node["id"]) for node in selected),
-            missing_ids=tuple(sorted(item_ids - removed_ids)),
+            blocked_ids=blocked_ids,
+            missing_ids=tuple(sorted(item_ids - removed_ids - blocked)),
         )
 
     def _queue_linked_media_removal(
@@ -3750,6 +3787,8 @@ class MeetingTreeController(QObject):
 
     @Slot(str)
     def deleteSection(self, section_id: str):
+        if getattr(self, "_folder_mutation_pending", False):
+            return
         node = self._find_node(section_id)
         if not node or node.get("type") not in ("section", "subsection"):
             return
@@ -3768,11 +3807,12 @@ class MeetingTreeController(QObject):
         if not node or node.get("type") not in ("section", "subsection"):
             return
         selected.intersection_update(select_media_ids(self._nodes, scope_id))
-        MeetingTreeController._remove_media_ids(
+        result = MeetingTreeController._remove_media_ids(
             self,
             selected if choice is ContainerRemovalChoice.DELETE_MEDIA else set(),
             container_id=section_id,
         )
+        MeetingTreeController._warn_blocked_removal(self, result)
 
     @Slot(str)
     def recolorSection(self, section_id: str):
@@ -3864,16 +3904,30 @@ class MeetingTreeController(QObject):
         mgr.prefetch_progress.connect(self._on_prefetch_progress)
         mgr.prefetch_error.connect(self._on_prefetch_error)
 
-    def _save(self) -> bool:
+    def _save(self, *, sync_after_local: bool = False) -> bool:
         self._image_framing_save_timer.stop()
         self._image_framing_save_pending = False
         MeetingTreeController._prune_deleted_source_keys(self)
         MeetingTreeController._refresh_canonical_restore_state(self)
         if not self._tree_key:
             return True
-        if self._sync_enabled:
+        if self._sync_enabled and not sync_after_local:
             self._schedule_sync_manifest_save()
-        return self._save_local_cache()
+        if not self._save_local_cache():
+            return False
+        if self._sync_enabled and sync_after_local:
+            previous_snapshot = self._sync_snapshot
+            try:
+                self._schedule_sync_manifest_save()
+            except MeetingSyncError as exc:
+                # The local edit was accepted; keep the sync request for retry.
+                log.warning("Failed to stage meeting sync intent: %s", exc)
+                self._arm_sync_save_timer()
+                self.syncStateChanged.emit()
+            else:
+                if self._sync_snapshot != previous_snapshot:
+                    self._save_local_cache()
+        return True
 
     def _save_local_cache(self) -> bool:
         self._local_edit_revision = getattr(self, "_local_edit_revision", 0) + 1

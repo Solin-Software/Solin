@@ -439,7 +439,10 @@ def remove_items_from_manifest(
         return portable_resource_key(url, sub) if url else ""
 
     item_ids = {str(item["id"]) for item in removed if item.get("id")}
-    anonymous_keys = {resource_key(item) for item in removed if not item.get("id")}
+    anonymous_keys = {
+        key for item in removed if not item.get("id")
+        if (key := resource_key(item))
+    }
     keys = {resource_key(item) for item in removed} - {""}
     service = playlist_sync(sub)
     with service.lock:

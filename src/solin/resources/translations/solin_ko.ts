@@ -12636,5 +12636,21 @@ Media items: {count}</source>
         <source>Keep media</source>
         <translation>미디어 유지</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>&quot;{name}&quot; 하위 섹션을 삭제하시겠습니까?
+내부 항목은 유지됩니다.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>재생 중인 미디어</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>현재 재생 중이므로 “{title}”을(를) 제거할 수 없습니다.
+투사를 중지한 후 다시 시도하십시오.</translation>
+    </message>
 </context>
 </TS>

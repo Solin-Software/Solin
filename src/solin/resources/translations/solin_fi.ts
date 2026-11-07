@@ -12680,5 +12680,21 @@ Mediakohteita: {count}</translation>
         <source>Keep media</source>
         <translation>Säilytä media</translation>
     </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Poistetaanko aliosio ”{name}”?
+Sen sisältö säilytetään.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Mediaa toistetaan</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Kohdetta &quot;{title}&quot; ei voi poistaa, kun sitä toistetaan.
+Lopeta heijastaminen ja yritä uudelleen.</translation>
+    </message>
 </context>
 </TS>
