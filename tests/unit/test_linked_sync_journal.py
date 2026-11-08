@@ -476,6 +476,43 @@ def test_stage_finishes_published_intent_after_transient_directory_fsync_error(
     assert restarted.read_local().entities["image"]["title"] == "After"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Directory fsync is POSIX-specific")
+def test_stage_retains_proven_publication_when_confirmation_and_reads_fail(
+    transport, tmp_path, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_fsync = os.fsync
+    original_read = Path.read_bytes
+
+    def fail_directory_sync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("directory fsync unavailable")
+        return original_fsync(fd)
+
+    def unreadable_operation(path):
+        if path.parent in (replica.outbox_dir, replica.archive_dir) and path.suffix == ".json":
+            raise PermissionError("journal read denied")
+        return original_read(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", fail_directory_sync)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(PermissionError("journal confirmation denied")),
+        )
+        patch.setattr(Path, "read_bytes", unreadable_operation)
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert staged.entities["image"]["title"] == "After"
+    assert staged.durability_pending
+    assert replica.pending_count == 1
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "After"
+
+
 def test_stage_retains_published_intent_when_durability_is_uncertain(
     transport, tmp_path, monkeypatch,
 ):
@@ -596,6 +633,32 @@ def test_stage_rejects_unverified_intent_when_read_temporarily_fails(
     # Recovery still discovers a copy that was successfully written.
     restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
     assert restarted.read_local().entities["image"]["title"] == "After"
+
+
+def test_stage_rejects_published_intent_lost_before_confirmation(
+    transport, tmp_path, monkeypatch,
+):
+    from solin.core.storage.binary_files import ImmutablePublicationIncomplete
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_unlink = Path.unlink
+
+    def lose_intent_during_cleanup(path, *args, **kwargs):
+        if path.parent == replica.outbox_dir and path.name.startswith("."):
+            for operation_path in replica.outbox_dir.glob("*.json"):
+                original_unlink(operation_path)
+            raise PermissionError("publication finalization failed")
+        return original_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", lose_intent_during_cleanup)
+        with pytest.raises(ImmutablePublicationIncomplete):
+            replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert replica.pending_count == 0
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "Before"
 
 
 def test_stage_rejects_unreadable_same_size_conflicting_intent(

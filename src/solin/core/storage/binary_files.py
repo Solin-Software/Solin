@@ -5,6 +5,10 @@ from pathlib import Path
 import tempfile
 
 
+class ImmutablePublicationIncomplete(OSError):
+    """The exact payload became visible, but publication did not finish cleanly."""
+
+
 def write_bytes_atomic(
     path: str | Path,
     payload: bytes,
@@ -59,29 +63,39 @@ def publish_bytes_immutable(path: str | Path, payload: bytes, *, mode: int = 0o6
         dir=target.parent,
     )
     temporary = Path(temporary_name)
+    verified = False
     try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        if os.name != "nt":
-            temporary.chmod(mode)
         try:
-            if os.name == "nt":
-                os.rename(temporary, target)
-            else:
-                os.link(temporary, target)
-        except FileExistsError:
-            if target.read_bytes() != payload:
-                raise
-            return False
-        if os.name != "nt":
-            target.chmod(mode)
-            directory_descriptor = os.open(target.parent, os.O_RDONLY)
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if os.name != "nt":
+                temporary.chmod(mode)
             try:
-                os.fsync(directory_descriptor)
-            finally:
-                os.close(directory_descriptor)
-        return True
-    finally:
-        temporary.unlink(missing_ok=True)
+                if os.name == "nt":
+                    os.rename(temporary, target)
+                else:
+                    os.link(temporary, target)
+            except FileExistsError:
+                if target.read_bytes() != payload:
+                    raise
+                verified = True
+                return False
+            verified = True
+            if os.name != "nt":
+                target.chmod(mode)
+                directory_descriptor = os.open(target.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_descriptor)
+                finally:
+                    os.close(directory_descriptor)
+            return True
+        finally:
+            temporary.unlink(missing_ok=True)
+    except OSError as exc:
+        if verified:
+            raise ImmutablePublicationIncomplete(
+                f"Immutable file content was published, but finalization failed: {target}"
+            ) from exc
+        raise

@@ -630,6 +630,43 @@ def test_meeting_removal_reconciles_error_after_outbox_publication(
     assert "nested" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
 
 
+def test_meeting_removal_keeps_published_intent_when_journal_reads_are_denied(
+    synced_meeting, tmp_path, monkeypatch,
+):
+    from solin.core.ingest.sync import journal
+
+    meeting, identity = synced_meeting
+    replica = meeting._sync_service._replica(Path(meeting._sync_folder))
+    original_unlink = Path.unlink
+    original_read = Path.read_bytes
+
+    def fail_cleanup_after_publication(path, *args, **kwargs):
+        if path.parent == replica.outbox_dir and path.name.startswith("."):
+            raise PermissionError("temporary file cleanup denied")
+        return original_unlink(path, *args, **kwargs)
+
+    def unreadable_operation(path):
+        if path.parent in (replica.outbox_dir, replica.archive_dir) and path.suffix == ".json":
+            raise PermissionError("journal read denied")
+        return original_read(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_cleanup_after_publication)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(PermissionError("journal confirmation denied")),
+        )
+        patch.setattr(Path, "read_bytes", unreadable_operation)
+        result = MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+
+    assert result.removed_ids == ("nested",)
+    assert meeting._find_node("nested") is None
+    assert meeting._sync_snapshot.durability_pending
+    reloaded = MeetingLinkedFolderSync(lambda _pub_type: 0).load_tree(str(tmp_path), identity)
+    assert reloaded is not None
+    assert "nested" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
+
+
 def test_uncertain_meeting_removal_defers_file_cleanup_until_journal_is_published(
     synced_meeting, tmp_path, monkeypatch,
 ):

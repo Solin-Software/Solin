@@ -22,7 +22,11 @@ from threading import RLock
 from typing import Any
 
 from solin.core.foundation.runtime_paths import RuntimePaths
-from solin.core.storage.binary_files import publish_bytes_immutable, write_bytes_atomic
+from solin.core.storage.binary_files import (
+    ImmutablePublicationIncomplete,
+    publish_bytes_immutable,
+    write_bytes_atomic,
+)
 from solin.core.ingest.sync.lifecycle import (
     DocumentLifecycle,
     DocumentUnavailable,
@@ -645,15 +649,18 @@ class JournalReplica:
                         error = confirm_error
                 else:
                     # Visibility alone cannot establish that the immutable
-                    # operation has the expected contents. Keep a readable,
-                    # matching copy pending if its durability is uncertain.
+                    # operation has the expected contents. Either read the
+                    # matching bytes or rely on proof from our own atomic
+                    # publication when reads are temporarily unavailable.
                     verified = False
+                    unreadable = False
                     for candidate in candidates:
                         try:
                             data = candidate.read_bytes()
                         except FileNotFoundError:
                             continue
                         except OSError as read_error:
+                            unreadable = True
                             error = read_error
                             continue
                         if data != payload:
@@ -662,7 +669,9 @@ class JournalReplica:
                             )
                         verified = True
                         break
-                    if not verified:
+                    if not verified and not (
+                        unreadable and isinstance(exc, ImmutablePublicationIncomplete)
+                    ):
                         if error is exc:
                             raise
                         raise error from exc
