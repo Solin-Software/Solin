@@ -425,6 +425,9 @@ class MeetingTreeController(QObject):
         media_tree_runtime.operations.operationChanged.connect(self._on_modal_operation_changed)
         self._sync_revision = 0
         self._sync_snapshot = ReplicaSnapshot()
+        self._sync_binding_pending = False
+        self._sync_binding_generation = 0
+        self._deferred_media_cleanup: list[tuple[str | None, str, str, str]] = []
         self._sync_refresh_generation = 0
         self._sync_refresh_operation_id = ""
         self._local_snapshot_generation = 0
@@ -695,6 +698,9 @@ class MeetingTreeController(QObject):
         latest = cached_lookup(snapshot.tree_key) if callable(cached_lookup) else None
         if latest is not None and latest.revision > snapshot.revision:
             snapshot = latest
+        self._sync_binding_pending = False
+        self._sync_binding_generation = 0
+        self._deferred_media_cleanup = []
         _reset_media_requests(self)
         self._meeting_type = snapshot.pub_type
         self._tree_key = snapshot.tree_key
@@ -826,6 +832,9 @@ class MeetingTreeController(QObject):
         *,
         persist: bool = True,
     ) -> None:
+        self._sync_binding_pending = False
+        self._sync_binding_generation = 0
+        self._deferred_media_cleanup = []
         saved = clone_nodes(stored_snapshot.nodes) if stored_snapshot is not None else None
         self._canonical_reset_generation = (
             stored_snapshot.canonical_reset_generation if stored_snapshot is not None else 0
@@ -2898,7 +2907,19 @@ class MeetingTreeController(QObject):
                 raise RuntimeError("Meeting changed while sync was being enabled")
             self._apply_sync_record(value)
             self._folder_state = "present"
-            self._save_local_cache()
+            # Activation is already published. Until its local binding reaches
+            # disk, an offline restart cannot discover newly staged edits.
+            self._sync_binding_pending = True
+            try:
+                queued = self._save_local_cache()
+            except OSError as exc:
+                log.warning("Could not queue meeting sync binding: %s", exc)
+                self.storageSaveFailed.emit(self._tree_key, str(exc))
+            else:
+                if not queued:
+                    self.storageSaveFailed.emit(
+                        self._tree_key, "Could not queue meeting sync binding persistence",
+                    )
             self._start_media_requests()
             self.chromeChanged.emit()
             _emit_controller_state_changed(self)
@@ -3530,7 +3551,7 @@ class MeetingTreeController(QObject):
             if linked_source and not node.get("meeting_generated"):
                 file_path = self._url_for_node(node)
                 if MeetingTreeController._is_direct_meeting_folder_media(self, item_id, file_path):
-                    cleanup.append((node, file_path, linked_source))
+                    cleanup.append((item_id, file_path, linked_source))
                 self._linked_folder_files.pop(file_path, None)
                 self._cleanup_meeting_folder_import_for_removed_node(
                     item_id, file_path, source_removed=False,
@@ -3562,25 +3583,36 @@ class MeetingTreeController(QObject):
         for node in selected:
             self._cancel_media_info_requests_for_item(str(node["id"]))
         self._emit_section_counts()
-        scheduled_sources = set()
-        for node, file_path, linked_source in cleanup:
-            source = os.path.normcase(os.path.normpath(file_path))
-            if source not in scheduled_sources:
-                scheduled_sources.add(source)
-                self._queue_linked_media_removal(node, file_path, linked_source)
+        if getattr(getattr(self, "_sync_snapshot", None), "durability_pending", False):
+            # Leave owned files in place until the journal edit reaches durable
+            # sync storage. The normal sync retry will finish this cleanup.
+            document_id = self._sync_snapshot.document_id
+            self._deferred_media_cleanup.extend(
+                (document_id, item_id, file_path, source)
+                for item_id, file_path, source in cleanup
+            )
+        else:
+            MeetingTreeController._schedule_linked_media_cleanup(self, cleanup)
         return MediaRemovalResult(
             removed_ids=tuple(str(node["id"]) for node in selected),
             blocked_ids=blocked_ids,
             missing_ids=tuple(sorted(item_ids - removed_ids - blocked)),
         )
 
+    def _schedule_linked_media_cleanup(self, cleanup: list[tuple[str, str, str]]) -> None:
+        scheduled_sources = set()
+        for item_id, file_path, linked_source in cleanup:
+            source = os.path.normcase(os.path.normpath(file_path))
+            if source not in scheduled_sources:
+                scheduled_sources.add(source)
+                self._queue_linked_media_removal(item_id, file_path, linked_source)
+
     def _queue_linked_media_removal(
         self,
-        node: Node,
+        item_id: str,
         file_path: str,
         linked_source: str,
     ) -> None:
-        item_id = str(node.get("id") or "")
         owner_id = self._tree_session.owner_id
         if not item_id or not owner_id:
             return
@@ -3916,6 +3948,11 @@ class MeetingTreeController(QObject):
             return True
         if self._sync_enabled:
             if require_staged_sync:
+                if getattr(self, "_sync_binding_pending", False):
+                    self.storageSaveFailed.emit(
+                        self._tree_key, "Meeting sync binding is still being saved",
+                    )
+                    return False
                 try:
                     if not self._schedule_sync_manifest_save(require_staged=True):
                         log.warning("Cannot save meeting edit without a durable sync journal")
@@ -3927,6 +3964,11 @@ class MeetingTreeController(QObject):
                     log.warning("Could not stage meeting edit: %s", exc)
                     self.storageSaveFailed.emit(self._tree_key, str(exc))
                     return False
+                if getattr(self._sync_snapshot, "durability_pending", False):
+                    self.storageSaveFailed.emit(
+                        self._tree_key,
+                        "Meeting sync journal durability is pending verification",
+                    )
             else:
                 self._schedule_sync_manifest_save()
         # Once a synced edit is staged, its journal is authoritative.
@@ -3989,6 +4031,8 @@ class MeetingTreeController(QObject):
         )
         if generation <= 0:
             return False
+        if getattr(self, "_sync_binding_pending", False):
+            self._sync_binding_generation = generation
         derived_timer = getattr(self, "_derived_media_save_timer", None)
         if derived_timer is not None:
             derived_timer.stop()
@@ -4002,6 +4046,13 @@ class MeetingTreeController(QObject):
 
     @Slot(str, int)
     def _on_snapshot_write_completed(self, key: str, _generation: int) -> None:
+        if (
+            key == self._snapshot_storage_key()
+            and getattr(self, "_sync_binding_pending", False)
+            and _generation >= self._sync_binding_generation > 0
+        ):
+            self._sync_binding_pending = False
+            self._sync_binding_generation = 0
         pending_deletions = getattr(self, "_folder_deletion_persistence", {})
         for tree_key in tuple(pending_deletions):
             if key == self._snapshot_storage_key(tree_key):
@@ -4226,6 +4277,17 @@ class MeetingTreeController(QObject):
                     pending_framing,
                 )
                 self._save_local_cache()
+                if not transport_pending:
+                    deferred = getattr(self, "_deferred_media_cleanup", [])
+                    self._deferred_media_cleanup = []
+                    MeetingTreeController._schedule_linked_media_cleanup(
+                        self,
+                        [
+                            (item_id, file_path, source)
+                            for document_id, item_id, file_path, source in deferred
+                            if document_id == saved_record.snapshot.document_id
+                        ],
+                    )
             elif key == current_key:
                 self._sync_revision = saved_record.revision
         elif isinstance(error, MeetingSyncInactive):
@@ -4625,6 +4687,7 @@ class MeetingTreeController(QObject):
             return False
         index = max(0, min(insert_index, len(target_children)))
         previous_children = list(target_children)
+        previous_framing_pending = getattr(self, "_image_framing_save_pending", False)
         for offset, node in enumerate(nodes):
             target_children.insert(index + offset, node)
         saved = False
@@ -4638,6 +4701,8 @@ class MeetingTreeController(QObject):
         finally:
             if not saved:
                 target_children[:] = previous_children
+                if previous_framing_pending:
+                    self._schedule_image_framing_save()
         if not saved:
             return False
         self._start_media_requests(nodes)

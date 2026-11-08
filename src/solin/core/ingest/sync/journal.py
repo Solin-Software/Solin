@@ -98,6 +98,9 @@ class ReplicaSnapshot:
     token: str = ""
     operation_ids: tuple[str, ...] = ()
     document_id: str | None = None
+    # Transient status: the intent is visible but filesystem durability could
+    # not be verified. Never serialize it as part of the shared protocol.
+    durability_pending: bool = field(default=False, compare=False)
 
     def to_dict(self) -> dict:
         return {
@@ -621,9 +624,10 @@ class JournalReplica:
         self._flush()
         return self._materialize(operations)
 
-    def _persist(self, operation: dict) -> None:
+    def _persist(self, operation: dict) -> bool:
         with self._stage_lock:
             path = self.outbox_dir / f"{operation['id']}.json"
+            durable = True
             try:
                 _publish(path, operation)
             except OSError as exc:
@@ -632,21 +636,48 @@ class JournalReplica:
                 # and finish local durability before accepting either copy.
                 error = exc
                 payload = _encode(operation)
-                for candidate in (path, self.archive_dir / path.name):
+                candidates = (path, self.archive_dir / path.name)
+                for candidate in candidates:
                     try:
                         if _confirm_local_publication(candidate, payload):
                             break
                     except OSError as confirm_error:
                         error = confirm_error
                 else:
-                    if error is exc:
-                        raise
-                    raise error from exc
-                log.warning(
-                    "Confirmed journal operation after publication error: %s", exc,
-                )
+                    # Visibility alone cannot establish that the immutable
+                    # operation has the expected contents. Keep a readable,
+                    # matching copy pending if its durability is uncertain.
+                    verified = False
+                    for candidate in candidates:
+                        try:
+                            data = candidate.read_bytes()
+                        except FileNotFoundError:
+                            continue
+                        except OSError as read_error:
+                            error = read_error
+                            continue
+                        if data != payload:
+                            raise JournalCorrupt(
+                                f"Immutable operation conflict: {candidate.name}"
+                            )
+                        verified = True
+                        break
+                    if not verified:
+                        if error is exc:
+                            raise
+                        raise error from exc
+                    durable = False
+                    log.error(
+                        "Journal intent remains visible, but durability could not be "
+                        "confirmed; retaining the edit for recovery: %s", error,
+                    )
+                if durable:
+                    log.warning(
+                        "Confirmed journal operation after publication error: %s", exc,
+                    )
             self._local_operations[operation["id"]] = operation
             self.pending_count += 1
+            return durable
 
     def stage(
         self,
@@ -655,7 +686,7 @@ class JournalReplica:
         *,
         restore_ids: set[str] | None = None,
     ) -> ReplicaSnapshot:
-        """Durably accept an intent without touching the linked-folder transport."""
+        """Stage local intent and report durability still awaiting confirmation."""
         # A background reader may wait on cloud hydration while holding _lock.
         # Local intentions only need immutable cached/local causal history.
         with self._stage_lock:
@@ -713,6 +744,7 @@ class JournalReplica:
                 removed_fields[entity_id] = missing
         deleted = sorted(base.entities.keys() - desired.keys())
         staged_ids = set(base.operation_ids)
+        durability_pending = base.durability_pending
         if patches or removed_fields or deleted or restored:
             # A frontier bounds dependency growth without losing causal context.
             dependencies = set(base.operation_ids)
@@ -732,7 +764,7 @@ class JournalReplica:
                 "restored": restored,
             }
             operation = {**body, "id": _digest(body)}
-            self._persist(operation)
+            durability_pending |= not self._persist(operation)
             operations[operation["id"]] = operation
             staged_ids.add(operation["id"])
         if publish:
@@ -754,7 +786,10 @@ class JournalReplica:
                 for entity_id in added_ids & deleted_ids:
                     desired.pop(entity_id, None)
             ids = tuple(sorted(staged_ids))
-            return ReplicaSnapshot(desired, _digest(ids) if ids else "", ids, self.document_id)
+            return ReplicaSnapshot(
+                desired, _digest(ids) if ids else "", ids, self.document_id,
+                durability_pending=durability_pending,
+            )
         return self._materialize(operations)
 
     def _materialize(

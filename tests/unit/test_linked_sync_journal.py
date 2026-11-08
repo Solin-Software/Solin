@@ -476,8 +476,8 @@ def test_stage_finishes_published_intent_after_transient_directory_fsync_error(
     assert restarted.read_local().entities["image"]["title"] == "After"
 
 
-def test_stage_cannot_ack_published_intent_without_durability_confirmation(
-    transport, monkeypatch,
+def test_stage_retains_published_intent_when_durability_is_uncertain(
+    transport, tmp_path, monkeypatch,
 ):
     import solin.core.ingest.sync.journal as journal
 
@@ -496,7 +496,139 @@ def test_stage_cannot_ack_published_intent_without_durability_confirmation(
     with monkeypatch.context() as patch:
         patch.setattr(journal, "_publish", fail_after_publish)
         patch.setattr(journal, "_confirm_local_publication", no_durability_confirmation)
-        with pytest.raises(OSError, match="directory fsync still unavailable"):
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert staged.entities["image"]["title"] == "After"
+    assert staged.durability_pending
+    assert replica.pending_count == 1
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "After"
+
+
+def test_stage_rejects_intent_that_was_never_published(transport, tmp_path, monkeypatch):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+
+    def fail_before_publish(path, operation):
+        if path.parent == replica.outbox_dir:
+            raise OSError("outbox is unavailable")
+        original_publish(path, operation)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_before_publish)
+        with pytest.raises(OSError, match="outbox is unavailable"):
+            replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert replica.pending_count == 0
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "Before"
+
+
+def test_stage_does_not_treat_unreadable_missing_intent_as_published(
+    transport, tmp_path, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+    original_read = Path.read_bytes
+
+    def fail_before_publish(path, operation):
+        if path.parent == replica.outbox_dir:
+            raise PermissionError("outbox write denied")
+        original_publish(path, operation)
+
+    def unreadable_operation(path):
+        if path.parent in (replica.outbox_dir, replica.archive_dir) and path.suffix == ".json":
+            raise PermissionError("journal read denied")
+        return original_read(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_before_publish)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(PermissionError("journal read denied")),
+        )
+        patch.setattr(Path, "read_bytes", unreadable_operation)
+        with pytest.raises(PermissionError, match="journal read denied"):
+            replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert replica.pending_count == 0
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "Before"
+
+
+def test_stage_rejects_unverified_intent_when_read_temporarily_fails(
+    transport, tmp_path, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+    original_read = Path.read_bytes
+
+    def fail_after_publish(path, operation):
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("journal flush failed")
+
+    def unreadable_operation(path):
+        if path.parent == replica.outbox_dir and path.suffix == ".json":
+            raise PermissionError("journal read denied")
+        return original_read(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_after_publish)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(PermissionError("journal read denied")),
+        )
+        patch.setattr(Path, "read_bytes", unreadable_operation)
+        with pytest.raises(PermissionError, match="journal read denied"):
+            replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert replica.pending_count == 0
+    # Recovery still discovers a copy that was successfully written.
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "After"
+
+
+def test_stage_rejects_unreadable_same_size_conflicting_intent(
+    transport, tmp_path, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+    original_read = Path.read_bytes
+
+    def publish_conflicting_file(path, operation):
+        if path.parent == replica.outbox_dir:
+            payload = journal._encode(operation)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x" * len(payload))
+            raise OSError("outbox publication failed")
+        original_publish(path, operation)
+
+    def unreadable_operation(path):
+        if path.parent in (replica.outbox_dir, replica.archive_dir) and path.suffix == ".json":
+            raise PermissionError("journal read denied")
+        return original_read(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", publish_conflicting_file)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(PermissionError("journal read denied")),
+        )
+        patch.setattr(Path, "read_bytes", unreadable_operation)
+        with pytest.raises(PermissionError, match="journal read denied"):
             replica.stage(baseline, {"image": {"title": "After"}})
 
     assert replica.pending_count == 0

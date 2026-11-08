@@ -434,6 +434,10 @@ class MeetingLinkedFolderSync:
             snapshot = replica.stage(known, known.entities)
         return self._record_from_snapshot(folder, identity, snapshot)
 
+    @staticmethod
+    def _retirement_pending(replica: JournalReplica, snapshot: ReplicaSnapshot) -> bool:
+        return bool(snapshot.durability_pending or replica.pending_count or replica.waiting_count)
+
     def _reconcile_resource_files(self, folder: Path, snapshot: ReplicaSnapshot) -> str:
         projected = reconcile_discoveries(snapshot.entities)
         active = {
@@ -445,6 +449,8 @@ class MeetingLinkedFolderSync:
             for node in projected.values() if node.get(SUPPRESSED)
         }
         suppressions = ResourceSuppressions(snapshot.entities)
+        replica = self._replica(folder)
+        retirement_pending = self._retirement_pending(replica, snapshot)
         error = ""
         # Suppression records are the durable cleanup queue. Retrying after a
         # restart never requires guessing from a missing filesystem entry.
@@ -455,6 +461,9 @@ class MeetingLinkedFolderSync:
                 if identity in active:
                     recover_file(folder, resource, document_id=snapshot.document_id)
                 else:
+                    if retirement_pending:
+                        error = "Media cleanup is waiting for journal publication"
+                        continue
                     versions = suppressions.versions(resource)
                     if versions is None:
                         # Legacy deletions must not claim today's replacement bytes.
@@ -827,6 +836,8 @@ class MeetingLinkedFolderSync:
         replica = self._replica(folder)
         replica.require_document(activation.document_id)
         snapshot = self._bind_resource_contents(folder, replica.read())
+        if self._retirement_pending(replica, snapshot):
+            return False  # Reconciliation will retire suppressed bytes after publication.
         resource = portable_resource_key(file_path, folder)
         projected = reconcile_discoveries(snapshot.entities)
         if any(

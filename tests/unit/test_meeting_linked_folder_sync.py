@@ -1398,8 +1398,9 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 )
             )
             controller._save_local_cache = (
-                lambda: setattr(controller, "saved", True)
+                lambda: setattr(controller, "saved", True) or True
             )
+            controller.storageSaveFailed = _Signal()
             controller._linked_folder_availability_signature = lambda: ()
             controller._start_media_requests = lambda: None
             controller._warn_sync_failed = lambda _message: None
@@ -1426,6 +1427,8 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertTrue(controller._sync_enabled)
             self.assertEqual(controller._sync_revision, 9)
             self.assertTrue(controller.saved)
+            self.assertTrue(controller._sync_binding_pending)
+            self.assertEqual(controller.storageSaveFailed.calls, [])
 
     def test_folder_refresh_auto_adopts_manifest_created_elsewhere(self):
         class FakeController:

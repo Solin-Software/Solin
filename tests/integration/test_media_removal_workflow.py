@@ -10,6 +10,7 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 
 from solin.controllers.snapshot_write_coordinator import SnapshotWriteCoordinator
+from solin.core.ingest.sync.journal import ReplicaSnapshot
 from solin.core.meetings.tree_types import iter_nodes
 from solin.core.meetings.linked_folder_sync import (
     MeetingLinkedFolderSync, MeetingSyncError, MeetingSyncIdentity,
@@ -41,6 +42,7 @@ def meeting():
         }],
         _deleted_source_keys=set(), _hidden_canonical_media={},
         _linked_folder_files={}, _meeting_folder_imports={},
+        _sync_snapshot=ReplicaSnapshot(), _deferred_media_cleanup=[],
         writes=[], notifications=[], cancellations=[], cleanup=[], parent=lambda: None,
     )
     controller._find_node = lambda node_id: next(
@@ -432,6 +434,37 @@ def test_rejected_synced_insertion_cannot_be_retried(synced_meeting, monkeypatch
     assert "rejected" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
 
 
+def test_rejected_synced_insertion_rearms_pending_image_framing(synced_meeting, monkeypatch):
+    meeting, _identity = synced_meeting
+    meeting._parse_list_id = lambda value: MeetingTreeController._parse_list_id(meeting, value)
+    meeting._children_for_target = lambda kind, node_id: (
+        MeetingTreeController._children_for_target(meeting, kind, node_id)
+    )
+    meeting._image_framing_save_pending = True
+    meeting._find_node("outside")["image_framing"] = {"zoom": 1.4}
+    starts = []
+    meeting._image_framing_save_timer = SimpleNamespace(
+        stop=lambda: None, start=lambda: starts.append(True),
+    )
+    meeting._schedule_image_framing_save = lambda: (
+        MeetingTreeController._schedule_image_framing_save(meeting)
+    )
+
+    def fail_stage(*_args, **kwargs):
+        if kwargs.get("stage_only"):
+            raise OSError("journal unavailable")
+        raise AssertionError("Unexpected non-staging save")
+
+    monkeypatch.setattr(meeting._sync_service, "save_tree", fail_stage)
+    meeting._start_media_requests = lambda *_args: None
+    assert not MeetingTreeController._commit_inserted_nodes(
+        meeting, "section:section", 0, [_media("rejected")], signal_name="media",
+    )
+    assert meeting._find_node("rejected") is None
+    assert meeting._image_framing_save_pending
+    assert starts == [True]
+
+
 def test_synced_insertion_staged_before_rejected_local_cache(synced_meeting):
     meeting, identity = synced_meeting
     meeting._parse_list_id = lambda value: MeetingTreeController._parse_list_id(meeting, value)
@@ -447,6 +480,36 @@ def test_synced_insertion_staged_before_rejected_local_cache(synced_meeting):
     reloaded = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
     assert reloaded is not None
     assert "added" in {node["id"] for node in iter_nodes(reloaded.nodes)}
+
+
+def test_synced_insertion_waits_for_initial_local_sync_binding(synced_meeting):
+    meeting, identity = synced_meeting
+    meeting._parse_list_id = lambda value: MeetingTreeController._parse_list_id(meeting, value)
+    meeting._children_for_target = lambda kind, node_id: (
+        MeetingTreeController._children_for_target(meeting, kind, node_id)
+    )
+    meeting._start_media_requests = lambda *_args: None
+    meeting._sync_binding_pending = True
+    meeting._sync_binding_generation = 3
+    meeting._snapshot_storage_key = lambda *_args: "meeting:binding"
+    meeting.storageSaved = SimpleNamespace(emit=lambda *_args: None)
+
+    assert not MeetingTreeController._commit_inserted_nodes(
+        meeting, "section:section", 0, [_media("early")], signal_name="media",
+    )
+    assert meeting._find_node("early") is None
+    assert not meeting._pending_sync_saves
+    reloaded = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
+    assert reloaded is not None
+    assert "early" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
+
+    MeetingTreeController._on_snapshot_write_completed(meeting, "meeting:binding", 2)
+    assert meeting._sync_binding_pending
+    MeetingTreeController._on_snapshot_write_completed(meeting, "meeting:binding", 3)
+    assert not meeting._sync_binding_pending
+    assert MeetingTreeController._commit_inserted_nodes(
+        meeting, "section:section", 0, [_media("accepted")], signal_name="media",
+    )
 
 
 def test_meeting_removal_refuses_sync_edit_without_journal(meeting):
@@ -565,6 +628,185 @@ def test_meeting_removal_reconciles_error_after_outbox_publication(
     reloaded = MeetingLinkedFolderSync(lambda _pub_type: 0).load_tree(str(tmp_path), identity)
     assert reloaded is not None
     assert "nested" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
+
+
+def test_uncertain_meeting_removal_defers_file_cleanup_until_journal_is_published(
+    synced_meeting, tmp_path, monkeypatch,
+):
+    from solin.core.ingest.sync import journal
+
+    meeting, identity = synced_meeting
+    removed_source = meeting._find_node("manual")
+    removed_source["linked_folder_source"] = meeting._sync_folder
+    removed_source["media_ref"] = {
+        "file_path": str(Path(meeting._sync_folder) / "manual.mp4"),
+    }
+    meeting._meeting_folder_imports["manual.mp4"] = {
+        "kind": "media", "path": removed_source["media_ref"]["file_path"],
+        "node_ids": ["manual"],
+    }
+    cleanup = []
+    meeting._queue_linked_media_removal = lambda *_args: cleanup.append(True)
+    failures = []
+    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: failures.append(args))
+    replica = meeting._sync_service._replica(Path(meeting._sync_folder))
+    original_publish = journal._publish
+
+    def error_after_publish(path, operation):
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("publication became visible")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", error_after_publish)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(OSError("durability unavailable")),
+        )
+        result = MeetingTreeController.remove_additional_media(meeting, "section:section")
+
+    assert "manual" in result.removed_ids
+    assert meeting._find_node("manual") is None
+    assert meeting._sync_snapshot.durability_pending
+    assert failures and "durability" in failures[0][1].lower()
+    assert cleanup == []
+    restarted = MeetingLinkedFolderSync(lambda _pub_type: 0)
+    record = restarted.load_tree(str(tmp_path), identity)
+    assert record is not None
+    assert "manual" not in {node["id"] for node in iter_nodes(record.nodes)}
+
+    request = next(iter(meeting._pending_sync_saves.values()))
+    published = meeting._sync_service.save_tree(
+        request.folder, request.identity, nodes=request.nodes,
+        deleted_source_keys=request.deleted_source_keys,
+        linked_folder_files=request.linked_folder_files,
+        meeting_folder_imports=request.meeting_folder_imports,
+        base_snapshot=request.snapshot,
+    )
+    meeting._apply_sync_record = lambda record: setattr(meeting, "_sync_snapshot", record.snapshot)
+    MeetingTreeController._on_sync_save_completed(
+        meeting, next(iter(meeting._pending_sync_saves)), request.generation, published, None,
+    )
+    assert not published.pending_count
+    assert cleanup == [True]
+    assert not meeting._deferred_media_cleanup
+
+
+def test_meeting_sync_retains_media_files_until_deletion_journal_is_published(
+    tmp_path, monkeypatch,
+):
+    from solin.core.ingest.sync import journal
+
+    folder = tmp_path / "2026-11-02 MW"
+    folder.mkdir()
+    source = folder / "manual.mp4"
+    source.write_bytes(b"original media")
+    identity = MeetingSyncIdentity("test", "mwb", date(2026, 11, 2))
+    service = MeetingLinkedFolderSync(lambda _pub_type: 0)
+    media = _media("manual")
+    media["media_ref"] = {"file_path": str(source)}
+    media["linked_folder_source"] = str(folder)
+    initial = service.save_tree(
+        folder, identity, nodes=[media], deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={}, enable=True,
+    )
+    replica = service._replica(folder)
+    original_publish = journal._publish
+
+    def unavailable_publication(path, operation):
+        if path.parent == replica.operations_dir:
+            raise OSError("shared journal unavailable")
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("durability cannot be confirmed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", unavailable_publication)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(OSError("directory sync unavailable")),
+        )
+        staged = service.save_tree(
+            folder, identity, nodes=[], deleted_source_keys=set(),
+            linked_folder_files={}, meeting_folder_imports={},
+            base_snapshot=initial.snapshot, stage_only=True,
+        )
+        assert staged.snapshot.durability_pending
+        pending = service.save_tree(
+            folder, identity, nodes=[], deleted_source_keys=set(),
+            linked_folder_files={}, meeting_folder_imports={},
+            base_snapshot=staged.snapshot,
+        )
+        assert pending.pending_count > 0
+        assert pending.resource_error
+        assert source.read_bytes() == b"original media"
+
+        reloaded = MeetingLinkedFolderSync(lambda _pub_type: 0).load_tree(
+            str(tmp_path), identity,
+        )
+        assert reloaded is not None and reloaded.pending_count > 0
+        assert source.read_bytes() == b"original media"
+
+    published = service.save_tree(
+        folder, identity, nodes=[], deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={},
+        base_snapshot=pending.snapshot,
+    )
+    assert published.pending_count == 0
+    assert not published.resource_error
+    assert not source.exists()
+
+
+def test_direct_meeting_cleanup_waits_for_pending_deletion_publication(
+    tmp_path, monkeypatch,
+):
+    from solin.core.ingest.sync import journal
+
+    folder = tmp_path / "2026-11-02 MW"
+    folder.mkdir()
+    source = folder / "manual.mp4"
+    source.write_bytes(b"original media")
+    identity = MeetingSyncIdentity("test", "mwb", date(2026, 11, 2))
+    service = MeetingLinkedFolderSync(lambda _pub_type: 0)
+    media = _media("manual")
+    media["media_ref"] = {"file_path": str(source)}
+    media["linked_folder_source"] = str(folder)
+    initial = service.save_tree(
+        folder, identity, nodes=[media], deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={}, enable=True,
+    )
+    replica = service._replica(folder)
+    original_publish = journal._publish
+
+    def fail_shared_publication(path, operation):
+        if path.parent == replica.operations_dir:
+            raise OSError("shared journal unavailable")
+        original_publish(path, operation)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_shared_publication)
+        staged = service.save_tree(
+            folder, identity, nodes=[], deleted_source_keys=set(),
+            linked_folder_files={}, meeting_folder_imports={},
+            base_snapshot=initial.snapshot, stage_only=True,
+        )
+        assert not staged.snapshot.durability_pending
+        assert replica.pending_count > 0
+        assert not service.remove_media_file(
+            folder, identity, str(source),
+            document_id=staged.snapshot.document_id,
+            file_store=SimpleNamespace(),
+        )
+        assert source.read_bytes() == b"original media"
+
+    published = service.save_tree(
+        folder, identity, nodes=[], deleted_source_keys=set(),
+        linked_folder_files={}, meeting_folder_imports={},
+        base_snapshot=staged.snapshot,
+    )
+    assert published.pending_count == 0
+    assert not published.resource_error
+    assert not source.exists()
 
 
 def test_meeting_folder_mutation_blocks_batch(meeting):
