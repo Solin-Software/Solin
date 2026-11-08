@@ -1,7 +1,9 @@
 """Removal contracts shared by single, scoped and global commands."""
 
+from concurrent.futures import Future
 from copy import deepcopy
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -335,19 +337,19 @@ def test_failed_meeting_removal_rearms_pending_image_framing(meeting):
     ] == {"zoom": 1.3}
 
 
-def test_nonremoval_sync_stage_failure_retains_and_retries_save(meeting, tmp_path, monkeypatch):
-    service = MeetingLinkedFolderSync(lambda _pub_type: 0)
+def test_nonremoval_sync_stage_failure_retains_and_retries_save(synced_meeting, monkeypatch):
+    meeting, identity = synced_meeting
+    service = meeting._sync_service
+    original_save_tree = service.save_tree
+    meeting._find_node("manual")["title"] = "Edited while offline"
 
-    def stage_unavailable(*_args, **_kwargs):
-        raise OSError("journal temporarily unavailable")
+    def stage_unavailable(*args, **kwargs):
+        if kwargs.get("stage_only"):
+            raise OSError("journal temporarily unavailable")
+        return original_save_tree(*args, **kwargs)
 
     monkeypatch.setattr(service, "save_tree", stage_unavailable)
     events = []
-    meeting._sync_folder = str(tmp_path)
-    meeting._sync_identity = MeetingSyncIdentity("test", "mwb", date(2026, 11, 2))
-    meeting._sync_revision = 1
-    meeting._sync_service = service
-    meeting._pending_sync_saves = {}
     meeting._sync_save_inflight = None
     meeting._cancel_sync_refresh = lambda: events.append("cancel-refresh")
     meeting._sync_save_timer = SimpleNamespace(
@@ -357,10 +359,94 @@ def test_nonremoval_sync_stage_failure_retains_and_retries_save(meeting, tmp_pat
     meeting.syncStateChanged = SimpleNamespace(emit=lambda: events.append("state-changed"))
 
     with pytest.raises(OSError, match="journal temporarily unavailable"):
-        MeetingTreeController._schedule_sync_manifest_save(meeting)
+        MeetingTreeController._schedule_sync_manifest_save(meeting, delay_ms=0)
 
     assert len(meeting._pending_sync_saves) == 1
     assert events == ["cancel-refresh", "retry-timer", "state-changed"]
+    monkeypatch.setattr(service, "save_tree", original_save_tree)
+
+    def run_immediately(task, *args):
+        future = Future()
+        future.set_result(task(*args))
+        return future
+
+    meeting._sync_save_executor = SimpleNamespace(submit=run_immediately)
+    meeting._media_tree_runtime = SimpleNamespace(
+        resource_lanes=SimpleNamespace(run=lambda _claim, callback: callback()),
+    )
+    meeting._apply_sync_record = lambda record: setattr(meeting, "_sync_revision", record.revision)
+    meeting._syncSaveCompleted = SimpleNamespace(
+        emit=lambda *args: MeetingTreeController._on_sync_save_completed(meeting, *args),
+    )
+    meeting._emit_sync_save_completed = lambda *args: (
+        MeetingTreeController._emit_sync_save_completed(meeting, *args)
+    )
+    MeetingTreeController._drain_sync_manifest_saves(meeting)
+
+    assert meeting._pending_sync_saves == {}
+    reloaded = service.load_tree(str(Path(meeting._sync_folder).parent), identity)
+    assert reloaded is not None
+    assert next(node for node in iter_nodes(reloaded.nodes) if node["id"] == "manual")[
+        "title"
+    ] == "Edited while offline"
+
+
+def test_rejected_synced_insertion_cannot_be_retried(synced_meeting, monkeypatch):
+    meeting, identity = synced_meeting
+    meeting._parse_list_id = lambda value: MeetingTreeController._parse_list_id(meeting, value)
+    meeting._children_for_target = lambda kind, node_id: (
+        MeetingTreeController._children_for_target(meeting, kind, node_id)
+    )
+    meeting._start_media_requests = lambda *_args: None
+    meeting._sync_save_inflight = None
+    MeetingTreeController._schedule_sync_manifest_save(meeting)
+    previously_queued = deepcopy(meeting._pending_sync_saves)
+    original_save_tree = meeting._sync_service.save_tree
+
+    def fail_stage(*args, **kwargs):
+        if kwargs.get("stage_only"):
+            raise OSError("journal unavailable during insertion")
+        return original_save_tree(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(meeting._sync_service, "save_tree", fail_stage)
+        accepted = MeetingTreeController._commit_inserted_nodes(
+            meeting, "section:section", 0, [_media("rejected")], signal_name="media",
+        )
+
+    assert not accepted
+    assert meeting._find_node("rejected") is None
+    assert meeting._pending_sync_saves == previously_queued
+    for request in meeting._pending_sync_saves.values():
+        meeting._sync_service.save_tree(
+            request.folder, request.identity, nodes=request.nodes,
+            deleted_source_keys=request.deleted_source_keys,
+            linked_folder_files=request.linked_folder_files,
+            meeting_folder_imports=request.meeting_folder_imports,
+            base_snapshot=request.snapshot,
+            canonical_reset_generation=request.canonical_reset_generation,
+            hidden_canonical_media=request.hidden_canonical_media,
+        )
+    reloaded = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
+    assert reloaded is not None
+    assert "rejected" not in {node["id"] for node in iter_nodes(reloaded.nodes)}
+
+
+def test_synced_insertion_staged_before_rejected_local_cache(synced_meeting):
+    meeting, identity = synced_meeting
+    meeting._parse_list_id = lambda value: MeetingTreeController._parse_list_id(meeting, value)
+    meeting._children_for_target = lambda kind, node_id: (
+        MeetingTreeController._children_for_target(meeting, kind, node_id)
+    )
+    meeting._start_media_requests = lambda *_args: None
+    meeting._save_local_cache = lambda: False
+
+    assert MeetingTreeController._commit_inserted_nodes(
+        meeting, "section:section", 0, [_media("added")], signal_name="media",
+    )
+    reloaded = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
+    assert reloaded is not None
+    assert "added" in {node["id"] for node in iter_nodes(reloaded.nodes)}
 
 
 def test_meeting_removal_refuses_sync_edit_without_journal(meeting):

@@ -135,6 +135,25 @@ def _publish(path: Path, operation: dict) -> None:
         raise JournalCorrupt(f"Immutable operation conflict: {path.name}") from exc
 
 
+def _confirm_local_publication(path: Path, payload: bytes) -> bool:
+    """Confirm an already visible immutable intent is durable on this filesystem."""
+    try:
+        # Windows requires a writable descriptor for os.fsync / _commit.
+        with path.open("r+b") as handle:
+            if handle.read() != payload:
+                raise JournalCorrupt(f"Immutable operation conflict: {path.name}")
+            os.fsync(handle.fileno())
+        if os.name != "nt":
+            descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    except FileNotFoundError:
+        return False  # Another local replica may have moved the intent to the archive.
+    return True
+
+
 def _validate(operation: Any, namespace: str) -> dict:
     if not isinstance(operation, dict):
         raise JournalCorrupt("Operation must be an object")
@@ -608,16 +627,23 @@ class JournalReplica:
             try:
                 _publish(path, operation)
             except OSError as exc:
-                # Publication may succeed before chmod or directory fsync fails.
-                # A visible intent can be replayed, so the caller must not roll it back.
-                try:
-                    published = path.read_bytes() == _encode(operation)
-                except OSError:
-                    published = False
-                if not published:
-                    raise
+                # A publication can fail after becoming visible, or another
+                # local replica may have already archived the intent. Verify
+                # and finish local durability before accepting either copy.
+                error = exc
+                payload = _encode(operation)
+                for candidate in (path, self.archive_dir / path.name):
+                    try:
+                        if _confirm_local_publication(candidate, payload):
+                            break
+                    except OSError as confirm_error:
+                        error = confirm_error
+                else:
+                    if error is exc:
+                        raise
+                    raise error from exc
                 log.warning(
-                    "Journal operation remains visible after publication error: %s", exc,
+                    "Confirmed journal operation after publication error: %s", exc,
                 )
             self._local_operations[operation["id"]] = operation
             self.pending_count += 1

@@ -3918,28 +3918,28 @@ class MeetingTreeController(QObject):
             if require_staged_sync:
                 try:
                     if not self._schedule_sync_manifest_save(require_staged=True):
-                        log.warning("Cannot remove meeting media without a durable sync journal")
+                        log.warning("Cannot save meeting edit without a durable sync journal")
                         self.storageSaveFailed.emit(
                             self._tree_key, "Meeting sync journal is unavailable",
                         )
                         return False
                 except (MeetingSyncError, OSError) as exc:
-                    log.warning("Could not stage meeting media removal: %s", exc)
+                    log.warning("Could not stage meeting edit: %s", exc)
                     self.storageSaveFailed.emit(self._tree_key, str(exc))
                     return False
             else:
                 self._schedule_sync_manifest_save()
-        # Once a synced removal is staged, its journal is authoritative.
+        # Once a synced edit is staged, its journal is authoritative.
         # A rejected local cache request cannot undo the durable edit.
         try:
             local_saved = self._save_local_cache()
         except OSError as exc:
             if not (require_staged_sync and self._sync_enabled):
                 raise
-            log.warning("Could not queue local snapshot for staged meeting removal: %s", exc)
+            log.warning("Could not queue local snapshot for staged meeting edit: %s", exc)
             return True
         if not local_saved and require_staged_sync and self._sync_enabled:
-            log.warning("Local snapshot queue rejected a staged meeting removal")
+            log.warning("Local snapshot queue rejected a staged meeting edit")
             return True
         return local_saved
 
@@ -4629,7 +4629,12 @@ class MeetingTreeController(QObject):
             target_children.insert(index + offset, node)
         saved = False
         try:
-            saved = self._save()
+            # Prepared inserts can be rolled back (and their copied files
+            # removed). Stage their intent before considering the edit accepted.
+            if getattr(self, "_sync_enabled", False):
+                saved = self._save(require_staged_sync=True)
+            else:
+                saved = self._save()
         finally:
             if not saved:
                 target_children[:] = previous_children

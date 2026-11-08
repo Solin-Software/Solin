@@ -448,16 +448,22 @@ def test_cold_stage_fails_closed_on_corrupt_local_history(transport, tmp_path):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Directory fsync is POSIX-specific")
-def test_stage_preserves_published_intent_after_directory_fsync_error(transport, tmp_path, monkeypatch):
+def test_stage_finishes_published_intent_after_transient_directory_fsync_error(
+    transport, tmp_path, monkeypatch,
+):
     from solin.core.storage import binary_files
 
     replica = transport.replicas[0]
     baseline = replica.read({"image": {"title": "Before"}})
     original_fsync = os.fsync
+    directory_syncs = 0
 
     def fail_directory_sync(fd):
+        nonlocal directory_syncs
         if stat.S_ISDIR(os.fstat(fd).st_mode):
-            raise OSError("directory fsync unavailable")
+            directory_syncs += 1
+            if directory_syncs == 1:
+                raise OSError("directory fsync temporarily unavailable")
         return original_fsync(fd)
 
     with monkeypatch.context() as patch:
@@ -465,7 +471,64 @@ def test_stage_preserves_published_intent_after_directory_fsync_error(transport,
         staged = replica.stage(baseline, {"image": {"title": "After"}})
 
     assert staged.entities["image"]["title"] == "After"
+    assert directory_syncs >= 2
     restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "After"
+
+
+def test_stage_cannot_ack_published_intent_without_durability_confirmation(
+    transport, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+
+    def fail_after_publish(path, operation):
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("directory fsync failed")
+
+    def no_durability_confirmation(*_args):
+        raise OSError("directory fsync still unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_after_publish)
+        patch.setattr(journal, "_confirm_local_publication", no_durability_confirmation)
+        with pytest.raises(OSError, match="directory fsync still unavailable"):
+            replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert replica.pending_count == 0
+
+
+def test_stage_reconciles_publication_archived_by_another_replica(
+    transport, tmp_path, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    first = transport.replicas[0]
+    baseline = first.read({"image": {"title": "Before"}})
+    second = JournalReplica(first.folder, "meeting", state_dir=tmp_path / "local-0")
+    original_publish = journal._publish
+    archived = []
+
+    def publish_then_archive(path, operation):
+        original_publish(path, operation)
+        if path.parent == first.outbox_dir and not archived:
+            second.read()
+            assert not path.exists()
+            assert (first.archive_dir / path.name).exists()
+            archived.append(path.name)
+            raise OSError("outbox was archived after publication")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", publish_then_archive)
+        staged = first.stage(baseline, {"image": {"title": "After"}})
+
+    assert archived
+    assert staged.entities["image"]["title"] == "After"
+    restarted = JournalReplica(first.folder, "meeting", state_dir=tmp_path / "local-0")
     assert restarted.read_local().entities["image"]["title"] == "After"
 
 
