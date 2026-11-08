@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import shutil
+import stat
 import threading
 from pathlib import Path
 
@@ -443,6 +445,28 @@ def test_cold_stage_fails_closed_on_corrupt_local_history(transport, tmp_path):
     with pytest.raises(JournalCorrupt):
         restarted.stage(baseline, {"image": {"title": "Must not be accepted"}})
     assert not list(restarted.outbox_dir.glob("*.json"))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Directory fsync is POSIX-specific")
+def test_stage_preserves_published_intent_after_directory_fsync_error(transport, tmp_path, monkeypatch):
+    from solin.core.storage import binary_files
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_fsync = os.fsync
+
+    def fail_directory_sync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("directory fsync unavailable")
+        return original_fsync(fd)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(binary_files.os, "fsync", fail_directory_sync)
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert staged.entities["image"]["title"] == "After"
+    restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
+    assert restarted.read_local().entities["image"]["title"] == "After"
 
 
 @pytest.mark.parametrize(

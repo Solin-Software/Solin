@@ -3521,6 +3521,7 @@ class MeetingTreeController(QObject):
         previous_linked = dict(self._linked_folder_files)
         previous_imports = copy.deepcopy(self._meeting_folder_imports)
         previous_hidden = copy.deepcopy(getattr(self, "_hidden_canonical_media", {}))
+        previous_framing_pending = getattr(self, "_image_framing_save_pending", False)
         cleanup = []
         for node in selected:
             item_id = str(node["id"])
@@ -3551,6 +3552,8 @@ class MeetingTreeController(QObject):
                 self._meeting_folder_imports = previous_imports
                 self._hidden_canonical_media = previous_hidden
                 MeetingTreeController._refresh_canonical_restore_state(self)
+                if previous_framing_pending:
+                    self._schedule_image_framing_save()
         if not saved:
             return MediaRemovalResult(
                 blocked_ids=blocked_ids,
@@ -4080,6 +4083,10 @@ class MeetingTreeController(QObject):
             except (MeetingSyncError, OSError):
                 if not require_staged:
                     self._pending_sync_saves[key] = request
+                    if callable(cancel_refresh):
+                        cancel_refresh()
+                    self._arm_sync_save_timer()
+                    self.syncStateChanged.emit()
                 raise
             request.snapshot = staged.snapshot
             request.nodes = clone_nodes(staged.nodes)

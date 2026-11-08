@@ -11,6 +11,7 @@ from contextlib import contextmanager
 import hashlib
 import heapq
 import json
+import logging
 import os
 import re
 import uuid
@@ -30,6 +31,7 @@ from solin.core.ingest.sync.lifecycle import (
 )
 
 VERSION = 1
+log = logging.getLogger(__name__)
 
 
 def _default_state_dir() -> Path:
@@ -602,7 +604,21 @@ class JournalReplica:
 
     def _persist(self, operation: dict) -> None:
         with self._stage_lock:
-            _publish(self.outbox_dir / f"{operation['id']}.json", operation)
+            path = self.outbox_dir / f"{operation['id']}.json"
+            try:
+                _publish(path, operation)
+            except OSError as exc:
+                # Publication may succeed before chmod or directory fsync fails.
+                # A visible intent can be replayed, so the caller must not roll it back.
+                try:
+                    published = path.read_bytes() == _encode(operation)
+                except OSError:
+                    published = False
+                if not published:
+                    raise
+                log.warning(
+                    "Journal operation remains visible after publication error: %s", exc,
+                )
             self._local_operations[operation["id"]] = operation
             self.pending_count += 1
 
