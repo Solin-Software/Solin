@@ -18,6 +18,7 @@ class MediaRemovalResult:
     blocked_ids: tuple[str, ...] = ()
     missing_ids: tuple[str, ...] = ()
     failed_ids: tuple[str, ...] = ()
+    pending_ids: tuple[str, ...] = ()
 
 
 def select_media_ids(

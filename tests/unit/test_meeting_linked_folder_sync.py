@@ -1061,6 +1061,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 },
             ]
             controller._sync_enabled = True
+            controller._sync_folder = str(record.folder)
             controller._sync_revision = 1
             controller._deleted_source_keys = set()
             controller._linked_folder_files = {}
@@ -1134,6 +1135,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             revision=2,
         )
         controller._sync_enabled = True
+        controller._sync_folder = str(record.folder)
         controller._sync_revision = 1
         controller._deleted_source_keys = set()
         controller._linked_folder_files = {}
@@ -1372,6 +1374,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             controller._sync_available = True
             controller._sync_identity = _identity("mwb")
             controller._tree_key = controller._sync_identity.tree_key
+            controller._snapshot_storage_key = lambda: "meeting:enable"
             controller._sync_root = str(folder.parent)
             controller._sync_folder = ""
             controller._sync_enabled = False
@@ -1427,7 +1430,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertTrue(controller._sync_enabled)
             self.assertEqual(controller._sync_revision, 9)
             self.assertTrue(controller.saved)
-            self.assertTrue(controller._sync_binding_pending)
+            self.assertEqual(controller._sync_binding_writes, {"meeting:enable": 0})
             self.assertEqual(controller.storageSaveFailed.calls, [])
 
     def test_folder_refresh_auto_adopts_manifest_created_elsewhere(self):
@@ -1452,6 +1455,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             )
             controller = FakeController()
             controller._tree_key = identity.tree_key
+            controller._snapshot_storage_key = lambda: "meeting:discovery"
             controller._sync_root = ""
             controller._sync_identity = identity
             controller._sync_available = False
@@ -1510,8 +1514,9 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
                 )
             )
             controller._save_local_cache = (
-                lambda: setattr(controller, "saved", True)
+                lambda: setattr(controller, "saved", True) or True
             )
+            controller.storageSaveFailed = _Signal()
             controller._schedule_sync_manifest_save = lambda: None
             controller._start_media_requests = lambda *_args: None
             controller._emit_section_counts = (
@@ -1569,6 +1574,7 @@ class MeetingTreeControllerSyncTests(unittest.TestCase):
             self.assertEqual(controller._nodes, record.nodes)
             self.assertEqual(controller._deleted_source_keys, {"remote-source"})
             self.assertTrue(controller.saved)
+            self.assertEqual(controller._sync_binding_writes, {"meeting:discovery": 0})
             self.assertEqual(len(controller.stateChanged.calls), 1)
 
 

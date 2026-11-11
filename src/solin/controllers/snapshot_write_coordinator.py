@@ -30,6 +30,14 @@ class _WriteRequest:
     conflict_key: str | ResourceClaim
 
 
+@dataclass(frozen=True, slots=True)
+class SnapshotWriteReceipt:
+    """The request is queued; ``durable`` confirms its writer already finished."""
+
+    generation: int
+    durable: bool
+
+
 class SnapshotWriteCoordinator(QObject):
     """Coalesce writes by storage key and execute them serially off Qt."""
 
@@ -84,6 +92,47 @@ class SnapshotWriteCoordinator(QObject):
             self._timer.start(self._debounce_ms)
         return generation
 
+    def request_critical(
+        self,
+        key: str,
+        writer: SnapshotWriter,
+        *,
+        wait_ms: int = 25,
+    ) -> SnapshotWriteReceipt:
+        """Prioritize a recovery write without performing disk I/O on Qt.
+
+        Return a durable receipt only when the worker completes inside the
+        bounded wait. Otherwise its queued generation owns the normal retry
+        lifecycle, including ordering behind an in-flight write for this key.
+        """
+        if self._closing:
+            return SnapshotWriteReceipt(0, False)
+        if not key or not callable(writer):
+            raise ValueError("Snapshot writes require a key and writer")
+        outcome: list[BaseException | None] = []
+
+        def observe_write() -> None:
+            try:
+                writer()
+            except BaseException as exc:  # noqa: BLE001 - worker-to-caller boundary
+                outcome.append(exc)
+                raise
+            else:
+                outcome.append(None)
+
+        generation = self.request(key, observe_write)
+        if self._inflight is None:
+            self._drain(priority_key=key)
+        inflight = self._inflight
+        if inflight is None or (inflight[0].key, inflight[0].generation) != (key, generation):
+            return SnapshotWriteReceipt(generation, False)
+        inflight[1].join(timeout=max(0, wait_ms) / 1_000)
+        if inflight[1].is_alive() or not outcome:
+            return SnapshotWriteReceipt(generation, False)
+        if outcome[0] is not None:
+            raise outcome[0]
+        return SnapshotWriteReceipt(generation, True)
+
     def retry(self, key: str) -> bool:
         if self._closing or key in self._pending:
             return False
@@ -117,10 +166,10 @@ class SnapshotWriteCoordinator(QObject):
         return tuple(dict.fromkeys(unfinished))
 
     @Slot()
-    def _drain(self) -> None:
+    def _drain(self, priority_key: str | None = None) -> None:
         if self._closing or self._inflight is not None or not self._pending:
             return
-        key = next(iter(self._pending))
+        key = priority_key if priority_key in self._pending else next(iter(self._pending))
         request = self._pending.pop(key)
 
         def run() -> None:

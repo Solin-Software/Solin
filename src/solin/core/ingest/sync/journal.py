@@ -23,7 +23,6 @@ from typing import Any
 
 from solin.core.foundation.runtime_paths import RuntimePaths
 from solin.core.storage.binary_files import (
-    ImmutablePublicationIncomplete,
     publish_bytes_immutable,
     write_bytes_atomic,
 )
@@ -233,6 +232,7 @@ class JournalReplica:
         self._required_document_id: str | None = None
         self._operations: dict[str, dict] = {}
         self._local_operations: dict[str, dict] = {}
+        self._unconfirmed_operations: dict[str, dict] = {}
         self._signatures: dict[Path, tuple[int, int, int]] = {}
         self.pending_count = 0
         self.waiting_count = 0
@@ -255,6 +255,7 @@ class JournalReplica:
         self.outbox_dir = self.state_dir / "outbox"
         self._operations = {}
         self._local_operations = {}
+        self._unconfirmed_operations = {}
         self._signatures = {}
         self._projection = None
         self._projection_ids = None
@@ -660,8 +661,14 @@ class JournalReplica:
                         except FileNotFoundError:
                             continue
                         except OSError as read_error:
-                            unreadable = True
                             error = read_error
+                            try:
+                                candidate.stat()
+                            except FileNotFoundError:
+                                continue
+                            except OSError:
+                                pass  # Metadata is as uncertain as the content.
+                            unreadable = True
                             continue
                         if data != payload:
                             raise JournalCorrupt(
@@ -669,23 +676,46 @@ class JournalReplica:
                             )
                         verified = True
                         break
-                    if not verified and not (
-                        unreadable and isinstance(exc, ImmutablePublicationIncomplete)
-                    ):
+                    if not verified and not unreadable:
                         if error is exc:
                             raise
                         raise error from exc
                     durable = False
                     log.error(
-                        "Journal intent remains visible, but durability could not be "
-                        "confirmed; retaining the edit for recovery: %s", error,
+                        "Journal intent could not be verified; retaining the edit "
+                        "in memory for reconciliation: %s", error,
                     )
                 if durable:
                     log.warning(
                         "Confirmed journal operation after publication error: %s", exc,
                     )
+            else:
+                if operation["id"] in self._unconfirmed_operations:
+                    # A retry can find identical bytes from a prior publish
+                    # whose fsync failed. Their presence is not a durability
+                    # receipt; finish confirmation before unblocking descendants.
+                    payload = _encode(operation)
+                    error = None
+                    for candidate in (path, self.archive_dir / path.name):
+                        try:
+                            if _confirm_local_publication(candidate, payload):
+                                break
+                        except OSError as confirm_error:
+                            error = confirm_error
+                    else:
+                        durable = False
+                        log.error(
+                            "Journal intent still lacks durability confirmation: %s",
+                            error or "local operation copy not found",
+                        )
+            is_new = operation["id"] not in self._local_operations
             self._local_operations[operation["id"]] = operation
-            self.pending_count += 1
+            if durable:
+                self._unconfirmed_operations.pop(operation["id"], None)
+            else:
+                self._unconfirmed_operations[operation["id"]] = operation
+            if is_new:
+                self.pending_count += 1
             return durable
 
     def stage(
@@ -720,6 +750,12 @@ class JournalReplica:
         publish: bool,
     ) -> ReplicaSnapshot:
         desired = _entities(entities)
+        # An ambiguous filesystem error can occur after publication but
+        # before the immutable operation can be read back. Do not build a
+        # dependent operation until that exact intent has been confirmed.
+        for operation in tuple(self._unconfirmed_operations.values()):
+            if not self._persist(operation):
+                raise JournalUnavailable("Earlier local intent awaits durability verification")
         if publish:
             operations = self._load(offline=True)
         else:

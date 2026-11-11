@@ -505,6 +505,8 @@ def test_stage_retains_proven_publication_when_confirmation_and_reads_fail(
         )
         patch.setattr(Path, "read_bytes", unreadable_operation)
         staged = replica.stage(baseline, {"image": {"title": "After"}})
+        with pytest.raises(JournalUnavailable, match="awaits durability verification"):
+            replica.stage(staged, {"image": {"title": "Later"}})
 
     assert staged.entities["image"]["title"] == "After"
     assert staged.durability_pending
@@ -540,6 +542,38 @@ def test_stage_retains_published_intent_when_durability_is_uncertain(
     assert replica.pending_count == 1
     restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
     assert restarted.read_local().entities["image"]["title"] == "After"
+
+
+def test_replaying_unconfirmed_journal_intent_requires_fsync_confirmation(
+    transport, monkeypatch,
+):
+    import solin.core.ingest.sync.journal as journal
+
+    replica = transport.replicas[0]
+    baseline = replica.read({"image": {"title": "Before"}})
+    original_publish = journal._publish
+
+    def fail_after_publication(path, operation):
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("publication status unavailable")
+
+    def fail_confirmation(*_args):
+        raise OSError("fsync unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", fail_after_publication)
+        patch.setattr(journal, "_confirm_local_publication", fail_confirmation)
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
+
+    assert staged.durability_pending
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_confirm_local_publication", fail_confirmation)
+        with pytest.raises(JournalUnavailable, match="awaits durability verification"):
+            replica.stage(staged, staged.entities)
+
+    assert len(replica._unconfirmed_operations) == 1
+    assert replica.pending_count == 1
 
 
 def test_stage_rejects_intent_that_was_never_published(transport, tmp_path, monkeypatch):
@@ -599,7 +633,7 @@ def test_stage_does_not_treat_unreadable_missing_intent_as_published(
     assert restarted.read_local().entities["image"]["title"] == "Before"
 
 
-def test_stage_rejects_unverified_intent_when_read_temporarily_fails(
+def test_stage_reconciles_published_intent_when_reads_recover(
     transport, tmp_path, monkeypatch,
 ):
     import solin.core.ingest.sync.journal as journal
@@ -626,10 +660,12 @@ def test_stage_rejects_unverified_intent_when_read_temporarily_fails(
             lambda *_args: (_ for _ in ()).throw(PermissionError("journal read denied")),
         )
         patch.setattr(Path, "read_bytes", unreadable_operation)
-        with pytest.raises(PermissionError, match="journal read denied"):
-            replica.stage(baseline, {"image": {"title": "After"}})
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
 
-    assert replica.pending_count == 0
+    assert staged.durability_pending
+    committed = replica.commit(staged, staged.entities)
+    assert committed.entities["image"]["title"] == "After"
+    assert not replica._unconfirmed_operations
     # Recovery still discovers a copy that was successfully written.
     restarted = JournalReplica(replica.folder, "meeting", state_dir=tmp_path / "local-0")
     assert restarted.read_local().entities["image"]["title"] == "After"
@@ -661,7 +697,7 @@ def test_stage_rejects_published_intent_lost_before_confirmation(
     assert restarted.read_local().entities["image"]["title"] == "Before"
 
 
-def test_stage_rejects_unreadable_same_size_conflicting_intent(
+def test_stage_rejects_conflicting_intent_once_reads_recover(
     transport, tmp_path, monkeypatch,
 ):
     import solin.core.ingest.sync.journal as journal
@@ -691,10 +727,11 @@ def test_stage_rejects_unreadable_same_size_conflicting_intent(
             lambda *_args: (_ for _ in ()).throw(PermissionError("journal read denied")),
         )
         patch.setattr(Path, "read_bytes", unreadable_operation)
-        with pytest.raises(PermissionError, match="journal read denied"):
-            replica.stage(baseline, {"image": {"title": "After"}})
+        staged = replica.stage(baseline, {"image": {"title": "After"}})
 
-    assert replica.pending_count == 0
+    assert staged.durability_pending
+    with pytest.raises(JournalCorrupt, match="Immutable operation conflict"):
+        replica.commit(staged, staged.entities)
 
 
 def test_stage_reconciles_publication_archived_by_another_replica(
