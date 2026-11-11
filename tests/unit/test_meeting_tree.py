@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QDialog, QMessageBox
+from PySide6.QtWidgets import QDialog
 
 import solin.core.meetings.tree_store as tree_store_module
 import solin.core.meetings.memorial as memorial_module
@@ -1437,6 +1437,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
 
         controller = FakeController()
         controller._nodes = nodes
+        controller._tree_key = "test"
         controller.saved = 0
         controller.count_updates = 0
         controller.chromeChanged = self._Signal()
@@ -1444,6 +1445,7 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         controller._tree_session = SimpleNamespace(
             tree_id="meeting:test",
             structure_revision=1,
+            generation=1,
         )
         controller._save = lambda: setattr(
             controller,
@@ -1733,6 +1735,8 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
         self.assertEqual(controller.section_updates, [])
 
     def test_delete_official_section_confirmation_uses_display_title(self):
+        from solin.ui.dialogs.media_removal import ContainerRemovalChoice
+
         node = {
             "id": "section",
             "type": "section",
@@ -1750,16 +1754,15 @@ class MeetingTreeControllerEditingTests(unittest.TestCase):
                 "solin.widgets.meetings.tree_controller.display_meeting_section_title",
                 return_value="NOSSA VIDA CRISTÃ",
             ),
-            patch.object(
-                QMessageBox,
-                "question",
-                return_value=QMessageBox.StandardButton.No,
-            ) as question,
+            patch(
+                "solin.widgets.meetings.tree_controller.confirm_container_removal",
+                return_value=ContainerRemovalChoice.CANCEL,
+            ) as confirmation,
         ):
             MeetingTreeController.deleteSection(controller, "section")
 
-        self.assertIn("NOSSA VIDA CRISTÃ", question.call_args.args[2])
-        self.assertNotIn("LIVING AS CHRISTIANS", question.call_args.args[2])
+        self.assertIn("NOSSA VIDA CRISTÃ", confirmation.call_args.args[1])
+        self.assertNotIn("LIVING AS CHRISTIANS", confirmation.call_args.args[1])
 
     def test_move_node_reparents_media_and_emits_persistence_updates(self):
         nodes = [
@@ -2601,7 +2604,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
         controller._tree_key = "mwb:2026-05-25:T:issue"
         controller._sync_enabled = False
         controller._sync_identity = None
-        controller._save = lambda: setattr(controller, "saved", True) or True
+        controller._save = lambda **_kwargs: setattr(controller, "saved", True) or True
         controller._tree_session = SimpleNamespace(
             owner_id="meeting:test",
             remove_pending_node=lambda _item_id: False,
@@ -2616,6 +2619,7 @@ class MeetingTreeControllerMeetingFolderImportTests(unittest.TestCase):
             )
         )
         controller._cancel_media_info_requests_for_item = lambda _item_id: None
+        controller._emit_section_counts = lambda: None
         controller._find_node = lambda node_id, nodes=None: MeetingTreeController._find_node(
             controller,
             node_id,

@@ -332,6 +332,32 @@ def test_case_variant_deletion_suppresses_late_claim_but_deliberate_readd_surviv
     assert "new" in reconcile_discoveries(result)
 
 
+def test_republished_occurrence_keeps_its_deletion_acknowledgement():
+    deletion_id, deletion = suppression_record("old", "image.jpg")
+    first = record_discovery_edits(
+        {deletion_id: deletion}, {"restored": {RESOURCE: "image.jpg"}},
+    )
+    assert "restored" in reconcile_discoveries(first)
+
+    # A fresh domain projection may omit the sync-only acknowledgement.
+    second = record_discovery_edits(first, {"restored": {RESOURCE: "IMAGE.JPG", "title": "Updated"}})
+    assert deletion_id in second["restored"][ACKNOWLEDGED]
+    assert reconcile_discoveries(second)["restored"]["title"] == "Updated"
+
+
+def test_acknowledgement_is_not_inherited_when_occurrence_changes_resource():
+    deletion_id, deletion = suppression_record("old", "image.jpg")
+    restored = record_discovery_edits(
+        {deletion_id: deletion}, {"media": {RESOURCE: "image.jpg"}},
+    )
+    moved = record_discovery_edits(
+        restored, {"media": {**restored["media"], RESOURCE: "another.jpg"}},
+    )
+
+    assert ACKNOWLEDGED not in moved["media"]
+    assert "media" in reconcile_discoveries(moved)
+
+
 def test_explicit_edits_update_absorbed_fallback_intentions():
     base = {
         "fallback": {

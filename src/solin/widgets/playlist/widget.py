@@ -68,6 +68,13 @@ from ...core.media.formats import media_type_from_path
 from ...core.media.identity import PLAYLIST_MEDIA_OCCURRENCES, partition_media_items
 from ...core.media.insertion import MediaInsertResult
 from ...core.media.operations import MediaOperationPresentation, MediaOperationSpec
+from ...core.media.removal import MediaRemovalResult, select_media_ids
+from ...ui.dialogs.media_removal import (
+    ContainerRemovalChoice,
+    confirm_additional_media_removal,
+    confirm_container_removal,
+    warn_playing_media_removal,
+)
 from ...core.media.thumbnail_identity import (
     thumbnail_source_fingerprint,
     thumbnail_storage_id,
@@ -88,7 +95,7 @@ from ...core.projection.image_framing import (
     image_transform_to_record,
     prepare_image_transform_for_aspect,
 )
-from ...core.playlists.tree_editing import insert_playlist_media
+from ...core.playlists.tree_editing import build_playlist_tree, insert_playlist_media
 from ...ui.media_info import MediaInfoQueue
 from .drag_drop import PlaylistDragDropMixin
 from .edit_actions import PlaylistEditActionsMixin
@@ -725,6 +732,7 @@ class PlaylistEditView(
 
         self.bridge.renameSectionSignal.connect(self._rename_section)
         self.bridge.deleteSectionSignal.connect(self._delete_section)
+        self.bridge.removeAdditionalMediaSignal.connect(self._confirm_remove_additional_media)
         self.bridge.recolorSectionSignal.connect(self._recolor_section)
 
         self.bridge.collapseSectionSignal.connect(self._toggle_section_collapse)
@@ -1930,23 +1938,26 @@ class PlaylistEditView(
         self._tree_session.refresh(probe_changed_sources=False)
 
     def _delete_section(self, sec_id: str):
-        """Delete a section/subsection but keep its items."""
+        """Remove container structure, optionally using normal media removal."""
         if not self._pl:
             return
         sections = self._pl.get("sections", [])
         sec = next((s for s in sections if s["id"] == sec_id), None)
         if not sec:
             return
-        reply = QMessageBox.question(
-            self,
-            self.tr("Delete section"),
-            self.tr('Delete section "{name}"?\nItems inside will be kept.').replace(
-                "{name}", sec.get("name", "")
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        playlist = self._pl
+        scope_id = f"{'subsection' if sec.get('parent_id') else 'section'}:{sec_id}"
+        selected = set(select_media_ids(build_playlist_tree(playlist), scope_id))
+        choice = confirm_container_removal(
+            self, sec.get("name", ""), subsection=bool(sec.get("parent_id")),
         )
-        if reply != QMessageBox.StandardButton.Yes:
+        if choice is ContainerRemovalChoice.CANCEL or self._pl is not playlist:
             return
+        sections = playlist.get("sections", [])
+        sec = next((s for s in sections if s["id"] == sec_id), None)
+        if sec is None:
+            return
+        selected.intersection_update(select_media_ids(build_playlist_tree(playlist), scope_id))
         parent_id = sec.get("parent_id") or None
         is_subsection = bool(parent_id)
         replacement_section_id = parent_id if is_subsection else None
@@ -1978,9 +1989,16 @@ class PlaylistEditView(
                 for marker in self._pl.get("markers", [])
                 if marker.get("subsection_id") not in removed_section_ids
             ]
+        if choice is ContainerRemovalChoice.DELETE_MEDIA:
+            result = PlaylistEditView._remove_media_ids(self, selected)
+            if result.removed_ids:
+                PlaylistEditView._warn_blocked_removal(self, result)
+                return
         self._save()
         self._publish_tree_snapshot()
         self._sync_playlist_chrome(emit_data_changed=False)
+        if choice is ContainerRemovalChoice.DELETE_MEDIA:
+            PlaylistEditView._warn_blocked_removal(self, result)
 
     def _recolor_section(self, sec_id: str):
         """Open hue picker to choose section color."""
@@ -2010,8 +2028,70 @@ class PlaylistEditView(
             self._tree_session.remove_pending(item_id)
             self._sync_playlist_chrome(emit_data_changed=False)
             return
-        item = next((it for it in self._pl.get("items", []) if it["id"] == item_id), None)
-        if item and self._media_ctrl is not None:
+        result = PlaylistEditView._remove_media_ids(self, {item_id})
+        PlaylistEditView._warn_blocked_removal(self, result)
+
+    def remove_additional_media(self, scope_id: str = "root") -> MediaRemovalResult:
+        """Remove committed media in a scope without presenting confirmation UI."""
+        if not self._pl:
+            return MediaRemovalResult()
+        return PlaylistEditView._remove_media_ids(
+            self, set(select_media_ids(build_playlist_tree(self._pl), scope_id)),
+        )
+
+    def _confirm_remove_additional_media(self, scope_id: str) -> None:
+        if not self._pl:
+            return
+        playlist = self._pl
+        selected = set(select_media_ids(build_playlist_tree(playlist), scope_id))
+        kind, _, section_id = scope_id.partition(":")
+        section = self._section_by_id(section_id) if kind in {"section", "subsection"} else None
+        if not section or not selected:
+            return
+        if not confirm_additional_media_removal(self, section.get("name", ""), len(selected)):
+            return
+        if self._pl is not playlist:
+            return
+        selected.intersection_update(select_media_ids(build_playlist_tree(playlist), scope_id))
+        result = PlaylistEditView._remove_media_ids(self, selected)
+        PlaylistEditView._warn_blocked_removal(self, result)
+
+    def _remove_media_ids(self, item_ids: set[str]) -> MediaRemovalResult:
+        """Apply occurrence protection once and publish one resulting playlist."""
+        if not self._pl or not item_ids:
+            return MediaRemovalResult()
+        items = self._pl.get("items", [])
+        selected = [item for item in items if item["id"] in item_ids]
+        blocked = [
+            item for item in selected if PlaylistEditView._is_item_playing(self, item)
+        ]
+        blocked_ids = {item["id"] for item in blocked}
+        removed = [item for item in selected if item["id"] not in blocked_ids]
+        removed_ids = {item["id"] for item in removed}
+        result = MediaRemovalResult(
+            tuple(item["id"] for item in removed),
+            tuple(item["id"] for item in blocked),
+            tuple(sorted(item_ids - {item["id"] for item in selected})),
+        )
+        if not removed:
+            return result
+        self._pl["items"] = [item for item in items if item["id"] not in removed_ids]
+        remaining_items = copy.deepcopy(self._pl["items"])
+        for item in removed:
+            self._cancel_thumbnail_requests_for_item(item["id"])
+        self._save()
+        if self._is_watched and self._watched_path:
+            self._remove_watched_items(
+                self._watched_path, removed, remaining_items=remaining_items,
+            )
+        else:
+            self._schedule_cleanup(removed)
+        self._publish_tree_snapshot()
+        self._sync_playlist_chrome(emit_data_changed=False)
+        return result
+
+    def _is_item_playing(self, item: dict) -> bool:
+        if self._media_ctrl is not None:
             item_type = item.get("type", "video")
             if item_type in ("video", "audio"):
                 item_url = item.get("url", "")
@@ -2027,7 +2107,7 @@ class PlaylistEditView(
                         )
                         or ""
                     )
-                    playing = current_occurrence_id == item_id and (
+                    playing = current_occurrence_id == item["id"] and (
                         not current_container_id
                         or current_container_id == str(self._pl.get("id") or "")
                     )
@@ -2039,43 +2119,32 @@ class PlaylistEditView(
                         playing = os.path.normpath(item_url) == os.path.normpath(
                             cur_local
                         )
-                if playing:
-                    QMessageBox.warning(
-                        self,
-                        self.tr("Media is playing"),
-                        self.tr(
-                            'Cannot remove "{title}" while it is currently playing.\nStop the projection and try again.'
-                        ).replace("{title}", str(item.get("title", item_url))),
-                    )
-                    return
-        self._pl["items"] = [it for it in self._pl["items"] if it["id"] != item_id]
-        remaining_items = copy.deepcopy(self._pl["items"])
-        self._cancel_thumbnail_requests_for_item(item_id)
-        self._save()
-        if self._is_watched and self._watched_path and item:
-            self._remove_watched_item(
-                self._watched_path,
-                item,
-                remaining_items=remaining_items,
-            )
-        elif item:
-            self._schedule_cleanup([item])
-        self._publish_tree_snapshot()
-        self._sync_playlist_chrome(emit_data_changed=False)
+                return bool(playing)
+        return False
 
-    def _remove_watched_item(
+    def _warn_blocked_removal(self, result: MediaRemovalResult) -> None:
+        if not result.blocked_ids:
+            return
+        blocked = set(result.blocked_ids)
+        titles = ", ".join(
+            str(item.get("title") or item.get("url") or "")
+            for item in self._pl.get("items", []) if item["id"] in blocked
+        )
+        warn_playing_media_removal(self, titles)
+
+    def _remove_watched_items(
         self,
         folder_path: str,
-        item: dict,
+        items: list[dict],
         *,
         remaining_items: list[dict] | None = None,
     ) -> None:
         operation_id = f"linked-remove:{uuid.uuid4().hex}"
-        item_snapshot = copy.deepcopy(item)
+        item_snapshot = copy.deepcopy(items)
         remaining_snapshot = copy.deepcopy(remaining_items or [])
 
         def run(_progress, _cancellation):
-            return self._watched_folder_playlist_store.remove_item(
+            return self._watched_folder_playlist_store.remove_items(
                 folder_path,
                 item_snapshot,
                 remaining_items=remaining_snapshot,
@@ -2085,7 +2154,7 @@ class PlaylistEditView(
             if self._warn_manifest_save_failed(folder_path, message):
                 QTimer.singleShot(
                     0,
-                    lambda: self._remove_watched_item(
+                    lambda: self._remove_watched_items(
                         folder_path,
                         item_snapshot,
                         remaining_items=remaining_snapshot,

@@ -4249,16 +4249,6 @@ Lopeta heijastaminen ja yritä uudelleen.</translation>
         <source>Rename media</source>
         <translation>Nimeä media uudelleen</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Osiota ei voi poistaa</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Siirrä tai poista ensin manuaalisesti lisätyt aliosiot ja merkinnät.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,47 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Kuvat: {images} · Videot: {videos} · Ääni: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Poista lisätty media</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Poistetaanko lisätty media osiosta &quot;{name}&quot;?
+Mediakohteita: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Poistetaanko &quot;{name}&quot; ja sen media?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Poista media</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Säilytä media</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Poistetaanko aliosio ”{name}”?
+Sen sisältö säilytetään.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Mediaa toistetaan</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Kohdetta &quot;{title}&quot; ei voi poistaa, kun sitä toistetaan.
+Lopeta heijastaminen ja yritä uudelleen.</translation>
     </message>
 </context>
 </TS>

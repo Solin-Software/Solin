@@ -11,6 +11,7 @@ from contextlib import contextmanager
 import hashlib
 import heapq
 import json
+import logging
 import os
 import re
 import uuid
@@ -21,7 +22,10 @@ from threading import RLock
 from typing import Any
 
 from solin.core.foundation.runtime_paths import RuntimePaths
-from solin.core.storage.binary_files import publish_bytes_immutable, write_bytes_atomic
+from solin.core.storage.binary_files import (
+    publish_bytes_immutable,
+    write_bytes_atomic,
+)
 from solin.core.ingest.sync.lifecycle import (
     DocumentLifecycle,
     DocumentUnavailable,
@@ -30,6 +34,7 @@ from solin.core.ingest.sync.lifecycle import (
 )
 
 VERSION = 1
+log = logging.getLogger(__name__)
 
 
 def _default_state_dir() -> Path:
@@ -96,6 +101,9 @@ class ReplicaSnapshot:
     token: str = ""
     operation_ids: tuple[str, ...] = ()
     document_id: str | None = None
+    # Transient status: the intent is visible but filesystem durability could
+    # not be verified. Never serialize it as part of the shared protocol.
+    durability_pending: bool = field(default=False, compare=False)
 
     def to_dict(self) -> dict:
         return {
@@ -131,6 +139,25 @@ def _publish(path: Path, operation: dict) -> None:
         publish_bytes_immutable(path, data)
     except FileExistsError as exc:
         raise JournalCorrupt(f"Immutable operation conflict: {path.name}") from exc
+
+
+def _confirm_local_publication(path: Path, payload: bytes) -> bool:
+    """Confirm an already visible immutable intent is durable on this filesystem."""
+    try:
+        # Windows requires a writable descriptor for os.fsync / _commit.
+        with path.open("r+b") as handle:
+            if handle.read() != payload:
+                raise JournalCorrupt(f"Immutable operation conflict: {path.name}")
+            os.fsync(handle.fileno())
+        if os.name != "nt":
+            descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    except FileNotFoundError:
+        return False  # Another local replica may have moved the intent to the archive.
+    return True
 
 
 def _validate(operation: Any, namespace: str) -> dict:
@@ -205,6 +232,7 @@ class JournalReplica:
         self._required_document_id: str | None = None
         self._operations: dict[str, dict] = {}
         self._local_operations: dict[str, dict] = {}
+        self._unconfirmed_operations: dict[str, dict] = {}
         self._signatures: dict[Path, tuple[int, int, int]] = {}
         self.pending_count = 0
         self.waiting_count = 0
@@ -227,6 +255,7 @@ class JournalReplica:
         self.outbox_dir = self.state_dir / "outbox"
         self._operations = {}
         self._local_operations = {}
+        self._unconfirmed_operations = {}
         self._signatures = {}
         self._projection = None
         self._projection_ids = None
@@ -600,11 +629,94 @@ class JournalReplica:
         self._flush()
         return self._materialize(operations)
 
-    def _persist(self, operation: dict) -> None:
+    def _persist(self, operation: dict) -> bool:
         with self._stage_lock:
-            _publish(self.outbox_dir / f"{operation['id']}.json", operation)
+            path = self.outbox_dir / f"{operation['id']}.json"
+            durable = True
+            try:
+                _publish(path, operation)
+            except OSError as exc:
+                # A publication can fail after becoming visible, or another
+                # local replica may have already archived the intent. Verify
+                # and finish local durability before accepting either copy.
+                error = exc
+                payload = _encode(operation)
+                candidates = (path, self.archive_dir / path.name)
+                for candidate in candidates:
+                    try:
+                        if _confirm_local_publication(candidate, payload):
+                            break
+                    except OSError as confirm_error:
+                        error = confirm_error
+                else:
+                    # Visibility alone cannot establish that the immutable
+                    # operation has the expected contents. Either read the
+                    # matching bytes or rely on proof from our own atomic
+                    # publication when reads are temporarily unavailable.
+                    verified = False
+                    unreadable = False
+                    for candidate in candidates:
+                        try:
+                            data = candidate.read_bytes()
+                        except FileNotFoundError:
+                            continue
+                        except OSError as read_error:
+                            error = read_error
+                            try:
+                                candidate.stat()
+                            except FileNotFoundError:
+                                continue
+                            except OSError:
+                                pass  # Metadata is as uncertain as the content.
+                            unreadable = True
+                            continue
+                        if data != payload:
+                            raise JournalCorrupt(
+                                f"Immutable operation conflict: {candidate.name}"
+                            )
+                        verified = True
+                        break
+                    if not verified and not unreadable:
+                        if error is exc:
+                            raise
+                        raise error from exc
+                    durable = False
+                    log.error(
+                        "Journal intent could not be verified; retaining the edit "
+                        "in memory for reconciliation: %s", error,
+                    )
+                if durable:
+                    log.warning(
+                        "Confirmed journal operation after publication error: %s", exc,
+                    )
+            else:
+                if operation["id"] in self._unconfirmed_operations:
+                    # A retry can find identical bytes from a prior publish
+                    # whose fsync failed. Their presence is not a durability
+                    # receipt; finish confirmation before unblocking descendants.
+                    payload = _encode(operation)
+                    error = None
+                    for candidate in (path, self.archive_dir / path.name):
+                        try:
+                            if _confirm_local_publication(candidate, payload):
+                                break
+                        except OSError as confirm_error:
+                            error = confirm_error
+                    else:
+                        durable = False
+                        log.error(
+                            "Journal intent still lacks durability confirmation: %s",
+                            error or "local operation copy not found",
+                        )
+            is_new = operation["id"] not in self._local_operations
             self._local_operations[operation["id"]] = operation
-            self.pending_count += 1
+            if durable:
+                self._unconfirmed_operations.pop(operation["id"], None)
+            else:
+                self._unconfirmed_operations[operation["id"]] = operation
+            if is_new:
+                self.pending_count += 1
+            return durable
 
     def stage(
         self,
@@ -613,7 +725,7 @@ class JournalReplica:
         *,
         restore_ids: set[str] | None = None,
     ) -> ReplicaSnapshot:
-        """Durably accept an intent without touching the linked-folder transport."""
+        """Stage local intent and report durability still awaiting confirmation."""
         # A background reader may wait on cloud hydration while holding _lock.
         # Local intentions only need immutable cached/local causal history.
         with self._stage_lock:
@@ -638,6 +750,12 @@ class JournalReplica:
         publish: bool,
     ) -> ReplicaSnapshot:
         desired = _entities(entities)
+        # An ambiguous filesystem error can occur after publication but
+        # before the immutable operation can be read back. Do not build a
+        # dependent operation until that exact intent has been confirmed.
+        for operation in tuple(self._unconfirmed_operations.values()):
+            if not self._persist(operation):
+                raise JournalUnavailable("Earlier local intent awaits durability verification")
         if publish:
             operations = self._load(offline=True)
         else:
@@ -671,6 +789,7 @@ class JournalReplica:
                 removed_fields[entity_id] = missing
         deleted = sorted(base.entities.keys() - desired.keys())
         staged_ids = set(base.operation_ids)
+        durability_pending = base.durability_pending
         if patches or removed_fields or deleted or restored:
             # A frontier bounds dependency growth without losing causal context.
             dependencies = set(base.operation_ids)
@@ -690,7 +809,7 @@ class JournalReplica:
                 "restored": restored,
             }
             operation = {**body, "id": _digest(body)}
-            self._persist(operation)
+            durability_pending |= not self._persist(operation)
             operations[operation["id"]] = operation
             staged_ids.add(operation["id"])
         if publish:
@@ -712,7 +831,10 @@ class JournalReplica:
                 for entity_id in added_ids & deleted_ids:
                     desired.pop(entity_id, None)
             ids = tuple(sorted(staged_ids))
-            return ReplicaSnapshot(desired, _digest(ids) if ids else "", ids, self.document_id)
+            return ReplicaSnapshot(
+                desired, _digest(ids) if ids else "", ids, self.document_id,
+                durability_pending=durability_pending,
+            )
         return self._materialize(operations)
 
     def _materialize(

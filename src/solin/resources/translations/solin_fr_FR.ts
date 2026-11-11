@@ -4249,16 +4249,6 @@ Arrêtez la projection et réessayez.</translation>
         <source>Rename media</source>
         <translation>Renommer le média</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Impossible de supprimer la section</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Déplacer ou supprimer d’abord les sous-sections et les repères ajoutés manuellement.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12664,6 +12654,47 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Images: {images} · Vidéos: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Supprimer les médias supplémentaires</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Supprimer les médias supplémentaires de &quot;{name}&quot; ?
+Éléments multimédias : {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Supprimer &quot;{name}&quot; et ses médias ?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Supprimer les médias</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Conserver les médias</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Supprimer la sous-section « {name} » ?
+Les éléments qu'elle contient seront conservés.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Média en cours de lecture</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Impossible de supprimer « {title} » pendant sa lecture.
+Arrêtez la projection et réessayez.</translation>
     </message>
 </context>
 </TS>

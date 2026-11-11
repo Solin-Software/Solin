@@ -78,6 +78,7 @@ _NON_NEGATIVE_INT_ROLES = frozenset({
     "endTrimTicks",
     "baseDurationTicks",
     "itemCount",
+    "additionalMediaCount",
 })
 _PROGRESS_ROLES = frozenset({"cloudProgress", "operationProgress"})
 _OPERATION_STATES = frozenset({

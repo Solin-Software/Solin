@@ -4276,16 +4276,6 @@ Stop the projection and try again.</source>
         <source>Rename media</source>
         <translation>Перейменувати медіа</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Не вдалося видалити розділ</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Спершу перемістіть або видаліть додані вручну підрозділи та позначки.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12708,6 +12698,47 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Зображення: {images} · Відео: {videos} · Аудіо: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Видалити додаткові медіафайли</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Видалити додаткові медіафайли з «{name}»?
+Медіаелементів: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Видалити «{name}» разом із медіафайлами?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Видалити медіафайли</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Зберегти медіафайли</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Видалити підрозділ «{name}»?
+Вміст буде збережено.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Відтворюється медіа</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Неможливо видалити &quot;{title}&quot; під час відтворення.
+Зупиніть проекцію та спробуйте знову.</translation>
     </message>
 </context>
 </TS>

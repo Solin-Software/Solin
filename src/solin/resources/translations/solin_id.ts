@@ -4222,16 +4222,6 @@ Hentikan proyeksi dan coba lagi.</translation>
         <source>Rename media</source>
         <translation>Ganti nama media</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Tidak dapat menghapus bagian</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Pindahkan atau hapus dulu subbagian dan penanda yang ditambahkan secara manual.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12620,6 +12610,47 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Gambar: {images} · Video: {videos} · Audio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Hapus media tambahan</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Hapus media tambahan dari &quot;{name}&quot;?
+Item media: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Hapus &quot;{name}&quot; beserta medianya?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Hapus media</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Pertahankan media</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Hapus subbagian &quot;{name}&quot;?
+Isi di dalamnya akan tetap disimpan.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Media sedang diputar</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Tidak dapat menghapus &quot;{title}&quot; saat sedang diputar.
+Hentikan proyeksi dan coba lagi.</translation>
     </message>
 </context>
 </TS>

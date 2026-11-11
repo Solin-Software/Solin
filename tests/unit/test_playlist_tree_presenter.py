@@ -51,6 +51,7 @@ def test_presenter_counts_local_and_virtual_media_without_filesystem_queries() -
     assert snapshot.tree_id == "playlist:playlist-1"
     assert snapshot.revision == 4
     assert _roles(section)["itemCount"] == 2
+    assert _roles(section)["additionalMediaCount"] == 2
     assert [child.node_id for child in section.children] == [
         "local-media",
         "virtual-media",

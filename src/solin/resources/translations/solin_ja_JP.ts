@@ -4222,16 +4222,6 @@ Stop the projection and try again.</source>
         <source>Rename media</source>
         <translation>メディア名を変更</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>セクションを削除できません</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>先に、手動で追加したサブセクションとマーカーを移動または削除してください。</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12620,6 +12610,47 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>画像: {images} · 動画: {videos} · オーディオ: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>追加メディアを削除</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>「{name}」の追加メディアを削除しますか？
+メディア数: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>「{name}」とそのメディアを削除しますか？</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>メディアを削除</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>メディアを残す</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>サブセクション「{name}」を削除しますか？
+中の項目は保持されます。</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>メディアを再生中</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>「{title}」は再生中のため削除できません。
+投影を停止してからやり直してください。</translation>
     </message>
 </context>
 </TS>

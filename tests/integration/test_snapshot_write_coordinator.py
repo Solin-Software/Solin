@@ -57,6 +57,78 @@ def test_new_snapshot_during_inflight_write_is_persisted_after_it() -> None:
     coordinator.shutdown()
 
 
+def test_immediate_recovery_snapshot_supersedes_pending_write() -> None:
+    coordinator = SnapshotWriteCoordinator(debounce_ms=50)
+    writes: list[str] = []
+    completed: list[int] = []
+    coordinator.writeCompleted.connect(
+        lambda key, generation: completed.append(generation) if key == "meeting" else None
+    )
+
+    coordinator.request("meeting", lambda: writes.append("stale"))
+    receipt = coordinator.request_critical("meeting", lambda: writes.append("current"))
+    assert receipt.generation == 2
+    _wait_until(lambda: bool(completed))
+
+    assert writes == ["current"]
+    assert completed == [2]
+    coordinator.shutdown()
+
+
+def test_immediate_recovery_snapshot_waits_for_inflight_write() -> None:
+    coordinator = SnapshotWriteCoordinator(debounce_ms=0)
+    started = threading.Event()
+    release = threading.Event()
+    writes: list[str] = []
+
+    def stale_write() -> None:
+        started.set()
+        release.wait(1)
+        writes.append("stale")
+
+    coordinator.request("meeting", stale_write)
+    _wait_until(started.is_set)
+    threading.Timer(0.03, release.set).start()
+    receipt = coordinator.request_critical("meeting", lambda: writes.append("current"))
+    assert receipt.generation == 2
+    assert not receipt.durable
+    _wait_until(lambda: writes == ["stale", "current"])
+
+    assert writes == ["stale", "current"]
+    coordinator.shutdown()
+
+
+def test_critical_write_does_not_block_gui_on_slow_storage() -> None:
+    coordinator = SnapshotWriteCoordinator(debounce_ms=100)
+    release = threading.Event()
+    started = threading.Event()
+    finished = []
+    coordinator.writeCompleted.connect(
+        lambda key, generation: finished.append((key, generation))
+    )
+
+    def slow_write() -> None:
+        started.set()
+        release.wait(2)
+
+    try:
+        before = time.monotonic()
+        receipt = coordinator.request_critical("meeting", slow_write, wait_ms=20)
+        elapsed = time.monotonic() - before
+
+        assert receipt.generation == 1
+        assert not receipt.durable
+        assert elapsed < 0.15
+        _wait_until(started.is_set)
+        assert not finished
+    finally:
+        release.set()
+        _wait_until(lambda: bool(finished))
+        coordinator.shutdown()
+
+    assert finished == [("meeting", 1)]
+
+
 def test_superseded_write_failure_does_not_publish_a_stale_error() -> None:
     coordinator = SnapshotWriteCoordinator(debounce_ms=0)
     started = threading.Event()

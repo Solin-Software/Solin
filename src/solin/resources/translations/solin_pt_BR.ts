@@ -4253,16 +4253,6 @@ Pare a projeção e tente novamente.</translation>
         <source>Rename media</source>
         <translation>Renomear mídia</translation>
     </message>
-    <message>
-        <location filename="../../widgets/meetings/tree_controller.py" line="+8"/>
-        <source>Cannot delete section</source>
-        <translation>Não é possível excluir a seção</translation>
-    </message>
-    <message>
-        <location line="+4"/>
-        <source>Move or delete the manually added subsections and markers first.</source>
-        <translation>Mova ou exclua primeiro as subseções e os marcadores adicionados manualmente.</translation>
-    </message>
 </context>
 <context>
     <name>PlaylistImportNotifications</name>
@@ -12697,6 +12687,47 @@ Use o botão de reprodução para projetar · Arraste a alça ⠿ para reordenar
     <message>
         <source>Images: {images} · Videos: {videos} · Audio: {audio}</source>
         <translation>Imagens: {images} · Vídeos: {videos} · Áudio: {audio}</translation>
+    </message>
+</context>
+<context>
+    <name>MediaRemoval</name>
+    <message>
+        <source>Delete additional media</source>
+        <translation>Excluir mídias adicionais</translation>
+    </message>
+    <message>
+        <source>Delete additional media from &quot;{name}&quot;?
+Media items: {count}</source>
+        <translation>Excluir as mídias adicionais de &quot;{name}&quot;?
+Itens de mídia: {count}</translation>
+    </message>
+    <message>
+        <source>Delete &quot;{name}&quot; and its media?</source>
+        <translation>Excluir &quot;{name}&quot; e suas mídias?</translation>
+    </message>
+    <message>
+        <source>Delete media</source>
+        <translation>Excluir mídias</translation>
+    </message>
+    <message>
+        <source>Keep media</source>
+        <translation>Manter mídias</translation>
+    </message>
+    <message>
+        <source>Delete subsection &quot;{name}&quot;?
+Items inside will be kept.</source>
+        <translation>Excluir a subseção &quot;{name}&quot;?
+Os itens dentro dela serão mantidos.</translation>
+    </message>
+    <message>
+        <source>Media is playing</source>
+        <translation>Mídia em reprodução</translation>
+    </message>
+    <message>
+        <source>Cannot remove &quot;{title}&quot; while it is currently playing.
+Stop the projection and try again.</source>
+        <translation>Não é possível remover &quot;{title}&quot; enquanto está em reprodução.
+Pare a projeção e tente novamente.</translation>
     </message>
 </context>
 </TS>

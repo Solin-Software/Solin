@@ -91,6 +91,26 @@ preparation coordinator expires its own trees; background maintenance expires
 only unowned profiles and coalesces collection requests. Unreadable or malformed
 owners defer collection and protect publication sources.
 
+## Removing structured content
+
+Meetings and playlists share scoped media removal. **Delete additional media**
+removes committed media in a section and its subsections while retaining
+containers and markers. Official meeting provenance identifies canonical media;
+all playlist media are additional. Pending import placeholders are excluded.
+The same operation supports the entire list in the backend; the header has no
+global removal control. Removal retains the individual operation's playback
+protection, linked-file ownership, and synchronization rules.
+
+Deleting a section removes its nested structure, including manual subsections
+and markers. The confirmation offers deleting its media, keeping media, or
+cancellation. Kept media move to the enclosing section or root.
+`CONFIRM_CONTAINER_MEDIA_DELETION` in `core/foundation/constants.py` defaults to
+`True`. Disabling it restores the confirmation that always keeps media.
+Deleting official media hides recoverable canonical content rather than deleting
+its source files. This flag is independent of the additional-media action.
+`python scripts/benchmark_media_removal.py` reports P50/P95 for pure selection,
+counting, and filtering with synthetic trees; it excludes persistence and file I/O.
+
 ## Manual publication imports
 
 Manual JWPUB imports use a shared selector: inspect the publication's content

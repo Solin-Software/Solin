@@ -190,8 +190,9 @@ UTF-16; collision checks ignore case and Unicode normalization on every platform
 
 ### Shared removal and recovery
 
-Physical removal follows durable logical deletion. Retired resources are copied
-and flushed into
+Physical removal follows durable logical deletion. Synchronized meeting media
+remains in place until pending journal operations are published and their
+dependencies are available. Retired resources are copied and flushed into
 `.solin_sync/resources/<document-id>/<resource-key-sha256>/<content-sha256>` with an accompanying
 JSON metadata file before the visible source is removed. A deletion failure
 leaves the original bytes and the recovery copy. Resource suppression prevents
