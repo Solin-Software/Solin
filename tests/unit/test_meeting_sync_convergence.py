@@ -898,6 +898,77 @@ def test_cancelled_published_copy_remains_recoverable_for_unknown_remote_referen
     assert copied.read_bytes() == b"photo"
 
 
+@pytest.mark.parametrize("already_inside", [False, True])
+def test_enable_sync_recovers_from_metadata_change_during_media_preparation(
+    tmp_path, monkeypatch, already_inside,
+):
+    import hashlib
+    import os
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    destination = folder / "photo.jpg"
+    source = destination if already_inside else tmp_path / "photo.jpg"
+    source.write_bytes(b"photo")
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    digest = hashlib.file_digest
+    changed = False
+
+    def update_metadata(stream, *args):
+        nonlocal changed
+        result = digest(stream, *args)
+        if Path(stream.name) == destination and not changed:
+            changed = True
+            info = destination.stat()
+            os.utime(destination, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+        return result
+
+    monkeypatch.setattr(hashlib, "file_digest", update_metadata)
+    nodes, linked_files = service.materialize_tree_files(
+        [_media("photo", str(source))], folder, generated_roots=(),
+    )
+    record = _save(service, folder, nodes)
+    assert changed
+    assert record.nodes[0]["media_ref"]["file_path"] == str(destination)
+    assert linked_files[str(destination)] == "photo"
+    assert destination.read_bytes() == source.read_bytes() == b"photo"
+    assert service.activation_path(folder).is_file()
+    identity = MeetingSyncIdentity(record.tree_key, record.pub_type, record.monday)
+    reopened = MeetingLinkedFolderSync(lambda _: 0).load_tree(str(tmp_path), identity)
+    assert reopened is not None
+    assert reopened.nodes[0]["id"] == "photo"
+
+
+def test_preparation_rejects_content_changed_during_copy_verification(tmp_path, monkeypatch):
+    import hashlib
+    from solin.core.media.operations import MediaOperationCancelled
+
+    folder = tmp_path / "2026-05-25 MW"
+    folder.mkdir()
+    source = tmp_path / "photo.jpg"
+    source.write_bytes(b"original")
+    destination = folder / source.name
+    service = MeetingLinkedFolderSync(lambda _: 0)
+    digest = hashlib.file_digest
+    changed = False
+
+    def replace_content(stream, *args):
+        nonlocal changed
+        result = digest(stream, *args)
+        if Path(stream.name) == destination and not changed:
+            changed = True
+            destination.write_bytes(b"replaced content")
+        return result
+
+    monkeypatch.setattr(hashlib, "file_digest", replace_content)
+    with pytest.raises(MediaOperationCancelled, match="copied resource changed"):
+        service.materialize_tree_files([_media("new", str(source))], folder, generated_roots=())
+    assert changed
+    assert destination.read_bytes() == b"replaced content"
+    assert source.read_bytes() == b"original"
+    assert not service.activation_path(folder).exists()
+
+
 def test_preparation_rollback_preserves_replaced_copy(tmp_path, monkeypatch):
     from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
     from solin.core.media.operations import MediaOperationCancelled

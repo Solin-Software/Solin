@@ -157,7 +157,60 @@ def test_same_size_and_mtime_in_place_write_invalidates_hash(tmp_path):
     assert resources.content_signature(source) != before
 
 
-def test_content_changed_during_hash_is_retryable(tmp_path, monkeypatch):
+@pytest.mark.parametrize("change_content", [False, True])
+@pytest.mark.parametrize("changes", [1, 2])
+def test_content_signature_recovers_from_a_transient_revision_change(
+    tmp_path, monkeypatch, change_content, changes,
+):
+    source = tmp_path / "image.jpg"
+    source.write_bytes(b"original")
+    digest = hashlib.file_digest
+    remaining = changes
+
+    def change_during_hash(stream, *args):
+        nonlocal remaining
+        result = digest(stream, *args)
+        if remaining:
+            if change_content:
+                source.write_bytes(b"updated image" * remaining)
+            else:
+                info = source.stat()
+                os.utime(source, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+            remaining -= 1
+        return result
+
+    monkeypatch.setattr(hashlib, "file_digest", change_during_hash)
+    signature = resources.content_signature(source)
+    expected = b"updated image" if change_content else b"original"
+    assert signature == {"size": len(expected), "sha256": hashlib.sha256(expected).hexdigest()}
+
+
+@pytest.mark.parametrize("failure_at", ["open", "revision", "read"])
+def test_content_signature_does_not_retry_unrelated_io_errors(tmp_path, monkeypatch, failure_at):
+    source = tmp_path / "image.jpg"
+    source.write_bytes(b"image")
+    error = PermissionError("file access unavailable")
+    calls = []
+
+    def fail(*_args, **_kwargs):
+        calls.append(True)
+        raise error
+
+    if failure_at == "open":
+        monkeypatch.setattr(Path, "open", fail)
+    elif failure_at == "revision":
+        monkeypatch.setattr(resources, "_revision", fail)
+    else:
+        monkeypatch.setattr(hashlib, "file_digest", fail)
+    with pytest.raises(PermissionError) as caught:
+        resources.content_signature(source)
+    assert caught.value is error
+    assert len(calls) == 1
+
+
+def test_content_signature_rejects_persistent_revision_changes_with_bounded_work(
+    tmp_path, monkeypatch,
+):
     source = tmp_path / "image.jpg"
     source.write_bytes(b"old")
     revision = resources._revision
@@ -166,6 +219,7 @@ def test_content_changed_during_hash_is_retryable(tmp_path, monkeypatch):
     def change_revision(fd):
         nonlocal count
         count += 1
+        assert count <= 6, "Signature verification did not stop retrying an unstable file"
         result = revision(fd)
         return (*result[:-1], result[-1] + count)
 

@@ -129,6 +129,10 @@ within one clock tick. Windows filesystems without that signal are hashed on
 each check rather than reusing a potentially stale hash. Hashing and directory
 scans belong on background workers.
 
+If a file's revision changes during hashing, verification reopens it for up to
+three attempts. Only a stable read supplies a content hash; persistent revision
+changes and other I/O errors still abort verification.
+
 ## Missing files and recoverable removal
 
 An absent file in a synchronized document means unavailable media, not permission

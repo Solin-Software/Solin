@@ -27,6 +27,7 @@ from solin.core.media.local_source import local_source_revision_from_stat
 
 
 _CACHE_LIMIT = 32768
+_CONTENT_SIGNATURE_ATTEMPTS = 3
 _SIGNATURES: OrderedDict[str, tuple[tuple[int, ...], dict[str, str | int]]] = OrderedDict()
 _DIRECTORY_NAMES: OrderedDict[Path, tuple[tuple[int, ...], dict[str, tuple[Path, ...]]]] = (
     OrderedDict()
@@ -218,35 +219,39 @@ def _revision(descriptor: int) -> tuple[int, ...]:
 
 
 def content_signature(path: Path) -> dict[str, str | int]:
-    """Hash content once per local revision; raise if it changes while reading."""
+    """Return a stable content hash, retrying transient revision changes."""
     # The descriptor validates content identity. Resolving every ancestor here
     # adds filesystem calls but provides no extra correctness to this cache.
     cache_key = os.path.normcase(os.path.abspath(path))
-    with path.open("rb") as source:
-        before = _revision(source.fileno())
-        source_size = before[0]
-        # Windows metadata is not a portable content-generation counter. NTFS
-        # USNs normally advance on writes, but other Windows runner/storage
-        # configurations can report the same USN after an in-place rewrite
-        # whose size and mtime are restored. Reusing that digest would publish
-        # a stale content identity, so correctness takes precedence over this
-        # local hash cache on Windows.
-        cacheable = os.name != "nt"
+    # Windows metadata is not a portable content-generation counter. NTFS
+    # USNs normally advance on writes, but other Windows runner/storage
+    # configurations can report the same USN after an in-place rewrite
+    # whose size and mtime are restored. Reusing that digest would publish
+    # a stale content identity, so correctness takes precedence over this
+    # local hash cache on Windows.
+    cacheable = os.name != "nt"
+    for _attempt in range(_CONTENT_SIGNATURE_ATTEMPTS):
+        with path.open("rb") as source:
+            before = _revision(source.fileno())
+            source_size = before[0]
+            with _CACHE_LOCK:
+                cached = _SIGNATURES.get(cache_key)
+                if cacheable and cached is not None and cached[0] == before:
+                    _SIGNATURES.move_to_end(cache_key)
+                    return dict(cached[1])
+            digest = hashlib.file_digest(source, "sha256").hexdigest()
+            if before != _revision(source.fileno()):
+                # Cloud providers can change metadata without changing bytes.
+                # Discard this read and reopen; only a stable revision is valid.
+                continue
+        result: dict[str, str | int] = {"sha256": digest, "size": source_size}
         with _CACHE_LOCK:
-            cached = _SIGNATURES.get(cache_key)
-            if cacheable and cached is not None and cached[0] == before:
-                _SIGNATURES.move_to_end(cache_key)
-                return dict(cached[1])
-        digest = hashlib.file_digest(source, "sha256").hexdigest()
-        if before != _revision(source.fileno()):
-            raise OSError("Resource changed while calculating its content signature")
-    result: dict[str, str | int] = {"sha256": digest, "size": source_size}
-    with _CACHE_LOCK:
-        _SIGNATURES[cache_key] = before, result
-        _SIGNATURES.move_to_end(cache_key)
-        while len(_SIGNATURES) > _CACHE_LIMIT:
-            _SIGNATURES.popitem(last=False)
-    return dict(result)
+            _SIGNATURES[cache_key] = before, result
+            _SIGNATURES.move_to_end(cache_key)
+            while len(_SIGNATURES) > _CACHE_LIMIT:
+                _SIGNATURES.popitem(last=False)
+        return dict(result)
+    raise OSError("Resource changed while calculating its content signature")
 
 
 def _archive_directory(folder: Path, key: str, document_id: str | None) -> Path:
