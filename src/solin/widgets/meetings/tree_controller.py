@@ -4497,6 +4497,14 @@ class MeetingTreeController(QObject):
             self._request_sync_refresh()
         elif not is_latest:
             request.next_attempt_at = now
+        elif isinstance(error, MeetingSyncPending):
+            request.next_attempt_at = now + 2.0
+            if (
+                self._sync_enabled
+                and key == os.path.normcase(os.path.abspath(self._sync_folder))
+                and self._sync_identity == request.identity
+            ):
+                MeetingTreeController._mark_sync_transport_pending(self)
         elif isinstance(error, ManifestWriteError):
             elapsed = now - (request.first_attempt_at or now)
             if error.retryable and elapsed < _SYNC_SAVE_RETRY_BUDGET_SECONDS:

@@ -722,6 +722,8 @@ class MeetingLinkedFolderSync:
             try:
                 action = replica.stage if stage_only else replica.commit
                 snapshot = action(base, desired, restore_ids=restores)
+            except JournalUnavailable as exc:
+                raise MeetingSyncPending(str(exc)) from exc
             except JournalError as exc:
                 raise MeetingSyncError(str(exc)) from exc
             if enable:

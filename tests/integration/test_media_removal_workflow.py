@@ -16,7 +16,7 @@ from solin.controllers.snapshot_write_coordinator import SnapshotWriteCoordinato
 from solin.core.ingest.sync.journal import ReplicaSnapshot
 from solin.core.meetings.tree_types import iter_nodes
 from solin.core.meetings.linked_folder_sync import (
-    MeetingLinkedFolderSync, MeetingSyncError, MeetingSyncIdentity,
+    MeetingLinkedFolderSync, MeetingSyncError, MeetingSyncIdentity, MeetingSyncPending,
 )
 from solin.core.meetings.tree_store import MeetingTreeStore
 from solin.core.media.removal import select_media_ids
@@ -1079,6 +1079,121 @@ def test_uncertain_meeting_removal_defers_file_cleanup_until_journal_is_publishe
         "manual", str(Path(meeting._sync_folder) / "manual.mp4"), meeting._sync_folder,
     )]
     assert not meeting._deferred_media_cleanup
+
+
+@pytest.mark.parametrize("stage_only", [False, True])
+@pytest.mark.parametrize("unavailable", [False, True])
+def test_meeting_save_distinguishes_journal_availability_from_corruption(
+    synced_meeting, monkeypatch, stage_only, unavailable,
+):
+    from solin.core.ingest.sync.journal import JournalCorrupt, JournalUnavailable
+
+    meeting, identity = synced_meeting
+    replica = meeting._sync_service._replica(Path(meeting._sync_folder))
+    error = JournalUnavailable("journal unavailable") if unavailable else JournalCorrupt("invalid journal")
+
+    def fail_commit(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(replica, "stage" if stage_only else "commit", fail_commit)
+    with pytest.raises(MeetingSyncError) as caught:
+        meeting._sync_service.save_tree(
+            Path(meeting._sync_folder), identity, nodes=meeting._nodes,
+            deleted_source_keys=set(), linked_folder_files={}, meeting_folder_imports={},
+            base_snapshot=meeting._sync_snapshot, stage_only=stage_only,
+        )
+
+    assert isinstance(caught.value, MeetingSyncPending) is unavailable
+    assert caught.value.__cause__ is error
+
+
+@pytest.mark.parametrize("displayed", ["same", "other_folder", "other_meeting", "disabled"])
+@pytest.mark.parametrize("superseded", [False, True])
+def test_pending_background_save_retries_without_warning_or_changing_another_meeting(
+    synced_meeting, tmp_path, displayed, superseded,
+):
+    meeting, identity = synced_meeting
+    MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+    key, request = next(iter(meeting._pending_sync_saves.items()))
+    original_nodes = deepcopy(request.nodes)
+    original_snapshot = request.snapshot
+    meeting._sync_transport_pending = False
+    meeting._sync_busy_message = ""
+    if displayed == "other_folder":
+        meeting._sync_folder = str(tmp_path / "another-folder")
+    elif displayed == "other_meeting":
+        meeting._sync_identity = MeetingSyncIdentity("other", "wt", identity.monday)
+    elif displayed == "disabled":
+        meeting._sync_enabled = False
+    meeting._notify_sync_save_failure = lambda *_args: pytest.fail("Pending sync opened a warning")
+    meeting._sync_save_timer = SimpleNamespace(start=lambda *_args: None, stop=lambda: None)
+    meeting._arm_sync_save_timer = lambda: MeetingTreeController._arm_sync_save_timer(meeting)
+
+    for _attempt in range(2):
+        before = time.monotonic()
+        MeetingTreeController._on_sync_save_completed(
+            meeting, key, request.generation - int(superseded), None,
+            MeetingSyncPending("durability awaits confirmation"),
+        )
+        assert meeting._pending_sync_saves[key] is request
+        assert request.nodes == original_nodes
+        assert request.snapshot == original_snapshot
+        if not superseded:
+            assert request.next_attempt_at > before
+        assert meeting._sync_transport_pending is (displayed == "same" and not superseded)
+
+
+def test_unconfirmed_removal_recovers_after_background_availability_retries(
+    synced_meeting, monkeypatch,
+):
+    from solin.core.ingest.sync import journal
+
+    meeting, identity = synced_meeting
+    replica = meeting._sync_service._replica(Path(meeting._sync_folder))
+    original_publish = journal._publish
+    meeting._notify_sync_save_failure = lambda *_args: pytest.fail("Pending sync opened a warning")
+
+    def ambiguous_publish(path, operation):
+        original_publish(path, operation)
+        if path.parent == replica.outbox_dir:
+            raise OSError("publication acknowledgement unavailable")
+
+    def save_request(request):
+        return meeting._sync_service.save_tree(
+            request.folder, request.identity, nodes=request.nodes,
+            deleted_source_keys=request.deleted_source_keys,
+            linked_folder_files=request.linked_folder_files,
+            meeting_folder_imports=request.meeting_folder_imports,
+            base_snapshot=request.snapshot,
+        )
+
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", ambiguous_publish)
+        patch.setattr(
+            journal, "_confirm_local_publication",
+            lambda *_args: (_ for _ in ()).throw(OSError("fsync unavailable")),
+        )
+        MeetingTreeController.remove_additional_media(meeting, "subsection:sub")
+        key, request = next(iter(meeting._pending_sync_saves.items()))
+        for _attempt in range(2):
+            with pytest.raises(MeetingSyncPending) as caught:
+                save_request(request)
+            MeetingTreeController._on_sync_save_completed(
+                meeting, key, request.generation, None, caught.value,
+            )
+        assert meeting._find_node("nested") is None
+
+    published = save_request(request)
+    meeting._apply_sync_record = lambda record: MeetingTreeController._apply_sync_record(meeting, record)
+    MeetingTreeController._on_sync_save_completed(
+        meeting, key, request.generation, published, None,
+    )
+    assert not meeting._pending_sync_saves
+    assert not meeting._sync_transport_pending
+    assert not replica._unconfirmed_operations
+    recovered = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
+    assert recovered is not None
+    assert "nested" not in {node["id"] for node in iter_nodes(recovered.nodes)}
 
 
 def test_deferred_media_cleanup_waits_for_detachment_persistence(synced_meeting):
