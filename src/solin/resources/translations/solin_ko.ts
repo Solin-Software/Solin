@@ -3487,12 +3487,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>하나 또는 둘 다 선택하거나 나중에 설정하세요.</translation>
+        <translation type="vanished">하나 또는 둘 다 선택하거나 나중에 설정하세요.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Solin에서 장면과 카메라를 제어합니다.</translation>
+        <translation type="vanished">Solin에서 장면과 카메라를 제어합니다.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3507,67 +3507,67 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>OBS Studio 연결</translation>
+        <translation type="vanished">OBS Studio 연결</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Solin에서 OBS 장면과 카메라를 사용합니다. 자동 전환은 선택 사항입니다.</translation>
+        <translation type="vanished">Solin에서 OBS 장면과 카메라를 사용합니다. 자동 전환은 선택 사항입니다.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket 포트</translation>
+        <translation type="vanished">WebSocket 포트</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>비밀번호(선택 사항)</translation>
+        <translation type="vanished">비밀번호(선택 사항)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>연결 중…</translation>
+        <translation type="vanished">연결 중…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>연결</translation>
+        <translation type="vanished">연결</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>OBS 설정에 도움이 필요하세요?</translation>
+        <translation type="vanished">OBS 설정에 도움이 필요하세요?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>자동 장면 전환</translation>
+        <translation type="vanished">자동 장면 전환</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>미디어가 투사되는 동안 Solin이 장면을 전환합니다.</translation>
+        <translation type="vanished">미디어가 투사되는 동안 Solin이 장면을 전환합니다.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>장면과 카메라의 수동 제어는 계속 사용할 수 있습니다.</translation>
+        <translation type="vanished">장면과 카메라의 수동 제어는 계속 사용할 수 있습니다.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>기본 장면</translation>
+        <translation type="vanished">기본 장면</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>미디어 장면</translation>
+        <translation type="vanished">미디어 장면</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>OBS 나중에 설정</translation>
+        <translation type="vanished">OBS 나중에 설정</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3665,12 +3665,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>연결됨 · 자동 장면 전환</translation>
+        <translation type="vanished">연결됨 · 자동 장면 전환</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>연결됨 · 수동 제어</translation>
+        <translation type="vanished">연결됨 · 수동 제어</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3685,7 +3685,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>장면 선택</translation>
+        <translation type="vanished">장면 선택</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3720,7 +3720,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>1에서 65535 사이의 포트를 입력하세요.</translation>
+        <translation type="vanished">1에서 65535 사이의 포트를 입력하세요.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3735,17 +3735,17 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>OBS에 연결하거나 나중에 설정을 선택하세요.</translation>
+        <translation type="vanished">OBS에 연결하거나 나중에 설정을 선택하세요.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>두 OBS 장면을 모두 선택하세요.</translation>
+        <translation type="vanished">두 OBS 장면을 모두 선택하세요.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>서로 다른 OBS 장면 두 개를 선택하세요.</translation>
+        <translation type="vanished">서로 다른 OBS 장면 두 개를 선택하세요.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3801,6 +3801,38 @@ The folder and its visible files will be kept.</source>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>자동 공유를 사용하려면 xdotool을 설치하세요.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Solin 장면 기능이 포함되어 있습니다. Zoom의 자동 화면 공유는 선택 사항입니다.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Solin 장면</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>카메라와 미디어를 조합하여 집회용 장면을 만드세요.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>프로필을 만든 후 장면 탭을 열어 카메라, 소스 및 PTZ를 구성하세요.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>대부분의 구성에서는 Solin 장면과 %1만으로 충분합니다.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>포함됨 · 장면에서 카메라 구성</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>사용하려면 OBS 가상 카메라 확장 프로그램을 설치하고 활성화하세요.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Linux에서는 v4l2loopback이 필요합니다. 카메라 이름은 구성에 따라 다를 수 있습니다.</translation>
     </message>
 </context>
 <context>

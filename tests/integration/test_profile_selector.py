@@ -550,7 +550,6 @@ def test_startup_screen_shares_selector_and_preserves_single_profile_fast_path(
             profile_service=profiles,
             profile_settings_for=lambda _id: None,
             onboarding_service=None,
-            obs_probe=None,
             congregation_lookup=None,
         )
     )

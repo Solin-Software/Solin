@@ -3505,12 +3505,12 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Wählen Sie eine Option, beide Optionen oder richten Sie sie später ein.</translation>
+        <translation type="vanished">Wählen Sie eine Option, beide Optionen oder richten Sie sie später ein.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Steuern Sie Szenen und Kameras direkt in Solin.</translation>
+        <translation type="vanished">Steuern Sie Szenen und Kameras direkt in Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3525,67 +3525,67 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>OBS Studio verbinden</translation>
+        <translation type="vanished">OBS Studio verbinden</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Nutzen Sie OBS-Szenen und Kameras aus Solin. Automatisches Wechseln ist optional.</translation>
+        <translation type="vanished">Nutzen Sie OBS-Szenen und Kameras aus Solin. Automatisches Wechseln ist optional.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket-Port</translation>
+        <translation type="vanished">WebSocket-Port</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Passwort (optional)</translation>
+        <translation type="vanished">Passwort (optional)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Verbindung wird hergestellt…</translation>
+        <translation type="vanished">Verbindung wird hergestellt…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Verbinden</translation>
+        <translation type="vanished">Verbinden</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Hilfe beim Einrichten von OBS?</translation>
+        <translation type="vanished">Hilfe beim Einrichten von OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Automatischer Szenenwechsel</translation>
+        <translation type="vanished">Automatischer Szenenwechsel</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin wechselt Szenen, während Medien projiziert werden.</translation>
+        <translation type="vanished">Solin wechselt Szenen, während Medien projiziert werden.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Manuelle Szenen- und Kamerasteuerung bleibt verfügbar.</translation>
+        <translation type="vanished">Manuelle Szenen- und Kamerasteuerung bleibt verfügbar.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Standardszene</translation>
+        <translation type="vanished">Standardszene</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Medienszene</translation>
+        <translation type="vanished">Medienszene</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>OBS später einrichten</translation>
+        <translation type="vanished">OBS später einrichten</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3683,12 +3683,12 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Verbunden · automatischer Szenenwechsel</translation>
+        <translation type="vanished">Verbunden · automatischer Szenenwechsel</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Verbunden · manuelle Steuerung</translation>
+        <translation type="vanished">Verbunden · manuelle Steuerung</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3703,7 +3703,7 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Szene auswählen</translation>
+        <translation type="vanished">Szene auswählen</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3738,7 +3738,7 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Geben Sie einen Port zwischen 1 und 65535 ein.</translation>
+        <translation type="vanished">Geben Sie einen Port zwischen 1 und 65535 ein.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3753,17 +3753,17 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Verbinden Sie OBS oder wählen Sie „Später einrichten“.</translation>
+        <translation type="vanished">Verbinden Sie OBS oder wählen Sie „Später einrichten“.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Wählen Sie beide OBS-Szenen.</translation>
+        <translation type="vanished">Wählen Sie beide OBS-Szenen.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Wählen Sie zwei unterschiedliche OBS-Szenen.</translation>
+        <translation type="vanished">Wählen Sie zwei unterschiedliche OBS-Szenen.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3819,6 +3819,38 @@ Der Ordner und seine sichtbaren Dateien bleiben erhalten.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Installieren Sie xdotool, um die automatische Freigabe zu verwenden.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Solin-Szenen sind enthalten. Die automatische Bildschirmfreigabe in Zoom ist optional.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Solin-Szenen</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Kombinieren Sie Kameras und Medien zu Szenen für Ihre Zusammenkünfte.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Öffnen Sie nach dem Erstellen Ihres Profils den Tab Szenen, um Kameras, Quellen und PTZ zu konfigurieren.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Für die meisten Setups reichen Solin-Szenen mit %1 aus.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Enthalten · Kameras unter Szenen konfigurieren</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Installieren und aktivieren Sie die Erweiterung für die virtuelle OBS-Kamera, um sie zu verwenden.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Erfordert v4l2loopback unter Linux; der Kameraname kann je nach Konfiguration variieren.</translation>
     </message>
 </context>
 <context>

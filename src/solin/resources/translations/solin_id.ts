@@ -3487,12 +3487,12 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Pilih satu opsi, keduanya, atau atur nanti.</translation>
+        <translation type="vanished">Pilih satu opsi, keduanya, atau atur nanti.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Kendalikan adegan dan kamera dari Solin.</translation>
+        <translation type="vanished">Kendalikan adegan dan kamera dari Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3507,67 +3507,67 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Hubungkan OBS Studio</translation>
+        <translation type="vanished">Hubungkan OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Gunakan adegan dan kamera OBS dari Solin. Pergantian otomatis bersifat opsional.</translation>
+        <translation type="vanished">Gunakan adegan dan kamera OBS dari Solin. Pergantian otomatis bersifat opsional.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>Port WebSocket</translation>
+        <translation type="vanished">Port WebSocket</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Kata sandi (opsional)</translation>
+        <translation type="vanished">Kata sandi (opsional)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Menghubungkan…</translation>
+        <translation type="vanished">Menghubungkan…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Hubungkan</translation>
+        <translation type="vanished">Hubungkan</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Butuh bantuan menyiapkan OBS?</translation>
+        <translation type="vanished">Butuh bantuan menyiapkan OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Pergantian adegan otomatis</translation>
+        <translation type="vanished">Pergantian adegan otomatis</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin mengganti adegan saat media diproyeksikan.</translation>
+        <translation type="vanished">Solin mengganti adegan saat media diproyeksikan.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Kontrol adegan dan kamera manual tetap tersedia.</translation>
+        <translation type="vanished">Kontrol adegan dan kamera manual tetap tersedia.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Adegan standar</translation>
+        <translation type="vanished">Adegan standar</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Adegan media</translation>
+        <translation type="vanished">Adegan media</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>Siapkan OBS nanti</translation>
+        <translation type="vanished">Siapkan OBS nanti</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3665,12 +3665,12 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Terhubung · pergantian adegan otomatis</translation>
+        <translation type="vanished">Terhubung · pergantian adegan otomatis</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Terhubung · kontrol manual</translation>
+        <translation type="vanished">Terhubung · kontrol manual</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3685,7 +3685,7 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Pilih adegan</translation>
+        <translation type="vanished">Pilih adegan</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3720,7 +3720,7 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Masukkan port antara 1 dan 65535.</translation>
+        <translation type="vanished">Masukkan port antara 1 dan 65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3735,17 +3735,17 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Hubungkan ke OBS atau pilih Siapkan nanti.</translation>
+        <translation type="vanished">Hubungkan ke OBS atau pilih Siapkan nanti.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Pilih kedua adegan OBS.</translation>
+        <translation type="vanished">Pilih kedua adegan OBS.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Pilih dua adegan OBS yang berbeda.</translation>
+        <translation type="vanished">Pilih dua adegan OBS yang berbeda.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3801,6 +3801,38 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Instal xdotool untuk menggunakan berbagi otomatis.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Adegan Solin sudah disertakan. Berbagi layar otomatis di Zoom bersifat opsional.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Adegan Solin</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Gabungkan kamera dan media menjadi adegan untuk perhimpunan Anda.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Setelah membuat profil, buka tab Adegan untuk mengonfigurasi kamera, sumber, dan PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Untuk sebagian besar pengaturan, Adegan Solin dengan %1 sudah cukup.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Disertakan · konfigurasikan kamera di Adegan</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Instal dan aktifkan ekstensi kamera virtual OBS untuk menggunakannya.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Memerlukan v4l2loopback di Linux; nama kamera dapat berbeda sesuai konfigurasinya.</translation>
     </message>
 </context>
 <context>

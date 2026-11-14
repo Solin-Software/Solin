@@ -3505,12 +3505,12 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Pumili ng isa, pareho, o i-set up ang mga ito mamaya.</translation>
+        <translation type="vanished">Pumili ng isa, pareho, o i-set up ang mga ito mamaya.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Kontrolin ang mga scene at camera mula sa Solin.</translation>
+        <translation type="vanished">Kontrolin ang mga scene at camera mula sa Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3525,67 +3525,67 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Ikonekta ang OBS Studio</translation>
+        <translation type="vanished">Ikonekta ang OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Gamitin ang mga OBS scene at camera mula sa Solin. Opsyonal ang awtomatikong pagpapalit.</translation>
+        <translation type="vanished">Gamitin ang mga OBS scene at camera mula sa Solin. Opsyonal ang awtomatikong pagpapalit.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket port</translation>
+        <translation type="vanished">WebSocket port</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Password (opsyonal)</translation>
+        <translation type="vanished">Password (opsyonal)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Kumokonekta…</translation>
+        <translation type="vanished">Kumokonekta…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Kumonekta</translation>
+        <translation type="vanished">Kumonekta</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Kailangan ng tulong sa pag-set up ng OBS?</translation>
+        <translation type="vanished">Kailangan ng tulong sa pag-set up ng OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Awtomatikong pagpapalit ng scene</translation>
+        <translation type="vanished">Awtomatikong pagpapalit ng scene</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Pinapalitan ng Solin ang mga scene habang naka-project ang media.</translation>
+        <translation type="vanished">Pinapalitan ng Solin ang mga scene habang naka-project ang media.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Mananatiling available ang manual na control ng mga scene at camera.</translation>
+        <translation type="vanished">Mananatiling available ang manual na control ng mga scene at camera.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Default na scene</translation>
+        <translation type="vanished">Default na scene</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Media scene</translation>
+        <translation type="vanished">Media scene</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>I-set up ang OBS mamaya</translation>
+        <translation type="vanished">I-set up ang OBS mamaya</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3683,12 +3683,12 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Nakakonekta · awtomatikong pagpapalit ng scene</translation>
+        <translation type="vanished">Nakakonekta · awtomatikong pagpapalit ng scene</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Nakakonekta · manual na mga control</translation>
+        <translation type="vanished">Nakakonekta · manual na mga control</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3703,7 +3703,7 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Pumili ng scene</translation>
+        <translation type="vanished">Pumili ng scene</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3738,7 +3738,7 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Maglagay ng port mula 1 hanggang 65535.</translation>
+        <translation type="vanished">Maglagay ng port mula 1 hanggang 65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3753,17 +3753,17 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Kumonekta sa OBS o piliin ang I-set up mamaya.</translation>
+        <translation type="vanished">Kumonekta sa OBS o piliin ang I-set up mamaya.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Piliin ang parehong OBS scene.</translation>
+        <translation type="vanished">Piliin ang parehong OBS scene.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Pumili ng dalawang magkaibang OBS scene.</translation>
+        <translation type="vanished">Pumili ng dalawang magkaibang OBS scene.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3819,6 +3819,38 @@ Pananatilihin ang folder at ang mga nakikitang file nito.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>I-install ang xdotool para gamitin ang awtomatikong pagbabahagi.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Kasama na ang Mga Eksena ng Solin. Opsyonal ang awtomatikong pagbabahagi ng screen sa Zoom.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Mga Eksena ng Solin</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Pagsamahin ang mga camera at media sa mga eksena para sa inyong mga pulong.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Pagkatapos gawin ang inyong profile, buksan ang tab na Mga Eksena para i-configure ang mga camera, mga source, at PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Para sa karamihan ng mga setup, sapat na ang Mga Eksena ng Solin kasama ang %1.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Kasama na · i-configure ang mga camera sa Mga Eksena</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>I-install at paganahin ang extension ng virtual na camera ng OBS para magamit ito.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Kailangan ang v4l2loopback sa Linux; maaaring mag-iba ang pangalan ng camera depende sa configuration nito.</translation>
     </message>
 </context>
 <context>

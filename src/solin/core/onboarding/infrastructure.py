@@ -6,10 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
-from solin.core.integrations.automation.settings import (
-    AutoShareSettingsStore,
-    OBSSettingsStore,
-)
+from solin.core.integrations.automation.settings import AutoShareSettingsStore
 from solin.core.jw.background_song_settings import BackgroundSongSettingsStore
 from solin.core.jw.language_settings import JWLanguageSettingsStore
 from solin.core.media.settings import MediaSettingsStore
@@ -24,7 +21,6 @@ class OnboardingSettingsStores:
     media_settings: MediaSettingsStore
     meeting_schedule_settings: MeetingScheduleSettingsStore
     background_song_settings: BackgroundSongSettingsStore
-    obs_settings: OBSSettingsStore
     auto_share_settings: AutoShareSettingsStore
 
 
@@ -60,18 +56,6 @@ class QSettingsOnboardingSettings:
             command.meeting_schedule is not None
             and command.meeting_schedule.has_configured_slot
         )
-
-        obs_settings = stores.obs_settings
-        obs_settings.set_enabled(command.obs.enabled)
-        if command.obs.enabled:
-            obs_settings.set_connection(command.obs.port, command.obs.password)
-        if command.obs.enabled and command.obs.automatic_scene_switching:
-            obs_settings.set_scenes(
-                command.obs.default_scene,
-                command.obs.media_scene,
-            )
-        else:
-            obs_settings.set_scenes("", "")
 
         auto_share_settings = stores.auto_share_settings
         auto_share_settings.set_enabled(command.zoom_share.enabled)

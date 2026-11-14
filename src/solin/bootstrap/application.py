@@ -660,16 +660,10 @@ def _run_zoom_poll_standalone(app, filepath: str, lang_manager) -> int:
 
 
 def _create_profile_screen(container, lang_manager):
-    from solin.controllers.onboarding_obs_probe import OnboardingOBSProbe
-    from solin.core.integrations.automation.obs import OBSWebSocketService
     from solin.core.jw.congregation_lookup_service import CongregationLookupService
     from solin.ui.profile_screen import ProfileScreen
     from solin.widgets.screen_picker_overlay import ScreenPickerOverlay
 
-    obs_probe = OnboardingOBSProbe(
-        lambda settings, parent: OBSWebSocketService(settings, parent=parent)
-    )
-    container.lifecycle.register_cleanup(obs_probe.shutdown)
     congregation_lookup = CongregationLookupService()
     container.lifecycle.register_cleanup(congregation_lookup.shutdown)
     return ProfileScreen(
@@ -679,7 +673,6 @@ def _create_profile_screen(container, lang_manager):
             container.profile_runtime.create(profile_id).settings
         ),
         onboarding_service=container.onboarding_service,
-        obs_probe=obs_probe,
         congregation_lookup=congregation_lookup,
         target_picker_factory=ScreenPickerOverlay,
     )

@@ -24,6 +24,7 @@ from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.core.media.camera_identity import local_camera_device_key
 from solin.core.scenes.application import DuplicateLayerNameError
 from solin.core.scenes.composition import scene_ptz_camera_ids
+from solin.core.scenes.virtual_camera_identity import virtual_camera_device_name
 from solin.core.scenes.editor_geometry import (
     FramingRect,
     MINIMUM_LAYER_SIZE,
@@ -451,10 +452,7 @@ class ScenesBridge(QObject):
 
     @Property(str, constant=True)
     def virtualCameraDeviceName(self) -> str:
-        if sys.platform == "darwin":
-            # Match the installed vendor device's name in meeting apps.
-            return "OBS Virtual Camera"
-        return QCoreApplication.translate("ScenesWorkspace", "Solin Virtual Camera")
+        return virtual_camera_device_name(sys.platform)
 
     @Property(bool, notify=changed)
     def virtualCameraReady(self) -> bool:

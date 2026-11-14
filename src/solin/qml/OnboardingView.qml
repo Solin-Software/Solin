@@ -33,7 +33,6 @@ Rectangle {
         if (page === "profile") return profilePage
         if (page === "preferences") return preferencesPage
         if (page === "integrations") return integrationsPage
-        if (page === "obs") return obsPage
         if (page === "zoom") return zoomPage
         return reviewPage
     }
@@ -133,6 +132,7 @@ Rectangle {
 
     StackView {
         id: pageStack
+        objectName: "onboardingPageStack"
         anchors.top: header.bottom
         anchors.bottom: footer.top
         anchors.left: parent.left
@@ -197,6 +197,7 @@ Rectangle {
 
     Item {
         id: footer
+        objectName: "onboardingFooter"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -413,213 +414,65 @@ Rectangle {
         id: integrationsPage
 
         FocusScope {
-            PageColumn {
-                width: Math.min(parent.width - 72, 760)
-                anchors.centerIn: parent
-                title: qsTr("Choose how Solin should help")
-                subtitle: qsTr("Choose one option, both, or set them up later.")
+            objectName: "onboardingIntegrationsPage"
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 28
-                    spacing: 12
-
-                    IntegrationChoice {
-                        Layout.fillWidth: true
-                        selected: root.draft.obsSelected
-                        iconName: "obs"
-                        title: "OBS Studio"
-                        subtitle: qsTr("Control scenes and cameras from Solin.")
-                        onClicked: onboardingBridge.updateField("obsSelected", !selected)
-                    }
-
-                    IntegrationChoice {
-                        Layout.fillWidth: true
-                        selected: root.draft.zoomSelected
-                        enabled: root.draft.zoomAvailable
-                        iconName: "zoom"
-                        title: "Zoom Meetings"
-                        subtitle: root.draft.zoomAvailable
-                                  ? qsTr("Share your screen automatically.")
-                                  : root.draft.zoomUnavailableReason
-                        onClicked: onboardingBridge.updateField("zoomSelected", !selected)
-                    }
-                }
-
-                TextButton {
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 18
-                    text: qsTr("Set up later")
-                    visible: root.draft.obsSelected || root.draft.zoomSelected
-                    onClicked: {
-                        onboardingBridge.updateField("obsSelected", false)
-                        onboardingBridge.updateField("zoomSelected", false)
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: obsPage
-
-        FocusScope {
             Flickable {
+                id: integrationsScroll
                 anchors.fill: parent
-                contentHeight: obsContent.implicitHeight + 52
+                contentHeight: integrationsContent.implicitHeight + 48
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
                 PageColumn {
-                    id: obsContent
-                    width: Math.min(parent.width - 72, 700)
+                    id: integrationsContent
+                    width: Math.min(parent.width - 72, 760)
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.top: parent.top
-                    anchors.topMargin: 14
-                    title: qsTr("Connect OBS Studio")
-                    subtitle: qsTr("Use OBS scenes and cameras from Solin. Automatic switching is optional.")
+                    y: Math.max(24, (integrationsScroll.height - implicitHeight) / 2)
+                    title: qsTr("Choose how Solin should help")
+                    subtitle: qsTr("Solin Scenes is included. Automatic Zoom sharing is optional.")
 
-                    ColumnLayout {
+                    RowLayout {
                         Layout.fillWidth: true
-                        Layout.topMargin: 20
+                        Layout.topMargin: 28
                         spacing: 12
 
-                        RowLayout {
+                        IntegrationChoice {
+                            objectName: "onboardingScenesCard"
                             Layout.fillWidth: true
-                            spacing: 10
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 7
-                                FieldLabel { text: qsTr("WebSocket port") }
-                                AppTextField {
-                                    restingColor: root.surfaceColor
-                                    cornerRadius: 9
-                                    focusedBorderWidth: 1
-                                    font.pixelSize: 13
-                                    Layout.fillWidth: true
-                                    text: root.draft.obsPort
-                                    inputMethodHints: Qt.ImhDigitsOnly
-                                    onTextEdited: onboardingBridge.updateField("obsPort", text)
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 7
-                                FieldLabel { text: qsTr("Password (optional)") }
-                                AppTextField {
-                                    restingColor: root.surfaceColor
-                                    cornerRadius: 9
-                                    focusedBorderWidth: 1
-                                    font.pixelSize: 13
-                                    Layout.fillWidth: true
-                                    text: root.draft.obsPassword
-                                    echoMode: TextInput.Password
-                                    onTextEdited: onboardingBridge.updateField("obsPassword", text)
-                                }
-                            }
-
-                            SecondaryButton {
-                                Layout.alignment: Qt.AlignBottom
-                                text: root.draft.obsState === "connecting"
-                                      ? qsTr("Connecting…") : qsTr("Connect")
-                                enabled: root.draft.obsState !== "connecting"
-                                onClicked: onboardingBridge.testObsConnection()
-                            }
+                            Layout.fillHeight: true
+                            selected: true
+                            selectable: false
+                            iconName: "scenes"
+                            title: qsTr("Solin Scenes")
+                            subtitle: qsTr("Combine cameras and media into scenes for your meetings.")
+                            description: qsTr("After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.")
                         }
 
-                        StatusLine {
+                        IntegrationChoice {
+                            objectName: "onboardingZoomCard"
                             Layout.fillWidth: true
-                            stateKey: root.draft.obsState
-                            text: root.draft.obsStatusText
+                            Layout.fillHeight: true
+                            selected: root.draft.zoomSelected
+                            enabled: root.draft.zoomAvailable
+                            iconName: "zoom"
+                            title: "Zoom Meetings"
+                            subtitle: root.draft.zoomAvailable
+                                      ? qsTr("Share your screen automatically.")
+                                      : root.draft.zoomUnavailableReason
+                            description: qsTr("For most setups, Solin Scenes with %1 is enough.")
+                                         .arg(onboardingBridge.virtualCameraDeviceName)
+                                         + (onboardingBridge.virtualCameraRequirement !== ""
+                                            ? "\n\n" + onboardingBridge.virtualCameraRequirement : "")
+                            onClicked: onboardingBridge.updateField("zoomSelected", !selected)
                         }
+                    }
 
-                        TextButton {
-                            Layout.alignment: Qt.AlignLeft
-                            Layout.topMargin: -6
-                            iconName: "book"
-                            text: qsTr("Need help setting up OBS?")
-                            onClicked: onboardingBridge.openObsSetupGuide()
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: autoContent.implicitHeight + 28
-                            visible: root.draft.obsConnected
-                            radius: 12
-                            color: root.surfaceColor
-                            border.width: 1
-                            border.color: root.draft.obsAutomatic ? root.accent : appTheme.border
-
-                            ColumnLayout {
-                                id: autoContent
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.top: parent.top
-                                anchors.margins: 14
-                                spacing: 10
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 12
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 3
-                                        Text {
-                                            text: qsTr("Automatic scene switching")
-                                            color: root.textPrimary
-                                            font.pixelSize: 13
-                                            font.weight: Font.DemiBold
-                                        }
-                                        Text {
-                                            Layout.fillWidth: true
-                                            text: root.draft.obsAutomatic
-                                                  ? qsTr("Solin switches scenes while media is projected.")
-                                                  : qsTr("Manual scene and camera controls remain available.")
-                                            color: root.textMuted
-                                            font.pixelSize: 11
-                                            wrapMode: Text.Wrap
-                                        }
-                                    }
-
-                                    AppToggle {
-                                        checked: root.draft.obsAutomatic
-                                        onToggled: checked => onboardingBridge.updateField("obsAutomatic", checked)
-                                    }
-                                }
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 10
-                                    visible: root.draft.obsAutomatic
-
-                                    SceneChoice {
-                                        Layout.fillWidth: true
-                                        label: qsTr("Default scene")
-                                        value: root.draft.obsDefaultScene
-                                        model: root.draft.obsScenes
-                                        onSelected: value => onboardingBridge.updateField("obsDefaultScene", value)
-                                    }
-
-                                    SceneChoice {
-                                        Layout.fillWidth: true
-                                        label: qsTr("Media scene")
-                                        value: root.draft.obsMediaScene
-                                        model: root.draft.obsScenes
-                                        onSelected: value => onboardingBridge.updateField("obsMediaScene", value)
-                                    }
-                                }
-                            }
-                        }
-
-                        TextButton {
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.topMargin: 4
-                            text: qsTr("Set up OBS later")
-                            onClicked: onboardingBridge.skipCurrentIntegration()
-                        }
+                    TextButton {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 18
+                        text: qsTr("Set up later")
+                        visible: root.draft.zoomSelected
+                        onClicked: onboardingBridge.updateField("zoomSelected", false)
                     }
                 }
             }
@@ -773,12 +626,9 @@ Rectangle {
                                : qsTr("Not configured")
                     }
                     ReviewLine {
-                        iconName: "obs"
-                        title: "OBS Studio"
-                        value: !root.draft.obsSelected ? qsTr("Not configured")
-                               : (root.draft.obsAutomatic
-                                  ? qsTr("Connected · automatic scene switching")
-                                  : qsTr("Connected · manual controls"))
+                        iconName: "scenes"
+                        title: qsTr("Solin Scenes")
+                        value: qsTr("Included · configure cameras in Scenes")
                     }
                     ReviewLine {
                         iconName: "zoom"
@@ -935,94 +785,138 @@ Rectangle {
     component IntegrationChoice: Rectangle {
         id: integration
         property bool selected: false
+        property bool selectable: true
         property string iconName: ""
         property string title: ""
         property string subtitle: ""
+        property string description: ""
         signal clicked()
-        Layout.preferredHeight: 126
+        implicitHeight: integrationContent.implicitHeight + 36
+        Layout.preferredHeight: implicitHeight
         radius: 13
         color: selected ? root.accentTint
               : (integrationMouse.containsMouse ? appTheme.hover : root.surfaceColor)
         border.width: 1
-        border.color: selected ? root.accent : appTheme.borderChrome
-        opacity: enabled ? 1 : 0.48
+        border.color: activeFocus ? root.accent
+                      : (selected ? root.accent : appTheme.borderChrome)
+        activeFocusOnTab: selectable && enabled
         Accessible.name: title
-        Accessible.description: subtitle
+        Accessible.description: subtitle + " " + description
         Accessible.role: Accessible.CheckBox
         Accessible.checked: selected
+        Accessible.checkable: selectable
+        Accessible.readOnly: !selectable
+        Accessible.onToggleAction: integration.activate()
+
+        function activate() {
+            if (selectable && enabled)
+                clicked()
+        }
+
+        Keys.onSpacePressed: integration.activate()
+        Keys.onReturnPressed: integration.activate()
+        Keys.onEnterPressed: integration.activate()
 
         Behavior on color { ColorAnimation { duration: 150 } }
         Behavior on border.color { ColorAnimation { duration: 150 } }
 
-        RowLayout {
-            anchors.fill: parent
+        ColumnLayout {
+            id: integrationContent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             anchors.margins: 18
-            spacing: 14
+            spacing: 12
 
-            Rectangle {
-                Layout.preferredWidth: 48
-                Layout.preferredHeight: 48
-                radius: 24
-                color: integration.selected ? appTheme.accentMuted : appTheme.surfaceAlt
-
-                Image {
-                    anchors.centerIn: parent
-                    width: 23
-                    height: 23
-                    source: root.iconSource(
-                        integration.iconName,
-                        23,
-                        integration.selected ? appTheme.accentText : root.textSecondary
-                    )
-                    sourceSize: Qt.size(23, 23)
-                }
-            }
-
-            ColumnLayout {
+            RowLayout {
                 Layout.fillWidth: true
-                spacing: 5
-                Text {
-                    Layout.fillWidth: true
-                    text: integration.title
-                    color: root.textPrimary
-                    font.pixelSize: 15
-                    font.weight: Font.DemiBold
+                Layout.minimumHeight: 90
+                opacity: integration.enabled ? 1 : 0.48
+                spacing: 14
+
+                Rectangle {
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    radius: 24
+                    color: integration.selected ? appTheme.accentMuted : appTheme.surfaceAlt
+
+                    Image {
+                        anchors.centerIn: parent
+                        width: 23
+                        height: 23
+                        source: root.iconSource(
+                            integration.iconName,
+                            23,
+                            integration.selected ? appTheme.accentText : root.textSecondary
+                        )
+                        sourceSize: Qt.size(23, 23)
+                    }
                 }
-                Text {
+
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: integration.subtitle
-                    color: root.textMuted
-                    font.pixelSize: 11
-                    wrapMode: Text.Wrap
+                    spacing: 5
+                    Text {
+                        Layout.fillWidth: true
+                        text: integration.title
+                        color: root.textPrimary
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                        wrapMode: Text.Wrap
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: integration.subtitle
+                        color: root.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.Wrap
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 24
+                    radius: 12
+                    color: integration.selected ? root.accent : "transparent"
+                    border.width: 1.5
+                    border.color: integration.selected ? root.accent : root.textDim
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: integration.selected
+                        text: "✓"
+                        color: appTheme.white
+                        font.pixelSize: 14
+                        font.weight: Font.Bold
+                    }
                 }
             }
 
             Rectangle {
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                radius: 12
-                color: integration.selected ? root.accent : "transparent"
-                border.width: 1.5
-                border.color: integration.selected ? root.accent : root.textDim
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: root.borderColor
+                visible: integration.description !== ""
+            }
 
-                Text {
-                    anchors.centerIn: parent
-                    visible: integration.selected
-                    text: "✓"
-                    color: appTheme.white
-                    font.pixelSize: 14
-                    font.weight: Font.Bold
-                }
+            Text {
+                objectName: "integrationDescription"
+                Layout.fillWidth: true
+                text: integration.description
+                color: root.textMuted
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+                visible: text !== ""
             }
         }
 
         MouseArea {
             id: integrationMouse
             anchors.fill: parent
-            enabled: integration.enabled
+            enabled: integration.enabled && integration.selectable
             hoverEnabled: true
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: integration.clicked()
+            onClicked: integration.activate()
         }
     }
 
@@ -1135,233 +1029,6 @@ Rectangle {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onClicked: compact.clicked()
-        }
-    }
-
-    component StatusLine: Rectangle {
-        property string stateKey: "idle"
-        property alias text: statusText.text
-        implicitHeight: 42
-        radius: 9
-        color: stateKey === "connected" ? appTheme.successSurface
-             : stateKey === "error" ? appTheme.dangerSubtle : appTheme.surfaceAlt
-
-        Row {
-            anchors.left: parent.left
-            anchors.leftMargin: 13
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 9
-            Rectangle {
-                anchors.verticalCenter: parent.verticalCenter
-                width: 7
-                height: 7
-                radius: 4
-                color: stateKey === "connected" ? appTheme.success
-                     : stateKey === "connecting" ? appTheme.warning
-                     : stateKey === "error" ? appTheme.danger : root.textDim
-            }
-            Text {
-                id: statusText
-                anchors.verticalCenter: parent.verticalCenter
-                color: stateKey === "connected" ? appTheme.success : root.textMuted
-                font.pixelSize: 11
-                font.weight: Font.Medium
-            }
-        }
-    }
-
-    component AppToggle: Rectangle {
-        id: toggle
-        property bool checked: false
-        signal toggled(bool checked)
-        implicitWidth: 42
-        implicitHeight: 24
-        radius: 12
-        color: checked ? root.accent : appTheme.borderChrome
-
-        Behavior on color { ColorAnimation { duration: 130 } }
-        Rectangle {
-            width: 18
-            height: 18
-            radius: 9
-            y: 3
-            x: toggle.checked ? toggle.width - width - 3 : 3
-            color: appTheme.white
-            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-        }
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: toggle.toggled(!toggle.checked)
-        }
-    }
-
-    component SceneChoice: ColumnLayout {
-        id: sceneChoice
-        property string label: ""
-        property string value: ""
-        property var model: []
-        readonly property int popupScrollbarGutter: 14
-        signal selected(string value)
-        spacing: 6
-
-        FieldLabel { text: sceneChoice.label }
-        ComboBox {
-            id: sceneCombo
-            Layout.fillWidth: true
-            Layout.preferredHeight: 42
-            model: sceneChoice.model
-            currentIndex: sceneChoice.model.indexOf(sceneChoice.value)
-            displayText: sceneChoice.value || qsTr("Choose a scene")
-            hoverEnabled: true
-            onActivated: index => {
-                if (index >= 0)
-                    sceneChoice.selected(String(sceneChoice.model[index]))
-            }
-            contentItem: Text {
-                leftPadding: 13
-                rightPadding: 38
-                text: sceneCombo.displayText
-                color: root.textPrimary
-                font.pixelSize: 11
-                font.weight: Font.Medium
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-            indicator: Image {
-                x: sceneCombo.width - width - 13
-                y: Math.round((sceneCombo.height - height) / 2)
-                width: 15
-                height: 15
-                source: root.iconSource(
-                    "chevron_down",
-                    15,
-                    sceneCombo.popup.visible ? root.accent : root.textMuted
-                )
-                rotation: sceneCombo.popup.visible ? 180 : 0
-                opacity: sceneCombo.enabled ? 1.0 : 0.45
-
-                Behavior on rotation { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                Behavior on opacity { NumberAnimation { duration: 120 } }
-            }
-            background: Rectangle {
-                radius: 10
-                color: sceneCombo.popup.visible || sceneCombo.hovered
-                       ? appTheme.surfaceAlt : root.surfaceChrome
-                border.width: 1
-                border.color: sceneCombo.popup.visible || sceneCombo.activeFocus
-                              ? root.accent : appTheme.border
-
-                Behavior on color { ColorAnimation { duration: 140 } }
-                Behavior on border.color { ColorAnimation { duration: 140 } }
-            }
-            delegate: ItemDelegate {
-                id: sceneOption
-
-                required property int index
-                required property var modelData
-
-                width: Math.max(
-                    0,
-                    sceneCombo.width - 12 - sceneChoice.popupScrollbarGutter
-                )
-                height: 38
-                leftPadding: 10
-                rightPadding: 10
-                topPadding: 0
-                bottomPadding: 0
-                hoverEnabled: true
-                highlighted: sceneCombo.highlightedIndex === index
-
-                property bool selectedScene: sceneChoice.value === String(modelData)
-
-                background: Rectangle {
-                    radius: 9
-                    color: sceneOption.selectedScene
-                           ? root.accentTint
-                           : (sceneOption.highlighted || sceneOption.hovered
-                              ? appTheme.hover : "transparent")
-                    border.width: sceneOption.selectedScene ? 1 : 0
-                    border.color: sceneOption.selectedScene ? root.accent : "transparent"
-
-                    Behavior on color { ColorAnimation { duration: 110 } }
-                }
-                contentItem: RowLayout {
-                    spacing: 9
-                    Rectangle {
-                        Layout.preferredWidth: 6
-                        Layout.preferredHeight: 6
-                        radius: 3
-                        color: sceneOption.selectedScene ? root.accent : "transparent"
-                    }
-                    Text {
-                        Layout.fillWidth: true
-                        text: String(sceneOption.modelData)
-                        color: sceneOption.selectedScene ? root.textPrimary : root.textSecondary
-                        font.pixelSize: 11
-                        font.weight: sceneOption.selectedScene ? Font.DemiBold : Font.Medium
-                        elide: Text.ElideRight
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                }
-            }
-            popup: Popup {
-                id: scenePopup
-
-                y: sceneCombo.height + 8
-                width: sceneCombo.width
-                implicitHeight: Math.min(sceneList.contentHeight + 12, 224)
-                padding: 6
-                modal: false
-                focus: true
-                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-
-                enter: Transition {
-                    NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 120 }
-                    NumberAnimation { property: "scale"; from: 0.98; to: 1.0; duration: 140; easing.type: Easing.OutCubic }
-                }
-                exit: Transition {
-                    NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 90 }
-                    NumberAnimation { property: "scale"; from: 1.0; to: 0.98; duration: 90; easing.type: Easing.InCubic }
-                }
-                background: Rectangle {
-                    radius: 13
-                    color: root.surfaceColor
-                    border.width: 1
-                    border.color: appTheme.borderChrome
-                }
-                contentItem: ListView {
-                    id: sceneList
-
-                    clip: true
-                    implicitHeight: Math.min(contentHeight, 212)
-                    model: scenePopup.visible ? sceneCombo.delegateModel : null
-                    currentIndex: sceneCombo.highlightedIndex
-                    boundsBehavior: Flickable.StopAtBounds
-                    rightMargin: sceneChoice.popupScrollbarGutter
-                    spacing: 4
-
-                    ScrollBar.vertical: ScrollBar {
-                        id: sceneScrollBar
-
-                        policy: ScrollBar.AsNeeded
-                        width: 8
-                        contentItem: Rectangle {
-                            implicitWidth: 4
-                            radius: 2
-                            color: (sceneScrollBar.active || sceneScrollBar.hovered)
-                                   ? root.textMuted : root.borderColor
-                            opacity: (sceneScrollBar.active
-                                      || sceneScrollBar.hovered
-                                      || sceneList.moving) ? 1.0 : 0.35
-                            anchors.horizontalCenter: parent.horizontalCenter
-
-                            Behavior on color { ColorAnimation { duration: 150 } }
-                            Behavior on opacity { NumberAnimation { duration: 180 } }
-                        }
-                    }
-                }
-            }
         }
     }
 
