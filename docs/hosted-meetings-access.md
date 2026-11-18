@@ -2,7 +2,7 @@
 
 Specification agreed on 2026-11-17. It changes how people reach a meeting that Solin hosts itself (see [hosted-meetings.md](hosted-meetings.md)), and it touches both Solin and the hub ([solin-hub](https://github.com/Solin-Software/solin-hub)).
 
-**Status:** the Solin side is implemented on `spike/galene` (see "Implementation status" at the end). The hub side is not built yet. Until it is, Solin draws the codes itself and checks the password itself, and the link goes through the hub's current per-hall address: `https://<hall>.meet.solin.run/<code>`.
+**Status:** the Solin side is implemented on `spike/galene`, and the hub routes `meet.solin.run/<code>` to the congregation that registered the code (see "Implementation status" at the end). Solin still draws the codes and checks the password itself; the hub keeps codes unique and shows the waiting, "no longer valid" and "no such meeting" pages.
 
 The hub is at `meet.solin.run`.
 
@@ -240,17 +240,20 @@ All calls are authenticated with the congregation's existing key.
 | Pages: first screen (name, password, count), lobby countdown, stage page, moderator page with the device key | `resources/hosted_meeting_web/` (`index.html`/`app.js`, `stage.*`, `moderator.*`, `staff.js`) |
 | Console: links and password, upcoming meetings, Share the month, renewals, approvals, approved devices, live total, official count | `qml/MeetingConsoleView.qml`, `ui/qml/meeting_console_bridge.py` |
 | Setting "Meeting links"; notifications for the automatic opening and the official count | `ui/qml/settings/`, `main_window.py` |
+| Sending the codes to the hub on every change; drawing again a code another congregation holds; the "hub does not know these links yet" warning | `core/hosted_meeting/hub_codes.py`, `service.py` |
+| Hub: code registry (`PUT /api/halls/<hall>/codes`, hall key; 409 for another hall's code; retired codes kept 400 days), routing `/<code>/…` to the hall's tunnel, landing page, waiting page with countdown, "no longer valid" | solin-hub: `ask/ask.py`, `ask/landing.html`, `sites.caddy` |
 
-**Differences from the target until the hub part exists:**
-- **Codes:** Solin draws codes locally from the same alphabet and never reuses a code this congregation retired. Global uniqueness needs the hub's `reserve`.
-- **Password:** the hall checks it, so before Solin opens the meeting nobody can type it in. Nothing answers yet before the operator opens the meeting.
-- **Countdown:** the waiting page and its countdown exist only from the moment Solin opens the meeting (from 30 minutes before the start, automatically).
+**Differences from the target:**
+- **Codes:** Solin draws them and the hub only accepts or refuses them (instead of issuing them); the result is the same, unique codes across congregations.
+- **Password:** the hall checks it, so before Solin opens the meeting the hub's waiting page has no password field; the name, password and count come after it opens.
+- **A future meeting's code while another meeting is open:** the hub sends it to the hall, whose page answers that the link is not valid now (the hub's countdown only shows while the hall is offline).
 - **Low-codes warning:** with local codes it only appears when Solin has not been opened for weeks.
 
-**Not built yet: the hub side.** The code registry and path routing on `meet.solin.run`, the password-hash check, the hub-served entry, countdown, ended and invalid pages, the API, and admission tickets.
+**Not built yet:** the password-hash check on the hub, admission tickets, and the hub-served "ended" page.
 
 **Tests:**
-- unit: `test_hosted_meeting_links.py`, `test_hosted_meeting_access.py`, `test_hosted_meeting_link.py`, `test_hosted_meeting_core.py`;
+- unit: `test_hosted_meeting_links.py`, `test_hosted_meeting_access.py`, `test_hosted_meeting_link.py`, `test_hosted_meeting_core.py`, `test_hosted_meeting_hub_codes.py`;
+- hub (solin-hub): `tests/test_ask.py`, and `scripts/smoke_local.sh` end to end with Caddy, frps, real frpc and coturn;
 - live, against Galene: `test_hosted_meeting_runtime_live.py` (password, rate limit, stage and moderator approval, moderator commands, remembered devices, old codes) and `test_hosted_meeting_service_live.py`;
 - real Chromium: `test_hosted_meeting_browser_live.py` (the first screen, a moderator with a WebCrypto device key approved once and recognised after a reload, a moderator admitting an attendee);
 - console render: `test_meeting_console_qml.py`.

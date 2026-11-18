@@ -5,7 +5,9 @@ the stage page is ``/<code>/s`` and the moderator page ``/<code>/m``. In "same l
 mode one permanent code serves every meeting; in "per meeting" mode each scheduled
 meeting has its own code and password, prepared four weeks ahead from the
 congregation's meeting days. The origin is the hub's address for this hall, or the
-computer's LAN address without a hub.
+computer's LAN address without a hub. With a hub, every change to the codes is sent to
+it (:mod:`.hub_codes`) so ``https://<hub>/<code>`` leads to this hall; a code another
+congregation already holds is drawn again.
 
 Start (on a worker thread, so the UI never blocks):
 
@@ -49,6 +51,7 @@ from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .binaries import Helper, find_helper
 from .galene_config import TurnServer
 from .galene_server import GaleneServer, GaleneUnavailable
+from .hub_codes import CodesPayload, RegisterResult, codes_payload, register_codes
 from .devices import DeviceRegistry
 from .links import UNSCHEDULED, LinkMode, LinksState, ScheduledMeeting, clean_password
 from .participant_video import bridge_ports_argument, valid_slot
@@ -64,6 +67,7 @@ PROGRAM_USERNAME = "Solin program"
 HALL_LISTENER_USERNAME = "Solin hall"
 _LONG_TOKEN_TTL = 24 * 3600
 _AUTO_START_TICK_MS = 30_000
+_HUB_SYNC_DELAY_MS = 300   # changes come in bursts (a dialog saves, then the list refreshes)
 # Solin restarted after the count time: give people a moment to reconnect first.
 _LATE_COUNT_DELAY = timedelta(minutes=2)
 # The people admitted before a restart are let back in only within this time.
@@ -97,6 +101,7 @@ class MeetingInfo:
     upcoming: list[dict[str, Any]] = field(default_factory=list)
     low_on_codes: bool = False
     devices: list[dict[str, Any]] = field(default_factory=list)
+    hub_error: str = ""            # why the hub does not know this hall's codes yet ("" = it does)
     output: str = "idle"           # program output: idle/starting/live/reconnecting/failed
     tunnel: str = "off"            # off/connecting/online/failed
     galene: str = "stopped"
@@ -114,6 +119,7 @@ class MeetingInfo:
             "officialCount": dict(self.official_count) if self.official_count else None,
             "autoStarted": self.auto_started, "upcoming": [dict(m) for m in self.upcoming],
             "lowOnCodes": self.low_on_codes, "devices": [dict(d) for d in self.devices],
+            "hubError": self.hub_error,
             "output": self.output, "tunnel": self.tunnel, "galene": self.galene,
             "commenterAudio": self.commenter_audio,
             "participantVideo": {str(slot): user for slot, user in sorted(self.participant_video.items())},
@@ -147,6 +153,7 @@ class HostedMeetingService(QObject):
         scene_runtime: Any = None,
         auto_start: bool = False,
         clock: Callable[[], datetime] | None = None,
+        register: Callable[[HubConnection, CodesPayload], RegisterResult] = register_codes,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -171,6 +178,14 @@ class HostedMeetingService(QObject):
         self._count_timer.setSingleShot(True)
         self._count_timer.timeout.connect(self._take_official_count)
         self._call_on_main.connect(self._run_on_main, Qt.ConnectionType.QueuedConnection)
+        # The codes the hub knows (the last list it accepted), and the one being sent.
+        self._register = register
+        self._hub_known: tuple[str, CodesPayload] | None = None
+        self._hub_sending = False
+        self._hub_timer = QTimer(self)
+        self._hub_timer.setSingleShot(True)
+        self._hub_timer.setInterval(_HUB_SYNC_DELAY_MS)
+        self._hub_timer.timeout.connect(self._sync_hub_codes)
         self._info = MeetingInfo()
         self.refresh_links()
         self._auto_timer: QTimer | None = None
@@ -279,6 +294,48 @@ class HostedMeetingService(QObject):
             # Keep the running meeting's link; refresh only the list of meetings ahead.
             fields = {key: fields[key] for key in ("upcoming", "low_on_codes", "devices", "link_mode")}
         self._update(**fields)
+        self._hub_timer.start()
+
+    # ── the hub's code registry ───────────────────────────────────────────
+
+    def _sync_hub_codes(self) -> None:
+        """Send the codes to the hub when they differ from what it last accepted (one request at a time)."""
+
+        hub = self._settings.hub()
+        if hub is None:
+            if self._info.hub_error:
+                self._update(hub_error="")
+            return
+        payload = codes_payload(self._settings.links(), self._settings.link_mode(), self._clock(),
+                                running=self._code if self._active() else "")
+        target = (hub.to_code(), payload)
+        if self._hub_known == target or self._hub_sending:
+            return
+        self._hub_sending = True
+
+        def send() -> None:
+            result = self._register(hub, payload)
+            self._main(lambda: self._hub_codes_sent(target, result))
+
+        threading.Thread(target=send, name="solin-hub-codes", daemon=True).start()
+
+    def _hub_codes_sent(self, target: tuple[str, CodesPayload], result: RegisterResult) -> None:
+        self._hub_sending = False
+        if result.ok:
+            self._hub_known = target
+            self._update(hub_error="")
+        elif result.taken:
+            # Another congregation holds these codes: draw new ones (not the running meeting's).
+            taken = [code for code in result.taken if not (self._active() and code == self._code)]
+            if taken:
+                log.info("hub: %d code(s) held by another hall; drawing new ones", len(taken))
+                self._settings.set_links(self._settings.links().redraw(taken))
+                self.refresh_links()
+                return
+            self._update(hub_error="this meeting's code belongs to another congregation; use New link after it")
+        else:
+            self._update(hub_error=result.error)
+        # Retry on the next schedule tick (or the next change).
 
     def _changing_links(self) -> bool:
         return self.state not in (MeetingState.IDLE, MeetingState.FAILED)
@@ -422,6 +479,8 @@ class HostedMeetingService(QObject):
             return
         if not self._active():
             self.refresh_links()
+        else:
+            self._hub_timer.start()
         if self._active() or not self.available():
             return
         meeting = self._prepared_links().in_window(self._clock())
@@ -791,6 +850,7 @@ class HostedMeetingService(QObject):
         """
 
         self._count_timer.stop()
+        self._hub_timer.stop()
         if self._auto_timer is not None:
             self._auto_timer.stop()
         if self._info.state is MeetingState.IDLE:

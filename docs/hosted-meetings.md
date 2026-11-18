@@ -20,7 +20,7 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
 
 ```
                       ┌──────────────── hub (VPS, self-hostable) ────────────────┐
- attendee browser ──► │ Caddy: TLS for <hall>.<hub-domain>  ──►  frps (tunnel)    │
+ attendee browser ──► │ Caddy: <hub-domain>/<code> → hall   ──►  frps (tunnel)    │
    (HTTPS + WSS)      │ coturn: TURN UDP/TCP, time-limited credentials           │
         │             └───────────────────────────────▲──────────────────────────┘
         │ media (UDP; direct via IPv6/srflx,          │ hall dials out (frpc)
@@ -109,11 +109,11 @@ Every meeting is reached at `<origin>/<code>`, a 6-character code plus a passwor
 ### Hub (VPS, run by the project or self-hosted)
 
 Adapted from the S5 bundle (`spikes/hosted-meetings/s5_hub/`):
-- **Caddy:** on-demand TLS for `<hall>.<hub-domain>`, gated by an `ask` service that approves only halls currently connected to frps.
+- **Caddy:** one address, `https://<hub-domain>/<code>`. An `ask` service keeps the code registry (each hall's Solin sends its codes) and tells Caddy which hall's tunnel serves a code; it answers unknown, retired and not-yet-open codes itself.
 - **frps:** each hall's `frpc` dials out and forwards one TCP port, the meeting web server. Raw TCP forwarding, not frp's HTTP vhost, which closed long WebSockets after ~60 s in S5. No `heartbeatTimeout` with `tcpMux`, which dropped tunnels every 90 s in S5.
 - **coturn:** dual-stack UDP + TCP 3478 with `use-auth-secret`; Solin hands its credentials to Galene, which hands them to attendees.
-- **Auth:** a hub token per hall. Phase 1 uses frps' shared token plus a per-hall subdomain reservation; registration can come later.
-- **Statelessness:** the hub holds no meeting state; everything lives on the hall PC.
+- **Auth:** frps' shared token plus a per-hall name and key (`halls.json`); the same key authenticates the hall's code list.
+- **State:** only the code registry; meetings, passwords and attendance live on the hall PC.
 - **Deployment:** a `docker compose up` bundle with an IP-only test variant (no DNS).
 
 Solin supervises `frpc` next to Galene and shows the hall's public URL once the tunnel is up.

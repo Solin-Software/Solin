@@ -4,7 +4,7 @@ A hall joins a hub with a **connection code** the hub operator gives it::
 
     solin-hub:<base64url(JSON)>
 
-where the JSON holds ``domain`` (halls are ``<hall>.<domain>``), ``frp_addr`` /
+where the JSON holds ``domain`` (meetings are ``https://<domain>/<code>``), ``frp_addr`` /
 ``frp_port`` (the tunnel server), ``frp_token``, ``hall`` / ``hall_key`` (this hall's
 reserved name and key), and optionally ``turn_secret`` / ``turn_port`` /
 ``turn_host``. The code is stored as-is; secrets never leave the hall PC except to
@@ -69,7 +69,9 @@ class HubConnection:
 
     @property
     def public_origin(self) -> str:
-        return f"https://{self.hall}.{self.domain}"
+        """Every hall's meetings share the hub's address; the code picks the hall."""
+
+        return f"https://{self.domain}"
 
     @property
     def turn_urls(self) -> tuple[str, ...]:

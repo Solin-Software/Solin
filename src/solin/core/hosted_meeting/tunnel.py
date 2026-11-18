@@ -2,7 +2,8 @@
 
 The hall dials *out* to the hub's frps (so it works behind CGNAT) and exposes one raw
 TCP service: the meeting web server. The hub serves it at
-``https://<hall>.<hub-domain>`` (the hub lives in the solin-hub repository,
+``https://<hub-domain>/<code>`` for every code the hall registered (:mod:`.hub_codes`;
+the hub lives in the solin-hub repository,
 https://github.com/Solin-Software/solin-hub). The configuration follows that
 repository's ``hall/frpc.toml.template``.
 """

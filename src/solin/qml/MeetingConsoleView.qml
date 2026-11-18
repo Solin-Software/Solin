@@ -307,7 +307,7 @@ Rectangle {
                         Text {
                             Layout.fillWidth: true
                             visible: !root.infoExpanded
-                            text: (info.lowOnCodes ? "⚠ " : "") + root.infoSummary()
+                            text: (info.lowOnCodes || info.hubError ? "⚠ " : "") + root.infoSummary()
                             color: appTheme.textMuted; font.pixelSize: 12; elide: Text.ElideRight
                         }
                         Item { Layout.fillWidth: true; visible: root.infoExpanded }
@@ -369,6 +369,12 @@ Rectangle {
                         Layout.fillWidth: true
                         visible: !!info.lowOnCodes
                         text: "⚠ " + qsTr("Fewer than two weeks of meeting links are prepared. Open Solin while it is online to prepare more.")
+                        color: "#c9a227"; font.pixelSize: 12; wrapMode: Text.Wrap
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        visible: !!info.hubError
+                        text: "⚠ " + qsTr("The hub does not know these links yet, so they do not open yet: %1. Solin keeps trying.").arg(info.hubError || "")
                         color: "#c9a227"; font.pixelSize: 12; wrapMode: Text.Wrap
                     }
 

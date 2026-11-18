@@ -17,8 +17,8 @@ start and closes :data:`WINDOW_AFTER` after the worst-case end
 
 Codes use lowercase consonants and the digits 2–9: no ``0 o 1 l i``, which are easy
 to confuse, and no vowels, so a code never spells a word. A retired code is never
-handed out again by this congregation. (When the hub issues codes it guarantees
-uniqueness across congregations; until then Solin draws them itself.)
+handed out again by this congregation. With a hub, the hub keeps codes unique across
+congregations: a code another hall already holds is drawn again (:meth:`LinksState.redraw`).
 """
 
 from __future__ import annotations
@@ -275,6 +275,25 @@ class LinksState:
         renewed = replace(meeting, code=code, password=new_password())
         return replace(self, meetings=tuple(renewed if m.id == meeting_id else m for m in self.meetings),
                        retired=retired)
+
+    def redraw(self, codes: Iterable[str]) -> LinksState:
+        """New codes in place of these (another hall holds them); passwords stay. Nothing is retired:
+        the codes were never this hall's."""
+
+        clash = set(codes)
+        taken = self.codes_in_use() | clash
+
+        def fresh() -> str:
+            code = new_code(taken)
+            taken.add(code)
+            return code
+
+        permanent = self.permanent
+        if permanent is not None and permanent.code in clash:
+            permanent = Link(fresh(), permanent.password)
+        meetings = tuple(replace(m, code=fresh()) if m.code in clash else m for m in self.meetings)
+        retired = {code: when for code, when in self.retired.items() if code not in clash}
+        return replace(self, permanent=permanent, meetings=meetings, retired=retired)
 
     def renew_upcoming(self, now: datetime, *, skip: str = "") -> LinksState:
         state = self

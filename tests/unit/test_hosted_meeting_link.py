@@ -5,13 +5,17 @@ from __future__ import annotations
 import base64
 import json
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
+from PySide6.QtCore import QCoreApplication
+
 from solin.core.hosted_meeting.devices import ApprovedDevice, KeyKind, StaffRole
+from solin.core.hosted_meeting.hub_codes import RegisterResult
 from solin.core.hosted_meeting.links import LinkMode, normalize_code
 from solin.core.hosted_meeting.service import HostedMeetingService, MeetingState
 from solin.core.hosted_meeting.settings import HUB_CODE_PREFIX, HostedMeetingSettingsStore
@@ -53,12 +57,31 @@ def _hub_code() -> str:
     return HUB_CODE_PREFIX + base64.urlsafe_b64encode(json.dumps(fields).encode()).decode().rstrip("=")
 
 
+class FakeHub:
+    """Stands in for the hub's code registry: records what Solin sends, answers as told."""
+
+    def __init__(self) -> None:
+        self.sent: list = []
+        self.answers: list[RegisterResult] = []
+
+    def __call__(self, hub, payload) -> RegisterResult:
+        self.sent.append(payload)
+        return self.answers.pop(0) if self.answers else RegisterResult(ok=True)
+
+
+def _pump(until=lambda: False, seconds: float = 2.0) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and not until():
+        QCoreApplication.processEvents()
+        time.sleep(0.01)
+
+
 def _device() -> dict:
     return ApprovedDevice("m1", StaffRole.MODERATOR, "Lima", KeyKind.SECRET, "h", approved_at=4e9).to_json()
 
 
 def test_same_link_mode_offers_one_permanent_link(store, tmp_path, clock):
-    service = HostedMeetingService(store, tmp_path, clock=clock)
+    service = HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub())
     info = service.info
     code = info["code"]
     assert normalize_code(code) == code and info["password"].isdigit() and len(info["password"]) == 6
@@ -69,8 +92,63 @@ def test_same_link_mode_offers_one_permanent_link(store, tmp_path, clock):
 
     store.set_hub_code(_hub_code())
     service.refresh_links()
-    assert service.info["invitationUrl"] == f"https://hall-x.meet.solin.run/{code}"
-    assert HostedMeetingService(store, tmp_path, clock=clock).info["code"] == code  # stored
+    assert service.info["invitationUrl"] == f"https://meet.solin.run/{code}"
+    assert service.info["stageUrl"] == f"https://meet.solin.run/{code}/s"
+    assert HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub()).info["code"] == code  # stored
+
+
+def test_codes_are_sent_to_the_hub_when_they_change(store, tmp_path, clock):
+    hub = FakeHub()
+    store.set_hub_code(_hub_code())
+    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    code = service.info["code"]
+    _pump(lambda: hub.sent)
+    assert list(hub.sent[0].active) == [code]
+    assert hub.sent[0].active[code] == "2026-11-18T19:30:00-03:00"   # the next meeting, for the countdown
+    # Unchanged codes are not sent again.
+    service.refresh_links()
+    _pump(seconds=0.5)
+    assert len(hub.sent) == 1
+    # New link: the new code is active and the old one retired.
+    assert service.new_link() is True
+    _pump(lambda: len(hub.sent) == 2)
+    new = service.info["code"]
+    assert list(hub.sent[1].active) == [new] and code in hub.sent[1].retired
+
+
+def test_a_code_another_congregation_holds_is_drawn_again(store, tmp_path, clock):
+    hub = FakeHub()
+    store.set_hub_code(_hub_code())
+    store.set_link_mode(LinkMode.PER_MEETING)
+    first = HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub()).info["upcoming"]
+    clash = first[1]["code"]
+    hub.answers = [RegisterResult(ok=False, taken=(clash,))]
+    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    _pump(lambda: len(hub.sent) == 2)
+    upcoming = service.info["upcoming"]
+    assert upcoming[1]["code"] != clash and upcoming[1]["password"] == first[1]["password"]
+    assert clash not in hub.sent[1].active and clash not in hub.sent[1].retired
+    assert [m["code"] for i, m in enumerate(upcoming) if i != 1] == [m["code"] for i, m in enumerate(first) if i != 1]
+    assert service.info["hubError"] == ""
+
+
+def test_a_hub_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock):
+    hub = FakeHub()
+    hub.answers = [RegisterResult(ok=False, error="the hub cannot be reached (timed out)")]
+    store.set_hub_code(_hub_code())
+    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    _pump(lambda: service.info["hubError"])
+    assert "cannot be reached" in service.info["hubError"]
+    service.refresh_links()   # what the 30 s schedule tick does
+    _pump(lambda: len(hub.sent) == 2 and not service.info["hubError"])
+    assert service.info["hubError"] == ""
+
+
+def test_without_a_hub_nothing_is_sent(store, tmp_path, clock):
+    hub = FakeHub()
+    HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    _pump(seconds=0.5)
+    assert hub.sent == []
 
 
 def test_per_meeting_mode_prepares_four_weeks(store, tmp_path, clock):
