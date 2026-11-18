@@ -288,3 +288,53 @@ def test_not_dockable_without_a_host():
     finally:
         window.deleteLater()
         _pump(0.1)
+
+
+def test_dialogs_fit_a_narrow_docked_panel():
+    """Docked at its narrowest, a dialog stays inside the panel and its fields inside the dialog."""
+    service = FakeService()
+    window = MeetingConsoleWindow(service)
+    try:
+        window.resize(300, 700)
+        window.show()
+        service.info_changed.emit({"state": "idle", "linkMode": "per_meeting", "upcoming": [], "warnings": []})
+        _pump(0.4)
+        root = window.view.rootObject()
+        dialog = root.findChild(QObject, "timeDialog")
+        dialog.open()
+        _pump(0.5)
+        field = root.findChild(QQuickItem, "dateField")
+        width = dialog.property("width")
+        assert 0 < width <= root.width()
+        assert field.isVisible() and field.width() > 40
+        right = field.mapToItem(dialog.property("contentItem"), field.width(), 0).x()
+        assert right <= dialog.property("availableWidth") + 0.5
+    finally:
+        window.close()
+        window.deleteLater()
+        _pump(0.1)
+
+
+def test_moderators_and_stage_come_after_the_attendees():
+    service = FakeService()
+    window = MeetingConsoleWindow(service)
+    try:
+        window.resize(1080, 680)
+        window.show()
+        service.info_changed.emit({"state": "live", "linkMode": "same", "upcoming": [], "warnings": [],
+                                   "invitationUrl": "https://meet.solin.run/k7m4p2", "password": "482913"})
+        row = {"device": "d1", "name": "Ana", "state": "admitted", "count": 1, "connected": True, "live": False,
+               "partHolder": False, "hand": False}
+        service.snapshot_changed.emit({"attendees": [row, dict(row, device="d2", name="Bia")], "hands": [],
+                                       "lobby": [], "staff": [{"device": "m1", "name": "Lima", "role": "moderator"}]})
+        _pump(0.6)
+        root = window.view.rootObject()
+        staff = root.findChild(QQuickItem, "staffOnline")
+        assert staff is not None and staff.isVisible()
+        list_view = staff.parentItem().parentItem()          # footer -> contentItem -> ListView
+        top = staff.mapToItem(list_view, 0, 0).y()
+        assert top >= 2 * 20, top                              # below both attendee rows
+    finally:
+        window.close()
+        window.deleteLater()
+        _pump(0.1)

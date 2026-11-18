@@ -113,6 +113,46 @@ Rectangle {
         }
     }
 
+    // The console's dialogs: themed, and as wide as the panel allows (it may be docked narrow).
+    component ConsoleDialog: Dialog {
+        id: dialogControl
+        property string okText: qsTr("OK")
+        property bool okEnabled: true
+        property bool okDanger: false
+        default property alias body: dialogBody.data
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(400, root.width - 24)
+        padding: 16; topPadding: 0
+        standardButtons: Dialog.NoButton
+        Overlay.modal: Rectangle { color: "#80000000" }
+        background: Rectangle { color: appTheme.surface; radius: 12; border.color: appTheme.border_ }
+        header: Text {
+            text: dialogControl.title; padding: 16; bottomPadding: 10
+            color: appTheme.textPrimary; font.pixelSize: 15; font.bold: true; elide: Text.ElideRight
+        }
+        contentItem: ColumnLayout { id: dialogBody; spacing: 8 }
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            ActionButton { text: qsTr("Cancel"); onClicked: dialogControl.reject() }
+            ActionButton {
+                text: dialogControl.okText; primary: !dialogControl.okDanger; danger: dialogControl.okDanger
+                enabled: dialogControl.okEnabled; onClicked: dialogControl.accept()
+                Layout.rightMargin: 16; Layout.bottomMargin: 16
+            }
+        }
+    }
+
+    component ConsoleField: TextField {
+        Layout.fillWidth: true
+        Layout.preferredWidth: 10       // fill the dialog, never push it wider
+        selectByMouse: true
+        font.pixelSize: 13; color: appTheme.textPrimary
+        placeholderTextColor: appTheme.textMuted
+        background: Rectangle { color: appTheme.surfaceAlt; radius: 6; border.color: parent.activeFocus ? appTheme.accent : appTheme.border_ }
+    }
+
     // Toggles between a floating window and the main window's right panel.
     component DockButton: Button {
         id: dockControl
@@ -552,24 +592,27 @@ Rectangle {
                 Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1.3
                 Layout.minimumHeight: root.compact ? 120 : 0
                 title: qsTr("Attendees"); count: meeting ? meeting.attendees.count : 0
-                Column {
-                    id: staffOnline
-                    anchors { left: parent.left; right: parent.right; top: parent.top }
-                    spacing: 4
-                    Repeater {
-                        model: snap.staff || []
-                        RowLayout {
-                            width: staffOnline.width; spacing: 6
-                            Text {
-                                Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 14; color: appTheme.textPrimary
-                                text: modelData.name + (modelData.networkChanged ? "  · " + qsTr("new network") : "")
+                ListView {
+                    anchors.fill: parent
+                    // Moderators and stage devices come after the attendees.
+                    footer: Column {
+                        id: staffOnline
+                        objectName: "staffOnline"
+                        width: ListView.view.width
+                        topPadding: ListView.view.count > 0 && (snap.staff || []).length > 0 ? 4 : 0
+                        spacing: 4
+                        Repeater {
+                            model: snap.staff || []
+                            RowLayout {
+                                width: staffOnline.width; spacing: 6
+                                Text {
+                                    Layout.fillWidth: true; elide: Text.ElideRight; font.pixelSize: 14; color: appTheme.textPrimary
+                                    text: modelData.name + (modelData.networkChanged ? "  · " + qsTr("new network") : "")
+                                }
+                                Badge { role: modelData.role }
                             }
-                            Badge { role: modelData.role }
                         }
                     }
-                }
-                ListView {
-                    anchors { left: parent.left; right: parent.right; top: staffOnline.bottom; bottom: parent.bottom; topMargin: staffOnline.height > 0 ? 6 : 0 }
                     clip: true; spacing: 4
                     model: meeting ? meeting.attendees : null
                     delegate: ColumnLayout {
@@ -612,64 +655,58 @@ Rectangle {
         width: 1; color: appTheme.borderChrome
     }
 
-    Dialog {
+    ConsoleDialog {
         id: newLinkDialog
         property string meetingId: ""
-        modal: true
-        anchors.centerIn: parent
         title: meetingId === "*" ? qsTr("Renew every upcoming link?") : qsTr("Replace the link?")
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        okText: meetingId === "*" ? qsTr("Renew") : qsTr("Replace"); okDanger: true
         Text {
-            width: Math.min(380, root.width - 80)
+            Layout.fillWidth: true
             text: qsTr("Everyone will need the new link and password. Moderators and stage devices will need to be approved again.")
             color: appTheme.textPrimary; font.pixelSize: 13; wrapMode: Text.Wrap
         }
         onAccepted: meetingId === "*" ? meeting.renewUpcoming() : meeting.newLink(meetingId)
     }
 
-    Dialog {
+    ConsoleDialog {
         id: passwordDialog
         property string meetingId: ""
-        modal: true
-        anchors.centerIn: parent
         title: qsTr("Meeting password")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        ColumnLayout {
-            width: Math.min(340, root.width - 80); spacing: 8
-            TextField { id: passwordField; Layout.fillWidth: true; selectByMouse: true; maximumLength: 32 }
-            Text {
-                Layout.fillWidth: true; wrapMode: Text.Wrap; color: appTheme.textMuted; font.pixelSize: 12
-                text: qsTr("4 to 32 characters, without spaces. The link stays the same, and approved devices are kept.")
-            }
+        okEnabled: /^\S{4,32}$/.test(passwordField.text.trim())
+        onOpened: { passwordField.forceActiveFocus(); passwordField.selectAll() }
+        ConsoleField { id: passwordField; maximumLength: 32; onAccepted: if (passwordDialog.okEnabled) passwordDialog.accept() }
+        Text {
+            Layout.fillWidth: true; wrapMode: Text.Wrap; color: appTheme.textMuted; font.pixelSize: 12
+            text: qsTr("4 to 32 characters, without spaces. The link stays the same, and approved devices are kept.")
         }
         onAccepted: meeting.setPassword(passwordField.text.trim(), meetingId)
     }
 
-    Dialog {
+    ConsoleDialog {
         id: timeDialog
+        objectName: "timeDialog"
         property string meetingId: ""
-        modal: true
-        anchors.centerIn: parent
         title: meetingId ? qsTr("Change the meeting time") : qsTr("Add a meeting")
-        standardButtons: Dialog.Ok | Dialog.Cancel
+        okText: meetingId ? qsTr("Change") : qsTr("Add")
+        okEnabled: dateField.text.trim().length > 0 && timeField.text.trim().length > 0
+        onOpened: dateField.forceActiveFocus()
         GridLayout {
-            width: Math.min(340, root.width - 80); columns: 2; columnSpacing: 8; rowSpacing: 8
+            Layout.fillWidth: true; columns: 2; columnSpacing: 10; rowSpacing: 8
             Text { text: qsTr("Date"); color: appTheme.textSecondary; font.pixelSize: 13 }
-            TextField { id: dateField; Layout.fillWidth: true; placeholderText: qsTr("DD/MM/YYYY"); selectByMouse: true }
+            ConsoleField { id: dateField; objectName: "dateField"; placeholderText: qsTr("DD/MM/YYYY"); inputMethodHints: Qt.ImhDate }
             Text { text: qsTr("Time"); color: appTheme.textSecondary; font.pixelSize: 13 }
-            TextField { id: timeField; Layout.fillWidth: true; placeholderText: "HH:MM"; selectByMouse: true }
+            ConsoleField { id: timeField; placeholderText: "HH:MM"; inputMethodHints: Qt.ImhTime; onAccepted: if (timeDialog.okEnabled) timeDialog.accept() }
         }
         onAccepted: timeDialog.meetingId ? meeting.moveMeeting(timeDialog.meetingId, dateField.text, timeField.text)
                                          : meeting.addMeeting(dateField.text, timeField.text)
     }
 
-    Dialog {
+    ConsoleDialog {
         id: renameDialog
-        modal: true
-        anchors.centerIn: parent
         title: qsTr("Rename attendee")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        TextField { id: renameField; width: Math.min(320, root.width - 80); selectByMouse: true }
+        okEnabled: renameField.text.trim().length > 0
+        onOpened: { renameField.forceActiveFocus(); renameField.selectAll() }
+        ConsoleField { id: renameField; onAccepted: if (renameDialog.okEnabled) renameDialog.accept() }
         onAccepted: if (renameField.text.trim().length > 0) meeting.rename(root.renameDevice, renameField.text.trim())
     }
 }
