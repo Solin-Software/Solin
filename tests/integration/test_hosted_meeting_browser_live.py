@@ -236,6 +236,13 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
             await ana.wait("upCam !== null && upMic !== null")
             report["ana_camera"] = await ana.evaluate(
                 "(() => { const s = camStream.getVideoTracks()[0].getSettings(); return [s.width, s.height]; })()")
+            # Ana sees her own camera in a corner, and not after turning it off.
+            await ana.wait("(v => !v.hidden && v.srcObject === camStream && v.videoWidth > 0)(document.getElementById('self-view'))")
+            await ana.evaluate("document.getElementById('part-cam').click(); true")
+            report["ana_self_view_after_off"] = await ana.evaluate(
+                "(v => [v.hidden, v.srcObject])(document.getElementById('self-view'))")
+            await ana.evaluate("document.getElementById('part-cam').click(); true")
+            await ana.wait("upCam !== null")
 
             # Bruno: Ana's voice as a hidden <audio>; the main video untouched (no program here).
             await bruno.wait("voices.size === 1")
@@ -269,6 +276,7 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
     assert len(packets) >= 20, f"only {len(packets)} RTP packets reached slot 1"
     assert all(p[1] & 0x7F == 96 for p in packets)  # rewritten to the slot's payload type
     assert report["ana_camera"] == [640, 360], report  # part-holder cameras go up at 360p
+    assert report["ana_self_view_after_off"] == [True, None], report
     assert report["bruno_audio"] == [{"hidden": True, "audio": 1, "video": 0}], report
     assert report["bruno_program_src"] is True, report
     assert [d["label"] for d in report["bruno_down_labels"]] == ["camera"], report  # Ana's mic only

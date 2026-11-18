@@ -497,7 +497,7 @@ async function startCam() {
   upCam = sc.newUpStream();
   upCam.label = PARTICIPANT_LABEL;
   upCam.setStream(camStream);
-  upCam.onclose = () => { upCam = null; };
+  upCam.onclose = () => { upCam = null; updatePartControls(); };
   for (const t of camStream.getVideoTracks()) {
     upCam.pc.addTransceiver(t, { direction: 'sendonly', streams: [camStream],
                                  sendEncodings: [{ maxBitrate: PARTICIPANT_VIDEO_BITRATE }] });
@@ -518,6 +518,12 @@ function updatePartControls() {
   $('part-cam').hidden = !(present && partHolder);
   $('part-mic').textContent = upMic ? T.micOff : T.micOn;
   $('part-cam').textContent = upCam ? T.cameraOff : T.cameraOn;
+  // While the camera goes up, the part-holder sees it in a corner of the video.
+  const selfView = $('self-view');
+  const showing = upCam && camStream ? camStream : null;
+  if (selfView.srcObject !== showing) selfView.srcObject = showing;
+  selfView.hidden = !showing;
+  if (showing) selfView.play().catch(() => {});
 }
 $('part-mic').addEventListener('click', () => { upMic ? stopMic() : startMic(); });
 $('part-cam').addEventListener('click', () => { upCam ? stopCam() : startCam(); });

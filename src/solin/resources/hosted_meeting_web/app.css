@@ -24,6 +24,11 @@ button.primary, form button { background: var(--accent); color: var(--accent-fg)
 form button { margin-top: 14px; width: 100%; }
 .stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
 .stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* A part-holder's own camera, as others will see it (mirrored, like a mirror). */
+.stage #self-view { position: absolute; right: 10px; bottom: 10px; width: 28%; max-width: 220px; height: auto;
+  aspect-ratio: 16 / 9; object-fit: cover; transform: scaleX(-1); border-radius: 8px; border: 2px solid rgba(255,255,255,.7);
+  box-shadow: 0 2px 10px rgba(0,0,0,.5); background: #111; }
+.stage #self-view[hidden] { display: none; }
 .overlay { position: absolute; inset: auto 50% 16px auto; transform: translateX(50%); }
 .controls { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
 .controls button { flex: 1 1 160px; }
