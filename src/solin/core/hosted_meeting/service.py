@@ -4,20 +4,22 @@ Links (:mod:`.links`): every meeting is reached at ``<origin>/<code>`` with a pa
 the stage page is ``/<code>/s`` and the moderator page ``/<code>/m``. In "same link"
 mode one permanent code serves every meeting; in "per meeting" mode each scheduled
 meeting has its own code and password, prepared four weeks ahead from the
-congregation's meeting days. The origin is the hub's address for this hall, or the
-computer's LAN address without a hub. With a hub, every change to the codes is sent to
-it (:mod:`.hub_codes`) so ``https://<hub>/<code>`` leads to this hall; a code another
-congregation already holds is drawn again.
+congregation's meeting days. With a meeting server (:mod:`.hub_client`), codes come
+from the server: a new link first gets a local code, which works on this network right
+away, and is then exchanged for the server's code and its owner secret; the server also
+learns each code's start time (its waiting page counts down) and which codes are retired.
+Without a server, or until it answers, links use this computer's LAN address.
 
 Start (on a worker thread, so the UI never blocks):
 
-1. Galene (with the hub's TURN when a hub is configured) and a fresh group for this
+1. Galene (with TURN credentials the server issues for this meeting) and a fresh group for this
    meeting (the code, a per-meeting HS256 key);
 2. the meeting runtime: web server + operator client + rules (password, approved
    stage/moderator devices, and the people admitted before Solin restarted, if this
    meeting was already running);
-3. the hub tunnel (frpc), giving the hall its public HTTPS address — optional: without
-   a hub the meeting is reachable on the LAN only;
+3. the tunnel to the server (frpc), named after the code and authorized by its secret,
+   giving the meeting its public HTTPS address — without a server (or a server code) the
+   meeting is reachable on the LAN only;
 4. the commenter-audio player (``solin-galene-bridge receive`` → remote-audio device),
    which also forwards remote part-holders' video to the scenes' video slots
    (``participant_video``); its slot events reach the scene engine so a slot whose
@@ -51,13 +53,13 @@ from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
 from .binaries import Helper, find_helper
 from .galene_config import TurnServer
 from .galene_server import GaleneServer, GaleneUnavailable
-from .hub_codes import CodesPayload, RegisterResult, codes_payload, register_codes
+from .hub_client import CodeState, HubClient, HubError, TunnelInfo, new_secret
 from .devices import DeviceRegistry
 from .links import UNSCHEDULED, LinkMode, LinksState, ScheduledMeeting, clean_password
 from .participant_video import bridge_ports_argument, valid_slot
 from .processes import ProcessState, SupervisedProcess
 from .runtime import MeetingRuntime, MeetingRuntimeConfig
-from .settings import HostedMeetingSettingsStore, HubConnection, MeetingProvider, MeetingQuality
+from .settings import HostedMeetingSettingsStore, HubServer, MeetingProvider, MeetingQuality
 from .tokens import OBSERVE, PRESENT, new_group_key, sign_token
 from .tunnel import FrpTunnel, TunnelState
 
@@ -91,7 +93,8 @@ class MeetingInfo:
     lan_url: str = ""
     stage_url: str = ""
     moderator_url: str = ""
-    link_scope: str = "lan"        # lan (this network only) / hub (reachable from anywhere)
+    link_scope: str = "lan"        # lan (this network only) / hub (from anywhere) / pending (server code coming)
+    server: str = ""               # the meeting server's address ("" = none)
     link_mode: str = LinkMode.SAME.value
     meeting_id: str = ""           # the scheduled meeting this link belongs to
     starts_at: str = ""            # ISO; empty for an unscheduled meeting
@@ -101,7 +104,7 @@ class MeetingInfo:
     upcoming: list[dict[str, Any]] = field(default_factory=list)
     low_on_codes: bool = False
     devices: list[dict[str, Any]] = field(default_factory=list)
-    hub_error: str = ""            # why the hub does not know this hall's codes yet ("" = it does)
+    hub_error: str = ""            # why the server has not answered ("" = it has)
     output: str = "idle"           # program output: idle/starting/live/reconnecting/failed
     tunnel: str = "off"            # off/connecting/online/failed
     galene: str = "stopped"
@@ -119,7 +122,7 @@ class MeetingInfo:
             "officialCount": dict(self.official_count) if self.official_count else None,
             "autoStarted": self.auto_started, "upcoming": [dict(m) for m in self.upcoming],
             "lowOnCodes": self.low_on_codes, "devices": [dict(d) for d in self.devices],
-            "hubError": self.hub_error,
+            "hubError": self.hub_error, "server": self.server,
             "output": self.output, "tunnel": self.tunnel, "galene": self.galene,
             "commenterAudio": self.commenter_audio,
             "participantVideo": {str(slot): user for slot, user in sorted(self.participant_video.items())},
@@ -153,7 +156,7 @@ class HostedMeetingService(QObject):
         scene_runtime: Any = None,
         auto_start: bool = False,
         clock: Callable[[], datetime] | None = None,
-        register: Callable[[HubConnection, CodesPayload], RegisterResult] = register_codes,
+        hub_client: Callable[[HubServer], HubClient] = HubClient,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -178,10 +181,11 @@ class HostedMeetingService(QObject):
         self._count_timer.setSingleShot(True)
         self._count_timer.timeout.connect(self._take_official_count)
         self._call_on_main.connect(self._run_on_main, Qt.ConnectionType.QueuedConnection)
-        # The codes the hub knows (the last list it accepted), and the one being sent.
-        self._register = register
-        self._hub_known: tuple[str, CodesPayload] | None = None
-        self._hub_sending = False
+        # Talking to the meeting server: one exchange at a time; the last state it accepted.
+        self._hub_client = hub_client
+        self._hub_synced: tuple[str, list[CodeState]] | None = None
+        self._hub_busy = False
+        self._hub_again = False
         self._hub_timer = QTimer(self)
         self._hub_timer.setSingleShot(True)
         self._hub_timer.setInterval(_HUB_SYNC_DELAY_MS)
@@ -244,14 +248,20 @@ class HostedMeetingService(QObject):
         return updated
 
     def _link_fields(self, code: str, password: str, *, use_hub: bool = True) -> dict[str, Any]:
-        origin, lan = self._origin(use_hub=use_hub)
-        hub = use_hub and self._settings.hub() is not None
+        """The links for a code: on the server once it issued the code, on this network until then."""
+
+        hub = self._settings.hub()
+        public, lan = self._origin(use_hub=use_hub)
+        issued = use_hub and hub is not None and bool(code) and self._settings.links().issued(code)
+        origin = public if issued else lan
+        scope = "hub" if issued else "pending" if use_hub and hub is not None and code else "lan"
+        server = hub.domain if hub is not None else ""
         if not code:
             return {"slug": "", "password": "", "invitation_url": "", "lan_url": "", "stage_url": "",
-                    "moderator_url": "", "link_scope": "hub" if hub else "lan"}
+                    "moderator_url": "", "link_scope": scope, "server": server}
         return {"slug": code, "password": password, "invitation_url": f"{origin}/{code}", "lan_url": f"{lan}/{code}",
                 "stage_url": f"{origin}/{code}/s", "moderator_url": f"{origin}/{code}/m",
-                "link_scope": "hub" if hub else "lan"}
+                "link_scope": scope, "server": server}
 
     def _idle_fields(self) -> dict[str, Any]:
         """What the console shows before a meeting: the link to share, the meetings ahead."""
@@ -266,7 +276,9 @@ class HostedMeetingService(QObject):
             password = meeting.password if mode is LinkMode.PER_MEETING else (
                 state.permanent.password if state.permanent else "")
             upcoming.append({"id": meeting.id, "kind": meeting.kind, "startsAt": meeting.starts_at.isoformat(),
-                             "code": code, "password": password, "url": f"{origin}/{code}" if code else "",
+                             "code": code, "password": password,
+                             "url": (f"{origin if state.issued(code) else self._origin(use_hub=False)[1]}/{code}"
+                                     if code else ""),
                              "cancelled": meeting.cancelled, "moved": meeting.moved,
                              "open": meeting.in_window(now), "running": meeting.id == self._info.meeting_id
                              and self._active()})
@@ -296,46 +308,114 @@ class HostedMeetingService(QObject):
         self._update(**fields)
         self._hub_timer.start()
 
-    # ── the hub's code registry ───────────────────────────────────────────
+    # ── the meeting server ────────────────────────────────────────────────
+
+    def _active_codes(self, state: LinksState) -> dict[str, str]:
+        """The codes that lead to a meeting now, with the start the server's waiting page counts down to."""
+
+        now = self._clock()
+        active: dict[str, str] = {}
+        if self._settings.link_mode() is LinkMode.SAME:
+            if state.permanent is not None:
+                following = next((m for m in state.upcoming(now) if not m.cancelled), None)
+                active[state.permanent.code] = following.starts_at.isoformat() if following else ""
+        else:
+            for meeting in state.meetings:
+                if meeting.code:
+                    active[meeting.code] = meeting.starts_at.isoformat() if meeting.scheduled else ""
+        if self._active() and self._code:
+            active.setdefault(self._code, "")
+        return active
 
     def _sync_hub_codes(self) -> None:
-        """Send the codes to the hub when they differ from what it last accepted (one request at a time)."""
+        """Exchange local codes for the server's, then keep the server's view of our codes current.
+
+        One exchange at a time, on a worker thread; results are applied on the Qt thread.
+        The running meeting keeps its code even if it is still a local one.
+        """
 
         hub = self._settings.hub()
         if hub is None:
             if self._info.hub_error:
                 self._update(hub_error="")
             return
-        payload = codes_payload(self._settings.links(), self._settings.link_mode(), self._clock(),
-                                running=self._code if self._active() else "")
-        target = (hub.to_code(), payload)
-        if self._hub_known == target or self._hub_sending:
+        if self._hub_busy:
+            self._hub_again = True
             return
-        self._hub_sending = True
+        state = self._settings.links()
+        active = self._active_codes(state)
+        running = self._code if self._active() else ""
+        pending = [code for code in active if not state.issued(code) and code != running]
+        states = [CodeState(code, secret, active.get(code, ""), code in active)
+                  for code, secret in sorted(state.secrets.items())]
+        if not pending and self._hub_synced == (hub.domain, states):
+            return
+        self._hub_busy = True
+        client = self._hub_client(hub)
 
-        def send() -> None:
-            result = self._register(hub, payload)
-            self._main(lambda: self._hub_codes_sent(target, result))
+        def work() -> None:
+            issued: list[tuple[str, str, str]] = []
+            rejected: set[str] = set()
+            error = ""
+            try:
+                for local in pending:
+                    secret = new_secret()
+                    issued.append((local, client.create_code(secret, active[local]), secret))
+                if not pending:
+                    rejected = client.sync_codes(states)
+            except HubError as failure:
+                error = str(failure)
+            self._main(lambda: self._hub_done(hub.domain, states, issued, rejected, error, synced=not pending))
 
-        threading.Thread(target=send, name="solin-hub-codes", daemon=True).start()
+        threading.Thread(target=work, name="solin-hub-codes", daemon=True).start()
 
-    def _hub_codes_sent(self, target: tuple[str, CodesPayload], result: RegisterResult) -> None:
-        self._hub_sending = False
-        if result.ok:
-            self._hub_known = target
-            self._update(hub_error="")
-        elif result.taken:
-            # Another congregation holds these codes: draw new ones (not the running meeting's).
-            taken = [code for code in result.taken if not (self._active() and code == self._code)]
-            if taken:
-                log.info("hub: %d code(s) held by another hall; drawing new ones", len(taken))
-                self._settings.set_links(self._settings.links().redraw(taken))
-                self.refresh_links()
-                return
-            self._update(hub_error="this meeting's code belongs to another congregation; use New link after it")
-        else:
-            self._update(hub_error=result.error)
-        # Retry on the next schedule tick (or the next change).
+    def _hub_done(self, domain: str, states: list[CodeState], issued: list[tuple[str, str, str]],
+                  rejected: set[str], error: str, *, synced: bool) -> None:
+        self._hub_busy = False
+        before = self._settings.links()
+        state = before
+        for local, code, secret in issued:
+            if local in state.codes_in_use() - set(state.retired):   # not renewed meanwhile
+                state = state.issue(local, code, secret)
+        if rejected:
+            # The server does not know these as ours (e.g. it lost its registry): they get new codes.
+            log.info("meeting server: %d code(s) not known as ours; getting new ones", len(rejected))
+            state = state.forget_secrets(rejected)
+        if state != before:
+            self._settings.set_links(state)
+        if synced and not error and not rejected:
+            self._hub_synced = (domain, states)
+        self._update(hub_error=error)
+        if state != before or self._hub_again:
+            self._hub_again = False
+            self.refresh_links()
+
+    def _issue_for_start(self, hub: HubServer) -> str:
+        """Worker thread, opening a meeting: the code's secret, getting a server code first if needed.
+
+        Returns "" when the server cannot be reached: the meeting then runs on this network only.
+        """
+
+        state = self._settings.links()
+        if state.issued(self._code):
+            return state.secrets[self._code]
+        secret = new_secret()
+        try:
+            code = self._hub_client(hub).create_code(secret, self._info.starts_at)
+        except HubError as error:
+            self._warn(f"No public link: {error}. The meeting is reachable on this network only.")
+            return ""
+        local, self._code = self._code, code
+        applied = threading.Event()
+
+        def apply() -> None:
+            self._settings.set_links(self._settings.links().issue(local, code, secret))
+            applied.set()
+
+        self._main(apply)
+        applied.wait(5)
+        self._update(**self._link_fields(code, self._password))
+        return secret
 
     def _changing_links(self) -> bool:
         return self.state not in (MeetingState.IDLE, MeetingState.FAILED)
@@ -623,7 +703,20 @@ class HostedMeetingService(QObject):
     def _start_services(self) -> None:
         settings = self._settings
         hub = settings.hub()
-        turn = TurnServer(urls=hub.turn_urls, secret=hub.turn_secret) if hub and hub.turn_urls else None
+        secret = self._issue_for_start(hub) if hub is not None else ""
+        turn: TurnServer | None = None
+        tunnel: TunnelInfo | None = None
+        if hub is not None and secret:
+            client = self._hub_client(hub)
+            try:
+                tunnel = client.tunnel_info()
+                credentials = client.turn_credentials(self._code, secret)
+                if credentials is not None:
+                    turn = TurnServer(urls=credentials.urls, secret=credentials.credential,
+                                      username=credentials.username, credential_type="")
+            except HubError as error:
+                self._warn(f"No public link: {error}. The meeting is reachable on this network only.")
+                tunnel = None
         self._galene = GaleneServer(self._data_dir / "galene", on_state=self._on_galene_state)
         try:
             self._galene.start(turn=turn)
@@ -647,13 +740,13 @@ class HostedMeetingService(QObject):
         )
         self._runtime.start()
 
-        if hub is not None:
-            self._start_tunnel(hub, port)
+        if hub is not None and tunnel is not None:
+            self._start_tunnel(hub, tunnel, secret, port)
         self._start_receiver(slug)
         self._main(lambda: self._start_output(slug))
         self._update(state=MeetingState.LIVE)
 
-    def _start_tunnel(self, hub: HubConnection, port: int) -> None:
+    def _start_tunnel(self, hub: HubServer, tunnel: TunnelInfo, secret: str, port: int) -> None:
         binary = find_helper(Helper.FRPC)
         if binary is None:
             self._warn("The hub tunnel (frpc) is not installed; the meeting is reachable on this network only.")
@@ -663,7 +756,8 @@ class HostedMeetingService(QObject):
         def on_state(state: TunnelState, detail: str) -> None:
             self._update(tunnel=state.value)
 
-        self._tunnel = FrpTunnel(binary, self._data_dir / "frpc", hub, local_port=port, on_state=on_state)
+        self._tunnel = FrpTunnel(binary, self._data_dir / "frpc", hub, tunnel, code=self._code, secret=secret,
+                                 local_port=port, on_state=on_state)
         self._update(tunnel="connecting")
         self._tunnel.start()
 

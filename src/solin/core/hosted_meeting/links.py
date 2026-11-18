@@ -17,8 +17,12 @@ start and closes :data:`WINDOW_AFTER` after the worst-case end
 
 Codes use lowercase consonants and the digits 2–9: no ``0 o 1 l i``, which are easy
 to confuse, and no vowels, so a code never spells a word. A retired code is never
-handed out again by this congregation. With a hub, the hub keeps codes unique across
-congregations: a code another hall already holds is drawn again (:meth:`LinksState.redraw`).
+handed out again by this congregation.
+
+With a meeting server, the server creates the codes: Solin first draws a local one (which
+works on this network right away), then exchanges it for one from the server, together
+with a secret that proves ownership (:meth:`LinksState.issue`; ``secrets``). Codes in
+``secrets`` are the server's; the others are local.
 """
 
 from __future__ import annotations
@@ -150,6 +154,7 @@ class LinksState:
     permanent: Link | None = None
     meetings: tuple[ScheduledMeeting, ...] = ()
     retired: dict[str, str] = field(default_factory=dict)   # code -> ISO time it was retired
+    secrets: dict[str, str] = field(default_factory=dict)   # server-issued code -> its owner secret
 
     # ── persistence ───────────────────────────────────────────────────────
 
@@ -159,6 +164,7 @@ class LinksState:
             "permanent": {"code": self.permanent.code, "password": self.permanent.password} if self.permanent else None,
             "meetings": [m.as_dict() for m in self.meetings],
             "retired": dict(self.retired),
+            "secrets": dict(self.secrets),
         }
 
     @classmethod
@@ -176,7 +182,9 @@ class LinksState:
                                      if isinstance(item, dict)) if m is not None)
         retired = {str(k): str(v) for k, v in (data.get("retired") or {}).items()} \
             if isinstance(data.get("retired"), dict) else {}
-        return cls(permanent=permanent, meetings=meetings, retired=retired)
+        owned = {str(k): str(v) for k, v in (data.get("secrets") or {}).items() if normalize_code(str(k))} \
+            if isinstance(data.get("secrets"), dict) else {}
+        return cls(permanent=permanent, meetings=meetings, retired=retired, secrets=owned)
 
     # ── queries ───────────────────────────────────────────────────────────
 
@@ -264,7 +272,11 @@ class LinksState:
                 taken.add(code)
                 meeting = replace(meeting, code=code, password=new_password())
             meetings.append(meeting)
-        return replace(self, meetings=tuple(meetings), retired=retired)
+        in_use = {m.code for m in meetings if m.code} | set(retired)
+        if self.permanent is not None:
+            in_use.add(self.permanent.code)
+        owned = {code: secret for code, secret in self.secrets.items() if code in in_use}
+        return replace(self, meetings=tuple(meetings), retired=retired, secrets=owned)
 
     def renew(self, meeting_id: str, now: datetime) -> LinksState:
         meeting = self.find(meeting_id)
@@ -276,24 +288,25 @@ class LinksState:
         return replace(self, meetings=tuple(renewed if m.id == meeting_id else m for m in self.meetings),
                        retired=retired)
 
-    def redraw(self, codes: Iterable[str]) -> LinksState:
-        """New codes in place of these (another hall holds them); passwords stay. Nothing is retired:
-        the codes were never this hall's."""
+    def issued(self, code: str) -> bool:
+        """True for a code the meeting server created (it has its owner secret)."""
 
-        clash = set(codes)
-        taken = self.codes_in_use() | clash
+        return code in self.secrets
 
-        def fresh() -> str:
-            code = new_code(taken)
-            taken.add(code)
-            return code
+    def issue(self, local: str, code: str, secret: str) -> LinksState:
+        """Put the server's ``code`` (owned by ``secret``) in place of the local code; passwords stay."""
 
         permanent = self.permanent
-        if permanent is not None and permanent.code in clash:
-            permanent = Link(fresh(), permanent.password)
-        meetings = tuple(replace(m, code=fresh()) if m.code in clash else m for m in self.meetings)
-        retired = {code: when for code, when in self.retired.items() if code not in clash}
-        return replace(self, permanent=permanent, meetings=meetings, retired=retired)
+        if permanent is not None and permanent.code == local:
+            permanent = Link(code, permanent.password)
+        meetings = tuple(replace(m, code=code) if m.code == local else m for m in self.meetings)
+        return replace(self, permanent=permanent, meetings=meetings, secrets={**self.secrets, code: secret})
+
+    def forget_secrets(self, codes: Iterable[str]) -> LinksState:
+        """The server no longer knows these codes as ours: they become local again (and get new ones)."""
+
+        gone = set(codes)
+        return replace(self, secrets={c: v for c, v in self.secrets.items() if c not in gone})
 
     def renew_upcoming(self, now: datetime, *, skip: str = "") -> LinksState:
         state = self

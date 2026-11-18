@@ -1,11 +1,11 @@
 """The hall's tunnel to the hub: a supervised ``frpc``.
 
 The hall dials *out* to the hub's frps (so it works behind CGNAT) and exposes one raw
-TCP service: the meeting web server. The hub serves it at
-``https://<hub-domain>/<code>`` for every code the hall registered (:mod:`.hub_codes`;
+TCP service: the meeting web server, named after the meeting code and authorized by the
+code's secret. The hub serves it at ``https://<hub-domain>/<code>`` (:mod:`.hub_client`;
 the hub lives in the solin-hub repository,
 https://github.com/Solin-Software/solin-hub). The configuration follows that
-repository's ``hall/frpc.toml.template``.
+repository's ``client/frpc.toml.template``.
 """
 
 from __future__ import annotations
@@ -16,8 +16,9 @@ from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 
+from .hub_client import TunnelInfo
 from .processes import ProcessState, SupervisedProcess
-from .settings import HubConnection
+from .settings import HubServer
 
 log = logging.getLogger(__name__)
 
@@ -38,22 +39,22 @@ def _toml_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def frpc_config(hub: HubConnection, local_port: int) -> str:
+def frpc_config(hub: HubServer, tunnel: TunnelInfo, code: str, secret: str, local_port: int) -> str:
     return "\n".join([
-        f"serverAddr = {_toml_string(hub.frp_addr)}",
-        f"serverPort = {int(hub.frp_port)}",
+        f"serverAddr = {_toml_string(hub.domain.split(':', 1)[0])}",
+        f"serverPort = {int(tunnel.frp_port)}",
         'auth.method = "token"',
-        f"auth.token = {_toml_string(hub.frp_token)}",
+        f"auth.token = {_toml_string(tunnel.frp_token)}",
         "loginFailExit = false",
         "transport.tcpMux = true",
         'transport.protocol = "tcp"',
         'log.to = "console"',
         'log.level = "info"',
-        f"metadatas.hall = {_toml_string(hub.hall)}",
-        f"metadatas.hall_key = {_toml_string(hub.hall_key)}",
+        f"metadatas.code = {_toml_string(code)}",
+        f"metadatas.secret = {_toml_string(secret)}",
         "",
         "[[proxies]]",
-        f"name = {_toml_string(hub.hall)}",
+        f"name = {_toml_string(code)}",
         'type = "tcp"',
         'localIP = "127.0.0.1"',
         f"localPort = {int(local_port)}",
@@ -67,14 +68,20 @@ class FrpTunnel:
         self,
         binary: Path,
         root: Path,
-        hub: HubConnection,
+        hub: HubServer,
+        tunnel: TunnelInfo,
         *,
+        code: str,
+        secret: str,
         local_port: int,
         on_state: Callable[[TunnelState, str], None] | None = None,
     ) -> None:
         self._binary = binary
         self._root = Path(root)
         self._hub = hub
+        self._tunnel = tunnel
+        self._code = code
+        self._secret = secret
         self._local_port = local_port
         self._on_state = on_state
         self._process: SupervisedProcess | None = None
@@ -103,7 +110,7 @@ class FrpTunnel:
     def start(self) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
         config = self._root / "frpc.toml"
-        config.write_text(frpc_config(self._hub, self._local_port), encoding="utf-8")
+        config.write_text(frpc_config(self._hub, self._tunnel, self._code, self._secret, self._local_port), encoding="utf-8")
         try:
             config.chmod(0o600)
         except OSError:

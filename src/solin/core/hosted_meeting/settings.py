@@ -1,14 +1,9 @@
-"""Hosted-meeting settings (per profile) and the hub connection code.
+"""Hosted-meeting settings (per profile) and the meeting server.
 
-A hall joins a hub with a **connection code** the hub operator gives it::
-
-    solin-hub:<base64url(JSON)>
-
-where the JSON holds ``domain`` (meetings are ``https://<domain>/<code>``), ``frp_addr`` /
-``frp_port`` (the tunnel server), ``frp_token``, ``hall`` / ``hall_key`` (this hall's
-reserved name and key), and optionally ``turn_secret`` / ``turn_port`` /
-``turn_host``. The code is stored as-is; secrets never leave the hall PC except to
-the hub they belong to.
+The **meeting server** (the hub, :data:`DEFAULT_SERVER` unless the congregation runs its
+own) gives meetings their public address, ``https://<server>/<code>``. It is open to
+every Solin: no account or connection code. Empty means no server: meetings are reached
+on this network only.
 """
 
 from __future__ import annotations
@@ -16,18 +11,19 @@ from __future__ import annotations
 import base64
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.integrations.automation.settings import _ProfilePrefsSettings
 
 from .links import LinkMode, LinksState
 
-HUB_CODE_PREFIX = "solin-hub:"
+DEFAULT_SERVER = "meet.solin.run"
 DEFAULT_WEB_PORT = 8780
-_HALL = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+# Before the hub was open, it was configured with a connection code; its domain is kept.
+_OLD_CONNECTION_CODE = "solin-hub:"
+_HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:\d{1,5})?$")
 
 
 class MeetingProvider(StrEnum):
@@ -48,62 +44,31 @@ class MeetingQuality(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class HubConnection:
-    domain: str
-    frp_addr: str
-    frp_port: int
-    frp_token: str
-    hall: str
-    hall_key: str
-    turn_secret: str = ""
-    turn_port: int = 3478
-    turn_host: str = ""
+class HubServer:
+    """The meeting server: its address is the meetings' public origin."""
 
-    def __post_init__(self) -> None:
-        if not self.domain or not self.frp_addr or not self.frp_token:
-            raise ValueError("incomplete hub connection")
-        if not _HALL.match(self.hall) or not self.hall_key:
-            raise ValueError("invalid hall name or key")
-        if not 0 < int(self.frp_port) < 65536 or not 0 < int(self.turn_port) < 65536:
-            raise ValueError("invalid port")
+    domain: str
 
     @property
     def public_origin(self) -> str:
-        """Every hall's meetings share the hub's address; the code picks the hall."""
-
         return f"https://{self.domain}"
 
-    @property
-    def turn_urls(self) -> tuple[str, ...]:
-        if not self.turn_secret:
-            return ()
-        host = self.turn_host or self.frp_addr
-        if ":" in host and not host.startswith("["):
-            host = f"[{host}]"
-        return (f"turn:{host}:{self.turn_port}?transport=udp", f"turn:{host}:{self.turn_port}?transport=tcp")
 
-    def to_code(self) -> str:
-        raw = json.dumps(asdict(self), separators=(",", ":"), sort_keys=True).encode("utf-8")
-        return HUB_CODE_PREFIX + base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+def clean_server(text: str) -> str | None:
+    """A server address as typed ("meet.solin.run", "https://meet.solin.run/"), or None if invalid."""
 
-    @classmethod
-    def from_code(cls, code: str) -> HubConnection:
-        code = (code or "").strip()
-        if not code.startswith(HUB_CODE_PREFIX):
-            raise ValueError("not a Solin hub connection code")
-        payload = code[len(HUB_CODE_PREFIX):]
-        try:
-            data: Any = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-        except (ValueError, json.JSONDecodeError) as error:
-            raise ValueError("unreadable hub connection code") from error
-        if not isinstance(data, dict):
-            raise ValueError("unreadable hub connection code")
-        fields = {name: data[name] for name in cls.__dataclass_fields__ if name in data}
-        try:
-            return cls(**{**fields, "frp_port": int(fields.get("frp_port", 7000)),
-                          "turn_port": int(fields.get("turn_port", 3478))})
-        except TypeError as error:
-            raise ValueError("incomplete hub connection code") from error
+    host = (text or "").strip().lower()
+    host = re.sub(r"^https?://", "", host).split("/", 1)[0]
+    return host if _HOST.match(host) else None
+
+
+def _server_from_old_code(code: str) -> str:
+    payload = code[len(_OLD_CONNECTION_CODE):]
+    try:
+        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except ValueError:
+        return ""
+    return clean_server(str(data.get("domain") or "")) or "" if isinstance(data, dict) else ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,22 +188,24 @@ class HostedMeetingSettingsStore(_ProfilePrefsSettings):
     def set_web_port(self, port: int) -> None:
         self.settings.set_value(SettingsKey.HOSTED_MEETING_WEB_PORT, int(port))
 
-    def hub(self) -> HubConnection | None:
-        code = self.settings.string(SettingsKey.HOSTED_MEETING_HUB, "")
-        if not code:
-            return None
-        try:
-            return HubConnection.from_code(code)
-        except ValueError:
-            return None
+    def server(self) -> str:
+        """The meeting server's address; "" = this network only."""
 
-    def set_hub_code(self, code: str) -> HubConnection | None:
-        """Validate and store a connection code; an empty code disconnects the hub."""
+        value = self.settings.string(SettingsKey.HOSTED_MEETING_HUB, DEFAULT_SERVER).strip()
+        if value.startswith(_OLD_CONNECTION_CODE):
+            return _server_from_old_code(value)
+        return clean_server(value) or "" if value else ""
 
-        code = (code or "").strip()
-        if not code:
-            self.settings.set_value(SettingsKey.HOSTED_MEETING_HUB, "")
-            return None
-        hub = HubConnection.from_code(code)
-        self.settings.set_value(SettingsKey.HOSTED_MEETING_HUB, code)
-        return hub
+    def set_server(self, text: str) -> str:
+        """Store a server address ("" = this network only); raises ValueError when it is not one."""
+
+        text = (text or "").strip()
+        host = clean_server(text) if text else ""
+        if host is None:
+            raise ValueError("not a server address")
+        self.settings.set_value(SettingsKey.HOSTED_MEETING_HUB, host)
+        return host
+
+    def hub(self) -> HubServer | None:
+        server = self.server()
+        return HubServer(server) if server else None

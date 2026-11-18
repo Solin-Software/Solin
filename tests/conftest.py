@@ -119,6 +119,17 @@ def isolated_linked_sync_state(tmp_path, monkeypatch):
     linked_folder._SERVICES.clear()
 
 
+@pytest.fixture(autouse=True)
+def no_real_meeting_server(monkeypatch):
+    """Hosted meetings default to meet.solin.run: tests never reach it (they pass a fake client)."""
+    from solin.core.hosted_meeting import hub_client
+
+    def offline(self, method, path, body=None):
+        raise hub_client.HubError(f"{self.server.domain} cannot be reached (tests stay offline)")
+
+    monkeypatch.setattr(hub_client.HubClient, "_call", offline)
+
+
 @pytest.fixture
 def qt_object_owner() -> Iterator[QObject]:
     """Keep QObject children owned until destruction on the Qt thread."""

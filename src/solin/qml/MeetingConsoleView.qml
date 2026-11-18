@@ -362,7 +362,9 @@ Rectangle {
                         visible: !root.live && !root.busy && !root.perMeeting
                         text: info.linkScope === "hub"
                             ? qsTr("This link and password stay the same for every meeting, so you can share them in advance.")
-                            : qsTr("Without a hub this link only works on this network, while a meeting is open, and it changes if this computer's network address changes.")
+                            : info.linkScope === "pending"
+                            ? qsTr("Getting the public link from %1… Until then this link only works on this network.").arg(info.server || "")
+                            : qsTr("Without a meeting server this link only works on this network, while a meeting is open, and it changes if this computer's network address changes.")
                         color: appTheme.textMuted; font.pixelSize: 12; wrapMode: Text.Wrap
                     }
                     Text {
@@ -374,7 +376,7 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         visible: !!info.hubError
-                        text: "⚠ " + qsTr("The hub does not know these links yet, so they do not open yet: %1. Solin keeps trying.").arg(info.hubError || "")
+                        text: "⚠ " + qsTr("No public links for now: %1. Solin keeps trying; meanwhile links work on this network only.").arg(info.hubError || "")
                         color: "#c9a227"; font.pixelSize: 12; wrapMode: Text.Wrap
                     }
 

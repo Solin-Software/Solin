@@ -1,4 +1,4 @@
-"""Hosted-meeting settings for Qt Quick: provider, hall, quality, audio and hub."""
+"""Hosted-meeting settings for Qt Quick: provider, hall, quality, audio and meeting server."""
 
 from __future__ import annotations
 
@@ -56,7 +56,6 @@ class HostedMeetingSettings(SettingsDomain):
         super().__init__(parent)
         self._store = store
         self._devices: list[dict[str, Any]] = []
-        self._hub_code_draft = ""
         self._devices_loaded.connect(self._apply_devices, Qt.ConnectionType.QueuedConnection)
         self._publish_all()
 
@@ -64,7 +63,7 @@ class HostedMeetingSettings(SettingsDomain):
 
     def _publish_all(self) -> None:
         store = self._store
-        hub = store.hub()
+        server = store.server()
         missing = [helper.value for helper in Helper if find_helper(helper) is None]
         feed = store.hall_feed()
         device = store.remote_audio_device()
@@ -96,10 +95,9 @@ class HostedMeetingSettings(SettingsDomain):
             remoteAudioDevice=device["id"],
             remoteAudioOptions=self._device_options(device),
             webPort=str(store.web_port()),
-            hubCode="",
-            hubStatus=(_tr("Connected to {hub} as {hall}").format(hub=hub.domain, hall=hub.hall)
-                       if hub else _tr("Not connected: the meeting is reachable on this network only")),
-            hubConnected=hub is not None,
+            server=server,
+            serverStatus=(_tr("Meeting links: https://{server}/…").format(server=server) if server
+                          else _tr("No server: meetings are reachable on this network only")),
             helpersStatus=(_tr("Missing components: {names}").format(names=", ".join(missing)) if missing
                            else _tr("All meeting components are installed")),
         )
@@ -171,31 +169,20 @@ class HostedMeetingSettings(SettingsDomain):
                 return
             store.set_web_port(port)
             self.publish(feedback="", feedbackKind="")
-        elif key == "hubCode":
-            self._hub_code_draft = str(value)
-            self.publish(hubCode=self._hub_code_draft)
-            return
+        elif key == "server":
+            try:
+                store.set_server(str(value))
+            except ValueError:
+                self.fail(_tr("Type a server address, like meet.solin.run"))
+                return
+            self.publish(feedback="", feedbackKind="")
         else:
             raise ValueError(f"Unknown settings field: {key}")
         self._publish_all()
 
     @Slot(str)
     def invoke(self, action: str) -> None:
-        if action == "connectHub":
-            try:
-                hub = self._store.set_hub_code(self._hub_code_draft)
-            except ValueError:
-                self.fail(_tr("This is not a valid hub connection code"))
-                return
-            self._hub_code_draft = ""
-            self._publish_all()
-            if hub is not None:
-                self.succeed(_tr("Hub connection saved"))
-        elif action == "disconnectHub":
-            self._store.set_hub_code("")
-            self._publish_all()
-            self.succeed(_tr("Hub connection removed"))
-        elif action == "refreshDevices":
+        if action == "refreshDevices":
             self.refresh_runtime()
         else:
             raise ValueError(f"Unknown settings action: {action}")

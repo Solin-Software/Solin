@@ -27,11 +27,17 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{2,62}$")
 
 @dataclass(frozen=True, slots=True)
 class TurnServer:
-    """The hub's TURN relay; Galene mints time-limited credentials from ``secret``."""
+    """The hub's TURN relay.
+
+    With ``credential_type`` "hmac-sha1", Galene mints time-limited credentials from
+    ``secret`` itself; with "" the credentials (``username`` / ``secret``) are handed to
+    attendees as they are (the meeting server issued them for this meeting).
+    """
 
     urls: tuple[str, ...]
     secret: str
     username: str = "solin"
+    credential_type: str = "hmac-sha1"
 
     def stun_urls(self) -> tuple[str, ...]:
         hosts: list[str] = []
@@ -80,12 +86,10 @@ class GaleneLayout:
         stun = turn.stun_urls()
         if stun:
             servers.append({"urls": list(stun)})
-        servers.append({
-            "urls": list(turn.urls),
-            "username": turn.username,
-            "credential": turn.secret,
-            "credentialType": "hmac-sha1",
-        })
+        server: dict[str, object] = {"urls": list(turn.urls), "username": turn.username, "credential": turn.secret}
+        if turn.credential_type:
+            server["credentialType"] = turn.credential_type
+        servers.append(server)
         _write_json(path, servers)
 
     def write_group(self, slug: str, key: bytes, *, display_name: str = "", max_clients: int = 300) -> Path:

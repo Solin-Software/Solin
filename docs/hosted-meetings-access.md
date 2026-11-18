@@ -2,7 +2,7 @@
 
 Specification agreed on 2026-11-17. It changes how people reach a meeting that Solin hosts itself (see [hosted-meetings.md](hosted-meetings.md)), and it touches both Solin and the hub ([solin-hub](https://github.com/Solin-Software/solin-hub)).
 
-**Status:** the Solin side is implemented on `spike/galene`, and the hub routes `meet.solin.run/<code>` to the congregation that registered the code (see "Implementation status" at the end). Solin still draws the codes and checks the password itself; the hub keeps codes unique and shows the waiting, "no longer valid" and "no such meeting" pages.
+**Status:** implemented on `spike/galene` and in solin-hub (see "Implementation status" at the end). The hub creates the codes, each owned by a secret only the Solin that asked for it holds, and routes `meet.solin.run/<code>` to that Solin's tunnel. Solin still checks the password itself.
 
 The hub is at `meet.solin.run`.
 
@@ -160,35 +160,34 @@ New link is for a link or password that has leaked.
 
 **Changing only the password** is allowed. The code stays, and approved devices are kept, since they don't use the password any more.
 
-## Registration and routing
+## Ownership and routing
 
-- **One registration per congregation** (Solin profile), not per building. Kingdom Halls are often shared by two or three congregations, sometimes on the same computer. Each congregation has its own codes, schedule, devices and hub registration.
-- **Path routing on one host:** `meet.solin.run/<code>/…`. This replaces the per-hall subdomains (`<hall>.<hub-domain>`), so the hub needs one TLS certificate instead of on-demand certificates.
-  - Caddy sends each request to the hub's service, which looks the code up and either serves its own page (entry, countdown, ended, invalid) or proxies the request through that congregation's tunnel.
-  - The hall's pages and WebSocket must work under the `/<code>/` prefix.
-- **Without a hub:** the link is the computer's LAN address, the hall checks the password and serves every page, and there is no countdown before Solin opens.
+- **No registration.** The hub is open to every Solin. Settings → Integrations → Hosted meetings → **Meeting server** defaults to `meet.solin.run`; a congregation running its own hub types its address; empty means meetings on this network only. (Decided 2026-11-18: an open hub is acceptable, since the software is only useful for congregation meetings.)
+- **The hub creates the codes.** Solin asks for a code with the sha256 of a fresh random **owner secret**, and keeps the secret. Whoever holds the secret owns the code: it sets the code's start time and state, opens the meeting's tunnel and gets TURN credentials for it. Each code has its own secret, so codes are not tied to a computer or a building; they move with the Solin profile.
+- **Kingdom Halls shared by several congregations:** each congregation (Solin profile) has its own codes, schedule and devices.
+- **Path routing on one host:** `meet.solin.run/<code>/…`, one TLS certificate.
+  - Caddy asks the hub's service about each request: an open meeting goes through its tunnel; otherwise the hub answers itself (waiting page with countdown, "no longer valid", or "no such meeting").
+  - The meeting's pages and WebSocket work under the `/<code>/` prefix.
+- **Without a server:** the link is the computer's LAN address, the meeting checks the password and serves every page, and there is no countdown before Solin opens.
 
 ### What the hub stores per code
 
 | Field | Notes |
 |---|---|
-| code | 6 characters, unique, never reused for at least a year |
-| congregation | the registration it belongs to |
-| window start / end | UTC; empty for a same-link code |
-| password hash | salted scrypt; never the password |
-| state | active, retired |
+| code | 6 characters, unique; forgotten (and reusable) only after 400 days without its owner |
+| owner | sha256 of the owner secret |
+| start | ISO time for the waiting page's countdown; empty for none |
+| state | active, or inactive ("no longer valid"; the owner may re-activate it) |
 
-**Not stored:** names, meeting titles or attendance.
+**Not stored:** names, passwords, meeting titles or attendance.
 
 ### Hub API for Solin
 
-All calls are authenticated with the congregation's existing key.
-
-- `reserve` *n* codes with their windows and password hashes.
-- `update` a code: change its window or password hash.
-- `retire` a code (New link).
-- `opened` / `ended`: Solin tells the hub when the operator opens or ends a code's meeting. The hub uses this to choose the attendee page's state.
-- `schedule`: the start times for a same-link code, used by its countdown.
+- `POST /api/codes {owner, startsAt}` → a new code (rate-limited per address).
+- `POST /api/codes/sync {codes: [{code, secret, startsAt, active}]}`: start times and states, sent whenever they change; codes the hub does not know as ours come back as `rejected` and get new ones.
+- `GET /api/hub`: the tunnel server's port and token.
+- `POST /api/turn {code, secret}`: time-limited TURN credentials for that meeting.
+- Tunnel (frp): one proxy named after the code, with the code and secret in its metadata.
 
 ### From the hub's entry page to the hall
 
@@ -240,11 +239,11 @@ All calls are authenticated with the congregation's existing key.
 | Pages: first screen (name, password, count), lobby countdown, stage page, moderator page with the device key | `resources/hosted_meeting_web/` (`index.html`/`app.js`, `stage.*`, `moderator.*`, `staff.js`) |
 | Console: links and password, upcoming meetings, Share the month, renewals, approvals, approved devices, live total, official count | `qml/MeetingConsoleView.qml`, `ui/qml/meeting_console_bridge.py` |
 | Setting "Meeting links"; notifications for the automatic opening and the official count | `ui/qml/settings/`, `main_window.py` |
-| Sending the codes to the hub on every change; drawing again a code another congregation holds; the "hub does not know these links yet" warning | `core/hosted_meeting/hub_codes.py`, `service.py` |
-| Hub: code registry (`PUT /api/halls/<hall>/codes`, hall key; 409 for another hall's code; retired codes kept 400 days), routing `/<code>/…` to the hall's tunnel, landing page, waiting page with countdown, "no longer valid" | solin-hub: `ask/ask.py`, `ask/landing.html`, `sites.caddy` |
+| Codes from the server: a new link starts with a local code (works on this network at once), exchanged for the server's code and its owner secret; start times and retired codes sent on every change; the meeting's tunnel and TURN credentials authorized by the code's secret; "Meeting server" setting (an old connection code keeps its domain) | `core/hosted_meeting/hub_client.py`, `service.py`, `links.py` (`secrets`), `tunnel.py`, `settings.py` |
+| Hub: creates codes owned by a secret, sync, tunnels per code (frps plugin picks the port), routing `/<code>/…`, landing page, waiting page with countdown, "no longer valid", TURN credentials per code | solin-hub: `ask/ask.py`, `ask/landing.html`, `sites.caddy`, `frps.toml` |
 
 **Differences from the target:**
-- **Codes:** Solin draws them and the hub only accepts or refuses them (instead of issuing them); the result is the same, unique codes across congregations.
+- **Codes:** the hub issues one code at a time on Solin's request instead of `reserve`-ing batches; a link created while the server is unreachable works on this network until the server answers.
 - **Password:** the hall checks it, so before Solin opens the meeting the hub's waiting page has no password field; the name, password and count come after it opens.
 - **A future meeting's code while another meeting is open:** the hub sends it to the hall, whose page answers that the link is not valid now (the hub's countdown only shows while the hall is offline).
 - **Low-codes warning:** with local codes it only appears when Solin has not been opened for weeks.
@@ -252,7 +251,7 @@ All calls are authenticated with the congregation's existing key.
 **Not built yet:** the password-hash check on the hub, admission tickets, and the hub-served "ended" page.
 
 **Tests:**
-- unit: `test_hosted_meeting_links.py`, `test_hosted_meeting_access.py`, `test_hosted_meeting_link.py`, `test_hosted_meeting_core.py`, `test_hosted_meeting_hub_codes.py`;
+- unit: `test_hosted_meeting_links.py`, `test_hosted_meeting_access.py`, `test_hosted_meeting_link.py`, `test_hosted_meeting_core.py`, `test_hosted_meeting_hub_client.py`;
 - hub (solin-hub): `tests/test_ask.py`, and `scripts/smoke_local.sh` end to end with Caddy, frps, real frpc and coturn;
 - live, against Galene: `test_hosted_meeting_runtime_live.py` (password, rate limit, stage and moderator approval, moderator commands, remembered devices, old codes) and `test_hosted_meeting_service_live.py`;
 - real Chromium: `test_hosted_meeting_browser_live.py` (the first screen, a moderator with a WebCrypto device key approved once and recognised after a reload, a moderator admitting an attendee);

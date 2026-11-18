@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import json
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,10 +13,10 @@ from solin.core.foundation.settings_store import SettingsStore
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.hosted_meeting.devices import ApprovedDevice, KeyKind, StaffRole
-from solin.core.hosted_meeting.hub_codes import RegisterResult
+from solin.core.hosted_meeting.hub_client import HubError
 from solin.core.hosted_meeting.links import LinkMode, normalize_code
 from solin.core.hosted_meeting.service import HostedMeetingService, MeetingState
-from solin.core.hosted_meeting.settings import HUB_CODE_PREFIX, HostedMeetingSettingsStore
+from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore
 
 TZ = timezone(timedelta(hours=-3))
 NOW = datetime(2026, 11, 16, 12, 0, tzinfo=TZ)   # Monday
@@ -29,6 +27,7 @@ def store():
     settings = SettingsStore.for_namespace("SolinTests", f"hosted-meeting-link-{secrets.token_hex(4)}")
     store = HostedMeetingSettingsStore(settings)
     store.set_hall_name("Salão Central")
+    store.set_server("")   # each test that wants a server sets one, with a FakeHub
     settings.set_value(SettingsKey.MEETING_MIDWEEK_DAY, 2)
     settings.set_value(SettingsKey.MEETING_MIDWEEK_TIME, "19:30")
     settings.set_value(SettingsKey.MEETING_WEEKEND_DAY, 6)
@@ -51,22 +50,31 @@ def clock():
     return Clock()
 
 
-def _hub_code() -> str:
-    fields = {"domain": "meet.solin.run", "frp_addr": "meet.solin.run", "frp_port": 7000, "frp_token": "t",
-              "hall": "hall-x", "hall_key": "k"}
-    return HUB_CODE_PREFIX + base64.urlsafe_b64encode(json.dumps(fields).encode()).decode().rstrip("=")
-
-
 class FakeHub:
-    """Stands in for the hub's code registry: records what Solin sends, answers as told."""
+    """Stands in for the meeting server: issues codes, records syncs, fails when told."""
 
     def __init__(self) -> None:
-        self.sent: list = []
-        self.answers: list[RegisterResult] = []
+        self.created: list[tuple[str, str]] = []    # (code, owner secret)
+        self.synced: list[list] = []
+        self.reject: set[str] = set()
+        self.down = ""
+        self._codes = iter(f"q{n:05d}".translate(str.maketrans("01", "xz")) for n in range(1, 99999))
 
-    def __call__(self, hub, payload) -> RegisterResult:
-        self.sent.append(payload)
-        return self.answers.pop(0) if self.answers else RegisterResult(ok=True)
+    def __call__(self, server):
+        return self
+
+    def create_code(self, secret: str, starts_at: str = "") -> str:
+        if self.down:
+            raise HubError(self.down)
+        code = next(self._codes)
+        self.created.append((code, secret))
+        return code
+
+    def sync_codes(self, codes) -> set[str]:
+        if self.down:
+            raise HubError(self.down)
+        self.synced.append(list(codes))
+        return {c.code for c in codes} & self.reject
 
 
 def _pump(until=lambda: False, seconds: float = 2.0) -> None:
@@ -81,7 +89,7 @@ def _device() -> dict:
 
 
 def test_same_link_mode_offers_one_permanent_link(store, tmp_path, clock):
-    service = HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub())
+    service = HostedMeetingService(store, tmp_path, clock=clock)
     info = service.info
     code = info["code"]
     assert normalize_code(code) == code and info["password"].isdigit() and len(info["password"]) == 6
@@ -89,66 +97,92 @@ def test_same_link_mode_offers_one_permanent_link(store, tmp_path, clock):
     assert info["stageUrl"].endswith(f"/{code}/s") and info["moderatorUrl"].endswith(f"/{code}/m")
     assert [m["kind"] for m in info["upcoming"][:2]] == ["midweek", "weekend"]
     assert all(m["code"] == code for m in info["upcoming"])
-
-    store.set_hub_code(_hub_code())
-    service.refresh_links()
-    assert service.info["invitationUrl"] == f"https://meet.solin.run/{code}"
-    assert service.info["stageUrl"] == f"https://meet.solin.run/{code}/s"
-    assert HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub()).info["code"] == code  # stored
+    assert HostedMeetingService(store, tmp_path, clock=clock).info["code"] == code  # stored
 
 
-def test_codes_are_sent_to_the_hub_when_they_change(store, tmp_path, clock):
+def test_the_server_issues_the_codes(store, tmp_path, clock):
     hub = FakeHub()
-    store.set_hub_code(_hub_code())
-    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
-    code = service.info["code"]
-    _pump(lambda: hub.sent)
-    assert list(hub.sent[0].active) == [code]
-    assert hub.sent[0].active[code] == "2026-11-18T19:30:00-03:00"   # the next meeting, for the countdown
-    # Unchanged codes are not sent again.
+    store.set_server("meet.solin.run")
+    service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
+    local = service.info["code"]
+    assert service.info["linkScope"] == "pending"
+    assert service.info["invitationUrl"].endswith(f":{store.web_port()}/{local}")   # works here meanwhile
+    _pump(lambda: service.info["linkScope"] == "hub")
+    code, secret = hub.created[0]
+    info = service.info
+    assert info["code"] == code != local and info["server"] == "meet.solin.run"
+    assert info["invitationUrl"] == f"https://meet.solin.run/{code}"
+    assert info["stageUrl"] == f"https://meet.solin.run/{code}/s"
+    assert store.links().secrets == {code: secret}
+    # Then the server learns the start time its waiting page counts down to.
+    _pump(lambda: hub.synced)
+    assert [(c.code, c.secret, c.starts_at, c.active) for c in hub.synced[0]] == \
+           [(code, secret, "2026-11-18T19:30:00-03:00", True)]
+    # Nothing changed: nothing is sent again.
     service.refresh_links()
     _pump(seconds=0.5)
-    assert len(hub.sent) == 1
-    # New link: the new code is active and the old one retired.
+    assert len(hub.created) == 1 and len(hub.synced) == 1
+
+
+def test_new_link_retires_the_old_code_on_the_server(store, tmp_path, clock):
+    hub = FakeHub()
+    store.set_server("meet.solin.run")
+    service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
+    _pump(lambda: hub.synced)
+    old = service.info["code"]
     assert service.new_link() is True
-    _pump(lambda: len(hub.sent) == 2)
+    _pump(lambda: len(hub.created) == 2 and len(hub.synced) == 2)
     new = service.info["code"]
-    assert list(hub.sent[1].active) == [new] and code in hub.sent[1].retired
+    assert new == hub.created[1][0] and new != old
+    states = {c.code: c.active for c in hub.synced[1]}
+    assert states == {old: False, new: True}
 
 
-def test_a_code_another_congregation_holds_is_drawn_again(store, tmp_path, clock):
+def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock):
     hub = FakeHub()
-    store.set_hub_code(_hub_code())
+    store.set_server("meet.solin.run")
     store.set_link_mode(LinkMode.PER_MEETING)
-    first = HostedMeetingService(store, tmp_path, clock=clock, register=FakeHub()).info["upcoming"]
-    clash = first[1]["code"]
-    hub.answers = [RegisterResult(ok=False, taken=(clash,))]
-    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
-    _pump(lambda: len(hub.sent) == 2)
+    service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
+    _pump(lambda: hub.synced)
     upcoming = service.info["upcoming"]
-    assert upcoming[1]["code"] != clash and upcoming[1]["password"] == first[1]["password"]
-    assert clash not in hub.sent[1].active and clash not in hub.sent[1].retired
-    assert [m["code"] for i, m in enumerate(upcoming) if i != 1] == [m["code"] for i, m in enumerate(first) if i != 1]
-    assert service.info["hubError"] == ""
+    assert len(hub.created) == 8
+    assert [m["code"] for m in upcoming] == [code for code, _secret in hub.created]
+    assert all(m["url"] == f"https://meet.solin.run/{m['code']}" for m in upcoming)
+    starts = {c.code: c.starts_at for c in hub.synced[0]}
+    assert starts[upcoming[1]["code"]] == upcoming[1]["startsAt"]
 
 
-def test_a_hub_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock):
+def test_a_server_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock):
     hub = FakeHub()
-    hub.answers = [RegisterResult(ok=False, error="the hub cannot be reached (timed out)")]
-    store.set_hub_code(_hub_code())
-    service = HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    hub.down = "meet.solin.run cannot be reached (timed out)"
+    store.set_server("meet.solin.run")
+    service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(lambda: service.info["hubError"])
-    assert "cannot be reached" in service.info["hubError"]
+    assert "cannot be reached" in service.info["hubError"] and service.info["linkScope"] == "pending"
+    hub.down = ""
     service.refresh_links()   # what the 30 s schedule tick does
-    _pump(lambda: len(hub.sent) == 2 and not service.info["hubError"])
+    _pump(lambda: service.info["linkScope"] == "hub" and not service.info["hubError"])
     assert service.info["hubError"] == ""
 
 
-def test_without_a_hub_nothing_is_sent(store, tmp_path, clock):
+def test_codes_the_server_does_not_know_as_ours_are_replaced(store, tmp_path, clock):
     hub = FakeHub()
-    HostedMeetingService(store, tmp_path, clock=clock, register=hub)
+    store.set_server("meet.solin.run")
+    service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
+    _pump(lambda: hub.synced and not service._hub_busy)
+    lost = service.info["code"]
+    hub.reject = {lost}               # e.g. the server lost its registry
+    service._hub_synced = None        # force a new sync
+    service.refresh_links()
+    _pump(lambda: service.info["code"] != lost and service.info["linkScope"] == "hub")
+    assert service.info["code"] == hub.created[-1][0] and lost not in store.links().secrets
+
+
+def test_without_a_server_nothing_is_sent(store, tmp_path, clock):
+    hub = FakeHub()
+    HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(seconds=0.5)
-    assert hub.sent == []
+    assert hub.created == [] and hub.synced == []
 
 
 def test_per_meeting_mode_prepares_four_weeks(store, tmp_path, clock):

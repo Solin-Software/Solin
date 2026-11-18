@@ -35,7 +35,9 @@ class FakeEngine:
 def service(tmp_path):
     settings = SettingsStore.for_namespace("SolinTests", f"hosted-meeting-video-{secrets.token_hex(4)}")
     engine = FakeEngine()
-    service = HostedMeetingService(HostedMeetingSettingsStore(settings), tmp_path,
+    store = HostedMeetingSettingsStore(settings)
+    store.set_server("")
+    service = HostedMeetingService(store, tmp_path,
                                    scene_runtime=SimpleNamespace(scene_engine=engine))
     service.engine = engine  # type: ignore[attr-defined]
     yield service

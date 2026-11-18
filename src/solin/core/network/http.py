@@ -352,6 +352,38 @@ def configure_default_transport(transport: HttpTransport | None) -> None:
     _DEFAULT_TRANSPORT = transport or RequestsHttpTransport()
 
 
+def request_json(
+    method: str,
+    url: str,
+    *,
+    body: Any = None,
+    timeout: HttpTimeout = DEFAULT_TIMEOUT,
+    headers: Mapping[str, str] | None = None,
+) -> HttpResponse:
+    """Call a JSON API (``body`` sent as JSON when given).
+
+    Unlike :func:`get`, an error status does not raise: the response comes back as it is,
+    so the caller can read the API's own error message. Transport failures still raise.
+    """
+    import certifi
+    import requests
+
+    try:
+        response = requests.request(
+            method, url, json=body, headers=dict(headers or {}), timeout=timeout, verify=certifi.where()
+        )
+    except requests.Timeout as exc:
+        raise HttpTimeoutError(f"{method} {url} timed out: {exc}") from exc
+    except requests.RequestException as exc:
+        raise HttpTransportError(f"{method} {url} failed: {exc}") from exc
+    return HttpResponse(
+        url=str(getattr(response, "url", "") or url),
+        status_code=int(getattr(response, "status_code", 0) or 0),
+        headers=HttpHeaders(getattr(response, "headers", {})),
+        content=bytes(getattr(response, "content", b"")),
+    )
+
+
 def get(
     url: str,
     *,

@@ -49,7 +49,7 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
 - Locates the binary: env var, then `<app>/bin`, then `build/galene/<platform>`.
 - Writes a per-run data directory:
   - `config.json` with `allowOrigin` set to the web server;
-  - `ice-servers.json` with the hub's STUN/TURN and `hmac-sha1` credentials;
+  - `ice-servers.json` with the hub's STUN/TURN and the time-limited credentials the hub issued for this meeting's code;
   - one group per meeting: `h264` + `opus`, `allow-recording: false`, an `authKeys` HS256 key generated per meeting, no password users.
 - Starts Galene with `-insecure -http 127.0.0.1:<port> -turn ""`, health-checks it, and restarts it with backoff (like the libobs sidecar supervision).
 
@@ -109,10 +109,10 @@ Every meeting is reached at `<origin>/<code>`, a 6-character code plus a passwor
 ### Hub (VPS, run by the project or self-hosted)
 
 Adapted from the S5 bundle (`spikes/hosted-meetings/s5_hub/`):
-- **Caddy:** one address, `https://<hub-domain>/<code>`. An `ask` service keeps the code registry (each hall's Solin sends its codes) and tells Caddy which hall's tunnel serves a code; it answers unknown, retired and not-yet-open codes itself.
+- **Caddy:** one address, `https://<hub-domain>/<code>`. An `ask` service creates the codes (each owned by a secret the requesting Solin keeps) and tells Caddy which tunnel serves a code; it answers unknown, retired and not-yet-open codes itself.
 - **frps:** each hall's `frpc` dials out and forwards one TCP port, the meeting web server. Raw TCP forwarding, not frp's HTTP vhost, which closed long WebSockets after ~60 s in S5. No `heartbeatTimeout` with `tcpMux`, which dropped tunnels every 90 s in S5.
-- **coturn:** dual-stack UDP + TCP 3478 with `use-auth-secret`; Solin hands its credentials to Galene, which hands them to attendees.
-- **Auth:** frps' shared token plus a per-hall name and key (`halls.json`); the same key authenticates the hall's code list.
+- **coturn:** dual-stack UDP + TCP 3478 with `use-auth-secret`; the hub mints time-limited credentials per meeting code (`TURN_SECRET` never leaves it); Solin hands them to Galene, which hands them to attendees.
+- **Auth:** none to use the hub (it is open); each meeting's tunnel, start time and TURN credentials need its code's owner secret. frps' token is handed to every Solin.
 - **State:** only the code registry; meetings, passwords and attendance live on the hall PC.
 - **Deployment:** a `docker compose up` bundle with an IP-only test variant (no DNS).
 
@@ -150,7 +150,7 @@ All four phases are built on `spike/galene`.
 | Phase | What exists | Verified by |
 |---|---|---|
 | 1. Hall core | `core/hosted_meeting/`: tokens, Galene config + supervisor, operator client, `MeetingCore` rules, meeting runtime (web server, lobby, `/ws` proxy, stage feed), `HostedMeetingService`, frpc tunnel, settings + hub code. libobs sidecar: `libobs_meeting_output.py` + `start/stop_meeting_output` IPC. UI: "Hosted meetings" settings group, Live meeting console window opened from the quick-toolbar meeting button. Attendee and stage pages in `resources/hosted_meeting_web/` (en / pt / es). Bridge: `tools/solin-galene-bridge/`. | Unit tests (tokens, config, core). Live tests against real Galene: runtime journey, service lifecycle. Native libobs test of the meeting output. Sidecar IPC round trip. Console QML render test. |
-| 2. Hub | The [solin-hub](https://github.com/Solin-Software/solin-hub) repository, formerly `deploy/hub/` (Caddy + frps + coturn + ask, `add_hall.py` prints the connection code). | Local smoke test (solin-hub's `scripts/smoke_local.sh`). A real GCP VM (below). An end-to-end meeting through the internet: headless Chromium joined through `https://hall-teste.<hub>/j/…`, was admitted, played the program, was called on (mic opened), was released, and saw "meeting ended". Galene's relay self-test against the hub's TURN. |
+| 2. Hub | The [solin-hub](https://github.com/Solin-Software/solin-hub) repository, formerly `deploy/hub/` (Caddy + frps + coturn + ask; since 2026-11-18 open to every Solin, with server-issued codes). | Local smoke test (solin-hub's `scripts/smoke_local.sh`). A real GCP VM (below). An end-to-end meeting through the internet: headless Chromium joined through `https://hall-teste.<hub>/j/…`, was admitted, played the program, was called on (mic opened), was released, and saw "meeting ended". Galene's relay self-test against the hub's TURN. |
 | 3. Packaging | `scripts/fetch_hosted_meeting_helpers.py` (Galene from source, frpc release with checksum), `scripts/build_galene_bridge.py`, `scripts/stage_hosted_meeting_helpers.py` (into `<app>/bin` + licences), Nuitka data dir for the web pages in Linux/Windows/macOS, CI: Go + libopus (apt / MSYS2 / Homebrew). | Staging run locally on Linux. CI and the Windows/macOS builds have not run yet (the branch must be pushed). |
 | 4. Polish | Hall-feed delay setting (camera latency, `obs_source_set_sync_offset`), copy the attendance count, optional screen wake lock and auto-reconnect in the attendee app. | Unit and live tests. |
 

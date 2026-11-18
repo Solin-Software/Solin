@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 import time
 from concurrent.futures import Future
@@ -14,6 +15,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.hosted_meeting.binaries import Helper, find_helper
+from solin.core.hosted_meeting.hub_client import TunnelInfo, TurnCredentials
 from solin.core.hosted_meeting.processes import free_tcp_port
 from solin.core.hosted_meeting.service import HostedMeetingService, MeetingState
 from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore, MeetingQuality
@@ -73,6 +75,7 @@ def store(tmp_path):
     store.set_quality(MeetingQuality.HD)
     store.set_web_port(free_tcp_port())
     store.set_hall_feed("none")
+    store.set_server("")   # this network only: the tests do not reach a meeting server
     yield store
     for key in settings.all_keys():
         settings.set_value(key, None)
@@ -157,3 +160,48 @@ def test_link_stays_the_same_across_meetings(store, tmp_path):
         assert pump_until(lambda: service.state is MeetingState.IDLE, 30)
         assert service.info["invitationUrl"] == before["invitationUrl"]
     assert len(group_keys) == 2  # only the link is permanent: each meeting has its own key
+
+
+class FakeMeetingServer:
+    """The meeting server's API as the service uses it; the tunnel itself points nowhere."""
+
+    def __init__(self) -> None:
+        self.created: list[tuple[str, str]] = []
+
+    def __call__(self, server):
+        return self
+
+    def create_code(self, secret, starts_at=""):
+        code = ("q2q2q" + "23456789bcdfghjkmnpqrstvwxyz"[len(self.created)])
+        self.created.append((code, secret))
+        return code
+
+    def sync_codes(self, codes):
+        return set()
+
+    def tunnel_info(self):
+        return TunnelInfo(frp_port=7000, frp_token="frp-token")
+
+    def turn_credentials(self, code, secret):
+        return TurnCredentials(urls=("turn:hub.invalid:3478?transport=udp",), username=f"1900000000:{code}",
+                               credential="cred")
+
+
+@pytest.mark.skipif(find_helper(Helper.FRPC) is None, reason="frpc not available")
+def test_a_meeting_on_the_server_uses_its_code_secret_for_tunnel_and_turn(store, tmp_path):
+    server = FakeMeetingServer()
+    store.set_server("hub.invalid")
+    service = HostedMeetingService(store, tmp_path, scene_runtime=FakeRuntime(), hub_client=server)
+    assert pump_until(lambda: service.info["linkScope"] == "hub")
+    assert service.start_meeting()
+    assert pump_until(lambda: service.state is MeetingState.LIVE)
+    code, secret = server.created[0]
+    info = service.info
+    assert info["slug"] == code and info["invitationUrl"] == f"https://hub.invalid/{code}"
+    frpc = (tmp_path / "hosted_meeting" / "frpc" / "frpc.toml").read_text()
+    assert f'metadatas.code = "{code}"' in frpc and f'metadatas.secret = "{secret}"' in frpc
+    assert f'name = "{code}"' in frpc and 'serverAddr = "hub.invalid"' in frpc
+    ice = json.loads((tmp_path / "hosted_meeting" / "galene" / "data" / "ice-servers.json").read_text())
+    assert ice[-1]["username"] == f"1900000000:{code}" and "credentialType" not in ice[-1]
+    service.end_meeting()
+    assert pump_until(lambda: service.state is MeetingState.IDLE, 30)
