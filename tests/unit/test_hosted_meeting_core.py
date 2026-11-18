@@ -13,11 +13,19 @@ SECRET = "s" * 32
 class Effects:
     def __init__(self) -> None:
         self.notes: list[tuple[str, dict[str, Any]]] = []
+        self.staff_notes: list[tuple[str, dict[str, Any]]] = []
         self.actions: list[tuple[str, str]] = []
+        self.devices: list[list[dict[str, Any]]] = []
         self.changes = 0
 
     def notify(self, device_id: str, message: dict[str, Any]) -> None:
         self.notes.append((device_id, message))
+
+    def notify_staff(self, device_id: str, message: dict[str, Any]) -> None:
+        self.staff_notes.append((device_id, message))
+
+    def devices_changed(self, devices: list[dict[str, Any]]) -> None:
+        self.devices.append(devices)
 
     def present(self, galene_id: str) -> None:
         self.actions.append(("present", galene_id))
@@ -160,7 +168,6 @@ def test_hand_and_disconnect_tracking(core):
     core.on_galene_user("delete", user)
     snapshot = core.snapshot()
     assert snapshot["attendees"][0]["connected"] is False and snapshot["live"] == ""
-    assert snapshot["attendance"] == 1
 
 
 def test_end_notifies_everyone_and_blocks_joins(core):
@@ -178,17 +185,8 @@ def test_stage_view(core):
     connect(core, "d1", "g1", raisehand=True)
     connect(core, "d2", "g2")
     core.call_on("d2")
-    assert core.stage_view() == {"hands": ["Ana"], "live": "Bia", "ended": False}
-
-
-def test_attendance_report_lists_everyone_admitted(core):
-    admit(core, "d1", "Ana")
-    admit(core, "d2", "Bia")
-    core.request_join("d3", SECRET, "Caio")  # never admitted
-    core.remove("d2")
-    report = core.attendance_report()
-    assert [row["name"] for row in report] == ["Ana", "Bia"]
-    assert [row["removed"] for row in report] == [False, True]
+    assert core.stage_view() == {"hands": ["Ana"], "live": "Bia", "participants": ["Ana", "Bia"], "staff": [],
+                                 "ended": False}
 
 
 def test_a_lowered_hand_does_not_come_back_from_stale_galene_data(core):

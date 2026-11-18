@@ -2,18 +2,26 @@
 
 ``MeetingRuntime`` owns a dedicated asyncio thread. On it run:
 
-* the **meeting web server** (aiohttp, plain HTTP on the hall; the hub terminates TLS):
+* the **meeting web server** (aiohttp, plain HTTP on the hall; the hub terminates TLS).
+  Everything lives under the meeting's short code, so the hub can route
+  ``meet.<domain>/<code>/…`` to this hall without rewriting anything:
 
-  ========================== ======================================================
-  ``GET  /j/<slug>``         attendee app (name → lobby → program)
-  ``GET  /stage/<slug>``     the conductor's raised-hands page (``#<stage key>``)
-  ``GET  /assets/<file>``    the pages' scripts and styles
-  ``POST /api/<slug>/join``  ask to join (device id + secret + name)
-  ``POST /api/<slug>/token`` a fresh Galene join token for an admitted device
-  ``GET  /api/<slug>/events`` WebSocket: lobby/admit/hand/rename/removed/ended
-  ``GET  /api/<slug>/stage`` WebSocket: hands queue for the stage page
-  ``GET  /ws``               Galene's WebSocket, proxied (one origin for attendees)
-  ========================== ======================================================
+  ============================== ==================================================
+  ``GET  /<code>``               attendee app (name, password, count → lobby → program)
+  ``GET  /<code>/s``             stage page (raised hands, read-only; approved device)
+  ``GET  /<code>/m``             remote moderator page (approved device)
+  ``GET  /<code>/assets/<file>`` the pages' scripts and styles
+  ``GET  /<code>/api/info``      title, start time, whether the code is still valid
+  ``POST /<code>/api/join``      ask to join (device id + secret + name + password + count)
+  ``POST /<code>/api/token``     a fresh Galene join token for an admitted device
+  ``GET  /<code>/api/events``    WebSocket: lobby/admit/hand/rename/removed/ended
+  ``GET  /<code>/api/staff``     WebSocket: stage and moderator pages (approval, views, commands)
+  ``GET  /<code>/ws``            Galene's WebSocket, proxied (one origin for attendees)
+  ============================== ==================================================
+
+  A code that is not this meeting's (an old or mistyped link) gets the attendee page,
+  which then says the link is no longer valid. Wrong passwords are rate-limited per
+  client address (behind the hub, the address Caddy forwards).
 
 * the **Galene operator client** (``op`` token), reconnecting if Galene restarts;
 * the :class:`~solin.core.hosted_meeting.meeting_core.MeetingCore`.
@@ -25,9 +33,12 @@ operator snapshot is delivered through ``on_snapshot`` on the loop thread.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 import threading
+import time
+from collections import deque
 from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, field
@@ -38,8 +49,10 @@ import aiohttp
 from aiohttp import WSMsgType, web
 
 from ..foundation.resources import application_resource_path
+from .devices import DeviceRegistry, StaffRole, network_of
 from .galene_client import GaleneClient, GaleneUser
-from .meeting_core import JoinStatus, MeetingCore
+from .links import normalize_code
+from .meeting_core import JoinStatus, MeetingCore, StaffStatus
 from .tokens import OPERATOR, sign_token
 
 log = logging.getLogger(__name__)
@@ -49,6 +62,12 @@ _MAX_BODY = 4096
 # click without a visible delay (the console updates its rows in place).
 _SNAPSHOT_DEBOUNCE_S = 0.05
 _OPERATOR_RETRY_S = 2.0
+# Refreshes the snapshot now and then: people who dropped stop counting after a grace period.
+_TOTALS_REFRESH_S = 15.0
+# Wrong passwords: per client address, and for the whole meeting (addresses can rotate).
+_FAILURES_PER_CLIENT = 10
+_FAILURES_PER_MEETING = 200
+_FAILURE_WINDOW_S = 600.0
 
 _CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
@@ -78,13 +97,16 @@ def default_assets_dir() -> Path:
 
 @dataclass(frozen=True, slots=True)
 class MeetingRuntimeConfig:
-    slug: str
+    slug: str                   # the meeting's short code (also its Galene group)
     title: str
     group_key: bytes
     galene_port: int
     web_port: int
+    password: str = ""
+    starts_at: str = ""         # ISO start of a scheduled meeting (the attendee countdown)
+    devices: tuple[dict[str, Any], ...] = ()    # approved stage/moderator devices (JSON)
+    admitted: tuple[dict[str, Any], ...] = ()   # restored after Solin restarted mid-meeting
     bind_host: str = "0.0.0.0"
-    stage_key: str = ""
     assets_dir: Path = field(default_factory=default_assets_dir)
 
     @property
@@ -110,6 +132,12 @@ class _Effects:
     def notify(self, device_id: str, message: dict[str, Any]) -> None:
         self._rt._push_device(device_id, message)
 
+    def notify_staff(self, device_id: str, message: dict[str, Any]) -> None:
+        self._rt._push_staff(device_id, message)
+
+    def devices_changed(self, devices: list[dict[str, Any]]) -> None:
+        self._rt._devices_changed(devices)
+
     def present(self, galene_id: str) -> None:
         self._rt._galene_action("present", galene_id)
 
@@ -130,10 +158,17 @@ class MeetingRuntime:
         *,
         on_snapshot: Callable[[dict[str, Any]], None] | None = None,
         on_operator_state: Callable[[bool], None] | None = None,
+        on_devices: Callable[[list[dict[str, Any]]], None] | None = None,
+        on_admitted: Callable[[list[dict[str, Any]]], None] | None = None,
     ) -> None:
         self.config = config
         self._on_snapshot = on_snapshot
         self._on_operator_state = on_operator_state
+        self._on_devices = on_devices
+        self._on_admitted = on_admitted
+        self._last_admitted: list[dict[str, Any]] | None = None
+        self._failures: dict[str, deque[float]] = {}
+        self._all_failures: deque[float] = deque()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._started = threading.Event()
@@ -144,10 +179,12 @@ class MeetingRuntime:
         self._client: GaleneClient | None = None
         self._operator_task: asyncio.Task[None] | None = None
         self._device_sockets: dict[str, set[web.WebSocketResponse]] = {}
-        self._stage_sockets: set[web.WebSocketResponse] = set()
+        self._staff_sockets: dict[str, set[web.WebSocketResponse]] = {}
         self._snapshot_handle: asyncio.TimerHandle | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self.operator_connected = False
+        # Solin is closing, not ending the meeting: browsers keep retrying instead of "ended".
+        self.keep_attendees_waiting = False
 
     # ── lifecycle (any thread) ────────────────────────────────────────────
 
@@ -217,37 +254,49 @@ class MeetingRuntime:
 
     async def _main(self) -> None:
         self._stopping = asyncio.Event()
-        self.core = MeetingCore(_Effects(self), self._mint, stage_key=self.config.stage_key)
+        self.core = MeetingCore(_Effects(self), self._mint, password=self.config.password,
+                                devices=DeviceRegistry.from_json(list(self.config.devices)))
+        if self.core.devices.prune(time.time()):
+            self._devices_changed(self.core.devices.to_json())
+        self.core.restore_admitted(self.config.admitted)
         app = web.Application(client_max_size=_MAX_BODY, middlewares=[self._security_headers])
-        slug = self.config.slug
-        app.router.add_get(f"/j/{slug}", self._page("index.html"))
-        app.router.add_get(f"/stage/{slug}", self._page("stage.html"))
-        app.router.add_get("/assets/{name}", self._asset)
-        app.router.add_post(f"/api/{slug}/join", self._join)
-        app.router.add_post(f"/api/{slug}/token", self._token)
-        app.router.add_get(f"/api/{slug}/events", self._events)
-        app.router.add_get(f"/api/{slug}/stage", self._stage_events)
-        app.router.add_get(f"/api/{slug}/info", self._info)
-        app.router.add_get("/ws", self._galene_proxy)
         app.router.add_get("/healthz", self._health)
+        app.router.add_get("/{code}", self._page("index.html"))
+        app.router.add_get("/{code}/s", self._page("stage.html"))
+        app.router.add_get("/{code}/m", self._page("moderator.html"))
+        app.router.add_get("/{code}/assets/{name}", self._asset)
+        app.router.add_get("/{code}/api/info", self._info)
+        app.router.add_post("/{code}/api/join", self._join)
+        app.router.add_post("/{code}/api/token", self._token)
+        app.router.add_get("/{code}/api/events", self._events)
+        app.router.add_get("/{code}/api/staff", self._staff_events)
+        app.router.add_get("/{code}/ws", self._galene_proxy)
         self._runner = web.AppRunner(app, access_log=None, handle_signals=False)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self.config.bind_host, self.config.web_port, reuse_address=True)
         await site.start()
         self._operator_task = asyncio.create_task(self._operator_loop())
+        refresher = asyncio.create_task(self._refresh_totals())
         self._started.set()
+        self._schedule_snapshot()
         await self._stopping.wait()
+        refresher.cancel()
         await self._shutdown()
 
+    async def _refresh_totals(self) -> None:
+        while True:
+            await asyncio.sleep(_TOTALS_REFRESH_S)
+            self._schedule_snapshot()
+
     async def _shutdown(self) -> None:
-        if self.core is not None:
+        if self.core is not None and not self.keep_attendees_waiting:
             self.core.end()
             await asyncio.sleep(0.2)  # let "ended" reach the browsers
         if self._operator_task is not None:
             self._operator_task.cancel()
         if self._client is not None:
             await self._client.close()
-        for sockets in list(self._device_sockets.values()) + [self._stage_sockets]:
+        for sockets in list(self._device_sockets.values()) + list(self._staff_sockets.values()):
             for ws in list(sockets):
                 await ws.close()
         if self._runner is not None:
@@ -333,9 +382,39 @@ class MeetingRuntime:
                 self._on_snapshot(snapshot)
             except Exception:  # noqa: BLE001 - observer boundary
                 log.exception("snapshot observer failed")
-        stage = json.dumps({"type": "stage", **self.core.stage_view()})
-        for ws in list(self._stage_sockets):
-            self._spawn(self._send_quiet(ws, stage))
+        admitted = self.core.export_admitted()
+        if admitted != self._last_admitted:
+            self._last_admitted = admitted
+            if self._on_admitted is not None:
+                try:
+                    self._on_admitted(admitted)
+                except Exception:  # noqa: BLE001 - observer boundary
+                    log.exception("admitted observer failed")
+        for device_id in list(self._staff_sockets):
+            self._send_staff_view(device_id)
+
+    def _staff_view(self, device_id: str) -> dict[str, Any] | None:
+        role = self.core.staff_role(device_id) if self.core is not None else None
+        if role is StaffRole.MODERATOR:
+            return {"type": "view", "role": role.value, **self.core.moderator_view()}  # type: ignore[union-attr]
+        if role is StaffRole.STAGE:
+            return {"type": "view", "role": role.value, **self.core.stage_view()}  # type: ignore[union-attr]
+        return None
+
+    def _send_staff_view(self, device_id: str) -> None:
+        view = self._staff_view(device_id)
+        if view is None:
+            return
+        text = json.dumps(view)
+        for ws in list(self._staff_sockets.get(device_id, ())):
+            self._spawn(self._send_quiet(ws, text))
+
+    def _devices_changed(self, devices: list[dict[str, Any]]) -> None:
+        if self._on_devices is not None:
+            try:
+                self._on_devices(devices)
+            except Exception:  # noqa: BLE001 - observer boundary
+                log.exception("devices observer failed")
 
     @staticmethod
     async def _send_quiet(ws: web.WebSocketResponse, text: str) -> None:
@@ -349,6 +428,25 @@ class MeetingRuntime:
         for ws in list(self._device_sockets.get(device_id, ())):
             self._spawn(self._send_quiet(ws, text))
 
+    def _push_staff(self, device_id: str, message: dict[str, Any]) -> None:
+        sockets = list(self._staff_sockets.get(device_id, ()))
+        text = json.dumps(message)
+        for ws in sockets:
+            self._spawn(self._send_quiet(ws, text))
+        if message.get("type") == "ready":
+            self._send_staff_view(device_id)
+        elif message.get("type") in ("removed", "refused", "ended"):
+            for ws in sockets:
+                self._spawn(self._close_quiet(ws))
+
+    @staticmethod
+    async def _close_quiet(ws: web.WebSocketResponse) -> None:
+        await asyncio.sleep(0.1)  # let the last message out first
+        try:
+            await ws.close()
+        except (ConnectionError, RuntimeError):
+            pass
+
     # ── HTTP ──────────────────────────────────────────────────────────────
 
     @web.middleware
@@ -359,9 +457,21 @@ class MeetingRuntime:
                 response.headers.setdefault(key, value)
         return response
 
+    def _code(self, request: web.Request) -> bool:
+        """Whether the request is for this meeting's code (typed in capitals or not)."""
+
+        return normalize_code(request.match_info.get("code", "")) == self.config.slug
+
+    def _require_code(self, request: web.Request) -> None:
+        if not self._code(request):
+            raise web.HTTPNotFound()
+
     def _page(self, name: str) -> Any:
-        async def handler(_request: web.Request) -> web.StreamResponse:
-            return await self._file_response(name)
+        async def handler(request: web.Request) -> web.StreamResponse:
+            code = request.match_info["code"]
+            if normalize_code(code) is None:
+                raise web.HTTPNotFound()
+            return await self._file_response(name, base=f"/{code}")
 
         return handler
 
@@ -369,21 +479,60 @@ class MeetingRuntime:
         name = request.match_info["name"]
         if "/" in name or "\\" in name or name.startswith(".") or name.endswith(".html"):
             raise web.HTTPNotFound()
+        if normalize_code(request.match_info["code"]) is None:
+            raise web.HTTPNotFound()
         return await self._file_response(name)
 
-    async def _file_response(self, name: str) -> web.StreamResponse:
+    async def _file_response(self, name: str, *, base: str = "") -> web.StreamResponse:
         path = self.config.assets_dir / name
         suffix = path.suffix.lower()
         if suffix not in _ASSET_TYPES or not path.is_file():
             raise web.HTTPNotFound()
-        return web.Response(body=path.read_bytes(), headers={"Content-Type": _ASSET_TYPES[suffix]})
+        body = path.read_bytes()
+        if suffix == ".html":
+            # Pages are served at /<code>, /<code>/s and /<code>/m: their links need the code.
+            body = body.replace(b"{{BASE}}", base.encode("ascii"))
+        return web.Response(body=body, headers={"Content-Type": _ASSET_TYPES[suffix]})
 
     async def _health(self, _request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "operator": self.operator_connected})
 
-    async def _info(self, _request: web.Request) -> web.Response:
-        return web.json_response({"title": self.config.title, "group": self.config.slug,
-                                  "ended": bool(self.core and self.core.ended)})
+    async def _info(self, request: web.Request) -> web.Response:
+        if not self._code(request):
+            return web.json_response({"valid": False})
+        return web.json_response({"valid": True, "title": self.config.title, "startsAt": self.config.starts_at,
+                                  "now": time.time(), "ended": bool(self.core and self.core.ended)})
+
+    # ── wrong passwords ───────────────────────────────────────────────────
+
+    @staticmethod
+    def client_address(request: web.Request) -> str:
+        """The visitor's address: behind the hub (frpc on loopback), the one Caddy forwards."""
+
+        remote = request.remote or ""
+        try:
+            loopback = ipaddress.ip_address(remote).is_loopback
+        except ValueError:
+            loopback = False
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if loopback and forwarded:
+            return forwarded.split(",")[0].strip()
+        return remote
+
+    def _blocked(self, client: str) -> bool:
+        now = time.monotonic()
+        for queue in (self._failures.get(client), self._all_failures):
+            while queue and now - queue[0] > _FAILURE_WINDOW_S:
+                queue.popleft()
+        return (len(self._failures.get(client, ())) >= _FAILURES_PER_CLIENT
+                or len(self._all_failures) >= _FAILURES_PER_MEETING)
+
+    def _failed(self, client: str) -> None:
+        now = time.monotonic()
+        self._failures.setdefault(client, deque()).append(now)
+        self._all_failures.append(now)
+        if len(self._failures) > 10_000:
+            self._failures.clear()
 
     async def _read_json(self, request: web.Request) -> dict[str, Any]:
         try:
@@ -397,26 +546,35 @@ class MeetingRuntime:
     def _decision_response(self, decision: Any) -> web.Response:
         payload: dict[str, Any] = {"status": decision.status.value}
         if decision.token:
-            payload.update(token=decision.token, group=self.config.slug, ws="/ws")
+            payload.update(token=decision.token, group=self.config.slug, ws=f"/{self.config.slug}/ws")
         if decision.reason:
             payload["reason"] = decision.reason
         status = 403 if decision.status is JoinStatus.REFUSED else 200
         return web.json_response(payload, status=status)
 
     async def _join(self, request: web.Request) -> web.Response:
+        self._require_code(request)
+        client = self.client_address(request)
+        if self._blocked(client):
+            return web.json_response({"status": "refused", "reason": "too many attempts"}, status=429)
         body = await self._read_json(request)
         assert self.core is not None
         decision = self.core.request_join(str(body.get("device") or ""), str(body.get("secret") or ""),
-                                          str(body.get("name") or ""))
+                                          str(body.get("name") or ""), password=str(body.get("password") or ""),
+                                          count=body.get("count"))
+        if decision.reason == "password":
+            self._failed(client)
         return self._decision_response(decision)
 
     async def _token(self, request: web.Request) -> web.Response:
+        self._require_code(request)
         body = await self._read_json(request)
         assert self.core is not None
         decision = self.core.token_for(str(body.get("device") or ""), str(body.get("secret") or ""))
         return self._decision_response(decision)
 
     async def _events(self, request: web.Request) -> web.WebSocketResponse:
+        self._require_code(request)
         ws = web.WebSocketResponse(heartbeat=20.0, max_msg_size=_MAX_BODY)
         await ws.prepare(request)
         device_id = ""
@@ -452,24 +610,79 @@ class MeetingRuntime:
         if message.get("type") == "done" and self.core is not None:
             self.core.done(device_id)
 
-    async def _stage_events(self, request: web.Request) -> web.WebSocketResponse:
+    async def _staff_events(self, request: web.Request) -> web.WebSocketResponse:
+        """Stage and moderator pages: hello → (login → pending →) challenge/ready → views."""
+
+        self._require_code(request)
         ws = web.WebSocketResponse(heartbeat=20.0, max_msg_size=_MAX_BODY)
         await ws.prepare(request)
+        client = self.client_address(request)
+        network = network_of(client)
+        device_id = ""
+        attached = False
+        core = self.core
+        assert core is not None
+
+        async def send(message: dict[str, Any]) -> None:
+            await self._send_quiet(ws, json.dumps(message))
+
+        async def answer(decision: Any) -> None:
+            nonlocal attached
+            if decision.status in (StaffStatus.PENDING, StaffStatus.CHALLENGE, StaffStatus.READY) and not attached:
+                attached = True
+                self._staff_sockets.setdefault(device_id, set()).add(ws)
+                core.staff_socket(device_id, True)
+            payload: dict[str, Any] = {"type": decision.status.value}
+            if decision.challenge:
+                payload["challenge"] = decision.challenge
+            if decision.reason:
+                payload["reason"] = decision.reason
+            await send(payload)
+            if decision.status is StaffStatus.READY:
+                self._send_staff_view(device_id)
+            elif decision.status is StaffStatus.REFUSED:
+                await ws.close()
+
         try:
             first = await asyncio.wait_for(ws.receive(), 10.0)
-            auth = json.loads(first.data) if first.type == WSMsgType.TEXT else {}
-            assert self.core is not None
-            if auth.get("type") != "auth" or auth.get("key") != self.core.stage_key:
-                await ws.close(code=4401, message=b"unauthorized")
+            hello = json.loads(first.data) if first.type == WSMsgType.TEXT else {}
+            device_id = str(hello.get("device") or "")[:64]
+            role = str(hello.get("role") or "")
+            if hello.get("type") != "hello" or not device_id:
+                await ws.close(code=4400, message=b"bad request")
                 return ws
-            self._stage_sockets.add(ws)
-            await ws.send_str(json.dumps({"type": "stage", **self.core.stage_view()}))
-            async for _message in ws:
-                pass
+            await answer(core.staff_hello(device_id, role, str(hello.get("secret") or ""), network))
+            async for message in ws:
+                if message.type != WSMsgType.TEXT:
+                    continue
+                data = json.loads(message.data)
+                kind = data.get("type")
+                if kind == "login":
+                    if self._blocked(client):
+                        await send({"type": "login", "reason": "too many attempts"})
+                        continue
+                    decision = core.staff_login(
+                        device_id, role, str(data.get("name") or ""), str(data.get("password") or ""),
+                        key_kind=str(data.get("keyKind") or ""), key=str(data.get("key") or ""), network=network,
+                    )
+                    if decision.reason == "password":
+                        self._failed(client)
+                    await answer(decision)
+                elif kind == "proof":
+                    await answer(core.staff_proof(device_id, str(data.get("signature") or "")))
+                elif kind == "command":
+                    args = data.get("args") if isinstance(data.get("args"), list) else []
+                    core.moderator_command(device_id, str(data.get("name") or ""), args)
         except (TimeoutError, json.JSONDecodeError, ConnectionError):
             pass
         finally:
-            self._stage_sockets.discard(ws)
+            if attached:
+                sockets = self._staff_sockets.get(device_id)
+                if sockets is not None:
+                    sockets.discard(ws)
+                    if not sockets:
+                        self._staff_sockets.pop(device_id, None)
+                core.staff_socket(device_id, False)
         return ws
 
     async def _galene_proxy(self, request: web.Request) -> web.WebSocketResponse:

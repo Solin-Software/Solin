@@ -5,17 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Raised hands</title>
-<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="{{BASE}}/assets/app.css">
 </head>
-<body class="stage-page">
+<body class="stage-page" data-base="{{BASE}}">
 <main id="app">
   <p id="state" class="muted"></p>
-  <h2 id="live-label">Speaking</h2>
-  <p id="live" class="live-now">—</p>
-  <h2 id="hands-label">Raised hands</h2>
-  <ol id="hands"></ol>
-  <p id="empty" class="muted">No hands raised.</p>
+
+  <section id="view-login" class="card" hidden>
+    <form id="login-form" novalidate>
+      <label for="name" data-t="yourName">Your name</label>
+      <input id="name" autocomplete="name" maxlength="60" required>
+      <label for="password" class="spaced" data-t="password">Meeting password</label>
+      <input id="password" type="password" autocomplete="off" maxlength="32" required>
+      <p id="form-error" class="error" role="alert" hidden></p>
+      <button type="submit" data-t="continue">Continue</button>
+    </form>
+  </section>
+
+  <section id="view-pending" class="card" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="big" data-t="pending">Waiting for the operator to approve this device…</p>
+  </section>
+
+  <section id="view-board" hidden>
+    <h2 data-t="live">Speaking</h2>
+    <p id="live" class="live-now">—</p>
+    <h2 data-t="hands">Raised hands</h2>
+    <ol id="hands"></ol>
+    <p id="empty" class="muted" data-t="empty">No hands raised.</p>
+    <h2 data-t="participants">Participants</h2>
+    <ul id="participants" class="names"></ul>
+  </section>
 </main>
-<script src="/assets/stage.js"></script>
+<script src="{{BASE}}/assets/staff.js"></script>
+<script src="{{BASE}}/assets/stage.js"></script>
 </body>
 </html>

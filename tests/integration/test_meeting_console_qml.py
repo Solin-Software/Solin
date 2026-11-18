@@ -32,7 +32,7 @@ class FakeService(QObject):
         return lambda *args: self.calls.append((name, *args))
 
     def attendance_text(self) -> str:
-        return "1\n19:30\tAna"
+        return "3"
 
 
 def _pump(seconds: float = 0.3) -> None:
@@ -58,27 +58,100 @@ def test_console_renders_live_state(qt_object_owner=None):
         quick = window.view
         assert quick.errors() == [], quick.errors()
         assert isinstance(quick.rootObject(), QQuickItem)
-        live = {"state": "live", "invitationUrl": "https://hall.hub/j/x", "stageUrl": "https://hall.hub/stage/x#k",
-                "output": "live", "tunnel": "online", "galene": "running", "commenterAudio": "running",
-                "warnings": ["Example warning"], "error": ""}
-        row = {"device": "d1", "name": "Ana", "state": "admitted", "connected": True, "live": False,
+        upcoming = [
+            {"id": "midweek:2026-11-18", "kind": "midweek", "startsAt": "2026-11-18T19:30:00-03:00",
+             "code": "k7m4p2", "password": "482913", "url": "https://meet.solin.run/k7m4p2", "cancelled": False,
+             "moved": False, "open": True, "running": True},
+            {"id": "extra:1", "kind": "extra", "startsAt": "2026-11-20T19:30:00-03:00", "code": "b2c3d4",
+             "password": "111111", "url": "https://meet.solin.run/b2c3d4", "cancelled": True, "moved": True,
+             "open": False, "running": False},
+        ]
+        device = {"device": "m1", "name": "Irmão Lima", "role": "moderator", "lastSeen": 1.8e9}
+        idle = {"state": "idle", "linkMode": "per_meeting", "upcoming": upcoming, "devices": [device],
+                "lowOnCodes": True, "warnings": []}
+        service.info_changed.emit(idle)
+        _pump(0.4)
+        assert quick.errors() == []
+        service.info_changed.emit(dict(idle, linkMode="same", invitationUrl="https://meet.solin.run/k7m4p2",
+                                       password="482913", stageUrl="https://meet.solin.run/k7m4p2/s",
+                                       moderatorUrl="https://meet.solin.run/k7m4p2/m", linkScope="hub"))
+        _pump(0.4)
+        live = {"state": "live", "invitationUrl": "https://meet.solin.run/k7m4p2", "password": "482913",
+                "stageUrl": "https://meet.solin.run/k7m4p2/s", "moderatorUrl": "https://meet.solin.run/k7m4p2/m",
+                "linkMode": "per_meeting", "upcoming": upcoming, "output": "live", "tunnel": "online",
+                "galene": "running", "commenterAudio": "running", "warnings": ["Example warning"], "error": ""}
+        row = {"device": "d1", "name": "Ana", "state": "admitted", "count": 3, "connected": True, "live": False,
                "partHolder": False, "hand": True}
         service.info_changed.emit(live)
-        service.snapshot_changed.emit({"micsLocked": True, "lobby": [dict(row, device="d2", name="Bia", state="lobby")],
-                                       "attendees": [row], "hands": [row], "connected": 1, "attendance": 1,
-                                       "live": ""})
+        service.snapshot_changed.emit({
+            "micsLocked": True, "lobby": [dict(row, device="d2", name="Bia", state="lobby", count=0)],
+            "attendees": [row], "hands": [row], "connected": 1, "people": 3, "devices": 1, "live": "",
+            "staffRequests": [{"device": "m2", "name": "Irmão <b>Reis</b>", "role": "moderator"},
+                              {"device": "s1", "name": "Tribuna", "role": "stage"}],
+            "staff": [{"device": "m1", "name": "Irmão Lima", "role": "moderator", "networkChanged": True}],
+            "approvedDevices": [dict(device, online=True)],
+            "officialCount": {"people": 3, "devices": 1, "at": "2026-11-18T21:00-03:00"},
+        })
         _pump(0.6)
         assert quick.errors() == []
         window.bridge.admitAll()
         window.bridge.callOn("d1")
-        window.bridge.copyAttendance()
+        window.bridge.approveStaff("m2")
+        window.bridge.removeDevice("m1")
+        window.bridge.newLink("extra:1")
+        window.bridge.copyCount()
         assert ("admit_all",) in service.calls and ("call_on", "d1") in service.calls
+        assert ("approve_staff", "m2") in service.calls and ("remove_device", "m1") in service.calls
+        assert ("new_link", "extra:1") in service.calls
     finally:
         qInstallMessageHandler(previous)
         window.close()
         window.deleteLater()
         _pump(0.1)
     assert problems == [], problems
+
+
+def _visible_texts(item: QQuickItem) -> list[str]:
+    texts: list[str] = []
+    if not item.isVisible():
+        return texts
+    if item.metaObject().className().startswith("QQuickText") and item.property("text"):
+        texts.append(str(item.property("text")))
+    for child in item.childItems():
+        texts.extend(_visible_texts(child))
+    return texts
+
+
+def test_meeting_information_folds_away_during_a_meeting():
+    """Open between meetings; folded (link and password still on one line) during one; the header toggles it."""
+    service = FakeService()
+    window = MeetingConsoleWindow(service)
+    try:
+        window.show()
+        links = {"invitationUrl": "https://meet.solin.run/k7m4p2", "password": "482913", "linkMode": "same",
+                 "stageUrl": "https://meet.solin.run/k7m4p2/s", "moderatorUrl": "https://meet.solin.run/k7m4p2/m",
+                 "linkScope": "hub", "upcoming": [], "warnings": []}
+        service.info_changed.emit(dict(links, state="idle"))
+        _pump(0.4)
+        root = window.view.rootObject()
+        assert root.property("infoExpanded") is True
+        assert "Stage page" in _visible_texts(root)
+
+        service.info_changed.emit(dict(links, state="live"))
+        _pump(0.4)
+        assert root.property("infoExpanded") is False
+        texts = _visible_texts(root)
+        assert "Stage page" not in texts
+        assert "meet.solin.run/k7m4p2  ·  password 482913" in texts
+
+        root.setProperty("infoExpanded", True)   # what a click on the header does
+        _pump(0.2)
+        assert "Stage page" in _visible_texts(root)
+        assert window.view.errors() == []
+    finally:
+        window.close()
+        window.deleteLater()
+        _pump(0.1)
 
 
 def _attendee_delegates(window: MeetingConsoleWindow) -> dict[str, QQuickItem]:

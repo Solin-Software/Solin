@@ -12,6 +12,7 @@ from typing import Any
 from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal, Slot
 
 from solin.core.hosted_meeting.binaries import Helper, find_helper
+from solin.core.hosted_meeting.links import LinkMode
 from solin.core.hosted_meeting.settings import (
     HostedMeetingSettingsStore,
     MeetingProvider,
@@ -75,6 +76,11 @@ class HostedMeetingSettings(SettingsDomain):
             ],
             solinHosting=store.provider() is MeetingProvider.SOLIN,
             hallName=store.hall_name(),
+            linkMode=store.link_mode().value,
+            linkModeOptions=[
+                {"value": LinkMode.SAME.value, "label": _tr("Same link for every meeting")},
+                {"value": LinkMode.PER_MEETING.value, "label": _tr("A new link for each meeting")},
+            ],
             quality=store.quality().value,
             qualityOptions=[
                 {"value": MeetingQuality.SD.value, "label": _tr("Standard (360p, ~0.5 Mbps per attendee)")},
@@ -138,6 +144,8 @@ class HostedMeetingSettings(SettingsDomain):
             self.provider_changed.emit(str(value))
         elif key == "hallName":
             store.set_hall_name(str(value))
+        elif key == "linkMode":
+            store.set_link_mode(LinkMode(str(value)))
         elif key == "quality":
             store.set_quality(MeetingQuality(str(value)))
         elif key == "hallFeed":

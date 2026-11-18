@@ -43,3 +43,41 @@ button.raised { background: #f2c94c; color: #1b1f24; border-color: transparent; 
 .stage-page ol { font-size: 1.6rem; margin: 0; padding-left: 1.6em; }
 .stage-page li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .stage-page .live-now { font-size: 1.6rem; color: var(--live); font-weight: 700; }
+/* first screen */
+.spaced { margin-top: 14px; }
+input[type=password], input[type=number] { width: 100%; padding: 12px; font-size: 1rem; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+fieldset.count { border: 0; padding: 0; margin: 16px 0 0; }
+fieldset.count legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.count-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.count-buttons button { padding: 10px 0; min-height: 44px; }
+form .count-buttons button, form button.counted { margin-top: 0; width: auto; background: var(--card); color: var(--fg);
+  border-color: var(--line); }
+form button.counted { margin-top: 8px; width: 100%; }
+form button.selected { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+#count-more { margin-top: 8px; }
+.error { color: var(--warn); font-weight: 600; margin: 12px 0 0; }
+#countdown { margin: -6px 0 10px; }
+@media (max-width: 420px) { .count-buttons { grid-template-columns: repeat(3, 1fr); } }
+/* badges (stage and moderator pages) */
+.badge { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  vertical-align: middle; background: var(--line); color: var(--fg); }
+.badge.moderator { background: var(--accent); color: var(--accent-fg); }
+.badge.stage { background: var(--live); color: var(--live-fg); }
+.stage-page ul.names { list-style: none; margin: 0; padding: 0; font-size: 1.25rem; }
+.stage-page ul.names li { padding: 4px 0; }
+/* moderator page */
+.moderator-page .summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.moderator-page .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.moderator-page .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.moderator-page h2 { font-size: 1rem; margin: 0 0 8px; }
+.moderator-page .rows { list-style: none; margin: 0; padding: 0; }
+.moderator-page ol.rows { list-style: decimal inside; }
+.moderator-page .rows li { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.moderator-page .rows li .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.moderator-page .rows button { min-height: 36px; padding: 6px 10px; font-size: 0.9rem; }
+.moderator-page .rows li.offline .name { color: var(--muted); }
+.moderator-page .rows li.live .name { color: var(--live); font-weight: 700; }
+.moderator-page #admit-all { width: 100%; margin-bottom: 8px; }
+button.danger { background: var(--warn); color: var(--accent-fg); border-color: transparent; }
+.banner.count { background: var(--accent); color: var(--accent-fg); margin: 0 0 12px; }

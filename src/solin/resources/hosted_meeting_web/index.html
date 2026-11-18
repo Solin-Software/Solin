@@ -5,20 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>Meeting</title>
-<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="{{BASE}}/assets/app.css">
 </head>
-<body>
+<body data-base="{{BASE}}">
 <main id="app">
   <header>
     <h1 id="title">Meeting</h1>
+    <p id="countdown" class="muted" hidden></p>
     <p id="connection" class="muted" hidden></p>
   </header>
 
   <section id="view-name" class="card" hidden>
-    <form id="name-form">
+    <form id="name-form" novalidate>
       <label for="name" data-t="yourName">Your name</label>
       <input id="name" autocomplete="name" maxlength="60" required>
-      <p class="muted" data-t="nameHint">The hall sees this name. Use your full name, or the names of everyone watching with you.</p>
+      <label for="password" class="spaced" data-t="password">Meeting password</label>
+      <input id="password" type="password" autocomplete="off" inputmode="numeric" maxlength="32" required>
+      <fieldset class="count">
+        <legend data-t="howMany">How many people are watching on this device, including you?</legend>
+        <div class="count-buttons" id="count-buttons">
+          <button type="button" data-count="1">1</button>
+          <button type="button" data-count="2">2</button>
+          <button type="button" data-count="3">3</button>
+          <button type="button" data-count="4">4</button>
+          <button type="button" data-count="5">5</button>
+          <button type="button" data-count="more" data-t="more">More…</button>
+        </div>
+        <input id="count-more" type="number" min="6" max="20" inputmode="numeric" hidden>
+        <button type="button" class="counted" data-count="0" data-t="alreadyCounted">Already counted</button>
+      </fieldset>
+      <p id="form-error" class="error" role="alert" hidden></p>
       <button type="submit" data-t="join">Join</button>
     </form>
   </section>
@@ -56,7 +72,7 @@
     <button id="rejoin" hidden data-t="rejoin">Join again</button>
   </section>
 </main>
-<script src="/assets/protocol.js"></script>
-<script src="/assets/app.js"></script>
+<script src="{{BASE}}/assets/protocol.js"></script>
+<script src="{{BASE}}/assets/app.js"></script>
 </body>
 </html>

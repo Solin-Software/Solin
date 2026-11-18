@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Moderator</title>
+<link rel="stylesheet" href="{{BASE}}/assets/app.css">
+</head>
+<body class="moderator-page" data-base="{{BASE}}">
+<main id="app">
+  <header>
+    <h1 data-t="title">Moderator</h1>
+    <p id="state" class="muted"></p>
+  </header>
+
+  <section id="view-login" class="card" hidden>
+    <form id="login-form" novalidate>
+      <label for="name" data-t="yourName">Your name</label>
+      <input id="name" autocomplete="name" maxlength="60" required>
+      <label for="password" class="spaced" data-t="password">Meeting password</label>
+      <input id="password" type="password" autocomplete="off" maxlength="32" required>
+      <p class="muted" data-t="approvalHint">The meeting operator approves this device the first time.</p>
+      <p id="form-error" class="error" role="alert" hidden></p>
+      <button type="submit" data-t="continue">Continue</button>
+    </form>
+  </section>
+
+  <section id="view-pending" class="card" hidden>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="big" data-t="pending">Waiting for the operator to approve this device…</p>
+  </section>
+
+  <section id="view-console" hidden>
+    <div id="official" class="banner count" hidden>
+      <span id="official-text"></span>
+      <button id="official-dismiss" data-t="ok">OK</button>
+    </div>
+    <div class="summary">
+      <p id="totals" class="big"></p>
+      <button id="mics"></button>
+    </div>
+    <div class="columns">
+      <section class="panel">
+        <h2><span data-t="lobby">Lobby</span> <span id="lobby-count" class="muted"></span></h2>
+        <button id="admit-all" class="primary" hidden data-t="admitAll">Admit all</button>
+        <ul id="lobby" class="rows"></ul>
+      </section>
+      <section class="panel">
+        <h2><span data-t="hands">Raised hands</span> <span id="hands-count" class="muted"></span></h2>
+        <ol id="hands" class="rows"></ol>
+      </section>
+      <section class="panel">
+        <h2><span data-t="attendees">Attendees</span> <span id="attendees-count" class="muted"></span></h2>
+        <ul id="staff" class="rows"></ul>
+        <ul id="attendees" class="rows"></ul>
+      </section>
+    </div>
+  </section>
+</main>
+<script src="{{BASE}}/assets/staff.js"></script>
+<script src="{{BASE}}/assets/moderator.js"></script>
+</body>
+</html>

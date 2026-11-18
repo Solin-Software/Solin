@@ -1661,9 +1661,27 @@ class MainWindow(QWidget):
             store = HostedMeetingSettingsStore(self._zoom_settings.settings)
         self._hosted_meeting_settings = store
         self._hosted_meeting = HostedMeetingService(
-            store, self.runtime_paths.data_dir, scene_runtime=self.scene_runtime, parent=self,
+            store, self.runtime_paths.data_dir, scene_runtime=self.scene_runtime, auto_start=True, parent=self,
         )
+        self._hosted_meeting.auto_started.connect(self._on_meeting_auto_started)
+        self._hosted_meeting.official_count_taken.connect(self._on_meeting_official_count)
         self._meeting_console = None
+
+    def _on_meeting_auto_started(self, _meeting: dict) -> None:
+        self.notifications.information(
+            self.tr("Attendees can now wait in the lobby. Open the meeting panel to admit them."),
+            title=self.tr("Meeting opened automatically"),
+            duration_ms=15_000,
+        )
+
+    def _on_meeting_official_count(self, count: dict) -> None:
+        people, devices = int(count.get("people") or 0), int(count.get("devices") or 0)
+        self.notifications.information(
+            self.tr("{people} people on {devices} devices. The number stays in the meeting panel.").format(
+                people=people, devices=devices),
+            title=self.tr("Attendance count"),
+            duration_ms=60_000,
+        )
 
     def _wire_hosted_meeting_ui(self) -> None:
         from .core.hosted_meeting.service import MeetingState

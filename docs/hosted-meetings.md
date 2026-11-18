@@ -28,11 +28,11 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
         ▼                                             │
  ┌──────────────────────────────── hall PC (Solin) ───┴──────────────────────────┐
  │ Meeting web server (aiohttp, one origin):                                     │
- │   /join/<meeting>  name → lobby (waits)  → admitted: signed Galene token      │
- │   /m/<meeting>     attendee client (program, raise hand, mic when called on,  │
- │                    auto-reconnect)                                            │
- │   /stage/<meeting> conductor's raised-hands list (read-only)                  │
- │   /ws              proxied to Galene's WebSocket                              │
+ │   /<code>          name + password + count → lobby → program (raise hand,    │
+ │                    mic when called on, auto-reconnect)                        │
+ │   /<code>/s        stage page: raised hands, participants (read-only)         │
+ │   /<code>/m        remote moderator: lobby, call on, mics, hands              │
+ │   /<code>/ws       proxied to Galene's WebSocket                              │
  │ Galene sidecar (127.0.0.1): group per meeting, tokens only, no recording      │
  │ Operator client (Python, Galene `op`): admit, lock, call on/off, kick, hands  │
  │ libobs sidecar: "meeting" output — x264 (scenecut=0) + Opus, packets →        │
@@ -102,9 +102,9 @@ The spike behind every number here is on this branch: `spikes/galene/` (G1–G6)
 - auto-reconnect with backoff, plus an immediate reconnect when visible again;
 - media session, optional screen wake lock.
 
-### Permanent link
+### Links, access and attendance
 
-Each hall has one invitation link and one stage page link, created once and stored in the profile (`HostedMeetingSettingsStore.meeting_link`). The console shows them before any meeting starts, so they can be shared in advance; "New link" replaces them while no meeting is running. Only the link is permanent: every meeting still has a new Galene key and an empty lobby, so an old link never skips admission. Without a hub the link uses the computer's LAN address, so it only works on that network, while a meeting is running.
+Every meeting is reached at `<origin>/<code>`, a 6-character code plus a password: one permanent link, or one per scheduled meeting. The stage page is `/<code>/s` and the remote moderator page `/<code>/m`, for devices the operator approves once. Attendees say how many people watch on their device, and the official count is taken at 0.75 of the meeting. Scheduled meetings open by themselves 30 minutes before the start. See [hosted-meetings-access.md](hosted-meetings-access.md) for the specification and what is built.
 
 ### Hub (VPS, run by the project or self-hosted)
 
@@ -150,9 +150,9 @@ All four phases are built on `spike/galene`.
 | Phase | What exists | Verified by |
 |---|---|---|
 | 1. Hall core | `core/hosted_meeting/`: tokens, Galene config + supervisor, operator client, `MeetingCore` rules, meeting runtime (web server, lobby, `/ws` proxy, stage feed), `HostedMeetingService`, frpc tunnel, settings + hub code. libobs sidecar: `libobs_meeting_output.py` + `start/stop_meeting_output` IPC. UI: "Hosted meetings" settings group, Live meeting console window opened from the quick-toolbar meeting button. Attendee and stage pages in `resources/hosted_meeting_web/` (en / pt / es). Bridge: `tools/solin-galene-bridge/`. | Unit tests (tokens, config, core). Live tests against real Galene: runtime journey, service lifecycle. Native libobs test of the meeting output. Sidecar IPC round trip. Console QML render test. |
-| 2. Hub | `deploy/hub/` (Caddy + frps + coturn + ask, `add_hall.py` prints the connection code). | Local smoke test (`deploy/hub/scripts/smoke_local.sh`). A real GCP VM (below). An end-to-end meeting through the internet: headless Chromium joined through `https://hall-teste.<hub>/j/…`, was admitted, played the program, was called on (mic opened), was released, and saw "meeting ended". Galene's relay self-test against the hub's TURN. |
+| 2. Hub | The [solin-hub](https://github.com/Solin-Software/solin-hub) repository, formerly `deploy/hub/` (Caddy + frps + coturn + ask, `add_hall.py` prints the connection code). | Local smoke test (solin-hub's `scripts/smoke_local.sh`). A real GCP VM (below). An end-to-end meeting through the internet: headless Chromium joined through `https://hall-teste.<hub>/j/…`, was admitted, played the program, was called on (mic opened), was released, and saw "meeting ended". Galene's relay self-test against the hub's TURN. |
 | 3. Packaging | `scripts/fetch_hosted_meeting_helpers.py` (Galene from source, frpc release with checksum), `scripts/build_galene_bridge.py`, `scripts/stage_hosted_meeting_helpers.py` (into `<app>/bin` + licences), Nuitka data dir for the web pages in Linux/Windows/macOS, CI: Go + libopus (apt / MSYS2 / Homebrew). | Staging run locally on Linux. CI and the Windows/macOS builds have not run yet (the branch must be pushed). |
-| 4. Polish | Hall-feed delay setting (camera latency, `obs_source_set_sync_offset`), copy attendance, optional screen wake lock and auto-reconnect in the attendee app. | Unit and live tests. |
+| 4. Polish | Hall-feed delay setting (camera latency, `obs_source_set_sync_offset`), copy the attendance count, optional screen wake lock and auto-reconnect in the attendee app. | Unit and live tests. |
 
 ### Running it (development)
 
@@ -173,14 +173,12 @@ All four phases are built on `spike/galene`.
 
 ### Hub deployment
 
-See `deploy/hub/README.md`. On a fresh VPS:
+The hub has its own repository, [solin-hub](https://github.com/Solin-Software/solin-hub), with CI and a deploy pipeline. Its `INSTALL.md` covers the VPS setup. Each hall is registered on the hub with `python3 scripts/add_hall.py <hall>`, which prints the hall's connection code.
 
-```
-docker compose up -d
-python3 scripts/add_hall.py <hall> --env hub.env
-```
-
-The second command prints the hall's connection code.
+Keep the two sides compatible:
+- the connection code format (`HubConnection` here, `scripts/add_hall.py` there);
+- the frpc configuration (`tunnel.py` here, `hall/frpc.toml.template` there);
+- the frp version.
 
 ### Known limits and next steps
 

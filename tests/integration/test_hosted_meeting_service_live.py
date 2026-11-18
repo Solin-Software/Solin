@@ -86,9 +86,9 @@ def test_meeting_lifecycle(store, tmp_path):
     assert service.start_meeting()
     assert pump_until(lambda: service.state is MeetingState.LIVE and service.info["output"] == "starting")
     info = service.info
-    assert info["slug"].startswith("salao-do-reino-central-")
-    assert info["invitationUrl"].endswith(f"/j/{info['slug']}")
-    assert "#" in info["stageUrl"]
+    assert len(info["slug"]) == 6 and len(info["password"]) == 6
+    assert info["invitationUrl"].endswith(f"/{info['slug']}")
+    assert info["stageUrl"].endswith(f"/{info['slug']}/s") and info["moderatorUrl"].endswith(f"/{info['slug']}/m")
     assert info["galene"] == "running"
 
     # The program output was requested from the scene engine with a 720p, present-only token.
@@ -108,8 +108,9 @@ def test_meeting_lifecycle(store, tmp_path):
 
     async def join() -> str:
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"{base}/api/{info['slug']}/join",
-                                    json={"device": device, "secret": secret, "name": "Ana"}) as response:
+            async with session.post(f"{base}/{info['slug']}/api/join",
+                                    json={"device": device, "secret": secret, "name": "Ana",
+                                          "password": info["password"], "count": 2}) as response:
                 return (await response.json())["status"]
 
     assert asyncio.run(join()) == "lobby"
@@ -117,12 +118,16 @@ def test_meeting_lifecycle(store, tmp_path):
     service.admit(device)
     assert pump_until(lambda: [a["device"] for a in service.snapshot.get("attendees", [])] == [device])
     assert service.snapshot["operatorConnected"] is True
+    assert service.snapshot["people"] == 2 and service.attendance_text() == "2"
+    # Solin restarting mid-meeting would let Ana straight back in.
+    assert pump_until(lambda: (tmp_path / "hosted_meeting" / f"admitted-{info['slug']}.json").exists())
 
     service.end_meeting()
     assert pump_until(lambda: service.state is MeetingState.IDLE)
     assert runtime.scene_engine.stopped == 1
     assert runtime.required == [True, False]
     assert service.info["galene"] == "stopped"
+    assert not list((tmp_path / "hosted_meeting").glob("admitted-*.json"))  # ended: nobody is let back
 
 
 def test_start_fails_cleanly_without_galene(store, tmp_path, monkeypatch):
@@ -144,8 +149,9 @@ def test_link_stays_the_same_across_meetings(store, tmp_path):
         assert service.start_meeting()
         assert pump_until(lambda: service.state is MeetingState.LIVE)
         live = service.info
-        assert (live["invitationUrl"], live["stageUrl"]) == (before["invitationUrl"], before["stageUrl"])
-        assert service._runtime.core.stage_key == live["stageUrl"].split("#")[1]
+        assert (live["invitationUrl"], live["stageUrl"], live["password"]) == (
+            before["invitationUrl"], before["stageUrl"], before["password"])
+        assert service._runtime.core.password == live["password"]
         group_keys.add(service._group_key)
         service.end_meeting()
         assert pump_until(lambda: service.state is MeetingState.IDLE, 30)

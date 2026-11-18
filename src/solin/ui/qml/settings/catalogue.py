@@ -139,6 +139,8 @@ SECTIONS = (
             Setting("meetingProvider", QT_TRANSLATE_NOOP("SettingsWidget", "Host meetings with"), "select", options="providerOptions",
                     description=QT_TRANSLATE_NOOP("SettingsWidget", "Solin can host the hybrid meeting itself: attendees join from a browser link, without Zoom.")),
             Setting("hallName", QT_TRANSLATE_NOOP("SettingsWidget", "Meeting name"), "input", visible_when="solinHosting"),
+            Setting("linkMode", QT_TRANSLATE_NOOP("SettingsWidget", "Meeting links"), "select", options="linkModeOptions", visible_when="solinHosting",
+                    description=QT_TRANSLATE_NOOP("SettingsWidget", "One link and password for every meeting, or a new one for each meeting, prepared four weeks ahead from the meeting days.")),
             Setting("quality", QT_TRANSLATE_NOOP("SettingsWidget", "Video quality"), "select", options="qualityOptions", visible_when="solinHosting"),
             Setting("hallFeed", QT_TRANSLATE_NOOP("SettingsWidget", "Hall audio feed"), "select", options="hallFeedOptions", visible_when="solinHosting",
                     description=QT_TRANSLATE_NOOP("SettingsWidget", "The input that carries the hall's sound from the mixer to attendees.")),

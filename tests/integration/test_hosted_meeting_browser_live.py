@@ -44,7 +44,8 @@ pytestmark = [
                        reason="needs an audio device"),
 ]
 
-SLUG = "browser-hall-0001"
+SLUG = "b7rw5r"
+PASSWORD = "246810"
 
 
 def wait_for(predicate, timeout=10.0):
@@ -143,7 +144,7 @@ def meeting(tmp_path):
     snapshots: list[dict] = []
     runtime = MeetingRuntime(
         MeetingRuntimeConfig(slug=SLUG, title="Browser Hall", group_key=key, galene_port=server.port,
-                             web_port=free_tcp_port(), bind_host="127.0.0.1"),
+                             web_port=free_tcp_port(), bind_host="127.0.0.1", password=PASSWORD),
         on_snapshot=snapshots.append,
     )
     runtime.start()
@@ -204,14 +205,16 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
         report: dict = {}
         async with aiohttp.ClientSession() as session:
             async def open_page() -> tuple[Page, aiohttp.ClientWebSocketResponse]:
-                async with session.put(f"http://127.0.0.1:{chromium}/json/new?{base}/j/{SLUG}") as response:
+                async with session.put(f"http://127.0.0.1:{chromium}/json/new?{base}/{SLUG}") as response:
                     target = await response.json(content_type=None)
                 ws = await session.ws_connect(target["webSocketDebuggerUrl"], max_msg_size=0)
                 return Page(ws), ws
 
             async def join(page: Page, name: str) -> str:
-                await page.wait("document.readyState === 'complete' && !!document.getElementById('name')")
+                await page.wait("document.readyState === 'complete' && (document.getElementById('view-name') || {hidden: true}).hidden === false")
                 await page.evaluate(f"document.getElementById('name').value = {json.dumps(name)};"
+                                    f"document.getElementById('password').value = {json.dumps(PASSWORD)};"
+                                    "document.querySelector('[data-count=\"2\"]').click();"
                                     "document.getElementById('name-form').requestSubmit(); true")
                 loop = asyncio.get_running_loop()
                 device = await loop.run_in_executor(None, lambda: wait_for(lambda: lobby_device(name), 15))
@@ -227,7 +230,7 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, lambda: meeting.command("set_part_holder", ana_device, True).result(5))
-            await ana.wait("present && partHolder && !document.getElementById('part-cam').hidden")
+            await ana.wait("present && partHolder && (document.getElementById('part-cam') || {hidden: true}).hidden === false")
             await ana.evaluate("startMic().then(() => true)")
             await ana.evaluate("document.getElementById('part-cam').click(); true")
             await ana.wait("upCam !== null && upMic !== null")
@@ -270,3 +273,81 @@ def test_part_holder_camera_reaches_the_hall_and_not_the_attendees(meeting, chro
     assert report["bruno_program_src"] is True, report
     assert [d["label"] for d in report["bruno_down_labels"]] == ["camera"], report  # Ana's mic only
     assert participant_video.FFMPEG_OPTIONS  # the slot contract the bridge writes to
+
+
+def test_first_screen_and_moderator_device_key_in_a_real_browser(meeting, chromium):
+    """The attendee's first screen (wrong password, count), and a moderator whose browser
+    keeps a non-extractable WebCrypto key: approved once, recognised again after a reload."""
+
+    base = f"http://127.0.0.1:{meeting.config.web_port}"
+
+    def snapshot() -> dict:
+        return meeting.core.snapshot()
+
+    async def scenario() -> dict:
+        report: dict = {}
+        async with aiohttp.ClientSession() as session:
+            async def open_page(path: str) -> tuple[Page, aiohttp.ClientWebSocketResponse]:
+                async with session.put(f"http://127.0.0.1:{chromium}/json/new?{base}/{path}") as response:
+                    target = await response.json(content_type=None)
+                ws = await session.ws_connect(target["webSocketDebuggerUrl"], max_msg_size=0)
+                return Page(ws), ws
+
+            loop = asyncio.get_running_loop()
+            attendee, attendee_ws = await open_page(SLUG.upper())
+            await attendee.wait("(document.getElementById('view-name') || {hidden: true}).hidden === false")
+            await attendee.evaluate("document.getElementById('name').value = 'Família Souza';"
+                                    "document.getElementById('password').value = '999999';"
+                                    "document.getElementById('name-form').requestSubmit(); true")
+            report["needs_count"] = await attendee.wait(
+                "(document.getElementById('form-error') || {hidden: true}).hidden === false && document.getElementById('form-error').textContent")
+            await attendee.evaluate("document.querySelector('[data-count=more]').click();"
+                                    "const f = document.getElementById('count-more'); f.value = '7';"
+                                    "f.dispatchEvent(new Event('input')); document.getElementById('name-form').requestSubmit(); true")
+            await attendee.wait("document.getElementById('form-error').textContent === T.wrongPassword")
+            await attendee.evaluate(f"document.getElementById('password').value = {json.dumps(PASSWORD)};"
+                                    "document.getElementById('name-form').requestSubmit(); true")
+            assert await loop.run_in_executor(None, lambda: wait_for(lambda: snapshot()["lobby"], 15))
+            report["lobby"] = [(r["name"], r["count"]) for r in snapshot()["lobby"]]
+            # A reload returns to the lobby without the form (the password was already checked).
+            await attendee.evaluate("location.reload(); true")
+            await asyncio.sleep(1.0)
+            await attendee.wait("(document.getElementById('view-lobby') || {hidden: true}).hidden === false")
+
+            moderator, moderator_ws = await open_page(f"{SLUG}/m")
+            await moderator.wait("(document.getElementById('view-login') || {hidden: true}).hidden === false")
+            report["secure"] = await moderator.evaluate("window.isSecureContext && !!crypto.subtle")
+            await moderator.evaluate(f"document.getElementById('name').value = 'Irmão Lima';"
+                                     f"document.getElementById('password').value = {json.dumps(PASSWORD)};"
+                                     "document.getElementById('login-form').requestSubmit(); true")
+            await moderator.wait("(document.getElementById('view-pending') || {hidden: true}).hidden === false")
+            requests = await loop.run_in_executor(None, lambda: wait_for(lambda: snapshot()["staffRequests"], 10))
+            assert requests
+            device = snapshot()["staffRequests"][0]["device"]
+            await loop.run_in_executor(None, lambda: meeting.command("approve_staff", device).result(5))
+            await moderator.wait("(document.getElementById('view-console') || {hidden: true}).hidden === false"
+                                 " && document.getElementById('lobby').children.length === 1")
+            report["key_kind"] = meeting.core.devices.get(device, time.time()).key_kind.value
+            report["mod_lobby"] = await moderator.evaluate("document.getElementById('lobby').textContent")
+            # The moderator admits the family from the browser.
+            await moderator.evaluate("document.querySelector('#lobby button.primary').click(); true")
+            await attendee.wait("(document.getElementById('view-meeting') || {hidden: true}).hidden === false")
+
+            # Reload: the stored key signs a fresh challenge; no login, no approval.
+            await moderator.evaluate("location.reload(); true")
+            await asyncio.sleep(1.0)
+            await moderator.wait("(document.getElementById('view-console') || {hidden: true}).hidden === false")
+            report["login_after_reload"] = await moderator.evaluate(
+                "(document.getElementById('view-login') || {hidden: true}).hidden === false")
+            report["totals"] = await moderator.evaluate("document.getElementById('totals').textContent")
+            for ws in (attendee_ws, moderator_ws):
+                await ws.close()
+        return report
+
+    report = asyncio.run(scenario())
+    assert report["needs_count"], report
+    assert report["lobby"] == [("Família Souza", 7)], report
+    assert report["secure"] is True and report["key_kind"] == "ecdsa", report
+    assert "Família Souza" in report["mod_lobby"], report
+    assert report["login_after_reload"] is False, report
+    assert "7" in report["totals"], report

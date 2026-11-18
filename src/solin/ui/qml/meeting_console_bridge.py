@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import (
@@ -19,7 +20,25 @@ from PySide6.QtGui import QGuiApplication
 
 from solin.core.hosted_meeting.service import HostedMeetingService
 
-_ROW_ROLES = ("device", "name", "state", "connected", "live", "partHolder", "hand")
+_ROW_ROLES = ("device", "name", "state", "count", "connected", "live", "partHolder", "hand")
+_DATE_FORMATS = ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y")
+
+
+def parse_local_datetime(date_text: str, time_text: str) -> datetime | None:
+    """A date (DD/MM/YYYY or YYYY-MM-DD) and HH:MM typed by the operator, in local time."""
+
+    date_text, time_text = str(date_text or "").strip(), str(time_text or "").strip()
+    try:
+        clock = datetime.strptime(time_text, "%H:%M").time()
+    except ValueError:
+        return None
+    for fmt in _DATE_FORMATS:
+        try:
+            day = datetime.strptime(date_text, fmt).date()
+        except ValueError:
+            continue
+        return datetime.combine(day, clock).astimezone()
+    return None
 
 
 class MeetingRowsModel(QAbstractListModel):
@@ -167,9 +186,47 @@ class MeetingConsoleBridge(QObject):
     def requestDock(self, docked: bool) -> None:  # noqa: N802 - QML API
         self.dockRequested.emit(docked)
 
+    @Slot(str)
+    def newLink(self, meeting_id: str = "") -> None:  # noqa: N802 - QML API
+        self._service.new_link(meeting_id)
+
     @Slot()
-    def newLink(self) -> None:  # noqa: N802 - QML API
-        self._service.new_link()
+    def renewUpcoming(self) -> None:  # noqa: N802 - QML API
+        self._service.renew_upcoming()
+
+    @Slot(str, str, result=bool)
+    def setPassword(self, password: str, meeting_id: str = "") -> bool:  # noqa: N802 - QML API
+        return self._service.set_password(password, meeting_id)
+
+    @Slot(str, bool)
+    def setMeetingCancelled(self, meeting_id: str, cancelled: bool) -> None:  # noqa: N802 - QML API
+        self._service.set_meeting_cancelled(meeting_id, cancelled)
+
+    @Slot(str, str, str, result=bool)
+    def moveMeeting(self, meeting_id: str, date_text: str, time_text: str) -> bool:  # noqa: N802 - QML API
+        when = parse_local_datetime(date_text, time_text)
+        return when is not None and self._service.move_meeting(meeting_id, when)
+
+    @Slot(str, str, result=bool)
+    def addMeeting(self, date_text: str, time_text: str) -> bool:  # noqa: N802 - QML API
+        when = parse_local_datetime(date_text, time_text)
+        return when is not None and bool(self._service.add_meeting(when))
+
+    @Slot(str)
+    def removeMeeting(self, meeting_id: str) -> None:  # noqa: N802 - QML API
+        self._service.remove_meeting(meeting_id)
+
+    @Slot(str)
+    def approveStaff(self, device: str) -> None:  # noqa: N802 - QML API
+        self._service.approve_staff(device)
+
+    @Slot(str)
+    def refuseStaff(self, device: str) -> None:  # noqa: N802 - QML API
+        self._service.refuse_staff(device)
+
+    @Slot(str)
+    def removeDevice(self, device: str) -> None:  # noqa: N802 - QML API
+        self._service.remove_device(device)
 
     @Slot()
     def start(self) -> None:
@@ -216,7 +273,7 @@ class MeetingConsoleBridge(QObject):
         self._service.lock_mics(locked)
 
     @Slot()
-    def copyAttendance(self) -> None:  # noqa: N802 - QML API
+    def copyCount(self) -> None:  # noqa: N802 - QML API
         self.copy(self._service.attendance_text())
 
     @Slot(str)

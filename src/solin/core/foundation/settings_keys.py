@@ -86,6 +86,8 @@ class SettingsKey:
     HOSTED_MEETING_HALL_NAME: Final = "hosted_meeting/hall_name"
     HOSTED_MEETING_QUALITY: Final = "hosted_meeting/quality"
     HOSTED_MEETING_LINK: Final = "hosted_meeting/link"
+    HOSTED_MEETING_LINK_MODE: Final = "hosted_meeting/link_mode"
+    HOSTED_MEETING_DEVICES: Final = "hosted_meeting/devices"
     HOSTED_MEETING_PANEL_DOCKED: Final = "hosted_meeting/panel_docked"
     HOSTED_MEETING_HALL_FEED: Final = "hosted_meeting/hall_feed"
     HOSTED_MEETING_REMOTE_AUDIO_DEVICE: Final = "hosted_meeting/remote_audio_device"
