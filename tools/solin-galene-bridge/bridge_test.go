@@ -546,3 +546,19 @@ func TestVideoSlotForwardsOnlyTheHolder(t *testing.T) {
 		t.Fatal("a packet from a non-holder was forwarded")
 	}
 }
+
+func TestLocalEndpointSkipsICEServers(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"http://127.0.0.1:43673/group/x/.whip": true,
+		"ws://127.0.0.1:43673/ws":              true,
+		"ws://[::1]:8443/ws":                   true,
+		"http://localhost:8080/group/x/.whip":  true,
+		"https://meet.solin.run/group/x/.whip": false,
+		"wss://192.168.18.9/ws":                false,
+		"::not a url":                          false,
+	} {
+		if got := localEndpoint(raw); got != want {
+			t.Errorf("localEndpoint(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}

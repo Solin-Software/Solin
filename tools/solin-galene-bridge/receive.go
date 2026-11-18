@@ -224,7 +224,8 @@ func newReceiver(cfg receiveConfig, events *emitter, mix *Mixer) (*receiver, err
 	}
 	r := &receiver{
 		cfg: cfg, events: events, mix: mix, gain: float32(cfg.gain),
-		api: webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir)),
+		api: webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir),
+			webrtc.WithSettingEngine(settingEngine(cfg.ws))),
 	}
 	r.rtc.Store(&webrtc.Configuration{})
 	if len(cfg.videoPorts) > 0 {
@@ -355,7 +356,9 @@ func (r *receiver) session(ctx context.Context) (joined bool, err error) {
 		case "joined":
 			switch m.Kind {
 			case "join", "change":
-				if conf, err := rtcConfigurationFromGalene(m.RTCConfiguration); err != nil {
+				if localEndpoint(r.cfg.ws) {
+					r.rtc.Store(&webrtc.Configuration{}) // see localEndpoint
+				} else if conf, err := rtcConfigurationFromGalene(m.RTCConfiguration); err != nil {
 					log.Printf("rtcConfiguration: %v", err)
 				} else {
 					r.rtc.Store(&conf)

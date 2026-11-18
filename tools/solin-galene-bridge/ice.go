@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"net"
+	"net/url"
 	"strings"
 
 	"github.com/pion/webrtc/v4"
@@ -19,6 +21,38 @@ type galeneICEServer struct {
 type galeneRTCConfiguration struct {
 	ICEServers         []galeneICEServer `json:"iceServers"`
 	ICETransportPolicy string            `json:"iceTransportPolicy"`
+}
+
+// localEndpoint reports whether Galene is reached on this computer (a loopback
+// address). Solin runs the bridge next to Galene: STUN/TURN servers are for remote
+// attendees and only slow ICE down here. With a relay and the many interfaces a
+// hall PC can have (Docker, LXD, IPv6), the checks outlast the connection timeout.
+func localEndpoint(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// settingEngine for a peer connection to Galene at endpoint. Next to Galene the
+// bridge offers a single candidate, its IPv4 loopback address: with a TURN relay
+// configured, Galene asks the relay for a permission per remote candidate before
+// it answers the nomination, and a hall PC's many interfaces (Docker, LXD, Wi-Fi,
+// IPv6) queued enough of those to outlast the connection timeout.
+func settingEngine(endpoint string) webrtc.SettingEngine {
+	var se webrtc.SettingEngine
+	if localEndpoint(endpoint) {
+		se.SetNetworkTypes([]webrtc.NetworkType{webrtc.NetworkTypeUDP4})
+		se.SetIncludeLoopbackCandidate(true)
+		se.SetIPFilter(func(ip net.IP) bool { return ip.IsLoopback() })
+	}
+	return se
 }
 
 func validICEURL(u string) bool {

@@ -220,9 +220,10 @@ func newPublisher(cfg publishConfig, events *emitter) (*publisher, error) {
 	return &publisher{
 		cfg:    cfg,
 		events: events,
-		api:    webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir)),
-		http:   &http.Client{Timeout: httpTimeout},
-		base:   uint32(time.Now().UnixNano()),
+		api: webrtc.NewAPI(webrtc.WithMediaEngine(m), webrtc.WithInterceptorRegistry(ir),
+			webrtc.WithSettingEngine(settingEngine(cfg.whip))),
+		http: &http.Client{Timeout: httpTimeout},
+		base: uint32(time.Now().UnixNano()),
 	}, nil
 }
 
@@ -458,7 +459,10 @@ func (p *publisher) connect(ctx context.Context) (*pubSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	ice := p.fetchICEServers(ctx, token)
+	var ice []webrtc.ICEServer
+	if !localEndpoint(p.cfg.whip) {
+		ice = p.fetchICEServers(ctx, token)
+	}
 	pc, err := p.api.NewPeerConnection(webrtc.Configuration{ICEServers: ice})
 	if err != nil {
 		return nil, err
