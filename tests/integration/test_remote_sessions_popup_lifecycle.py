@@ -6,7 +6,7 @@ import shiboken6
 from PySide6.QtCore import QAbstractAnimation, QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication, QWidget
 
-from solin.core.remote_control.security import RemoteSessionInfo
+from solin.core.remote_control.security import RemoteScope, RemoteSessionInfo
 from solin.widgets.remote_sessions_popup import RemoteSessionsPopup
 from tests._qt import wait_until
 
@@ -25,7 +25,7 @@ def popup_host():
             management_id="one", principal="operator", browser="Chrome",
             platform="Android", client_mode="standalone", remote_address="192.168.1.45",
             created_at_utc=1_721_130_000.0, last_activity_at_utc=1_721_130_400.0,
-            connected_socket_count=1,
+            connected_socket_count=1, scope=RemoteScope.MEDIA,
         ),))
         yield anchor, popup
     finally:

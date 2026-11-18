@@ -1,374 +1,176 @@
-# Solin Remote web app
+# Remote-control web applications
 
-This directory is the self-contained PWA shell served at `/remote/`. It has no
-runtime dependency on a CDN, a package manager, or browser storage. All media and
-projection state remains authoritative in the desktop process.
+This directory contains the self-contained Progressive Web App (PWA) shells served by Solin's
+local HTTPS remote-control host:
 
-## Static hosting contract
+- `shared/` — shared CSS design tokens/base rules and zero-storage ES modules (`dom.js`,
+  `i18n.js`, `api.js`, `pwa.js`, `setup.js`).
+- `media/` — **Solin Media** (`/remote/media/`), for browsing meeting/playlist media and
+  controlling projection playback.
+- `timer/` — **Solin Timer** (`/remote/timer/`), a fullscreen-first meeting clock/timer display
+  with authenticated part and schedule control.
 
-Serve this directory below `/remote/`, with `index.html` for both `/remote/` and
-`/remote/index.html`. `service-worker.js` must be served with
-`Service-Worker-Allowed: /remote/` and `no-cache, no-store, must-revalidate`.
-The server derives one shell revision from the installation ID, the worker
-template, and every packaged shell asset. It renders the worker and index at
-startup, exposes shell files under revisioned `/_assets/` URLs, and serves those
-content-addressed responses as immutable. A release asset change or a different
-Solin installation at the same IP therefore produces both a different worker
-script and different subresource URLs without a manual cache-version bump.
+Neither app depends on external CDNs, bundlers, or browser storage (`localStorage`,
+`sessionStorage`, or `indexedDB`). All domain state remains authoritative in the desktop Qt
+process.
 
-The stable HTML routes remain `no-store` and navigation is network-first. This
-also migrates clients controlled by the original cache-first worker: the fresh
-index references revisioned URLs the old allowlist cannot intercept. The client
-then requests an uncached worker update, the fully populated replacement cache
-activates with `skipWaiting()`, and `clients.claim()` plus `controllerchange`
-reloads existing clients. Activation removes only obsolete
-`solin-remote-shell-*` caches, never unrelated origin storage.
+## Static hosting and Service Worker contract
 
-The HTTP server is responsible for the security policy that cannot be enforced
-reliably by markup alone, especially:
+Each module mounts under its own `/remote/<scope>/` prefix (`/remote/media/` and
+`/remote/timer/`):
 
-- HTTPS only, exact `Host` and same-origin `Origin` validation;
-- `Content-Security-Policy` with `frame-ancestors 'none'`, scripts/styles from
-  `'self'`, and `connect-src 'self'`;
-- `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and a
+- `GET /remote/<scope>` redirects (`302`) to `/remote/<scope>/`, preserving query parameters
+  such as `?setup=1`.
+- `GET /remote/<scope>/` and `/remote/<scope>/index.html` return the rendered HTML shell with
+  `Cache-Control: no-store`.
+- `GET /remote/<scope>/service-worker.js` is served with `Service-Worker-Allowed: /remote/<scope>/`
+  and `Cache-Control: no-cache, no-store, must-revalidate`.
+- `RemoteControlWebAssets` computes an installation-scoped SHA-256 shell revision over the
+  installation ID, `index.html`, `service-worker.js`, all module assets (`app/…`), and all
+  shared assets (`shared/…`). Rendered shells rewrite `./…` and `../shared/…` references to
+  immutable `/remote/<scope>/_assets/<revision>/…` URLs (`public, max-age=31536000, immutable`).
+- Service Workers cache only the explicit revisioned static shell allowlist (`solin-remote-media-shell-*`
+  and `solin-remote-timer-shell-*`) and never intercept `/remote/<scope>/api/`, authentication,
+  commands, thumbnails, WebSockets, or `/remote/trust-certificate.cer`.
+
+### Security headers and CSP
+
+Every response enforces:
+
+- HTTPS only (TLS 1.2+), exact `Host` matching, and exact same-origin `Origin` validation on
+  mutations and WebSocket upgrades;
+- `Content-Security-Policy`: `default-src 'self'; base-uri 'none'; form-action 'self';
+  frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self';
+  img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self';
+  worker-src 'self'` (no inline scripts, no inline `style` attributes, no `element.style.*`
+  mutations, and no HTML string injection);
+- `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+  `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, and a
   restrictive `Permissions-Policy`;
-- `Cache-Control: no-store` on HTML and every API response.
+- `Cache-Control: no-store` on HTML, certificate downloads, and all API responses.
 
-The service worker caches only the explicit static shell allowlist. It never
-intercepts `/remote/api/`, commands, authentication, WebSocket traffic,
-thumbnails, or other runtime data.
+## Shared certificate trust and onboarding
 
-## Local certificate trust
+`GET /remote/trust-certificate.cer` returns the public DER certificate for Solin's
+installation-local Root CA (`application/pkix-cert`, `Cache-Control: no-store`). A 10-year Root
+CA (`pathLenConstraint=1`) signs a 3-year private-network intermediate CA (`pathLenConstraint=0`,
+critical RFC 1918 `nameConstraints`), which signs the 90-day server leaf for the selected IPv4
+address. Leaf renewals hot-reload the live `SSLContext` without restarting the listener or
+revoking sessions.
 
-`GET /remote/trust-certificate.cer` returns the public DER certificate for
-Solin's installation-local Root CA with `Cache-Control: no-store`; no private
-key is ever exposed. The ten-year root has `pathLenConstraint=1` and signs a
-three-year issuing CA with `pathLenConstraint=0` and critical `nameConstraints`
-limited to private RFC 1918 networks. That constrained issuer signs only the
-short-lived HTTPS leaf for the currently selected private IPv4 address.
+`GET /remote/<scope>/api/setup` is unauthenticated and returns only the localized setup/login
+catalog (`locale` + translated `messages` from Qt `.qm` catalogs) and public `tls` metadata
+(`installationId`, `authoritySha256`, `verificationCode`, `authorityCertificateUrl`,
+`authorityNotValidAfter`). Visiting `/remote/<scope>/?setup=1` opens the dedicated 3-step
+certificate trust and PWA installation guide.
 
-Users compare the short verification code, or the full Root CA SHA-256
-fingerprint under advanced details, with the value displayed by the native setup
-assistant before trusting it. Trust is a one-device setup step required for
-browsers to provide a reliable secure context for Service Worker and PWA
-installation. Selecting another IP or renewing the 90-day leaf replaces only
-the server identity. The stable Root CA remains trusted, and the live TLS context
-is reloaded without stopping the listener or revoking sessions. A root security
-expiry or unrecoverable private-key loss is surfaced explicitly and is the
-exceptional case that requires a replacement.
+## Scoped authentication and session isolation
 
-## Authentication
+Media and Timer never share credentials, rate limiters, sessions, cookies, or CSRF secrets:
 
-All endpoints use `application/json`, same-origin credentials, and the prefix
-`/remote/api`.
+| Property | Media (`RemoteScope.MEDIA`) | Timer (`RemoteScope.TIMER`) |
+| --- | --- | --- |
+| Prefix | `/remote/media` | `/remote/timer` |
+| Cookie | `__Host-solin_remote_media` | `__Host-solin_remote_timer` |
+| Manifest `id` / `scope` | `/remote/media/` | `/remote/timer/` |
 
-### `POST /remote/api/auth/login`
+- `POST /remote/<scope>/api/auth/login` validates `{"username", "password"}` against that
+  scope's credential store, sets `Secure; HttpOnly; SameSite=Strict; Path=/`, and returns the
+  authenticated bootstrap payload including `csrfToken`.
+- `csrfToken` is kept strictly in JavaScript memory and sent as `X-CSRF-Token` on `POST`
+  mutations (`/logout` and `/commands`).
+- `POST /remote/<scope>/api/logout` revokes the server session, closes its authenticated
+  WebSockets with `4401`, and expires that scope's cookie.
+- Desktop revocation accepts `<scope>:<managementId>` to revoke a single device or revokes all
+  sessions in one or all scopes.
 
-Request:
+---
 
-```json
-{"username":"operator","password":"a user supplied password"}
-```
+## Media contract (`/remote/media/api`)
 
-Success creates a `Secure; HttpOnly; SameSite=Strict; Path=/` session cookie and
-returns the bootstrap fields below, plus `csrfToken`. The CSRF token is retained
-only in JavaScript memory and sent as `X-CSRF-Token` on mutations. It is never
-written to `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or a URL.
+All Media runtime routes require an authenticated `RemoteScope.MEDIA` session:
 
-### `POST /remote/api/logout`
+- `GET /remote/media/api/bootstrap` — returns `serverInstanceId`, `eventSequence`, `csrfToken`,
+  `principal`, `currentMeetingWeekStart`, `profile` (`id`, `name`, `theme`, `locale`,
+  `messages`), `catalogRevision`, `playbackRevision`, and `playback`.
+- `GET /remote/media/api/catalog` — returns sanitized `collections` (`playlist`,
+  `linked_folder`, `meeting`) and `nodes` (`section`, `subsection`, `marker`, `media`) without
+  exposing local paths or upstream URLs.
+- `GET /remote/media/api/playback` — returns `playbackRevision`, `playbackSessionId`, `state`,
+  `origin`, `title`, `mediaKind`, `queue`, `positionMs`, `durationMs`, `volume`,
+  `capabilities`, and `error`.
+- `GET /remote/media/api/thumbnails/{source}/{collectionId}/{nodeId}` and
+  `GET /remote/media/api/collection-thumbnails/{source}/{collectionId}` — re-resolve opaque
+  public catalog IDs to bounded JPEG artwork (`Cache-Control: private, max-age=300`).
+- `POST /remote/media/api/commands` — idempotent UUID `commandId` envelope supporting `play`
+  (fenced by `catalogRevision`), `pause`, `resume`, `seek`, `set_volume`, `previous`, `next`
+  (fenced by `playbackSessionId`), and unconditional `stop`. Error codes: `catalog_stale`,
+  `playback_stale`, `blocked`, `not_found`, `unavailable`, `failed`, `invalid`,
+  `command_id_conflict`, `command_in_progress`.
+- `GET /remote/media/api/ws` — unidirectional server-to-client WebSocket emitting atomic
+  `session.snapshot` baseline followed by `catalog.snapshot`, `playback.snapshot`,
+  `profile.snapshot`, `session.revoked`, and 20 s `heartbeat` frames.
 
-Requires the session cookie, exact same origin, and `X-CSRF-Token`. It revokes
-the server-side session and expires the cookie.
+---
 
-### Errors
+## Timer contract (`/remote/timer/api`)
 
-The preferred error body is:
+### Public fullscreen stage (no login required)
 
-```json
-{"error":{"code":"rate_limited","message":"Try again later.","retryable":true}}
-```
+Opening `/remote/timer/` enters the fullscreen timer stage immediately and acquires a browser
+Screen Wake Lock (`navigator.wakeLock`) while visible:
 
-The client also handles an empty or plain-text HTTP error by mapping the HTTP
-status. `401` returns to login; login `429` remains on the form and preserves the
-username.
+- `GET /remote/timer/api/public` — unauthenticated read model returning `authenticated`,
+  `controlAvailable`, `serverInstanceId`, `eventSequence`, `profile` (`id`, `name`,
+  `displayName`, `theme`, `locale`, `messages`), `tls`, `liveRevision`, and `live`. It never
+  includes the meeting schedule or `scheduleRevision`.
+- `GET /remote/timer/api/ws/public` — unauthenticated, origin-checked, IP-bounded WebSocket
+  emitting `public.snapshot`, `timer.live`, `profile.snapshot`, and `heartbeat`.
 
-## Read models
+### Zero-tick-flooding live synchronization
 
-### `GET /remote/api/setup`
+`live` (`TimerLiveWireSnapshot`) carries `liveRevision`, `serverEpochMs`, `utcOffsetMinutes`,
+`active`, `state` (`idle` | `running` | `stopped`), `direction` (`down` | `up`), `activePartId`,
+`activePartTitle`, `activeSection`, `plannedSeconds`, `elapsedSeconds`,
+and `clockConfig` (`mode`, `analogStyle`, `hourFormat24h`, `showAmpm`, `showSeconds`,
+`direction`, `partTimerDisplay`, `textScalePct`, `freezeSeconds`).
 
-This is the only unauthenticated JSON endpoint. It returns the active BCP 47
-locale and translated `_RemoteControlWeb` message map used by login/setup, plus
-the public TLS setup model: installation ID, Root CA SHA-256 fingerprint, short
-verification code, certificate-download route, and root expiry. It never
-includes profile identity, credentials, session data, private keys, or runtime
-catalog/playback state, and is always served with `Cache-Control: no-store`.
-English sources live in `messages.en.json`; the desktop resolves them through
-the active Qt `.qm` catalog before publishing them.
+The desktop emits `timer.live` only on discrete transitions (start, stop, reset, freeze revert,
+`±1 s` nudge, or clock configuration changes)—never on 250 ms UI ticks. Clients extrapolate
+elapsed and wall-clock time locally from a monotonic clock anchor and render Digital, Analog
+(*Signature* and *Classic*), Analog + Digital, *Clock + Timer* split, and duration-sector washes
+with exact parity to `solin.core.timer.render.build_render_model`.
 
-### `GET /remote/api/bootstrap`
+### Authenticated controller workspace
 
-```json
-{
-  "authenticated": true,
-  "serverInstanceId": "runtime-uuid",
-  "eventSequence": 42,
-  "csrfToken": "opaque-csrf-secret",
-  "principal": "operator",
-  "currentMeetingWeekStart": "2026-07-13",
-  "profile": {
-    "id": "main-hall",
-    "name": "Salão principal",
-    "locale": "pt-BR",
-    "messages": {
-      "app.remoteControl": "Controle remoto"
-    }
-  },
-  "catalogRevision": 17,
-  "playbackRevision": 91,
-  "playback": {}
-}
-```
+Tapping the fullscreen stage reveals an auto-hiding HUD with **Sign in** (when
+`controlAvailable` is `true`), opening a modal login dialog over the live timer, or **Control
+parts** when already authenticated:
 
-`locale` is the active Solin interface language converted from its locale
-code to a BCP 47 browser tag (`pt_BR` becomes `pt-BR`). `messages` comes from
-the same installed `QTranslator` used by the desktop, not from locale metadata.
-`currentMeetingWeekStart` is the Solin-authoritative Monday for the current
-meeting week and is refreshed in WebSocket heartbeats.
+- `GET /remote/timer/api/bootstrap` — authenticated baseline returning `csrfToken`, `principal`,
+  `profile`, `liveRevision`, `scheduleRevision`, `live`, and `schedule`.
+- `GET /remote/timer/api/schedule` — authenticated `TimerScheduleWireSnapshot` containing
+  `scheduleRevision`, `weekMonday`, `weekLabel`, `isCurrentWeek`, `meetingType`, section-styled
+  `parts` (including per-part `durationEditable`), and server-authoritative `capabilities`
+  (`controlParts`, `adjustPlannedMinutes`, `setPlannedSeconds`, `setSectionCount`,
+  `switchMeetingType`, `navigateWeeks`).
+- `GET /remote/timer/api/ws` — authenticated WebSocket emitting `session.snapshot` (`live` +
+  `schedule` + `profile`), `timer.live`, `timer.schedule`, `profile.snapshot`,
+  `session.revoked`, and `heartbeat`.
+- `POST /remote/timer/api/commands` — requires `__Host-solin_remote_timer`, same `Origin`, and
+  `X-CSRF-Token`. Rejects unknown fields and enforces idempotency (`commandId`) plus optimistic
+  concurrency (`scheduleRevision` on schedule-bound mutations):
+  - `start_part` (`scheduleRevision`, `partId`)
+  - `stop_part` (optional `partId`)
+  - `reset_part` (`scheduleRevision`, `partId`)
+  - `adjust_part` (`scheduleRevision`, `partId`, `deltaSeconds` in `{-60, -1, 1, 60}`)
+  - `set_part_seconds` (`scheduleRevision`, `partId`, `plannedSeconds` `60..86399`)
+  - `set_section_count` (`scheduleRevision`, `section` in `{"ministry", "living"}`, `count` `1..8`)
+  - `set_meeting_type` (`meetingType` in `{"midweek", "weekend"}`)
+  - `navigate_week` (`target` in `{"previous", "next", "current"}`)
 
-### `GET /remote/api/catalog`
-
-```json
-{
-  "catalogRevision": 17,
-  "collections": [
-    {
-      "id": "playlist-id",
-      "kind": "playlist",
-      "title": "Reunião de fim de semana",
-      "subtitle": "12 mídias",
-      "thumbnailId": null,
-      "weekStart": null,
-      "meetingType": null,
-      "nodes": []
-    }
-  ]
-}
-```
-
-Meeting collections carry the semantic start of their Monday-to-Sunday range as
-`weekStart` (`YYYY-MM-DD`) and a structured `meetingType`: `midweek`, `weekend`,
-`memorial`, or `other`. Other collection kinds use `null` for both fields. The
-meeting collection's `thumbnailId` identifies the persisted publication cover
-without exposing its bytes, source path, or storage representation. The
-PWA never renders `weekStart` as if it were an event date. It groups the current,
-future, and previous weeks and formats each complete range with
-`Intl.DateTimeFormat.formatRange`; Qt date-pattern syntax is not duplicated in
-the web client.
-
-Collection `kind` is `playlist`, `linked_folder`, or `meeting`. A catalog node
-has this public-only shape:
-
-```json
-{
-  "id": "stable-node-id",
-  "kind": "media",
-  "title": "Vídeo de abertura",
-  "children": [],
-  "color": null,
-  "collapsed": false,
-  "mediaKind": "video",
-  "durationMs": 125000,
-  "thumbnailId": "opaque-thumbnail-id",
-  "available": true,
-  "unavailableReason": null
-}
-```
-
-Node `kind` is `section`, `subsection`, `marker`, or `media`. The UI never needs
-or accepts a media URL, filesystem path, persisted reference, or original file
-metadata. Section and subsection nodes carry the same authoritative `collapsed`
-state used by Solin's native meeting/playlist tree. The PWA uses it as the
-initial state, preserves local expansion across playback-only renders, and
-reconciles it whenever a newer catalog snapshot arrives.
-Canonical generated meeting section/subsection titles are resolved from
-`section_code` (or the legacy `meeting_source_key`) through the active Qt
-translator. Non-generated and user-overridden titles remain untouched.
-
-### `GET /remote/api/playback`
-
-This optional diagnostic endpoint returns the same playback object included in
-bootstrap and WebSocket snapshots:
-
-```json
-{
-  "playbackRevision": 91,
-  "playbackSessionId": "session-id",
-  "state": "playing",
-  "origin": {
-    "source": "playlist",
-    "collectionId": "playlist-id",
-    "nodeId": "stable-node-id"
-  },
-  "title": "Vídeo de abertura",
-  "mediaKind": "video",
-  "queue": [
-    {
-      "origin": {
-        "source": "playlist",
-        "collectionId": "playlist-id",
-        "nodeId": "stable-node-id"
-      },
-      "title": "Vídeo de abertura",
-      "mediaKind": "video",
-      "thumbnailId": "opaque-thumbnail-id"
-    }
-  ],
-  "currentIndex": 0,
-  "positionMs": 24000,
-  "durationMs": 125000,
-  "volume": 80,
-  "capabilities": {
-    "pause": true,
-    "resume": false,
-    "seek": true,
-    "setVolume": true,
-    "previous": false,
-    "next": true,
-    "stop": true
-  },
-  "error": null
-}
-```
-
-Playback `state` is `idle`, `loading`, `playing`, `paused`, or `error`. The dock
-renders only controls allowed by `capabilities`; remote UI code never overrides
-desktop playback protection. The canonical `mediaKind` determines the
-presentation: idle has its own control-free state, images and other visual
-media never show seek/time/volume, and only `audio` or `video` may expose timed
-controls. Timed media keeps its timeline and multi-item queue navigation in a
-stable layout; playback protection, offline state, queue boundaries, and
-in-flight commands disable the affected controls instead of removing them.
-The current queue item is the single source of truth for the dock artwork, so
-the player does not need to rediscover the media inside a concurrently changing
-catalog tree.
-
-### `GET /remote/api/thumbnails/{source}/{collectionId}/{nodeId}`
-
-Returns a small authenticated image only when the corresponding node contains a
-non-null `thumbnailId`. The server re-resolves all three public IDs and must not
-accept a path or URL. Responses should use a restrictive image content type,
-`nosniff`, size limits, and private revalidation. For local image nodes without
-a pre-generated desktop thumbnail, the adapter renders a bounded JPEG directly.
-For video and audio it reuses Solin's bounded Qt media-info queue to capture a
-representative frame or embedded cover; stored HTTP(S) media uses the same
-bounded metadata fetch and established media-stream fallback. Meeting nodes
-prefer their already-resolved `thumbnail_url`; when artwork is
-absent, `resolved_url` is used to extract a representative media frame. Both
-references remain private and are re-resolved from the current catalog IDs.
-Concurrent requests are deduplicated and real extracted results are cached
-atomically. If
-media has no visual data, a deterministic type-specific placeholder uses a
-bounded expiring memory cache so a transient decoder or network failure cannot
-poison the persistent thumbnail store. Generation is fenced by catalog revision.
-The PWA never receives the source path or URL and does not persist thumbnails.
-
-### `GET /remote/api/collection-thumbnails/{source}/{collectionId}`
-
-Returns a meeting publication cover only when the current sanitized collection
-contains a non-null `thumbnailId`. The server re-resolves the collection against
-the same catalog revision, reads its persisted `MeetingTreeOverview` cover, and
-normalizes the bounded input to JPEG before responding. The route is authenticated
-and rejects paths, unknown sources, stale collections, missing covers, and invalid
-image data.
-
-The shell intentionally contains no inline scripts or styles. A browser console
-warning that names an injected file such as `content.js` means an extension
-attempted inline page injection and was blocked by the CSP; third-party hashes,
-nonces, or `unsafe-inline` must not be added to accommodate it.
-
-## Commands
-
-`POST /remote/api/commands` requires the session cookie, exact same origin, and
-`X-CSRF-Token`. `commandId` is a canonical UUID and makes retries idempotent.
-The parser rejects unknown fields.
-
-Play:
-
-```json
-{
-  "commandId": "9c0936e5-c96a-45ce-8662-00515a57b466",
-  "type": "play",
-  "catalogRevision": 17,
-  "origin": {
-    "source": "meeting",
-    "collectionId": "meeting-id",
-    "nodeId": "stable-node-id"
-  },
-  "startPaused": false
-}
-```
-
-`pause`, `resume`, `previous`, and `next` add only `playbackSessionId`. `seek`
-also adds integer `positionMs`; `set_volume` adds integer `volume` from 0 to 100.
-Stop is deliberately unconditional:
-
-```json
-{"commandId":"9c0936e5-c96a-45ce-8662-00515a57b466","type":"stop"}
-```
-
-Result:
-
-```json
-{
-  "commandId": "9c0936e5-c96a-45ce-8662-00515a57b466",
-  "ok": true,
-  "catalogRevision": 17,
-  "playbackRevision": 92,
-  "error": null
-}
-```
-
-Known command error codes are `catalog_stale`, `playback_stale`, `blocked`,
-`not_found`, `unavailable`, `failed`, `invalid`, `command_id_conflict`, and
-`command_in_progress`. A stale response triggers a full bootstrap/catalog
-recovery instead of an optimistic merge.
-
-## WebSocket synchronization
-
-`GET /remote/api/ws` authenticates with the same cookie. The server sends
-initial catalog, playback, and profile snapshots, then revisioned events:
-
-```json
-{
-  "type": "playback.snapshot",
-  "serverInstanceId": "runtime-uuid",
-  "sequence": 43,
-  "catalogRevision": 17,
-  "playbackRevision": 92,
-  "payload": {}
-}
-```
-
-Event types are `catalog.snapshot`, `playback.snapshot`, `profile.snapshot`,
-`session.revoked`, and `heartbeat`. Heartbeats repeat
-`currentMeetingWeekStart`, allowing an open PWA to cross into a new week without
-using the phone clock as its authority. The three initial snapshots may share
-the current bootstrap sequence. They form one authoritative baseline and are all
-applied before controls become available; contiguity checks begin only after
-that baseline. Language changes publish a profile snapshot before a localized
-catalog snapshot, so translated UI chrome and semantic section titles change as
-one ordered stream. Subsequent state events increase the sequence monotonically. The
-server sends a heartbeat at most every 25 seconds. After 55 seconds without any
-frame, the client closes the socket and reconnects with exponential backoff and
-jitter.
-
-The client performs a complete bootstrap/catalog recovery when it sees a
-sequence gap, a new `serverInstanceId`, a stale command result, the network
-returning, or a foregrounded disconnected app. Position-only snapshots update
-the player without rebuilding the catalog tree.
-
-Because browsers do not expose an HTTP status for every failed WebSocket
-handshake, a pre-upgrade failure is verified through bootstrap. A command-side
-`403` follows the same proof: bootstrap refreshes the in-memory CSRF token and
-the client retries the exact same idempotent `commandId` once. Bootstrap `401`
-always returns to login.
+  Error codes: `schedule_stale`, `blocked`, `not_found`, `unavailable`, `failed`, `invalid`,
+  `command_id_conflict`, `command_in_progress`. On `schedule_stale`, the client refreshes via
+  `/remote/timer/api/schedule` rather than merging stale schedule state; on `401` or
+  `session.revoked`, the client drops smoothly back to the live public fullscreen stage without
+  blanking the timer.

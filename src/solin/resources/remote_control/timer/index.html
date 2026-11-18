@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#0d1117">
+    <meta name="application-name" content="Solin Timer">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Solin Timer">
+    <meta name="format-detection" content="telephone=no">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'none'; connect-src 'self'; font-src 'self'; form-action 'self'; img-src 'self' data:; manifest-src 'self'; object-src 'none'; script-src 'self'; style-src 'self'; worker-src 'self'"
+    >
+    <title>Solin Timer</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+    <link rel="stylesheet" href="../shared/styles/tokens.css">
+    <link rel="stylesheet" href="../shared/styles/base.css">
+    <link rel="stylesheet" href="./styles/layout.css">
+    <link rel="stylesheet" href="./styles/components.css">
+    <script type="module" src="./scripts/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content" data-i18n="app.skipToContent">Skip to content</a>
+
+    <svg class="icon-sprite" aria-hidden="true" focusable="false">
+      <defs>
+        <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </symbol>
+        <symbol id="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="m3 3 18 18"></path>
+        </symbol>
+        <symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3 20 6v5c0 5.1-3.4 8.7-8 10"></path>
+          <path d="M12 3 4 6v5c0 5.1 3.4 8.7 8 10"></path>
+          <path d="m9 12 2 2 4-4"></path>
+        </symbol>
+        <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <path d="m16 17 5-5-5-5"></path>
+          <path d="M21 12H9"></path>
+        </symbol>
+        <symbol id="icon-fullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+          <path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+          <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+          <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+        </symbol>
+        <symbol id="icon-fullscreen-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3"></path>
+          <path d="M3 16h3a2 2 0 0 1 2 2v3"></path>
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+        </symbol>
+        <symbol id="icon-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </symbol>
+        <symbol id="icon-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+          <circle cx="9" cy="6" r="2" fill="currentColor"></circle>
+          <circle cx="15" cy="12" r="2" fill="currentColor"></circle>
+          <circle cx="10" cy="18" r="2" fill="currentColor"></circle>
+        </symbol>
+        <symbol id="icon-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="10" rx="2"></rect>
+          <path d="M8 11V7a4 4 0 0 1 8 0v4"></path>
+        </symbol>
+        <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </symbol>
+        <symbol id="icon-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </symbol>
+        <symbol id="icon-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+          <path d="M3 3v5h5"></path>
+        </symbol>
+        <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <polyline points="12 7 12 12 15.5 14"></polyline>
+        </symbol>
+        <symbol id="icon-sec-treasures" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 4 h12 l4 6 L12 22 L2 10 Z M2 10 h20 M6 4 L12 22 M18 4 L12 22 M8 10 L12 4 L16 10"></path>
+        </symbol>
+        <symbol id="icon-sec-ministry" viewBox="0 0 49 61">
+          <g fill="currentColor">
+            <path d="M20.89 14.5c.36-3.29-2.07-8.82 2.28-10.08.09 2.99.8 6.18-.12 9.09-.54.25-1.62.74-2.16.99m-4.43-2.8c-.56-2.24-.47-4.55 2.24-5.03-.2 1.97 1.15 6.21-2.24 5.03m8.87.54c.29-1.8-.92-6.74 2.35-4.77.51 2.15.36 4.61-2.35 4.77m-14.24 7.67c-2.47-2.65-1.6-6.68-.93-9.88 3.45 2.03 7.26 3.76 10.03 6.72 1.57 2.75.72 6.1.37 9.07-3.27-1.76-6.6-3.53-9.47-5.91m.59-5.98c-.21 4.46 4.03 6.23 7.31 8 .22-4.5-4.04-6.2-7.31-8m12.16 2.95c2.86-3.09 6.74-5.16 10.66-6.62-.11 3.19 1.01 7.15-1.51 9.7-2.91 2.4-6.23 4.33-9.76 5.67.08-2.88-.68-6.07.61-8.75m8.17-2.72c-3.23 1.59-7.05 3.53-6.83 7.77 2.83-1.84 8-3.36 6.83-7.77M9.69 22.5c3.67 1.65 7.4 3.51 10.32 6.32 1.81 2.79.84 6.34.66 9.44-3.5-2.02-7.33-3.74-10.19-6.66-1.64-2.72-.73-6.1-.79-9.1m1.95 3.77c-.2 4.46 4 6.22 7.27 8.02.22-4.42-4.06-6.2-7.27-8.02m12.39 2.63c2.94-2.85 6.7-4.73 10.39-6.41-.05 3.33 1.27 7.69-1.79 10.11-2.86 2.05-5.77 4.35-9.21 5.3-.31-2.95-.92-6.3.61-9m1.24 5.47c3.2-1.9 7.41-3.65 7.23-8.12-3.23 1.86-7.56 3.62-7.23 8.12"></path>
+            <path d="M20.46 50.41c-7.05-1.1-12.97-8.65-10.22-15.71 2.91 1.78 5.9 3.47 8.65 5.49 2.69 1.64 1.93 5.17 2.33 7.81h1.8c.33-2.4-.49-5.47 1.57-7.26 2.95-2.44 6.36-4.26 9.72-6.06 1.83 7.23-3.4 14.61-10.66 15.74-.3 1.65-.02 3.67-1.67 4.67-1.39-1.17-1.22-3.06-1.52-4.68m-8.77-11.8c1.07 3.82 3.37 7.21 7.05 8.91-.1-1.57-.33-3.13-.67-4.66-1.85-1.79-4.2-2.93-6.38-4.25m15.27 3.45c-1.9 1.12-1.1 3.65-1.51 5.46 3.59-1.79 5.97-5.07 6.96-8.92-1.85 1.1-3.75 2.13-5.45 3.46"></path>
+          </g>
+        </symbol>
+        <symbol id="icon-sec-living" viewBox="0 0 111 108">
+          <g fill="currentColor">
+            <path d="M72.35 21.29c5.01-3.3 12.92-3.64 17.05 1.26 2.86 3.26 6.09 6.2 8.7 9.66 1.08 3.18-1.07 6.51-3.54 8.39-2.17 1.77-5.12 1.3-7.71 1.48-1.41 6.97-2.85 13.94-4.24 20.91-0.7 4.13-3.59 7.52-7.04 9.72.87 7.37 2.37 14.72 2.15 22.17-3.47.02-7.03.53-10.46-.25-1.88-4.85-2.87-10-4.2-15.02-1.15 5.23-2.9 10.3-4.69 15.34-3.38.03-6.84.39-10.13-.57.62-6.47 1.63-12.9 2.37-19.36-3.48-.05-7-.25-10.41.56 1.36 6.37 3.54 12.55 4.48 19.01-3.62.56-7.29.47-10.94.32-1.76-4.35-3.62-8.68-4.88-13.22-.99 4.27-1.73 8.61-3.07 12.78-2.99.98-6.37.68-9.46.19l-.57-1.01c-.12-7.16-.39-14.38.13-21.51 2.25-2.68 4.98-4.9 7.48-7.34.02-1.81.05-3.61.09-5.41-2.19 1.4-5.04 5.19-7.71 2.55-.48-4.66-.4-9.41-.02-14.08 1.13-7.67 8.39-14.09 16.2-13.87 8.07-.05 16.14.09 24.21-.02 1.34.15 2.28-.98 3.26-1.68 4.29-3.7 8.49-7.52 12.95-11m1.94 4.02c-4.96 4.01-9.58 8.46-14.61 12.38-9.2.83-18.54-.08-27.78.42-4.97.36-9.4 3.98-11.1 8.6-.7 3.21-.36 6.53-.5 9.79 2.09-1.39 5.17-5.21 7.55-2.44.96 3.85.16 8.04.43 12.03-2.57 2.62-5.23 5.15-7.89 7.69-.03 5.86-.07 11.72.02 17.58.38-.18 1.13-.53 1.51-.7 1.4-3.81 1.48-8.02 3.09-11.76 4.22-2.53 8.75-4.52 13.09-6.83 2.4-1.44 5.27-1.04 7.94-1.09 6.42.15 12.85-.24 19.27.26 2.01 6.47 3.51 13.1 5.7 19.5.54.13 1.61.4 2.15.53-.54-6.95-2.23-13.86-1.89-20.84 2.46-2.12 5.85-3.87 6.46-7.39 1.72-7.61 3.11-15.3 4.83-22.92.37-3.19 4.32-1.75 6.46-2.19 2.69.13 4.37-2.25 4.87-4.61-3.01-2.8-5.69-5.91-8.7-8.7-3.12-2.71-7.88-1.6-10.9.69M54.88 75.3c-.09 5.39-1.16 10.7-1.52 16.07l1.51-.69c2.04-5.12 3.41-10.51 5.07-15.78-1.69.11-3.38.24-5.06.4m-21.87 4.31c1.22 3.7 2.46 7.43 4.12 10.96.57.19 1.73.56 2.31.75-1.07-4.42-2.3-8.81-3.3-13.25-1.04.51-2.08 1.02-3.13 1.54"></path>
+            <path d="M74.38 30.37c1.66-1.12 3.36.09 4.4 1.42-.75 1.03-1.5 2.05-2.24 3.08l.24 2.92c.95 1.24 2.21 2.48 1.82 4.21-1.23 1.72-3.92 1.1-4.89-.57-2.28-3.13-2.38-8.38.67-11.06"></path>
+          </g>
+        </symbol>
+        <symbol id="icon-sec-public_talk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="7" r="3"></circle>
+          <path d="M6 17a6 6 0 0 1 12 0"></path>
+          <path d="M4 17h16l-2 4H6z"></path>
+        </symbol>
+        <symbol id="icon-sec-watchtower" viewBox="0 0 32 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.149 1.398 H8.169 V4.668 H10.572 V1.398 H14.636 V4.668 H17.039 V1.398 H21.103 V4.668 H23.55 V1.398 H27.57 V8.332 L23.754 13.063 V22 H7.965 V13.063 L4.149 8.332 Z"></path>
+        </symbol>
+      </defs>
+    </svg>
+
+    <div id="boot-view" class="boot-view" aria-live="polite">
+      <img class="boot-logo" src="./icons/icon-192.png" alt="" width="72" height="72">
+      <div class="spinner" aria-hidden="true"></div>
+      <p data-i18n="boot.connecting">Connecting to Solin…</p>
+    </div>
+
+    <section
+      id="stage-view"
+      class="stage-view"
+      data-hud-visible="true"
+      aria-label="Meeting timer"
+      data-i18n-aria-label="app.timer"
+      tabindex="0"
+      hidden
+    >
+      <canvas id="stage-canvas" class="stage-canvas" aria-hidden="true"></canvas>
+      <p id="stage-sr-readout" class="visually-hidden" aria-live="off"></p>
+
+      <header id="stage-hud" class="stage-hud">
+        <div class="stage-hud-bar">
+          <div class="stage-brand">
+            <img src="./icons/icon-192.png" alt="" width="34" height="34">
+            <div class="stage-brand-copy">
+              <strong data-i18n="app.title">Solin Timer</strong>
+              <span id="stage-profile-name" data-i18n="app.timer">Meeting timer</span>
+            </div>
+            <span id="stage-part-pill" class="stage-part-pill" hidden></span>
+          </div>
+
+          <div class="stage-actions">
+            <div id="stage-connection-chip" class="connection-chip connection-chip--stage" role="status">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="stage-connection-label" data-i18n="connection.connecting">Connecting…</span>
+            </div>
+
+            <button
+              id="stage-install-button"
+              class="stage-pill-button"
+              type="button"
+              aria-label="Install Solin Timer"
+              data-i18n-aria-label="app.installSolin"
+              hidden
+            >
+              <span class="css-icon css-icon--install" aria-hidden="true"></span>
+              <span class="desktop-label" data-i18n="app.installApp">Install app</span>
+            </button>
+
+            <a
+              id="stage-setup-link"
+              class="stage-icon-button"
+              href="?setup=1"
+              aria-label="Set up this device"
+              data-i18n-aria-label="login.setUpDevice"
+            >
+              <svg class="ui-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-shield"></use>
+              </svg>
+            </a>
+
+            <button
+              id="stage-fullscreen-button"
+              class="stage-icon-button"
+              type="button"
+              aria-label="Enter fullscreen"
+              data-i18n-aria-label="stage.enterFullscreen"
+              hidden
+            >
+              <svg id="stage-fullscreen-icon" class="ui-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-fullscreen"></use>
+              </svg>
+            </button>
+
+            <button id="stage-signin-button" class="stage-cta-button" type="button" hidden>
+              <svg class="ui-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-lock"></use>
+              </svg>
+              <span data-i18n="stage.signIn">Sign in</span>
+            </button>
+
+            <button id="stage-control-button" class="stage-cta-button" type="button" hidden>
+              <svg class="ui-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-sliders"></use>
+              </svg>
+              <span data-i18n="stage.controlParts">Control parts</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <p id="stage-hint" class="stage-hint" data-i18n="stage.tapHint">Tap anywhere to hide or show controls</p>
+    </section>
+
+    <div
+      id="login-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="login-title"
+      hidden
+    >
+      <section class="login-card">
+        <div class="modal-card-header">
+          <div class="brand-lockup brand-lockup--login">
+            <img src="./icons/icon-192.png" alt="" width="56" height="56">
+            <div>
+              <p class="eyebrow" data-i18n="login.eyebrow">TIMER CONTROL</p>
+              <h1 id="login-title" data-i18n="login.title">Solin Timer</h1>
+            </div>
+          </div>
+          <button
+            id="login-close"
+            class="icon-button"
+            type="button"
+            aria-label="Return to fullscreen timer"
+            data-i18n-aria-label="login.close"
+          >
+            <span class="css-icon css-icon--close" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <p class="login-intro" data-i18n="login.intro">
+          Sign in to start, stop, and adjust meeting parts from this device.
+        </p>
+
+        <div id="login-offline" class="notice notice--warning" role="status" hidden>
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <span data-i18n="login.offline">Solin is unreachable. Check the network and try again.</span>
+        </div>
+
+        <form id="login-form" class="login-form" novalidate>
+          <div class="field">
+            <label for="username" data-i18n="login.username">Username</label>
+            <input
+              id="username"
+              name="username"
+              type="text"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="128"
+              required
+            >
+          </div>
+          <div class="field">
+            <label for="password" data-i18n="login.password">Password</label>
+            <div class="password-field">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                minlength="1"
+                maxlength="128"
+                required
+              >
+              <button
+                id="toggle-password"
+                class="icon-button icon-button--inside"
+                type="button"
+                aria-label="Show password"
+                data-i18n-aria-label="login.showPassword"
+                aria-pressed="false"
+              >
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-eye"></use>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+          <button id="login-submit" class="button button--primary button--full" type="submit">
+            <span class="button-label" data-i18n="login.signIn">Sign in</span>
+            <span class="button-spinner spinner spinner--small" aria-hidden="true" hidden></span>
+          </button>
+        </form>
+
+        <p class="local-note">
+          <svg class="ui-icon" aria-hidden="true" focusable="false">
+            <use href="#icon-shield"></use>
+          </svg>
+          <span data-i18n="login.localProtection">Protected connection limited to your local network</span>
+        </p>
+        <a class="login-setup-link" href="?setup=1" data-i18n="login.setUpDevice">
+          Set up this device
+        </a>
+      </section>
+    </div>
+
+    <main id="setup-view" class="setup-view" hidden>
+      <section class="setup-card" aria-labelledby="setup-title">
+        <header class="setup-header">
+          <div class="brand-lockup">
+            <img src="./icons/icon-192.png" alt="" width="48" height="48">
+            <div>
+              <p class="eyebrow" data-i18n="setup.eyebrow">SECURE SETUP</p>
+              <h1 id="setup-title" data-i18n="setup.title">Set up Solin Timer</h1>
+            </div>
+          </div>
+          <a
+            class="icon-button setup-close"
+            href="/remote/timer/"
+            aria-label="Back to timer"
+            data-i18n-aria-label="setup.backToTimer"
+          >
+            <span class="css-icon css-icon--close" aria-hidden="true"></span>
+          </a>
+        </header>
+
+        <p class="setup-intro" data-i18n="setup.intro">
+          Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.
+        </p>
+
+        <div id="setup-unavailable" class="notice notice--warning" role="status" hidden>
+          <span class="notice-icon" aria-hidden="true">!</span>
+          <span data-i18n="setup.unavailable">Setup information is unavailable. Keep Solin open and check this device's network.</span>
+        </div>
+
+        <ol id="setup-steps" class="setup-steps">
+          <li class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">1</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.trustTitle">Trust this Solin</h2>
+              <p data-i18n="setup.trustDetail">
+                The certificate protects your password and remote commands. Compare the short code below with the one shown in Solin before installing it.
+              </p>
+              <div class="verification-card">
+                <span data-i18n="setup.verificationCode">Verification code</span>
+                <strong id="setup-verification-code">—</strong>
+                <details>
+                  <summary data-i18n="setup.fullFingerprint">Show full SHA-256 fingerprint</summary>
+                  <code id="setup-fingerprint">—</code>
+                </details>
+              </div>
+              <a
+                id="setup-certificate-link"
+                class="button button--primary button--full"
+                href="/remote/trust-certificate.cer"
+                download="solin-remote-root.cer"
+              >
+                <span class="css-icon css-icon--download" aria-hidden="true"></span>
+                <span data-i18n="setup.downloadCertificate">Download Solin certificate</span>
+              </a>
+              <div class="setup-platform-guide" data-platform-help="android" hidden>
+                <strong data-i18n="setup.androidLabel">Android</strong>
+                <ol class="setup-mini-steps">
+                  <li data-i18n="setup.androidTrustSettings">Open Settings and search for “CA certificate”.</li>
+                  <li data-i18n="setup.androidTrustInstall">Choose Install a certificate › CA certificate, select solin-remote-root.cer from your downloads, and confirm with your device lock.</li>
+                  <li data-i18n="setup.androidTrustConfirm">Approve Android's security notice only after the verification code matches Solin.</li>
+                </ol>
+                <p class="setup-platform-note" data-i18n="setup.androidTrustVariation">Menu names can vary by manufacturer. Opening the downloaded file directly may only redirect you to Settings.</p>
+              </div>
+              <div class="setup-platform-guide" data-platform-help="apple" hidden>
+                <strong data-i18n="setup.appleLabel">iPhone or iPad</strong>
+                <ol class="setup-mini-steps">
+                  <li data-i18n="setup.appleTrustDownload">Download the certificate in Safari, open Settings, and tap Profile Downloaded. If it is not shown, open General › VPN &amp; Device Management.</li>
+                  <li data-i18n="setup.appleTrustInstall">Tap Install and follow the confirmation prompts.</li>
+                  <li data-i18n="setup.appleTrustEnable">Open General › About › Certificate Trust Settings and enable full trust for Solin Remote Root.</li>
+                </ol>
+              </div>
+              <p class="setup-platform-note" data-platform-help="generic" data-i18n="setup.genericTrust">
+                Install the downloaded file as a trusted certificate authority for this device.
+              </p>
+            </div>
+          </li>
+
+          <li class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">2</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.reopenTitle">Reopen the secure address</h2>
+              <p data-i18n="setup.reopenDetail">
+                Fully close and reopen the browser. The privacy warning should no longer appear.
+              </p>
+              <p class="setup-platform-note" data-platform-help="android" hidden data-i18n="setup.androidRestart">
+                If Chrome still shows the warning after the CA certificate is installed, restart Android once and reopen the address.
+              </p>
+              <p class="setup-platform-note" data-platform-help="apple" hidden data-i18n="setup.appleReopen">
+                On iPhone or iPad, return to Safari after enabling full trust and reopen the address.
+              </p>
+            </div>
+          </li>
+
+          <li id="setup-install-step" class="setup-step">
+            <span class="setup-step-number" aria-hidden="true">3</span>
+            <div class="setup-step-content">
+              <h2 data-i18n="setup.installTitle">Install Solin Timer</h2>
+              <p id="setup-install-help" data-i18n="setup.installDetail">
+                Install Solin Timer on this device for standalone fullscreen access from your home screen.
+              </p>
+              <button id="setup-install-button" class="button button--secondary button--full" type="button" hidden>
+                <span class="css-icon css-icon--install" aria-hidden="true"></span>
+                <span data-i18n="setup.installApp">Install Solin Timer</span>
+              </button>
+              <p class="setup-platform-note" data-install-manual data-platform-help="android" hidden data-i18n="setup.installManualAndroid">
+                In Chrome, open the ⋮ menu, choose Add to Home screen, then choose Install rather than Add shortcut.
+              </p>
+              <p class="setup-platform-note" data-install-manual data-platform-help="apple" hidden data-i18n="setup.installManualApple">
+                In Safari, tap Share › Add to Home Screen, enable Open as Web App, then tap Add.
+              </p>
+              <p class="setup-platform-note" data-install-manual data-platform-help="generic" data-i18n="setup.installManual">
+                Use your browser menu and choose Install app or Add to Home Screen.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="setup-actions">
+          <a class="button button--primary button--full" href="/remote/timer/" data-i18n="setup.continueToTimer">
+            Open Solin Timer
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <div id="control-view" class="control-shell" hidden>
+      <header class="topbar">
+        <div class="brand-lockup">
+          <img src="./icons/icon-192.png" alt="" width="40" height="40">
+          <div class="brand-copy">
+            <span class="brand-name" data-i18n="app.title">Solin Timer</span>
+            <span id="control-profile-name" class="brand-subtitle" data-i18n="app.timer">Meeting timer</span>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <div id="control-connection-chip" class="connection-chip" role="status">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="control-connection-label" data-i18n="connection.connecting">Connecting…</span>
+          </div>
+
+          <button
+            id="control-install-button"
+            class="button button--secondary button--compact"
+            type="button"
+            aria-label="Install Solin Timer"
+            data-i18n-aria-label="app.installSolin"
+            hidden
+          >
+            <span class="css-icon css-icon--install" aria-hidden="true"></span>
+            <span class="desktop-label" data-i18n="app.installApp">Install app</span>
+          </button>
+
+          <button
+            id="logout-button"
+            class="icon-button"
+            type="button"
+            aria-label="Sign out"
+            data-i18n-aria-label="app.signOut"
+          >
+            <svg class="ui-icon" aria-hidden="true" focusable="false">
+              <use href="#icon-logout"></use>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="reconnect-banner" class="reconnect-banner" role="status" hidden>
+        <div>
+          <strong data-i18n="connection.reconnectingTitle">Reconnecting to Solin…</strong>
+          <span data-i18n="connection.reconnectingDetail">Live updates and controls will resume automatically.</span>
+        </div>
+        <button id="retry-connection" class="button button--ghost button--compact" type="button">
+          <span data-i18n="connection.retryNow">Try now</span>
+        </button>
+      </div>
+
+      <aside
+        id="sticky-timer-bar"
+        class="sticky-timer-shell"
+        data-stuck="false"
+        data-state="idle"
+        data-overrun="false"
+        aria-hidden="true"
+      >
+        <div class="sticky-timer-dock">
+          <button
+            id="sticky-scroll-top"
+            class="sticky-timer-summary"
+            type="button"
+            aria-label="Back to top"
+            title="Back to top"
+            data-i18n-aria-label="hero.backToTop"
+            data-i18n-title="hero.backToTop"
+          >
+            <span class="sticky-status-dot" aria-hidden="true"></span>
+            <span class="sticky-readout" aria-live="off">
+              <span id="sticky-primary-time" class="sticky-primary-time">--:--</span>
+              <span id="sticky-suffix-time" class="sticky-suffix-time" hidden></span>
+            </span>
+            <span class="sticky-divider" aria-hidden="true"></span>
+            <span id="sticky-title" class="sticky-title" data-i18n="hero.idleTitle">No meeting part running</span>
+          </button>
+
+          <div class="sticky-timer-actions">
+            <div id="sticky-nudge-group" class="sticky-nudge-group" hidden>
+              <button
+                id="sticky-minus-second"
+                class="button button--secondary button--mini"
+                type="button"
+                aria-label="Subtract 1 second"
+                data-i18n-aria-label="hero.minusSecondAria"
+                data-i18n="hero.minusSecond"
+              >
+                −1 s
+              </button>
+              <button
+                id="sticky-plus-second"
+                class="button button--secondary button--mini"
+                type="button"
+                aria-label="Add 1 second"
+                data-i18n-aria-label="hero.plusSecondAria"
+                data-i18n="hero.plusSecond"
+              >
+                +1 s
+              </button>
+            </div>
+
+            <button
+              id="sticky-stop-button"
+              class="button button--danger button--mini"
+              type="button"
+              aria-label="Stop"
+              data-i18n-aria-label="part.stop"
+              hidden
+            >
+              <span class="css-icon css-icon--stop" aria-hidden="true"></span>
+              <span class="sticky-stop-label" data-i18n="part.stop">Stop</span>
+            </button>
+
+            <button
+              id="sticky-expand-button"
+              class="icon-button icon-button--small sticky-expand-button"
+              type="button"
+              aria-label="Expand timer"
+              title="Expand timer"
+              data-i18n-aria-label="stage.expandTimer"
+              data-i18n-title="stage.expandTimer"
+            >
+              <svg class="ui-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-expand"></use>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main id="main-content" class="control-workspace">
+        <div class="control-container">
+          <section id="hero-card" class="hero-card" data-state="idle" data-overrun="false">
+            <div class="hero-top">
+              <div class="hero-meta">
+                <div class="hero-eyebrow-row">
+                  <p id="hero-eyebrow" class="eyebrow" data-i18n="hero.clockEyebrow">CURRENT TIME</p>
+                  <span id="hero-overrun-badge" class="overrun-badge" data-i18n="hero.overrun" hidden>Over time</span>
+                </div>
+                <h1 id="hero-title" class="hero-title" data-i18n="hero.idleTitle">No meeting part running</h1>
+              </div>
+
+              <div class="hero-top-actions">
+                <div id="hero-wall-clock-pill" class="wall-clock-pill" hidden>
+                  <svg class="ui-icon" aria-hidden="true" focusable="false">
+                    <use href="#icon-clock"></use>
+                  </svg>
+                  <span id="hero-wall-clock">—</span>
+                </div>
+
+                <button
+                  id="hero-expand-button"
+                  class="button button--secondary button--compact hero-expand-button"
+                  type="button"
+                  aria-label="Expand timer"
+                  title="Expand timer"
+                  data-i18n-aria-label="stage.expandTimer"
+                  data-i18n-title="stage.expandTimer"
+                >
+                  <svg class="ui-icon" aria-hidden="true" focusable="false">
+                    <use href="#icon-expand"></use>
+                  </svg>
+                  <span class="hero-expand-label" data-i18n="stage.expand">Expand</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="hero-main">
+              <div class="hero-readout" aria-live="off">
+                <span id="hero-primary-time" class="hero-primary-time">--:--</span>
+                <span id="hero-side-time" class="hero-side-time" hidden>
+                  <span id="hero-ampm-time" class="hero-ampm-time" hidden></span>
+                  <span id="hero-suffix-time" class="hero-suffix-time" hidden></span>
+                </span>
+              </div>
+
+              <div id="hero-actions" class="hero-actions" hidden>
+                <div id="hero-nudge-group" class="nudge-group" hidden>
+                  <button
+                    id="hero-minus-second"
+                    class="button button--secondary button--compact"
+                    type="button"
+                    aria-label="Subtract 1 second"
+                    data-i18n-aria-label="hero.minusSecondAria"
+                    data-i18n="hero.minusSecond"
+                  >
+                    −1 s
+                  </button>
+                  <button
+                    id="hero-plus-second"
+                    class="button button--secondary button--compact"
+                    type="button"
+                    aria-label="Add 1 second"
+                    data-i18n-aria-label="hero.plusSecondAria"
+                    data-i18n="hero.plusSecond"
+                  >
+                    +1 s
+                  </button>
+                </div>
+
+                <button id="hero-stop-button" class="button button--danger button--compact" type="button" hidden>
+                  <span class="css-icon css-icon--stop" aria-hidden="true"></span>
+                  <span data-i18n="part.stop">Stop</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section id="meeting-bar" class="meeting-bar">
+            <div class="segmented-switch" role="group">
+              <button
+                id="meeting-midweek"
+                class="segmented-button"
+                type="button"
+                aria-pressed="true"
+                data-meeting-type="midweek"
+                data-i18n="meeting.midweek"
+              >
+                Midweek
+              </button>
+              <button
+                id="meeting-weekend"
+                class="segmented-button"
+                type="button"
+                aria-pressed="false"
+                data-meeting-type="weekend"
+                data-i18n="meeting.weekend"
+              >
+                Weekend
+              </button>
+            </div>
+
+            <div id="week-nav" class="week-nav">
+              <button
+                id="week-prev"
+                class="icon-button icon-button--small week-nav-button"
+                type="button"
+                aria-label="Previous week"
+                title="Previous week"
+                data-i18n-aria-label="week.previous"
+                data-i18n-title="week.previous"
+              >
+                <span class="css-icon css-icon--chevron-left" aria-hidden="true"></span>
+              </button>
+
+              <div class="week-summary">
+                <div class="week-label-row">
+                  <svg class="ui-icon week-calendar-icon" aria-hidden="true" focusable="false">
+                    <use href="#icon-calendar"></use>
+                  </svg>
+                  <strong id="week-label" class="week-label">—</strong>
+                </div>
+                <span
+                  id="week-not-current"
+                  class="week-substatus"
+                  data-i18n="week.notCurrent"
+                  hidden
+                >
+                  Not the current week
+                </span>
+              </div>
+
+              <button
+                id="week-next"
+                class="icon-button icon-button--small week-nav-button"
+                type="button"
+                aria-label="Next week"
+                title="Next week"
+                data-i18n-aria-label="week.next"
+                data-i18n-title="week.next"
+              >
+                <span class="css-icon css-icon--chevron-right" aria-hidden="true"></span>
+              </button>
+
+              <button
+                id="week-current"
+                class="icon-button icon-button--small week-nav-button week-home-button"
+                type="button"
+                aria-label="Back to this week"
+                title="Back to this week"
+                data-i18n-aria-label="week.backToCurrent"
+                data-i18n-title="week.backToCurrent"
+                disabled
+              >
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-home"></use>
+                </svg>
+              </button>
+            </div>
+          </section>
+
+          <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
+        </div>
+      </main>
+    </div>
+
+    <div
+      id="duration-modal"
+      class="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="duration-modal-title"
+      hidden
+    >
+      <section class="duration-card">
+        <div class="modal-card-header">
+          <h2 id="duration-modal-title" class="duration-modal-title"></h2>
+          <button
+            id="duration-close"
+            class="icon-button icon-button--small"
+            type="button"
+            aria-label="Cancel"
+            data-i18n-aria-label="part.cancelDuration"
+          >
+            <span class="css-icon css-icon--close" aria-hidden="true"></span>
+          </button>
+        </div>
+
+        <form id="duration-form" class="duration-form" novalidate>
+          <div class="field">
+            <label for="duration-input" data-i18n="part.durationInputLabel">Duration (MM:SS or minutes)</label>
+            <input
+              id="duration-input"
+              name="duration"
+              type="text"
+              inputmode="text"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="12"
+              required
+            >
+          </div>
+          <p id="duration-error" class="form-error" role="alert" hidden></p>
+          <div class="duration-actions">
+            <button id="duration-cancel" class="button button--secondary" type="button" data-i18n="part.cancelDuration">
+              Cancel
+            </button>
+            <button id="duration-submit" class="button button--primary" type="submit" data-i18n="part.saveDuration">
+              Apply
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <div id="assertive-status" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+
+    <noscript>
+      <main class="noscript-card">
+        <h1 data-i18n="app.javascriptRequired">JavaScript required</h1>
+        <p data-i18n="app.javascriptRequiredDetail">Enable JavaScript to use Solin Timer.</p>
+      </main>
+    </noscript>
+  </body>
+</html>

@@ -139,9 +139,18 @@ def _domain_states():
         shortcutShareMode=False, shortcuts=[], shortcutCaptureText="", shortcutKeyLabel="",
     )
     states["remote"].update(
-        setupVisible=False, setupUrl="", fingerprint="", fingerprintVisible=False,
+        enabled=False,
+        setupVisible=False, setupTitle="", setupUrl="", fingerprint="", fingerprintVisible=False,
         qrBusy=False, qrError="", qrImage="", verificationCode="",
-        endpoint="https://192.168.1.2:8443", username="", password="", passwordConfirmation="",
+        mediaEnabled=False, timerEnabled=False,
+        mediaEndpoint="https://192.168.1.2:8765/remote/media/",
+        timerEndpoint="https://192.168.1.2:8765/remote/timer/",
+        mediaSetupEnabled=False, timerSetupEnabled=False,
+        mediaUsername="", mediaPassword="", mediaPasswordConfirmation="",
+        timerUsername="", timerPassword="", timerPasswordConfirmation="",
+        mediaCredentialsSummary="Not configured", timerCredentialsSummary="Not configured",
+        mediaStatusMessage="Disabled", mediaStatusKind="disabled",
+        timerStatusMessage="Disabled", timerStatusKind="disabled",
     )
     states["about"].update(
         installedVersion="26.33.0-beta.2", installedIsBeta=True,
@@ -405,7 +414,8 @@ def test_translated_search_ignores_accents_and_private_values():
         navigation = SettingsNavigation(domains)
         navigation.search("PROTECAO reproducao")
         assert [result["key"] for result in navigation.results] == ["playbackProtection"]
-        domains["remote"].setValue("password", "unique-private-secret")
+        domains["remote"].setValue("mediaPassword", "unique-private-secret")
+        domains["remote"].setValue("timerPassword", "unique-private-secret")
         navigation.search("unique-private-secret")
         assert navigation.results == []
     finally:
@@ -892,32 +902,42 @@ def test_obs_encloses_nested_ndi_and_animates_expansion(create_view):
 
 def test_remote_credentials_expand_from_header_with_summary_and_keep_drafts(create_view):
     view = create_view(width=1280, height=900)
-    view.domains["remote"].publish(credentialsSummary="Configured as operator", password="draft")
+    view.domains["remote"].publish(
+        mediaCredentialsSummary="Configured as operator",
+        mediaPassword="draft",
+    )
     view.navigation.openSection("remote", "", "")
     _settle(view)
-    group = _find(view.root, "group_credentials")
-    heading = _find(view.root, "groupHeading_credentials")
-    body = _find(view.root, "groupBody_credentials")
+    group = _find(view.root, "group_mediaCredentials")
+    heading = _find(view.root, "groupHeading_mediaCredentials")
+    body = _find(view.root, "groupBody_mediaCredentials")
     assert group.property("expanded") is False
     assert body.height() == 0
     assert any(item.property("text") == "Configured as operator" for item in _items(heading))
-    assert _find(view.root, "setting_credentialsSummary") is None
+    assert _find(view.root, "setting_mediaCredentialsSummary") is None
     assert not any(item.property("text") == "Change" for item in _items(group))
     position = heading.mapToScene(QPointF(heading.width() / 2, heading.height() / 2))
     mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
     _wait_until(lambda: _expanded_body_settled(body))
     _settle(view)
     assert group.property("expanded") is True
-    for key in ("username", "password", "passwordConfirmation", "saveCredentials"):
+    for key in (
+        "mediaUsername",
+        "mediaPassword",
+        "mediaPasswordConfirmation",
+        "saveMediaCredentials",
+    ):
         assert _find(view.root, "setting_" + key).isVisible()
-    view.navigation.expand("credentials", False)
+    view.navigation.expand("mediaCredentials", False)
     _settle(view)
     view.navigation.search("Confirm password")
-    result = next(result for result in view.navigation.results if result["key"] == "passwordConfirmation")
+    result = next(
+        result for result in view.navigation.results if result["key"] == "mediaPasswordConfirmation"
+    )
     view.navigation.openSection(result["section"], result["group"], result["key"])
     _settle(view)
-    assert _find(view.root, "group_credentials").property("expanded") is True
-    assert view.domains["remote"].state["password"] == "draft"
+    assert _find(view.root, "group_mediaCredentials").property("expanded") is True
+    assert view.domains["remote"].state["mediaPassword"] == "draft"
     assert view.domains["remote"].calls == []
     assert view.warnings == []
 

@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 
-from solin.core.remote_control.contracts import (
+from solin.core.remote_control.media.contracts import (
     CatalogCollection,
     CatalogKind,
     CatalogNode,

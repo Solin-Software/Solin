@@ -16,12 +16,15 @@ from solin.core.remote_control.security import (
     LoginRateLimitPolicy,
     PasswordValidationError,
     RemoteControlCredentialsStore,
+    RemoteScope,
     ScryptParameters,
     ScryptPasswordHasher,
     SessionGenerationChangedError,
     SessionLimitReachedError,
     UsernameValidationError,
+    format_global_management_id,
     normalize_username,
+    parse_global_management_id,
     validate_password,
 )
 from solin.core.remote_control.settings import (
@@ -70,7 +73,7 @@ def _credentials_store() -> tuple[RemoteControlCredentialsStore, _MemorySettings
         ScryptParameters(n=1_024, r=8, p=1, max_memory_bytes=8 * 1024 * 1024),
         salt_factory=lambda length: b"s" * length,
     )
-    return RemoteControlCredentialsStore.create(
+    return RemoteControlCredentialsStore.for_media(
         profile_settings,
         password_hasher=hasher,
     ), settings
@@ -114,7 +117,7 @@ def test_hasher_construction_does_not_run_scrypt_but_invalid_login_does_once(
     monkeypatch.setattr(ScryptPasswordHasher, "_derive", staticmethod(derive))
     settings = _MemorySettings()
     hasher = ScryptPasswordHasher()
-    store = RemoteControlCredentialsStore.create(
+    store = RemoteControlCredentialsStore.for_media(
         ProfileAppSettingsStore(cast(Any, settings)),
         password_hasher=hasher,
     )
@@ -130,7 +133,7 @@ def test_credentials_are_profile_scoped_versioned_and_never_store_plaintext() ->
 
     store.set_credentials("  Operator.ONE ", password)
 
-    raw = cast(str, settings.values[SettingsKey.REMOTE_CONTROL_CREDENTIALS])
+    raw = cast(str, settings.values[SettingsKey.REMOTE_CONTROL_MEDIA_CREDENTIALS])
     assert password not in raw
     assert '"version":1' in raw
     assert '"algorithm":"scrypt"' in raw
@@ -141,9 +144,38 @@ def test_credentials_are_profile_scoped_versioned_and_never_store_plaintext() ->
     assert store.authenticate("different.user", password) is False
 
 
+def test_media_and_timer_credentials_are_completely_isolated_per_scope() -> None:
+    settings = _MemorySettings()
+    profile_settings = ProfileAppSettingsStore(cast(Any, settings))
+    hasher = ScryptPasswordHasher(
+        ScryptParameters(n=1_024, r=8, p=1, max_memory_bytes=8 * 1024 * 1024),
+        salt_factory=lambda length: b"s" * length,
+    )
+    media_store = RemoteControlCredentialsStore.for_media(profile_settings, password_hasher=hasher)
+    timer_store = RemoteControlCredentialsStore.for_timer(profile_settings, password_hasher=hasher)
+
+    media_store.set_credentials("media.op", "media-secret-pass")
+    timer_store.set_credentials("timer.op", "timer-secret-pass")
+
+    assert media_store.authenticate("media.op", "media-secret-pass") is True
+    assert media_store.authenticate("timer.op", "timer-secret-pass") is False
+    assert timer_store.authenticate("timer.op", "timer-secret-pass") is True
+    assert timer_store.authenticate("media.op", "media-secret-pass") is False
+
+    media_store.clear_credentials()
+    assert media_store.has_credentials() is False
+    assert timer_store.has_credentials() is True
+    assert timer_store.authenticate("timer.op", "timer-secret-pass") is True
+
+    global_id = format_global_management_id(RemoteScope.TIMER, "mgmt-123")
+    assert global_id == "timer:mgmt-123"
+    assert parse_global_management_id(global_id) == (RemoteScope.TIMER, "mgmt-123")
+    assert parse_global_management_id("invalid-id") is None
+
+
 def test_credentials_fail_closed_when_record_is_corrupt_and_can_be_cleared() -> None:
     store, settings = _credentials_store()
-    settings.values[SettingsKey.REMOTE_CONTROL_CREDENTIALS] = (
+    settings.values[SettingsKey.REMOTE_CONTROL_MEDIA_CREDENTIALS] = (
         '{"version":1,"username":"operator","password_envelope":{"algorithm":"scrypt"}}'
     )
 
@@ -154,7 +186,7 @@ def test_credentials_fail_closed_when_record_is_corrupt_and_can_be_cleared() -> 
     store.set_credentials("operator", "correct horse battery staple")
     store.clear_credentials()
 
-    assert SettingsKey.REMOTE_CONTROL_CREDENTIALS not in settings.values
+    assert SettingsKey.REMOTE_CONTROL_MEDIA_CREDENTIALS not in settings.values
     assert store.authenticate("operator", "correct horse battery staple") is False
 
 
@@ -333,13 +365,23 @@ def test_remote_control_settings_are_profile_scoped_disabled_by_default_and_fixe
 
     assert REMOTE_CONTROL_PORT == 8765
     assert store.snapshot().enabled is False
+    assert store.snapshot().media_enabled is False
+    assert store.snapshot().timer_enabled is False
     assert store.snapshot().network_selection is None
     assert store.onboarding_seen() is False
 
     store.set_enabled(True)
+    store.set_media_enabled(True)
+    store.set_timer_enabled(True)
 
     assert store.enabled() is True
-    assert settings.values == {SettingsKey.REMOTE_CONTROL_ENABLED: True}
+    assert store.media_enabled() is True
+    assert store.timer_enabled() is True
+    assert settings.values == {
+        SettingsKey.REMOTE_CONTROL_ENABLED: True,
+        SettingsKey.REMOTE_CONTROL_MEDIA_ENABLED: True,
+        SettingsKey.REMOTE_CONTROL_TIMER_ENABLED: True,
+    }
     assert all("port" not in key for key in settings.values)
 
     store.mark_onboarding_seen()

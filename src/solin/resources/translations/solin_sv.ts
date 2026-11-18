@@ -5408,6 +5408,14 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>Solin scenes · engine unavailable</source>
         <translation>Solin-scener · motorn inte tillgänglig</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>Fjärrkontroll · %n helskärmsvisning</numerusform>
+            <numerusform>Fjärrkontroll · %n helskärmsvisningar</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5504,6 +5512,26 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>Säker fjärrstyrning körs. Förnyelse av certifikat kommer att göras om automatiskt.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>Spara inloggningsuppgifter för Media för att starta fjärrstyrning av media.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>Spara inloggningsuppgifter för Räknare för att starta fjärrstyrning av räknaren.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Aktivera fjärrstyrning för Media eller Räknare för att ta emot anslutningar.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>Fjärrstyrning av räknaren är igång. Förbereder mediakatalogen…</translation>
     </message>
 </context>
 <context>
@@ -5613,8 +5641,8 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>Konfigurera Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>Konfigurera Solin Media</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5700,6 +5728,11 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <source>Choose another location and try again.</source>
         <translation>Välj en annan plats och försök igen.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>Konfigurera Solin Timer</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5772,6 +5805,57 @@ Den nuvarande ordningen och filerna bevaras. Väntande ändringar från den tidi
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>Kopplar från…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>Media och Räknare aktiva på det lokala nätverket</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>Media aktiv på det lokala nätverket</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>Räknare aktiv på det lokala nätverket</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>Inga inloggade räknarkontroller</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>Inga inloggade mediaenheter</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>Räknare</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>%n helskärmsvisning</numerusform>
+            <numerusform>%n helskärmsvisningar</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>%n inloggad enhet</numerusform>
+            <numerusform>%n inloggade enheter</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7869,7 +7953,7 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">Media</translation>
+        <translation>Media</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -8795,6 +8879,76 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Öppna nedladdningssidan</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>Installera certifikatet för att lägga till fjärrkontroller som appar utan webbläsarvarningar.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>Bläddra bland möten och spellistor och styr mediaprojektionen på distans.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>Räknare</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>Visa mötesräknaren i helskärm utan att logga in, eller logga in för att styra punkter.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>Välj ett privat nätverk innan fjärrstyrning aktiveras.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>Aktivera Fjärrkontroll först.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>Spara inloggningsuppgifter för Media innan fjärrstyrning av media aktiveras.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>Spara inloggningsuppgifter för Räknare innan fjärrstyrning av räknaren aktiveras.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Aktivera fjärrstyrning för Media eller Räknare för att ta emot anslutningar.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>Valfritt (endast helskärmsvisning)</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="406"/>
+        <source>Disabled</source>
+        <translation>Inaktiverad</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="408"/>
+        <source>Credentials required</source>
+        <translation>Inloggningsuppgifter krävs</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="410"/>
+        <source>Active</source>
+        <translation>Aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="411"/>
+        <source>Starting…</source>
+        <translation>Startar…</translation>
     </message>
 </context>
 <context>
@@ -11158,13 +11312,13 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solin Remote</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>Fjärrstyrning</translation>
+        <source>Media control</source>
+        <translation>Mediakontroll</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11173,8 +11327,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>Installera Solin</translation>
+        <source>Install Solin Media</source>
+        <translation>Installera Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11203,8 +11357,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>Aktivera JavaScript för att använda Solin-fjärrstyrning.</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>Aktivera JavaScript för att använda Solin Media.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11213,8 +11367,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>FJÄRRSTYRNING</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>MEDIAKONTROLL</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11273,8 +11427,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>Konfigurera Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>Konfigurera Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11283,8 +11437,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>Godkänn denna Solin en gång och installera sedan webbappen för snabb och säker åtkomst via det lokala nätverket.</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>Lita på detta Solin en gång och installera sedan Solin Media för snabb och säker åtkomst i det lokala nätverket.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11388,13 +11542,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>Installera Solin Remote</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>Installera Solin Remote på den här enheten för snabb åtkomst från hemskärmen.</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>Installera Solin Media på den här enheten för snabb åtkomst från hemskärmen.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11438,8 +11587,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>Inloggad. Fjärrstyrning ansluten.</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>Inloggad. Mediakontroll ansluten.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11918,8 +12067,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>Solin har installerats på den här enheten.</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>Solin Media installerades på den här enheten.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11991,6 +12140,311 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <source>Solin could not complete the request.</source>
         <translation>Solin kunde inte slutföra begäran.</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>Mötesräknare</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>Installera Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>Aktivera JavaScript för att använda Solin Timer.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>Tryck på skärmen för att dölja eller visa kontroller</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>Styr punkter</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>Öppna helskärm</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>Avsluta helskärm</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>Förstora</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>Förstora timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>Klocka</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>RÄKNARKONTROLL</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>Logga in för att starta, stoppa och justera mötespunkter från den här enheten.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>Tillbaka till helskärmsräknaren</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>Inloggad. Räknarkontroll ansluten.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>Konfigurera Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>Tillbaka till räknaren</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>Lita på detta Solin en gång och installera sedan Solin Timer för helskärmsvisning och snabb styrning i det lokala nätverket.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>Installera Solin Timer på den här enheten för direkt åtkomst i helskärm från hemskärmen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Öppna Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Den här enheten kopplades från i Solin. Återgick till helskärmsvisning.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Alla fjärrenheter kopplades från i Solin. Återgick till helskärmsvisning.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>Liveuppdateringar och kontroller återupptas automatiskt.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>AKTUELL TID</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>PÅGÅR NU</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>AVSLUTAD</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>Ingen mötespunkt pågår</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>Över tiden</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>Tillbaka till toppen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>Dra av 1 sekund</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>Lägg till 1 sekund</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>Veckomöte</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>Helg</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>Föregående vecka</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>Tillbaka till denna vecka</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>Inte aktuell vecka</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>Inga punkter i detta schema</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>Punkter</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>Färre punkter i {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>Fler punkter i {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>Starta</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>Återställa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>Startade {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>Längd {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>Dra av 1 minut från {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>Lägg till 1 minut till {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>Ange längd för {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>Längd (MM:SS eller minuter)</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>Tillämpa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>Avbryt</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>Ange en giltig längd mellan 01:00 och 23:59:59.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>Solin Timer installerades på den här enheten.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>Utloggad på den här enheten.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>Schemat uppdaterades. Försök igen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>Den här räknaråtgärden är inaktiverad.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>Den här mötespunkten är inte längre tillgänglig.</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12048,8 +12502,8 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solin-app · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12075,6 +12529,21 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>Aktiv för %1 dag sedan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>Räknare</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

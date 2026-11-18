@@ -5,7 +5,8 @@ import uuid
 
 import pytest
 
-from solin.core.remote_control.contracts import (
+from solin.core.remote_control.command_gate import CommandDisposition
+from solin.core.remote_control.media.contracts import (
     CatalogCollection,
     CatalogKind,
     CommandError,
@@ -16,15 +17,14 @@ from solin.core.remote_control.contracts import (
     PlayCommand,
     ProjectionOrigin,
     ProjectionSnapshot,
+    ProjectionSource,
     RemoteMediaKind,
     ResumeCommand,
     SeekCommand,
     SetVolumeCommand,
     StopCommand,
 )
-from solin.core.remote_control.contracts import ProjectionSource
-from solin.core.remote_control.state import (
-    CommandDisposition,
+from solin.core.remote_control.media.state import (
     ProjectionCommandSession,
     RemoteControlStateStore,
 )

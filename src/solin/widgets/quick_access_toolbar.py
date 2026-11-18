@@ -28,7 +28,7 @@ from solin.core.integrations.automation.auto_key_actions import (
 )
 from solin.core.integrations.automation.settings import AutoKeySettingsStore, OBSSettingsStore
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
-from solin.core.remote_control.security import RemoteSessionInfo
+from solin.core.remote_control.security import RemoteScope, RemoteSessionInfo
 from solin.ui.helpers import begin_qml_pointer_cursor, end_qml_pointer_cursor
 from solin.ui.macos_layer import apply_corner_radius
 from solin.ui.background_song_status import translate_background_song_status
@@ -209,6 +209,9 @@ class QuickAccessToolbar(QQuickWidget):
         self._zoom_enabled = bool(zoom_service and zoom_service.is_enabled)
         self._remote_enabled = False
         self._remote_running = False
+        self._remote_media_active = False
+        self._remote_timer_active = False
+        self._remote_timer_viewers = 0
         self._remote_runtime_message = ""
         self._remote_sessions: tuple[RemoteSessionInfo, ...] = ()
         self._zoom_song_link = (False, False)
@@ -536,7 +539,10 @@ class QuickAccessToolbar(QQuickWidget):
             self._remote_enabled,
             self._remote_running,
             self._remote_runtime_message,
+            media_active=self._remote_media_active,
+            timer_active=self._remote_timer_active,
         )
+        popup.set_public_viewers(self._remote_timer_viewers)
         popup.set_sessions(self._remote_sessions)
         self._remote_sessions_popup = popup
         return popup
@@ -587,9 +593,13 @@ class QuickAccessToolbar(QQuickWidget):
         enabled: bool,
         running: bool,
         message: str,
+        media_active: bool = False,
+        timer_active: bool = False,
     ) -> None:
         self._remote_enabled = bool(enabled)
         self._remote_running = bool(running)
+        self._remote_media_active = bool(media_active)
+        self._remote_timer_active = bool(timer_active)
         self._remote_runtime_message = str(message or "")
         self._bridge.set_remote_control_visible(self._remote_enabled)
         if self._remote_sessions_popup is not None:
@@ -597,6 +607,8 @@ class QuickAccessToolbar(QQuickWidget):
                 self._remote_enabled,
                 self._remote_running,
                 self._remote_runtime_message,
+                media_active=self._remote_media_active,
+                timer_active=self._remote_timer_active,
             )
         if (
             not self._remote_enabled
@@ -606,6 +618,15 @@ class QuickAccessToolbar(QQuickWidget):
             self._remote_sessions_popup.close()
         self._sync_remote_control_state()
         self._reposition()
+
+    def set_remote_public_viewers(self, counts: object) -> None:
+        timer_viewers = 0
+        if isinstance(counts, dict):
+            timer_viewers = int(counts.get(RemoteScope.TIMER, 0) or 0)
+        self._remote_timer_viewers = max(0, timer_viewers)
+        if self._remote_sessions_popup is not None:
+            self._remote_sessions_popup.set_public_viewers(self._remote_timer_viewers)
+        self._sync_remote_control_state()
 
     def set_remote_sessions(self, sessions: object) -> None:
         self._remote_sessions = (
@@ -630,9 +651,12 @@ class QuickAccessToolbar(QQuickWidget):
 
     def _sync_remote_control_state(self) -> None:
         session_count = len(self._remote_sessions)
-        connected = any(
-            int(getattr(session, "connected_socket_count", 0) or 0) > 0
-            for session in self._remote_sessions
+        connected = (
+            any(
+                int(getattr(session, "connected_socket_count", 0) or 0) > 0
+                for session in self._remote_sessions
+            )
+            or self._remote_timer_viewers > 0
         )
         color = (
             PALETTE.accent
@@ -651,6 +675,12 @@ class QuickAccessToolbar(QQuickWidget):
                 "Remote control · %n signed-in device(s)",
                 "",
                 session_count,
+            )
+        elif self._remote_timer_viewers > 0:
+            tooltip = self.tr(
+                "Remote control · %n fullscreen viewer(s)",
+                "",
+                self._remote_timer_viewers,
             )
         else:
             tooltip = self.tr("Remote control · no signed-in devices")

@@ -7,8 +7,10 @@ from PySide6.QtCore import QCoreApplication, QTranslator
 from solin.core.foundation.resources import application_translation_root
 from solin.core.i18n.meeting_sections import display_meeting_section_title
 from solin.core.i18n.remote_control import (
-    remote_control_localization,
-    remote_control_message_sources,
+    remote_media_localization,
+    remote_media_message_sources,
+    remote_timer_localization,
+    remote_timer_message_sources,
 )
 from tests._translation_catalog import catalog_translation
 
@@ -16,13 +18,16 @@ from tests._translation_catalog import catalog_translation
 _PLACEHOLDER = re.compile(r"\{[A-Za-z][A-Za-z0-9_]*\}")
 
 
-def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders(compiled_translation_catalogs) -> None:
+def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders(
+    compiled_translation_catalogs,
+) -> None:
     app = QCoreApplication.instance() or QCoreApplication([])
     translator = QTranslator(app)
     assert translator.load(str(compiled_translation_catalogs / "solin_pt_BR.qm"))
     assert app.installTranslator(translator)
     try:
-        payload = remote_control_localization("pt_BR")
+        media_payload = remote_media_localization("pt_BR")
+        timer_payload = remote_timer_localization("pt_BR")
         section_title = display_meeting_section_title(
             {
                 "type": "section",
@@ -33,7 +38,11 @@ def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders(c
         )
         setup_title = QCoreApplication.translate(
             "RemoteControlSetupDialog",
-            "Set up Solin Remote",
+            "Set up Solin Media",
+        )
+        timer_setup_title = QCoreApplication.translate(
+            "RemoteControlSetupDialog",
+            "Set up Solin Timer",
         )
         sessions_empty = QCoreApplication.translate(
             "RemoteSessionsPopup",
@@ -42,56 +51,103 @@ def test_remote_localization_uses_active_qt_catalog_and_preserves_placeholders(c
     finally:
         app.removeTranslator(translator)
 
-    assert payload["locale"] == "pt-BR"
-    messages = payload["messages"]
-    assert isinstance(messages, dict)
-    sources = remote_control_message_sources()
+    assert media_payload["locale"] == "pt-BR"
+    assert timer_payload["locale"] == "pt-BR"
+    media_messages = media_payload["messages"]
+    timer_messages = timer_payload["messages"]
+    assert isinstance(media_messages, dict)
+    assert isinstance(timer_messages, dict)
+
+    media_sources = remote_media_message_sources()
     for key in (
-        "app.remoteControl", "library.chooseMeeting", "count.media.other", "setup.title",
+        "app.title",
+        "app.mediaControl",
+        "library.chooseMeeting",
+        "count.media.other",
+        "setup.title",
         "session.disconnectedDevice",
     ):
-        assert messages[key] == catalog_translation("pt_BR", "_RemoteControlWeb", sources[key])
-    assert section_title == catalog_translation("pt_BR", "_Section", "TREASURES FROM GOD'S WORD")
+        assert media_messages[key] == catalog_translation(
+            "pt_BR", "_RemoteControlWeb", media_sources[key]
+        )
+
+    timer_sources = remote_timer_message_sources()
+    for key in (
+        "app.title",
+        "stage.controlParts",
+        "stage.expand",
+        "stage.expandTimer",
+        "setup.title",
+        "part.start",
+        "session.disconnectedDevice",
+    ):
+        assert timer_messages[key] == catalog_translation(
+            "pt_BR", "_RemoteControlWeb", timer_sources[key]
+        )
+
+    assert section_title == catalog_translation(
+        "pt_BR", "_Section", "TREASURES FROM GOD'S WORD"
+    )
     assert setup_title == catalog_translation(
-        "pt_BR", "RemoteControlSetupDialog", "Set up Solin Remote",
+        "pt_BR", "RemoteControlSetupDialog", "Set up Solin Media"
+    )
+    assert timer_setup_title == catalog_translation(
+        "pt_BR", "RemoteControlSetupDialog", "Set up Solin Timer"
     )
     assert sessions_empty == catalog_translation(
-        "pt_BR", "RemoteSessionsPopup", "No signed-in devices.",
+        "pt_BR", "RemoteSessionsPopup", "No signed-in devices."
     )
-    for key, source in remote_control_message_sources().items():
-        assert set(_PLACEHOLDER.findall(messages[key])) == set(_PLACEHOLDER.findall(source))
+    for key, source in media_sources.items():
+        assert set(_PLACEHOLDER.findall(media_messages[key])) == set(
+            _PLACEHOLDER.findall(source)
+        )
+    for key, source in timer_sources.items():
+        assert set(_PLACEHOLDER.findall(timer_messages[key])) == set(
+            _PLACEHOLDER.findall(source)
+        )
 
 
-def test_remote_localization_uses_its_dedicated_web_context(compiled_translation_catalogs) -> None:
+def test_remote_localization_uses_its_dedicated_web_context(
+    compiled_translation_catalogs,
+) -> None:
     app = QCoreApplication.instance() or QCoreApplication([])
     translator = QTranslator(app)
     assert translator.load(str(compiled_translation_catalogs / "solin_es.qm"))
     assert app.installTranslator(translator)
     try:
-        messages = remote_control_localization("es")["messages"]
+        media_messages = remote_media_localization("es")["messages"]
+        timer_messages = remote_timer_localization("es")["messages"]
     finally:
         app.removeTranslator(translator)
 
-    assert isinstance(messages, dict)
-    sources = remote_control_message_sources()
+    assert isinstance(media_messages, dict)
+    assert isinstance(timer_messages, dict)
+    media_sources = remote_media_message_sources()
+    timer_sources = remote_timer_message_sources()
     for key in ("nav.meetings", "library.chooseMeeting"):
-        assert messages[key] == catalog_translation("es", "_RemoteControlWeb", sources[key])
+        assert media_messages[key] == catalog_translation(
+            "es", "_RemoteControlWeb", media_sources[key]
+        )
+    for key in ("meeting.midweek", "stage.controlParts"):
+        assert timer_messages[key] == catalog_translation(
+            "es", "_RemoteControlWeb", timer_sources[key]
+        )
 
 
-def test_remote_localization_rejects_unstructured_plural_variants(compiled_translation_catalogs) -> None:
+def test_remote_localization_rejects_unstructured_plural_variants(
+    compiled_translation_catalogs,
+) -> None:
     app = QCoreApplication.instance() or QCoreApplication([])
     translator = QTranslator(app)
-    assert translator.load(
-        str(compiled_translation_catalogs / "solin_ru.qm")
-    )
+    assert translator.load(str(compiled_translation_catalogs / "solin_ru.qm"))
     assert app.installTranslator(translator)
     try:
-        messages = remote_control_localization("ru")["messages"]
+        messages = remote_media_localization("ru")["messages"]
     finally:
         app.removeTranslator(translator)
 
     assert isinstance(messages, dict)
-    sources = remote_control_message_sources()
+    sources = remote_media_message_sources()
     for key in (
         "count.playlist.other",
         "count.item.other",
@@ -103,22 +159,32 @@ def test_remote_localization_rejects_unstructured_plural_variants(compiled_trans
         assert "|" not in messages[key]
 
 
-def test_every_non_english_catalog_compiles_the_new_remote_control_copy(compiled_translation_catalogs) -> None:
+def test_every_non_english_catalog_compiles_the_new_remote_control_copy(
+    compiled_translation_catalogs,
+) -> None:
     app = QCoreApplication.instance() or QCoreApplication([])
     translation_root = application_translation_root()
     locale_codes = sorted(
-        path.stem for path in (translation_root / "locales").glob("*.json") if path.stem != "en"
+        path.stem
+        for path in (translation_root / "locales").glob("*.json")
+        if path.stem != "en"
     )
 
     assert len(locale_codes) == 17
     for locale_code in locale_codes:
         translator = QTranslator(app)
-        assert translator.load(str(compiled_translation_catalogs / f"solin_{locale_code}.qm")), locale_code
+        assert translator.load(
+            str(compiled_translation_catalogs / f"solin_{locale_code}.qm")
+        ), locale_code
         assert app.installTranslator(translator)
         try:
             install_detail = QCoreApplication.translate(
                 "_RemoteControlWeb",
-                "Install Solin Remote on this device for quick access from your home screen.",
+                "Install Solin Media on this device for quick access from your home screen.",
+            )
+            timer_install_detail = QCoreApplication.translate(
+                "_RemoteControlWeb",
+                "Install Solin Timer on this device for standalone fullscreen access from your home screen.",
             )
             password_hint = QCoreApplication.translate(
                 "SettingsWidget",
@@ -130,7 +196,12 @@ def test_every_non_english_catalog_compiles_the_new_remote_control_copy(compiled
         assert install_detail == catalog_translation(
             locale_code,
             "_RemoteControlWeb",
-            "Install Solin Remote on this device for quick access from your home screen.",
+            "Install Solin Media on this device for quick access from your home screen.",
+        ), locale_code
+        assert timer_install_detail == catalog_translation(
+            locale_code,
+            "_RemoteControlWeb",
+            "Install Solin Timer on this device for standalone fullscreen access from your home screen.",
         ), locale_code
         assert password_hint == catalog_translation(
             locale_code,

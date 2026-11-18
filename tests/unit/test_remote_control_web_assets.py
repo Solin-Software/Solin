@@ -130,3 +130,80 @@ def test_index_fails_closed_for_unknown_local_assets(tmp_path: Path) -> None:
             installation_id="installation-a",
             url_prefix="/remote",
         )
+
+
+def test_shared_root_maps_app_and_shared_trees_with_1_to_1_relative_imports(
+    tmp_path: Path,
+) -> None:
+    shared_root = tmp_path / "shared"
+    (shared_root / "styles").mkdir(parents=True)
+    (shared_root / "scripts").mkdir(parents=True)
+    (shared_root / "styles" / "tokens.css").write_text(":root {}", encoding="utf-8")
+    (shared_root / "scripts" / "api.js").write_text("export const ok = true;\n", encoding="utf-8")
+
+    app_root = tmp_path / "timer"
+    (app_root / "scripts").mkdir(parents=True)
+    (app_root / "icons").mkdir(parents=True)
+    (app_root / "index.html").write_text(
+        "<!doctype html>\n"
+        '<link rel="stylesheet" href="../shared/styles/tokens.css">\n'
+        '<link rel="manifest" href="./manifest.webmanifest">\n'
+        '<link rel="icon" href="./icons/icon.png">\n'
+        '<script type="module" src="./scripts/app.js"></script>\n'
+        '<a href="/remote/trust-certificate.cer">Certificate</a>\n',
+        encoding="utf-8",
+    )
+    (app_root / "service-worker.js").write_text(
+        'const revision = "__SOLIN_REMOTE_SHELL_REVISION__";\n'
+        "const resources = __SOLIN_REMOTE_SHELL_RESOURCES__;\n",
+        encoding="utf-8",
+    )
+    (app_root / "manifest.webmanifest").write_text("{}", encoding="utf-8")
+    (app_root / "scripts" / "app.js").write_text(
+        'import { ok } from "../../shared/scripts/api.js";\nconsole.log(ok);\n',
+        encoding="utf-8",
+    )
+    (app_root / "icons" / "icon.png").write_bytes(b"png")
+
+    assets = RemoteControlWebAssets(
+        app_root,
+        shared_root=shared_root,
+        installation_id="installation-a",
+        url_prefix="/remote/timer",
+    )
+    index = assets.index_html.decode("utf-8")
+    worker = assets.service_worker.decode("utf-8")
+    rev = assets.revision
+
+    assert f"/remote/timer/_assets/{rev}/shared/styles/tokens.css" in index
+    assert f"/remote/timer/_assets/{rev}/app/scripts/app.js" in index
+    assert 'href="/remote/trust-certificate.cer"' in index
+    assert _resources(worker) == [
+        "./",
+        "./index.html",
+        f"./_assets/{rev}/app/icons/icon.png",
+        f"./_assets/{rev}/app/manifest.webmanifest",
+        f"./_assets/{rev}/app/scripts/app.js",
+        f"./_assets/{rev}/shared/scripts/api.js",
+        f"./_assets/{rev}/shared/styles/tokens.css",
+    ]
+
+    assert (
+        assets.resolve_versioned(f"_assets/{rev}/app/scripts/app.js")
+        == (app_root / "scripts" / "app.js").resolve()
+    )
+    assert (
+        assets.resolve_versioned(f"_assets/{rev}/shared/scripts/api.js")
+        == (shared_root / "scripts" / "api.js").resolve()
+    )
+    assert assets.resolve_versioned(f"_assets/{rev}/other/scripts/api.js") is None
+    assert assets.resolve_versioned(f"_assets/{rev}/shared/../timer/index.html") is None
+
+    (shared_root / "scripts" / "api.js").write_text("export const ok = 2;\n", encoding="utf-8")
+    updated = RemoteControlWebAssets(
+        app_root,
+        shared_root=shared_root,
+        installation_id="installation-a",
+        url_prefix="/remote/timer",
+    )
+    assert updated.revision != rev

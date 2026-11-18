@@ -198,7 +198,10 @@ class RemoteMediaThumbnailExtractor(QObject):
             if not request.future.done():
                 request.future.set_result(data)
 
-        request.loop.call_soon_threadsafe(complete)
+        try:
+            request.loop.call_soon_threadsafe(complete)
+        except RuntimeError:
+            return
 
     @staticmethod
     def _source_key(location: str, media_kind: MediaKind) -> tuple[str, MediaKind]:

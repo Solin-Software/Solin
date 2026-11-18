@@ -23,12 +23,17 @@ WEB_ASSET_CONTENT_TYPES: Final = {
 _INDEX_NAME: Final = "index.html"
 _SERVICE_WORKER_NAME: Final = "service-worker.js"
 _DOCUMENTATION_NAME: Final = "README.md"
-_DYNAMIC_INDEX_ASSETS: Final = frozenset({"trust-certificate.cer"})
+_DYNAMIC_INDEX_ASSETS: Final = frozenset(
+    {
+        "trust-certificate.cer",
+        "/remote/trust-certificate.cer",
+    }
+)
 _SHELL_REVISION_DOMAIN: Final = b"solin-remote-shell-revision-v1\0"
 _SHELL_REVISION_PLACEHOLDER: Final = "__SOLIN_REMOTE_SHELL_REVISION__"
 _SHELL_RESOURCES_PLACEHOLDER: Final = "__SOLIN_REMOTE_SHELL_RESOURCES__"
 _INDEX_ASSET_REFERENCE: Final = re.compile(
-    r'(?P<prefix>\b(?:href|src)=")\./(?P<path>[^"?#]+)(?P<suffix>[^"]*")'
+    r'(?P<prefix>\b(?:href|src)=")(?P<rel>\./|\.\./shared/)(?P<path>[^"?#]+)(?P<suffix>[^"]*")'
 )
 
 
@@ -37,14 +42,15 @@ class _HashWriter(Protocol):
 
 
 class RemoteControlWebAssets:
-    """Immutable, installation-scoped view of the packaged remote shell."""
+    """Immutable, installation-scoped view of a packaged remote web-application shell."""
 
     __slots__ = (
-        "_asset_relative_path_set",
+        "_asset_owners",
         "_index_html",
         "_revision",
         "_root",
         "_service_worker",
+        "_shared_root",
         "_versioned_route_prefix",
     )
 
@@ -54,12 +60,23 @@ class RemoteControlWebAssets:
         *,
         installation_id: str,
         url_prefix: str,
+        shared_root: Path | None = None,
     ) -> None:
         resolved_root = Path(root).resolve()
         if not resolved_root.is_dir():
             raise FileNotFoundError(
                 f"Remote-control asset directory does not exist: {resolved_root}"
             )
+
+        resolved_shared_root: Path | None = None
+        if shared_root is not None:
+            resolved_shared_root = Path(shared_root).resolve()
+            if not resolved_shared_root.is_dir():
+                raise FileNotFoundError(
+                    f"Shared remote-control asset directory does not exist: {resolved_shared_root}"
+                )
+            if resolved_shared_root == resolved_root:
+                raise ValueError("Shared remote-control asset directory must be distinct from root")
 
         normalized_installation_id = str(installation_id or "").strip()
         if not normalized_installation_id or len(normalized_installation_id) > 256:
@@ -71,24 +88,37 @@ class RemoteControlWebAssets:
 
         index_template = self._read_required(resolved_root / _INDEX_NAME)
         worker_template = self._read_required(resolved_root / _SERVICE_WORKER_NAME)
-        relative_paths = self._discover_shell_assets(resolved_root)
+
+        asset_owners: dict[str, tuple[Path, str]] = {}
+        app_relative_paths = self._discover_shell_assets(resolved_root)
+        if resolved_shared_root is None:
+            for relative in app_relative_paths:
+                asset_owners[relative] = (resolved_root, relative)
+        else:
+            for relative in app_relative_paths:
+                asset_owners[f"app/{relative}"] = (resolved_root, relative)
+            for relative in self._discover_shell_assets(resolved_shared_root):
+                asset_owners[f"shared/{relative}"] = (resolved_shared_root, relative)
+
+        logical_paths = tuple(sorted(asset_owners))
         revision = self._calculate_revision(
             installation_id=normalized_installation_id,
             url_prefix=normalized_url_prefix,
             templates=((_INDEX_NAME, index_template), (_SERVICE_WORKER_NAME, worker_template)),
-            root=resolved_root,
-            relative_paths=relative_paths,
+            asset_owners=asset_owners,
+            logical_paths=logical_paths,
         )
         route_prefix = f"{REMOTE_SHELL_ASSET_ROUTE}/{revision}/"
         url_prefix_with_revision = f"{normalized_url_prefix}/{REMOTE_SHELL_ASSET_ROUTE}/{revision}"
 
         self._root = resolved_root
-        self._asset_relative_path_set = frozenset(relative_paths)
+        self._shared_root = resolved_shared_root
+        self._asset_owners = asset_owners
         self._revision = revision
         self._versioned_route_prefix = route_prefix
         self._index_html = self._render_index(index_template, url_prefix_with_revision)
         self._service_worker = self._render_service_worker(
-            worker_template, revision, relative_paths
+            worker_template, revision, logical_paths
         )
 
     @property
@@ -107,11 +137,33 @@ class RemoteControlWebAssets:
         normalized = str(requested or "").strip("/")
         if not normalized.startswith(self._versioned_route_prefix):
             return None
-        relative = normalized.removeprefix(self._versioned_route_prefix)
-        if relative not in self._asset_relative_path_set:
+        logical = normalized.removeprefix(self._versioned_route_prefix)
+        entry = self._asset_owners.get(logical)
+        if entry is None:
             return None
-        candidate = (self._root / Path(*relative.split("/"))).resolve()
-        if self._root not in candidate.parents or not candidate.is_file():
+        owner_root, relative = entry
+        candidate = (owner_root / Path(*relative.split("/"))).resolve()
+        if owner_root not in candidate.parents or not candidate.is_file():
+            return None
+        return candidate
+
+    def resolve_unversioned(self, requested: str) -> Path | None:
+        relative = str(requested or "").strip("/")
+        if not relative or "\\" in relative:
+            return None
+        owner_root = self._root
+        subpath = relative
+        if self._shared_root is not None and relative.startswith("shared/"):
+            owner_root = self._shared_root
+            subpath = relative.removeprefix("shared/")
+            if not subpath:
+                return None
+        candidate = (owner_root / subpath).resolve()
+        if owner_root not in candidate.parents or not candidate.is_file():
+            return None
+        if candidate.name in {_DOCUMENTATION_NAME, _INDEX_NAME, _SERVICE_WORKER_NAME}:
+            return None
+        if candidate.suffix.lower() not in WEB_ASSET_CONTENT_TYPES:
             return None
         return candidate
 
@@ -143,8 +195,8 @@ class RemoteControlWebAssets:
         installation_id: str,
         url_prefix: str,
         templates: tuple[tuple[str, bytes], ...],
-        root: Path,
-        relative_paths: tuple[str, ...],
+        asset_owners: dict[str, tuple[Path, str]],
+        logical_paths: tuple[str, ...],
     ) -> str:
         digest = hashlib.sha256()
         digest.update(_SHELL_REVISION_DOMAIN)
@@ -152,8 +204,9 @@ class RemoteControlWebAssets:
         RemoteControlWebAssets._hash_value(digest, "url-prefix", url_prefix.encode("utf-8"))
         for relative, data in templates:
             RemoteControlWebAssets._hash_value(digest, relative, data)
-        for relative in relative_paths:
-            RemoteControlWebAssets._hash_value(digest, relative, (root / relative).read_bytes())
+        for logical in logical_paths:
+            owner_root, relative = asset_owners[logical]
+            RemoteControlWebAssets._hash_value(digest, logical, (owner_root / relative).read_bytes())
         return digest.hexdigest()[:32]
 
     @staticmethod
@@ -170,14 +223,25 @@ class RemoteControlWebAssets:
         except UnicodeDecodeError as error:
             raise ValueError("Remote-control index must be valid UTF-8") from error
 
+        has_shared = self._shared_root is not None
+
         def replace_reference(match: re.Match[str]) -> str:
+            rel_prefix = match.group("rel")
             relative = match.group("path")
-            if relative in _DYNAMIC_INDEX_ASSETS:
+            if rel_prefix == "./" and relative in _DYNAMIC_INDEX_ASSETS:
                 return match.group(0)
-            if relative not in self._asset_relative_path_set:
+            if rel_prefix == "../shared/":
+                if not has_shared:
+                    raise ValueError(
+                        f"Remote-control index references shared asset without shared_root: {relative}"
+                    )
+                logical = f"shared/{relative}"
+            else:
+                logical = f"app/{relative}" if has_shared else relative
+            if logical not in self._asset_owners:
                 raise ValueError(f"Remote-control index references an unknown asset: {relative}")
             return (
-                f"{match.group('prefix')}{versioned_url_prefix}/{relative}{match.group('suffix')}"
+                f"{match.group('prefix')}{versioned_url_prefix}/{logical}{match.group('suffix')}"
             )
 
         return _INDEX_ASSET_REFERENCE.sub(replace_reference, source).encode("utf-8")
@@ -186,7 +250,7 @@ class RemoteControlWebAssets:
     def _render_service_worker(
         template: bytes,
         revision: str,
-        relative_paths: tuple[str, ...],
+        logical_paths: tuple[str, ...],
     ) -> bytes:
         try:
             source = template.decode("utf-8")
@@ -201,7 +265,7 @@ class RemoteControlWebAssets:
         resources = [
             "./",
             "./index.html",
-            *(f"./{REMOTE_SHELL_ASSET_ROUTE}/{revision}/{path}" for path in relative_paths),
+            *(f"./{REMOTE_SHELL_ASSET_ROUTE}/{revision}/{path}" for path in logical_paths),
         ]
         rendered = source.replace(_SHELL_REVISION_PLACEHOLDER, revision).replace(
             _SHELL_RESOURCES_PLACEHOLDER,

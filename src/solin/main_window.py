@@ -318,7 +318,8 @@ class MainWindow(QWidget):
         self._media_countdown_settings = profile_settings_bundle.media_countdown
         self._watched_folder_settings = profile_settings_bundle.watched_folder
         self._remote_control_settings = profile_settings_bundle.remote_control
-        self._remote_control_credentials = profile_settings_bundle.remote_control_credentials
+        self._remote_media_credentials = profile_settings_bundle.remote_media_credentials
+        self._remote_timer_credentials = profile_settings_bundle.remote_timer_credentials
         self._yeartext_settings = profile_settings_bundle.yeartext
         self._background_song_settings = profile_settings_bundle.background_song
         self.screen_mgr = ScreenManager(self)
@@ -643,7 +644,8 @@ class MainWindow(QWidget):
                 meeting_schedule_settings=self._meeting_schedule_settings,
                 watched_folder_settings=self._watched_folder_settings,
                 remote_control_settings=self._remote_control_settings,
-                remote_control_credentials=self._remote_control_credentials,
+                remote_media_credentials=self._remote_media_credentials,
+                remote_timer_credentials=self._remote_timer_credentials,
                 yeartext_settings=self._yeartext_settings,
                 yeartext_service_factory=service_factories.yeartext,
                 congregation_lookup_factory=service_factories.congregation_lookup,
@@ -1479,7 +1481,8 @@ class MainWindow(QWidget):
                 active_profile_name=self.active_profile.name,
                 active_profile_locale=lambda: self.lang.current_code,
                 settings=self._remote_control_settings,
-                credentials=self._remote_control_credentials,
+                media_credentials=self._remote_media_credentials,
+                timer_credentials=self._remote_timer_credentials,
                 playlist_repository=self.playlist_repository,
                 meeting_tree_store=self.meeting_tree_store,
                 watched_folder_settings=self._watched_folder_settings,
@@ -1493,12 +1496,15 @@ class MainWindow(QWidget):
                 media_projection=self._media_projection,
                 projection_stop=self._projection_stop,
                 playback_protection=self.playback_protection,
+                timer_engine=self.timer_engine,
+                timer_bridge=self.timer_bridge,
                 settings_widget=self.settings_widget,
             ),
             self,
         )
         controller.runtime_status_reported.connect(self._quick_toolbar.set_remote_control_status)
         controller.session_inventory_reported.connect(self._quick_toolbar.set_remote_sessions)
+        controller.public_viewers_reported.connect(self._quick_toolbar.set_remote_public_viewers)
         controller.session_revocation_reported.connect(
             self._quick_toolbar.set_remote_session_revocation_result
         )
@@ -1713,6 +1719,8 @@ class MainWindow(QWidget):
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
+        if getattr(self, "_remote_control", None) is not None:
+            self._remote_control.on_theme_changed()
         self.update()
 
     # Signal emitted when user wants to return to profile selector.

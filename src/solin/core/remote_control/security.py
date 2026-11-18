@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 import base64
 import binascii
 import hashlib
@@ -31,6 +32,43 @@ DEFAULT_MAX_SESSIONS: Final = 8
 _CREDENTIAL_RECORD_VERSION: Final = 1
 _PASSWORD_ENVELOPE_VERSION: Final = 1
 _USERNAME_PATTERN: Final = re.compile(r"[a-z0-9][a-z0-9._-]*", re.ASCII)
+
+
+class RemoteScope(StrEnum):
+    """Isolated web-application scopes hosted on the local remote-control server."""
+
+    MEDIA = "media"
+    TIMER = "timer"
+
+
+_VALID_CREDENTIAL_KEYS: Final = frozenset(
+    {
+        SettingsKey.REMOTE_CONTROL_MEDIA_CREDENTIALS,
+        SettingsKey.REMOTE_CONTROL_TIMER_CREDENTIALS,
+    }
+)
+
+
+def format_global_management_id(scope: RemoteScope, management_id: str) -> str:
+    if not isinstance(scope, RemoteScope):
+        raise TypeError("scope must be a RemoteScope")
+    normalized = str(management_id or "").strip()
+    if not normalized:
+        raise ValueError("management_id must not be empty")
+    return f"{scope.value}:{normalized}"
+
+
+def parse_global_management_id(value: str) -> tuple[RemoteScope, str] | None:
+    if not isinstance(value, str) or ":" not in value:
+        return None
+    raw_scope, raw_id = value.split(":", 1)
+    if not raw_id:
+        return None
+    try:
+        scope = RemoteScope(raw_scope)
+    except ValueError:
+        return None
+    return scope, raw_id
 
 
 class UsernameValidationError(ValueError):
@@ -274,19 +312,41 @@ class CredentialRecord:
 
 @dataclass(frozen=True, slots=True)
 class RemoteControlCredentialsStore:
-    """Profile-scoped remote credentials stored as one fail-closed record."""
+    """Profile-scoped remote credentials stored as one fail-closed record per scope."""
 
     profile_settings: ProfileAppSettingsStore
+    credential_key: str
     password_hasher: ScryptPasswordHasher
 
+    def __post_init__(self) -> None:
+        if self.credential_key not in _VALID_CREDENTIAL_KEYS:
+            raise ValueError("Unsupported remote-control credential settings key")
+
     @classmethod
-    def create(
+    def for_media(
         cls,
         profile_settings: ProfileAppSettingsStore,
         *,
         password_hasher: ScryptPasswordHasher | None = None,
     ) -> RemoteControlCredentialsStore:
-        return cls(profile_settings, password_hasher or ScryptPasswordHasher())
+        return cls(
+            profile_settings,
+            SettingsKey.REMOTE_CONTROL_MEDIA_CREDENTIALS,
+            password_hasher or ScryptPasswordHasher(),
+        )
+
+    @classmethod
+    def for_timer(
+        cls,
+        profile_settings: ProfileAppSettingsStore,
+        *,
+        password_hasher: ScryptPasswordHasher | None = None,
+    ) -> RemoteControlCredentialsStore:
+        return cls(
+            profile_settings,
+            SettingsKey.REMOTE_CONTROL_TIMER_CREDENTIALS,
+            password_hasher or ScryptPasswordHasher(),
+        )
 
     def configured_username(self) -> str:
         record = self._record()
@@ -301,7 +361,7 @@ class RemoteControlCredentialsStore:
             password_envelope=self.password_hasher.hash_password(password),
         )
         self.profile_settings.settings.set_value(
-            SettingsKey.REMOTE_CONTROL_CREDENTIALS,
+            self.credential_key,
             record.serialize(),
         )
 
@@ -321,10 +381,10 @@ class RemoteControlCredentialsStore:
         return username_matches and password_matches and record is not None
 
     def clear_credentials(self) -> None:
-        self.profile_settings.settings.remove(SettingsKey.REMOTE_CONTROL_CREDENTIALS)
+        self.profile_settings.settings.remove(self.credential_key)
 
     def _record(self) -> CredentialRecord | None:
-        raw = self.profile_settings.settings.string(SettingsKey.REMOTE_CONTROL_CREDENTIALS)
+        raw = self.profile_settings.settings.string(self.credential_key)
         return CredentialRecord.deserialize(raw) if raw else None
 
 
@@ -337,6 +397,7 @@ class SessionCredentials:
 
 @dataclass(frozen=True, slots=True)
 class SessionSnapshot:
+    scope: RemoteScope
     management_id: str
     principal: str
     browser: str
@@ -350,9 +411,14 @@ class SessionSnapshot:
     absolute_expires_at: float
     idle_expires_at: float
 
+    @property
+    def global_management_id(self) -> str:
+        return format_global_management_id(self.scope, self.management_id)
+
 
 @dataclass(frozen=True, slots=True)
 class RemoteSessionInfo:
+    scope: RemoteScope
     management_id: str
     principal: str
     browser: str
@@ -362,6 +428,14 @@ class RemoteSessionInfo:
     created_at_utc: float
     last_activity_at_utc: float
     connected_socket_count: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.scope, RemoteScope):
+            raise TypeError("scope must be a RemoteScope")
+
+    @property
+    def global_management_id(self) -> str:
+        return format_global_management_id(self.scope, self.management_id)
 
 
 @dataclass(slots=True)
@@ -385,6 +459,7 @@ class InMemorySessionStore:
     def __init__(
         self,
         *,
+        scope: RemoteScope = RemoteScope.MEDIA,
         absolute_ttl_seconds: float = DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS,
         idle_ttl_seconds: float = DEFAULT_SESSION_IDLE_TTL_SECONDS,
         max_sessions: int = DEFAULT_MAX_SESSIONS,
@@ -393,12 +468,15 @@ class InMemorySessionStore:
         token_factory: Callable[[], str] | None = None,
         management_id_factory: Callable[[], str] | None = None,
     ) -> None:
+        if not isinstance(scope, RemoteScope):
+            raise TypeError("scope must be a RemoteScope")
         if not math.isfinite(absolute_ttl_seconds) or absolute_ttl_seconds <= 0:
             raise ValueError("Absolute session TTL must be positive and finite")
         if not math.isfinite(idle_ttl_seconds) or idle_ttl_seconds <= 0:
             raise ValueError("Idle session TTL must be positive and finite")
         if max_sessions <= 0:
             raise ValueError("Maximum sessions must be positive")
+        self._scope = scope
         self._absolute_ttl_seconds = float(absolute_ttl_seconds)
         self._idle_ttl_seconds = float(idle_ttl_seconds)
         self._max_sessions = max_sessions
@@ -410,6 +488,10 @@ class InMemorySessionStore:
         self._generation = 0
         self._dummy_csrf_token = secrets.token_urlsafe(32)
         self._lock = threading.RLock()
+
+    @property
+    def scope(self) -> RemoteScope:
+        return self._scope
 
     @property
     def generation(self) -> int:
@@ -596,6 +678,7 @@ class InMemorySessionStore:
 
     def _snapshot(self, session: _Session) -> SessionSnapshot:
         return SessionSnapshot(
+            scope=self._scope,
             management_id=session.management_id,
             principal=session.principal,
             browser=session.browser,

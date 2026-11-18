@@ -332,7 +332,11 @@ def test_server_binding_requires_the_certificate_ip_and_fixed_port(tmp_path: Pat
 
     binding = RemoteControlServerBinding("192.168.1.5", 8765, identity)
 
-    assert binding.url == "https://192.168.1.5:8765/remote/"
+    assert binding.media_url == "https://192.168.1.5:8765/remote/media/"
+    assert binding.timer_url == "https://192.168.1.5:8765/remote/timer/"
+    assert binding.trust_certificate_url == (
+        "https://192.168.1.5:8765/remote/trust-certificate.cer"
+    )
     with pytest.raises(ValueError, match="certificate IPv4"):
         RemoteControlServerBinding("192.168.1.6", 8765, identity)
     with pytest.raises(ValueError, match="fixed port"):

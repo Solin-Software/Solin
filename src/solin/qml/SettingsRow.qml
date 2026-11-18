@@ -218,7 +218,7 @@ FocusScope {
                     width: root.narrow ? parent.width : implicitWidth
                     text: root.spec.label
                     enabled: root.available
-                    primary: ["saveCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
+                    primary: ["saveCredentials", "saveMediaCredentials", "saveTimerCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
                     onClicked: root.domain.invoke(root.spec.action)
                 }
                 SettingsButton {

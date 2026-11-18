@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 from io import BytesIO
 import json
 from pathlib import Path
@@ -8,9 +9,8 @@ import threading
 import time
 from types import SimpleNamespace
 from typing import Any
-import uuid
 from unittest.mock import patch
-from datetime import timedelta
+import uuid
 
 from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
@@ -20,25 +20,38 @@ from solin.controllers.remote_control_controller import (
     RemoteControlController,
     RemoteControlDependencies,
 )
+from solin.controllers.remote_media_adapter import RemoteMediaAdapter
 from solin.core.media.formats import MediaKind
 from solin.core.media.thumbnail_identity import thumbnail_storage_id
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
-from solin.core.remote_control.contracts import (
+from solin.core.remote_control.certificates import TLSCertificateStore
+from solin.core.remote_control.features import (
+    DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+    TimerRemoteFeatureFlags,
+)
+from solin.core.remote_control.media.contracts import (
     CatalogCollection,
     CatalogKind,
     CatalogNode,
     CatalogNodeKind,
     CommandErrorCode,
     PauseCommand,
-    PlayCommand,
     PlaybackState,
+    PlayCommand,
     ProjectionOrigin,
     ProjectionSource,
     RemoteMediaKind,
 )
-from solin.core.remote_control.certificates import TLSCertificateStore
-from solin.core.remote_control.state import ProjectionCommandSession
-from solin.core.remote_control.thumbnails import render_media_placeholder_thumbnail
+from solin.core.remote_control.media.state import ProjectionCommandSession
+from solin.core.remote_control.media.thumbnails import render_media_placeholder_thumbnail
+from solin.core.remote_control.security import RemoteScope
+from solin.core.timer.models import (
+    ClockConfig,
+    Direction,
+    MeetingType,
+    PartState,
+    TimerSnapshot,
+)
 
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
@@ -170,7 +183,8 @@ class _ProjectionBar(QObject):
 
 class _RemoteSettings(QObject):
     remote_control_settings_changed = Signal()
-    remote_control_credentials_changed = Signal()
+    remote_media_credentials_changed = Signal()
+    remote_timer_credentials_changed = Signal()
 
     def __init__(self, parent: QObject) -> None:
         super().__init__(parent)
@@ -217,7 +231,50 @@ class _MediaProjection:
         pass
 
 
-def _controller(tmp_path: Path, playlists: list[dict[str, Any]]):
+class _TimerEngine(QObject):
+    state_changed = Signal(dict)
+    tick = Signal(dict)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.schedule = SimpleNamespace(week_monday="2026-07-13", part_by_id=lambda _pid: None)
+
+    @staticmethod
+    def snapshot() -> TimerSnapshot:
+        return TimerSnapshot(
+            active=False,
+            state=PartState.IDLE,
+            direction=Direction.DOWN,
+            active_part_id=None,
+            active_part_title="",
+            active_section=None,
+            planned_seconds=0,
+            elapsed_seconds=0.0,
+            remaining_seconds=0.0,
+            wall_clock_epoch=1_721_130_000.0,
+        )
+
+
+class _TimerBridge(QObject):
+    scheduleChanged = Signal()
+    clockConfigChanged = Signal()
+    weekChanged = Signal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.clockConfig = ClockConfig().to_dict()
+        self.parts: list[dict[str, Any]] = []
+        self.meetingType = MeetingType.MIDWEEK.value
+        self.weekLabel = "13–19 Jul 2026"
+        self.isCurrentWeek = True
+
+
+def _controller(
+    tmp_path: Path,
+    playlists: list[dict[str, Any]],
+    *,
+    timer_feature_flags: TimerRemoteFeatureFlags = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+):
     playlist_repository = _Repository(playlists)
     meeting_repository = MeetingTreeStore(tmp_path / "meeting-trees.json")
     watched_store = _WatchedStore()
@@ -226,6 +283,8 @@ def _controller(tmp_path: Path, playlists: list[dict[str, Any]]):
     media_controller = _MediaController()
     media_projection = _MediaProjection()
     media_thumbnail_extractor = _MediaThumbnailExtractor()
+    timer_engine = _TimerEngine()
+    timer_bridge = _TimerBridge()
     controller = RemoteControlController(
         RemoteControlDependencies(
             runtime_paths=SimpleNamespace(data_dir=tmp_path),
@@ -234,9 +293,18 @@ def _controller(tmp_path: Path, playlists: list[dict[str, Any]]):
             active_profile_locale=lambda: "en",
             settings=SimpleNamespace(
                 enabled=lambda: False,
+                media_enabled=lambda: True,
+                timer_enabled=lambda: False,
                 network_selection=lambda: None,
             ),
-            credentials=SimpleNamespace(has_credentials=lambda: False),
+            media_credentials=SimpleNamespace(
+                has_credentials=lambda: False,
+                configured_username=lambda: "",
+            ),
+            timer_credentials=SimpleNamespace(
+                has_credentials=lambda: False,
+                configured_username=lambda: "",
+            ),
             playlist_repository=playlist_repository,
             meeting_tree_store=meeting_repository,
             watched_folder_settings=SimpleNamespace(path=lambda: ""),
@@ -250,7 +318,10 @@ def _controller(tmp_path: Path, playlists: list[dict[str, Any]]):
             media_projection=media_projection,
             projection_stop=SimpleNamespace(stop_projection=lambda: None),
             playback_protection=_PlaybackProtection(),
+            timer_engine=timer_engine,
+            timer_bridge=timer_bridge,
             settings_widget=_SettingsWidget(),
+            timer_feature_flags=timer_feature_flags,
         ),
         None,
     )
@@ -262,35 +333,35 @@ def test_catalog_revision_stays_aligned_when_initial_public_catalog_is_empty(
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
 
-    controller._refresh_catalog()
+    controller._media_adapter.refresh_catalog_synchronously()
 
-    assert controller.state.catalog_revision == 1
+    assert controller.media_state.catalog_revision == 1
     controller.stop()
 
 
 def test_invalid_remote_catalog_does_not_escape_into_app_startup(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
-    controller._catalog = SimpleNamespace(
+    controller._media_adapter._catalog = SimpleNamespace(
         build=lambda: (_ for _ in ()).throw(ValueError("duplicate node"))
     )
 
-    controller._refresh_catalog()
+    controller._media_adapter.refresh_catalog_synchronously()
 
-    assert controller.state.catalog_revision == 0
+    assert controller.media_state.catalog_revision == 0
     controller.stop()
 
 
 def test_disabled_start_does_not_build_catalog_or_create_tls(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     builds = []
-    controller._catalog.build = lambda: builds.append(True)
+    controller._media_adapter._catalog.build = lambda: builds.append(True)
 
     controller.start()
 
     assert builds == []
-    assert controller._catalog_refresh_inflight is None
+    assert controller._media_adapter._catalog_refresh_inflight is None
     assert controller._tls_store is None
-    assert controller.state.catalog_revision == 0
+    assert controller.media_state.catalog_revision == 0
     controller.stop()
 
 
@@ -298,7 +369,8 @@ def test_disabled_start_does_not_build_catalog_or_create_tls(tmp_path: Path) -> 
     "signal_name",
     [
         "remote_control_settings_changed",
-        "remote_control_credentials_changed",
+        "remote_media_credentials_changed",
+        "remote_timer_credentials_changed",
     ],
 )
 def test_remote_domain_changes_reconfigure_and_publish_runtime_back_to_domain(
@@ -308,23 +380,26 @@ def test_remote_domain_changes_reconfigure_and_publish_runtime_back_to_domain(
     controller, *_ = _controller(tmp_path, [])
     remote = controller._dependencies.settings_widget.remote
     controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
     try:
         getattr(remote, signal_name).emit()
         assert remote.runtime_status["running"] is False
-        assert (
-            remote.runtime_status["message"] == "Save access credentials to start remote control."
-        )
-        assert remote.runtime_status["access_url"] == ""
+        assert remote.runtime_status["media_access_url"] == ""
+        assert remote.runtime_status["timer_access_url"] == ""
         assert remote.runtime_status["certificate_der"] == b""
     finally:
         controller.stop()
 
 
-def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) -> None:
+def test_enabled_media_start_publishes_catalog_before_starting_server(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
     controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.media_enabled = lambda: True
     controller._dependencies.settings.network_selection = lambda: object()
-    controller._dependencies.credentials.has_credentials = lambda: True
+    controller._dependencies.media_credentials.has_credentials = lambda: True
     controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
         ipv4_address="192.168.1.10"
     )
@@ -334,10 +409,17 @@ def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) 
     )
     controller._tls_store = SimpleNamespace(load_or_create=lambda _address: identity)
     started_at_revisions = []
-    server = SimpleNamespace(is_running=True)
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+    )
 
     def start_server(_identity):
-        started_at_revisions.append(controller.state.catalog_revision)
+        started_at_revisions.append(controller.media_state.catalog_revision)
         return server
 
     controller._start_server = start_server
@@ -345,12 +427,14 @@ def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) 
     controller.start()
 
     assert controller._server is None
-    assert controller._catalog_refresh_inflight is not None
+    assert controller._media_adapter._catalog_refresh_inflight is not None
     deadline = time.monotonic() + 2
-    while controller._catalog_refresh_inflight is not None:
+    while controller._media_adapter._catalog_refresh_inflight is not None:
         _APP.processEvents()
         time.sleep(0.001)
         assert time.monotonic() < deadline
+    for _ in range(5):
+        _APP.processEvents()
 
     assert started_at_revisions == [1]
     assert controller._server is server
@@ -358,17 +442,232 @@ def test_enabled_start_publishes_catalog_before_starting_server(tmp_path: Path) 
     controller.stop()
 
 
+def test_timer_only_start_launches_immediately_without_waiting_on_media_catalog(
+    tmp_path: Path,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    builds: list[bool] = []
+    controller._media_adapter._catalog.build = lambda: builds.append(True)
+    controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.media_enabled = lambda: False
+    controller._dependencies.settings.timer_enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.timer_credentials.has_credentials = lambda: True
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    identity = SimpleNamespace(
+        trust_anchor_fingerprint_sha256="00",
+        trust_certificate_der=lambda: b"certificate",
+    )
+    controller._tls_store = SimpleNamespace(load_or_create=lambda _address: identity)
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+    )
+    controller._start_server = lambda _identity: server
+
+    controller.start()
+
+    assert builds == []
+    assert controller._server is server
+    assert controller.timer_active is True
+    assert controller.media_active is False
+    status = controller._dependencies.settings_widget.remote.runtime_status
+    assert status["running"] is True
+    assert status["timer_running"] is True
+    assert status["media_running"] is False
+    assert status["timer_access_url"] == "https://192.168.1.10:8765/remote/timer/"
+    assert status["media_access_url"] == ""
+    controller._server = None
+    controller.stop()
+
+
+def test_enabling_media_while_timer_runs_keeps_server_up_and_syncs_modules_when_ready(
+    tmp_path: Path,
+) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    media_enabled = False
+    controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.media_enabled = lambda: media_enabled
+    controller._dependencies.settings.timer_enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.media_credentials.has_credentials = lambda: True
+    controller._dependencies.timer_credentials.has_credentials = lambda: True
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    identity = SimpleNamespace(
+        trust_anchor_fingerprint_sha256="00",
+        trust_certificate_der=lambda: b"certificate",
+    )
+    controller._tls_store = SimpleNamespace(load_or_create=lambda _address: identity)
+    events: list[str] = []
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+        sync_module_states=lambda: events.append("sync") or None,
+        publish_snapshot=lambda scope=None: events.append(f"publish:{scope.value if scope else 'all'}"),
+        stop=lambda: events.append("stop"),
+    )
+    start_calls = 0
+
+    def start_server(_identity):
+        nonlocal start_calls
+        start_calls += 1
+        return server
+
+    controller._start_server = start_server
+    controller.start()
+    assert start_calls == 1
+    assert controller.timer_active is True
+    assert controller.media_active is False
+
+    media_enabled = True
+    controller.reconfigure()
+
+    assert start_calls == 1
+    assert "stop" not in events
+    assert controller.timer_active is True
+    deadline = time.monotonic() + 2
+    while not controller.media_active:
+        _APP.processEvents()
+        time.sleep(0.001)
+        assert time.monotonic() < deadline
+
+    assert start_calls == 1
+    assert "stop" not in events
+    assert "sync" in events
+    assert "publish:media" in events
+    assert controller.media_active is True
+    assert controller.timer_active is True
+    controller._server = None
+    controller.stop()
+
+
+def test_scoped_credential_rotation_revokes_only_matching_scope(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    revoked_scopes: list[RemoteScope | None] = []
+    profile_scopes: list[RemoteScope | None] = []
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+        revoke_all_sessions=lambda scope=None: revoked_scopes.append(scope) or None,
+        publish_profile=lambda scope=None: profile_scopes.append(scope),
+        sync_module_states=lambda: None,
+        publish_snapshot=lambda _scope=None: None,
+    )
+    controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.media_enabled = lambda: False
+    controller._dependencies.settings.timer_enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.timer_credentials.has_credentials = lambda: True
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    controller._server = server
+
+    initial_timer_gen = controller._timer_sessions.generation
+    initial_media_gen = controller._media_sessions.generation
+
+    controller.media_credentials_changed()
+    assert revoked_scopes == [RemoteScope.MEDIA]
+    assert controller._media_sessions.generation == initial_media_gen + 1
+    assert controller._timer_sessions.generation == initial_timer_gen
+
+    controller.timer_credentials_changed()
+    assert revoked_scopes == [RemoteScope.MEDIA, RemoteScope.TIMER]
+    assert controller._timer_sessions.generation == initial_timer_gen + 1
+    assert profile_scopes == [RemoteScope.TIMER]
+
+    controller._server = None
+    controller.stop()
+
+
+def test_view_only_timer_feature_flag_starts_without_saved_timer_credentials(
+    tmp_path: Path,
+) -> None:
+    controller, *_ = _controller(
+        tmp_path,
+        [],
+        timer_feature_flags=TimerRemoteFeatureFlags(require_credentials=False),
+    )
+    controller._dependencies.settings.enabled = lambda: True
+    controller._dependencies.settings.media_enabled = lambda: False
+    controller._dependencies.settings.timer_enabled = lambda: True
+    controller._dependencies.settings.network_selection = lambda: object()
+    controller._dependencies.timer_credentials.has_credentials = lambda: False
+    controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
+        ipv4_address="192.168.1.10"
+    )
+    identity = SimpleNamespace(
+        trust_anchor_fingerprint_sha256="00",
+        trust_certificate_der=lambda: b"certificate",
+    )
+    controller._tls_store = SimpleNamespace(load_or_create=lambda _address: identity)
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+    )
+    controller._start_server = lambda _identity: server
+
+    controller.start()
+
+    assert controller.timer_active is True
+    controller._server = None
+    controller.stop()
+
+
+def test_real_server_wiring_builds_media_and_timer_modules_cleanly(tmp_path: Path) -> None:
+    controller, *_ = _controller(tmp_path, [])
+    identity = TLSCertificateStore(tmp_path / "tls").load_or_create("192.168.1.10")
+    captured_bindings = []
+
+    with patch(
+        "solin.core.remote_control.server.RemoteControlServer.start",
+        side_effect=lambda binding, **_kw: captured_bindings.append(binding),
+    ):
+        server = controller._start_server(identity)
+
+    assert len(captured_bindings) == 1
+    assert captured_bindings[0].media_url == "https://192.168.1.10:8765/remote/media/"
+    assert captured_bindings[0].timer_url == "https://192.168.1.10:8765/remote/timer/"
+    assert len(server._dependencies.modules) == 2
+    assert [m.scope for m in server._dependencies.modules] == [
+        RemoteScope.MEDIA,
+        RemoteScope.TIMER,
+    ]
+    controller.stop()
+
+
 def test_clearing_watched_folder_marks_catalog_dirty_without_building_while_disabled(
     tmp_path: Path,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
-    initial_generation = controller._catalog_refresh_generation
+    adapter = controller._media_adapter
+    initial_generation = adapter._catalog_refresh_generation
 
     controller._dependencies.settings_widget.general.watched_folder_changed.emit("")
 
-    assert controller._catalog_refresh_generation == initial_generation + 1
-    assert controller._catalog_dirty is True
-    assert controller._catalog_refresh_timer.isActive() is False
+    assert adapter._catalog_refresh_generation == initial_generation + 1
+    assert adapter._catalog_dirty is True
+    assert adapter._catalog_refresh_timer.isActive() is False
     controller.stop()
 
 
@@ -377,72 +676,87 @@ def test_catalog_invalidated_while_disabled_is_rebuilt_before_reenable(
 ) -> None:
     playlists = [{"id": "playlist-1", "name": "Initial", "items": []}]
     controller, *_ = _controller(tmp_path, playlists)
-    controller._refresh_catalog()
-    initial_revision = controller.state.catalog_revision
+    adapter = controller._media_adapter
+    adapter.refresh_catalog_synchronously()
+    initial_revision = controller.media_state.catalog_revision
     enabled = False
     controller._dependencies.settings.enabled = lambda: enabled
+    controller._dependencies.settings.media_enabled = lambda: True
     controller._dependencies.settings.network_selection = lambda: object()
-    controller._dependencies.credentials.has_credentials = lambda: True
+    controller._dependencies.media_credentials.has_credentials = lambda: True
     controller._resolve_selected_interface = lambda _selection: SimpleNamespace(
         ipv4_address="192.168.1.10"
     )
     controller._tls_store = SimpleNamespace(
-        load_or_create=lambda _address: SimpleNamespace()
+        load_or_create=lambda _address: SimpleNamespace(
+            trust_anchor_fingerprint_sha256="00",
+            trust_certificate_der=lambda: b"cert",
+        )
     )
     started_at_revisions: list[int] = []
-    server = SimpleNamespace(is_running=True)
+    server = SimpleNamespace(
+        is_running=True,
+        binding=SimpleNamespace(
+            host="192.168.1.10",
+            media_url="https://192.168.1.10:8765/remote/media/",
+            timer_url="https://192.168.1.10:8765/remote/timer/",
+        ),
+    )
     controller._start_server = lambda _identity: (
-        started_at_revisions.append(controller.state.catalog_revision) or server
+        started_at_revisions.append(controller.media_state.catalog_revision) or server
     )
 
     playlists[0]["name"] = "Updated while disabled"
-    controller._schedule_catalog_refresh()
+    adapter._schedule_catalog_refresh()
 
-    assert controller._catalog_dirty is True
-    assert controller._catalog_refresh_inflight is None
+    assert adapter._catalog_dirty is True
+    assert adapter._catalog_refresh_inflight is None
 
     enabled = True
     controller.reconfigure()
 
     assert controller._server is None
     deadline = time.monotonic() + 2
-    while controller._catalog_refresh_inflight is not None:
+    while adapter._catalog_refresh_inflight is not None:
         _APP.processEvents()
         time.sleep(0.001)
         assert time.monotonic() < deadline
+    for _ in range(5):
+        _APP.processEvents()
 
-    assert controller._catalog_dirty is False
-    assert controller.state.catalog_revision > initial_revision
-    assert started_at_revisions == [controller.state.catalog_revision]
+    assert adapter._catalog_dirty is False
+    assert controller.media_state.catalog_revision > initial_revision
+    assert started_at_revisions == [controller.media_state.catalog_revision]
     controller._server = None
     controller.stop()
 
 
 def test_repository_catalog_refresh_runs_outside_qt_thread(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
-    controller._dependencies.settings.enabled = lambda: True
+    adapter = controller._media_adapter
+    adapter._active = True
     caller_thread = threading.get_ident()
     worker_threads: list[int] = []
-    original_build = controller._catalog.build
+    original_build = adapter._catalog.build
 
     def build():
         worker_threads.append(threading.get_ident())
         return original_build()
 
-    controller._catalog.build = build
-    controller._schedule_catalog_refresh()
-    controller._catalog_refresh_timer.stop()
-    controller._start_catalog_refresh()
+    adapter._catalog.build = build
+    adapter._schedule_catalog_refresh()
+    adapter._catalog_refresh_timer.stop()
+    adapter._start_catalog_refresh()
 
     deadline = time.monotonic() + 2
-    while controller._catalog_refresh_inflight is not None:
+    while adapter._catalog_refresh_inflight is not None:
         _APP.processEvents()
         time.sleep(0.001)
         assert time.monotonic() < deadline
 
     assert worker_threads
     assert all(thread_id != caller_thread for thread_id in worker_threads)
-    assert controller.state.catalog_revision == 1
+    assert controller.media_state.catalog_revision == 1
     controller.stop()
 
 
@@ -451,22 +765,24 @@ def test_catalog_invalidation_during_scan_keeps_single_debounced_followup(
     monkeypatch,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    adapter._active = True
     scheduled = []
     monkeypatch.setattr(
-        "solin.controllers.remote_control_controller.QTimer.singleShot",
+        "solin.controllers.remote_media_adapter.QTimer.singleShot",
         lambda delay, callback: scheduled.append((delay, callback)),
     )
-    controller._catalog_refresh_generation = 2
-    controller._catalog_refresh_inflight = (1, object())
-    controller._catalog_refresh_pending = False
-    controller._catalog_refresh_timer.start()
+    adapter._catalog_refresh_generation = 2
+    adapter._catalog_refresh_inflight = (1, object())  # type: ignore[assignment]
+    adapter._catalog_refresh_pending = False
+    adapter._catalog_refresh_timer.start()
 
-    controller._on_catalog_build_completed(1, None, None)
+    adapter._on_catalog_build_completed(1, None, None)
 
-    assert controller._catalog_refresh_timer.isActive()
+    assert adapter._catalog_refresh_timer.isActive()
     assert scheduled == []
-    controller._catalog_refresh_timer.stop()
-    controller._catalog_refresh_inflight = None
+    adapter._catalog_refresh_timer.stop()
+    adapter._catalog_refresh_inflight = None
     controller.stop()
 
 
@@ -474,12 +790,12 @@ def test_catalog_invalidation_during_scan_does_not_retry_after_disable(
     tmp_path: Path,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
-    enabled = True
-    controller._dependencies.settings.enabled = lambda: enabled
+    adapter = controller._media_adapter
+    adapter._active = True
     started = threading.Event()
     release = threading.Event()
     build_calls: list[bool] = []
-    original_build = controller._catalog.build
+    original_build = adapter._catalog.build
 
     def build():
         build_calls.append(True)
@@ -487,18 +803,18 @@ def test_catalog_invalidation_during_scan_does_not_retry_after_disable(
         assert release.wait(timeout=2)
         return original_build()
 
-    controller._catalog.build = build
-    controller._schedule_catalog_refresh()
-    controller._catalog_refresh_timer.stop()
-    controller._start_catalog_refresh()
+    adapter._catalog.build = build
+    adapter._schedule_catalog_refresh()
+    adapter._catalog_refresh_timer.stop()
+    adapter._start_catalog_refresh()
     assert started.wait(timeout=1)
 
-    enabled = False
-    controller._schedule_catalog_refresh()
+    adapter.set_active(False)
+    adapter._schedule_catalog_refresh()
     release.set()
 
     deadline = time.monotonic() + 2
-    while controller._catalog_refresh_inflight is not None:
+    while adapter._catalog_refresh_inflight is not None:
         _APP.processEvents()
         time.sleep(0.001)
         assert time.monotonic() < deadline
@@ -506,8 +822,8 @@ def test_catalog_invalidation_during_scan_does_not_retry_after_disable(
         _APP.processEvents()
 
     assert build_calls == [True]
-    assert controller._catalog_dirty is True
-    assert controller._catalog_refresh_timer.isActive() is False
+    assert adapter._catalog_dirty is True
+    assert adapter._catalog_refresh_timer.isActive() is False
     controller.stop()
 
 
@@ -531,26 +847,28 @@ def test_superseded_catalog_build_cannot_replace_the_published_private_view(
         ],
     }
     controller, *_rest, media_projection = _controller(tmp_path, [playlist])
-    controller._refresh_catalog()
-    published_revision = controller.state.catalog_revision
+    adapter = controller._media_adapter
+    adapter._active = True
+    adapter.refresh_catalog_synchronously()
+    published_revision = controller.media_state.catalog_revision
     playlist["items"][0]["url"] = str(second_path)
-    superseded = controller._catalog.build()
-    controller._catalog_refresh_generation = 2
-    controller._catalog_refresh_inflight = (1, object())
-    controller._catalog_refresh_timer.start()
+    superseded = adapter._catalog.build()
+    adapter._catalog_refresh_generation = 2
+    adapter._catalog_refresh_inflight = (1, object())  # type: ignore[assignment]
+    adapter._catalog_refresh_timer.start()
 
-    controller._on_catalog_build_completed(1, superseded, None)
+    adapter._on_catalog_build_completed(1, superseded, None)
 
     command = PlayCommand(
         str(uuid.uuid4()),
         ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
         published_revision,
     )
-    assert controller._execute_command(command) is None
+    assert adapter._execute_command(command) is None
     assert media_projection.projected is not None
     assert media_projection.projected[0][0]["url"] == str(first_path)
-    assert controller.state.catalog_revision == published_revision
-    controller._catalog_refresh_timer.stop()
+    assert controller.media_state.catalog_revision == published_revision
+    adapter._catalog_refresh_timer.stop()
     controller.stop()
 
 
@@ -576,33 +894,34 @@ def test_synchronous_catalog_refresh_supersedes_an_inflight_build(
         ],
     }
     controller, *_rest, media_projection = _controller(tmp_path, [playlist])
-    controller._dependencies.settings.enabled = lambda: True
-    controller._refresh_catalog()
+    adapter = controller._media_adapter
+    adapter._active = True
+    adapter.refresh_catalog_synchronously()
 
     playlist["items"][0]["url"] = str(second_path)
-    superseded = controller._catalog.build()
-    inflight_generation = controller._catalog_refresh_generation
-    controller._catalog_refresh_inflight = (inflight_generation, object())
+    superseded = adapter._catalog.build()
+    inflight_generation = adapter._catalog_refresh_generation
+    adapter._catalog_refresh_inflight = (inflight_generation, object())  # type: ignore[assignment]
     scheduled = []
     monkeypatch.setattr(
-        "solin.controllers.remote_control_controller.QTimer.singleShot",
+        "solin.controllers.remote_media_adapter.QTimer.singleShot",
         lambda delay, callback: scheduled.append((delay, callback)),
     )
 
     playlist["items"][0]["url"] = str(third_path)
-    controller._refresh_catalog()
-    published_revision = controller.state.catalog_revision
-    controller._on_catalog_build_completed(inflight_generation, superseded, None)
+    adapter.refresh_catalog_synchronously()
+    published_revision = controller.media_state.catalog_revision
+    adapter._on_catalog_build_completed(inflight_generation, superseded, None)
 
     command = PlayCommand(
         str(uuid.uuid4()),
         ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
         published_revision,
     )
-    assert controller._execute_command(command) is None
+    assert adapter._execute_command(command) is None
     assert media_projection.projected is not None
     assert media_projection.projected[0][0]["url"] == str(third_path)
-    assert controller.state.catalog_revision == published_revision
+    assert controller.media_state.catalog_revision == published_revision
     assert len(scheduled) == 1
     controller.stop()
 
@@ -623,27 +942,28 @@ def test_catalog_commit_is_atomic_for_public_and_private_readers(tmp_path: Path)
         ],
     }
     controller, *_ = _controller(tmp_path, [playlist])
-    build = controller._catalog.build()
+    adapter = controller._media_adapter
+    build = adapter._catalog.build()
     public_published = threading.Event()
     allow_private_publish = threading.Event()
     reader_completed = threading.Event()
-    original_publish = controller._catalog.publish
+    original_publish = adapter._catalog.publish
 
     def paused_publish(candidate, *, revision=None):
         public_published.set()
         assert allow_private_publish.wait(timeout=2)
         return original_publish(candidate, revision=revision)
 
-    controller._catalog.publish = paused_publish
-    commit_thread = threading.Thread(target=controller._commit_catalog_build, args=(build,))
+    adapter._catalog.publish = paused_publish
+    commit_thread = threading.Thread(target=adapter._commit_catalog_build, args=(build,))
     commit_thread.start()
     assert public_published.wait(timeout=2)
 
     observed: list[tuple[int, str]] = []
 
     def read_published_catalog() -> None:
-        revision = controller.state.catalog_revision
-        resolved = controller._catalog.resolve_play(
+        revision = controller.media_state.catalog_revision
+        resolved = adapter._catalog.resolve_play(
             PlayCommand(
                 str(uuid.uuid4()),
                 ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
@@ -666,37 +986,46 @@ def test_catalog_commit_is_atomic_for_public_and_private_readers(tmp_path: Path)
     controller.stop()
 
 
-def test_language_change_publishes_profile_before_localized_catalog(tmp_path: Path) -> None:
+def test_language_change_publishes_profile_and_schedules_localized_catalog(
+    tmp_path: Path,
+) -> None:
     controller, *_ = _controller(tmp_path, [])
     events: list[str] = []
     controller._server = SimpleNamespace(
         publish_profile=lambda: events.append("profile"),
-        publish_snapshot=lambda: events.append("catalog"),
+        publish_snapshot=lambda _scope=None: events.append("snapshot"),
     )
-    controller._dependencies.settings.enabled = lambda: True
-    localization = {
-        "locale": "pt-BR",
-        "messages": {"app.remoteControl": "Controle remoto"},
-    }
+    controller._media_adapter._active = True
+    media_loc = {"locale": "pt-BR", "messages": {"app.mediaControl": "Controle de mídia"}}
+    timer_loc = {"locale": "pt-BR", "messages": {"timer.brand": "Cronômetro"}}
 
-    with patch(
-        "solin.controllers.remote_control_controller.remote_control_localization",
-        return_value=localization,
-    ) as build_localization:
+    with (
+        patch(
+            "solin.controllers.remote_control_controller.remote_media_localization",
+            return_value=media_loc,
+        ) as build_media,
+        patch(
+            "solin.controllers.remote_control_controller.remote_timer_localization",
+            return_value=timer_loc,
+        ) as build_timer,
+    ):
         controller.on_language_changed("pt_BR")
 
-    build_localization.assert_called_once_with("pt_BR")
-    assert controller._localization_payload() == localization
+    build_media.assert_called_once_with("pt_BR")
+    build_timer.assert_called_once_with("pt_BR")
+    assert controller._media_localization == media_loc
+    assert controller._timer_localization == timer_loc
     assert events == ["profile"]
-    assert controller._catalog_refresh_timer.isActive()
-    controller._catalog_refresh_timer.stop()
+    assert controller._media_adapter._catalog_refresh_timer.isActive()
+    controller._media_adapter._catalog_refresh_timer.stop()
     controller._server = None
     controller.stop()
 
 
 def test_playback_origins_must_resolve_against_the_public_catalog(tmp_path: Path) -> None:
     controller, *_ = _controller(tmp_path, [])
-    controller.state.update_catalog(
+    adapter = controller._media_adapter
+    controller.media_state.update_catalog(
         (
             CatalogCollection(
                 "linked-1",
@@ -713,7 +1042,7 @@ def test_playback_origins_must_resolve_against_the_public_catalog(tmp_path: Path
         )
     )
 
-    public_origin = controller._origin_from_item(
+    public_origin = adapter._origin_from_item(
         {
             "origin_kind": "linked_folder",
             "origin_container_id": "linked-1",
@@ -721,7 +1050,7 @@ def test_playback_origins_must_resolve_against_the_public_catalog(tmp_path: Path
         },
         0,
     )
-    private_origin = controller._origin_from_item(
+    private_origin = adapter._origin_from_item(
         {
             "origin_kind": "linked_folder",
             "origin_container_id": r"C:\Private\Meeting media",
@@ -750,8 +1079,9 @@ def test_runtime_reconciliation_recovers_and_fails_closed_with_the_interface(
     controller, *_ = _controller(tmp_path, [])
     settings = controller._dependencies.settings
     settings.enabled = lambda: True
+    settings.media_enabled = lambda: True
     settings.network_selection = lambda: object()
-    controller._dependencies.credentials.has_credentials = lambda: True
+    controller._dependencies.media_credentials.has_credentials = lambda: True
     reconciliations: list[str] = []
     monkeypatch.setattr(controller, "reconfigure", lambda: reconciliations.append("run"))
 
@@ -793,14 +1123,15 @@ def test_play_resolves_private_media_and_annotates_the_projection_queue(
         ],
     }
     controller, *_rest, media_projection = _controller(tmp_path, [playlist])
-    controller._refresh_catalog()
+    adapter = controller._media_adapter
+    adapter.refresh_catalog_synchronously()
     command = PlayCommand(
         str(uuid.uuid4()),
         ProjectionOrigin(ProjectionSource.PLAYLIST, "playlist-1", "media-1"),
-        controller.state.catalog_revision,
+        controller.media_state.catalog_revision,
     )
 
-    error = controller._execute_command(command)
+    error = adapter._execute_command(command)
 
     assert error is None
     assert media_projection.projected is not None
@@ -831,8 +1162,9 @@ def test_play_uses_the_exact_private_catalog_published_to_remote_clients(
         ],
     }
     controller, *_rest, media_projection = _controller(tmp_path, [playlist])
-    controller._refresh_catalog()
-    published_revision = controller.state.catalog_revision
+    adapter = controller._media_adapter
+    adapter.refresh_catalog_synchronously()
+    published_revision = controller.media_state.catalog_revision
     playlist["items"][0]["url"] = str(second_path)
     command = PlayCommand(
         str(uuid.uuid4()),
@@ -840,25 +1172,25 @@ def test_play_uses_the_exact_private_catalog_published_to_remote_clients(
         published_revision,
     )
 
-    error = controller._execute_command(command)
+    error = adapter._execute_command(command)
 
     assert error is None
     assert media_projection.projected is not None
     assert media_projection.projected[0][0]["url"] == str(first_path)
-    assert controller.state.catalog_revision == published_revision
+    assert controller.media_state.catalog_revision == published_revision
 
-    controller._refresh_catalog()
-    assert controller.state.catalog_revision == published_revision + 1
-    stale_error = controller._execute_command(command)
+    adapter.refresh_catalog_synchronously()
+    assert controller.media_state.catalog_revision == published_revision + 1
+    stale_error = adapter._execute_command(command)
     assert stale_error is not None
     assert stale_error.code is CommandErrorCode.CATALOG_STALE
 
     refreshed_command = PlayCommand(
         str(uuid.uuid4()),
         command.origin,
-        controller.state.catalog_revision,
+        controller.media_state.catalog_revision,
     )
-    assert controller._execute_command(refreshed_command) is None
+    assert adapter._execute_command(refreshed_command) is None
     assert media_projection.projected[0][0]["url"] == str(second_path)
     controller.stop()
 
@@ -867,7 +1199,8 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
     tmp_path: Path,
 ) -> None:
     controller, session, bar, media, _projection = _controller(tmp_path, [])
-    controller.state.update_catalog(
+    adapter = controller._media_adapter
+    controller.media_state.update_catalog(
         (
             CatalogCollection(
                 "playlist-1",
@@ -911,8 +1244,8 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
         }
     ]
 
-    controller._refresh_playback()
-    playback = controller.state.playback
+    adapter._refresh_playback()
+    playback = controller.media_state.playback
 
     assert playback.state is PlaybackState.PLAYING
     assert playback.playback_session_id == "projection-7-media-9"
@@ -931,20 +1264,27 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
 
 
 def test_generated_talk_theme_is_exposed_as_screen_media() -> None:
-    assert RemoteControlController._media_kind_for_state(
-        "image",
-        {"generated_kind": "talk_theme"},
-    ) is RemoteMediaKind.SCREEN
-    assert RemoteControlController._media_kind_for_state(
-        "image",
-        {},
-    ) is RemoteMediaKind.IMAGE
+    assert (
+        RemoteMediaAdapter._media_kind_for_state(
+            "image",
+            {"generated_kind": "talk_theme"},
+        )
+        is RemoteMediaKind.SCREEN
+    )
+    assert (
+        RemoteMediaAdapter._media_kind_for_state(
+            "image",
+            {},
+        )
+        is RemoteMediaKind.IMAGE
+    )
 
 
 def test_persisted_meeting_cover_is_exposed_as_normalized_collection_thumbnail(
     tmp_path: Path,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
+    adapter = controller._media_adapter
     cover = BytesIO()
     Image.new("RGB", (400, 600), (32, 104, 176)).save(cover, "PNG")
     controller._dependencies.meeting_tree_store.save(
@@ -956,14 +1296,14 @@ def test_persisted_meeting_cover_is_exposed_as_normalized_collection_thumbnail(
             cover_bytes=cover.getvalue(),
         ),
     )
-    controller._refresh_catalog()
+    adapter.refresh_catalog_synchronously()
 
-    collection = controller.state.catalog.collections[0]
-    data = asyncio.run(controller._load_collection_thumbnail("meeting", collection.id))
+    collection = controller.media_state.catalog.collections[0]
+    data = asyncio.run(adapter._load_collection_thumbnail("meeting", collection.id))
 
     assert collection.thumbnail_id is not None
     assert data is not None and data.startswith(b"\xff\xd8")
-    assert asyncio.run(controller._load_collection_thumbnail("playlist", collection.id)) is None
+    assert asyncio.run(adapter._load_collection_thumbnail("playlist", collection.id)) is None
     controller.stop()
 
 
@@ -971,6 +1311,7 @@ def test_resolved_meeting_artwork_is_generated_on_first_remote_request(
     tmp_path: Path,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
+    adapter = controller._media_adapter
     thumbnail_url = "https://media.example.test/private/song-thumb.jpg?token=secret"
     video_url = "https://media.example.test/private/song.mp4?token=secret"
     controller._dependencies.meeting_tree_store.save(
@@ -998,17 +1339,17 @@ def test_resolved_meeting_artwork_is_generated_on_first_remote_request(
     Image.new("RGB", (640, 360), (24, 112, 196)).save(output, "JPEG")
     extractor = controller._dependencies.media_thumbnail_extractor
     extractor.results[MediaKind.IMAGE] = output.getvalue()
-    controller._refresh_catalog()
-    collection = controller.state.catalog.collections[0]
+    adapter.refresh_catalog_synchronously()
+    collection = controller.media_state.catalog.collections[0]
     node = collection.nodes[0]
 
-    data = asyncio.run(controller._load_thumbnail("meeting", collection.id, node.id))
+    data = asyncio.run(adapter._load_thumbnail("meeting", collection.id, node.id))
 
     assert node.thumbnail_id is not None
     assert data is not None and data.startswith(b"\xff\xd8")
     assert extractor.requests == [(thumbnail_url, MediaKind.IMAGE)]
     assert controller._dependencies.meeting_thumbnail_store.exists(node.thumbnail_id)
-    public_catalog = json.dumps(controller.state.catalog.to_dict())
+    public_catalog = json.dumps(controller.media_state.catalog.to_dict())
     assert thumbnail_url not in public_catalog
     assert video_url not in public_catalog
     controller.stop()
@@ -1018,6 +1359,7 @@ def test_failed_meeting_artwork_keeps_the_original_video_placeholder(
     tmp_path: Path,
 ) -> None:
     controller, *_ = _controller(tmp_path, [])
+    adapter = controller._media_adapter
     thumbnail_url = "https://media.example.test/private/video-thumb.jpg"
     controller._dependencies.meeting_tree_store.save(
         "mwb:2026-07-13:T:20260700",
@@ -1035,16 +1377,17 @@ def test_failed_meeting_artwork_keeps_the_original_video_placeholder(
         "canonical",
         overview=MeetingTreeOverview(title="Life and Ministry"),
     )
-    controller._refresh_catalog()
-    collection = controller.state.catalog.collections[0]
+    adapter.refresh_catalog_synchronously()
+    collection = controller.media_state.catalog.collections[0]
     node = collection.nodes[0]
 
-    data = asyncio.run(controller._load_thumbnail("meeting", collection.id, node.id))
+    data = asyncio.run(adapter._load_thumbnail("meeting", collection.id, node.id))
 
     assert controller._dependencies.media_thumbnail_extractor.requests == [
         (thumbnail_url, MediaKind.IMAGE)
     ]
     assert data == render_media_placeholder_thumbnail(MediaKind.VIDEO)
+    assert node.thumbnail_id is not None
     assert not controller._dependencies.meeting_thumbnail_store.exists(node.thumbnail_id)
     controller.stop()
 
@@ -1053,23 +1396,24 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
     tmp_path: Path,
 ) -> None:
     controller, session, _bar, media, _projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
     session.state_type = "video"
     session.state = {"type": "video", "title": "First media"}
     session.session_id = 1
     media.session_id = 1
     media.is_playing = True
-    controller._refresh_playback()
-    old_session_id = controller.state.playback.playback_session_id
+    adapter._refresh_playback()
+    old_session_id = controller.media_state.playback.playback_session_id
     assert old_session_id is not None
     command = PauseCommand(str(uuid.uuid4()), old_session_id)
-    decision = ProjectionCommandSession(controller.state).prepare(command)
+    decision = ProjectionCommandSession(controller.media_state).prepare(command)
     assert decision.should_execute is True
 
     session.state = {"type": "video", "title": "Replacement media"}
     session.session_id = 2
     media.session_id = 2
-    controller._refresh_playback()
-    error = controller._execute_command(command)
+    adapter._refresh_playback()
+    error = adapter._execute_command(command)
 
     assert error is not None
     assert error.code is CommandErrorCode.PLAYBACK_STALE
@@ -1081,6 +1425,8 @@ def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
     tmp_path: Path,
 ) -> None:
     controller, session, bar, media, _projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    adapter._active = True
     session.state_type = "video"
     session.state = {
         "type": "video",
@@ -1095,8 +1441,8 @@ def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
             "type": "video",
         }
     ]
-    controller._on_media_error(r"Could not open C:\Users\TestUser\secret.mp4")
-    playback = controller.state.playback
+    adapter._on_media_error(r"Could not open C:\Users\TestUser\secret.mp4")
+    playback = controller.media_state.playback
     encoded = json.dumps(playback.to_dict())
 
     assert playback.title == "Media"
@@ -1120,8 +1466,8 @@ def test_failed_server_stop_keeps_lifecycle_ownership(tmp_path: Path) -> None:
 
     server = _Server()
     identity = object()
-    controller._server = server
-    controller._tls_identity = identity
+    controller._server = server  # type: ignore[assignment]
+    controller._tls_identity = identity  # type: ignore[assignment]
 
     assert controller._stop_server() is False
     assert controller._server is server
@@ -1146,7 +1492,11 @@ def test_tls_renewal_reloads_live_context_without_revoking_sessions_or_stopping_
 
     class _Server:
         is_running = True
-        binding = SimpleNamespace(url="https://192.168.1.20:8765/remote/")
+        binding = SimpleNamespace(
+            host="192.168.1.20",
+            media_url="https://192.168.1.20:8765/remote/media/",
+            timer_url="https://192.168.1.20:8765/remote/timer/",
+        )
 
         def __init__(self) -> None:
             self.reloaded = []
@@ -1159,7 +1509,7 @@ def test_tls_renewal_reloads_live_context_without_revoking_sessions_or_stopping_
             self.stop_called = True
 
     server = _Server()
-    controller._server = server
+    controller._server = server  # type: ignore[assignment]
     controller._tls_identity = previous
     controller._tls_store = SimpleNamespace(
         load_or_create=lambda _address: renewed,
@@ -1171,7 +1521,8 @@ def test_tls_renewal_reloads_live_context_without_revoking_sessions_or_stopping_
     assert server.stop_called is False
     assert controller._server is server
     assert controller._tls_identity is renewed
-    assert controller._sessions.generation == 0
+    assert controller._media_sessions.generation == 0
+    assert controller._timer_sessions.generation == 0
 
     controller._server = None
     controller._tls_identity = None
@@ -1190,14 +1541,18 @@ def test_failed_tls_hot_reload_keeps_running_identity_and_backs_off(tmp_path: Pa
 
     class _Server:
         is_running = True
-        binding = SimpleNamespace(url="https://192.168.1.20:8765/remote/")
+        binding = SimpleNamespace(
+            host="192.168.1.20",
+            media_url="https://192.168.1.20:8765/remote/media/",
+            timer_url="https://192.168.1.20:8765/remote/timer/",
+        )
 
         @staticmethod
         def reload_tls(_identity) -> None:
             raise RuntimeError("synthetic reload failure")
 
     server = _Server()
-    controller._server = server
+    controller._server = server  # type: ignore[assignment]
     controller._tls_identity = previous
     controller._tls_store = SimpleNamespace(
         load_or_create=lambda _address: renewed,
@@ -1232,16 +1587,17 @@ def test_local_images_get_safe_on_demand_remote_thumbnails(tmp_path: Path) -> No
         ],
     }
     controller, *_ = _controller(tmp_path, [playlist])
-    controller._refresh_catalog()
-    node = controller.state.catalog.collections[0].nodes[0]
+    adapter = controller._media_adapter
+    adapter.refresh_catalog_synchronously()
+    node = controller.media_state.catalog.collections[0].nodes[0]
 
-    data = asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "image-1"))
+    data = asyncio.run(adapter._load_thumbnail("playlist", "playlist-1", "image-1"))
 
     storage_id = thumbnail_storage_id("image-1", str(source))
     assert node.thumbnail_id == storage_id
     assert data is not None and data.startswith(b"\xff\xd8")
     assert controller._dependencies.playlist_thumbnail_store.exists(storage_id)
-    assert str(source) not in json.dumps(controller.state.catalog.to_dict())
+    assert str(source) not in json.dumps(controller.media_state.catalog.to_dict())
     controller.stop()
 
 
@@ -1263,20 +1619,21 @@ def test_local_video_and_audio_thumbnails_are_generated_and_cached_on_demand(
         ],
     }
     controller, *_ = _controller(tmp_path, [playlist])
+    adapter = controller._media_adapter
     extractor = controller._dependencies.media_thumbnail_extractor
     output = BytesIO()
     Image.new("RGB", (800, 450), (18, 110, 210)).save(output, "JPEG")
     extractor.results[MediaKind.VIDEO] = output.getvalue()
-    controller._refresh_catalog()
+    adapter.refresh_catalog_synchronously()
 
     async def load() -> tuple[bytes | None, bytes | None]:
         return await asyncio.gather(
-            controller._load_thumbnail("playlist", "playlist-1", "video-1"),
-            controller._load_thumbnail("playlist", "playlist-1", "audio-1"),
+            adapter._load_thumbnail("playlist", "playlist-1", "video-1"),
+            adapter._load_thumbnail("playlist", "playlist-1", "audio-1"),
         )
 
     video_data, audio_data = asyncio.run(load())
-    nodes = controller.state.catalog.collections[0].nodes
+    nodes = controller.media_state.catalog.collections[0].nodes
 
     video_storage_id = thumbnail_storage_id("video-1", str(video))
     audio_storage_id = thumbnail_storage_id("audio-1", str(audio))
@@ -1292,12 +1649,10 @@ def test_local_video_and_audio_thumbnails_are_generated_and_cached_on_demand(
     ]
     assert controller._dependencies.playlist_thumbnail_store.exists(video_storage_id)
     assert not controller._dependencies.playlist_thumbnail_store.exists(audio_storage_id)
-    assert (
-        asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "audio-1")) == audio_data
-    )
+    assert asyncio.run(adapter._load_thumbnail("playlist", "playlist-1", "audio-1")) == audio_data
     assert len(extractor.requests) == 2
-    assert str(video) not in json.dumps(controller.state.catalog.to_dict())
-    assert str(audio) not in json.dumps(controller.state.catalog.to_dict())
+    assert str(video) not in json.dumps(controller.media_state.catalog.to_dict())
+    assert str(audio) not in json.dumps(controller.media_state.catalog.to_dict())
     controller.stop()
 
 
@@ -1311,14 +1666,15 @@ def test_concurrent_thumbnail_requests_share_one_media_extraction(tmp_path: Path
         "items": [{"id": "video-1", "title": "Clip", "type": "video", "url": str(source)}],
     }
     controller, *_ = _controller(tmp_path, [playlist])
+    adapter = controller._media_adapter
     extractor = controller._dependencies.media_thumbnail_extractor
     extractor.delay = 0.01
-    controller._refresh_catalog()
+    adapter.refresh_catalog_synchronously()
 
     async def load() -> tuple[bytes | None, bytes | None]:
         return await asyncio.gather(
-            controller._load_thumbnail("playlist", "playlist-1", "video-1"),
-            controller._load_thumbnail("playlist", "playlist-1", "video-1"),
+            adapter._load_thumbnail("playlist", "playlist-1", "video-1"),
+            adapter._load_thumbnail("playlist", "playlist-1", "video-1"),
         )
 
     first, second = asyncio.run(load())
@@ -1341,12 +1697,13 @@ def test_cancelled_thumbnail_waiter_does_not_leak_completed_singleflight_task(
         "items": [{"id": "video-1", "title": "Clip", "type": "video", "url": str(source)}],
     }
     controller, *_ = _controller(tmp_path, [playlist])
+    adapter = controller._media_adapter
     controller._dependencies.media_thumbnail_extractor.delay = 0.01
-    controller._refresh_catalog()
+    adapter.refresh_catalog_synchronously()
 
     async def cancel_waiter() -> None:
         pending = asyncio.create_task(
-            controller._load_thumbnail("playlist", "playlist-1", "video-1")
+            adapter._load_thumbnail("playlist", "playlist-1", "video-1")
         )
         await asyncio.sleep(0)
         pending.cancel()
@@ -1356,7 +1713,7 @@ def test_cancelled_thumbnail_waiter_does_not_leak_completed_singleflight_task(
 
     asyncio.run(cancel_waiter())
 
-    assert controller._thumbnail_tasks == {}
+    assert adapter._thumbnail_tasks == {}
     controller.stop()
 
 
@@ -1372,20 +1729,21 @@ def test_thumbnail_generation_does_not_cross_catalog_revision(tmp_path: Path) ->
         "items": [{"id": "video-1", "title": "Clip", "type": "video", "url": str(first)}],
     }
     controller, *_ = _controller(tmp_path, [playlist])
+    adapter = controller._media_adapter
     extractor = controller._dependencies.media_thumbnail_extractor
     output = BytesIO()
     Image.new("RGB", (320, 180), (18, 110, 210)).save(output, "JPEG")
     extractor.results[MediaKind.VIDEO] = output.getvalue()
     extractor.delay = 0.01
-    controller._refresh_catalog()
+    adapter.refresh_catalog_synchronously()
 
     async def change_catalog_while_loading() -> bytes | None:
         pending = asyncio.create_task(
-            controller._load_thumbnail("playlist", "playlist-1", "video-1")
+            adapter._load_thumbnail("playlist", "playlist-1", "video-1")
         )
         await asyncio.sleep(0)
         playlist["items"][0]["url"] = str(second)
-        controller._refresh_catalog()
+        adapter.refresh_catalog_synchronously()
         return await pending
 
     assert asyncio.run(change_catalog_while_loading()) is None
@@ -1401,10 +1759,11 @@ def test_stored_remote_media_thumbnail_is_resolved_by_catalog_id_only(tmp_path: 
         "items": [{"id": "video-1", "title": "Clip", "type": "video", "url": private_url}],
     }
     controller, *_ = _controller(tmp_path, [playlist])
-    controller._refresh_catalog()
-    node = controller.state.catalog.collections[0].nodes[0]
+    adapter = controller._media_adapter
+    adapter.refresh_catalog_synchronously()
+    node = controller.media_state.catalog.collections[0].nodes[0]
 
-    data = asyncio.run(controller._load_thumbnail("playlist", "playlist-1", "video-1"))
+    data = asyncio.run(adapter._load_thumbnail("playlist", "playlist-1", "video-1"))
 
     storage_id = thumbnail_storage_id("video-1", private_url)
     assert node.thumbnail_id == storage_id
@@ -1412,5 +1771,5 @@ def test_stored_remote_media_thumbnail_is_resolved_by_catalog_id_only(tmp_path: 
     assert controller._dependencies.media_thumbnail_extractor.requests == [
         (private_url, MediaKind.VIDEO)
     ]
-    assert private_url not in json.dumps(controller.state.catalog.to_dict())
+    assert private_url not in json.dumps(controller.media_state.catalog.to_dict())
     controller.stop()

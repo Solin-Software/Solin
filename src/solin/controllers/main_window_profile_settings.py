@@ -44,4 +44,5 @@ class MainWindowProfileSettings:
     notification: NotificationSettingsStore
     talk_theme: TalkThemeSettingsStore
     remote_control: RemoteControlSettingsStore
-    remote_control_credentials: RemoteControlCredentialsStore
+    remote_media_credentials: RemoteControlCredentialsStore
+    remote_timer_credentials: RemoteControlCredentialsStore

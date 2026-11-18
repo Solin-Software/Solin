@@ -8,7 +8,7 @@ from PySide6.QtCore import QEvent, QCoreApplication, QRect
 from PySide6.QtGui import QColor, QIcon
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
-from solin.core.remote_control.security import RemoteSessionInfo
+from solin.core.remote_control.security import RemoteScope, RemoteSessionInfo
 from solin.styles.icons import ICON_REMOTE_CONTROL, make_icon
 from solin.ui.controls import ButtonConfirmationFeedback
 from solin.ui.qml.quick_toolbar import QuickToolbarBridge
@@ -26,6 +26,7 @@ def _session(
     browser: str,
     platform: str,
     sockets: int,
+    scope: RemoteScope = RemoteScope.MEDIA,
 ) -> RemoteSessionInfo:
     return RemoteSessionInfo(
         management_id=management_id,
@@ -37,6 +38,7 @@ def _session(
         created_at_utc=1_721_130_000.0,
         last_activity_at_utc=1_721_130_400.0,
         connected_socket_count=sockets,
+        scope=scope,
     )
 
 
@@ -134,6 +136,42 @@ def test_remote_sessions_popup_distinguishes_connected_and_signed_in_sessions() 
         "RemoteSessionConnected": "Connected now",
         "RemoteSessionSignedIn": "Signed in",
     }
+    popup.deleteLater()
+
+
+def test_remote_sessions_popup_groups_media_and_timer_services_and_public_viewers() -> None:
+    popup = RemoteSessionsPopup()
+    sessions = (
+        _session("m1", browser="Chrome", platform="Android", sockets=1, scope=RemoteScope.MEDIA),
+        _session("t1", browser="Safari", platform="iPad", sockets=1, scope=RemoteScope.TIMER),
+    )
+
+    popup.set_runtime_state(
+        True,
+        True,
+        "Secure remote control is running.",
+        media_active=True,
+        timer_active=True,
+    )
+    popup.set_public_viewers(3)
+    popup.set_sessions(sessions)
+
+    assert popup.findChild(QLabel, "RemoteSessionsCount").text() == "2"
+    assert popup.findChild(QWidget, "RemoteScopeHeader_media") is not None
+    timer_header = popup.findChild(QWidget, "RemoteScopeHeader_timer")
+    assert timer_header is not None
+    assert "3" in timer_header.findChild(QLabel, "RemoteScopeHeaderMeta").text()
+    rows = popup.findChildren(_RemoteSessionRow)
+    assert {row.session.global_management_id for row in rows} == {"media:m1", "timer:t1"}
+    device_labels = {
+        row.session.scope: row.findChild(QLabel, "RemoteSessionDevice").text()
+        for row in rows
+    }
+    assert device_labels == {
+        RemoteScope.MEDIA: "Solin Media · Chrome on Android",
+        RemoteScope.TIMER: "Solin Timer · Safari on iPad",
+    }
+    popup.deleteLater()
 
 
 def test_remote_sessions_popup_uses_spacious_stable_geometry() -> None:
@@ -141,11 +179,12 @@ def test_remote_sessions_popup_uses_spacious_stable_geometry() -> None:
     popup.set_runtime_state(True, True, "running")
     popup.set_sessions((_session("one", browser="Chrome", platform="Android", sockets=1),))
 
-    assert popup.width() == 392
+    assert popup.width() == 404
     assert popup.findChild(_RemoteSessionRow).minimumHeight() == 88
     assert popup.height() == popup.sizeHint().height()
     count = popup.findChild(QLabel, "RemoteSessionsCount")
     assert count.width() == count.height() == 24
+    popup.deleteLater()
 
 
 def test_remote_sessions_popup_position_avoids_the_anchor_and_screen_edges() -> None:
@@ -195,9 +234,9 @@ def test_remote_sessions_popup_confirms_granular_and_global_revocation() -> None
         button for button in row.findChildren(QPushButton) if button.property("destructive") is True
     )
     confirm.click()
-    assert granular == ["target"]
+    assert granular == ["media:target"]
 
-    popup.set_revocation_result("target", False)
+    popup.set_revocation_result("media:target", False)
     error = row.findChild(QLabel, "RemoteSessionError")
     assert error.isVisibleTo(row)
     assert "Could not disconnect" in error.text()
@@ -213,6 +252,7 @@ def test_remote_sessions_popup_confirms_granular_and_global_revocation() -> None
     )
     global_confirm.click()
     assert global_requests == [True]
+    popup.deleteLater()
 
 
 def test_remote_sessions_popup_palette_change_does_not_reapply_styles_recursively(

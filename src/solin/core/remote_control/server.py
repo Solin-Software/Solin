@@ -1,46 +1,33 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
+from concurrent.futures import Future
 from dataclasses import dataclass
-from datetime import date
 import json
 import logging
 from pathlib import Path
 import re
 import ssl
 import threading
-from typing import Final
-from concurrent.futures import Future
+from typing import Any, Final, Protocol
 
 from aiohttp import WSCloseCode, WSMsgType, web
 
-from ..meetings.meeting_weeks import current_monday
 from .certificates import TLSIdentity
-from .contracts import (
-    CommandError,
-    CommandErrorCode,
-    CommandResult,
-    JsonObject,
-    JsonValue,
-    RemoteCommand,
-    parse_projection_command,
-)
 from .security import (
     DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS,
     InMemorySessionStore,
     LoginRateLimiter,
-    RemoteSessionInfo,
     RemoteControlCredentialsStore,
+    RemoteScope,
+    RemoteSessionInfo,
     SessionGenerationChangedError,
     SessionLimitReachedError,
+    parse_global_management_id,
 )
 from .settings import REMOTE_CONTROL_PORT
-from .state import (
-    ProjectionCommandSession,
-    RemoteControlRuntimeSnapshot,
-    RemoteControlStateStore,
-)
+from .validation import JsonObject, JsonValue
 from .web_assets import (
     REMOTE_SHELL_ASSET_ROUTE,
     WEB_ASSET_CONTENT_TYPES,
@@ -51,19 +38,26 @@ from .web_assets import (
 log = logging.getLogger(__name__)
 
 REMOTE_CONTROL_PREFIX: Final = "/remote"
-SESSION_COOKIE_NAME: Final = "__Host-solin_remote"
-_MAX_LOGIN_BODY_BYTES: Final = 2_048
-_MAX_COMMAND_BODY_BYTES: Final = 8_192
-_COMMAND_TIMEOUT_SECONDS: Final = 10.0
-_COMMAND_SHUTDOWN_TIMEOUT_SECONDS: Final = 5.0
-_REQUEST_BODY_TIMEOUT_SECONDS: Final = 5.0
-_MAX_THUMBNAIL_BYTES: Final = 2 * 1024 * 1024
+REMOTE_MEDIA_PREFIX: Final = "/remote/media"
+REMOTE_TIMER_PREFIX: Final = "/remote/timer"
+TRUST_CERTIFICATE_ROUTE: Final = "/remote/trust-certificate.cer"
+
+MEDIA_SESSION_COOKIE_NAME: Final = "__Host-solin_remote_media"
+TIMER_SESSION_COOKIE_NAME: Final = "__Host-solin_remote_timer"
+
+MAX_LOGIN_BODY_BYTES: Final = 2_048
+MAX_COMMAND_BODY_BYTES: Final = 8_192
+COMMAND_TIMEOUT_SECONDS: Final = 10.0
+COMMAND_SHUTDOWN_TIMEOUT_SECONDS: Final = 5.0
+REQUEST_BODY_TIMEOUT_SECONDS: Final = 5.0
+WEBSOCKET_HEARTBEAT_SECONDS: Final = 20.0
+WEBSOCKET_CLOSE_TIMEOUT_SECONDS: Final = 0.25
+OPAQUE_ROUTE_ID: Final = re.compile(r"[A-Za-z0-9._~:-]{1,512}\Z")
+
 _MAX_LOGIN_HASHES: Final = 2
-_MAX_WEBSOCKETS: Final = 32
-_MAX_WEBSOCKETS_PER_SESSION: Final = 4
-_WEBSOCKET_HEARTBEAT_SECONDS: Final = 20.0
-_WEBSOCKET_CLOSE_TIMEOUT_SECONDS: Final = 0.25
-_OPAQUE_ROUTE_ID: Final = re.compile(r"[A-Za-z0-9._~:-]{1,512}\Z")
+_DEFAULT_MAX_AUTH_WEBSOCKETS: Final = 32
+_DEFAULT_MAX_WEBSOCKETS_PER_SESSION: Final = 4
+
 _SECURITY_HEADERS: Final = {
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
@@ -77,29 +71,10 @@ _CSP: Final = (
     "object-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     "font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'"
 )
-CommandHandler = Callable[[RemoteCommand], Awaitable[CommandError | None]]
-ThumbnailHandler = Callable[[str, str, str], Awaitable[bytes | None]]
-CollectionThumbnailHandler = Callable[[str, str], Awaitable[bytes | None]]
+
 SetupProvider = Callable[[], JsonObject]
 SessionInventoryCallback = Callable[[tuple[RemoteSessionInfo, ...]], None]
-
-
-@dataclass(frozen=True, slots=True)
-class RemoteControlServerDependencies:
-    state: RemoteControlStateStore
-    command_session: ProjectionCommandSession
-    credentials: RemoteControlCredentialsStore
-    sessions: InMemorySessionStore
-    rate_limiter: LoginRateLimiter
-    assets_directory: Path
-    command_handler: CommandHandler
-    setup_provider: SetupProvider
-    thumbnail_handler: ThumbnailHandler | None = None
-    collection_thumbnail_handler: CollectionThumbnailHandler | None = None
-    session_inventory_changed: SessionInventoryCallback | None = None
-    profile_id: str = ""
-    profile_name: str = ""
-    meeting_week_start: Callable[[], date] = current_monday
+PublicViewerCountCallback = Callable[[dict[RemoteScope, int]], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,91 +94,451 @@ class RemoteControlServerBinding:
         return f"https://{self.host}:{self.port}"
 
     @property
-    def url(self) -> str:
-        return f"{self.origin}{REMOTE_CONTROL_PREFIX}/"
+    def media_url(self) -> str:
+        return f"{self.origin}{REMOTE_MEDIA_PREFIX}/"
+
+    @property
+    def timer_url(self) -> str:
+        return f"{self.origin}{REMOTE_TIMER_PREFIX}/"
+
+    @property
+    def trust_certificate_url(self) -> str:
+        return f"{self.origin}{TRUST_CERTIFICATE_ROUTE}"
 
 
-class RemoteControlHttpApplication:
-    """Authenticated aiohttp adapter around immutable remote-control contracts."""
+@dataclass(frozen=True, slots=True)
+class RemoteHostContext:
+    allowed_origin: str
+    installation_id: str
+    authenticate_with_slot: Callable[[RemoteControlCredentialsStore, str, str], Awaitable[bool]]
+    notify_session_inventory_changed: Callable[[], None]
+    notify_public_viewers_changed: Callable[[], None]
+
+
+class RemoteRouteModule(Protocol):
+    @property
+    def scope(self) -> RemoteScope: ...
+
+    @property
+    def url_prefix(self) -> str: ...
+
+    @property
+    def cookie_name(self) -> str: ...
+
+    def is_enabled(self) -> bool: ...
+
+    def bind_host(self, host: RemoteHostContext) -> None: ...
+
+    def register_routes(self, app: web.Application) -> None: ...
+
+    def active_session_inventory(self) -> tuple[RemoteSessionInfo, ...]: ...
+
+    def public_viewer_count(self) -> int: ...
+
+    async def revoke_session(self, management_id: str) -> bool: ...
+
+    async def revoke_all_sessions(self) -> int: ...
+
+    async def close_disabled_connections(self) -> None: ...
+
+    async def publish_snapshot(self) -> None: ...
+
+    async def publish_profile(self) -> None: ...
+
+    async def shutdown(self) -> None: ...
+
+
+class ScopedRemoteHttpModule:
+    """Shared per-scope HTTP/session/WebSocket mechanics for isolated remote apps."""
 
     def __init__(
         self,
-        dependencies: RemoteControlServerDependencies,
         *,
-        allowed_origin: str,
-        installation_id: str,
-        trust_certificate_der: bytes | None = None,
+        scope: RemoteScope,
+        url_prefix: str,
+        cookie_name: str,
+        assets_directory: Path,
+        shared_assets_directory: Path | None = None,
+        credentials: RemoteControlCredentialsStore,
+        sessions: InMemorySessionStore,
+        rate_limiter: LoginRateLimiter,
+        setup_provider: SetupProvider,
+        enabled_predicate: Callable[[], bool] | None = None,
+        allow_login_predicate: Callable[[], bool] | None = None,
+        theme_provider: Callable[[], str] | None = None,
+        profile_id: str = "",
+        profile_name: str = "",
+        max_auth_websockets: int = _DEFAULT_MAX_AUTH_WEBSOCKETS,
+        max_websockets_per_session: int = _DEFAULT_MAX_WEBSOCKETS_PER_SESSION,
     ) -> None:
-        self._dependencies = dependencies
-        self._allowed_origin = allowed_origin.rstrip("/")
-        self._allowed_host = self._allowed_origin.removeprefix("https://").casefold()
-        self._trust_certificate_der = trust_certificate_der
-        self._web_assets = RemoteControlWebAssets(
-            dependencies.assets_directory,
-            installation_id=installation_id,
-            url_prefix=REMOTE_CONTROL_PREFIX,
+        if sessions.scope is not scope:
+            raise ValueError(
+                f"Session store scope {sessions.scope.value!r} does not match module scope {scope.value!r}"
+            )
+        if not cookie_name.startswith("__Host-"):
+            raise ValueError("Remote session cookies must use the __Host- prefix")
+        normalized_prefix = "/" + str(url_prefix or "").strip("/")
+        if not normalized_prefix.startswith(f"{REMOTE_CONTROL_PREFIX}/"):
+            raise ValueError(f"Module URL prefix must live under {REMOTE_CONTROL_PREFIX}/")
+
+        self._scope = scope
+        self._url_prefix = normalized_prefix
+        self._cookie_name = cookie_name
+        self._assets_directory = Path(assets_directory)
+        self._shared_assets_directory = (
+            Path(shared_assets_directory) if shared_assets_directory is not None else None
         )
-        self._websockets: dict[web.WebSocketResponse, asyncio.Lock] = {}
+        self._credentials = credentials
+        self._sessions = sessions
+        self._rate_limiter = rate_limiter
+        self._setup_provider = setup_provider
+        self._enabled_predicate = enabled_predicate or (lambda: True)
+        self._allow_login_predicate = allow_login_predicate or (lambda: True)
+        self._theme_provider = theme_provider or (lambda: "dark")
+        self._profile_id = profile_id
+        self._profile_name = profile_name
+        self._max_auth_websockets = max_auth_websockets
+        self._max_websockets_per_session = max_websockets_per_session
+
+        self._host: RemoteHostContext | None = None
+        self._web_assets: RemoteControlWebAssets | None = None
+        self._auth_websockets: dict[web.WebSocketResponse, asyncio.Lock] = {}
         self._websocket_sessions: dict[web.WebSocketResponse, str] = {}
         self._websocket_reservations: dict[str, int] = {}
         self._websocket_reservation_count = 0
         self._publication_lock = asyncio.Lock()
-        self._command_tasks: set[asyncio.Task[CommandResult]] = set()
-        self._login_hash_tasks: set[asyncio.Task[bool]] = set()
-        self._login_hash_slots = asyncio.Semaphore(_MAX_LOGIN_HASHES)
+        self._command_tasks: set[asyncio.Task[Any]] = set()
         self._event_sequence = 0
-        self._last_catalog_revision = dependencies.state.catalog_revision
-        self._last_playback_revision = dependencies.state.playback_revision
-        self._app = web.Application(
-            client_max_size=_MAX_COMMAND_BODY_BYTES,
-            middlewares=[self._security_headers_middleware],
-        )
-        self._app.on_shutdown.append(self._shutdown_websockets)
-        self._app.on_shutdown.append(self._shutdown_background_tasks)
-        self._configure_routes()
 
     @property
-    def app(self) -> web.Application:
-        return self._app
+    def scope(self) -> RemoteScope:
+        return self._scope
 
-    async def publish_snapshot(self) -> None:
-        async with self._publication_lock:
-            if not self._websockets:
-                return
-            snapshot = self._dependencies.state.snapshot()
-            events: list[JsonObject] = []
-            if snapshot.catalog_revision != self._last_catalog_revision:
-                self._last_catalog_revision = snapshot.catalog_revision
-                events.append(
-                    self._event(
-                        "catalog.snapshot",
-                        snapshot.catalog.to_dict(),
-                        snapshot=snapshot,
-                    )
-                )
-            if snapshot.playback_revision != self._last_playback_revision:
-                self._last_playback_revision = snapshot.playback_revision
-                events.append(
-                    self._event(
-                        "playback.snapshot",
-                        snapshot.playback.to_dict(),
-                        snapshot=snapshot,
-                    )
-                )
-            if not events:
-                return
-            await self._broadcast(events)
+    @property
+    def url_prefix(self) -> str:
+        return self._url_prefix
 
-    async def publish_profile(self) -> None:
-        async with self._publication_lock:
-            if not self._websockets:
-                return
-            await self._broadcast([self._event("profile.snapshot", self._profile_payload())])
+    @property
+    def cookie_name(self) -> str:
+        return self._cookie_name
 
-    async def _broadcast(self, events: list[JsonObject]) -> None:
-        sockets = tuple(self._websockets)
+    def is_enabled(self) -> bool:
+        return bool(self._enabled_predicate())
+
+    def public_viewer_count(self) -> int:
+        return 0
+
+    def bind_host(self, host: RemoteHostContext) -> None:
+        self._host = host
+        self._web_assets = RemoteControlWebAssets(
+            self._assets_directory,
+            installation_id=host.installation_id,
+            url_prefix=self._url_prefix,
+            shared_root=self._shared_assets_directory,
+        )
+
+    def _host_context(self) -> RemoteHostContext:
+        if self._host is None:
+            raise RuntimeError("Remote route module has not been bound to a host")
+        return self._host
+
+    def _assets(self) -> RemoteControlWebAssets:
+        if self._web_assets is None:
+            raise RuntimeError("Remote web assets have not been initialized")
+        return self._web_assets
+
+    def _register_common_shell_and_auth_routes(
+        self,
+        app: web.Application,
+        *,
+        register_specific_routes: Callable[[web.Application], None],
+    ) -> None:
+        prefix = self._url_prefix
+        app.router.add_get(prefix, self._redirect_to_trailing_slash)
+        app.router.add_get(f"{prefix}/api/setup", self._setup)
+        app.router.add_post(f"{prefix}/api/auth/login", self._login)
+        app.router.add_post(f"{prefix}/api/logout", self._logout)
+        app.router.add_get(f"{prefix}/api/bootstrap", self._bootstrap)
+        register_specific_routes(app)
+        app.router.add_get(f"{prefix}/service-worker.js", self._service_worker)
+        app.router.add_get(f"{prefix}/", self._index)
+        app.router.add_get(f"{prefix}/index.html", self._index)
+        app.router.add_get(f"{prefix}/{{asset:.*}}", self._asset)
+
+    def _require_enabled(self) -> None:
+        if not self.is_enabled():
+            raise web.HTTPNotFound()
+
+    def _require_same_origin(self, request: web.Request) -> None:
+        origin = request.headers.get("Origin", "").rstrip("/")
+        if origin != self._host_context().allowed_origin:
+            raise web.HTTPForbidden(text="Cross-origin request rejected")
+
+    def _require_session(self, request: web.Request) -> str:
+        self._require_enabled()
+        token = request.cookies.get(self._cookie_name, "")
+        self._publish_expired_sessions()
+        if not token or self._sessions.resolve(token) is None:
+            raise web.HTTPUnauthorized()
+        return token
+
+    def _authorize_mutation(self, request: web.Request) -> str:
+        self._require_enabled()
+        self._require_same_origin(request)
+        self._publish_expired_sessions()
+        token = request.cookies.get(self._cookie_name, "")
+        csrf_token = request.headers.get("X-CSRF-Token", "")
+        if not token or self._sessions.authorize_mutation(token, csrf_token) is None:
+            raise web.HTTPForbidden(text="Invalid session or CSRF token")
+        return token
+
+    def _publish_expired_sessions(self) -> None:
+        if self._sessions.purge_expired():
+            self._notify_inventory_changed()
+
+    def _notify_inventory_changed(self) -> None:
+        if self._host is not None:
+            self._host.notify_session_inventory_changed()
+
+    def _notify_public_viewers_changed(self) -> None:
+        if self._host is not None:
+            self._host.notify_public_viewers_changed()
+
+    async def _redirect_to_trailing_slash(self, request: web.Request) -> web.StreamResponse:
+        self._require_enabled()
+        suffix = f"?{request.query_string}" if request.query_string else ""
+        raise web.HTTPFound(location=f"{self._url_prefix}/{suffix}")
+
+    async def _index(self, request: web.Request) -> web.StreamResponse:
+        del request
+        self._require_enabled()
+        return web.Response(
+            body=self._assets().index_html,
+            content_type="text/html",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _service_worker(self, request: web.Request) -> web.Response:
+        del request
+        self._require_enabled()
+        return web.Response(
+            body=self._assets().service_worker,
+            content_type="text/javascript",
+            charset="utf-8",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Expires": "0",
+                "Pragma": "no-cache",
+                "Service-Worker-Allowed": f"{self._url_prefix}/",
+            },
+        )
+
+    async def _setup(self, request: web.Request) -> web.Response:
+        del request
+        self._require_enabled()
+        return self._json_response(self._setup_payload())
+
+    async def _asset(self, request: web.Request) -> web.StreamResponse:
+        self._require_enabled()
+        requested = request.match_info.get("asset", "")
+        if requested.startswith("api/") or requested == "ws":
+            raise web.HTTPNotFound()
+        if requested == "index.html":
+            return await self._index(request)
+        if requested == "service-worker.js":
+            return await self._service_worker(request)
+        assets = self._assets()
+        if requested.startswith(f"{REMOTE_SHELL_ASSET_ROUTE}/"):
+            candidate = assets.resolve_versioned(requested)
+            if candidate is None:
+                raise web.HTTPNotFound()
+            return self._static_file_response(
+                candidate,
+                cache_control="public, max-age=31536000, immutable",
+            )
+        candidate = assets.resolve_unversioned(requested)
+        if candidate is None:
+            raise web.HTTPNotFound()
+        cache_control = "no-store" if candidate.suffix.lower() == ".html" else "no-cache"
+        return self._static_file_response(candidate, cache_control=cache_control)
+
+    @staticmethod
+    def _static_file_response(candidate: Path, *, cache_control: str) -> web.FileResponse:
+        content_type = WEB_ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
+        if content_type is None:
+            raise web.HTTPNotFound()
+        return web.FileResponse(
+            candidate,
+            headers={
+                "Cache-Control": cache_control,
+                "Content-Type": content_type,
+            },
+        )
+
+    async def _login(self, request: web.Request) -> web.Response:
+        self._require_enabled()
+        self._require_same_origin(request)
+        if not self._allow_login_predicate() or not self._credentials.has_credentials():
+            raise web.HTTPForbidden(text="Control sign-in is not available")
+
+        payload = await self._strict_json(request, MAX_LOGIN_BODY_BYTES)
+        if set(payload) != {"username", "password"}:
+            raise web.HTTPBadRequest(text="Invalid login request")
+        username = payload.get("username")
+        password = payload.get("password")
+        if not isinstance(username, str) or not isinstance(password, str):
+            raise web.HTTPBadRequest(text="Invalid login request")
+
+        client_address = request.remote or "<unknown>"
+        rate_limit = self._rate_limiter.attempt(client_address, username)
+        if not rate_limit.allowed:
+            raise web.HTTPTooManyRequests(
+                headers={"Retry-After": str(max(1, int(rate_limit.retry_after_seconds + 0.999)))},
+                text="Too many login attempts",
+            )
+        session_generation = self._sessions.generation
+        authenticated = await self._host_context().authenticate_with_slot(
+            self._credentials,
+            username,
+            password,
+        )
+        if not authenticated:
+            raise web.HTTPUnauthorized(text="Invalid username or password")
+        self._rate_limiter.reset_identity(client_address, username)
+        existing_token = request.cookies.get(self._cookie_name, "")
+        if existing_token and self._sessions.revoke(existing_token):
+            await self._close_session_websockets(existing_token, "signed_in_again")
+        try:
+            session_credentials = self._sessions.create(
+                self._credentials.configured_username(),
+                **client_metadata(request),
+                expected_generation=session_generation,
+            )
+        except SessionGenerationChangedError as error:
+            raise web.HTTPUnauthorized(text="Invalid username or password") from error
+        except SessionLimitReachedError as error:
+            raise web.HTTPServiceUnavailable(text="Session limit reached") from error
+        self._notify_inventory_changed()
+
+        response = self._json_response(
+            {
+                "ok": True,
+                "csrfToken": session_credentials.csrf_token,
+                **self._bootstrap_payload(session_credentials.csrf_token),
+            }
+        )
+        response.set_cookie(
+            self._cookie_name,
+            session_credentials.session_token,
+            secure=True,
+            httponly=True,
+            samesite="Strict",
+            path="/",
+            max_age=DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS,
+        )
+        return response
+
+    async def _logout(self, request: web.Request) -> web.Response:
+        token = self._authorize_mutation(request)
+        self._sessions.revoke(token)
+        await self._close_session_websockets(token, "signed_out")
+        self._notify_inventory_changed()
+        response = self._json_response({"ok": True})
+        response.del_cookie(self._cookie_name, path="/", secure=True, httponly=True)
+        return response
+
+    async def _bootstrap(self, request: web.Request) -> web.Response:
+        token = self._require_session(request)
+        session = self._sessions.touch(token)
+        if session is None:
+            raise web.HTTPUnauthorized()
+        csrf_token = self._sessions.csrf_token(token)
+        if csrf_token is None:
+            raise web.HTTPUnauthorized()
+        return self._json_response(self._bootstrap_payload(csrf_token, session.principal))
+
+    def _bootstrap_payload(self, csrf_token: str, principal: str = "") -> JsonObject:
+        raise NotImplementedError
+
+    def _revocation_event(self, reason: str) -> JsonObject:
+        raise NotImplementedError
+
+    def _profile_payload(self) -> JsonObject:
+        theme = "light" if self._theme_provider() == "light" else "dark"
+        return {
+            "id": self._profile_id,
+            "name": self._profile_name,
+            "displayName": self._profile_name,
+            "theme": theme,
+            **self._localization_payload(),
+        }
+
+    def _localization_payload(self) -> JsonObject:
+        return validated_localization_payload(self._setup_provider())
+
+    def _setup_payload(self) -> JsonObject:
+        return validated_setup_payload(self._setup_provider())
+
+    def _reserve_auth_websocket(self, session_token: str) -> None:
+        active_for_session = sum(
+            token == session_token for token in self._websocket_sessions.values()
+        )
+        reserved_for_session = self._websocket_reservations.get(session_token, 0)
+        if (
+            len(self._auth_websockets) + self._websocket_reservation_count
+            >= self._max_auth_websockets
+        ):
+            raise web.HTTPServiceUnavailable(text="WebSocket connection limit reached")
+        if active_for_session + reserved_for_session >= self._max_websockets_per_session:
+            raise web.HTTPTooManyRequests(text="Session WebSocket limit reached")
+        self._websocket_reservation_count += 1
+        self._websocket_reservations[session_token] = reserved_for_session + 1
+
+    def _release_auth_websocket_reservation(self, session_token: str) -> None:
+        reserved = self._websocket_reservations.get(session_token, 0)
+        if reserved <= 1:
+            self._websocket_reservations.pop(session_token, None)
+        else:
+            self._websocket_reservations[session_token] = reserved - 1
+        self._websocket_reservation_count = max(
+            0,
+            self._websocket_reservation_count - 1,
+        )
+
+    async def _send_auth(self, socket: web.WebSocketResponse, payload: JsonObject) -> None:
+        await self._send_many_to_map(self._auth_websockets, socket, (payload,))
+
+    async def _broadcast_auth(self, events: Sequence[JsonObject]) -> None:
+        stale = await self._broadcast_to_map(self._auth_websockets, events)
+        for socket in stale:
+            self._websocket_sessions.pop(socket, None)
+        if stale:
+            self._notify_inventory_changed()
+
+    @staticmethod
+    async def _send_many_to_map(
+        registry: dict[web.WebSocketResponse, asyncio.Lock],
+        socket: web.WebSocketResponse,
+        payloads: Sequence[JsonObject],
+    ) -> None:
+        lock = registry.get(socket)
+        if lock is None:
+            raise ConnectionError("WebSocket is no longer registered")
+        async with lock:
+            for payload in payloads:
+                await asyncio.wait_for(socket.send_json(payload), timeout=1.0)
+
+    async def _broadcast_to_map(
+        self,
+        registry: dict[web.WebSocketResponse, asyncio.Lock],
+        events: Sequence[JsonObject],
+    ) -> list[web.WebSocketResponse]:
+        sockets = tuple(registry)
+        if not sockets:
+            return []
         deliveries = await asyncio.gather(
-            *(self._send_many(socket, events) for socket in sockets),
+            *(self._send_many_to_map(registry, socket, events) for socket in sockets),
             return_exceptions=True,
         )
         stale = [
@@ -212,13 +547,310 @@ class RemoteControlHttpApplication:
             if isinstance(delivery, BaseException)
         ]
         for socket in stale:
-            self._websockets.pop(socket, None)
-            self._websocket_sessions.pop(socket, None)
+            registry.pop(socket, None)
         if stale:
             await asyncio.gather(
                 *(socket.close() for socket in stale),
                 return_exceptions=True,
             )
+        return stale
+
+    async def _close_session_websockets(self, session_token: str, reason: str) -> None:
+        sockets = [
+            socket for socket, token in self._websocket_sessions.items() if token == session_token
+        ]
+        if not sockets:
+            return
+        event = self._revocation_event(reason)
+        for socket in sockets:
+            try:
+                await self._send_auth(socket, event)
+            except (TimeoutError, ConnectionError, RuntimeError) as error:
+                log.debug("Could not notify a revoked remote session: %s", error)
+            finally:
+                await socket.close(code=4401, message=b"Session revoked")
+
+    def active_session_inventory(self) -> tuple[RemoteSessionInfo, ...]:
+        if not self.is_enabled():
+            return ()
+        socket_counts: dict[str, int] = {}
+        for token in self._websocket_sessions.values():
+            snapshot = self._sessions.resolve(token)
+            if snapshot is not None:
+                socket_counts[snapshot.management_id] = (
+                    socket_counts.get(snapshot.management_id, 0) + 1
+                )
+        return tuple(
+            RemoteSessionInfo(
+                scope=self._scope,
+                management_id=snapshot.management_id,
+                principal=snapshot.principal,
+                browser=snapshot.browser,
+                platform=snapshot.platform,
+                client_mode=snapshot.client_mode,
+                remote_address=snapshot.remote_address,
+                created_at_utc=snapshot.created_at_utc,
+                last_activity_at_utc=snapshot.last_activity_at_utc,
+                connected_socket_count=socket_counts.get(snapshot.management_id, 0),
+            )
+            for snapshot in self._sessions.active_sessions()
+        )
+
+    async def revoke_session(self, management_id: str) -> bool:
+        token = self._sessions.revoke_management_id(management_id)
+        if token is None:
+            self._notify_inventory_changed()
+            return False
+        await self._close_session_websockets(token, "revoked_device")
+        self._notify_inventory_changed()
+        return True
+
+    async def revoke_all_sessions(self) -> int:
+        tokens = tuple(set(self._websocket_sessions.values()))
+        revoked = self._sessions.revoke_all()
+        for token in tokens:
+            await self._close_session_websockets(token, "revoked_all")
+        self._notify_inventory_changed()
+        return revoked
+
+    async def close_disabled_connections(self) -> None:
+        tokens = tuple(set(self._websocket_sessions.values()))
+        self._sessions.revoke_all()
+        for token in tokens:
+            await self._close_session_websockets(token, "service_disabled")
+        remaining = tuple(self._auth_websockets)
+        if remaining:
+            await asyncio.gather(
+                *(
+                    socket.close(
+                        code=WSCloseCode.GOING_AWAY,
+                        message=b"Remote service disabled",
+                        drain=False,
+                    )
+                    for socket in remaining
+                ),
+                return_exceptions=True,
+            )
+
+    def _track_command_task(self, coro: Awaitable[Any]) -> asyncio.Task[Any]:
+        task = asyncio.create_task(coro)  # type: ignore[arg-type]
+        self._command_tasks.add(task)
+        task.add_done_callback(self._command_task_finished)
+        return task
+
+    def _command_task_finished(self, task: asyncio.Task[Any]) -> None:
+        self._command_tasks.discard(task)
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            log.error(
+                "Background remote-control command failed (%s)",
+                self._scope.value,
+                exc_info=(type(error), error, error.__traceback__),
+            )
+
+    async def _consume_unidirectional_socket(self, socket: web.WebSocketResponse) -> None:
+        async for message in socket:
+            if message.type in (WSMsgType.TEXT, WSMsgType.BINARY):
+                await socket.close(
+                    code=1008,
+                    message=b"Commands must use the HTTP endpoint",
+                )
+            elif message.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSED):
+                break
+
+    async def shutdown(self) -> None:
+        await asyncio.gather(
+            *(
+                socket.close(
+                    code=WSCloseCode.GOING_AWAY,
+                    message=b"Server shutting down",
+                    drain=False,
+                )
+                for socket in tuple(self._auth_websockets)
+            ),
+            return_exceptions=True,
+        )
+        tasks = tuple(self._command_tasks)
+        if tasks:
+            _, pending = await asyncio.wait(
+                tasks,
+                timeout=COMMAND_SHUTDOWN_TIMEOUT_SECONDS,
+            )
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+
+    @staticmethod
+    async def _strict_json(
+        request: web.Request,
+        maximum_bytes: int,
+        *,
+        timeout_seconds: float = REQUEST_BODY_TIMEOUT_SECONDS,
+    ) -> dict[str, object]:
+        return await read_strict_json_object(
+            request,
+            maximum_bytes,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @staticmethod
+    def _json_response(payload: JsonObject) -> web.Response:
+        return json_no_store_response(payload)
+
+
+class RemoteControlHttpApplication:
+    """Host aiohttp application serving shared TLS trust and isolated remote modules."""
+
+    def __init__(
+        self,
+        modules: Sequence[RemoteRouteModule],
+        *,
+        allowed_origin: str,
+        installation_id: str,
+        trust_certificate_der: bytes | None = None,
+        session_inventory_changed: SessionInventoryCallback | None = None,
+        public_viewer_count_changed: PublicViewerCountCallback | None = None,
+    ) -> None:
+        if not modules:
+            raise ValueError("RemoteControlHttpApplication requires at least one module")
+        seen_scopes: set[RemoteScope] = set()
+        seen_prefixes: set[str] = set()
+        seen_cookies: set[str] = set()
+        for module in modules:
+            if module.scope in seen_scopes:
+                raise ValueError(f"Duplicate remote module scope: {module.scope.value}")
+            if module.url_prefix in seen_prefixes:
+                raise ValueError(f"Duplicate remote module prefix: {module.url_prefix}")
+            if module.cookie_name in seen_cookies:
+                raise ValueError(f"Duplicate remote session cookie: {module.cookie_name}")
+            seen_scopes.add(module.scope)
+            seen_prefixes.add(module.url_prefix)
+            seen_cookies.add(module.cookie_name)
+
+        self._modules = tuple(modules)
+        self._modules_by_scope = {module.scope: module for module in self._modules}
+        self._allowed_origin = allowed_origin.rstrip("/")
+        self._allowed_host = self._allowed_origin.removeprefix("https://").casefold()
+        self._trust_certificate_der = trust_certificate_der
+        self._session_inventory_changed = session_inventory_changed
+        self._public_viewer_count_changed = public_viewer_count_changed
+        self._login_hash_tasks: set[asyncio.Task[bool]] = set()
+        self._login_hash_slots = asyncio.Semaphore(_MAX_LOGIN_HASHES)
+
+        self._app = web.Application(
+            client_max_size=MAX_COMMAND_BODY_BYTES,
+            middlewares=[self._security_headers_middleware],
+        )
+        host_context = RemoteHostContext(
+            allowed_origin=self._allowed_origin,
+            installation_id=installation_id,
+            authenticate_with_slot=self._authenticate_credentials,
+            notify_session_inventory_changed=self.publish_session_inventory,
+            notify_public_viewers_changed=self.publish_public_viewer_counts,
+        )
+        self._app.router.add_get(TRUST_CERTIFICATE_ROUTE, self._trust_certificate)
+        for module in self._modules:
+            module.bind_host(host_context)
+            module.register_routes(self._app)
+        self._app.on_shutdown.append(self._shutdown_modules)
+        self._app.on_shutdown.append(self._shutdown_login_tasks)
+
+    @property
+    def app(self) -> web.Application:
+        return self._app
+
+    def set_trust_certificate_der(self, data: bytes | None) -> None:
+        self._trust_certificate_der = data
+
+    async def publish_snapshot(self, scope: RemoteScope | None = None) -> None:
+        targets = (
+            (self._modules_by_scope[scope],)
+            if scope is not None and scope in self._modules_by_scope
+            else self._modules
+        )
+        await asyncio.gather(
+            *(module.publish_snapshot() for module in targets if module.is_enabled()),
+            return_exceptions=False,
+        )
+
+    async def publish_profile(self, scope: RemoteScope | None = None) -> None:
+        targets = (
+            (self._modules_by_scope[scope],)
+            if scope is not None and scope in self._modules_by_scope
+            else self._modules
+        )
+        await asyncio.gather(
+            *(module.publish_profile() for module in targets if module.is_enabled()),
+            return_exceptions=False,
+        )
+
+    async def sync_module_states(self) -> None:
+        for module in self._modules:
+            if not module.is_enabled():
+                await module.close_disabled_connections()
+        self.publish_session_inventory()
+        self.publish_public_viewer_counts()
+
+    def publish_session_inventory(self) -> None:
+        callback = self._session_inventory_changed
+        if callback is None:
+            return
+        inventory: list[RemoteSessionInfo] = []
+        for module in self._modules:
+            inventory.extend(module.active_session_inventory())
+        callback(
+            tuple(
+                sorted(
+                    inventory,
+                    key=lambda item: (
+                        -int(item.connected_socket_count > 0),
+                        -item.last_activity_at_utc,
+                        item.scope.value,
+                        item.management_id,
+                    ),
+                )
+            )
+        )
+
+    def publish_public_viewer_counts(self) -> None:
+        callback = self._public_viewer_count_changed
+        if callback is None:
+            return
+        callback(
+            {
+                module.scope: (module.public_viewer_count() if module.is_enabled() else 0)
+                for module in self._modules
+            }
+        )
+
+    async def revoke_session(self, identifier: str) -> bool:
+        parsed = parse_global_management_id(identifier)
+        if parsed is not None:
+            scope, management_id = parsed
+            module = self._modules_by_scope.get(scope)
+            if module is None:
+                self.publish_session_inventory()
+                return False
+            return await module.revoke_session(management_id)
+
+        if len(self._modules) == 1:
+            return await self._modules[0].revoke_session(identifier)
+        self.publish_session_inventory()
+        return False
+
+    async def revoke_all_sessions(self, scope: RemoteScope | None = None) -> int:
+        if scope is not None:
+            module = self._modules_by_scope.get(scope)
+            if module is None:
+                return 0
+            return await module.revoke_all_sessions()
+        counts = await asyncio.gather(
+            *(module.revoke_all_sessions() for module in self._modules),
+        )
+        return sum(counts)
 
     @web.middleware
     async def _security_headers_middleware(
@@ -227,15 +859,15 @@ class RemoteControlHttpApplication:
         handler: Callable[[web.Request], Awaitable[web.StreamResponse]],
     ) -> web.StreamResponse:
         error: web.HTTPException | None = None
+        is_api = _is_remote_api_path(request.path)
         try:
             if request.headers.get("Host", "").casefold() != self._allowed_host:
                 raise web.HTTPForbidden(text="Host rejected")
-            else:
-                response = await handler(request)
+            response = await handler(request)
         except web.HTTPException as caught:
             response = caught
             error = caught
-        if error is not None and request.path.startswith(f"{REMOTE_CONTROL_PREFIX}/api/"):
+        if error is not None and is_api:
             code = {
                 400: "invalid",
                 401: "unauthorized",
@@ -267,62 +899,12 @@ class RemoteControlHttpApplication:
             response.headers[name] = value
         response.headers["Content-Security-Policy"] = _CSP
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
-        if request.path.startswith(f"{REMOTE_CONTROL_PREFIX}/api/"):
+        if is_api:
             response.headers["Cache-Control"] = "no-store"
             response.headers["Pragma"] = "no-cache"
         if error is not None:
             raise error
         return response
-
-    def _configure_routes(self) -> None:
-        prefix = REMOTE_CONTROL_PREFIX
-        self._app.router.add_get(f"{prefix}/api/setup", self._setup)
-        self._app.router.add_post(f"{prefix}/api/auth/login", self._login)
-        self._app.router.add_post(f"{prefix}/api/logout", self._logout)
-        self._app.router.add_get(f"{prefix}/api/bootstrap", self._bootstrap)
-        self._app.router.add_get(f"{prefix}/api/catalog", self._catalog)
-        self._app.router.add_get(f"{prefix}/api/playback", self._playback)
-        self._app.router.add_get(
-            f"{prefix}/api/thumbnails/{{source}}/{{collection_id}}/{{node_id}}",
-            self._thumbnail,
-        )
-        self._app.router.add_get(
-            f"{prefix}/api/collection-thumbnails/{{source}}/{{collection_id}}",
-            self._collection_thumbnail,
-        )
-        self._app.router.add_post(f"{prefix}/api/commands", self._command)
-        self._app.router.add_get(f"{prefix}/api/ws", self._websocket)
-        self._app.router.add_get(
-            f"{prefix}/trust-certificate.cer",
-            self._trust_certificate,
-        )
-        self._app.router.add_get(f"{prefix}/service-worker.js", self._service_worker)
-        self._app.router.add_get(f"{prefix}/", self._index)
-        self._app.router.add_get(f"{prefix}/index.html", self._index)
-        self._app.router.add_get(f"{prefix}/{{asset:.*}}", self._asset)
-
-    async def _index(self, request: web.Request) -> web.StreamResponse:
-        del request
-        return web.Response(
-            body=self._web_assets.index_html,
-            content_type="text/html",
-            charset="utf-8",
-            headers={"Cache-Control": "no-store"},
-        )
-
-    async def _service_worker(self, request: web.Request) -> web.Response:
-        del request
-        return web.Response(
-            body=self._web_assets.service_worker,
-            content_type="text/javascript",
-            charset="utf-8",
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Expires": "0",
-                "Pragma": "no-cache",
-                "Service-Worker-Allowed": f"{REMOTE_CONTROL_PREFIX}/",
-            },
-        )
 
     async def _trust_certificate(self, request: web.Request) -> web.Response:
         del request
@@ -337,121 +919,22 @@ class RemoteControlHttpApplication:
             },
         )
 
-    async def _setup(self, request: web.Request) -> web.Response:
-        del request
-        return self._json_response(self._setup_payload())
-
-    async def _asset(self, request: web.Request) -> web.StreamResponse:
-        requested = request.match_info.get("asset", "")
-        if requested.startswith("api/") or requested == "ws":
-            raise web.HTTPNotFound()
-        if requested == "index.html":
-            return await self._index(request)
-        if requested == "service-worker.js":
-            return await self._service_worker(request)
-        if requested.startswith(f"{REMOTE_SHELL_ASSET_ROUTE}/"):
-            candidate = self._web_assets.resolve_versioned(requested)
-            if candidate is None:
-                raise web.HTTPNotFound()
-            return self._static_file_response(
-                candidate,
-                cache_control="public, max-age=31536000, immutable",
-            )
-        return await self._serve_asset(requested)
-
-    async def _serve_asset(self, requested: str) -> web.StreamResponse:
-        root = self._dependencies.assets_directory.resolve()
-        relative = requested.strip("/")
-        if not relative or "\\" in relative:
-            raise web.HTTPNotFound()
-        candidate = (root / relative).resolve()
-        if root not in candidate.parents or not candidate.is_file():
-            raise web.HTTPNotFound()
-        content_type = WEB_ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
-        if content_type is None:
-            raise web.HTTPNotFound()
-        cache_control = "no-store" if candidate.suffix.lower() == ".html" else "no-cache"
-        return self._static_file_response(candidate, cache_control=cache_control)
-
-    @staticmethod
-    def _static_file_response(candidate: Path, *, cache_control: str) -> web.FileResponse:
-        content_type = WEB_ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
-        if content_type is None:
-            raise web.HTTPNotFound()
-        return web.FileResponse(
-            candidate,
-            headers={
-                "Cache-Control": cache_control,
-                "Content-Type": content_type,
-            },
-        )
-
-    async def _login(self, request: web.Request) -> web.Response:
-        self._require_same_origin(request)
-        payload = await self._strict_json(request, _MAX_LOGIN_BODY_BYTES)
-        if set(payload) != {"username", "password"}:
-            raise web.HTTPBadRequest(text="Invalid login request")
-        username = payload.get("username")
-        password = payload.get("password")
-        if not isinstance(username, str) or not isinstance(password, str):
-            raise web.HTTPBadRequest(text="Invalid login request")
-
-        client_address = request.remote or "<unknown>"
-        rate_limit = self._dependencies.rate_limiter.attempt(client_address, username)
-        if not rate_limit.allowed:
-            raise web.HTTPTooManyRequests(
-                headers={"Retry-After": str(max(1, int(rate_limit.retry_after_seconds + 0.999)))},
-                text="Too many login attempts",
-            )
-        session_generation = self._dependencies.sessions.generation
-        authenticated = await self._authenticate_credentials(username, password)
-        if not authenticated:
-            raise web.HTTPUnauthorized(text="Invalid username or password")
-        self._dependencies.rate_limiter.reset_identity(client_address, username)
-        existing_token = request.cookies.get(SESSION_COOKIE_NAME, "")
-        if existing_token and self._dependencies.sessions.revoke(existing_token):
-            await self._close_session_websockets(existing_token, "signed_in_again")
-        try:
-            session_credentials = self._dependencies.sessions.create(
-                self._dependencies.credentials.configured_username(),
-                **_client_metadata(request),
-                expected_generation=session_generation,
-            )
-        except SessionGenerationChangedError as error:
-            raise web.HTTPUnauthorized(text="Invalid username or password") from error
-        except SessionLimitReachedError as error:
-            raise web.HTTPServiceUnavailable(text="Session limit reached") from error
-        self._publish_session_inventory()
-
-        response = self._json_response(
-            {
-                "ok": True,
-                "csrfToken": session_credentials.csrf_token,
-                **self._bootstrap_payload(session_credentials.csrf_token),
-            }
-        )
-        response.set_cookie(
-            SESSION_COOKIE_NAME,
-            session_credentials.session_token,
-            secure=True,
-            httponly=True,
-            samesite="Strict",
-            path="/",
-            max_age=DEFAULT_SESSION_ABSOLUTE_TTL_SECONDS,
-        )
-        return response
-
-    async def _authenticate_credentials(self, username: str, password: str) -> bool:
+    async def _authenticate_credentials(
+        self,
+        credentials: RemoteControlCredentialsStore,
+        username: str,
+        password: str,
+    ) -> bool:
         await self._login_hash_slots.acquire()
         try:
             task = asyncio.create_task(
                 asyncio.to_thread(
-                    self._dependencies.credentials.authenticate,
+                    credentials.authenticate,
                     username,
                     password,
                 )
             )
-        except BaseException:  # noqa: BLE001 - release a reserved hash slot on setup failure
+        except BaseException:  # noqa: BLE001 - release reserved hash slot on setup failure
             self._login_hash_slots.release()
             raise
         self._login_hash_tasks.add(task)
@@ -470,545 +953,29 @@ class RemoteControlHttpApplication:
                 exc_info=(type(error), error, error.__traceback__),
             )
 
-    async def _logout(self, request: web.Request) -> web.Response:
-        token = self._authorize_mutation(request)
-        self._dependencies.sessions.revoke(token)
-        await self._close_session_websockets(token, "signed_out")
-        self._publish_session_inventory()
-        response = self._json_response({"ok": True})
-        response.del_cookie(SESSION_COOKIE_NAME, path="/", secure=True, httponly=True)
-        return response
-
-    async def _bootstrap(self, request: web.Request) -> web.Response:
-        token = self._require_session(request)
-        session = self._dependencies.sessions.touch(token)
-        if session is None:
-            raise web.HTTPUnauthorized()
-        csrf_token = self._dependencies.sessions.csrf_token(token)
-        if csrf_token is None:
-            raise web.HTTPUnauthorized()
-        return self._json_response(self._bootstrap_payload(csrf_token, session.principal))
-
-    async def _catalog(self, request: web.Request) -> web.Response:
-        self._require_session(request)
-        return self._json_response(self._dependencies.state.catalog.to_dict())
-
-    async def _playback(self, request: web.Request) -> web.Response:
-        self._require_session(request)
-        return self._json_response(self._dependencies.state.playback.to_dict())
-
-    async def _thumbnail(self, request: web.Request) -> web.Response:
-        self._require_session(request)
-        handler = self._dependencies.thumbnail_handler
-        if handler is None:
-            raise web.HTTPNotFound()
-        route_parts = (
-            request.match_info["source"],
-            request.match_info["collection_id"],
-            request.match_info["node_id"],
-        )
-        if any(_OPAQUE_ROUTE_ID.fullmatch(part) is None for part in route_parts):
-            raise web.HTTPNotFound()
-        data = await handler(*route_parts)
-        return self._thumbnail_response(data)
-
-    async def _collection_thumbnail(self, request: web.Request) -> web.Response:
-        self._require_session(request)
-        handler = self._dependencies.collection_thumbnail_handler
-        if handler is None:
-            raise web.HTTPNotFound()
-        route_parts = (
-            request.match_info["source"],
-            request.match_info["collection_id"],
-        )
-        if any(_OPAQUE_ROUTE_ID.fullmatch(part) is None for part in route_parts):
-            raise web.HTTPNotFound()
-        data = await handler(*route_parts)
-        return self._thumbnail_response(data)
-
-    @staticmethod
-    def _thumbnail_response(data: bytes | None) -> web.Response:
-        if not data or len(data) > _MAX_THUMBNAIL_BYTES:
-            raise web.HTTPNotFound()
-        return web.Response(
-            body=data,
-            content_type="image/jpeg",
-            headers={"Cache-Control": "private, max-age=300"},
-        )
-
-    async def _command(self, request: web.Request) -> web.Response:
-        self._authorize_mutation(request)
-        try:
-            payload = await self._strict_json(request, _MAX_COMMAND_BODY_BYTES)
-            command = parse_projection_command(payload)
-        except (TypeError, ValueError) as error:
-            raise web.HTTPBadRequest(text="Invalid command") from error
-        self._authorize_mutation(request)
-
-        decision = self._dependencies.command_session.prepare(command)
-        if not decision.should_execute:
-            assert decision.result is not None
-            self._log_stale_command(command, decision.result, stage="precondition")
-            return self._json_response(decision.result.to_dict())
-
-        task = asyncio.create_task(self._execute_reserved_command(command))
-        self._command_tasks.add(task)
-        task.add_done_callback(self._command_task_finished)
-        try:
-            result = await asyncio.wait_for(
-                asyncio.shield(task),
-                timeout=_COMMAND_TIMEOUT_SECONDS,
-            )
-        except TimeoutError:
-            pending = self._dependencies.command_session.prepare(command)
-            assert pending.result is not None
-            result = pending.result
-        return self._json_response(result.to_dict())
-
-    async def _execute_reserved_command(self, command: RemoteCommand) -> CommandResult:
-        try:
-            command_error = await self._dependencies.command_handler(command)
-        except asyncio.CancelledError:
-            raise
-        except Exception:  # noqa: BLE001 - desktop command adapter boundary
-            log.exception("Remote-control command failed")
-            command_error = CommandError(
-                CommandErrorCode.FAILED,
-                "The command could not be completed.",
-            )
-        if command_error is None:
-            result = self._dependencies.command_session.complete_success(command)
-        else:
-            result = self._dependencies.command_session.complete_failure(
-                command,
-                command_error,
-            )
-            self._log_stale_command(command, result, stage="execution")
-        try:
-            await self.publish_snapshot()
-        except Exception:  # noqa: BLE001 - snapshot fan-out must not alter command result
-            log.exception("Could not publish the completed remote-control command")
-        return result
-
-    @staticmethod
-    def _log_stale_command(
-        command: RemoteCommand,
-        result: CommandResult,
-        *,
-        stage: str,
-    ) -> None:
-        error = result.error
-        if error is None or error.code not in {
-            CommandErrorCode.CATALOG_STALE,
-            CommandErrorCode.PLAYBACK_STALE,
-        }:
-            return
-        log.info(
-            "Remote-control command state conflict: type=%s code=%s stage=%s "
-            "submitted_catalog_revision=%s current_catalog_revision=%d "
-            "current_playback_revision=%d",
-            command.type.value,
-            error.code.value,
-            stage,
-            getattr(command, "catalog_revision", None),
-            result.catalog_revision,
-            result.playback_revision,
-        )
-
-    def _command_task_finished(self, task: asyncio.Task[CommandResult]) -> None:
-        self._command_tasks.discard(task)
-        if task.cancelled():
-            return
-        error = task.exception()
-        if error is not None:
-            log.error(
-                "Background remote-control command failed",
-                exc_info=(type(error), error, error.__traceback__),
-            )
-
-    async def _shutdown_websockets(self, _app: web.Application) -> None:
+    async def _shutdown_modules(self, _app: web.Application) -> None:
         await asyncio.gather(
-            *(
-                socket.close(
-                    code=WSCloseCode.GOING_AWAY,
-                    message=b"Server shutting down",
-                    drain=False,
-                )
-                for socket in tuple(self._websockets)
-            ),
+            *(module.shutdown() for module in self._modules),
             return_exceptions=True,
         )
 
-    async def _shutdown_background_tasks(self, _app: web.Application) -> None:
+    async def _shutdown_login_tasks(self, _app: web.Application) -> None:
         login_hash_tasks = tuple(self._login_hash_tasks)
         if login_hash_tasks:
             await asyncio.gather(*login_hash_tasks, return_exceptions=True)
-        tasks = tuple(self._command_tasks)
-        if not tasks:
-            return
-        _, pending = await asyncio.wait(
-            tasks,
-            timeout=_COMMAND_SHUTDOWN_TIMEOUT_SECONDS,
-        )
-        for task in pending:
-            task.cancel()
-        if pending:
-            await asyncio.gather(*pending, return_exceptions=True)
 
-    async def _websocket(self, request: web.Request) -> web.StreamResponse:
-        self._require_same_origin(request)
-        session_token = self._require_session(request)
-        self._reserve_websocket(session_token)
-        socket = web.WebSocketResponse(
-            timeout=_WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
-            heartbeat=_WEBSOCKET_HEARTBEAT_SECONDS,
-            receive_timeout=65.0,
-            max_msg_size=1_024,
-            compress=False,
-        )
-        try:
-            await socket.prepare(request)
-        finally:
-            self._release_websocket_reservation(session_token)
-        heartbeat_task: asyncio.Task[None] | None = None
-        try:
-            async with self._publication_lock:
-                first_socket = not self._websockets
-                self._websockets[socket] = asyncio.Lock()
-                self._websocket_sessions[socket] = session_token
-                self._publish_session_inventory()
-                snapshot = self._dependencies.state.snapshot()
-                if first_socket:
-                    self._last_catalog_revision = max(
-                        self._last_catalog_revision,
-                        snapshot.catalog_revision,
-                    )
-                    self._last_playback_revision = max(
-                        self._last_playback_revision,
-                        snapshot.playback_revision,
-                    )
-                baseline_sequence = self._event_sequence
-                await self._send(
-                    socket,
-                    self._event(
-                        "session.snapshot",
-                        {
-                            "catalog": snapshot.catalog.to_dict(),
-                            "playback": snapshot.playback.to_dict(),
-                            "profile": self._profile_payload(),
-                            "currentMeetingWeekStart": self._current_meeting_week_start(),
-                        },
-                        advance=False,
-                        snapshot=snapshot,
-                        sequence=baseline_sequence,
-                    ),
-                )
-            heartbeat_task = asyncio.create_task(self._heartbeat(socket, session_token))
-            async for message in socket:
-                if message.type in (WSMsgType.TEXT, WSMsgType.BINARY):
-                    await socket.close(
-                        code=1008,
-                        message=b"Commands must use the authenticated HTTP endpoint",
-                    )
-                elif message.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSED):
-                    break
-        finally:
-            if heartbeat_task is not None:
-                heartbeat_task.cancel()
-                await asyncio.gather(heartbeat_task, return_exceptions=True)
-            self._websockets.pop(socket, None)
-            self._websocket_sessions.pop(socket, None)
-            self._publish_session_inventory()
-        return socket
 
-    def _reserve_websocket(self, session_token: str) -> None:
-        active_for_session = sum(
-            token == session_token for token in self._websocket_sessions.values()
-        )
-        reserved_for_session = self._websocket_reservations.get(session_token, 0)
-        if len(self._websockets) + self._websocket_reservation_count >= _MAX_WEBSOCKETS:
-            raise web.HTTPServiceUnavailable(text="WebSocket connection limit reached")
-        if active_for_session + reserved_for_session >= _MAX_WEBSOCKETS_PER_SESSION:
-            raise web.HTTPTooManyRequests(text="Session WebSocket limit reached")
-        self._websocket_reservation_count += 1
-        self._websocket_reservations[session_token] = reserved_for_session + 1
-
-    def _release_websocket_reservation(self, session_token: str) -> None:
-        reserved = self._websocket_reservations.get(session_token, 0)
-        if reserved <= 1:
-            self._websocket_reservations.pop(session_token, None)
-        else:
-            self._websocket_reservations[session_token] = reserved - 1
-        self._websocket_reservation_count = max(
-            0,
-            self._websocket_reservation_count - 1,
-        )
-
-    async def _close_session_websockets(self, session_token: str, reason: str) -> None:
-        sockets = [
-            socket for socket, token in self._websocket_sessions.items() if token == session_token
-        ]
-        if not sockets:
-            return
-        event = self._event("session.revoked", {"reason": reason}, advance=False)
-        for socket in sockets:
-            try:
-                await self._send(socket, event)
-            except (TimeoutError, ConnectionError, RuntimeError) as error:
-                log.debug("Could not notify a revoked remote session: %s", error)
-            finally:
-                await socket.close(code=4401, message=b"Session revoked")
-
-    async def _heartbeat(
-        self,
-        socket: web.WebSocketResponse,
-        session_token: str,
-    ) -> None:
-        while not socket.closed:
-            await asyncio.sleep(_WEBSOCKET_HEARTBEAT_SECONDS)
-            self._publish_expired_sessions()
-            if self._dependencies.sessions.resolve(session_token) is None:
-                await socket.close(code=4401, message=b"Session expired")
-                return
-            await self._send(
-                socket,
-                {
-                    "type": "heartbeat",
-                    "serverInstanceId": self._dependencies.state.server_instance_id,
-                    "sequence": self._event_sequence,
-                    "currentMeetingWeekStart": self._current_meeting_week_start(),
-                },
-            )
-
-    async def _send(self, socket: web.WebSocketResponse, payload: JsonObject) -> None:
-        await self._send_many(socket, (payload,))
-
-    async def _send_many(
-        self,
-        socket: web.WebSocketResponse,
-        payloads: tuple[JsonObject, ...] | list[JsonObject],
-    ) -> None:
-        lock = self._websockets.get(socket)
-        if lock is None:
-            raise ConnectionError("WebSocket is no longer registered")
-        async with lock:
-            for payload in payloads:
-                await asyncio.wait_for(socket.send_json(payload), timeout=1.0)
-
-    def _event(
-        self,
-        event_type: str,
-        payload: JsonObject,
-        *,
-        advance: bool = True,
-        snapshot: RemoteControlRuntimeSnapshot | None = None,
-        sequence: int | None = None,
-    ) -> JsonObject:
-        if advance:
-            self._event_sequence += 1
-        elif sequence is None:
-            sequence = self._event_sequence
-        runtime_snapshot = snapshot or self._dependencies.state.snapshot()
-        return {
-            "type": event_type,
-            "serverInstanceId": runtime_snapshot.server_instance_id,
-            "sequence": self._event_sequence if sequence is None else sequence,
-            "catalogRevision": runtime_snapshot.catalog_revision,
-            "playbackRevision": runtime_snapshot.playback_revision,
-            "payload": payload,
-        }
-
-    def _bootstrap_payload(self, csrf_token: str, principal: str = "") -> JsonObject:
-        snapshot = self._dependencies.state.snapshot()
-        return {
-            "authenticated": True,
-            "serverInstanceId": snapshot.server_instance_id,
-            "eventSequence": self._event_sequence,
-            "csrfToken": csrf_token,
-            "principal": principal or self._dependencies.credentials.configured_username(),
-            "currentMeetingWeekStart": self._current_meeting_week_start(),
-            "profile": self._profile_payload(),
-            "catalogRevision": snapshot.catalog_revision,
-            "playbackRevision": snapshot.playback_revision,
-            "playback": snapshot.playback.to_dict(),
-        }
-
-    def _profile_payload(self) -> JsonObject:
-        return {
-            "id": self._dependencies.profile_id,
-            "name": self._dependencies.profile_name,
-            **self._localization_payload(),
-        }
-
-    def _localization_payload(self) -> JsonObject:
-        return self._validated_localization_payload(self._dependencies.setup_provider())
-
-    def _setup_payload(self) -> JsonObject:
-        payload = self._dependencies.setup_provider()
-        localization = self._validated_localization_payload(payload)
-        raw_tls = payload.get("tls")
-        if not isinstance(raw_tls, dict):
-            raise TypeError("setup_provider must return a TLS object")
-        tls: dict[str, JsonValue] = {}
-        for key in (
-            "installationId",
-            "authoritySha256",
-            "verificationCode",
-            "authorityCertificateUrl",
-            "authorityNotValidAfter",
-        ):
-            value = raw_tls.get(key)
-            if not isinstance(value, str) or not value:
-                raise TypeError(f"setup TLS field {key!r} must be a non-empty string")
-            tls[key] = value
-        return {**localization, "tls": tls}
-
-    @staticmethod
-    def _validated_localization_payload(payload: object) -> JsonObject:
-        if not isinstance(payload, dict):
-            raise TypeError("setup_provider must return an object")
-        locale = payload.get("locale")
-        raw_messages = payload.get("messages")
-        if not isinstance(locale, str) or not locale:
-            raise TypeError("setup_provider must return a locale string")
-        if not isinstance(raw_messages, dict):
-            raise TypeError("setup_provider must return a messages object")
-        messages: dict[str, JsonValue] = {}
-        for key, value in raw_messages.items():
-            if not isinstance(key, str) or not key or not isinstance(value, str):
-                raise TypeError("setup messages must contain string keys and values")
-            messages[key] = value
-        return {"locale": locale, "messages": messages}
-
-    def _current_meeting_week_start(self) -> str:
-        value = self._dependencies.meeting_week_start()
-        if not isinstance(value, date):
-            raise TypeError("meeting_week_start must return a date")
-        return value.isoformat()
-
-    def _publish_session_inventory(self) -> None:
-        callback = self._dependencies.session_inventory_changed
-        if callback is None:
-            return
-        socket_counts: dict[str, int] = {}
-        for token in self._websocket_sessions.values():
-            snapshot = self._dependencies.sessions.resolve(token)
-            if snapshot is not None:
-                socket_counts[snapshot.management_id] = (
-                    socket_counts.get(snapshot.management_id, 0) + 1
-                )
-        inventory = tuple(
-            RemoteSessionInfo(
-                management_id=snapshot.management_id,
-                principal=snapshot.principal,
-                browser=snapshot.browser,
-                platform=snapshot.platform,
-                client_mode=snapshot.client_mode,
-                remote_address=snapshot.remote_address,
-                created_at_utc=snapshot.created_at_utc,
-                last_activity_at_utc=snapshot.last_activity_at_utc,
-                connected_socket_count=socket_counts.get(snapshot.management_id, 0),
-            )
-            for snapshot in self._dependencies.sessions.active_sessions()
-        )
-        callback(
-            tuple(
-                sorted(
-                    inventory,
-                    key=lambda item: (
-                        -int(item.connected_socket_count > 0),
-                        -item.last_activity_at_utc,
-                        item.management_id,
-                    ),
-                )
-            )
-        )
-
-    def _require_same_origin(self, request: web.Request) -> None:
-        origin = request.headers.get("Origin", "").rstrip("/")
-        if origin != self._allowed_origin:
-            raise web.HTTPForbidden(text="Cross-origin request rejected")
-
-    def _require_session(self, request: web.Request) -> str:
-        token = request.cookies.get(SESSION_COOKIE_NAME, "")
-        self._publish_expired_sessions()
-        if not token or self._dependencies.sessions.resolve(token) is None:
-            raise web.HTTPUnauthorized()
-        return token
-
-    def _authorize_mutation(self, request: web.Request) -> str:
-        self._require_same_origin(request)
-        self._publish_expired_sessions()
-        token = request.cookies.get(SESSION_COOKIE_NAME, "")
-        csrf_token = request.headers.get("X-CSRF-Token", "")
-        if not token or self._dependencies.sessions.authorize_mutation(token, csrf_token) is None:
-            raise web.HTTPForbidden(text="Invalid session or CSRF token")
-        return token
-
-    def _publish_expired_sessions(self) -> None:
-        if self._dependencies.sessions.purge_expired():
-            self._publish_session_inventory()
-
-    async def revoke_session(self, management_id: str) -> bool:
-        token = self._dependencies.sessions.revoke_management_id(management_id)
-        if token is None:
-            self._publish_session_inventory()
-            return False
-        await self._close_session_websockets(token, "revoked_device")
-        self._publish_session_inventory()
-        return True
-
-    async def revoke_all_sessions(self) -> int:
-        tokens = tuple(set(self._websocket_sessions.values()))
-        revoked = self._dependencies.sessions.revoke_all()
-        for token in tokens:
-            await self._close_session_websockets(token, "revoked_all")
-        self._publish_session_inventory()
-        return revoked
-
-    @staticmethod
-    async def _strict_json(
-        request: web.Request,
-        maximum_bytes: int,
-        *,
-        timeout_seconds: float = _REQUEST_BODY_TIMEOUT_SECONDS,
-    ) -> dict[str, object]:
-        if request.content_length is not None and request.content_length > maximum_bytes:
-            raise web.HTTPRequestEntityTooLarge(
-                max_size=maximum_bytes,
-                actual_size=request.content_length,
-            )
-        if request.content_type != "application/json":
-            raise web.HTTPUnsupportedMediaType(text="Expected application/json")
-        try:
-            raw = await asyncio.wait_for(
-                request.read(),
-                timeout=timeout_seconds,
-            )
-        except TimeoutError as error:
-            raise web.HTTPRequestTimeout(text="Request body timed out") from error
-        if len(raw) > maximum_bytes:
-            raise web.HTTPRequestEntityTooLarge(max_size=maximum_bytes, actual_size=len(raw))
-        try:
-            value = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise web.HTTPBadRequest(text="Invalid JSON") from error
-        if not isinstance(value, dict):
-            raise web.HTTPBadRequest(text="Expected a JSON object")
-        return value
-
-    @staticmethod
-    def _json_response(payload: JsonObject) -> web.Response:
-        return web.json_response(
-            payload,
-            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
-        )
+@dataclass(frozen=True, slots=True)
+class RemoteControlHostDependencies:
+    modules: tuple[RemoteRouteModule, ...]
+    session_inventory_changed: SessionInventoryCallback | None = None
+    public_viewer_count_changed: PublicViewerCountCallback | None = None
 
 
 class RemoteControlServer:
     """Own the HTTPS/aiohttp event loop on a dedicated, stoppable thread."""
 
-    def __init__(self, dependencies: RemoteControlServerDependencies) -> None:
+    def __init__(self, dependencies: RemoteControlHostDependencies) -> None:
         self._dependencies = dependencies
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -1053,46 +1020,54 @@ class RemoteControlServer:
             self.stop()
             raise RuntimeError("Could not start the remote-control server") from error
 
-    def publish_snapshot(self) -> None:
+    def publish_snapshot(self, scope: RemoteScope | None = None) -> None:
         loop = self._loop
         application = self._application
         if loop is None or application is None or not loop.is_running():
             return
-        asyncio.run_coroutine_threadsafe(application.publish_snapshot(), loop)
+        asyncio.run_coroutine_threadsafe(application.publish_snapshot(scope), loop)
 
-    def publish_profile(self) -> None:
+    def publish_profile(self, scope: RemoteScope | None = None) -> None:
         loop = self._loop
         application = self._application
         if loop is None or application is None or not loop.is_running():
             return
-        asyncio.run_coroutine_threadsafe(application.publish_profile(), loop)
+        asyncio.run_coroutine_threadsafe(application.publish_profile(scope), loop)
 
-    def revoke_session(self, management_id: str) -> Future[bool] | None:
+    def sync_module_states(self) -> Future[None] | None:
+        loop = self._loop
+        application = self._application
+        if loop is None or application is None or not loop.is_running():
+            return None
+        return asyncio.run_coroutine_threadsafe(application.sync_module_states(), loop)
+
+    def revoke_session(self, identifier: str) -> Future[bool] | None:
         loop = self._loop
         application = self._application
         if loop is None or application is None or not loop.is_running():
             return None
         return asyncio.run_coroutine_threadsafe(
-            application.revoke_session(management_id),
+            application.revoke_session(identifier),
             loop,
         )
 
-    def revoke_all_sessions(self) -> Future[int] | None:
+    def revoke_all_sessions(self, scope: RemoteScope | None = None) -> Future[int] | None:
         loop = self._loop
         application = self._application
         if loop is None or application is None or not loop.is_running():
             return None
-        return asyncio.run_coroutine_threadsafe(application.revoke_all_sessions(), loop)
+        return asyncio.run_coroutine_threadsafe(application.revoke_all_sessions(scope), loop)
 
     def reload_tls(self, identity: TLSIdentity, *, timeout_seconds: float = 8.0) -> None:
         """Replace the leaf certificate without interrupting clients or sessions."""
 
         loop = self._loop
         context = self._ssl_context
-        if loop is None or context is None or not loop.is_running():
+        application = self._application
+        if loop is None or context is None or application is None or not loop.is_running():
             raise RuntimeError("Remote-control server is not running")
         future = asyncio.run_coroutine_threadsafe(
-            self._reload_tls_identity(context, identity),
+            self._reload_tls_identity(context, application, identity),
             loop,
         )
         try:
@@ -1144,10 +1119,12 @@ class RemoteControlServer:
         if binding is None:
             raise RuntimeError("Missing remote-control binding")
         application = RemoteControlHttpApplication(
-            self._dependencies,
+            self._dependencies.modules,
             allowed_origin=binding.origin,
             installation_id=binding.tls_identity.installation_id,
             trust_certificate_der=binding.tls_identity.trust_certificate_der(),
+            session_inventory_changed=self._dependencies.session_inventory_changed,
+            public_viewer_count_changed=self._dependencies.public_viewer_count_changed,
         )
         runner = web.AppRunner(
             application.app,
@@ -1177,16 +1154,23 @@ class RemoteControlServer:
     @staticmethod
     async def _reload_tls_identity(
         context: ssl.SSLContext,
+        application: RemoteControlHttpApplication,
         identity: TLSIdentity,
     ) -> None:
-        # Validate the complete candidate in isolation before mutating the
-        # listener's live context. Existing TLS connections keep their current
-        # session while subsequent handshakes receive the renewed certificate.
         _build_ssl_context(identity)
         context.load_cert_chain(
             certfile=str(identity.certificate_path),
             keyfile=str(identity.private_key_path),
         )
+        application.set_trust_certificate_der(identity.trust_certificate_der())
+
+
+def _is_remote_api_path(path: str) -> bool:
+    return (
+        path.startswith(f"{REMOTE_MEDIA_PREFIX}/api/")
+        or path.startswith(f"{REMOTE_TIMER_PREFIX}/api/")
+        or path.startswith(f"{REMOTE_CONTROL_PREFIX}/api/")
+    )
 
 
 def _build_ssl_context(identity: TLSIdentity) -> ssl.SSLContext:
@@ -1200,7 +1184,83 @@ def _build_ssl_context(identity: TLSIdentity) -> ssl.SSLContext:
     return context
 
 
-def _client_metadata(request: web.Request) -> dict[str, str]:
+async def read_strict_json_object(
+    request: web.Request,
+    maximum_bytes: int,
+    *,
+    timeout_seconds: float = REQUEST_BODY_TIMEOUT_SECONDS,
+) -> dict[str, object]:
+    if request.content_length is not None and request.content_length > maximum_bytes:
+        raise web.HTTPRequestEntityTooLarge(
+            max_size=maximum_bytes,
+            actual_size=request.content_length,
+        )
+    if request.content_type != "application/json":
+        raise web.HTTPUnsupportedMediaType(text="Expected application/json")
+    try:
+        raw = await asyncio.wait_for(
+            request.read(),
+            timeout=timeout_seconds,
+        )
+    except TimeoutError as error:
+        raise web.HTTPRequestTimeout(text="Request body timed out") from error
+    if len(raw) > maximum_bytes:
+        raise web.HTTPRequestEntityTooLarge(max_size=maximum_bytes, actual_size=len(raw))
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise web.HTTPBadRequest(text="Invalid JSON") from error
+    if not isinstance(value, dict):
+        raise web.HTTPBadRequest(text="Expected a JSON object")
+    return value
+
+
+def json_no_store_response(payload: JsonObject) -> web.Response:
+    return web.json_response(
+        payload,
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+def validated_localization_payload(payload: object) -> JsonObject:
+    if not isinstance(payload, dict):
+        raise TypeError("setup_provider must return an object")
+    locale = payload.get("locale")
+    raw_messages = payload.get("messages")
+    if not isinstance(locale, str) or not locale:
+        raise TypeError("setup_provider must return a locale string")
+    if not isinstance(raw_messages, dict):
+        raise TypeError("setup_provider must return a messages object")
+    messages: dict[str, JsonValue] = {}
+    for key, value in raw_messages.items():
+        if not isinstance(key, str) or not key or not isinstance(value, str):
+            raise TypeError("setup messages must contain string keys and values")
+        messages[key] = value
+    return {"locale": locale, "messages": messages}
+
+
+def validated_setup_payload(payload: object) -> JsonObject:
+    localization = validated_localization_payload(payload)
+    assert isinstance(payload, dict)
+    raw_tls = payload.get("tls")
+    if not isinstance(raw_tls, dict):
+        raise TypeError("setup_provider must return a TLS object")
+    tls: dict[str, JsonValue] = {}
+    for key in (
+        "installationId",
+        "authoritySha256",
+        "verificationCode",
+        "authorityCertificateUrl",
+        "authorityNotValidAfter",
+    ):
+        value = raw_tls.get(key)
+        if not isinstance(value, str) or not value:
+            raise TypeError(f"setup TLS field {key!r} must be a non-empty string")
+        tls[key] = value
+    return {**localization, "tls": tls}
+
+
+def client_metadata(request: web.Request) -> dict[str, str]:
     user_agent = request.headers.get("User-Agent", "")[:512]
     browser = ""
     for marker, name in (
