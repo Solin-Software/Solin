@@ -1593,14 +1593,16 @@ class MainWindow(QWidget):
         return self._scenes_dock
 
     def meeting_dock_container(self) -> QWidget:
-        """The thin strip right of the page content that hosts the Live meeting console."""
+        """The strip right of the page content that hosts the Live meeting console (drag its edge to resize)."""
         if self._meeting_dock is None:
-            container = QWidget(self)
+            from .widgets.side_dock import ResizableSideDock
+
+            settings = getattr(self, "_hosted_meeting_settings", None)
+            width = settings.panel_width(self._MEETING_DOCK_WIDTH) if settings is not None else self._MEETING_DOCK_WIDTH
+            container = ResizableSideDock(width, parent=self)
             container.setObjectName("MainWindowRightDock")
-            container.setFixedWidth(self._MEETING_DOCK_WIDTH)
-            dock_layout = QVBoxLayout(container)
-            dock_layout.setContentsMargins(0, 0, 0, 0)
-            dock_layout.setSpacing(0)
+            if settings is not None:
+                container.width_committed.connect(settings.set_panel_width)
             container.hide()
             self._content_row.addWidget(container)
             self._meeting_dock = container

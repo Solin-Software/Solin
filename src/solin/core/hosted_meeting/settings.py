@@ -138,6 +138,17 @@ class HostedMeetingSettingsStore(_ProfilePrefsSettings):
     def set_panel_docked(self, docked: bool) -> None:
         self.settings.set_value(SettingsKey.HOSTED_MEETING_PANEL_DOCKED, bool(docked))
 
+    def panel_width(self, default: int) -> int:
+        """The docked console's width, as the operator last dragged it."""
+
+        try:
+            return int(self.settings.value(SettingsKey.HOSTED_MEETING_PANEL_WIDTH, default))
+        except (TypeError, ValueError):
+            return default
+
+    def set_panel_width(self, width: int) -> None:
+        self.settings.set_value(SettingsKey.HOSTED_MEETING_PANEL_WIDTH, int(width))
+
     def _json(self, key: str) -> dict[str, str]:
         try:
             data = json.loads(self.settings.string(key, "") or "{}")

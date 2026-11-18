@@ -97,6 +97,7 @@ EXPECTED_SETTINGS_KEYS = {
     "HOSTED_MEETING_LINK_MODE": "hosted_meeting/link_mode",
     "HOSTED_MEETING_DEVICES": "hosted_meeting/devices",
     "HOSTED_MEETING_PANEL_DOCKED": "hosted_meeting/panel_docked",
+    "HOSTED_MEETING_PANEL_WIDTH": "hosted_meeting/panel_width",
     "HOSTED_MEETING_HALL_FEED": "hosted_meeting/hall_feed",
     "HOSTED_MEETING_REMOTE_AUDIO_DEVICE": "hosted_meeting/remote_audio_device",
     "HOSTED_MEETING_WEB_PORT": "hosted_meeting/web_port",
