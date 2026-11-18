@@ -59,7 +59,7 @@ class RecordingDomain(SettingsDomain):
     def setValue(self, key, value):  # noqa: N802 - QML slot
         self.calls.append((key, value))
         if key == "enabled" and value and self.reject_enable:
-            self.fail("Configuration required.")
+            self.publish(remoteError="Configuration required.")
             return
         self.publish(**{key: value})
 
@@ -142,6 +142,7 @@ def _domain_states():
         enabled=False,
         setupVisible=False, setupTitle="", setupUrl="", fingerprint="", fingerprintVisible=False,
         qrBusy=False, qrError="", qrImage="", verificationCode="",
+        setupFeedback="", setupFeedbackKind="",
         mediaEnabled=False, timerEnabled=False,
         mediaEndpoint="https://192.168.1.2:8765/remote/media/",
         timerEndpoint="https://192.168.1.2:8765/remote/timer/",
@@ -149,8 +150,11 @@ def _domain_states():
         mediaUsername="", mediaPassword="", mediaPasswordConfirmation="",
         timerUsername="", timerPassword="", timerPasswordConfirmation="",
         mediaCredentialsSummary="Not configured", timerCredentialsSummary="Not configured",
-        mediaStatusMessage="Disabled", mediaStatusKind="disabled",
-        timerStatusMessage="Disabled", timerStatusKind="disabled",
+        remoteError="", remoteFeedback="",
+        mediaError="", mediaFeedback="",
+        mediaCredentialsError="", mediaCredentialsFeedback="",
+        timerError="", timerFeedback="",
+        timerCredentialsError="", timerCredentialsFeedback="",
     )
     states["about"].update(
         installedVersion="26.33.0-beta.2", installedIsBeta=True,
@@ -614,10 +618,91 @@ def test_rejected_remote_enable_restores_toggle_state(create_view):
     _settle(view)
     assert view.domains["remote"].state["enabled"] is False
     assert toggle.property("checked") is False
+    host_error = _find(view.root, "groupError_remote")
+    assert host_error is not None and host_error.isVisible()
+    assert host_error.property("text") == "Configuration required."
     view.domains["remote"].reject_enable = False
-    view.domains["remote"].publish(enabled=True)
+    view.domains["remote"].publish(enabled=True, remoteError="")
     _settle(view)
     assert toggle.property("checked") is True
+    assert not host_error.isVisible()
+
+
+def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_dialog(
+    create_view,
+):
+    view = create_view(width=1000, height=900)
+    domain = view.domains["remote"]
+    view.navigation.expand("mediaCredentials", True)
+    view.navigation.expand("timerCredentials", True)
+    view.navigation.openSection("remote", "", "")
+    _settle(view)
+
+    domain.publish(
+        enabled=True,
+        feedback="legacy-bottom-notice-must-not-render",
+        feedbackKind="error",
+        remoteFeedback="Host active",
+        mediaError="Media credentials required",
+        mediaCredentialsError="Media password mismatch",
+        timerFeedback="Copied",
+        timerCredentialsFeedback="Saved",
+    )
+    _wait_until(
+        lambda: _expanded_body_settled(_find(view.root, "groupBody_mediaCredentials"))
+        and _expanded_body_settled(_find(view.root, "groupBody_timerCredentials"))
+    )
+    _settle(view)
+
+    assert not any(
+        item.isVisible() and item.property("text") == "legacy-bottom-notice-must-not-render"
+        for item in _items(view.root)
+    )
+
+    expected = (
+        ("groupFeedback_remote", "groupBody_remote", "Host active"),
+        ("groupError_remoteMedia", "groupBody_remoteMedia", "Media credentials required"),
+        ("groupError_mediaCredentials", "groupBody_mediaCredentials", "Media password mismatch"),
+        ("groupFeedback_remoteTimer", "groupBody_remoteTimer", "Copied"),
+        ("groupFeedback_timerCredentials", "groupBody_timerCredentials", "Saved"),
+    )
+    for notice_name, body_name, expected_text in expected:
+        notice = _find(view.root, notice_name)
+        body = _find(view.root, body_name)
+        assert notice is not None and body is not None, notice_name
+        assert notice.isVisible(), notice_name
+        assert notice.property("text") == expected_text
+        top_left = notice.mapToItem(body, QPointF(0, 0))
+        assert top_left.x() >= 0 and top_left.y() >= 0
+        assert top_left.x() + notice.width() <= body.width() + 1
+        assert top_left.y() + notice.height() <= body.height() + 1
+
+    # Media error renders above the nested Media credentials card and well above Timer.
+    media_error = _find(view.root, "groupError_remoteMedia")
+    media_creds = _find(view.root, "group_mediaCredentials")
+    timer_group = _find(view.root, "group_remoteTimer")
+    assert (
+        media_error.mapToItem(view.root, QPointF(0, media_error.height())).y()
+        <= media_creds.mapToItem(view.root, QPointF(0, 0)).y() + 1
+    )
+    assert (
+        media_error.mapToItem(view.root, QPointF(0, media_error.height())).y()
+        < timer_group.mapToItem(view.root, QPointF(0, 0)).y()
+    )
+
+    domain.publish(
+        setupVisible=True,
+        setupUrl="https://192.168.1.2:8765/remote/media/?setup=1",
+        verificationCode="1234 · 5678",
+        setupFeedback="Copied",
+        setupFeedbackKind="success",
+    )
+    _settle(view)
+    window_root = view.widget.quickWindow().contentItem()
+    setup_feedback = _find(window_root, "remoteSetupFeedback")
+    assert setup_feedback is not None and setup_feedback.isVisible()
+    assert setup_feedback.property("text") == "Copied"
+    assert view.warnings == []
 
 
 def test_remote_page_has_no_manual_network_refresh_action(create_view):

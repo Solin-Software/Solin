@@ -155,31 +155,31 @@ SECTIONS = (
             Setting("enabled", QT_TRANSLATE_NOOP("SettingsWidget", "Remote control"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Control Solin securely from another device on this local network.")),
             Setting("network", QT_TRANSLATE_NOOP("SettingsWidget", "Network interface"), "select", options="networkOptions"),
             Setting("setupEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Set up a device"), "action", action="openSetup", enabled_when="setupEnabled", description=QT_TRANSLATE_NOOP("SettingsWidget", "Install the certificate to add remote controls as apps without browser warnings.")),
-        ), status_key="statusMessage"),
+        ), feedback_key="remoteFeedback", error_key="remoteError"),
         Group("remoteMedia", QT_TRANSLATE_NOOP("SettingsWidget", "Media"), "remote", (
             Setting("mediaEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Media"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Browse meetings and playlists and control media projection remotely."), enabled_when="enabled"),
             Setting("mediaEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "action", action="copyMediaAddress", enabled_when="mediaEndpoint"),
             Setting("mediaSetupEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Set up a device"), "action", action="openMediaSetup", enabled_when="mediaSetupEnabled"),
-        ), status_key="mediaStatusSummary", children=(
+        ), children=(
             Group("mediaCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Access credentials"), "remote", (
                 Setting("mediaUsername", QT_TRANSLATE_NOOP("SettingsWidget", "Username"), "input"),
                 Setting("mediaPassword", QT_TRANSLATE_NOOP("SettingsWidget", "New password"), "password", description_key="passwordHint"),
                 Setting("mediaPasswordConfirmation", QT_TRANSLATE_NOOP("SettingsWidget", "Confirm password"), "password"),
                 Setting("saveMediaCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Save credentials"), "action", action="saveMediaCredentials", secondary_action="cancelMediaCredentials", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel")),
-            ), collapsible=True, status_key="mediaCredentialsSummary"),
-        )),
+            ), collapsible=True, status_key="mediaCredentialsSummary", feedback_key="mediaCredentialsFeedback", error_key="mediaCredentialsError"),
+        ), feedback_key="mediaFeedback", error_key="mediaError"),
         Group("remoteTimer", QT_TRANSLATE_NOOP("SettingsWidget", "Timer"), "remote", (
             Setting("timerEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Timer"), description=QT_TRANSLATE_NOOP("SettingsWidget", "View the meeting timer in fullscreen without signing in, or sign in to control parts."), enabled_when="enabled"),
             Setting("timerEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "action", action="copyTimerAddress", enabled_when="timerEndpoint"),
             Setting("timerSetupEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Set up a device"), "action", action="openTimerSetup", enabled_when="timerSetupEnabled"),
-        ), status_key="timerStatusSummary", children=(
+        ), children=(
             Group("timerCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Access credentials"), "remote", (
                 Setting("timerUsername", QT_TRANSLATE_NOOP("SettingsWidget", "Username"), "input"),
                 Setting("timerPassword", QT_TRANSLATE_NOOP("SettingsWidget", "New password"), "password", description_key="passwordHint"),
                 Setting("timerPasswordConfirmation", QT_TRANSLATE_NOOP("SettingsWidget", "Confirm password"), "password"),
                 Setting("saveTimerCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Save credentials"), "action", action="saveTimerCredentials", secondary_action="cancelTimerCredentials", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel")),
-            ), collapsible=True, status_key="timerCredentialsSummary"),
-        )),
+            ), collapsible=True, status_key="timerCredentialsSummary", feedback_key="timerCredentialsFeedback", error_key="timerCredentialsError"),
+        ), feedback_key="timerFeedback", error_key="timerError"),
     )),
     Section("about", QT_TRANSLATE_NOOP("SettingsWidget", "About"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Version and information"), "about", (

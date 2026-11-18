@@ -8930,26 +8930,6 @@ Lägg till innehåll, en kamera eller en annan scen.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Valfritt (endast helskärmsvisning)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Inaktiverad</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Inloggningsuppgifter krävs</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Aktiv</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Startar…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

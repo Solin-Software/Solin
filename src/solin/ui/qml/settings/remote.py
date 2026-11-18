@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QImage
@@ -28,6 +28,15 @@ from solin.core.storage.binary_files import write_bytes_atomic
 from solin.ui.qr_generation import QrGenerationSession, QrGenerationSessionFactory
 
 from .domain import SettingsDomain
+
+
+_NoticeKind = Literal["error", "feedback"]
+
+
+@dataclass(frozen=True, slots=True)
+class _Notice:
+    kind: _NoticeKind
+    code: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +90,12 @@ class RemoteSettings(SettingsDomain):
         self._active_setup: _SetupTarget | None = None
         self._qr_session: QrGenerationSession | None = None
         self._pending_auto_open_scope: RemoteScope | None = None
+        self._host_notice: _Notice | None = None
+        self._media_notice: _Notice | None = None
+        self._media_credentials_notice: _Notice | None = None
+        self._timer_notice: _Notice | None = None
+        self._timer_credentials_notice: _Notice | None = None
+        self._setup_notice: _Notice | None = None
         self._runtime_known = False
         self._running = False
         self._media_running = False
@@ -95,6 +110,16 @@ class RemoteSettings(SettingsDomain):
             timerUsername=self._timer_credentials.configured_username(),
             timerPassword="",
             timerPasswordConfirmation="",
+            remoteFeedback="",
+            remoteError="",
+            mediaFeedback="",
+            mediaError="",
+            mediaCredentialsFeedback="",
+            mediaCredentialsError="",
+            timerFeedback="",
+            timerError="",
+            timerCredentialsFeedback="",
+            timerCredentialsError="",
             setupVisible=False,
             setupTitle="",
             setupEnabled=False,
@@ -108,6 +133,8 @@ class RemoteSettings(SettingsDomain):
             qrImage="",
             qrBusy=False,
             qrError="",
+            setupFeedback="",
+            setupFeedbackKind="",
         )
         self.refresh_runtime()
 
@@ -115,22 +142,30 @@ class RemoteSettings(SettingsDomain):
     def setValue(self, key: str, value: Any) -> None:  # noqa: N802 - QML API
         if self._closed:
             return
-        if key in {
-            "mediaUsername",
-            "mediaPassword",
-            "mediaPasswordConfirmation",
-            "timerUsername",
-            "timerPassword",
-            "timerPasswordConfirmation",
-        }:
-            self.publish(**{key: str(value)}, feedback="", feedbackKind="")
+        if key in {"mediaUsername", "mediaPassword", "mediaPasswordConfirmation"}:
+            self._media_credentials_notice = None
+            self.publish(
+                **{key: str(value)},
+                mediaCredentialsFeedback="",
+                mediaCredentialsError="",
+            )
+        elif key in {"timerUsername", "timerPassword", "timerPasswordConfirmation"}:
+            self._timer_credentials_notice = None
+            self.publish(
+                **{key: str(value)},
+                timerCredentialsFeedback="",
+                timerCredentialsError="",
+            )
         elif key == "fingerprintVisible":
             self.publish(fingerprintVisible=bool(value))
         elif key == "network":
             interface = self._interfaces.get(str(value))
             if value and interface is None:
-                self.fail(QCoreApplication.translate("SettingsWidget", "Select a private network…"))
+                self._host_notice = _Notice("error", "select_network")
+                self._refresh_status()
                 return
+            self._host_notice = None
+            self._clear_copied_notices()
             if interface is None:
                 self._settings.clear_network_selection()
             else:
@@ -141,13 +176,18 @@ class RemoteSettings(SettingsDomain):
         elif key == "enabled":
             enabled = bool(value)
             if enabled and not self._network_valid():
-                self.fail(
-                    QCoreApplication.translate(
-                        "SettingsWidget",
-                        "Select a private network before enabling remote control.",
-                    )
-                )
+                self._host_notice = _Notice("error", "select_network_before_enable")
+                self._refresh_status()
                 return
+            self._host_notice = None
+            if not enabled:
+                self._media_notice = None
+                self._timer_notice = None
+            else:
+                if self._media_notice == _Notice("error", "enable_master_first"):
+                    self._media_notice = None
+                if self._timer_notice == _Notice("error", "enable_master_first"):
+                    self._timer_notice = None
             self._settings.set_enabled(enabled)
             if enabled and not self._settings.onboarding_seen():
                 if self._settings.media_enabled():
@@ -161,21 +201,14 @@ class RemoteSettings(SettingsDomain):
             enabled = bool(value)
             if enabled:
                 if not self._settings.enabled():
-                    self.fail(
-                        QCoreApplication.translate(
-                            "SettingsWidget",
-                            "Enable Remote control first.",
-                        )
-                    )
+                    self._media_notice = _Notice("error", "enable_master_first")
+                    self._refresh_status()
                     return
                 if not self._media_credentials.has_credentials():
-                    self.fail(
-                        QCoreApplication.translate(
-                            "SettingsWidget",
-                            "Save Media credentials before enabling Media remote control.",
-                        )
-                    )
+                    self._media_notice = _Notice("error", "save_media_credentials_first")
+                    self._refresh_status()
                     return
+            self._media_notice = None
             self._settings.set_media_enabled(enabled)
             if enabled and not self._settings.onboarding_seen():
                 self._pending_auto_open_scope = RemoteScope.MEDIA
@@ -185,21 +218,14 @@ class RemoteSettings(SettingsDomain):
             enabled = bool(value)
             if enabled:
                 if not self._settings.enabled():
-                    self.fail(
-                        QCoreApplication.translate(
-                            "SettingsWidget",
-                            "Enable Remote control first.",
-                        )
-                    )
+                    self._timer_notice = _Notice("error", "enable_master_first")
+                    self._refresh_status()
                     return
                 if not self._timer_credentials_valid():
-                    self.fail(
-                        QCoreApplication.translate(
-                            "SettingsWidget",
-                            "Save Timer credentials before enabling Timer remote control.",
-                        )
-                    )
+                    self._timer_notice = _Notice("error", "save_timer_credentials_first")
+                    self._refresh_status()
                     return
+            self._timer_notice = None
             self._settings.set_timer_enabled(enabled)
             if enabled and not self._settings.onboarding_seen():
                 self._pending_auto_open_scope = RemoteScope.TIMER
@@ -217,14 +243,14 @@ class RemoteSettings(SettingsDomain):
             "saveMediaCredentials": self._save_media_credentials,
             "cancelTimerCredentials": self._cancel_timer_credentials,
             "saveTimerCredentials": self._save_timer_credentials,
-            "copyMediaAddress": lambda: self._copy(self._state.get("mediaEndpoint", "")),
-            "copyTimerAddress": lambda: self._copy(self._state.get("timerEndpoint", "")),
+            "copyMediaAddress": lambda: self._copy_endpoint(RemoteScope.MEDIA),
+            "copyTimerAddress": lambda: self._copy_endpoint(RemoteScope.TIMER),
             "openSetup": self._open_default_setup,
             "openMediaSetup": lambda: self._open_scope_setup(RemoteScope.MEDIA),
             "openTimerSetup": lambda: self._open_scope_setup(RemoteScope.TIMER),
             "closeSetup": self._close_setup,
             "completeSetup": self._complete_setup,
-            "copySetupAddress": lambda: self._copy(self._state.get("setupUrl", "")),
+            "copySetupAddress": self._copy_setup_address,
             "saveCertificate": self._save_certificate,
         }
         callback = actions.get(action)
@@ -245,6 +271,65 @@ class RemoteSettings(SettingsDomain):
             self._timer_credentials.has_credentials()
             or not self._timer_feature_flags.require_credentials
         )
+
+    def _clear_copied_notices(self) -> None:
+        if self._media_notice == _Notice("feedback", "copied"):
+            self._media_notice = None
+        if self._timer_notice == _Notice("feedback", "copied"):
+            self._timer_notice = None
+
+    @staticmethod
+    def _translate_notice(notice: _Notice | None) -> str:
+        if notice is None:
+            return ""
+        code = notice.code
+        if code == "select_network":
+            return QCoreApplication.translate("SettingsWidget", "Select a private network…")
+        if code == "select_network_before_enable":
+            return QCoreApplication.translate(
+                "SettingsWidget",
+                "Select a private network before enabling remote control.",
+            )
+        if code == "enable_master_first":
+            return QCoreApplication.translate("SettingsWidget", "Enable Remote control first.")
+        if code == "save_media_credentials_first":
+            return QCoreApplication.translate(
+                "SettingsWidget",
+                "Save Media credentials before enabling Media remote control.",
+            )
+        if code == "save_timer_credentials_first":
+            return QCoreApplication.translate(
+                "SettingsWidget",
+                "Save Timer credentials before enabling Timer remote control.",
+            )
+        if code == "password_mismatch":
+            return QCoreApplication.translate("SettingsWidget", "The passwords do not match.")
+        if code == "password_empty":
+            return QCoreApplication.translate("SettingsWidget", "Enter a new password to save.")
+        if code == "invalid_credentials":
+            return QCoreApplication.translate(
+                "SettingsWidget",
+                "Check the username and use a password with at least %1 characters.",
+            ).replace("%1", str(PASSWORD_MIN_LENGTH))
+        if code == "saved":
+            return QCoreApplication.translate("SettingsWidget", "Saved")
+        if code == "copied":
+            return QCoreApplication.translate("SettingsWidget", "Copied")
+        if code == "save_cert_failed":
+            return QCoreApplication.translate(
+                "RemoteControlSetupDialog",
+                "Choose another location and try again.",
+            )
+        return ""
+
+    @classmethod
+    def _notice_pair(cls, notice: _Notice | None) -> tuple[str, str]:
+        if notice is None:
+            return "", ""
+        text = cls._translate_notice(notice)
+        if notice.kind == "error":
+            return text, ""
+        return "", text
 
     def refresh_runtime(self) -> None:
         if self._closed:
@@ -313,7 +398,11 @@ class RemoteSettings(SettingsDomain):
                         "Enable Media or Timer remote control to start accepting connections.",
                     )
                 )
-                kind = "ready"
+                kind = (
+                    "error"
+                    if self._runtime_known and self._runtime_kind == "error"
+                    else "ready"
+                )
         elif network_ok:
             message, kind = (
                 QCoreApplication.translate("SettingsWidget", "Ready to enable."),
@@ -324,6 +413,26 @@ class RemoteSettings(SettingsDomain):
                 QCoreApplication.translate("SettingsWidget", "Configuration required."),
                 "pending",
             )
+
+        if self._host_notice is not None:
+            remote_error, remote_feedback = self._notice_pair(self._host_notice)
+        elif enabled and network_ok and self._runtime_known and not self._running and kind == "error":
+            remote_error, remote_feedback = message, ""
+        elif enabled:
+            remote_error, remote_feedback = "", message
+        else:
+            remote_error, remote_feedback = "", ""
+
+        media_error, media_feedback = self._notice_pair(self._media_notice)
+        media_cred_error, media_cred_feedback = self._notice_pair(self._media_credentials_notice)
+        timer_error, timer_feedback = self._notice_pair(self._timer_notice)
+        timer_cred_error, timer_cred_feedback = self._notice_pair(self._timer_credentials_notice)
+        setup_feedback = self._translate_notice(self._setup_notice)
+        setup_feedback_kind = (
+            ""
+            if self._setup_notice is None
+            else ("error" if self._setup_notice.kind == "error" else "success")
+        )
 
         origin = f"https://{interface.ipv4_address}:{REMOTE_CONTROL_PORT}" if interface else ""
         media_setup_ready = bool(
@@ -355,18 +464,6 @@ class RemoteSettings(SettingsDomain):
                 self._timer_credentials,
                 allow_view_only=not self._timer_feature_flags.require_credentials,
             ),
-            mediaStatusSummary=self._service_status_summary(
-                master_enabled=enabled,
-                service_enabled=media_enabled,
-                service_running=self._media_running,
-                credentials_valid=media_configured,
-            ),
-            timerStatusSummary=self._service_status_summary(
-                master_enabled=enabled,
-                service_enabled=timer_enabled,
-                service_running=self._timer_running,
-                credentials_valid=timer_valid,
-            ),
             passwordHint=QCoreApplication.translate(
                 "SettingsWidget",
                 "Use at least %1 characters. Credentials belong only to this profile.",
@@ -375,6 +472,18 @@ class RemoteSettings(SettingsDomain):
             timerEndpoint=f"{origin}{REMOTE_TIMER_PREFIX}/" if origin else "",
             statusMessage=message,
             statusKind=kind,
+            remoteError=remote_error,
+            remoteFeedback=remote_feedback,
+            mediaError=media_error,
+            mediaFeedback=media_feedback,
+            mediaCredentialsError=media_cred_error,
+            mediaCredentialsFeedback=media_cred_feedback,
+            timerError=timer_error,
+            timerFeedback=timer_feedback,
+            timerCredentialsError=timer_cred_error,
+            timerCredentialsFeedback=timer_cred_feedback,
+            setupFeedback=setup_feedback,
+            setupFeedbackKind=setup_feedback_kind,
             mediaSetupEnabled=media_setup_ready,
             timerSetupEnabled=timer_setup_ready,
             setupEnabled=bool(media_setup_ready or timer_setup_ready),
@@ -394,22 +503,6 @@ class RemoteSettings(SettingsDomain):
             return QCoreApplication.translate("SettingsWidget", "Optional (fullscreen view only)")
         return QCoreApplication.translate("SettingsWidget", "Not configured")
 
-    def _service_status_summary(
-        self,
-        *,
-        master_enabled: bool,
-        service_enabled: bool,
-        service_running: bool,
-        credentials_valid: bool,
-    ) -> str:
-        if not master_enabled or not service_enabled:
-            return QCoreApplication.translate("SettingsWidget", "Disabled")
-        if not credentials_valid:
-            return QCoreApplication.translate("SettingsWidget", "Credentials required")
-        if self._running and service_running:
-            return QCoreApplication.translate("SettingsWidget", "Active")
-        return QCoreApplication.translate("SettingsWidget", "Starting…")
-
     def _invalidate_runtime(self) -> None:
         self._runtime_known = False
         self._running = False
@@ -427,48 +520,60 @@ class RemoteSettings(SettingsDomain):
         )
 
     def _cancel_media_credentials(self) -> None:
+        self._media_credentials_notice = None
         self.publish(
             mediaUsername=self._media_credentials.configured_username(),
             mediaPassword="",
             mediaPasswordConfirmation="",
-            feedback="",
-            feedbackKind="",
+            mediaCredentialsError="",
+            mediaCredentialsFeedback="",
         )
 
     def _cancel_timer_credentials(self) -> None:
+        self._timer_credentials_notice = None
         self.publish(
             timerUsername=self._timer_credentials.configured_username(),
             timerPassword="",
             timerPasswordConfirmation="",
-            feedback="",
-            feedbackKind="",
+            timerCredentialsError="",
+            timerCredentialsFeedback="",
         )
 
     def _save_media_credentials(self) -> None:
-        if not self._persist_credentials(
+        error_code = self._persist_credentials(
             store=self._media_credentials,
             username_key="mediaUsername",
             password_key="mediaPassword",
             confirm_key="mediaPasswordConfirmation",
-        ):
+        )
+        if error_code is not None:
+            self._media_credentials_notice = _Notice("error", error_code)
+            self._refresh_status()
             return
         self._cancel_media_credentials()
+        self._media_credentials_notice = _Notice("feedback", "saved")
+        if self._media_notice == _Notice("error", "save_media_credentials_first"):
+            self._media_notice = None
         self._refresh_status()
         self.remote_media_credentials_changed.emit()
-        self.succeed(QCoreApplication.translate("SettingsWidget", "Saved"))
 
     def _save_timer_credentials(self) -> None:
-        if not self._persist_credentials(
+        error_code = self._persist_credentials(
             store=self._timer_credentials,
             username_key="timerUsername",
             password_key="timerPassword",
             confirm_key="timerPasswordConfirmation",
-        ):
+        )
+        if error_code is not None:
+            self._timer_credentials_notice = _Notice("error", error_code)
+            self._refresh_status()
             return
         self._cancel_timer_credentials()
+        self._timer_credentials_notice = _Notice("feedback", "saved")
+        if self._timer_notice == _Notice("error", "save_timer_credentials_first"):
+            self._timer_notice = None
         self._refresh_status()
         self.remote_timer_credentials_changed.emit()
-        self.succeed(QCoreApplication.translate("SettingsWidget", "Saved"))
 
     def _persist_credentials(
         self,
@@ -477,25 +582,17 @@ class RemoteSettings(SettingsDomain):
         username_key: str,
         password_key: str,
         confirm_key: str,
-    ) -> bool:
+    ) -> str | None:
         password = str(self._state.get(password_key, ""))
         if password != str(self._state.get(confirm_key, "")):
-            self.fail(QCoreApplication.translate("SettingsWidget", "The passwords do not match."))
-            return False
+            return "password_mismatch"
         if not password:
-            self.fail(QCoreApplication.translate("SettingsWidget", "Enter a new password to save."))
-            return False
+            return "password_empty"
         try:
             store.set_credentials(str(self._state.get(username_key, "")), password)
         except (UsernameValidationError, PasswordValidationError):
-            self.fail(
-                QCoreApplication.translate(
-                    "SettingsWidget",
-                    "Check the username and use a password with at least %1 characters.",
-                ).replace("%1", str(PASSWORD_MIN_LENGTH))
-            )
-            return False
-        return True
+            return "invalid_credentials"
+        return None
 
     def set_remote_control_runtime_status(
         self,
@@ -572,6 +669,7 @@ class RemoteSettings(SettingsDomain):
         if self._state["setupVisible"]:
             self._close_setup()
         self._active_setup = setup
+        self._setup_notice = None
         octets = setup.fingerprint.split(":")
         fingerprint = (
             "  ".join(":".join(octets[index : index + 4]) for index in range(0, len(octets), 4))
@@ -589,6 +687,8 @@ class RemoteSettings(SettingsDomain):
             qrImage="",
             qrBusy=True,
             qrError="",
+            setupFeedback="",
+            setupFeedbackKind="",
         )
         session = self._qr_factory.create(parent=self)
         self._qr_session = session
@@ -642,6 +742,7 @@ class RemoteSettings(SettingsDomain):
 
     def _close_setup(self) -> None:
         self._active_setup = None
+        self._setup_notice = None
         session, self._qr_session = self._qr_session, None
         if session is not None:
             session.ready.disconnect(self._on_qr_ready)
@@ -658,6 +759,8 @@ class RemoteSettings(SettingsDomain):
             qrImage="",
             qrBusy=False,
             qrError="",
+            setupFeedback="",
+            setupFeedbackKind="",
         )
 
     def _complete_setup(self) -> None:
@@ -665,10 +768,29 @@ class RemoteSettings(SettingsDomain):
             self._settings.mark_onboarding_seen()
             self._close_setup()
 
-    def _copy(self, value: str) -> None:
-        if value.startswith("https://"):
-            QGuiApplication.clipboard().setText(value)
-            self.succeed(QCoreApplication.translate("SettingsWidget", "Copied"))
+    def _copy_endpoint(self, scope: RemoteScope) -> None:
+        key = "mediaEndpoint" if scope is RemoteScope.MEDIA else "timerEndpoint"
+        value = str(self._state.get(key, ""))
+        if not value.startswith("https://"):
+            return
+        QGuiApplication.clipboard().setText(value)
+        if scope is RemoteScope.MEDIA:
+            self._media_notice = _Notice("feedback", "copied")
+            if self._timer_notice == _Notice("feedback", "copied"):
+                self._timer_notice = None
+        else:
+            self._timer_notice = _Notice("feedback", "copied")
+            if self._media_notice == _Notice("feedback", "copied"):
+                self._media_notice = None
+        self._refresh_status()
+
+    def _copy_setup_address(self) -> None:
+        value = str(self._state.get("setupUrl", ""))
+        if not value.startswith("https://"):
+            return
+        QGuiApplication.clipboard().setText(value)
+        self._setup_notice = _Notice("feedback", "copied")
+        self._refresh_status()
 
     def _save_certificate(self) -> None:
         setup = self._active_setup
@@ -690,13 +812,11 @@ class RemoteSettings(SettingsDomain):
         try:
             write_bytes_atomic(path, setup.certificate, mode=0o644)
         except OSError:
-            self.fail(
-                QCoreApplication.translate(
-                    "RemoteControlSetupDialog", "Choose another location and try again."
-                )
-            )
+            self._setup_notice = _Notice("error", "save_cert_failed")
+            self._refresh_status()
             return
-        self.succeed(QCoreApplication.translate("SettingsWidget", "Saved"))
+        self._setup_notice = _Notice("feedback", "saved")
+        self._refresh_status()
 
     def cleanup(self) -> None:
         self._closed = True

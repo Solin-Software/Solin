@@ -8896,26 +8896,6 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Opsional (hanya tampilan layar penuh)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Dinonaktifkan</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Kredensial diperlukan</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Aktif</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Memulai…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

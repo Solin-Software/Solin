@@ -120,12 +120,13 @@ Item {
                 }
 
                 Text {
+                    objectName: "groupError_" + root.spec.id
                     Layout.fillWidth: true
                     Layout.leftMargin: 12
                     Layout.rightMargin: 12
                     Layout.topMargin: visible ? 8 : 0
                     Layout.bottomMargin: visible ? 8 : 0
-                    visible: root.spec.errorKey && text.length > 0
+                    visible: Boolean(root.spec.errorKey) && text.length > 0
                     text: root.spec.errorKey ? String(root.state[root.spec.errorKey] || "") : ""
                     color: appTheme.dangerText
                     font.pixelSize: 13
@@ -134,12 +135,13 @@ Item {
                 }
 
                 Text {
+                    objectName: "groupFeedback_" + root.spec.id
                     Layout.fillWidth: true
                     Layout.leftMargin: 12
                     Layout.rightMargin: 12
                     Layout.topMargin: visible ? 8 : 0
                     Layout.bottomMargin: visible ? 8 : 0
-                    visible: root.spec.feedbackKey && text.length > 0
+                    visible: Boolean(root.spec.feedbackKey) && text.length > 0
                     text: root.spec.feedbackKey ? String(root.state[root.spec.feedbackKey] || "") : ""
                     color: appTheme.textSecondary
                     font.pixelSize: 13

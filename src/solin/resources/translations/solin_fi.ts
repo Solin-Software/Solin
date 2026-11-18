@@ -8931,26 +8931,6 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Valinnainen (vain koko näytön näkymä)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Ei käytössä</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Kirjautumistiedot vaaditaan</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Aktiivinen</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Käynnistetään…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

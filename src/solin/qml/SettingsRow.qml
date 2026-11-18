@@ -128,6 +128,7 @@ FocusScope {
                     x: toggle.width - width
                     y: (toggle.height - height) / 2
                     width: 46; height: 26; radius: 13
+                    opacity: toggle.enabled ? 1 : 0.55
                     color: toggle.checked ? appTheme.accent : appTheme.secondaryControl
                     border.color: toggle.visualFocus ? appTheme.textPrimary : "transparent"
                     border.width: 2
@@ -218,7 +219,7 @@ FocusScope {
                     width: root.narrow ? parent.width : implicitWidth
                     text: root.spec.label
                     enabled: root.available
-                    primary: ["saveCredentials", "saveMediaCredentials", "saveTimerCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
+                    primary: ["saveMediaCredentials", "saveTimerCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
                     onClicked: root.domain.invoke(root.spec.action)
                 }
                 SettingsButton {

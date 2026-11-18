@@ -222,10 +222,11 @@ Dialog {
                     }
                 }
                 Text {
+                    objectName: "remoteSetupFeedback"
                     Layout.fillWidth: true
                     visible: text.length > 0
-                    text: dialog.remoteState.feedback
-                    color: dialog.remoteState.feedbackKind === "error"
+                    text: dialog.remoteState.setupFeedback || ""
+                    color: dialog.remoteState.setupFeedbackKind === "error"
                            ? appTheme.dangerText : appTheme.textSecondary
                     font.pixelSize: 13
                     wrapMode: Text.WordWrap

@@ -8931,26 +8931,6 @@ Aggiungere contenuto, una videocamera o un’altra scena.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Facoltativo (solo vista a schermo intero)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Disabilitato</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Credenziali richieste</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Attivo</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Avvio…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

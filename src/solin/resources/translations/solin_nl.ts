@@ -8931,26 +8931,6 @@ Voeg inhoud, een camera of een andere scène toe.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Optioneel (alleen volledig scherm)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Uitgeschakeld</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Inloggegevens vereist</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Actief</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Starten…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

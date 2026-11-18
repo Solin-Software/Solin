@@ -8931,26 +8931,6 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <source>Optional (fullscreen view only)</source>
         <translation>Si lazima (mwonekano wa skrini nzima pekee)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>Zimezimwa</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>Vitambulisho vinahitajika</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>Inafanya kazi</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>Inaanza…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

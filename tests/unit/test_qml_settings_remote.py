@@ -146,25 +146,41 @@ def test_remote_requires_live_network_and_per_scope_credentials_before_enabling(
     domain.setValue("enabled", True)
     assert settings.enabled() is False
     assert changes == []
-    assert domain.state["feedbackKind"] == "error"
+    assert domain.state["remoteError"] != ""
+    assert domain.state["mediaError"] == ""
+    assert domain.state["timerError"] == ""
 
     domain.setValue("mediaEnabled", True)
     assert settings.media_enabled() is False
+    assert domain.state["mediaError"] != ""
+    assert domain.state["timerError"] == ""
 
     domain.setValue("network", interface.selection_key)
+    assert domain.state["remoteError"] == ""
     domain.setValue("enabled", True)
     assert settings.enabled() is True
+    assert domain.state["mediaError"] == ""
+    assert domain.state["remoteFeedback"] != ""
 
     domain.setValue("mediaEnabled", True)
     assert settings.media_enabled() is False
+    assert domain.state["mediaError"] != ""
+    assert domain.state["timerError"] == ""
+
     domain.setValue("timerEnabled", True)
     assert settings.timer_enabled() is False
+    assert domain.state["timerError"] != ""
 
     _save_media(domain)
+    assert domain.state["mediaError"] == ""
+    assert domain.state["mediaCredentialsFeedback"] != ""
+    assert domain.state["timerError"] != ""
     domain.setValue("mediaEnabled", True)
     assert settings.media_enabled() is True
 
     _save_timer(domain)
+    assert domain.state["timerError"] == ""
+    assert domain.state["timerCredentialsFeedback"] != ""
     domain.setValue("timerEnabled", True)
     assert settings.timer_enabled() is True
     assert domain.state["statusKind"] == "pending"
@@ -217,7 +233,9 @@ def test_invalid_credentials_leave_store_unchanged(
     domain.invoke("saveMediaCredentials")
     assert not media_credentials.has_credentials()
     assert changes == []
-    assert domain.state["feedbackKind"] == "error"
+    assert domain.state["mediaCredentialsError"] != ""
+    assert domain.state["mediaCredentialsFeedback"] == ""
+    assert domain.state["timerCredentialsError"] == ""
     assert domain.state["mediaPassword"] == password
 
 
@@ -234,7 +252,10 @@ def test_credentials_commit_normalizes_username_and_clears_secrets_per_scope(rem
     assert domain.state["timerPassword"] == domain.state["timerPasswordConfirmation"] == ""
     assert domain.state["mediaCredentialsSummary"] == "Configured as operator"
     assert domain.state["timerCredentialsSummary"] == "Configured as timerop"
-    assert domain.state["feedbackKind"] == "success"
+    assert domain.state["mediaCredentialsFeedback"] != ""
+    assert domain.state["timerCredentialsFeedback"] != ""
+    assert domain.state["mediaCredentialsError"] == ""
+    assert domain.state["timerCredentialsError"] == ""
 
 
 def test_refresh_preserves_drafts_and_cancel_discards_them(remote_settings):
@@ -368,13 +389,19 @@ def test_disable_and_failed_runtime_close_setup_and_block_old_qr(remote_settings
     _running(domain)
     domain.set_remote_control_runtime_status(running=False, message="Cannot bind", status="error")
     assert domain.state["statusKind"] == "error"
+    assert domain.state["remoteError"] == "Cannot bind"
+    assert domain.state["remoteFeedback"] == ""
     assert not domain.state["setupVisible"]
     assert not domain.state["mediaSetupEnabled"]
     factory.sessions[0].failed.emit()
     assert domain.state["qrError"] == ""
     _running(domain)
+    assert domain.state["remoteError"] == ""
+    assert domain.state["remoteFeedback"] == "Secure remote control is running."
     domain.invoke("openMediaSetup")
     domain.setValue("enabled", False)
+    assert domain.state["remoteError"] == ""
+    assert domain.state["remoteFeedback"] == ""
     assert not domain.state["mediaSetupEnabled"]
     assert not domain.state["setupVisible"]
 
@@ -392,13 +419,32 @@ def test_runtime_identity_change_closes_old_setup(remote_settings):
 def test_setup_copy_and_fingerprint_preserve_canonical_values(remote_settings):
     domain = remote_settings[0]
     _enable_media(remote_settings)
-    _running(domain)
+    _save_timer(domain)
+    domain.setValue("timerEnabled", True)
+    _running(domain, media_running=True, timer_running=True)
     domain.invoke("copySetupAddress")
     assert QApplication.clipboard().text() == domain.state["setupUrl"]
-    assert domain.state["feedbackKind"] == "success"
+    assert domain.state["setupFeedback"] != ""
+    assert domain.state["setupFeedbackKind"] == "success"
+    assert domain.state["mediaFeedback"] == ""
+    assert domain.state["timerFeedback"] == ""
     fingerprint = domain.state["fingerprint"]
     assert fingerprint.replace("  ", ":") == ":".join(f"{value:02X}" for value in range(32))
     assert max(len(group) for group in fingerprint.split("  ")) == 11
+
+    domain.invoke("closeSetup")
+    assert domain.state["setupFeedback"] == ""
+    assert domain.state["setupFeedbackKind"] == ""
+
+    domain.invoke("copyMediaAddress")
+    assert QApplication.clipboard().text() == domain.state["mediaEndpoint"]
+    assert domain.state["mediaFeedback"] != ""
+    assert domain.state["timerFeedback"] == ""
+
+    domain.invoke("copyTimerAddress")
+    assert QApplication.clipboard().text() == domain.state["timerEndpoint"]
+    assert domain.state["timerFeedback"] != ""
+    assert domain.state["mediaFeedback"] == ""
 
 
 def test_certificate_save_and_failure_feedback(remote_settings, monkeypatch, tmp_path):
@@ -409,14 +455,53 @@ def test_certificate_save_and_failure_feedback(remote_settings, monkeypatch, tmp
     monkeypatch.setattr(remote.QFileDialog, "getSaveFileName", lambda *_: (str(target), ""))
     domain.invoke("saveCertificate")
     assert target.read_bytes() == b"certificate"
-    assert domain.state["feedbackKind"] == "success"
+    assert domain.state["setupFeedback"] != ""
+    assert domain.state["setupFeedbackKind"] == "success"
+    assert domain.state["mediaFeedback"] == ""
 
     def fail_write(*args, **kwargs):
         raise OSError("read-only volume")
 
     monkeypatch.setattr(remote, "write_bytes_atomic", fail_write)
     domain.invoke("saveCertificate")
-    assert domain.state["feedbackKind"] == "error"
+    assert domain.state["setupFeedback"] != ""
+    assert domain.state["setupFeedbackKind"] == "error"
+    assert domain.state["mediaError"] == ""
+
+
+def test_credential_notices_stay_isolated_per_scope_and_clear_on_edit_or_cancel(remote_settings):
+    domain = remote_settings[0]
+    _save_media(domain)
+    assert domain.state["mediaCredentialsFeedback"] != ""
+
+    domain.setValue("timerUsername", "timerop")
+    domain.setValue("timerPassword", "secret-one")
+    domain.setValue("timerPasswordConfirmation", "secret-two")
+    domain.invoke("saveTimerCredentials")
+    assert domain.state["timerCredentialsError"] != ""
+    assert domain.state["mediaCredentialsFeedback"] != ""
+    assert domain.state["mediaCredentialsError"] == ""
+
+    domain.setValue("timerPasswordConfirmation", "secret-one")
+    assert domain.state["timerCredentialsError"] == ""
+    assert domain.state["mediaCredentialsFeedback"] != ""
+
+    domain.invoke("cancelMediaCredentials")
+    assert domain.state["mediaCredentialsFeedback"] == ""
+
+
+def test_runtime_missing_credentials_error_surfaces_in_remote_error(remote_settings):
+    domain, _, _, _, _, interface = remote_settings
+    domain.setValue("network", interface.selection_key)
+    domain.setValue("enabled", True)
+    domain.set_remote_control_runtime_status(
+        running=False,
+        message="Save Media credentials to start Media remote control.",
+        status="error",
+    )
+    assert domain.state["statusKind"] == "error"
+    assert domain.state["remoteError"] == "Save Media credentials to start Media remote control."
+    assert domain.state["remoteFeedback"] == ""
 
 
 def test_cleanup_clears_secrets_and_ignores_late_runtime(remote_settings):

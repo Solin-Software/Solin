@@ -8896,26 +8896,6 @@ Add content, a camera, or another scene.</source>
         <source>Optional (fullscreen view only)</source>
         <translation>선택 사항(전체 화면 보기 전용)</translation>
     </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="406"/>
-        <source>Disabled</source>
-        <translation>사용 안 함</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="408"/>
-        <source>Credentials required</source>
-        <translation>자격 증명 필요</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="410"/>
-        <source>Active</source>
-        <translation>활성</translation>
-    </message>
-    <message>
-        <location filename="../../ui/qml/settings/remote.py" line="411"/>
-        <source>Starting…</source>
-        <translation>시작하는 중…</translation>
-    </message>
 </context>
 <context>
     <name>TalkThemeBridge</name>

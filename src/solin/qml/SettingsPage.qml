@@ -188,8 +188,8 @@ Item {
                         || root.section.id === "media"
                         || root.section.id === "meetings"
                         || root.section.id === "projection" ? [settingsGeneral]
-                        : root.section.id === "remote" ? [settingsRemote]
-                        : root.section.id === "about" ? [] : [settingsIntegrations]
+                        : root.section.id === "about"
+                        || root.section.id === "remote" ? [] : [settingsIntegrations]
                     delegate: Text {
                         required property var modelData
                         Layout.fillWidth: true
