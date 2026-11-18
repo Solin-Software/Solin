@@ -63,7 +63,7 @@ class FakeHub:
     def __call__(self, server):
         return self
 
-    def create_code(self, secret: str, starts_at: str = "") -> str:
+    def create_code(self, secret: str, starts_at: str = "", **listing) -> str:
         if self.down:
             raise HubError(self.down)
         code = next(self._codes)
@@ -142,6 +142,7 @@ def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock):
     hub = FakeHub()
     store.set_server("meet.solin.run")
     store.set_link_mode(LinkMode.PER_MEETING)
+    store.set_hall_name("Central")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(lambda: hub.synced)
     upcoming = service.info["upcoming"]
@@ -150,6 +151,9 @@ def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock):
     assert all(m["url"] == f"https://meet.solin.run/{m['code']}" for m in upcoming)
     starts = {c.code: c.starts_at for c in hub.synced[0]}
     assert starts[upcoming[1]["code"]] == upcoming[1]["startsAt"]
+    # The waiting page names the congregation and the kind of meeting.
+    listed = {c.code: (c.title, c.kind) for c in hub.synced[0]}
+    assert listed[upcoming[0]["code"]] == ("Central", upcoming[0]["kind"]) and upcoming[0]["kind"] in ("midweek", "weekend")
 
 
 def test_a_server_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock):

@@ -47,6 +47,8 @@ class CodeState:
     secret: str
     starts_at: str      # ISO, or "" (no countdown)
     active: bool        # False: the link says "no longer valid"
+    title: str = ""     # the congregation's name, shown while visitors wait
+    kind: str = ""      # midweek / weekend / extra / unscheduled, or "" (the permanent link, no meeting)
 
 
 def new_secret() -> str:
@@ -77,10 +79,11 @@ class HubClient:
             raise HubError(f"{self.server.domain} answered {response.status_code}" + (f": {detail}" if detail else ""))
         return data
 
-    def create_code(self, secret: str, starts_at: str = "") -> str:
+    def create_code(self, secret: str, starts_at: str = "", *, title: str = "", kind: str = "") -> str:
         """A new code, owned by ``secret``."""
 
-        data = self._call("POST", "/api/codes", {"owner": owner_of(secret), "startsAt": starts_at})
+        data = self._call("POST", "/api/codes", {"owner": owner_of(secret), "startsAt": starts_at,
+                                                 "title": title, "kind": kind})
         code = str(data.get("code") or "") if isinstance(data, dict) else ""
         if not code:
             raise HubError(f"{self.server.domain} gave no code")
@@ -93,7 +96,8 @@ class HubClient:
         for start in range(0, len(codes), MAX_SYNC):
             batch = codes[start:start + MAX_SYNC]
             data = self._call("POST", "/api/codes/sync", {"codes": [
-                {"code": c.code, "secret": c.secret, "startsAt": c.starts_at, "active": c.active} for c in batch]})
+                {"code": c.code, "secret": c.secret, "startsAt": c.starts_at, "active": c.active,
+                 "title": c.title, "kind": c.kind} for c in batch]})
             rejected |= {str(code) for code in (data.get("rejected") or [])} if isinstance(data, dict) else set()
         return rejected
 

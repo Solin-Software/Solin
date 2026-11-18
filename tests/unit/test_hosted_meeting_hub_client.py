@@ -69,20 +69,23 @@ def client(monkeypatch):
 
 def test_create_code_sends_only_the_secrets_hash(client):
     _Server.answers["/api/codes"] = (201, {"code": "k7m4p2"})
-    assert client.create_code("my-secret", "2026-11-18T19:30:00-03:00") == "k7m4p2"
+    assert client.create_code("my-secret", "2026-11-18T19:30:00-03:00", title="Central", kind="midweek") == "k7m4p2"
     method, path, body = _Server.received[0]
     assert (method, path) == ("POST", "/api/codes")
-    assert body == {"owner": owner_of("my-secret"), "startsAt": "2026-11-18T19:30:00-03:00"}
+    assert body == {"owner": owner_of("my-secret"), "startsAt": "2026-11-18T19:30:00-03:00",
+                    "title": "Central", "kind": "midweek"}
     assert "my-secret" not in json.dumps(body)
 
 
 def test_sync_codes_and_rejections(client):
     _Server.answers["/api/codes/sync"] = (200, {"rejected": ["b2c3d4"]})
-    states = [CodeState("k7m4p2", "s1", "2026-11-18T19:30:00-03:00", True), CodeState("b2c3d4", "s2", "", False)]
+    states = [CodeState("k7m4p2", "s1", "2026-11-18T19:30:00-03:00", True, title="Central", kind="weekend"),
+              CodeState("b2c3d4", "s2", "", False)]
     assert client.sync_codes(states) == {"b2c3d4"}
     assert _Server.received[0][2] == {"codes": [
-        {"code": "k7m4p2", "secret": "s1", "startsAt": "2026-11-18T19:30:00-03:00", "active": True},
-        {"code": "b2c3d4", "secret": "s2", "startsAt": "", "active": False}]}
+        {"code": "k7m4p2", "secret": "s1", "startsAt": "2026-11-18T19:30:00-03:00", "active": True,
+         "title": "Central", "kind": "weekend"},
+        {"code": "b2c3d4", "secret": "s2", "startsAt": "", "active": False, "title": "", "kind": ""}]}
 
 
 def test_tunnel_and_turn(client):

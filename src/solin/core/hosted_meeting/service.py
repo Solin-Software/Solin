@@ -310,22 +310,28 @@ class HostedMeetingService(QObject):
 
     # ── the meeting server ────────────────────────────────────────────────
 
-    def _active_codes(self, state: LinksState) -> dict[str, str]:
-        """The codes that lead to a meeting now, with the start the server's waiting page counts down to."""
+    def _active_codes(self, state: LinksState) -> dict[str, tuple[str, str]]:
+        """The codes that lead to a meeting now: {code: (start, kind)}.
+
+        The server's waiting page counts down to the start and names the kind of meeting.
+        """
 
         now = self._clock()
-        active: dict[str, str] = {}
+        active: dict[str, tuple[str, str]] = {}
         if self._settings.link_mode() is LinkMode.SAME:
             if state.permanent is not None:
                 following = next((m for m in state.upcoming(now) if not m.cancelled), None)
-                active[state.permanent.code] = following.starts_at.isoformat() if following else ""
+                active[state.permanent.code] = (following.starts_at.isoformat(), following.kind) if following else ("", "")
         else:
             for meeting in state.meetings:
                 if meeting.code:
-                    active[meeting.code] = meeting.starts_at.isoformat() if meeting.scheduled else ""
+                    active[meeting.code] = (meeting.starts_at.isoformat() if meeting.scheduled else "", meeting.kind)
         if self._active() and self._code:
-            active.setdefault(self._code, "")
+            active.setdefault(self._code, ("", self._running_kind(state)))
         return active
+
+    def _running_kind(self, state: LinksState) -> str:
+        return next((m.kind for m in state.meetings if m.id == self._info.meeting_id), "")
 
     def _sync_hub_codes(self) -> None:
         """Exchange local codes for the server's, then keep the server's view of our codes current.
@@ -346,8 +352,11 @@ class HostedMeetingService(QObject):
         active = self._active_codes(state)
         running = self._code if self._active() else ""
         pending = [code for code in active if not state.issued(code) and code != running]
-        states = [CodeState(code, secret, active.get(code, ""), code in active)
-                  for code, secret in sorted(state.secrets.items())]
+        title = self._settings.hall_name()
+        states = []
+        for code, secret in sorted(state.secrets.items()):
+            starts_at, kind = active.get(code, ("", ""))
+            states.append(CodeState(code, secret, starts_at, code in active, title=title, kind=kind))
         if not pending and self._hub_synced == (hub.domain, states):
             return
         self._hub_busy = True
@@ -360,7 +369,8 @@ class HostedMeetingService(QObject):
             try:
                 for local in pending:
                     secret = new_secret()
-                    issued.append((local, client.create_code(secret, active[local]), secret))
+                    starts_at, kind = active[local]
+                    issued.append((local, client.create_code(secret, starts_at, title=title, kind=kind), secret))
                 if not pending:
                     rejected = client.sync_codes(states)
             except HubError as failure:
@@ -401,7 +411,8 @@ class HostedMeetingService(QObject):
             return state.secrets[self._code]
         secret = new_secret()
         try:
-            code = self._hub_client(hub).create_code(secret, self._info.starts_at)
+            code = self._hub_client(hub).create_code(secret, self._info.starts_at, title=self._settings.hall_name(),
+                                                     kind=self._running_kind(state))
         except HubError as error:
             self._warn(f"No public link: {error}. The meeting is reachable on this network only.")
             return ""

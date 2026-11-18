@@ -171,7 +171,7 @@ class FakeMeetingServer:
     def __call__(self, server):
         return self
 
-    def create_code(self, secret, starts_at=""):
+    def create_code(self, secret, starts_at="", **listing):
         code = ("q2q2q" + "23456789bcdfghjkmnpqrstvwxyz"[len(self.created)])
         self.created.append((code, secret))
         return code
