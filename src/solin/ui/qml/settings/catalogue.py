@@ -158,8 +158,7 @@ SECTIONS = (
         ), feedback_key="remoteFeedback", error_key="remoteError"),
         Group("remoteMedia", QT_TRANSLATE_NOOP("SettingsWidget", "Media"), "remote", (
             Setting("mediaEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Media"), description=QT_TRANSLATE_NOOP("SettingsWidget", "Browse meetings and playlists and control media projection remotely."), enabled_when="enabled"),
-            Setting("mediaEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "action", action="copyMediaAddress", enabled_when="mediaEndpoint"),
-            Setting("mediaSetupEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Set up a device"), "action", action="openMediaSetup", enabled_when="mediaSetupEnabled"),
+            Setting("mediaEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "copy", enabled_when="mediaEndpoint"),
         ), children=(
             Group("mediaCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Access credentials"), "remote", (
                 Setting("mediaUsername", QT_TRANSLATE_NOOP("SettingsWidget", "Username"), "input"),
@@ -167,11 +166,10 @@ SECTIONS = (
                 Setting("mediaPasswordConfirmation", QT_TRANSLATE_NOOP("SettingsWidget", "Confirm password"), "password"),
                 Setting("saveMediaCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Save credentials"), "action", action="saveMediaCredentials", secondary_action="cancelMediaCredentials", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel")),
             ), collapsible=True, status_key="mediaCredentialsSummary", feedback_key="mediaCredentialsFeedback", error_key="mediaCredentialsError"),
-        ), feedback_key="mediaFeedback", error_key="mediaError"),
+        ), error_key="mediaError"),
         Group("remoteTimer", QT_TRANSLATE_NOOP("SettingsWidget", "Timer"), "remote", (
             Setting("timerEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Timer"), description=QT_TRANSLATE_NOOP("SettingsWidget", "View the meeting timer in fullscreen without signing in, or sign in to control parts."), enabled_when="enabled"),
-            Setting("timerEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "action", action="copyTimerAddress", enabled_when="timerEndpoint"),
-            Setting("timerSetupEnabled", QT_TRANSLATE_NOOP("SettingsWidget", "Set up a device"), "action", action="openTimerSetup", enabled_when="timerSetupEnabled"),
+            Setting("timerEndpoint", QT_TRANSLATE_NOOP("SettingsWidget", "Copy address"), "copy", enabled_when="timerEndpoint"),
         ), children=(
             Group("timerCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Access credentials"), "remote", (
                 Setting("timerUsername", QT_TRANSLATE_NOOP("SettingsWidget", "Username"), "input"),
@@ -179,7 +177,7 @@ SECTIONS = (
                 Setting("timerPasswordConfirmation", QT_TRANSLATE_NOOP("SettingsWidget", "Confirm password"), "password"),
                 Setting("saveTimerCredentials", QT_TRANSLATE_NOOP("SettingsWidget", "Save credentials"), "action", action="saveTimerCredentials", secondary_action="cancelTimerCredentials", secondary_label=QT_TRANSLATE_NOOP("SettingsWidget", "Cancel")),
             ), collapsible=True, status_key="timerCredentialsSummary", feedback_key="timerCredentialsFeedback", error_key="timerCredentialsError"),
-        ), feedback_key="timerFeedback", error_key="timerError"),
+        ), error_key="timerError"),
     )),
     Section("about", QT_TRANSLATE_NOOP("SettingsWidget", "About"),
             QT_TRANSLATE_NOOP("SettingsWidget", "Version and information"), "about", (

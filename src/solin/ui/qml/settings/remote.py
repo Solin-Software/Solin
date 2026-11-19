@@ -98,8 +98,6 @@ class RemoteSettings(SettingsDomain):
         self._setup_notice: _Notice | None = None
         self._runtime_known = False
         self._running = False
-        self._media_running = False
-        self._timer_running = False
         self._runtime_message = ""
         self._runtime_kind = "pending"
         self._closed = False
@@ -112,19 +110,15 @@ class RemoteSettings(SettingsDomain):
             timerPasswordConfirmation="",
             remoteFeedback="",
             remoteError="",
-            mediaFeedback="",
             mediaError="",
             mediaCredentialsFeedback="",
             mediaCredentialsError="",
-            timerFeedback="",
             timerError="",
             timerCredentialsFeedback="",
             timerCredentialsError="",
             setupVisible=False,
             setupTitle="",
             setupEnabled=False,
-            mediaSetupEnabled=False,
-            timerSetupEnabled=False,
             setupUrl="",
             accessUrl="",
             verificationCode="",
@@ -165,7 +159,6 @@ class RemoteSettings(SettingsDomain):
                 self._refresh_status()
                 return
             self._host_notice = None
-            self._clear_copied_notices()
             if interface is None:
                 self._settings.clear_network_selection()
             else:
@@ -243,11 +236,7 @@ class RemoteSettings(SettingsDomain):
             "saveMediaCredentials": self._save_media_credentials,
             "cancelTimerCredentials": self._cancel_timer_credentials,
             "saveTimerCredentials": self._save_timer_credentials,
-            "copyMediaAddress": lambda: self._copy_endpoint(RemoteScope.MEDIA),
-            "copyTimerAddress": lambda: self._copy_endpoint(RemoteScope.TIMER),
             "openSetup": self._open_default_setup,
-            "openMediaSetup": lambda: self._open_scope_setup(RemoteScope.MEDIA),
-            "openTimerSetup": lambda: self._open_scope_setup(RemoteScope.TIMER),
             "closeSetup": self._close_setup,
             "completeSetup": self._complete_setup,
             "copySetupAddress": self._copy_setup_address,
@@ -271,12 +260,6 @@ class RemoteSettings(SettingsDomain):
             self._timer_credentials.has_credentials()
             or not self._timer_feature_flags.require_credentials
         )
-
-    def _clear_copied_notices(self) -> None:
-        if self._media_notice == _Notice("feedback", "copied"):
-            self._media_notice = None
-        if self._timer_notice == _Notice("feedback", "copied"):
-            self._timer_notice = None
 
     @staticmethod
     def _translate_notice(notice: _Notice | None) -> str:
@@ -423,9 +406,7 @@ class RemoteSettings(SettingsDomain):
         else:
             remote_error, remote_feedback = "", ""
 
-        media_error, media_feedback = self._notice_pair(self._media_notice)
         media_cred_error, media_cred_feedback = self._notice_pair(self._media_credentials_notice)
-        timer_error, timer_feedback = self._notice_pair(self._timer_notice)
         timer_cred_error, timer_cred_feedback = self._notice_pair(self._timer_credentials_notice)
         setup_feedback = self._translate_notice(self._setup_notice)
         setup_feedback_kind = (
@@ -435,23 +416,6 @@ class RemoteSettings(SettingsDomain):
         )
 
         origin = f"https://{interface.ipv4_address}:{REMOTE_CONTROL_PORT}" if interface else ""
-        media_setup_ready = bool(
-            enabled
-            and media_enabled
-            and self._running
-            and self._media_running
-            and self._media_setup is not None
-            and self._media_setup.ready
-        )
-        timer_setup_ready = bool(
-            enabled
-            and timer_enabled
-            and self._running
-            and self._timer_running
-            and self._timer_setup is not None
-            and self._timer_setup.ready
-        )
-
         self.publish(
             enabled=enabled,
             mediaEnabled=media_enabled,
@@ -474,19 +438,15 @@ class RemoteSettings(SettingsDomain):
             statusKind=kind,
             remoteError=remote_error,
             remoteFeedback=remote_feedback,
-            mediaError=media_error,
-            mediaFeedback=media_feedback,
+            mediaError=self._translate_notice(self._media_notice),
             mediaCredentialsError=media_cred_error,
             mediaCredentialsFeedback=media_cred_feedback,
-            timerError=timer_error,
-            timerFeedback=timer_feedback,
+            timerError=self._translate_notice(self._timer_notice),
             timerCredentialsError=timer_cred_error,
             timerCredentialsFeedback=timer_cred_feedback,
             setupFeedback=setup_feedback,
             setupFeedbackKind=setup_feedback_kind,
-            mediaSetupEnabled=media_setup_ready,
-            timerSetupEnabled=timer_setup_ready,
-            setupEnabled=bool(media_setup_ready or timer_setup_ready),
+            setupEnabled=self._default_setup_target() is not None,
         )
 
     @staticmethod
@@ -506,18 +466,12 @@ class RemoteSettings(SettingsDomain):
     def _invalidate_runtime(self) -> None:
         self._runtime_known = False
         self._running = False
-        self._media_running = False
-        self._timer_running = False
         self._runtime_message = ""
         self._runtime_kind = "pending"
         self._media_setup = None
         self._timer_setup = None
         self._close_setup()
-        self.publish(
-            setupEnabled=False,
-            mediaSetupEnabled=False,
-            timerSetupEnabled=False,
-        )
+        self.publish(setupEnabled=False)
 
     def _cancel_media_credentials(self) -> None:
         self._media_credentials_notice = None
@@ -640,8 +594,6 @@ class RemoteSettings(SettingsDomain):
         self._timer_setup = next_timer
         self._runtime_known = True
         self._running = running
-        self._media_running = bool(running and media_running)
-        self._timer_running = bool(running and timer_running)
         self._runtime_message = message
         self._runtime_kind = "running" if running else status or "error"
         self._refresh_status()
@@ -649,22 +601,25 @@ class RemoteSettings(SettingsDomain):
         pending = self._pending_auto_open_scope
         if pending is not None:
             target = next_media if pending is RemoteScope.MEDIA else next_timer
-            if target is not None and target.ready:
+            if target is not None:
                 self._pending_auto_open_scope = None
-                self._open_scope_setup(pending)
+                self._open_setup(self._setup_target(pending))
+
+    def _setup_target(self, scope: RemoteScope) -> _SetupTarget | None:
+        if not self._settings.enabled():
+            return None
+        if scope is RemoteScope.MEDIA:
+            return self._media_setup if self._settings.media_enabled() else None
+        return self._timer_setup if self._settings.timer_enabled() else None
+
+    def _default_setup_target(self) -> _SetupTarget | None:
+        return self._setup_target(RemoteScope.MEDIA) or self._setup_target(RemoteScope.TIMER)
 
     def _open_default_setup(self) -> None:
-        if self._state.get("mediaSetupEnabled"):
-            self._open_scope_setup(RemoteScope.MEDIA)
-        elif self._state.get("timerSetupEnabled"):
-            self._open_scope_setup(RemoteScope.TIMER)
+        self._open_setup(self._default_setup_target())
 
-    def _open_scope_setup(self, scope: RemoteScope) -> None:
-        setup = self._media_setup if scope is RemoteScope.MEDIA else self._timer_setup
-        enabled_flag = (
-            "mediaSetupEnabled" if scope is RemoteScope.MEDIA else "timerSetupEnabled"
-        )
-        if not self._state.get(enabled_flag) or setup is None:
+    def _open_setup(self, setup: _SetupTarget | None) -> None:
+        if setup is None:
             return
         if self._state["setupVisible"]:
             self._close_setup()
@@ -678,7 +633,7 @@ class RemoteSettings(SettingsDomain):
         )
         self.publish(
             setupVisible=True,
-            setupTitle=self._setup_dialog_title(scope),
+            setupTitle=self._setup_dialog_title(setup.scope),
             setupUrl=setup.setup_url,
             accessUrl=setup.access_url,
             verificationCode=setup.verification_code,
@@ -768,27 +723,25 @@ class RemoteSettings(SettingsDomain):
             self._settings.mark_onboarding_seen()
             self._close_setup()
 
-    def _copy_endpoint(self, scope: RemoteScope) -> None:
-        key = "mediaEndpoint" if scope is RemoteScope.MEDIA else "timerEndpoint"
-        value = str(self._state.get(key, ""))
+    @staticmethod
+    def _copy_https_address(value: str) -> bool:
         if not value.startswith("https://"):
-            return
-        QGuiApplication.clipboard().setText(value)
-        if scope is RemoteScope.MEDIA:
-            self._media_notice = _Notice("feedback", "copied")
-            if self._timer_notice == _Notice("feedback", "copied"):
-                self._timer_notice = None
-        else:
-            self._timer_notice = _Notice("feedback", "copied")
-            if self._media_notice == _Notice("feedback", "copied"):
-                self._media_notice = None
-        self._refresh_status()
+            return False
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is None:
+            return False
+        clipboard.setText(value)
+        return True
+
+    @Slot(str, result=bool)
+    def copyAddress(self, key: str) -> bool:  # noqa: N802 - QML API
+        if self._closed or key not in {"mediaEndpoint", "timerEndpoint"}:
+            return False
+        return self._copy_https_address(str(self._state.get(key, "")))
 
     def _copy_setup_address(self) -> None:
-        value = str(self._state.get("setupUrl", ""))
-        if not value.startswith("https://"):
+        if not self._copy_https_address(str(self._state.get("setupUrl", ""))):
             return
-        QGuiApplication.clipboard().setText(value)
         self._setup_notice = _Notice("feedback", "copied")
         self._refresh_status()
 
@@ -830,6 +783,4 @@ class RemoteSettings(SettingsDomain):
             timerPassword="",
             timerPasswordConfirmation="",
             setupEnabled=False,
-            mediaSetupEnabled=False,
-            timerSetupEnabled=False,
         )

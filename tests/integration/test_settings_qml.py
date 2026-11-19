@@ -53,6 +53,7 @@ class RecordingDomain(SettingsDomain):
         super().__init__()
         self.calls = []
         self.reject_enable = False
+        self.reject_copy = False
         self.publish(**state)
 
     @Slot(str, "QVariant")
@@ -66,6 +67,11 @@ class RecordingDomain(SettingsDomain):
     @Slot(str)
     def invoke(self, action):
         self.calls.append((action,))
+
+    @Slot(str, result=bool)
+    def copyAddress(self, key):  # noqa: N802 - QML slot
+        self.calls.append((key,))
+        return not self.reject_copy and bool(self.state.get(key))
 
     @Slot()
     def activate(self):
@@ -146,14 +152,14 @@ def _domain_states():
         mediaEnabled=False, timerEnabled=False,
         mediaEndpoint="https://192.168.1.2:8765/remote/media/",
         timerEndpoint="https://192.168.1.2:8765/remote/timer/",
-        mediaSetupEnabled=False, timerSetupEnabled=False,
+        setupEnabled=False,
         mediaUsername="", mediaPassword="", mediaPasswordConfirmation="",
         timerUsername="", timerPassword="", timerPasswordConfirmation="",
         mediaCredentialsSummary="Not configured", timerCredentialsSummary="Not configured",
         remoteError="", remoteFeedback="",
-        mediaError="", mediaFeedback="",
+        mediaError="",
         mediaCredentialsError="", mediaCredentialsFeedback="",
-        timerError="", timerFeedback="",
+        timerError="",
         timerCredentialsError="", timerCredentialsFeedback="",
     )
     states["about"].update(
@@ -645,7 +651,7 @@ def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_d
         remoteFeedback="Host active",
         mediaError="Media credentials required",
         mediaCredentialsError="Media password mismatch",
-        timerFeedback="Copied",
+        timerError="Timer credentials required",
         timerCredentialsFeedback="Saved",
     )
     _wait_until(
@@ -663,7 +669,7 @@ def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_d
         ("groupFeedback_remote", "groupBody_remote", "Host active"),
         ("groupError_remoteMedia", "groupBody_remoteMedia", "Media credentials required"),
         ("groupError_mediaCredentials", "groupBody_mediaCredentials", "Media password mismatch"),
-        ("groupFeedback_remoteTimer", "groupBody_remoteTimer", "Copied"),
+        ("groupError_remoteTimer", "groupBody_remoteTimer", "Timer credentials required"),
         ("groupFeedback_timerCredentials", "groupBody_timerCredentials", "Saved"),
     )
     for notice_name, body_name, expected_text in expected:
@@ -702,6 +708,55 @@ def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_d
     setup_feedback = _find(window_root, "remoteSetupFeedback")
     assert setup_feedback is not None and setup_feedback.isVisible()
     assert setup_feedback.property("text") == "Copied"
+    assert view.warnings == []
+
+
+def test_remote_setup_button_is_shared_and_copy_confirmation_stays_in_each_button(create_view):
+    view = create_view(width=1000, height=900)
+    view.navigation.openSection("remote", "", "")
+    domain = view.domains["remote"]
+    domain.publish(setupEnabled=True, mediaError="Media credentials required")
+    _settle(view)
+
+    setup = _control(_find(view.root, "setting_setupEnabled"), "SettingsButton")
+    assert [
+        item for item in _items(view.root)
+        if item.isVisible() and "SettingsButton" in item.metaObject().className()
+        and item.property("text") == setup.property("text")
+    ] == [setup]
+    assert QMetaObject.invokeMethod(setup, "clicked")
+    assert domain.calls[-1] == ("openSetup",)
+
+    media = _control(_find(view.root, "setting_mediaEndpoint"), "SettingsButton")
+    timer = _control(_find(view.root, "setting_timerEndpoint"), "SettingsButton")
+    media_label = _control(media, "QQuickText")
+    timer_label = _control(timer, "QQuickText")
+    idle_label = media_label.property("text")
+    idle_width = media.width()
+    assert idle_label == timer_label.property("text")
+
+    domain.reject_copy = True
+    assert QMetaObject.invokeMethod(media, "clicked")
+    assert media_label.property("text") == idle_label
+
+    domain.reject_copy = False
+    assert QMetaObject.invokeMethod(media, "clicked")
+    assert domain.calls[-1] == ("mediaEndpoint",)
+    copied_label = media_label.property("text")
+    assert copied_label and copied_label != idle_label
+    assert media.width() == pytest.approx(idle_width, abs=1)
+    assert timer_label.property("text") == idle_label
+    assert _find(view.root, "groupError_remoteMedia").isVisible()
+    assert not _find(view.root, "groupFeedback_remoteMedia").isVisible()
+
+    assert QMetaObject.invokeMethod(timer, "clicked")
+    assert domain.calls[-1] == ("timerEndpoint",)
+    assert timer_label.property("text") == copied_label
+    assert not _find(view.root, "groupFeedback_remoteTimer").isVisible()
+    domain.publish(timerEndpoint="")
+    assert timer_label.property("text") == idle_label
+    assert not timer.isEnabled()
+    _wait_until(lambda: media_label.property("text") == idle_label)
     assert view.warnings == []
 
 

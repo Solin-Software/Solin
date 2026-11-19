@@ -308,7 +308,7 @@ def test_credentials_groups_own_expansion_and_preserve_drafts_until_save_or_canc
     assert navigation.expanded("mediaCredentials")
 
 
-def test_runtime_before_qml_auto_opens_setup_once_and_supports_per_scope_qr_setup(remote_settings):
+def test_setup_auto_opens_once_and_shared_action_uses_an_available_service(remote_settings):
     domain, _, _, _, factory, _ = remote_settings
     _enable_media(remote_settings)
     _save_timer(domain)
@@ -318,7 +318,8 @@ def test_runtime_before_qml_auto_opens_setup_once_and_supports_per_scope_qr_setu
     assert factory.sessions[0].started.endswith("/remote/timer/?setup=1")
     assert domain.state["setupTitle"] == "Set up Solin Timer"
 
-    domain.invoke("openMediaSetup")
+    assert domain.state["setupEnabled"]
+    domain.invoke("openSetup")
     assert domain.state["setupVisible"]
     assert factory.sessions[1].started.endswith("/remote/media/?setup=1")
     assert domain.state["setupTitle"] == "Set up Solin Media"
@@ -329,6 +330,10 @@ def test_runtime_before_qml_auto_opens_setup_once_and_supports_per_scope_qr_setu
     domain.invoke("closeSetup")
     _running(domain, media_running=True, timer_running=True)
     assert not domain.state["setupVisible"]
+    domain.setValue("mediaEnabled", False)
+    assert domain.state["setupEnabled"]
+    domain.invoke("openSetup")
+    assert factory.sessions[-1].started.endswith("/remote/timer/?setup=1")
 
 
 def test_only_done_marks_onboarding_complete_and_closes_qr_exactly_once(remote_settings):
@@ -340,7 +345,7 @@ def test_only_done_marks_onboarding_complete_and_closes_qr_exactly_once(remote_s
     assert factory.sessions[0].close_calls == 1
     domain.invoke("completeSetup")
     assert not settings.onboarding_seen()
-    domain.invoke("openMediaSetup")
+    domain.invoke("openSetup")
     domain.invoke("completeSetup")
     assert settings.onboarding_seen()
     domain.cleanup()
@@ -359,7 +364,7 @@ def test_qr_validates_png_and_ignores_results_from_closed_setup(remote_settings)
     assert domain.state["qrImage"].startswith("data:image/png;base64,")
     assert not domain.state["qrError"]
     domain.invoke("closeSetup")
-    domain.invoke("openMediaSetup")
+    domain.invoke("openSetup")
     first.ready.emit(generate_qr_png("stale"))
     first.failed.emit()
     assert domain.state["qrImage"] == ""
@@ -379,7 +384,7 @@ def test_network_loss_invalidates_setup_without_erasing_persisted_selection(
     assert domain.state["mediaEndpoint"] == ""
     assert domain.state["timerEndpoint"] == ""
     assert not domain.state["setupVisible"]
-    assert not domain.state["mediaSetupEnabled"]
+    assert not domain.state["setupEnabled"]
     assert factory.sessions[0].close_calls == 1
 
 
@@ -392,17 +397,17 @@ def test_disable_and_failed_runtime_close_setup_and_block_old_qr(remote_settings
     assert domain.state["remoteError"] == "Cannot bind"
     assert domain.state["remoteFeedback"] == ""
     assert not domain.state["setupVisible"]
-    assert not domain.state["mediaSetupEnabled"]
+    assert not domain.state["setupEnabled"]
     factory.sessions[0].failed.emit()
     assert domain.state["qrError"] == ""
     _running(domain)
     assert domain.state["remoteError"] == ""
     assert domain.state["remoteFeedback"] == "Secure remote control is running."
-    domain.invoke("openMediaSetup")
+    domain.invoke("openSetup")
     domain.setValue("enabled", False)
     assert domain.state["remoteError"] == ""
     assert domain.state["remoteFeedback"] == ""
-    assert not domain.state["mediaSetupEnabled"]
+    assert not domain.state["setupEnabled"]
     assert not domain.state["setupVisible"]
 
 
@@ -412,7 +417,7 @@ def test_runtime_identity_change_closes_old_setup(remote_settings):
     _running(domain)
     _running(domain, code="NEW-CODE")
     assert not domain.state["setupVisible"]
-    domain.invoke("openMediaSetup")
+    domain.invoke("openSetup")
     assert domain.state["verificationCode"] == "NEW-CODE"
 
 
@@ -426,8 +431,6 @@ def test_setup_copy_and_fingerprint_preserve_canonical_values(remote_settings):
     assert QApplication.clipboard().text() == domain.state["setupUrl"]
     assert domain.state["setupFeedback"] != ""
     assert domain.state["setupFeedbackKind"] == "success"
-    assert domain.state["mediaFeedback"] == ""
-    assert domain.state["timerFeedback"] == ""
     fingerprint = domain.state["fingerprint"]
     assert fingerprint.replace("  ", ":") == ":".join(f"{value:02X}" for value in range(32))
     assert max(len(group) for group in fingerprint.split("  ")) == 11
@@ -436,15 +439,27 @@ def test_setup_copy_and_fingerprint_preserve_canonical_values(remote_settings):
     assert domain.state["setupFeedback"] == ""
     assert domain.state["setupFeedbackKind"] == ""
 
-    domain.invoke("copyMediaAddress")
-    assert QApplication.clipboard().text() == domain.state["mediaEndpoint"]
-    assert domain.state["mediaFeedback"] != ""
-    assert domain.state["timerFeedback"] == ""
 
-    domain.invoke("copyTimerAddress")
-    assert QApplication.clipboard().text() == domain.state["timerEndpoint"]
-    assert domain.state["timerFeedback"] != ""
-    assert domain.state["mediaFeedback"] == ""
+def test_copy_endpoint_preserves_notices_and_requires_an_available_address(remote_settings):
+    domain, _, _, _, _, interface = remote_settings
+    clipboard = QApplication.clipboard()
+    previous = clipboard.text()
+    assert not domain.copyAddress("mediaEndpoint")
+    assert clipboard.text() == previous
+
+    domain.setValue("network", interface.selection_key)
+    domain.setValue("enabled", True)
+    domain.setValue("mediaEnabled", True)
+    state = domain.state
+    assert state["mediaError"]
+
+    for key in ("mediaEndpoint", "timerEndpoint"):
+        assert domain.copyAddress(key)
+        assert clipboard.text() == state[key]
+        assert domain.state == state
+
+    assert not domain.copyAddress("setupUrl")
+    assert clipboard.text() == state["timerEndpoint"]
 
 
 def test_certificate_save_and_failure_feedback(remote_settings, monkeypatch, tmp_path):
@@ -457,7 +472,6 @@ def test_certificate_save_and_failure_feedback(remote_settings, monkeypatch, tmp
     assert target.read_bytes() == b"certificate"
     assert domain.state["setupFeedback"] != ""
     assert domain.state["setupFeedbackKind"] == "success"
-    assert domain.state["mediaFeedback"] == ""
 
     def fail_write(*args, **kwargs):
         raise OSError("read-only volume")
@@ -519,7 +533,7 @@ def test_cleanup_clears_secrets_and_ignores_late_runtime(remote_settings):
     assert domain.state["timerPasswordConfirmation"] == ""
     assert domain.state["setupUrl"] == ""
     assert not domain.state["setupVisible"]
-    assert not domain.state["mediaSetupEnabled"]
+    assert not domain.state["setupEnabled"]
 
 
 def test_certificate_picker_return_after_profile_cleanup_does_not_export_stale_certificate(
