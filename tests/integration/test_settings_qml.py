@@ -654,10 +654,6 @@ def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_d
         timerError="Timer credentials required",
         timerCredentialsFeedback="Saved",
     )
-    _wait_until(
-        lambda: _expanded_body_settled(_find(view.root, "groupBody_mediaCredentials"))
-        and _expanded_body_settled(_find(view.root, "groupBody_timerCredentials"))
-    )
     _settle(view)
 
     assert not any(
@@ -676,12 +672,17 @@ def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_d
         notice = _find(view.root, notice_name)
         body = _find(view.root, body_name)
         assert notice is not None and body is not None, notice_name
+        assert body.isAncestorOf(notice), notice_name
         assert notice.isVisible(), notice_name
         assert notice.property("text") == expected_text
-        top_left = notice.mapToItem(body, QPointF(0, 0))
-        assert top_left.x() >= 0 and top_left.y() >= 0
-        assert top_left.x() + notice.width() <= body.width() + 1
-        assert top_left.y() + notice.height() <= body.height() + 1
+        # The notice can become visible before its parent layout applies the new height.
+        wait_until(
+            lambda body=body, notice=notice: _expanded_body_settled(body)
+            and body.boundingRect().adjusted(0, 0, 1, 1).contains(
+                notice.mapRectToItem(body, notice.boundingRect())
+            ),
+            description=f"{notice_name} to fit inside the expanded {body_name}",
+        )
 
     # Media error renders above the nested Media credentials card and well above Timer.
     media_error = _find(view.root, "groupError_remoteMedia")
