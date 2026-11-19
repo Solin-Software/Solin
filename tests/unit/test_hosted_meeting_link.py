@@ -16,18 +16,18 @@ from solin.core.hosted_meeting.devices import ApprovedDevice, KeyKind, StaffRole
 from solin.core.hosted_meeting.hub_client import HubError
 from solin.core.hosted_meeting.links import LinkMode, normalize_code
 from solin.core.hosted_meeting.service import HostedMeetingService, MeetingState
-from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore
+from solin.core.hosted_meeting.settings import SERVER_OVERRIDE, HostedMeetingSettingsStore
 
 TZ = timezone(timedelta(hours=-3))
 NOW = datetime(2026, 11, 16, 12, 0, tzinfo=TZ)   # Monday
 
 
 @pytest.fixture
-def store():
+def store(monkeypatch):
     settings = SettingsStore.for_namespace("SolinTests", f"hosted-meeting-link-{secrets.token_hex(4)}")
     store = HostedMeetingSettingsStore(settings)
     store.set_hall_name("Salão Central")
-    store.set_server("")   # each test that wants a server sets one, with a FakeHub
+    monkeypatch.setenv(SERVER_OVERRIDE, "")   # each test that wants a server sets one, with a FakeHub
     settings.set_value(SettingsKey.MEETING_MIDWEEK_DAY, 2)
     settings.set_value(SettingsKey.MEETING_MIDWEEK_TIME, "19:30")
     settings.set_value(SettingsKey.MEETING_WEEKEND_DAY, 6)
@@ -100,9 +100,9 @@ def test_same_link_mode_offers_one_permanent_link(store, tmp_path, clock):
     assert HostedMeetingService(store, tmp_path, clock=clock).info["code"] == code  # stored
 
 
-def test_the_server_issues_the_codes(store, tmp_path, clock):
+def test_the_server_issues_the_codes(store, tmp_path, clock, monkeypatch):
     hub = FakeHub()
-    store.set_server("meet.solin.run")
+    monkeypatch.setenv(SERVER_OVERRIDE, "meet.solin.run")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     local = service.info["code"]
     assert service.info["linkScope"] == "pending"
@@ -124,9 +124,9 @@ def test_the_server_issues_the_codes(store, tmp_path, clock):
     assert len(hub.created) == 1 and len(hub.synced) == 1
 
 
-def test_new_link_retires_the_old_code_on_the_server(store, tmp_path, clock):
+def test_new_link_retires_the_old_code_on_the_server(store, tmp_path, clock, monkeypatch):
     hub = FakeHub()
-    store.set_server("meet.solin.run")
+    monkeypatch.setenv(SERVER_OVERRIDE, "meet.solin.run")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(lambda: hub.synced)
     old = service.info["code"]
@@ -138,9 +138,9 @@ def test_new_link_retires_the_old_code_on_the_server(store, tmp_path, clock):
     assert states == {old: False, new: True}
 
 
-def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock):
+def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock, monkeypatch):
     hub = FakeHub()
-    store.set_server("meet.solin.run")
+    monkeypatch.setenv(SERVER_OVERRIDE, "meet.solin.run")
     store.set_link_mode(LinkMode.PER_MEETING)
     store.set_hall_name("Central")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
@@ -156,10 +156,10 @@ def test_per_meeting_codes_come_from_the_server(store, tmp_path, clock):
     assert listed[upcoming[0]["code"]] == ("Central", upcoming[0]["kind"]) and upcoming[0]["kind"] in ("midweek", "weekend")
 
 
-def test_a_server_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock):
+def test_a_server_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, clock, monkeypatch):
     hub = FakeHub()
     hub.down = "meet.solin.run cannot be reached (timed out)"
-    store.set_server("meet.solin.run")
+    monkeypatch.setenv(SERVER_OVERRIDE, "meet.solin.run")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(lambda: service.info["hubError"])
     assert "cannot be reached" in service.info["hubError"] and service.info["linkScope"] == "pending"
@@ -169,9 +169,9 @@ def test_a_server_that_cannot_be_reached_is_shown_and_retried(store, tmp_path, c
     assert service.info["hubError"] == ""
 
 
-def test_codes_the_server_does_not_know_as_ours_are_replaced(store, tmp_path, clock):
+def test_codes_the_server_does_not_know_as_ours_are_replaced(store, tmp_path, clock, monkeypatch):
     hub = FakeHub()
-    store.set_server("meet.solin.run")
+    monkeypatch.setenv(SERVER_OVERRIDE, "meet.solin.run")
     service = HostedMeetingService(store, tmp_path, clock=clock, hub_client=hub)
     _pump(lambda: hub.synced and not service._hub_busy)
     lost = service.info["code"]

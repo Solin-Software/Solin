@@ -18,7 +18,7 @@ from solin.core.hosted_meeting.binaries import Helper, find_helper
 from solin.core.hosted_meeting.hub_client import TunnelInfo, TurnCredentials
 from solin.core.hosted_meeting.processes import free_tcp_port
 from solin.core.hosted_meeting.service import HostedMeetingService, MeetingState
-from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore, MeetingQuality
+from solin.core.hosted_meeting.settings import SERVER_OVERRIDE, HostedMeetingSettingsStore, MeetingQuality
 from solin.core.hosted_meeting.tokens import decode_claims
 
 pytestmark = pytest.mark.skipif(
@@ -68,14 +68,14 @@ def pump_until(predicate, timeout=15.0):
 
 
 @pytest.fixture
-def store(tmp_path):
+def store(tmp_path, monkeypatch):
     settings = SettingsStore.for_namespace("SolinTests", f"hosted-meeting-{secrets.token_hex(4)}")
     store = HostedMeetingSettingsStore(settings)
     store.set_hall_name("Salão do Reino Central")
     store.set_quality(MeetingQuality.HD)
     store.set_web_port(free_tcp_port())
     store.set_hall_feed("none")
-    store.set_server("")   # this network only: the tests do not reach a meeting server
+    monkeypatch.setenv(SERVER_OVERRIDE, "")   # this network only: the tests do not reach a meeting server
     yield store
     for key in settings.all_keys():
         settings.set_value(key, None)
@@ -188,9 +188,9 @@ class FakeMeetingServer:
 
 
 @pytest.mark.skipif(find_helper(Helper.FRPC) is None, reason="frpc not available")
-def test_a_meeting_on_the_server_uses_its_code_secret_for_tunnel_and_turn(store, tmp_path):
+def test_a_meeting_on_the_server_uses_its_code_secret_for_tunnel_and_turn(store, tmp_path, monkeypatch):
     server = FakeMeetingServer()
-    store.set_server("hub.invalid")
+    monkeypatch.setenv(SERVER_OVERRIDE, "hub.invalid")
     service = HostedMeetingService(store, tmp_path, scene_runtime=FakeRuntime(), hub_client=server)
     assert pump_until(lambda: service.info["linkScope"] == "hub")
     assert service.start_meeting()

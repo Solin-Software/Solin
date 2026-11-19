@@ -93,7 +93,6 @@ class SettingsKey:
     HOSTED_MEETING_HALL_FEED: Final = "hosted_meeting/hall_feed"
     HOSTED_MEETING_REMOTE_AUDIO_DEVICE: Final = "hosted_meeting/remote_audio_device"
     HOSTED_MEETING_WEB_PORT: Final = "hosted_meeting/web_port"
-    HOSTED_MEETING_HUB: Final = "hosted_meeting/hub"
     HOSTED_MEETING_HALL_FEED_DELAY: Final = "hosted_meeting/hall_feed_delay_ms"
 
     AUTO_KEYS_ENABLED: Final = "auto_keys/enabled"

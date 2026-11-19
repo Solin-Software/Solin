@@ -2,22 +2,28 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import secrets
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler
+from pathlib import Path
 
 import pytest
+from cryptography import x509
 
-from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.hosted_meeting.galene_config import GaleneLayout, TurnServer
 from solin.core.hosted_meeting.hub_client import CodeState, HubClient, HubError, TunnelInfo, owner_of
 from solin.core.hosted_meeting.links import LinksState
-from solin.core.hosted_meeting.settings import DEFAULT_SERVER, HostedMeetingSettingsStore, HubServer, clean_server
-from solin.core.hosted_meeting.tunnel import frpc_config
+from solin.core.hosted_meeting.settings import (
+    DEFAULT_SERVER,
+    SERVER_OVERRIDE,
+    HostedMeetingSettingsStore,
+    HubServer,
+    clean_server,
+)
+from solin.core.hosted_meeting.tunnel import CERT_OVERRIDE, OFFICIAL_TUNNEL_CERT, frpc_config, tunnel_certificate
 from solin.core.meetings.schedule import MIDWEEK, WEEKEND, MeetingSchedule, MeetingSlot
 from tests._http import ThreadingLoopbackHTTPServer
 
@@ -117,22 +123,17 @@ def store():
         settings.set_value(key, None)
 
 
-def test_the_server_setting(store):
+def test_the_server_is_fixed_but_development_can_override_it(store, monkeypatch):
+    monkeypatch.delenv(SERVER_OVERRIDE, raising=False)
     assert store.server() == DEFAULT_SERVER == "meet.solin.run"
     assert store.hub() == HubServer("meet.solin.run")
-    assert store.set_server(" https://Meet.Example.org/ ") == "meet.example.org"
-    assert store.set_server("hub.local:8443") == "hub.local:8443"
-    assert store.set_server("") == "" and store.hub() is None    # this network only
-    with pytest.raises(ValueError):
-        store.set_server("not a server")
+    monkeypatch.setenv(SERVER_OVERRIDE, " https://Hub.Local:8443/ ")
+    assert store.server() == "hub.local:8443"
+    monkeypatch.setenv(SERVER_OVERRIDE, "")
+    assert store.server() == "" and store.hub() is None    # this network only
+    monkeypatch.setenv(SERVER_OVERRIDE, "not a server")
+    assert store.hub() is None
     assert clean_server("meet.solin.run/k7m4p2") == "meet.solin.run"
-
-
-def test_an_old_connection_code_keeps_its_server(store):
-    payload = json.dumps({"domain": "hub.example.org", "hall": "hall-x", "hall_key": "k"}).encode()
-    old = "solin-hub:" + base64.urlsafe_b64encode(payload).decode().rstrip("=")
-    store.settings.set_value(SettingsKey.HOSTED_MEETING_HUB, old)
-    assert store.server() == "hub.example.org"
 
 
 def test_issued_codes_keep_their_secret_and_passwords():
@@ -152,11 +153,29 @@ def test_issued_codes_keep_their_secret_and_passwords():
 
 
 def test_frpc_config_names_the_tunnel_after_the_code():
-    config = frpc_config(HubServer("meet.example.test:8443"), TunnelInfo(7000, 'to"k'), "k7m4p2", "sec", 8780)
+    config = frpc_config(HubServer("meet.example.test:8443"), TunnelInfo(7000, 'to"k'), "k7m4p2", "sec", 8780,
+                         Path("/run/hub-tunnel.crt"))
     assert 'serverAddr = "meet.example.test"' in config and "serverPort = 7000" in config
+    assert "transport.tls.enable = true" in config and 'transport.tls.serverName = "meet.example.test"' in config
+    assert 'transport.tls.trustedCaFile = "/run/hub-tunnel.crt"' in config
     assert 'auth.token = "to\\"k"' in config
     assert 'metadatas.code = "k7m4p2"' in config and 'metadatas.secret = "sec"' in config
     assert 'name = "k7m4p2"' in config and "localPort = 8780" in config
+
+
+def test_the_official_server_certificate_is_pinned(monkeypatch, tmp_path):
+    official = x509.load_pem_x509_certificate(tunnel_certificate(HubServer(DEFAULT_SERVER)).encode())
+    names = official.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    assert names.get_values_for_type(x509.DNSName) == [DEFAULT_SERVER]
+    assert official.not_valid_after_utc.year >= 2045
+    # Another server (development only) is checked only against a certificate it is given.
+    monkeypatch.delenv(CERT_OVERRIDE, raising=False)
+    assert tunnel_certificate(HubServer("hub.local:8443")) is None
+    pem = tmp_path / "hub.crt"
+    pem.write_text("PEM", encoding="utf-8")
+    monkeypatch.setenv(CERT_OVERRIDE, str(pem))
+    assert tunnel_certificate(HubServer("hub.local:8443")) == "PEM"
+    assert tunnel_certificate(HubServer(DEFAULT_SERVER)) == OFFICIAL_TUNNEL_CERT    # never overridden
 
 
 def test_turn_credentials_from_the_server_are_handed_out_as_they_are(tmp_path):

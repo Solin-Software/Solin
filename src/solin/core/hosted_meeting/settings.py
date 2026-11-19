@@ -1,15 +1,15 @@
 """Hosted-meeting settings (per profile) and the meeting server.
 
-The **meeting server** (the hub, :data:`DEFAULT_SERVER` unless the congregation runs its
-own) gives meetings their public address, ``https://<server>/<code>``. It is open to
-every Solin: no account or connection code. Empty means no server: meetings are reached
-on this network only.
+The **meeting server** (the hub, :data:`DEFAULT_SERVER`, run by the Solin project) gives
+meetings their public address, ``https://<server>/<code>``. It is open to every Solin: no
+account or connection code. It is not a setting; for development, the environment variable
+:data:`SERVER_OVERRIDE` names another server, or is empty for "this network only".
 """
 
 from __future__ import annotations
 
-import base64
 import json
+import os
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -20,9 +20,8 @@ from solin.core.integrations.automation.settings import _ProfilePrefsSettings
 from .links import LinkMode, LinksState
 
 DEFAULT_SERVER = "meet.solin.run"
+SERVER_OVERRIDE = "SOLIN_MEETING_SERVER"
 DEFAULT_WEB_PORT = 8780
-# Before the hub was open, it was configured with a connection code; its domain is kept.
-_OLD_CONNECTION_CODE = "solin-hub:"
 _HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:\d{1,5})?$")
 
 
@@ -60,15 +59,6 @@ def clean_server(text: str) -> str | None:
     host = (text or "").strip().lower()
     host = re.sub(r"^https?://", "", host).split("/", 1)[0]
     return host if _HOST.match(host) else None
-
-
-def _server_from_old_code(code: str) -> str:
-    payload = code[len(_OLD_CONNECTION_CODE):]
-    try:
-        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
-    except ValueError:
-        return ""
-    return clean_server(str(data.get("domain") or "")) or "" if isinstance(data, dict) else ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,22 +190,12 @@ class HostedMeetingSettingsStore(_ProfilePrefsSettings):
         self.settings.set_value(SettingsKey.HOSTED_MEETING_WEB_PORT, int(port))
 
     def server(self) -> str:
-        """The meeting server's address; "" = this network only."""
+        """The meeting server's address; "" = this network only (development override only)."""
 
-        value = self.settings.string(SettingsKey.HOSTED_MEETING_HUB, DEFAULT_SERVER).strip()
-        if value.startswith(_OLD_CONNECTION_CODE):
-            return _server_from_old_code(value)
-        return clean_server(value) or "" if value else ""
-
-    def set_server(self, text: str) -> str:
-        """Store a server address ("" = this network only); raises ValueError when it is not one."""
-
-        text = (text or "").strip()
-        host = clean_server(text) if text else ""
-        if host is None:
-            raise ValueError("not a server address")
-        self.settings.set_value(SettingsKey.HOSTED_MEETING_HUB, host)
-        return host
+        value = os.environ.get(SERVER_OVERRIDE)
+        if value is None:
+            return DEFAULT_SERVER
+        return clean_server(value) or "" if value.strip() else ""
 
     def hub(self) -> HubServer | None:
         server = self.server()

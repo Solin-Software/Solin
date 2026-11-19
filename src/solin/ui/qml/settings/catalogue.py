@@ -149,8 +149,6 @@ SECTIONS = (
             Setting("remoteAudioDevice", QT_TRANSLATE_NOOP("SettingsWidget", "Commenters' audio output"), "select", options="remoteAudioOptions", visible_when="solinHosting",
                     description=QT_TRANSLATE_NOOP("SettingsWidget", "The output connected to the mixer channel for remote audio (as with Zoom).")),
             Setting("webPort", QT_TRANSLATE_NOOP("SettingsWidget", "Local port"), "input", visible_when="solinHosting"),
-            Setting("server", QT_TRANSLATE_NOOP("SettingsWidget", "Meeting server"), "input", visible_when="solinHosting",
-                    description=QT_TRANSLATE_NOOP("SettingsWidget", "Gives meetings their public link, so attendees can join from the internet. Leave it empty to reach meetings on this network only.")),
             Setting("helpersStatus", QT_TRANSLATE_NOOP("SettingsWidget", "Refresh devices"), "action", action="refreshDevices", visible_when="solinHosting"),
         ), True, "serverStatus"),
     )),

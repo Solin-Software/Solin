@@ -123,7 +123,6 @@ EXPECTED_SETTINGS_KEYS = {
     "HOSTED_MEETING_HALL_FEED": "hosted_meeting/hall_feed",
     "HOSTED_MEETING_REMOTE_AUDIO_DEVICE": "hosted_meeting/remote_audio_device",
     "HOSTED_MEETING_WEB_PORT": "hosted_meeting/web_port",
-    "HOSTED_MEETING_HUB": "hosted_meeting/hub",
     "HOSTED_MEETING_HALL_FEED_DELAY": "hosted_meeting/hall_feed_delay_ms",
     "AUTO_KEYS_ENABLED": "auto_keys/enabled",
     "AUTO_KEYS_ACTIONS": "auto_keys/actions",

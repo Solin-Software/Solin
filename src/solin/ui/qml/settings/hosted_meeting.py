@@ -1,4 +1,4 @@
-"""Hosted-meeting settings for Qt Quick: provider, hall, quality, audio and meeting server."""
+"""Hosted-meeting settings for Qt Quick: provider, hall, quality and audio."""
 
 from __future__ import annotations
 
@@ -95,7 +95,6 @@ class HostedMeetingSettings(SettingsDomain):
             remoteAudioDevice=device["id"],
             remoteAudioOptions=self._device_options(device),
             webPort=str(store.web_port()),
-            server=server,
             serverStatus=(_tr("Meeting links: https://{server}/…").format(server=server) if server
                           else _tr("No server: meetings are reachable on this network only")),
             helpersStatus=(_tr("Missing components: {names}").format(names=", ".join(missing)) if missing
@@ -168,13 +167,6 @@ class HostedMeetingSettings(SettingsDomain):
                 self.fail(_tr("Choose a port between 1024 and 65535"))
                 return
             store.set_web_port(port)
-            self.publish(feedback="", feedbackKind="")
-        elif key == "server":
-            try:
-                store.set_server(str(value))
-            except ValueError:
-                self.fail(_tr("Type a server address, like meet.solin.run"))
-                return
             self.publish(feedback="", feedbackKind="")
         else:
             raise ValueError(f"Unknown settings field: {key}")

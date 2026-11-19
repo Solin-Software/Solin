@@ -12,7 +12,7 @@ from PySide6.QtCore import QCoreApplication
 
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.hosted_meeting.service import HostedMeetingService
-from solin.core.hosted_meeting.settings import HostedMeetingSettingsStore
+from solin.core.hosted_meeting.settings import SERVER_OVERRIDE, HostedMeetingSettingsStore
 
 
 class FakeEngine:
@@ -32,11 +32,11 @@ class FakeEngine:
 
 
 @pytest.fixture
-def service(tmp_path):
+def service(tmp_path, monkeypatch):
     settings = SettingsStore.for_namespace("SolinTests", f"hosted-meeting-video-{secrets.token_hex(4)}")
     engine = FakeEngine()
     store = HostedMeetingSettingsStore(settings)
-    store.set_server("")
+    monkeypatch.setenv(SERVER_OVERRIDE, "")
     service = HostedMeetingService(store, tmp_path,
                                    scene_runtime=SimpleNamespace(scene_engine=engine))
     service.engine = engine  # type: ignore[attr-defined]
