@@ -232,6 +232,10 @@ class MeetingConsoleBridge(QObject):
     def start(self) -> None:
         self._service.start_meeting()
 
+    @Slot(str)
+    def startUpcoming(self, meeting_id: str) -> None:  # noqa: N802 - QML API
+        self._service.start_meeting(meeting_id)
+
     @Slot()
     def end(self) -> None:
         self._service.end_meeting()

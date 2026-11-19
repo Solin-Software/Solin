@@ -446,6 +446,13 @@ Rectangle {
                             Menu {
                                 id: rowMenu
                                 MenuItem {
+                                    // Ahead of its time, with this meeting's own link and password.
+                                    text: qsTr("Open this meeting now")
+                                    visible: !root.live && !root.busy && !modelData.cancelled && !modelData.running
+                                    height: visible ? implicitHeight : 0
+                                    onTriggered: meeting.startUpcoming(modelData.id)
+                                }
+                                MenuItem {
                                     text: qsTr("Change password…"); visible: root.perMeeting; height: visible ? implicitHeight : 0
                                     onTriggered: { passwordDialog.meetingId = modelData.id; passwordField.text = modelData.password; passwordDialog.open() }
                                 }

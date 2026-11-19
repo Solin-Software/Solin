@@ -602,12 +602,16 @@ class HostedMeetingService(QObject):
 
     # ── lifecycle ─────────────────────────────────────────────────────────
 
-    def _choose_meeting(self) -> tuple[ScheduledMeeting | None, str, str]:
-        """The scheduled meeting open now (if any) and the code and password to use."""
+    def _choose_meeting(self, meeting_id: str = "") -> tuple[ScheduledMeeting | None, str, str]:
+        """The meeting to open and the code and password to use.
+
+        ``meeting_id``: that upcoming meeting, opened early; otherwise the scheduled meeting
+        open now (if any).
+        """
 
         now = self._clock()
         state = self._prepared_links()
-        meeting = state.in_window(now)
+        meeting = state.find(meeting_id) if meeting_id else state.in_window(now)
         if self._settings.link_mode() is LinkMode.SAME:
             assert state.permanent is not None
             return meeting, state.permanent.code, state.permanent.password
@@ -620,11 +624,17 @@ class HostedMeetingService(QObject):
         assert created is not None
         return created, created.code, created.password
 
-    def start_meeting(self, *, auto: bool = False) -> bool:
+    def start_meeting(self, meeting_id: str = "", *, auto: bool = False) -> bool:
+        """Open the meeting due now, or ``meeting_id`` (an upcoming one) ahead of its time."""
+
         with self._lock:
             if self._active():
                 return False
-        meeting, code, password = self._choose_meeting()
+        if meeting_id:
+            chosen = self._prepared_links().find(meeting_id)
+            if chosen is None or chosen.cancelled:
+                return False
+        meeting, code, password = self._choose_meeting(meeting_id)
         self._meeting, self._code, self._password = meeting, code, password
         if meeting is not None:
             self._handled.add(meeting.id)

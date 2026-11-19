@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import secrets
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -271,3 +272,20 @@ def test_unscheduled_meeting_in_per_meeting_mode_gets_its_own_link(store, tmp_pa
     meeting, code, password = service._choose_meeting()
     assert meeting.kind == "unscheduled" and code and password
     assert code not in {m["code"] for m in service.info["upcoming"] if m["kind"] != "unscheduled"}
+
+
+def test_an_upcoming_meeting_can_be_opened_early_with_its_own_link(store, tmp_path, clock, monkeypatch):
+    store.set_link_mode(LinkMode.PER_MEETING)
+    service = HostedMeetingService(store, tmp_path, clock=clock)
+    upcoming = [m for m in service.info["upcoming"] if not m["cancelled"]]
+    later = upcoming[1]                                      # not today's: days ahead
+    meeting, code, password = service._choose_meeting(later["id"])
+    assert (meeting.id, code, password) == (later["id"], later["code"], later["password"])
+    assert len(service.info["upcoming"]) == len(upcoming)    # no unscheduled meeting added
+    # Unknown or cancelled meetings are not opened.
+    workers: list[str] = []
+    monkeypatch.setattr(threading, "Thread", lambda *a, **k: workers.append(k.get("name")))
+    assert service.start_meeting("extra:nope") is False
+    assert service.set_meeting_cancelled(later["id"], True)
+    assert service.start_meeting(later["id"]) is False
+    assert workers == []
