@@ -8,5 +8,10 @@
     "file": "010-wasapi-preroll.patch",
     "purpose": "Prime Windows audio monitoring before starting the endpoint and rearm idle playback",
     "upstream": "candidate"
+  },
+  {
+    "file": "020-boolean-list-item.patch",
+    "purpose": "Read boolean list items from the boolean union member",
+    "upstream": "https://github.com/obsproject/obs-studio/commit/1a44b7f40140ec202da2658ba74068da8adb5a7e"
   }
 ]
