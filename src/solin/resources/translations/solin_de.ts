@@ -5409,6 +5409,14 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <source>Solin scenes · engine unavailable</source>
         <translation>Solin-Szenen · Engine nicht verfügbar</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>Fernsteuerung · %n Vollbildanzeige</numerusform>
+            <numerusform>Fernsteuerung · %n Vollbildanzeigen</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5505,6 +5513,26 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>Sichere Fernsteuerung ist aktiv. Die Zertifikatserneuerung wird automatisch erneut versucht.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>Medien-Zugangsdaten speichern, um die Medien-Fernsteuerung zu starten.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>Timer-Zugangsdaten speichern, um die Timer-Fernsteuerung zu starten.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Medien- oder Timer-Fernsteuerung aktivieren, um Verbindungen anzunehmen.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>Die Timer-Fernsteuerung läuft. Medienkatalog wird vorbereitet…</translation>
     </message>
 </context>
 <context>
@@ -5614,8 +5642,8 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remote einrichten</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Media einrichten</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5701,6 +5729,11 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <source>Choose another location and try again.</source>
         <translation>Einen anderen Speicherort wählen und erneut versuchen.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timer einrichten</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5773,6 +5806,57 @@ Die aktuelle Anordnung und die Dateien bleiben erhalten. Ausstehende Änderungen
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>Verbindung wird getrennt…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>Medien und Timer im lokalen Netzwerk aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>Medien im lokalen Netzwerk aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>Timer im lokalen Netzwerk aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>Keine angemeldeten Timer-Steuerungen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>Keine angemeldeten Medien-Geräte</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>Medien</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>%n Vollbildanzeige</numerusform>
+            <numerusform>%n Vollbildanzeigen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>%n angemeldetes Gerät</numerusform>
+            <numerusform>%n angemeldete Geräte</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7827,7 +7911,7 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">Medien</translation>
+        <translation>Medien</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -8796,6 +8880,56 @@ Inhalt, eine Kamera oder eine andere Szene hinzufügen.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Download-Seite öffnen</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>Zertifikat installieren, um Fernsteuerungen ohne Browserwarnungen als Apps hinzuzufügen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>Zusammenkünfte und Playlists durchsuchen und die Medienprojektion fernsteuern.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>Den Zusammenkunfts-Timer ohne Anmeldung im Vollbild anzeigen oder anmelden, um Programmpunkte zu steuern.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>Vor dem Aktivieren der Fernsteuerung ein privates Netzwerk auswählen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>Zuerst die Fernsteuerung aktivieren.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>Vor dem Aktivieren der Medien-Fernsteuerung Zugangsdaten speichern.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>Vor dem Aktivieren der Timer-Fernsteuerung Zugangsdaten speichern.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Medien- oder Timer-Fernsteuerung aktivieren, um Verbindungen anzunehmen.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>Optional (nur Vollbildanzeige)</translation>
     </message>
 </context>
 <context>
@@ -11159,13 +11293,13 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solin Remote</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>Fernsteuerung</translation>
+        <source>Media control</source>
+        <translation>Mediensteuerung</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11174,8 +11308,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>Solin installieren</translation>
+        <source>Install Solin Media</source>
+        <translation>Solin Media installieren</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11204,8 +11338,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>Aktivieren Sie JavaScript, um die Solin-Fernsteuerung zu nutzen.</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>JavaScript aktivieren, um Solin Media zu verwenden.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11214,8 +11348,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>FERNSTEUERUNG</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>MEDIENSTEUERUNG</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11274,8 +11408,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remote einrichten</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Media einrichten</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11284,8 +11418,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>Vertrauen Sie diesem Solin einmalig und installieren Sie dann die Web-App für einen schnellen, sicheren Zugriff in Ihrem lokalen Netzwerk.</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>Diesem Solin einmal vertrauen und anschließend Solin Media für schnellen, sicheren Zugriff im lokalen Netzwerk installieren.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11389,13 +11523,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>Solin Remote installieren</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>Installieren Sie Solin Remote auf diesem Gerät für einen schnellen Zugriff über Ihren Startbildschirm.</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>Solin Media auf diesem Gerät für schnellen Zugriff vom Startbildschirm installieren.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11439,8 +11568,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>Angemeldet. Fernsteuerung verbunden.</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>Angemeldet. Mediensteuerung verbunden.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11919,8 +12048,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>Solin wurde auf diesem Gerät installiert.</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>Solin Media wurde auf diesem Gerät installiert.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11992,6 +12121,311 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <source>Solin could not complete the request.</source>
         <translation>Solin konnte die Anfrage nicht ausführen.</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>Zusammenkunfts-Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>Solin Timer installieren</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>JavaScript aktivieren, um Solin Timer zu verwenden.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>Tippen, um Steuerelemente aus- oder einzublenden</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>Programmpunkte steuern</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>Vollbild aktivieren</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>Vollbild beenden</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>Vergrößern</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>Timer vergrößern</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>Uhr</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>TIMER-STEUERUNG</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>Anmelden, um Programmpunkte über dieses Gerät zu starten, zu stoppen und anzupassen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>Zurück zum Vollbild-Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>Angemeldet. Timer-Steuerung verbunden.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timer einrichten</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>Zurück zum Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>Diesem Solin einmal vertrauen und anschließend Solin Timer für Vollbildanzeige und schnelle Steuerung im lokalen Netzwerk installieren.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>Solin Timer auf diesem Gerät für direkten Vollbildzugriff vom Startbildschirm installieren.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Solin Timer öffnen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Dieses Gerät wurde in Solin getrennt. Zurück zur Vollbildanzeige.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Alle entfernten Geräte wurden in Solin getrennt. Zurück zur Vollbildanzeige.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>Live-Aktualisierungen und Steuerung werden automatisch fortgesetzt.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>AKTUELLE ZEIT</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>AKTUELL</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>BEENDET</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>Kein Programmpunkt aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>Über der Zeit</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>Nach oben</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>1 Sekunde abziehen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>1 Sekunde hinzufügen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>Unter der Woche</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>Wochenende</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>Vorherige Woche</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>Zurück zu dieser Woche</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>Nicht die aktuelle Woche</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>Keine Programmpunkte in diesem Plan</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>Programmpunkte</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>Weniger Programmpunkte in {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>Mehr Programmpunkte in {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>Starten</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>Zurücksetzen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>Gestartet {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>Dauer {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1 Min.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1 Min.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>1 Minute von {title} abziehen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>1 Minute zu {title} hinzufügen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>Dauer für {title} festlegen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>Dauer (MM:SS oder Minuten)</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>Übernehmen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>Abbrechen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>Eine gültige Dauer zwischen 01:00 und 23:59:59 eingeben.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>Solin Timer wurde auf diesem Gerät installiert.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>Auf diesem Gerät abgemeldet.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>Zeitplan aktualisiert. Erneut versuchen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>Diese Timer-Aktion ist deaktiviert.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>Dieser Programmpunkt ist nicht mehr verfügbar.</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12049,8 +12483,8 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solin-App · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12076,6 +12510,21 @@ Zum Projizieren die Wiedergabetaste verwenden · Zum Umsortieren den Griff ⠿ z
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>Vor %1 T. aktiv</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>Medien</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

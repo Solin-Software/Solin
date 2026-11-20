@@ -98,7 +98,10 @@ def _build_main_window_profile_settings(profile_settings):
         notification=NotificationSettingsStore.for_profile_settings(profile_settings),
         talk_theme=TalkThemeSettingsStore.for_profile_settings(profile_settings),
         remote_control=RemoteControlSettingsStore.create(profile_settings.app_settings()),
-        remote_control_credentials=RemoteControlCredentialsStore.create(
+        remote_media_credentials=RemoteControlCredentialsStore.for_media(
+            profile_settings.app_settings()
+        ),
+        remote_timer_credentials=RemoteControlCredentialsStore.for_timer(
             profile_settings.app_settings()
         ),
     )

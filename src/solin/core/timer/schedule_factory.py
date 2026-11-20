@@ -69,6 +69,7 @@ _CONCLUDING_COMMENTS_DEFAULT = 3 * 60
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
+
 def _even_split(total: int, count: int) -> list[int]:
     """Split ``total`` seconds into ``count`` parts as evenly as possible.
 
@@ -91,8 +92,7 @@ def _ministry_parts(count: int) -> list[MeetingPart]:
 def _living_parts(count: int) -> list[MeetingPart]:
     durations = _even_split(FIXED_TOTAL_SECONDS[Section.LIVING], count)
     return [
-        MeetingPart.new(Section.LIVING, _indexed_part_title(i), d)
-        for i, d in enumerate(durations)
+        MeetingPart.new(Section.LIVING, _indexed_part_title(i), d) for i, d in enumerate(durations)
     ]
 
 
@@ -154,11 +154,9 @@ def build_default_schedule(week_monday: date, meeting_type: MeetingType) -> Meet
 
 # ── Redistribution (fixed-total sections) ─────────────────────────────────────
 
+
 def _is_cbs_part(part: MeetingPart) -> bool:
-    return (
-        part.section is Section.LIVING
-        and (part.kind is PartKind.CBS or part.title == CBS_TITLE)
-    )
+    return part.section is Section.LIVING and (part.kind is PartKind.CBS or part.title == CBS_TITLE)
 
 
 def configurable_parts_in(schedule: MeetingSchedule, section: Section) -> list[MeetingPart]:
@@ -174,6 +172,16 @@ def configurable_count_for(schedule: MeetingSchedule, section: Section) -> int:
 
 def configurable_total_seconds(schedule: MeetingSchedule, section: Section) -> int:
     return sum(p.planned_seconds for p in configurable_parts_in(schedule, section))
+
+
+def is_part_duration_editable(schedule: MeetingSchedule, part: MeetingPart) -> bool:
+    """True when ``part`` is idle and its planned duration can actually change."""
+    if part.state is not PartState.IDLE:
+        return False
+    if part.section not in FIXED_TOTAL_SECONDS:
+        return True
+    section_parts = configurable_parts_in(schedule, part.section)
+    return not (part in section_parts and len(section_parts) == 1)
 
 
 def normalize_schedule(schedule: MeetingSchedule) -> bool:
@@ -231,10 +239,7 @@ def _ensure_cbs_part(schedule: MeetingSchedule) -> bool:
     if any(_is_cbs_part(part) for part in schedule.parts):
         return False
     insert_at = _default_insert_index(schedule, Section.LIVING)
-    living_indices = [
-        i for i, p in enumerate(schedule.parts)
-        if p.section is Section.LIVING
-    ]
+    living_indices = [i for i, p in enumerate(schedule.parts) if p.section is Section.LIVING]
     if living_indices:
         insert_at = living_indices[-1] + 1
     schedule.parts.insert(insert_at, _cbs_part())
@@ -245,18 +250,16 @@ def _ensure_concluding_comments_part(schedule: MeetingSchedule) -> bool:
     if any(part.section is Section.CONCLUDING_COMMENTS for part in schedule.parts):
         return False
     insert_at = _default_insert_index(schedule, Section.CONCLUDING_COMMENTS)
-    living_indices = [
-        i for i, p in enumerate(schedule.parts)
-        if p.section is Section.LIVING
-    ]
+    living_indices = [i for i, p in enumerate(schedule.parts) if p.section is Section.LIVING]
     if living_indices:
         insert_at = living_indices[-1] + 1
     schedule.parts.insert(insert_at, _concluding_comments_part())
     return True
 
 
-def _apply_delta_chain(parts: list[MeetingPart], start_index: int, order: list[int],
-                       delta: int) -> None:
+def _apply_delta_chain(
+    parts: list[MeetingPart], start_index: int, order: list[int], delta: int
+) -> None:
     """Absorb ``delta`` seconds across ``order`` (a list of indices into ``parts``),
     clamping each part to ``_MIN_PART_SECONDS`` and carrying the overflow on.
 
@@ -286,8 +289,7 @@ def _apply_delta_chain(parts: list[MeetingPart], start_index: int, order: list[i
         )
 
 
-def redistribute_section(schedule: MeetingSchedule, part_id: str,
-                         new_planned_seconds: int) -> None:
+def redistribute_section(schedule: MeetingSchedule, part_id: str, new_planned_seconds: int) -> None:
     """Set ``part_id`` to ``new_planned_seconds`` and rebalance its section.
 
     For fixed-total sections the change is absorbed by the following part(s)
@@ -349,6 +351,7 @@ def adjust_part(schedule: MeetingSchedule, part_id: str, delta_seconds: int) -> 
 
 # ── Part-count configuration ──────────────────────────────────────────────────
 
+
 def set_section_part_count(schedule: MeetingSchedule, section: Section, count: int) -> None:
     """Resize a section to ``count`` parts in place.
 
@@ -367,11 +370,10 @@ def set_section_part_count(schedule: MeetingSchedule, section: Section, count: i
     if indices:
         insert_at = indices[0]
     else:
-        section_indices = [
-            i for i, p in enumerate(schedule.parts)
-            if p.section is section
-        ]
-        insert_at = section_indices[0] if section_indices else _default_insert_index(schedule, section)
+        section_indices = [i for i, p in enumerate(schedule.parts) if p.section is section]
+        insert_at = (
+            section_indices[0] if section_indices else _default_insert_index(schedule, section)
+        )
 
     # Build the new part list for the section.
     if section in FIXED_TOTAL_SECONDS:
@@ -383,8 +385,7 @@ def set_section_part_count(schedule: MeetingSchedule, section: Section, count: i
                 p.planned_seconds = durations[i]
                 new_parts.append(p)
             else:
-                new_parts.append(MeetingPart.new(
-                    section, _default_title(section, i), durations[i]))
+                new_parts.append(MeetingPart.new(section, _default_title(section, i), durations[i]))
     else:
         builder = {
             Section.TREASURES: _treasures_parts,
@@ -406,8 +407,7 @@ def set_section_part_count(schedule: MeetingSchedule, section: Section, count: i
 
 def _named_parts(section: Section, count: int, default_secs: int) -> list[MeetingPart]:
     return [
-        MeetingPart.new(section, _default_title(section, i), default_secs)
-        for i in range(count)
+        MeetingPart.new(section, _default_title(section, i), default_secs) for i in range(count)
     ]
 
 
@@ -449,7 +449,8 @@ def _default_insert_index(schedule: MeetingSchedule, section: Section) -> int:
         Section.MINISTRY,
         Section.LIVING,
         Section.CONCLUDING_COMMENTS,
-        Section.PUBLIC_TALK, Section.WATCHTOWER,
+        Section.PUBLIC_TALK,
+        Section.WATCHTOWER,
     ]
     target_rank = order.index(section)
     for i, p in enumerate(schedule.parts):

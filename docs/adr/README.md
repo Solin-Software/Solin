@@ -8,3 +8,4 @@ new ADR that explicitly supersedes the earlier decision instead of rewriting its
 | --- | --- | --- |
 | [0001](0001-use-a-supervised-native-sidecar-for-scenes.md) | Use a supervised native sidecar for Scenes | Superseded by [ADR-0002](0002-use-supervised-libobs-for-media-and-scenes.md) |
 | [0002](0002-use-supervised-libobs-for-media-and-scenes.md) | Use supervised libobs for media and Scenes | Accepted |
+| [0003](0003-host-isolated-remote-web-apps-on-one-local-tls-listener.md) | Host isolated remote web apps on one local TLS listener | Accepted |

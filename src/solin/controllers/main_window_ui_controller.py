@@ -108,7 +108,8 @@ class MainWindowUiContext:
     meeting_schedule_settings: Any
     watched_folder_settings: Any
     remote_control_settings: Any
-    remote_control_credentials: Any
+    remote_media_credentials: Any
+    remote_timer_credentials: Any
     yeartext_settings: Any
     yeartext_service_factory: Callable[[QObject], Any]
     congregation_lookup_factory: Callable[[QObject], Any]
@@ -460,7 +461,8 @@ class MainWindowUiController:
             meeting_schedule_settings=context.meeting_schedule_settings,
             watched_folder_settings=context.watched_folder_settings,
             remote_control_settings=context.remote_control_settings,
-            remote_control_credentials=context.remote_control_credentials,
+            remote_media_credentials=context.remote_media_credentials,
+            remote_timer_credentials=context.remote_timer_credentials,
             qr_generation_session_factory=context.qr_generation_session_factory,
             yeartext_settings=context.yeartext_settings,
             yeartext_service_factory=context.yeartext_service_factory,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from solin.core.remote_control.security import RemoteSessionInfo
+from solin.core.remote_control.security import RemoteScope, RemoteSessionInfo
 from solin.styles.icons import ICON_REMOTE_CONTROL, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
 
@@ -35,11 +35,19 @@ class _RemoteSessionRow(QFrame):
         root.setSpacing(8)
 
         summary = QHBoxLayout()
-        summary.setSpacing(10)
+        summary.setSpacing(8)
         device = QLabel(self._session_label())
         device.setObjectName("RemoteSessionDevice")
         device.setMinimumWidth(0)
         summary.addWidget(device, 1)
+
+        scope_badge = QLabel(self._scope_label())
+        scope_badge.setObjectName(
+            "RemoteSessionScopeTimer"
+            if session.scope is RemoteScope.TIMER
+            else "RemoteSessionScopeMedia"
+        )
+        summary.addWidget(scope_badge)
 
         state = QLabel(
             self.tr("Connected now") if session.connected_socket_count > 0 else self.tr("Signed in")
@@ -95,6 +103,11 @@ class _RemoteSessionRow(QFrame):
         root.addWidget(self._feedback)
         self.refresh_activity()
 
+    def _scope_label(self) -> str:
+        if self.session.scope is RemoteScope.TIMER:
+            return self.tr("Timer")
+        return self.tr("Media")
+
     def refresh_activity(self) -> None:
         self._activity.setText("·  " + self._relative_activity())
 
@@ -132,7 +145,7 @@ class _RemoteSessionRow(QFrame):
     def _confirm_disconnect(self) -> None:
         self._disconnect.show()
         self.set_pending(True)
-        self.disconnect_requested.emit(self.session.management_id)
+        self.disconnect_requested.emit(self.session.global_management_id)
 
     def _notify_geometry_changed(self) -> None:
         self.updateGeometry()
@@ -146,7 +159,9 @@ class _RemoteSessionRow(QFrame):
         else:
             label = browser or platform or self.tr("Remote device")
         if self.session.client_mode == "standalone":
-            return self.tr("Solin app · %1").replace("%1", label)
+            if self.session.scope is RemoteScope.TIMER:
+                return self.tr("Solin Timer · %1").replace("%1", label)
+            return self.tr("Solin Media · %1").replace("%1", label)
         return label
 
     def _relative_activity(self) -> str:
@@ -172,8 +187,8 @@ class RemoteSessionsPopup(QWidget):
     disconnect_requested = Signal(str)
     disconnect_all_requested = Signal()
 
-    _WIDTH = 392
-    _MAX_LIST_HEIGHT = 348
+    _WIDTH = 404
+    _MAX_LIST_HEIGHT = 368
     _SCREEN_MARGIN = 8
     _ANCHOR_GAP = 10
 
@@ -185,9 +200,13 @@ class RemoteSessionsPopup(QWidget):
 
         self._enabled = False
         self._running = False
+        self._media_active = False
+        self._timer_active = False
+        self._timer_public_viewers = 0
         self._runtime_message = ""
         self._sessions: tuple[RemoteSessionInfo, ...] = ()
         self._rows: dict[str, _RemoteSessionRow] = {}
+        self._section_widgets: list[QWidget] = []
         self._pending_ids: set[str] = set()
         self._failed_ids: set[str] = set()
         self._disconnect_all_pending = False
@@ -314,10 +333,24 @@ class RemoteSessionsPopup(QWidget):
         root.addWidget(self._card)
         self._render()
 
-    def set_runtime_state(self, enabled: bool, running: bool, message: str) -> None:
+    def set_runtime_state(
+        self,
+        enabled: bool,
+        running: bool,
+        message: str,
+        *,
+        media_active: bool = False,
+        timer_active: bool = False,
+    ) -> None:
         self._enabled = bool(enabled)
         self._running = bool(running)
+        self._media_active = bool(media_active)
+        self._timer_active = bool(timer_active)
         self._runtime_message = str(message or "")
+        self._render()
+
+    def set_public_viewers(self, timer_viewers: int = 0) -> None:
+        self._timer_public_viewers = max(0, int(timer_viewers))
         self._render()
 
     def set_sessions(self, sessions: object) -> None:
@@ -327,7 +360,7 @@ class RemoteSessionsPopup(QWidget):
             else ()
         )
         self._sessions = values
-        active_ids = {session.management_id for session in values}
+        active_ids = {session.global_management_id for session in values}
         self._pending_ids.intersection_update(active_ids)
         self._failed_ids.intersection_update(active_ids)
         if not values:
@@ -336,14 +369,15 @@ class RemoteSessionsPopup(QWidget):
 
     def set_revocation_result(self, management_id: str, succeeded: bool) -> None:
         if management_id:
-            self._pending_ids.discard(management_id)
-            self._failed_ids.discard(management_id)
-            row = self._rows.get(management_id)
+            target_id = self._resolve_row_id(management_id)
+            self._pending_ids.discard(target_id)
+            self._failed_ids.discard(target_id)
+            row = self._rows.get(target_id)
             if row is not None:
                 if succeeded:
                     row.set_pending(True)
                 else:
-                    self._failed_ids.add(management_id)
+                    self._failed_ids.add(target_id)
                     row.show_error()
             return
         self._disconnect_all_pending = False
@@ -354,6 +388,14 @@ class RemoteSessionsPopup(QWidget):
             self._global_feedback.hide()
         self._render_footer()
         self._sync_geometry()
+
+    def _resolve_row_id(self, identifier: str) -> str:
+        if identifier in self._rows:
+            return identifier
+        for key, row in self._rows.items():
+            if row.session.management_id == identifier:
+                return key
+        return identifier
 
     def show_above(self, anchor: QWidget) -> None:
         anchor_top_left = anchor.mapToGlobal(anchor.rect().topLeft())
@@ -456,11 +498,27 @@ class RemoteSessionsPopup(QWidget):
                 border: 1px solid {PALETTE.warning_border}; border-radius: 8px;
                 padding: 8px 9px; font-size: 10px;
             }}
+            QLabel#RemoteScopeHeaderTitle {{
+                color: {PALETTE.text_secondary}; font-size: 10px; font-weight: 750;
+                letter-spacing: 0.6px;
+            }}
+            QLabel#RemoteScopeHeaderMeta {{
+                color: {PALETTE.text_muted}; font-size: 10px;
+            }}
+            QLabel#RemoteScopeEmpty {{
+                color: {PALETTE.text_dim}; font-size: 10px; padding: 6px 10px 8px 10px;
+                background: {PALETTE.surface_card}; border: 1px solid {PALETTE.border_muted};
+                border-radius: 9px;
+            }}
             QFrame#RemoteSessionRow {{
                 background: {PALETTE.surface_card}; border: 1px solid {PALETTE.border_muted};
                 border-radius: 10px;
             }}
             QLabel#RemoteSessionDevice {{ color: {PALETTE.text_primary}; font-size: 12px; font-weight: 650; }}
+            QLabel#RemoteSessionScopeMedia, QLabel#RemoteSessionScopeTimer {{
+                color: {PALETTE.accent_text_hover}; background: {PALETTE.accent_muted};
+                border-radius: 6px; padding: 2px 6px; font-size: 9px; font-weight: 700;
+            }}
             QLabel#RemoteSessionConnected {{ color: {PALETTE.success}; font-size: 10px; font-weight: 700; }}
             QLabel#RemoteSessionSignedIn {{ color: {PALETTE.text_muted}; font-size: 10px; font-weight: 650; }}
             QLabel#RemoteSessionMetadata {{ color: {PALETTE.text_dim}; font-size: 10px; }}
@@ -494,28 +552,51 @@ class RemoteSessionsPopup(QWidget):
             """
         )
 
+    def _summary_text(self) -> str:
+        if not self._enabled:
+            return self.tr("Disabled")
+        if not self._running:
+            return self.tr("Unavailable")
+        if self._media_active and self._timer_active:
+            return self.tr("Media and Timer active on local network")
+        if self._media_active:
+            return self.tr("Media active on local network")
+        if self._timer_active:
+            return self.tr("Timer active on local network")
+        return self.tr("Active on the local network")
+
+    def _visible_scopes(self) -> tuple[RemoteScope, ...]:
+        media_sessions = any(s.scope is RemoteScope.MEDIA for s in self._sessions)
+        timer_sessions = any(s.scope is RemoteScope.TIMER for s in self._sessions)
+        scopes: list[RemoteScope] = []
+        if self._media_active or media_sessions:
+            scopes.append(RemoteScope.MEDIA)
+        if self._timer_active or timer_sessions or self._timer_public_viewers > 0:
+            scopes.append(RemoteScope.TIMER)
+        return tuple(scopes)
+
     def _render(self) -> None:
         self._count.setText(str(len(self._sessions)))
-        if not self._enabled:
-            self._summary.setText(self.tr("Disabled"))
-        elif self._running:
-            self._summary.setText(self.tr("Active on the local network"))
-        else:
-            self._summary.setText(self.tr("Unavailable"))
+        self._summary.setText(self._summary_text())
 
         self._runtime.setVisible(self._enabled and not self._running)
         self._runtime.setText(self._runtime_message or self.tr("Remote control is not running."))
         self._rebuild_rows()
 
         has_sessions = bool(self._sessions)
-        self._scroll.setVisible(has_sessions)
-        self._empty.setVisible(not has_sessions)
-        if not has_sessions:
+        has_content = has_sessions or self._timer_public_viewers > 0 or len(self._visible_scopes()) > 1
+        show_list = bool(self._section_widgets or self._rows) and (
+            has_sessions or self._timer_public_viewers > 0
+        )
+        self._scroll.setVisible(show_list)
+        self._empty.setVisible(not show_list)
+        if not show_list:
             self._empty.setText(
                 self.tr("No signed-in devices. Solin is ready for a device to connect.")
                 if self._running
                 else self.tr("No signed-in devices.")
             )
+        del has_content
         self._footer.setVisible(has_sessions)
         self._render_footer()
         self._sync_geometry()
@@ -523,26 +604,90 @@ class RemoteSessionsPopup(QWidget):
     def _rebuild_rows(self) -> None:
         while self._list_layout.count():
             item = self._list_layout.takeAt(0)
-            if widget := item.widget():
+            if item is not None and (widget := item.widget()):
                 widget.deleteLater()
         self._rows.clear()
-        for session in self._sessions:
-            row = _RemoteSessionRow(session, self._list)
-            row.disconnect_requested.connect(self._request_disconnect)
-            row.geometry_changed.connect(self._reflow_rows)
-            row.set_pending(session.management_id in self._pending_ids)
-            if session.management_id in self._failed_ids:
-                row.show_error()
-            self._rows[session.management_id] = row
-            self._list_layout.addWidget(row)
+        self._section_widgets.clear()
+
+        scopes = self._visible_scopes()
+        if not scopes and self._sessions:
+            scopes = tuple(dict.fromkeys(session.scope for session in self._sessions))
+
+        has_any_list_content = bool(self._sessions) or self._timer_public_viewers > 0
+        if has_any_list_content:
+            for scope in scopes:
+                scope_sessions = [s for s in self._sessions if s.scope is scope]
+                header = self._build_scope_header(scope, len(scope_sessions))
+                self._section_widgets.append(header)
+                self._list_layout.addWidget(header)
+
+                if scope_sessions:
+                    for session in scope_sessions:
+                        row = _RemoteSessionRow(session, self._list)
+                        row.disconnect_requested.connect(self._request_disconnect)
+                        row.geometry_changed.connect(self._reflow_rows)
+                        row_id = session.global_management_id
+                        row.set_pending(row_id in self._pending_ids)
+                        if row_id in self._failed_ids:
+                            row.show_error()
+                        self._rows[row_id] = row
+                        self._list_layout.addWidget(row)
+                else:
+                    empty = QLabel(
+                        self.tr("No signed-in Timer controllers")
+                        if scope is RemoteScope.TIMER
+                        else self.tr("No signed-in Media devices")
+                    )
+                    empty.setObjectName("RemoteScopeEmpty")
+                    empty.setWordWrap(True)
+                    self._section_widgets.append(empty)
+                    self._list_layout.addWidget(empty)
+
         self._list_layout.addStretch()
         self._reflow_rows()
 
+    def _build_scope_header(self, scope: RemoteScope, session_count: int) -> QWidget:
+        container = QWidget(self._list)
+        container.setObjectName(f"RemoteScopeHeader_{scope.value}")
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(2, 4, 2, 2)
+        layout.setSpacing(8)
+        title = QLabel(
+            self.tr("Timer") if scope is RemoteScope.TIMER else self.tr("Media")
+        )
+        title.setObjectName("RemoteScopeHeaderTitle")
+        layout.addWidget(title)
+        layout.addStretch()
+
+        meta_parts: list[str] = []
+        if scope is RemoteScope.TIMER and self._timer_public_viewers > 0:
+            meta_parts.append(
+                self.tr(
+                    "%n fullscreen viewer(s)",
+                    "",
+                    self._timer_public_viewers,
+                )
+            )
+        meta_parts.append(
+            self.tr("%n signed-in device(s)", "", session_count)
+        )
+        meta = QLabel(" · ".join(meta_parts))
+        meta.setObjectName("RemoteScopeHeaderMeta")
+        layout.addWidget(meta)
+        return container
+
     def _reflow_rows(self) -> None:
         self._list_layout.activate()
+        section_heights = sum(
+            max(22, widget.sizeHint().height()) for widget in self._section_widgets
+        )
         row_heights = sum(max(88, row.sizeHint().height()) for row in self._rows.values())
-        row_spacing = max(0, len(self._rows) - 1) * self._list_layout.spacing()
-        rows_height = min(self._MAX_LIST_HEIGHT, row_heights + row_spacing)
+        item_count = len(self._section_widgets) + len(self._rows)
+        row_spacing = max(0, item_count - 1) * self._list_layout.spacing()
+        rows_height = min(
+            self._MAX_LIST_HEIGHT,
+            section_heights + row_heights + row_spacing,
+        )
         self._scroll.setFixedHeight(rows_height)
         self._sync_geometry()
 
@@ -556,14 +701,15 @@ class RemoteSessionsPopup(QWidget):
             self._disconnect_all.setText(self.tr("Disconnect all devices"))
 
     def _request_disconnect(self, management_id: str) -> None:
-        if management_id in self._pending_ids:
+        target_id = self._resolve_row_id(management_id)
+        if target_id in self._pending_ids:
             return
-        self._pending_ids.add(management_id)
-        self._failed_ids.discard(management_id)
-        row = self._rows.get(management_id)
+        self._pending_ids.add(target_id)
+        self._failed_ids.discard(target_id)
+        row = self._rows.get(target_id)
         if row is not None:
             row.set_pending(True)
-        self.disconnect_requested.emit(management_id)
+        self.disconnect_requested.emit(target_id)
 
     def _show_disconnect_all_confirmation(self) -> None:
         self._disconnect_all.hide()
@@ -588,12 +734,12 @@ class RemoteSessionsPopup(QWidget):
         for row in self._rows.values():
             row.refresh_activity()
 
-    def showEvent(self, event: QEvent) -> None:
+    def showEvent(self, event: QShowEvent) -> None:
         self._activity_timer.start()
         self._refresh_activity_labels()
         super().showEvent(event)
 
-    def hideEvent(self, event: QEvent) -> None:
+    def hideEvent(self, event: QHideEvent) -> None:
         self._show_timer.stop()
         self._fade.stop()
         self._opacity.setOpacity(1.0)

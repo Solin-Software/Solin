@@ -17,6 +17,7 @@ from solin.styles.theme import PALETTE
 # Declared without eagerly constructing the SVG returned by __getattr__.
 ICON_CURSOR_HOVER: str
 ICON_PEOPLE: str
+ICON_REMOTE_CONTROL: str
 ICON_VIDEO: str
 ICON_ZOOM: str
 

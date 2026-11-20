@@ -5377,6 +5377,13 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Solin scenes · engine unavailable</source>
         <translation>Solin のシーン · エンジン利用不可</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>リモコン · 全画面表示 %n 台</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5473,6 +5480,26 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>安全なリモートコントロールが実行中です。証明書の更新は自動的に再試行されます。</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>メディアのリモートコントロールを開始するには、メディアの認証情報を保存してください。</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>タイマーのリモートコントロールを開始するには、タイマーの認証情報を保存してください。</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>接続を受け付けるには、メディアまたはタイマーのリモートコントロールを有効にしてください。</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>タイマーのリモートコントロールが実行中です。メディアカタログを準備しています…</translation>
     </message>
 </context>
 <context>
@@ -5582,8 +5609,8 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remoteをセットアップ</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Mediaをセットアップ</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5669,6 +5696,11 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Choose another location and try again.</source>
         <translation>別の保存先を選択して，もう一度試してください。</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timerをセットアップ</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5741,6 +5773,55 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>接続を解除しています…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>ローカルネットワークでメディアとタイマーが有効</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>ローカルネットワークでメディアが有効</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>ローカルネットワークでタイマーが有効</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>サインイン中のタイマー操作端末はありません</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>サインイン中のメディア端末はありません</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>タイマー</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>メディア</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>全画面表示 %n 台</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>%n 台のデバイスが接続中</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7838,7 +7919,7 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">メディア</translation>
+        <translation>メディア</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -8764,6 +8845,56 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>ダウンロードページを開く</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>証明書をインストールすると、ブラウザーの警告なしでリモートコントロールをアプリとして追加できます。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>集会やプレイリストを参照し、メディアの投影を遠隔操作します。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>タイマー</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>サインインせずに集会タイマーを全画面表示するか、サインインしてパートを操作します。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>リモートコントロールを有効にする前にプライベートネットワークを選択してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>先にリモートコントロールを有効にしてください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>メディアのリモートコントロールを有効にする前に認証情報を保存してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>タイマーのリモートコントロールを有効にする前に認証情報を保存してください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>接続を受け付けるには、メディアまたはタイマーのリモートコントロールを有効にしてください。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>任意（全画面表示のみ）</translation>
     </message>
 </context>
 <context>
@@ -11117,13 +11248,13 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solinリモート</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>リモートコントロール</translation>
+        <source>Media control</source>
+        <translation>メディア操作</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11132,8 +11263,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>Solinをインストール</translation>
+        <source>Install Solin Media</source>
+        <translation>Solin Mediaをインストール</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11162,8 +11293,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>Solinリモートコントロールを使用するにはJavaScriptを有効にしてください。</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>Solin Mediaを使用するにはJavaScriptを有効にしてください。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11172,8 +11303,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>リモートコントロール</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>メディア操作</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11232,8 +11363,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remoteをセットアップ</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Mediaをセットアップ</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11242,8 +11373,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>このSolinを一度信頼し、ウェブアプリをインストールすることで、ローカルネットワークから迅速かつ安全にアクセスできるようになります。</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>このSolinを一度信頼してからSolin Mediaをインストールすると、ローカルネットワークから素早く安全にアクセスできます。</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11347,13 +11478,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>Solin Remoteをインストール</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>ホーム画面から素早くアクセスできるよう、このデバイスにSolin Remoteをインストールします。</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>ホーム画面から素早くアクセスできるよう、このデバイスにSolin Mediaをインストールします。</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11397,8 +11523,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>サインインしました。リモートコントロールが接続されました。</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>サインインしました。メディア操作に接続されました。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11877,8 +12003,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>Solinがこのデバイスにインストールされました。</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>このデバイスにSolin Mediaをインストールしました。</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11950,6 +12076,311 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Solin could not complete the request.</source>
         <translation>Solinは要求を完了できませんでした。</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>集会タイマー</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>Solin Timerをインストール</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>Solin Timerを使用するにはJavaScriptを有効にしてください。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>画面をタップしてコントロールを非表示／表示</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>パートを操作</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>全画面表示にする</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>全画面表示を終了</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>拡大表示</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>タイマーを拡大表示</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>時計</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>タイマー操作</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>このデバイスから集会のパートを開始・停止・調整するにはサインインしてください。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>全画面タイマーに戻る</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>サインインしました。タイマー操作に接続されました。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timerをセットアップ</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>タイマーに戻る</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>このSolinを一度信頼してからSolin Timerをインストールすると、ローカルネットワーク上で全画面表示と素早い操作が行えます。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>ホーム画面から全画面で直接開けるように、このデバイスにSolin Timerをインストールします。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Solin Timerを開く</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>このデバイスはSolin側で切断されました。全画面表示に戻りました。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>すべてのリモートデバイスがSolin側で切断されました。全画面表示に戻りました。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>リアルタイム更新と操作は自動的に再開されます。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>現在時刻</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>計測中</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>終了</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>実行中の集会パートはありません</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>時間超過</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>上へ戻る</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1秒</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1秒</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>1秒減らす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>1秒増やす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>週日</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>週末</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>先週</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>今週に戻る</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>現在の週ではありません</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>この予定にパートはありません</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>パート</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>{section}のパートを減らす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>{section}のパートを増やす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>開始</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>リセット</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>開始 {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>時間 {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1分</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1分</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>{title}から1分減らす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>{title}に1分増やす</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>{title}の時間を設定</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>時間（MM:SS または分）</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>適用</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>01:00〜23:59:59の範囲で有効な時間を入力してください。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>このデバイスにSolin Timerをインストールしました。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>このデバイスからサインアウトしました。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>予定が更新されました。もう一度お試しください。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>このタイマー操作は無効になっています。</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>この集会パートは利用できなくなりました。</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12007,8 +12438,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solinアプリ · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12034,6 +12465,21 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>%1日前にアクティブ</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>タイマー</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>メディア</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

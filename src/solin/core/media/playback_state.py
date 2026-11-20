@@ -5,7 +5,7 @@ The app-wide play/pause/stop state is carried by
 state originates from the sidecar's ``obs_media_state`` integers and is mapped to
 these three members for the UI. The value never crosses a process boundary — the
 wire vocabularies (``core.scenes.media_control.MediaPlaybackState`` and
-``core.remote_control.contracts.PlaybackState``) are separate and unchanged.
+``core.remote_control.media.contracts.PlaybackState``) are separate and unchanged.
 """
 
 from __future__ import annotations

@@ -27,7 +27,7 @@ class SettingsWidget(QWidget):
         auto_share_settings, auto_key_settings, media_settings,
         playback_protection, meeting_schedule_settings, watched_folder_settings,
         yeartext_settings, background_song_settings, remote_control_settings,
-        remote_control_credentials, qr_generation_session_factory,
+        remote_media_credentials, remote_timer_credentials, qr_generation_session_factory,
         yeartext_service_factory, congregation_lookup_factory,
         auto_share_accessibility_trusted,
         about_settings_factory: Callable[[QObject], AboutSettings],
@@ -55,7 +55,7 @@ class SettingsWidget(QWidget):
             target_picker_factory=ScreenPickerOverlay, parent=self,
         )
         self.remote = RemoteSettings(
-            remote_control_settings, remote_control_credentials,
+            remote_control_settings, remote_media_credentials, remote_timer_credentials,
             qr_generation_session_factory, dialog_parent=self, parent=self,
         )
         self.navigation = SettingsNavigation({

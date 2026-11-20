@@ -18,7 +18,7 @@ from solin.core.meetings.tree_store import (
     MeetingTreeSnapshot,
     MeetingTreeStore,
 )
-from solin.core.remote_control.catalog import (
+from solin.core.remote_control.media.catalog import (
     CatalogResolutionCode,
     CatalogResolutionError,
     MediaAvailability,
@@ -26,7 +26,7 @@ from solin.core.remote_control.catalog import (
     ResolvedMeetingPlay,
     ResolvedPlaylistPlay,
 )
-from solin.core.remote_control.contracts import (
+from solin.core.remote_control.media.contracts import (
     CatalogKind,
     PlayCommand,
     ProjectionOrigin,

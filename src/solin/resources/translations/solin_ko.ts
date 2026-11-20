@@ -5377,6 +5377,13 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Solin scenes · engine unavailable</source>
         <translation>Solin 장면 · 엔진 사용 불가</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>리모컨 · 전체 화면 표시 %n대</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5473,6 +5480,26 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>보안 원격 제어가 실행 중입니다. 인증서 갱신이 자동으로 재시도됩니다.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>미디어 원격 제어를 시작하려면 미디어 자격 증명을저장하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>스톱워치 원격 제어를 시작하려면 스톱워치 자격 증명을 저장하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>연결을 허용하려면 미디어 또는 스톱워치 원격 제어를 활성화하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>스톱워치 원격 제어가 실행 중입니다. 미디어 카탈로그 준비 중…</translation>
     </message>
 </context>
 <context>
@@ -5582,8 +5609,8 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remote 설정</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Media 설정</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5669,6 +5696,11 @@ The current organization and files will be preserved. Pending changes from the p
         <source>Choose another location and try again.</source>
         <translation>다른 위치를 선택하고 다시 시도하십시오.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timer 설정</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5741,6 +5773,55 @@ The current organization and files will be preserved. Pending changes from the p
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>연결 해제 중…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>로컬 네트워크에서 미디어 및 스톱워치 활성</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>로컬 네트워크에서 미디어 활성</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>로컬 네트워크에서 스톱워치 활성</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>로그인된 스톱워치 제어 기기가 없습니다</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>로그인된 미디어 기기가 없습니다</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>스톱워치</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>미디어</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>전체 화면 보기 %n대</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>연결된 기기 %n대</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7838,7 +7919,7 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">미디어</translation>
+        <translation>미디어</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -8764,6 +8845,56 @@ Add content, a camera, or another scene.</source>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>다운로드 페이지 열기</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>브라우저 경고 없이 원격 제어를 앱으로 추가하려면 인증서를 설치하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>집회와 재생목록을 탐색하고 미디어 영사를 원격으로 제어합니다.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>스톱워치</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>로그인 없이 집회 타이머를 전체 화면으로 보거나 로그인하여 파트를 제어합니다.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>원격 제어를 활성화하기 전에 사설 네트워크를 선택하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>먼저 원격 제어를 활성화하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>미디어 원격 제어를 활성화하기 전에 미디어 자격 증명을 저장하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>스톱워치 원격 제어를 활성화하기 전에 스톱워치 자격 증명을 저장하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>연결을 허용하려면 미디어 또는 스톱워치 원격 제어를 활성화하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>선택 사항(전체 화면 보기 전용)</translation>
     </message>
 </context>
 <context>
@@ -11117,13 +11248,13 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solin 리모컨</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>원격 제어</translation>
+        <source>Media control</source>
+        <translation>미디어 제어</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11132,8 +11263,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>Solin 설치</translation>
+        <source>Install Solin Media</source>
+        <translation>Solin Media 설치</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11162,8 +11293,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>Solin 리모컨을 사용하려면 JavaScript를 활성화하십시오.</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>Solin Media를 사용하려면 JavaScript를 활성화하십시오.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11172,8 +11303,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>원격 제어</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>미디어 제어</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11232,8 +11363,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>Solin Remote 설정</translation>
+        <source>Set up Solin Media</source>
+        <translation>Solin Media 설정</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11242,8 +11373,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>이 Solin을 한 번 신뢰한 다음, 로컬 네트워크에서 빠르고 안전하게 액세스할 수 있도록 웹 앱을 설치하십시오.</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>이 Solin을 한 번 신뢰한 후 Solin Media를 설치하면 로컬 네트워크에서 빠르고 안전하게 액세스할 수 있습니다.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11347,13 +11478,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>Solin Remote 설치</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>홈 화면에서 빠르게 액세스할 수 있도록 이 기기에 Solin Remote를 설치하십시오.</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>홈 화면에서 빠르게 액세스할 수 있도록 이 기기에 Solin Media를 설치합니다.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11397,8 +11523,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>로그인되었습니다. 원격 제어가 연결되었습니다.</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>로그인됨. 미디어 제어가 연결되었습니다.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11877,8 +12003,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>이 기기에 Solin이 설치되었습니다.</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>이 기기에 Solin Media가 설치되었습니다.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11950,6 +12076,311 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <source>Solin could not complete the request.</source>
         <translation>Solin이 요청을 완료할 수 없습니다.</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>집회 타이머</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>Solin Timer 설치</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>Solin Timer를 사용하려면 JavaScript를 활성화하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>화면을 탭하여 컨트롤 숨기기 또는 표시</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>파트 제어</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>전체 화면 전환</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>전체 화면 종료</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>확대</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>타이머 확대</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>시계</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>타이머 제어</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>이 기기에서 집회 파트를 시작, 중지 및 조정하려면 로그인하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>전체 화면 타이머로 돌아가기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>로그인됨. 타이머 제어가 연결되었습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>Solin Timer 설정</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>타이머로 돌아가기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>이 Solin을 한 번 신뢰한 후 Solin Timer를 설치하면 로컬 네트워크에서 전체 화면 표시와 빠른 제어를 사용할 수 있습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>홈 화면에서 바로 전체 화면으로 열 수 있도록 이 기기에 Solin Timer를 설치합니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Solin Timer 열기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Solin에서 이 기기의 연결이 해제되어 전체 화면 보기로 돌아갔습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Solin에서 모든 원격 기기의 연결이 해제되어 전체 화면 보기로 돌아갔습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>실시간 업데이트와 제어가 자동으로 재개됩니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>현재 시각</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>진행 중</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>종료됨</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>진행 중인 집회 파트 없음</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>시간 초과</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>맨 위로</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1초</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1초</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>1초 줄이기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>1초 늘리기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>주중</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>주말</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>이전 주</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>이번 주로 돌아가기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>현재 주가 아님</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>이 일정에 파트가 없습니다</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>파트</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>{section} 파트 수 줄이기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>{section} 파트 수 늘리기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>시작</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>재설정</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>시작 {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>소요 시간 {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1분</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1분</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>{title}에서 1분 줄이기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>{title}에 1분 늘리기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>{title} 시간 설정</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>시간(MM:SS 또는 분)</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>적용</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>취소</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>01:00에서 23:59:59 사이의 올바른 시간을 입력하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>이 기기에 Solin Timer가 설치되었습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>이 기기에서 로그아웃되었습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>일정이 업데이트되었습니다. 다시 시도하십시오.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>이 타이머 동작은 비활성화되어 있습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>이 집회 파트는 더 이상 사용할 수 없습니다.</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12007,8 +12438,8 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solin 앱 · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12034,6 +12465,21 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>%1일 전 활동</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>스톱워치</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>미디어</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

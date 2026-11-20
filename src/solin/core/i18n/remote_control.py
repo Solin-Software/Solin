@@ -1,19 +1,20 @@
-"""Qt-backed localization catalog for the remote-control web interface."""
+"""Qt-backed localization catalogs for Solin's remote-control web interfaces."""
 
 from __future__ import annotations
 
-import json
-import logging
-import re
 from collections import Counter
 from functools import lru_cache
+import json
+import logging
+from pathlib import Path
+import re
 from types import MappingProxyType
 from typing import Final, Mapping
 
-from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
+from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
 from ..foundation.resources import application_resource_path
-from ..remote_control.contracts import JsonObject
+from ..remote_control.validation import JsonObject
 
 
 log = logging.getLogger(__name__)
@@ -21,21 +22,21 @@ log = logging.getLogger(__name__)
 REMOTE_CONTROL_CONTEXT: Final = "_RemoteControlWeb"
 _PLACEHOLDER: Final = re.compile(r"\{[A-Za-z][A-Za-z0-9_]*\}")
 
-# Literal extraction markers for lupdate. The English JSON is shared with the
-# browser; a contract test keeps both source sets synchronized.
+# Literal extraction markers for lupdate. The English JSON catalogs are shared
+# with the browsers; contract tests keep both source sets synchronized.
 REMOTE_CONTROL_TRANSLATION_SOURCES = (
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin Remote"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Remote control"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin Media"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Media control"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Skip to content"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Media"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install app"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Sign out"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Library"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin content"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "JavaScript required"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enable JavaScript to use Solin remote control."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enable JavaScript to use Solin Media."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Connecting to Solin…"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "REMOTE CONTROL"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "MEDIA CONTROL"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb", "Sign in to control this Solin projection on the local network."
     ),
@@ -51,11 +52,11 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Protected connection limited to your local network"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up this device"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "SECURE SETUP"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up Solin Remote"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up Solin Media"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Back to sign in"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
-        "Trust this Solin once, then install the web app for quick, secure access on your local network.",
+        "Trust this Solin once, then install Solin Media for quick, secure access on your local network.",
     ),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
@@ -113,10 +114,9 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
         "_RemoteControlWeb",
         "On iPhone or iPad, return to Safari after enabling full trust and reopen the address.",
     ),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Remote"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
-        "Install Solin Remote on this device for quick access from your home screen.",
+        "Install Solin Media on this device for quick access from your home screen.",
     ),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",
@@ -141,7 +141,7 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     ),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "A new sign-in replaced this session."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enter your username and password."),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signed in. Remote control connected."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signed in. Media control connected."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Could not sign in."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Incorrect username or password."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Too many attempts. Wait a moment and try again."),
@@ -248,7 +248,7 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Volume"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Stop"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Loading"),
-    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin was installed on this device."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin Media was installed on this device."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "The local session was ended on this device."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "The command was not completed."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin state changed. Updating…"),
@@ -263,12 +263,93 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "This action was not authorized."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Too many attempts. Wait a moment."),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin could not complete the request."),
+    # Timer PWA sources
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin Timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Meeting timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Install Solin Timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enable JavaScript to use Solin Timer."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Tap anywhere to hide or show controls"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Control parts"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Enter fullscreen"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Exit fullscreen"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Expand"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Expand timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Wall clock"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "{title}: {time}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "TIMER CONTROL"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Sign in to start, stop, and adjust meeting parts from this device.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Return to fullscreen timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signed in. Timer control connected."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set up Solin Timer"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Back to timer"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Install Solin Timer on this device for standalone fullscreen access from your home screen.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Open Solin Timer"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "This device was disconnected in Solin. Returned to fullscreen view.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "All remote devices were disconnected in Solin. Returned to fullscreen view.",
+    ),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Live updates and controls will resume automatically.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "CURRENT TIME"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "RUNNING NOW"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "FINISHED"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "No meeting part running"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Over time"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Back to top"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "−1 s"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "+1 s"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Subtract 1 second"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Add 1 second"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Midweek"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Weekend"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Previous week"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Back to this week"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Not the current week"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "No parts in this schedule"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Parts"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Fewer parts in {section}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "More parts in {section}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Start"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Reset"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Started {time}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Duration {duration}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "−1 min"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "+1 min"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Subtract 1 minute from {title}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Add 1 minute to {title}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Set duration for {title}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Duration (MM:SS or minutes)"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Apply"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Cancel"),
+    QT_TRANSLATE_NOOP(
+        "_RemoteControlWeb",
+        "Enter a valid duration between 01:00 and 23:59:59.",
+    ),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Solin Timer was installed on this device."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Signed out on this device."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Schedule updated. Try again."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "This timer action is disabled."),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "This meeting part is no longer available."),
 )
 
 
-@lru_cache(maxsize=1)
-def remote_control_message_sources() -> Mapping[str, str]:
-    path = application_resource_path("remote_control", "messages.en.json")
+def _load_message_catalog(path: Path) -> Mapping[str, str]:
     with path.open(encoding="utf-8") as stream:
         payload = json.load(stream)
     if not isinstance(payload, dict) or not payload:
@@ -281,11 +362,32 @@ def remote_control_message_sources() -> Mapping[str, str]:
     return MappingProxyType(messages)
 
 
-def remote_control_localization(locale_code: str) -> JsonObject:
-    """Build an immutable-at-source, JSON-safe localization snapshot."""
+@lru_cache(maxsize=1)
+def remote_media_message_sources() -> Mapping[str, str]:
+    return _load_message_catalog(
+        application_resource_path("remote_control", "media", "messages.en.json")
+    )
 
+
+@lru_cache(maxsize=1)
+def remote_timer_message_sources() -> Mapping[str, str]:
+    return _load_message_catalog(
+        application_resource_path("remote_control", "timer", "messages.en.json")
+    )
+
+
+@lru_cache(maxsize=1)
+def remote_all_message_sources() -> tuple[str, ...]:
+    ordered: dict[str, None] = {}
+    for catalog in (remote_media_message_sources(), remote_timer_message_sources()):
+        for source in catalog.values():
+            ordered[source] = None
+    return tuple(ordered)
+
+
+def _build_localization(locale_code: str, sources: Mapping[str, str]) -> JsonObject:
     messages: dict[str, str] = {}
-    for key, source in remote_control_message_sources().items():
+    for key, source in sources.items():
         translated = QCoreApplication.translate(REMOTE_CONTROL_CONTEXT, source) or source
         if not _valid_remote_translation(source, translated):
             log.warning("Ignoring invalid remote-control translation for %s", key)
@@ -295,6 +397,18 @@ def remote_control_localization(locale_code: str) -> JsonObject:
         "locale": str(locale_code or "en").replace("_", "-"),
         "messages": messages,
     }
+
+
+def remote_media_localization(locale_code: str) -> JsonObject:
+    """Build an immutable-at-source, JSON-safe localization snapshot for Solin Media."""
+
+    return _build_localization(locale_code, remote_media_message_sources())
+
+
+def remote_timer_localization(locale_code: str) -> JsonObject:
+    """Build an immutable-at-source, JSON-safe localization snapshot for Solin Timer."""
+
+    return _build_localization(locale_code, remote_timer_message_sources())
 
 
 def _valid_remote_translation(source: str, translated: str) -> bool:
@@ -308,6 +422,9 @@ def _valid_remote_translation(source: str, translated: str) -> bool:
 __all__ = [
     "REMOTE_CONTROL_CONTEXT",
     "REMOTE_CONTROL_TRANSLATION_SOURCES",
-    "remote_control_localization",
-    "remote_control_message_sources",
+    "remote_all_message_sources",
+    "remote_media_localization",
+    "remote_media_message_sources",
+    "remote_timer_localization",
+    "remote_timer_message_sources",
 ]

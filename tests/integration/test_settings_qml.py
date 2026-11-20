@@ -53,19 +53,25 @@ class RecordingDomain(SettingsDomain):
         super().__init__()
         self.calls = []
         self.reject_enable = False
+        self.reject_copy = False
         self.publish(**state)
 
     @Slot(str, "QVariant")
     def setValue(self, key, value):  # noqa: N802 - QML slot
         self.calls.append((key, value))
         if key == "enabled" and value and self.reject_enable:
-            self.fail("Configuration required.")
+            self.publish(remoteError="Configuration required.")
             return
         self.publish(**{key: value})
 
     @Slot(str)
     def invoke(self, action):
         self.calls.append((action,))
+
+    @Slot(str, result=bool)
+    def copyAddress(self, key):  # noqa: N802 - QML slot
+        self.calls.append((key,))
+        return not self.reject_copy and bool(self.state.get(key))
 
     @Slot()
     def activate(self):
@@ -139,9 +145,22 @@ def _domain_states():
         shortcutShareMode=False, shortcuts=[], shortcutCaptureText="", shortcutKeyLabel="",
     )
     states["remote"].update(
-        setupVisible=False, setupUrl="", fingerprint="", fingerprintVisible=False,
+        enabled=False,
+        setupVisible=False, setupTitle="", setupUrl="", fingerprint="", fingerprintVisible=False,
         qrBusy=False, qrError="", qrImage="", verificationCode="",
-        endpoint="https://192.168.1.2:8443", username="", password="", passwordConfirmation="",
+        setupFeedback="", setupFeedbackKind="",
+        mediaEnabled=False, timerEnabled=False,
+        mediaEndpoint="https://192.168.1.2:8765/remote/media/",
+        timerEndpoint="https://192.168.1.2:8765/remote/timer/",
+        setupEnabled=False,
+        mediaUsername="", mediaPassword="", mediaPasswordConfirmation="",
+        timerUsername="", timerPassword="", timerPasswordConfirmation="",
+        mediaCredentialsSummary="Not configured", timerCredentialsSummary="Not configured",
+        remoteError="", remoteFeedback="",
+        mediaError="",
+        mediaCredentialsError="", mediaCredentialsFeedback="",
+        timerError="",
+        timerCredentialsError="", timerCredentialsFeedback="",
     )
     states["about"].update(
         installedVersion="26.33.0-beta.2", installedIsBeta=True,
@@ -405,7 +424,8 @@ def test_translated_search_ignores_accents_and_private_values():
         navigation = SettingsNavigation(domains)
         navigation.search("PROTECAO reproducao")
         assert [result["key"] for result in navigation.results] == ["playbackProtection"]
-        domains["remote"].setValue("password", "unique-private-secret")
+        domains["remote"].setValue("mediaPassword", "unique-private-secret")
+        domains["remote"].setValue("timerPassword", "unique-private-secret")
         navigation.search("unique-private-secret")
         assert navigation.results == []
     finally:
@@ -604,10 +624,141 @@ def test_rejected_remote_enable_restores_toggle_state(create_view):
     _settle(view)
     assert view.domains["remote"].state["enabled"] is False
     assert toggle.property("checked") is False
+    host_error = _find(view.root, "groupError_remote")
+    assert host_error is not None and host_error.isVisible()
+    assert host_error.property("text") == "Configuration required."
     view.domains["remote"].reject_enable = False
-    view.domains["remote"].publish(enabled=True)
+    view.domains["remote"].publish(enabled=True, remoteError="")
     _settle(view)
     assert toggle.property("checked") is True
+    assert not host_error.isVisible()
+
+
+def test_remote_contextual_notices_render_inside_their_owning_groups_and_setup_dialog(
+    create_view,
+):
+    view = create_view(width=1000, height=900)
+    domain = view.domains["remote"]
+    view.navigation.expand("mediaCredentials", True)
+    view.navigation.expand("timerCredentials", True)
+    view.navigation.openSection("remote", "", "")
+    _settle(view)
+
+    domain.publish(
+        enabled=True,
+        feedback="legacy-bottom-notice-must-not-render",
+        feedbackKind="error",
+        remoteFeedback="Host active",
+        mediaError="Media credentials required",
+        mediaCredentialsError="Media password mismatch",
+        timerError="Timer credentials required",
+        timerCredentialsFeedback="Saved",
+    )
+    _settle(view)
+
+    assert not any(
+        item.isVisible() and item.property("text") == "legacy-bottom-notice-must-not-render"
+        for item in _items(view.root)
+    )
+
+    expected = (
+        ("groupFeedback_remote", "groupBody_remote", "Host active"),
+        ("groupError_remoteMedia", "groupBody_remoteMedia", "Media credentials required"),
+        ("groupError_mediaCredentials", "groupBody_mediaCredentials", "Media password mismatch"),
+        ("groupError_remoteTimer", "groupBody_remoteTimer", "Timer credentials required"),
+        ("groupFeedback_timerCredentials", "groupBody_timerCredentials", "Saved"),
+    )
+    for notice_name, body_name, expected_text in expected:
+        notice = _find(view.root, notice_name)
+        body = _find(view.root, body_name)
+        assert notice is not None and body is not None, notice_name
+        assert body.isAncestorOf(notice), notice_name
+        assert notice.isVisible(), notice_name
+        assert notice.property("text") == expected_text
+        # The notice can become visible before its parent layout applies the new height.
+        wait_until(
+            lambda body=body, notice=notice: _expanded_body_settled(body)
+            and body.boundingRect().adjusted(0, 0, 1, 1).contains(
+                notice.mapRectToItem(body, notice.boundingRect())
+            ),
+            description=f"{notice_name} to fit inside the expanded {body_name}",
+        )
+
+    # Media error renders above the nested Media credentials card and well above Timer.
+    media_error = _find(view.root, "groupError_remoteMedia")
+    media_creds = _find(view.root, "group_mediaCredentials")
+    timer_group = _find(view.root, "group_remoteTimer")
+    assert (
+        media_error.mapToItem(view.root, QPointF(0, media_error.height())).y()
+        <= media_creds.mapToItem(view.root, QPointF(0, 0)).y() + 1
+    )
+    assert (
+        media_error.mapToItem(view.root, QPointF(0, media_error.height())).y()
+        < timer_group.mapToItem(view.root, QPointF(0, 0)).y()
+    )
+
+    domain.publish(
+        setupVisible=True,
+        setupUrl="https://192.168.1.2:8765/remote/media/?setup=1",
+        verificationCode="1234 · 5678",
+        setupFeedback="Copied",
+        setupFeedbackKind="success",
+    )
+    _settle(view)
+    window_root = view.widget.quickWindow().contentItem()
+    setup_feedback = _find(window_root, "remoteSetupFeedback")
+    assert setup_feedback is not None and setup_feedback.isVisible()
+    assert setup_feedback.property("text") == "Copied"
+    assert view.warnings == []
+
+
+def test_remote_setup_button_is_shared_and_copy_confirmation_stays_in_each_button(create_view):
+    view = create_view(width=1000, height=900)
+    view.navigation.openSection("remote", "", "")
+    domain = view.domains["remote"]
+    domain.publish(setupEnabled=True, mediaError="Media credentials required")
+    _settle(view)
+
+    setup = _control(_find(view.root, "setting_setupEnabled"), "SettingsButton")
+    assert [
+        item for item in _items(view.root)
+        if item.isVisible() and "SettingsButton" in item.metaObject().className()
+        and item.property("text") == setup.property("text")
+    ] == [setup]
+    assert QMetaObject.invokeMethod(setup, "clicked")
+    assert domain.calls[-1] == ("openSetup",)
+
+    media = _control(_find(view.root, "setting_mediaEndpoint"), "SettingsButton")
+    timer = _control(_find(view.root, "setting_timerEndpoint"), "SettingsButton")
+    media_label = _control(media, "QQuickText")
+    timer_label = _control(timer, "QQuickText")
+    idle_label = media_label.property("text")
+    idle_width = media.width()
+    assert idle_label == timer_label.property("text")
+
+    domain.reject_copy = True
+    assert QMetaObject.invokeMethod(media, "clicked")
+    assert media_label.property("text") == idle_label
+
+    domain.reject_copy = False
+    assert QMetaObject.invokeMethod(media, "clicked")
+    assert domain.calls[-1] == ("mediaEndpoint",)
+    copied_label = media_label.property("text")
+    assert copied_label and copied_label != idle_label
+    assert media.width() == pytest.approx(idle_width, abs=1)
+    assert timer_label.property("text") == idle_label
+    assert _find(view.root, "groupError_remoteMedia").isVisible()
+    assert not _find(view.root, "groupFeedback_remoteMedia").isVisible()
+
+    assert QMetaObject.invokeMethod(timer, "clicked")
+    assert domain.calls[-1] == ("timerEndpoint",)
+    assert timer_label.property("text") == copied_label
+    assert not _find(view.root, "groupFeedback_remoteTimer").isVisible()
+    domain.publish(timerEndpoint="")
+    assert timer_label.property("text") == idle_label
+    assert not timer.isEnabled()
+    _wait_until(lambda: media_label.property("text") == idle_label)
+    assert view.warnings == []
 
 
 def test_remote_page_has_no_manual_network_refresh_action(create_view):
@@ -892,32 +1043,42 @@ def test_obs_encloses_nested_ndi_and_animates_expansion(create_view):
 
 def test_remote_credentials_expand_from_header_with_summary_and_keep_drafts(create_view):
     view = create_view(width=1280, height=900)
-    view.domains["remote"].publish(credentialsSummary="Configured as operator", password="draft")
+    view.domains["remote"].publish(
+        mediaCredentialsSummary="Configured as operator",
+        mediaPassword="draft",
+    )
     view.navigation.openSection("remote", "", "")
     _settle(view)
-    group = _find(view.root, "group_credentials")
-    heading = _find(view.root, "groupHeading_credentials")
-    body = _find(view.root, "groupBody_credentials")
+    group = _find(view.root, "group_mediaCredentials")
+    heading = _find(view.root, "groupHeading_mediaCredentials")
+    body = _find(view.root, "groupBody_mediaCredentials")
     assert group.property("expanded") is False
     assert body.height() == 0
     assert any(item.property("text") == "Configured as operator" for item in _items(heading))
-    assert _find(view.root, "setting_credentialsSummary") is None
+    assert _find(view.root, "setting_mediaCredentialsSummary") is None
     assert not any(item.property("text") == "Change" for item in _items(group))
     position = heading.mapToScene(QPointF(heading.width() / 2, heading.height() / 2))
     mouse_click(view.widget, Qt.MouseButton.LeftButton, pos=position.toPoint())
     _wait_until(lambda: _expanded_body_settled(body))
     _settle(view)
     assert group.property("expanded") is True
-    for key in ("username", "password", "passwordConfirmation", "saveCredentials"):
+    for key in (
+        "mediaUsername",
+        "mediaPassword",
+        "mediaPasswordConfirmation",
+        "saveMediaCredentials",
+    ):
         assert _find(view.root, "setting_" + key).isVisible()
-    view.navigation.expand("credentials", False)
+    view.navigation.expand("mediaCredentials", False)
     _settle(view)
     view.navigation.search("Confirm password")
-    result = next(result for result in view.navigation.results if result["key"] == "passwordConfirmation")
+    result = next(
+        result for result in view.navigation.results if result["key"] == "mediaPasswordConfirmation"
+    )
     view.navigation.openSection(result["section"], result["group"], result["key"])
     _settle(view)
-    assert _find(view.root, "group_credentials").property("expanded") is True
-    assert view.domains["remote"].state["password"] == "draft"
+    assert _find(view.root, "group_mediaCredentials").property("expanded") is True
+    assert view.domains["remote"].state["mediaPassword"] == "draft"
     assert view.domains["remote"].calls == []
     assert view.warnings == []
 

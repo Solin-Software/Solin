@@ -5409,6 +5409,14 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>Solin scenes · engine unavailable</source>
         <translation>Mga eksena ng Solin · hindi available ang engine</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>Remote control · %n nanonood sa buong screen</numerusform>
+            <numerusform>Remote control · %n nanonood sa buong screen</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5505,6 +5513,26 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>Gumagana ang secure remote control. Awtomatikong susubukan muli ang pag-renew ng certificate.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>I-save ang credentials sa Media para simulan ang remote control ng media.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>I-save ang credentials sa Timer para simulan ang remote control ng timer.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>I-enable ang remote control ng Media o Timer para tumanggap ng koneksiyon.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>Tumatakbo ang remote control ng timer. Inihahanda ang catalog ng media…</translation>
     </message>
 </context>
 <context>
@@ -5614,8 +5642,8 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>I-set up ang Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>I-set up ang Solin Media</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5701,6 +5729,11 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <source>Choose another location and try again.</source>
         <translation>Pumili ng ibang lokasyon at subukan muli.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>I-set up ang Solin Timer</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5773,6 +5806,57 @@ Pananatilihin ang kasalukuyang pagkakaayos at mga file. Hindi ilalapat ang mga n
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>Dinidiskonekta…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>Aktibo ang Media at Timer sa local network</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>Aktibo ang Media sa local network</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>Aktibo ang Timer sa local network</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>Walang naka-sign in na controller ng Timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>Walang naka-sign in na device sa Media</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>%n nasa buong screen</numerusform>
+            <numerusform>%n nasa buong screen</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>%n nakakonektang device</numerusform>
+            <numerusform>%n nakakonektang device</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7827,7 +7911,7 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">Media</translation>
+        <translation>Media</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -8796,6 +8880,56 @@ Magdagdag ng nilalaman, camera, o ibang eksena.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Buksan ang download page</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>I-install ang certificate para maidagdag ang mga remote control bilang app nang walang babala sa browser.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>Mag-browse ng mga pulong at playlist at kontrolin nang malayuan ang pagpapalabas ng media.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>Tingnan ang timer ng pulong sa buong screen nang hindi nag-sa-sign in, o mag-sign in para kontrolin ang mga bahagi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>Pumili muna ng pribadong network bago i-enable ang remote control.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>I-enable muna ang Remote control.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>I-save muna ang credentials sa Media bago i-enable ang remote control nito.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>I-save muna ang credentials sa Timer bago i-enable ang remote control nito.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>I-enable ang remote control ng Media o Timer para tumanggap ng koneksiyon.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>Opsyonal (pang-buong screen lang)</translation>
     </message>
 </context>
 <context>
@@ -11159,13 +11293,13 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solin Remote</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>Remote control</translation>
+        <source>Media control</source>
+        <translation>Kontrol ng media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11174,8 +11308,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>I-install ang Solin</translation>
+        <source>Install Solin Media</source>
+        <translation>I-install ang Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11204,8 +11338,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>I-enable ang JavaScript para magamit ang Solin remote control.</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>I-enable ang JavaScript para magamit ang Solin Media.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11214,8 +11348,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>REMOTE CONTROL</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>KONTROL NG MEDIA</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11274,8 +11408,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>I-set up ang Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>I-set up ang Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11284,8 +11418,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>Pagkatiwalaan ang Solin na ito nang isang beses, pagkatapos ay i-install ang web app para sa mabilis at ligtas na access sa iyong lokal na network.</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>Pagkatiwalaan nang isang beses ang Solin na ito, saka i-install ang Solin Media para sa mabilis at ligtas na access sa local network.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11389,13 +11523,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>I-install ang Solin Remote</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>I-install ang Solin Remote sa device na ito para sa mabilis na access mula sa iyong home screen.</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>I-install ang Solin Media sa device na ito para sa mabilis na access mula sa home screen.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11439,8 +11568,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>Naka-sign in na. Konektado na ang remote control.</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>Naka-sign in na. Nakakonekta ang kontrol ng media.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11919,8 +12048,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>Na-install ang Solin sa device na ito.</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>Na-install ang Solin Media sa device na ito.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11992,6 +12121,311 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <source>Solin could not complete the request.</source>
         <translation>Hindi matapos ng Solin ang request.</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>Timer ng pulong</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>I-install ang Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>I-enable ang JavaScript para magamit ang Solin Timer.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>Mag-tap sa screen upang itago o ipakita ang mga kontrol</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>Kontrolin ang mga bahagi</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>Mag-buong screen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>Lumabas sa buong screen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>Palakihin</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>Palakihin ang timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>Orasan</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>KONTROL NG TIMER</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>Mag-sign in para simulan, ihinto, at baguhin ang mga bahagi ng pulong mula sa device na ito.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>Bumalik sa timer na buong screen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>Naka-sign in na. Nakakonekta ang kontrol ng timer.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>I-set up ang Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>Bumalik sa timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>Pagkatiwalaan nang isang beses ang Solin na ito, saka i-install ang Solin Timer para sa buong screen at mabilis na kontrol sa local network.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>I-install ang Solin Timer sa device na ito para sa direktang pagbukas sa buong screen mula sa home screen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Buksan ang Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Idiniskonekta ang device na ito sa Solin. Bumalik sa buong screen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Idiniskonekta ang lahat ng remote device sa Solin. Bumalik sa buong screen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>Awtomatikong babalik ang live na update at mga kontrol.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>KASALUKUYANG ORAS</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>TUMATAKBO NGAYON</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>TAPOS NA</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>Walang tumatakbong bahagi ng pulong</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>Lampas sa oras</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>Bumalik sa itaas</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1 seg</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1 seg</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>Magbawas ng 1 segundo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>Magdagdag ng 1 segundo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>Gitnang sanlinggo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>Dulo ng sanlinggo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>Nakaraang linggo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>Bumalik sa linggong ito</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>Hindi ang kasalukuyang linggo</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>Walang mga bahagi sa iskedyul na ito</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>Mga bahagi</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>Bawasan ang mga bahagi sa {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>Dagdagan ang mga bahagi sa {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>Simulan</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>I-reset</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>Nagsimula {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>Tagal {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>Magbawas ng 1 minuto sa {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>Magdagdag ng 1 minuto sa {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>Itakda ang tagal para sa {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>Tagal (MM:SS o minuto)</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>Ilapat</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>Kanselahin</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>Maglagay ng wastong tagal sa pagitan ng 01:00 at 23:59:59.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>Na-install ang Solin Timer sa device na ito.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>Nag-sign out sa device na ito.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>Na-update ang iskedyul. Subukan ulit.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>Naka-disable ang aksiyong ito sa timer.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>Hindi na available ang bahaging ito ng pulong.</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12049,8 +12483,8 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solin app · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12076,6 +12510,21 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>Aktibo %1 araw ang nakalipas</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>Timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

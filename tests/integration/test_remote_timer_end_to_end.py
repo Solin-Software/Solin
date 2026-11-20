@@ -1,0 +1,650 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import date
+import statistics
+import threading
+import time
+from types import SimpleNamespace
+import uuid
+
+from aiohttp.test_utils import TestClient, TestServer
+from PySide6.QtCore import QCoreApplication, QObject, Signal
+import pytest
+
+from solin.controllers.remote_timer_adapter import (
+    RemoteTimerAdapter,
+    RemoteTimerAdapterDependencies,
+)
+from solin.controllers.timer_engine import TimerEngine
+from solin.core.foundation.resources import application_resource_path
+from solin.core.foundation.settings_store import ProfileAppSettingsStore
+from solin.core.remote_control.features import (
+    DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+    TimerRemoteFeatureFlags,
+)
+from solin.core.remote_control.security import (
+    InMemorySessionStore,
+    LoginRateLimiter,
+    RemoteControlCredentialsStore,
+    RemoteScope,
+    ScryptParameters,
+    ScryptPasswordHasher,
+)
+from solin.core.remote_control.server import (
+    TIMER_SESSION_COOKIE_NAME,
+    TRUST_CERTIFICATE_ROUTE,
+    RemoteControlHttpApplication,
+)
+from solin.core.timer.application import TimerSession
+from solin.core.timer.models import ClockConfig, MeetingSchedule, MeetingType
+from solin.ui.qml.timer_bridge import TimerBridge
+
+
+_APP = QCoreApplication.instance() or QCoreApplication([])
+_ORIGIN = "https://192.168.1.10:8765"
+_HOST = "192.168.1.10:8765"
+
+
+class _MemorySettings:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+
+    def string(self, key: str, default: str = "") -> str:
+        return str(self.values.get(key, default) or "")
+
+    def set_value(self, key: str, value: object, *, sync: bool = True) -> None:
+        del sync
+        self.values[key] = value
+
+    def remove(self, key: str, *, sync: bool = True) -> None:
+        del sync
+        self.values.pop(key, None)
+
+
+class _InMemoryTimerRepository:
+    def __init__(self) -> None:
+        self.clock_config = ClockConfig()
+        self.visible = False
+        self.meeting_type = MeetingType.MIDWEEK
+        self.schedules: dict[tuple[str, str], dict] = {}
+
+    def load_clock_config(self) -> ClockConfig:
+        return self.clock_config
+
+    def save_clock_config(self, config: ClockConfig) -> None:
+        self.clock_config = config
+
+    def get_timer_visible(self) -> bool:
+        return self.visible
+
+    def set_timer_visible(self, visible: bool) -> None:
+        self.visible = visible
+
+    def load_last_meeting_type(self) -> MeetingType:
+        return self.meeting_type
+
+    def save_last_meeting_type(self, meeting_type: MeetingType) -> None:
+        self.meeting_type = meeting_type
+
+    def load_schedule(
+        self,
+        week_monday: date,
+        meeting_type: MeetingType,
+    ) -> MeetingSchedule | None:
+        saved = self.schedules.get((week_monday.isoformat(), meeting_type.value))
+        return MeetingSchedule.from_dict(saved) if saved is not None else None
+
+    def save_schedule(self, schedule: MeetingSchedule) -> None:
+        self.schedules[(schedule.week_monday, schedule.meeting_type.value)] = schedule.to_dict()
+
+
+class _MediaCountdownAutomationStub(QObject):
+    state_changed = Signal()
+
+
+def _build_stack(
+    *,
+    feature_flags: TimerRemoteFeatureFlags = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+):
+    repo = _InMemoryTimerRepository()
+    session = TimerSession(repo, date(2026, 7, 13))
+    engine = TimerEngine()
+    engine._timer.stop()  # Deterministic tick control in tests
+    engine.set_freeze_seconds(3)
+    bridge = TimerBridge(
+        engine=engine,
+        session=session,
+        output=SimpleNamespace(set_clock_config=lambda _cfg: None),
+        monitors=SimpleNamespace(
+            model=lambda: [],
+            is_visible=lambda: False,
+            request_reserve=lambda _idx, _label: {},
+            confirm_reserve=lambda _idx: True,
+            unreserve=lambda _idx: True,
+            set_visible=lambda _vis: None,
+        ),
+        pdf_export=SimpleNamespace(export=lambda *_a, **_kw: None),
+        media_countdown_automation=_MediaCountdownAutomationStub(),
+    )
+
+    hasher = ScryptPasswordHasher(ScryptParameters(n=2**12, r=8, p=1))
+    credentials = RemoteControlCredentialsStore.for_timer(
+        ProfileAppSettingsStore(_MemorySettings()),
+        password_hasher=hasher,
+    )
+    credentials.set_credentials("timer.op", "timer secret battery staple")
+
+    adapter = RemoteTimerAdapter(
+        RemoteTimerAdapterDependencies(
+            active_profile_id="profile-1",
+            active_profile_name="Main Auditorium",
+            credentials=credentials,
+            timer_engine=engine,
+            timer_bridge=bridge,
+            feature_flags=feature_flags,
+        ),
+        bridge,
+    )
+    adapter.set_active(True)
+
+    root_assets = application_resource_path("remote_control")
+    timer_sessions = InMemorySessionStore(scope=RemoteScope.TIMER)
+    timer_module = adapter.build_http_module(
+        sessions=timer_sessions,
+        rate_limiter=LoginRateLimiter(),
+        assets_directory=root_assets / "timer",
+        shared_assets_directory=root_assets / "shared",
+        setup_provider=lambda: {
+            "locale": "en",
+            "messages": {},
+            "tls": {
+                "installationId": "inst-timer-e2e",
+                "authoritySha256": "AA:BB:CC",
+                "verificationCode": "1234-5678",
+                "authorityCertificateUrl": TRUST_CERTIFICATE_ROUTE,
+                "authorityNotValidAfter": "2036-01-01T00:00:00+00:00",
+            },
+        },
+        enabled_predicate=lambda: True,
+    )
+    app = RemoteControlHttpApplication(
+        (timer_module,),
+        allowed_origin=_ORIGIN,
+        installation_id="inst-timer-e2e",
+        trust_certificate_der=b"der-bytes",
+    )
+    return engine, session, bridge, adapter, app
+
+
+async def _login_headers(client: TestClient) -> dict[str, str]:
+    resp = await client.post(
+        "/remote/timer/api/auth/login",
+        headers={"Host": _HOST, "Origin": _ORIGIN},
+        json={"username": "timer.op", "password": "timer secret battery staple"},
+    )
+    assert resp.status == 200
+    body = await resp.json()
+    cookie = resp.cookies[TIMER_SESSION_COOKIE_NAME].value
+    return {
+        "Host": _HOST,
+        "Origin": _ORIGIN,
+        "X-CSRF-Token": body["csrfToken"],
+        "Cookie": f"{TIMER_SESSION_COOKIE_NAME}={cookie}",
+    }
+
+
+def test_steady_state_timer_ticks_emit_zero_websocket_broadcasts() -> None:
+    engine, _session, _bridge, adapter, app = _build_stack()
+    snapshot_emissions = 0
+
+    def on_snapshot() -> None:
+        nonlocal snapshot_emissions
+        snapshot_emissions += 1
+
+    adapter.snapshot_updated.connect(on_snapshot)
+
+    async def scenario() -> None:
+        client = TestClient(TestServer(app.app))
+        await client.start_server()
+        try:
+            public_ws = await client.ws_connect(
+                "/remote/timer/api/ws/public",
+                headers={"Host": _HOST, "Origin": _ORIGIN},
+            )
+            initial = await public_ws.receive_json()
+            assert initial["type"] == "public.snapshot"
+
+            headers = await _login_headers(client)
+            post_start = await client.post(
+                "/remote/timer/api/commands",
+                headers=headers,
+                json={
+                    "commandId": str(uuid.uuid4()),
+                    "type": "start_part",
+                    "scheduleRevision": adapter.state.schedule_revision,
+                    "partId": adapter.state.schedule.parts[0].id,
+                },
+            )
+            assert (await post_start.json())["ok"] is True
+
+            started_event = await public_ws.receive_json()
+            assert started_event["type"] == "timer.live"
+            assert started_event["payload"]["active"] is True
+
+            emissions_after_start = snapshot_emissions
+            for _ in range(25):
+                engine._on_tick()
+
+            assert snapshot_emissions == emissions_after_start
+            await app.publish_snapshot(RemoteScope.TIMER)
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(public_ws.receive_json(), timeout=0.05)
+
+            await public_ws.close()
+        finally:
+            await client.close()
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_end_to_end_timer_part_and_schedule_commands_sync_public_and_controller_views() -> None:
+    engine, _session, _bridge, adapter, app = _build_stack()
+
+    async def scenario() -> None:
+        client = TestClient(TestServer(app.app))
+        await client.start_server()
+        try:
+            public_ws = await client.ws_connect(
+                "/remote/timer/api/ws/public",
+                headers={"Host": _HOST, "Origin": _ORIGIN},
+            )
+            public_baseline = await public_ws.receive_json()
+            assert public_baseline["sequence"] == 0
+            assert "scheduleRevision" not in public_baseline
+
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            rev = boot["scheduleRevision"]
+            first_part_id = boot["schedule"]["parts"][0]["id"]
+            second_part_id = boot["schedule"]["parts"][1]["id"]
+
+            async def send(payload: dict[str, object]) -> dict:
+                res = await client.post(
+                    "/remote/timer/api/commands",
+                    headers=headers,
+                    json={"commandId": str(uuid.uuid4()), **payload},
+                )
+                assert res.status == 200
+                data = await res.json()
+                assert data["ok"] is True, data
+                return data
+
+            # 1. Adjust idle part planned duration (+1 min)
+            r1 = await send(
+                {
+                    "type": "adjust_part",
+                    "scheduleRevision": rev,
+                    "partId": second_part_id,
+                    "deltaSeconds": 60,
+                }
+            )
+            rev = r1["scheduleRevision"]
+
+            # 2. Direct planned duration edit (set_part_seconds)
+            r2 = await send(
+                {
+                    "type": "set_part_seconds",
+                    "scheduleRevision": rev,
+                    "partId": second_part_id,
+                    "plannedSeconds": 420,
+                }
+            )
+            rev = r2["scheduleRevision"]
+            sched = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert (
+                next(p for p in sched["parts"] if p["id"] == second_part_id)["plannedSeconds"]
+                == 420
+            )
+
+            # 3. Set Ministry section count to 1 (locks single part) then 4 (re-enables)
+            r3_single = await send(
+                {
+                    "type": "set_section_count",
+                    "scheduleRevision": rev,
+                    "section": "ministry",
+                    "count": 1,
+                }
+            )
+            rev = r3_single["scheduleRevision"]
+            sched_single = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            ministry_single = [p for p in sched_single["parts"] if p["section"] == "ministry"]
+            assert len(ministry_single) == 1
+            assert ministry_single[0]["durationEditable"] is False
+
+            blocked_adjust = await (
+                await client.post(
+                    "/remote/timer/api/commands",
+                    headers=headers,
+                    json={
+                        "commandId": str(uuid.uuid4()),
+                        "type": "adjust_part",
+                        "scheduleRevision": rev,
+                        "partId": ministry_single[0]["id"],
+                        "deltaSeconds": 60,
+                    },
+                )
+            ).json()
+            assert blocked_adjust["ok"] is False
+            assert blocked_adjust["error"]["code"] == "blocked"
+
+            blocked_set = await (
+                await client.post(
+                    "/remote/timer/api/commands",
+                    headers=headers,
+                    json={
+                        "commandId": str(uuid.uuid4()),
+                        "type": "set_part_seconds",
+                        "scheduleRevision": rev,
+                        "partId": ministry_single[0]["id"],
+                        "plannedSeconds": 600,
+                    },
+                )
+            ).json()
+            assert blocked_set["ok"] is False
+            assert blocked_set["error"]["code"] == "blocked"
+
+            r3 = await send(
+                {
+                    "type": "set_section_count",
+                    "scheduleRevision": rev,
+                    "section": "ministry",
+                    "count": 4,
+                }
+            )
+            rev = r3["scheduleRevision"]
+            sched = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            ministry_parts = [p for p in sched["parts"] if p["section"] == "ministry"]
+            assert len(ministry_parts) == 4
+            assert all(p["durationEditable"] is True for p in ministry_parts)
+
+            # 4. Start part, nudge +1s / -1s while running, stop, reset
+            r4 = await send(
+                {
+                    "type": "start_part",
+                    "scheduleRevision": rev,
+                    "partId": first_part_id,
+                }
+            )
+            rev = r4["scheduleRevision"]
+            live_msg = await public_ws.receive_json()
+            assert live_msg["type"] == "timer.live"
+            assert live_msg["sequence"] == 1
+            assert "scheduleRevision" not in live_msg
+            assert live_msg["payload"]["activePartId"] == first_part_id
+            sched_running = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            assert (
+                next(p for p in sched_running["parts"] if p["id"] == first_part_id)[
+                    "durationEditable"
+                ]
+                is False
+            )
+
+            r5 = await send(
+                {
+                    "type": "adjust_part",
+                    "scheduleRevision": rev,
+                    "partId": first_part_id,
+                    "deltaSeconds": 1,
+                }
+            )
+            rev = r5["scheduleRevision"]
+            nudged_msg = await public_ws.receive_json()
+            assert nudged_msg["sequence"] == 2
+            assert "scheduleRevision" not in nudged_msg
+            assert nudged_msg["payload"]["elapsedSeconds"] >= 1.0
+
+            r6 = await send({"type": "stop_part", "partId": first_part_id})
+            rev = r6["scheduleRevision"]
+            stopped_msg = await public_ws.receive_json()
+            assert stopped_msg["sequence"] == 3
+            assert "scheduleRevision" not in stopped_msg
+            assert stopped_msg["payload"]["state"] in {"stopped", "idle"}
+            sched_stopped = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            assert (
+                next(p for p in sched_stopped["parts"] if p["id"] == first_part_id)[
+                    "durationEditable"
+                ]
+                is False
+            )
+
+            r7 = await send(
+                {
+                    "type": "reset_part",
+                    "scheduleRevision": rev,
+                    "partId": first_part_id,
+                }
+            )
+            rev = r7["scheduleRevision"]
+            sched_reset = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            assert (
+                next(p for p in sched_reset["parts"] if p["id"] == first_part_id)[
+                    "durationEditable"
+                ]
+                is True
+            )
+
+            # 5. Switch meeting type to Weekend and navigate weeks
+            await send({"type": "set_meeting_type", "meetingType": "weekend"})
+            sched_wknd = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            assert sched_wknd["meetingType"] == "weekend"
+
+            await send({"type": "navigate_week", "target": "next"})
+            sched_next = await (
+                await client.get("/remote/timer/api/schedule", headers=headers)
+            ).json()
+            assert sched_next["weekMonday"] == "2026-07-20"
+            assert sched_next["isCurrentWeek"] is False
+
+            await public_ws.close()
+        finally:
+            await client.close()
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_structure_edits_feature_flag_blocks_structural_mutations_end_to_end() -> None:
+    engine, _session, _bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_schedule_structure_edits=False)
+    )
+
+    async def scenario() -> None:
+        client = TestClient(TestServer(app.app))
+        await client.start_server()
+        try:
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            caps = boot["schedule"]["capabilities"]
+            assert caps["controlParts"] is True
+            assert caps["adjustPlannedMinutes"] is True
+            assert caps["switchMeetingType"] is True
+            assert caps["setPlannedSeconds"] is False
+            assert caps["setSectionCount"] is False
+            assert caps["navigateWeeks"] is False
+
+            blocked = await client.post(
+                "/remote/timer/api/commands",
+                headers=headers,
+                json={
+                    "commandId": str(uuid.uuid4()),
+                    "type": "navigate_week",
+                    "target": "next",
+                },
+            )
+            data = await blocked.json()
+            assert data["ok"] is False
+            assert data["error"]["code"] == "blocked"
+        finally:
+            await client.close()
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_cross_thread_command_to_websocket_snapshot_p95_latency_stays_under_budget() -> None:
+    engine, _session, _bridge, adapter, app = _build_stack()
+    adapter.snapshot_updated.connect(lambda: None)
+
+    stop_pumping = threading.Event()
+    latencies_ms: list[float] = []
+    worker_error: list[BaseException] = []
+
+    def worker() -> None:
+        async def run_benchmark() -> None:
+            client = TestClient(TestServer(app.app))
+            await client.start_server()
+            try:
+                headers = await _login_headers(client)
+                ws = await client.ws_connect("/remote/timer/api/ws", headers=headers)
+                initial = await ws.receive_json()
+                rev = initial["scheduleRevision"]
+                part_id = initial["payload"]["schedule"]["parts"][0]["id"]
+
+                start_res = await client.post(
+                    "/remote/timer/api/commands",
+                    headers=headers,
+                    json={
+                        "commandId": str(uuid.uuid4()),
+                        "type": "start_part",
+                        "scheduleRevision": rev,
+                        "partId": part_id,
+                    },
+                )
+                rev = (await start_res.json())["scheduleRevision"]
+                while True:
+                    msg = await asyncio.wait_for(ws.receive_json(), timeout=1.0)
+                    if msg["type"] == "timer.live" and msg["payload"]["active"]:
+                        break
+
+                # Measure 50 sequential running +/-1s nudges across threads
+                for index in range(50):
+                    delta = 1 if index % 2 == 0 else -1
+                    t0 = time.perf_counter()
+                    resp = await client.post(
+                        "/remote/timer/api/commands",
+                        headers=headers,
+                        json={
+                            "commandId": str(uuid.uuid4()),
+                            "type": "adjust_part",
+                            "scheduleRevision": rev,
+                            "partId": part_id,
+                            "deltaSeconds": delta,
+                        },
+                    )
+                    body = await resp.json()
+                    assert body["ok"] is True
+                    rev = body["scheduleRevision"]
+                    target_live_rev = body["liveRevision"]
+                    while True:
+                        event = await asyncio.wait_for(ws.receive_json(), timeout=1.0)
+                        if (
+                            event["type"] == "timer.live"
+                            and event["liveRevision"] >= target_live_rev
+                        ):
+                            break
+                    latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+
+                await ws.close()
+            finally:
+                await client.close()
+
+        try:
+            asyncio.run(run_benchmark())
+        except BaseException as exc:  # noqa: BLE001
+            worker_error.append(exc)
+        finally:
+            stop_pumping.set()
+
+    thread = threading.Thread(target=worker, name="timer-e2e-benchmark")
+    thread.start()
+    try:
+        deadline = time.monotonic() + 15.0
+        while not stop_pumping.is_set():
+            _APP.processEvents()
+            time.sleep(0.0005)
+            assert time.monotonic() < deadline, "Cross-thread timer benchmark timed out"
+        thread.join(timeout=2.0)
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+    if worker_error:
+        raise worker_error[0]
+
+    assert len(latencies_ms) == 50
+    sorted_latencies = sorted(latencies_ms)
+    p50 = statistics.median(sorted_latencies)
+    p95 = sorted_latencies[int(len(sorted_latencies) * 0.95) - 1]
+    assert p50 < 25.0, f"P50 latency too high: {p50:.2f} ms"
+    assert p95 < 50.0, f"P95 latency too high: {p95:.2f} ms"
+
+
+def test_abort_pending_commands_unblocks_server_waiter_without_pumping_qt() -> None:
+    from PySide6.QtCore import QObject
+    from solin.controllers.qt_command_bridge import QtCommandBridge
+
+    owner = QObject()
+    dispatched: list[str] = []
+    bridge: QtCommandBridge[str, str] = QtCommandBridge(
+        lambda cmd: dispatched.append(cmd) or None,
+        lambda: "server_stopping",
+        owner,
+    )
+
+    entered = threading.Event()
+    outcomes: list[str | None] = []
+
+    def server_worker() -> None:
+        async def run() -> None:
+            task = asyncio.create_task(bridge.execute("start_part"))
+            await asyncio.sleep(0)
+            entered.set()
+            outcomes.append(await asyncio.wait_for(task, timeout=1.0))
+
+        asyncio.run(run())
+
+    worker = threading.Thread(target=server_worker, name="qt-bridge-abort-test")
+    worker.start()
+    assert entered.wait(2.0)
+    # Main thread aborts pending commands without pumping Qt events; waiter resolves immediately.
+    t0 = time.perf_counter()
+    bridge.abort_pending()
+    worker.join(timeout=2.0)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    assert not worker.is_alive()
+    assert elapsed_ms < 250.0
+    assert outcomes == ["server_stopping"]
+    # Late queued Qt slot delivery after loop closure is a safe no-op.
+    _APP.processEvents()
+    assert dispatched == []

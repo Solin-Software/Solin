@@ -128,6 +128,7 @@ FocusScope {
                     x: toggle.width - width
                     y: (toggle.height - height) / 2
                     width: 46; height: 26; radius: 13
+                    opacity: toggle.enabled ? 1 : 0.55
                     color: toggle.checked ? appTheme.accent : appTheme.secondaryControl
                     border.color: toggle.visualFocus ? appTheme.textPrimary : "transparent"
                     border.width: 2
@@ -215,11 +216,26 @@ FocusScope {
                 spacing: 8
                 layoutDirection: root.narrow ? Qt.LeftToRight : Qt.RightToLeft
                 SettingsButton {
+                    id: actionButton
                     width: root.narrow ? parent.width : implicitWidth
                     text: root.spec.label
                     enabled: root.available
-                    primary: ["saveCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
-                    onClicked: root.domain.invoke(root.spec.action)
+                    confirmationText: root.spec.kind === "copy" ? qsTr("Copied") : ""
+                    primary: ["saveMediaCredentials", "saveTimerCredentials", "saveYeartext"].indexOf(root.spec.action) >= 0
+                    onClicked: {
+                        if (root.spec.kind !== "copy") {
+                            root.domain.invoke(root.spec.action)
+                        } else if (root.domain.copyAddress(root.spec.key)) {
+                            showConfirmation()
+                        } else {
+                            clearConfirmation()
+                        }
+                    }
+                    Connections {
+                        target: root
+                        enabled: root.spec.kind === "copy"
+                        function onValueChanged() { actionButton.clearConfirmation() }
+                    }
                 }
                 SettingsButton {
                     width: root.narrow ? parent.width : implicitWidth

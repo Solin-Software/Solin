@@ -5409,6 +5409,14 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>Solin scenes · engine unavailable</source>
         <translation>Solin-näkymät · moottori ei käytettävissä</translation>
     </message>
+    <message numerus="yes">
+        <location filename="../../widgets/quick_access_toolbar.py" line="681"/>
+        <source>Remote control · %n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>Kauko-ohjaus · %n koko näytön katselija</numerusform>
+            <numerusform>Kauko-ohjaus · %n koko näytön katselijaa</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>QuickToolbarBridge</name>
@@ -5505,6 +5513,26 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location line="-9"/>
         <source>Secure remote control is running. Certificate renewal will retry automatically.</source>
         <translation>Suojattu etäohjaus on käynnissä. Varmenteen uusimista yritetään automaattisesti uudelleen.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="245"/>
+        <source>Save Media credentials to start Media remote control.</source>
+        <translation>Tallenna Median kirjautumistiedot median etäohjauksen käynnistämiseksi.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="248"/>
+        <source>Save Timer credentials to start Timer remote control.</source>
+        <translation>Tallenna Ajastimen kirjautumistiedot ajastimen etäohjauksen käynnistämiseksi.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="252"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Ota Median tai Ajastimen etäohjaus käyttöön yhteyksien sallimiseksi.</translation>
+    </message>
+    <message>
+        <location filename="../../controllers/remote_control_controller.py" line="323"/>
+        <source>Timer remote control is running. Preparing the media catalog…</source>
+        <translation>Ajastimen etäohjaus on käynnissä. Valmistellaan medialuetteloa…</translation>
     </message>
 </context>
 <context>
@@ -5614,8 +5642,8 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
     </message>
     <message>
         <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
-        <source>Set up Solin Remote</source>
-        <translation>Määritä Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>Määritä Solin Media</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -5701,6 +5729,11 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <source>Choose another location and try again.</source>
         <translation>Valitse toinen sijainti ja yritä uudelleen.</translation>
     </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="603"/>
+        <source>Set up Solin Timer</source>
+        <translation>Määritä Solin Timer</translation>
+    </message>
 </context>
 <context>
     <name>RemoteSessionsPopup</name>
@@ -5773,6 +5806,57 @@ Nykyinen järjestys ja tiedostot säilytetään. Edellisen synkronoinnin odottav
         <location line="+35"/>
         <source>Disconnecting…</source>
         <translation>Katkaistaan yhteyttä…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="561"/>
+        <source>Media and Timer active on local network</source>
+        <translation>Media ja Ajastin aktiivisia lähiverkossa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="563"/>
+        <source>Media active on local network</source>
+        <translation>Media aktiivinen lähiverkossa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="565"/>
+        <source>Timer active on local network</source>
+        <translation>Ajastin aktiivinen lähiverkossa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="637"/>
+        <source>No signed-in Timer controllers</source>
+        <translation>Ei kirjautuneita Ajastimen ohjaimia</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="639"/>
+        <source>No signed-in Media devices</source>
+        <translation>Ei kirjautuneita Media-laitteita</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Timer</source>
+        <translation>Ajastin</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="656"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="666"/>
+        <source>%n fullscreen viewer(s)</source>
+        <translation>
+            <numerusform>%n koko näytön katselija</numerusform>
+            <numerusform>%n koko näytön katselijaa</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../../widgets/remote_sessions_popup.py" line="672"/>
+        <source>%n signed-in device(s)</source>
+        <translation>
+            <numerusform>%n kirjautunut laite</numerusform>
+            <numerusform>%n kirjautunutta laitetta</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -7827,7 +7911,7 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
     </message>
     <message>
         <source>Media</source>
-        <translation type="vanished">Media</translation>
+        <translation>Media</translation>
     </message>
     <message>
         <location line="+20"/>
@@ -8796,6 +8880,56 @@ Lisää sisältöä, kamera tai toinen näkymä.</translation>
         <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Avaa lataussivu</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="157"/>
+        <source>Install the certificate to add remote controls as apps without browser warnings.</source>
+        <translation>Asenna varmenne, jotta voit lisätä etäohjaimet sovelluksina ilman selaimen varoituksia.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="160"/>
+        <source>Browse meetings and playlists and control media projection remotely.</source>
+        <translation>Selaa kokouksia ja soittolistoja sekä ohjaa median esittämistä etänä.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="171"/>
+        <source>Timer</source>
+        <translation>Ajastin</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/catalogue.py" line="172"/>
+        <source>View the meeting timer in fullscreen without signing in, or sign in to control parts.</source>
+        <translation>Näytä kokousajastin koko näytöllä kirjautumatta tai kirjaudu sisään ohjataksesi osia.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="145"/>
+        <source>Select a private network before enabling remote control.</source>
+        <translation>Valitse yksityinen verkko ennen etäohjauksen käyttöönottoa.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="165"/>
+        <source>Enable Remote control first.</source>
+        <translation>Ota ensin Etäohjaus käyttöön.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="173"/>
+        <source>Save Media credentials before enabling Media remote control.</source>
+        <translation>Tallenna Median kirjautumistiedot ennen median etäohjauksen käyttöönottoa.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="197"/>
+        <source>Save Timer credentials before enabling Timer remote control.</source>
+        <translation>Tallenna Ajastimen kirjautumistiedot ennen ajastimen etäohjauksen käyttöönottoa.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="311"/>
+        <source>Enable Media or Timer remote control to start accepting connections.</source>
+        <translation>Ota Median tai Ajastimen etäohjaus käyttöön yhteyksien sallimiseksi.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/qml/settings/remote.py" line="394"/>
+        <source>Optional (fullscreen view only)</source>
+        <translation>Valinnainen (vain koko näytön näkymä)</translation>
     </message>
 </context>
 <context>
@@ -11159,13 +11293,13 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     <name>_RemoteControlWeb</name>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="+27"/>
-        <source>Solin Remote</source>
-        <translation>Solin Remote</translation>
+        <source>Solin Media</source>
+        <translation>Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Remote control</source>
-        <translation>Etäohjaus</translation>
+        <source>Media control</source>
+        <translation>Median ohjaus</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11174,8 +11308,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Install Solin</source>
-        <translation>Asenna Solin</translation>
+        <source>Install Solin Media</source>
+        <translation>Asenna Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11204,8 +11338,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Enable JavaScript to use Solin remote control.</source>
-        <translation>Ota JavaScript käyttöön käyttääksesi Solin-kaukosäädintä.</translation>
+        <source>Enable JavaScript to use Solin Media.</source>
+        <translation>Ota JavaScript käyttöön Solin Median käyttämiseksi.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11214,8 +11348,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>REMOTE CONTROL</source>
-        <translation>KAUKOSÄÄDIN</translation>
+        <source>MEDIA CONTROL</source>
+        <translation>MEDIAN OHJAUS</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11274,8 +11408,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Set up Solin Remote</source>
-        <translation>Määritä Solin Remote</translation>
+        <source>Set up Solin Media</source>
+        <translation>Määritä Solin Media</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11284,8 +11418,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Trust this Solin once, then install the web app for quick, secure access on your local network.</source>
-        <translation>Luota tähän Soliniin kerran ja asenna sitten verkkosovellus nopeaa ja turvallista paikallisverkkoyhteyttä varten.</translation>
+        <source>Trust this Solin once, then install Solin Media for quick, secure access on your local network.</source>
+        <translation>Luota tähän Soliniin kerran ja asenna sitten Solin Media nopeaa ja turvallista lähiverkkokäyttöä varten.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11389,13 +11523,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+4"/>
-        <source>Install Solin Remote</source>
-        <translation>Asenna Solin Remote</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Install Solin Remote on this device for quick access from your home screen.</source>
-        <translation>Asenna Solin Remote tälle laitteelle, jotta voit käyttää sitä nopeasti kotinäytöltä.</translation>
+        <source>Install Solin Media on this device for quick access from your home screen.</source>
+        <translation>Asenna Solin Media tälle laitteelle nopeaa käyttöä varten aloitusnäytöstä.</translation>
     </message>
     <message>
         <location line="+4"/>
@@ -11439,8 +11568,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Signed in. Remote control connected.</source>
-        <translation>Kirjauduttu sisään. Etäohjaus yhdistetty.</translation>
+        <source>Signed in. Media control connected.</source>
+        <translation>Kirjauduttu sisään. Median ohjaus yhdistetty.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11919,8 +12048,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+1"/>
-        <source>Solin was installed on this device.</source>
-        <translation>Solin on asennettu tähän laitteeseen.</translation>
+        <source>Solin Media was installed on this device.</source>
+        <translation>Solin Media asennettiin tälle laitteelle.</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -11992,6 +12121,311 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <source>Solin could not complete the request.</source>
         <translation>Solin ei voinut suorittaa pyyntöä.</translation>
     </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="268"/>
+        <source>Solin Timer</source>
+        <translation>Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="269"/>
+        <source>Meeting timer</source>
+        <translation>Kokousajastin</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="270"/>
+        <source>Install Solin Timer</source>
+        <translation>Asenna Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="271"/>
+        <source>Enable JavaScript to use Solin Timer.</source>
+        <translation>Ota JavaScript käyttöön Solin Timerin käyttämiseksi.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="272"/>
+        <source>Tap anywhere to hide or show controls</source>
+        <translation>Napauta piilottaaksesi tai näyttääksesi säätimet</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="273"/>
+        <source>Control parts</source>
+        <translation>Ohjaa osia</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="274"/>
+        <source>Enter fullscreen</source>
+        <translation>Siirry koko näyttöön</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="275"/>
+        <source>Exit fullscreen</source>
+        <translation>Poistu koko näytöstä</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="276"/>
+        <source>Expand</source>
+        <translation>Laajenna</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Expand timer</source>
+        <translation>Laajenna ajastin</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="277"/>
+        <source>Wall clock</source>
+        <translation>Kello</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="278"/>
+        <source>{title}: {time}</source>
+        <translation>{title}: {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="279"/>
+        <source>TIMER CONTROL</source>
+        <translation>AJASTIMEN OHJAUS</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="280"/>
+        <source>Sign in to start, stop, and adjust meeting parts from this device.</source>
+        <translation>Kirjaudu sisään käynnistääksesi, pysäyttääksesi ja säätääksesi kokouksen osia tällä laitteella.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="284"/>
+        <source>Return to fullscreen timer</source>
+        <translation>Palaa koko näytön ajastimeen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="285"/>
+        <source>Signed in. Timer control connected.</source>
+        <translation>Kirjauduttu sisään. Ajastimen ohjaus yhdistetty.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="286"/>
+        <source>Set up Solin Timer</source>
+        <translation>Määritä Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="287"/>
+        <source>Back to timer</source>
+        <translation>Takaisin ajastimeen</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="288"/>
+        <source>Trust this Solin once, then install Solin Timer for fullscreen display and quick control on your local network.</source>
+        <translation>Luota tähän Soliniin kerran ja asenna sitten Solin Timer koko näytön esitystä ja nopeaa ohjausta varten lähiverkossa.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="292"/>
+        <source>Install Solin Timer on this device for standalone fullscreen access from your home screen.</source>
+        <translation>Asenna Solin Timer tälle laitteelle nopeaa koko näytön käyttöä varten aloitusnäytöstä.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="296"/>
+        <source>Open Solin Timer</source>
+        <translation>Avaa Solin Timer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="297"/>
+        <source>This device was disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Tämän laitteen yhteys katkaistiin Solinissa. Palattiin koko näytön näkymään.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="301"/>
+        <source>All remote devices were disconnected in Solin. Returned to fullscreen view.</source>
+        <translation>Kaikkien etälaitteiden yhteys katkaistiin Solinissa. Palattiin koko näytön näkymään.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="305"/>
+        <source>Live updates and controls will resume automatically.</source>
+        <translation>Reaaliaikaiset päivitykset ja ohjaus jatkuvat automaattisesti.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="309"/>
+        <source>CURRENT TIME</source>
+        <translation>NYKYINEN AIKA</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="310"/>
+        <source>RUNNING NOW</source>
+        <translation>KÄYNNISSÄ</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="311"/>
+        <source>FINISHED</source>
+        <translation>VALMIS</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="312"/>
+        <source>No meeting part running</source>
+        <translation>Ei käynnissä olevaa kokouksen osaa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="313"/>
+        <source>Over time</source>
+        <translation>Yliajalla</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>Back to top</source>
+        <translation>Takaisin ylös</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="314"/>
+        <source>−1 s</source>
+        <translation>−1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="315"/>
+        <source>+1 s</source>
+        <translation>+1 s</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="316"/>
+        <source>Subtract 1 second</source>
+        <translation>Vähennä 1 sekunti</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="317"/>
+        <source>Add 1 second</source>
+        <translation>Lisää 1 sekunti</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="318"/>
+        <source>Midweek</source>
+        <translation>Viikolla</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="319"/>
+        <source>Weekend</source>
+        <translation>Viikonloppu</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="320"/>
+        <source>Previous week</source>
+        <translation>Edellinen viikko</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="321"/>
+        <source>Back to this week</source>
+        <translation>Takaisin tähän viikkoon</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>Not the current week</source>
+        <translation>Ei nykyinen viikko</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="322"/>
+        <source>No parts in this schedule</source>
+        <translation>Ei osia tässä ohjelmassa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="323"/>
+        <source>Parts</source>
+        <translation>Osat</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="324"/>
+        <source>Fewer parts in {section}</source>
+        <translation>Vähemmän osia osiossa {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="325"/>
+        <source>More parts in {section}</source>
+        <translation>Enemmän osia osiossa {section}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="326"/>
+        <source>Start</source>
+        <translation>Aloita</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="327"/>
+        <source>Reset</source>
+        <translation>Palauta</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="328"/>
+        <source>Started {time}</source>
+        <translation>Aloitettu {time}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="329"/>
+        <source>Duration {duration}</source>
+        <translation>Kesto {duration}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="330"/>
+        <source>−1 min</source>
+        <translation>−1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="331"/>
+        <source>+1 min</source>
+        <translation>+1 min</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="332"/>
+        <source>Subtract 1 minute from {title}</source>
+        <translation>Vähennä 1 minuutti osasta {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="333"/>
+        <source>Add 1 minute to {title}</source>
+        <translation>Lisää 1 minuutti osaan {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="334"/>
+        <source>Set duration for {title}</source>
+        <translation>Aseta kesto osalle {title}</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="335"/>
+        <source>Duration (MM:SS or minutes)</source>
+        <translation>Kesto (MM:SS tai minuutit)</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="336"/>
+        <source>Apply</source>
+        <translation>Käytä</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="337"/>
+        <source>Cancel</source>
+        <translation>Peruuta</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="338"/>
+        <source>Enter a valid duration between 01:00 and 23:59:59.</source>
+        <translation>Anna kelvollinen kesto välillä 01:00–23:59:59.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="342"/>
+        <source>Solin Timer was installed on this device.</source>
+        <translation>Solin Timer asennettiin tälle laitteelle.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="343"/>
+        <source>Signed out on this device.</source>
+        <translation>Kirjauduttu ulos tällä laitteella.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="344"/>
+        <source>Schedule updated. Try again.</source>
+        <translation>Ohjelma päivittyi. Yritä uudelleen.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="345"/>
+        <source>This timer action is disabled.</source>
+        <translation>Tämä ajastintoiminto on poistettu käytöstä.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py" line="346"/>
+        <source>This meeting part is no longer available.</source>
+        <translation>Tämä kokouksen osa ei ole enää saatavilla.</translation>
+    </message>
 </context>
 <context>
     <name>_RemoteSessionRow</name>
@@ -12049,8 +12483,8 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
     </message>
     <message>
         <location line="+4"/>
-        <source>Solin app · %1</source>
-        <translation>Solin-sovellus · %1</translation>
+        <source>Solin Media · %1</source>
+        <translation>Solin Media · %1</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -12076,6 +12510,21 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <location line="+2"/>
         <source>Active %1 d ago</source>
         <translation>Aktiivinen %1 pv sitten</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="108"/>
+        <source>Timer</source>
+        <translation>Ajastin</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="109"/>
+        <source>Media</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/remote_sessions_popup.py" line="163"/>
+        <source>Solin Timer · %1</source>
+        <translation>Solin Timer · %1</translation>
     </message>
 </context>
 <context>

@@ -79,6 +79,8 @@ class NetworkInterfaceSelection:
 @dataclass(frozen=True, slots=True)
 class RemoteControlSettingsSnapshot:
     enabled: bool
+    media_enabled: bool
+    timer_enabled: bool
     network_selection: NetworkInterfaceSelection | None
 
 
@@ -95,6 +97,8 @@ class RemoteControlSettingsStore:
     def snapshot(self) -> RemoteControlSettingsSnapshot:
         return RemoteControlSettingsSnapshot(
             enabled=self.enabled(),
+            media_enabled=self.media_enabled(),
+            timer_enabled=self.timer_enabled(),
             network_selection=self.network_selection(),
         )
 
@@ -110,6 +114,36 @@ class RemoteControlSettingsStore:
     def set_enabled(self, enabled: bool) -> None:
         self.profile_settings.settings.set_value(
             SettingsKey.REMOTE_CONTROL_ENABLED,
+            bool(enabled),
+        )
+
+    def media_enabled(self) -> bool:
+        return bool(
+            self.profile_settings.settings.value(
+                SettingsKey.REMOTE_CONTROL_MEDIA_ENABLED,
+                False,
+                bool,
+            )
+        )
+
+    def set_media_enabled(self, enabled: bool) -> None:
+        self.profile_settings.settings.set_value(
+            SettingsKey.REMOTE_CONTROL_MEDIA_ENABLED,
+            bool(enabled),
+        )
+
+    def timer_enabled(self) -> bool:
+        return bool(
+            self.profile_settings.settings.value(
+                SettingsKey.REMOTE_CONTROL_TIMER_ENABLED,
+                False,
+                bool,
+            )
+        )
+
+    def set_timer_enabled(self, enabled: bool) -> None:
+        self.profile_settings.settings.set_value(
+            SettingsKey.REMOTE_CONTROL_TIMER_ENABLED,
             bool(enabled),
         )
 

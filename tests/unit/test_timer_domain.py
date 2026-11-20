@@ -72,6 +72,7 @@ def _timer_repository(
 
 # ── Schedule defaults ─────────────────────────────────────────────────────────
 
+
 def test_midweek_default_section_totals():
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     assert [p.section for p in sch.parts] == [
@@ -324,6 +325,7 @@ def test_time_formatting_does_not_hide_unexpected_errors(monkeypatch):
 
 # ── Redistribution ────────────────────────────────────────────────────────────
 
+
 def test_redistribute_keeps_ministry_total():
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     first = sch.parts_in(Section.MINISTRY)[0]
@@ -388,7 +390,9 @@ def test_set_part_count_preserves_fixed_total():
     ]
     # Canonical ordering preserved: treasures, then ministry, then living.
     order = [p.section for p in sch.parts]
-    assert order.index(Section.TREASURES) < order.index(Section.MINISTRY) < order.index(Section.LIVING)
+    assert (
+        order.index(Section.TREASURES) < order.index(Section.MINISTRY) < order.index(Section.LIVING)
+    )
 
 
 def test_set_living_part_count_preserves_cbs():
@@ -447,7 +451,11 @@ def test_set_weekend_part_count_uses_translatable_indexed_titles():
 
 
 def _ministry_first_default() -> int:
-    return build_default_schedule(_WEEK, MeetingType.MIDWEEK).parts_in(Section.MINISTRY)[0].planned_seconds
+    return (
+        build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+        .parts_in(Section.MINISTRY)[0]
+        .planned_seconds
+    )
 
 
 def _living_last_default() -> int:
@@ -456,6 +464,7 @@ def _living_last_default() -> int:
 
 
 # ── Engine lifecycle ──────────────────────────────────────────────────────────
+
 
 def test_state_machine_transitions_are_deterministic():
     state = TimerStateMachine()
@@ -705,8 +714,8 @@ def test_engine_revert_cancelled_when_new_part_starts():
     p1, p2 = sch.parts[0], sch.parts[1]
     engine.start_part(p1.id)
     engine.stop_part(p1.id)
-    engine.start_part(p2.id)        # supersedes the pending revert
-    engine._on_revert_timeout()     # stale fire — must be a no-op
+    engine.start_part(p2.id)  # supersedes the pending revert
+    engine._on_revert_timeout()  # stale fire — must be a no-op
     assert engine.snapshot().active_part_id == p2.id
 
 
@@ -734,7 +743,7 @@ def test_engine_zero_freeze_reverts_immediately():
     part = sch.parts[0]
     engine.start_part(part.id)
     engine.stop_part(part.id)
-    assert not engine.snapshot().active   # no hold → straight to wall clock
+    assert not engine.snapshot().active  # no hold → straight to wall clock
     assert part.state is PartState.STOPPED
 
 
@@ -765,6 +774,7 @@ def test_engine_restores_running_part_from_schedule():
 
 # ── Serialization round-trips ─────────────────────────────────────────────────
 
+
 def test_part_roundtrip_preserves_runstate():
     part = MeetingPart.new(
         Section.LIVING,
@@ -792,9 +802,13 @@ def test_part_roundtrip_defaults_missing_kind_to_standard():
 
 def test_clock_config_roundtrip():
     cfg = ClockConfig(
-        mode=ClockMode.ANALOG, analog_style=AnalogClockStyle.CLASSIC,
-        hour_format_24h=False, show_ampm=True, show_seconds=False,
-        direction=Direction.UP, part_timer_display=PartTimerDisplay.CLOCK_TIMER,
+        mode=ClockMode.ANALOG,
+        analog_style=AnalogClockStyle.CLASSIC,
+        hour_format_24h=False,
+        show_ampm=True,
+        show_seconds=False,
+        direction=Direction.UP,
+        part_timer_display=PartTimerDisplay.CLOCK_TIMER,
         text_scale_pct=75,
     )
     assert ClockConfig.from_dict(cfg.to_dict()) == cfg
@@ -820,7 +834,8 @@ def test_schedule_roundtrip():
 def test_normalize_schedule_adds_current_midweek_parts_to_unused_saved_schedule():
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     sch.parts = [
-        p for p in sch.parts
+        p
+        for p in sch.parts
         if p.section not in {Section.OPENING_COMMENTS, Section.CONCLUDING_COMMENTS}
         and p.kind is not PartKind.CBS
     ]
@@ -844,7 +859,8 @@ def test_normalize_schedule_adds_current_midweek_parts_to_unused_saved_schedule(
 def test_normalize_schedule_does_not_insert_current_midweek_parts_into_used_schedule():
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     sch.parts = [
-        p for p in sch.parts
+        p
+        for p in sch.parts
         if p.section not in {Section.OPENING_COMMENTS, Section.CONCLUDING_COMMENTS}
         and p.kind is not PartKind.CBS
     ]
@@ -924,6 +940,7 @@ def test_snapshot_roundtrip_preserves_canonical_display_fields():
 
 
 # ── Store persistence ─────────────────────────────────────────────────────────
+
 
 def test_render_idle_digital_matches_wall_clock():
     import time
@@ -1007,9 +1024,15 @@ def test_render_active_countdown_and_overrun():
     from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=330, remaining_seconds=-30, overrun=True, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=0.0,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=330,
+        remaining_seconds=-30,
+        overrun=True,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(direction=Direction.DOWN, analog_style=AnalogClockStyle.CLASSIC)
     model = build_render_model(snap, cfg)
@@ -1065,9 +1088,15 @@ def test_render_active_can_show_clock_only_with_configured_clock_face():
 
     epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=epoch,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=120,
+        remaining_seconds=180,
+        overrun=False,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(
         mode=ClockMode.ANALOG_DIGITAL,
@@ -1093,9 +1122,15 @@ def test_render_active_can_show_configured_clock_with_timer():
 
     epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=epoch,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=120,
+        remaining_seconds=180,
+        overrun=False,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(
         mode=ClockMode.ANALOG,
@@ -1118,9 +1153,15 @@ def test_render_active_analog_clock_sector_marks_remaining_time():
 
     epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=epoch,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=120,
+        remaining_seconds=180,
+        overrun=False,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(
         mode=ClockMode.ANALOG,
@@ -1144,9 +1185,15 @@ def test_render_active_analog_clock_sector_marks_overrun_trail():
 
     epoch = time.mktime((2026, 6, 1, 12, 34, 10, 0, 0, -1))
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=epoch, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=330, remaining_seconds=-30, overrun=True, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=epoch,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=330,
+        remaining_seconds=-30,
+        overrun=True,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(
         mode=ClockMode.ANALOG,
@@ -1168,9 +1215,15 @@ def test_render_active_analog_clock_sector_stays_hidden_when_clock_is_not_visibl
     from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
-        active_part_title="Part 1", planned_seconds=300,
-        elapsed_seconds=120, remaining_seconds=180, overrun=False, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=0.0,
+        direction=Direction.DOWN,
+        active_part_title="Part 1",
+        planned_seconds=300,
+        elapsed_seconds=120,
+        remaining_seconds=180,
+        overrun=False,
+        state=PartState.RUNNING,
     )
     cfg = ClockConfig(
         mode=ClockMode.ANALOG,
@@ -1187,9 +1240,15 @@ def test_render_active_duration_splits_seconds_only_when_hours_are_visible():
     from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
-        active_part_title="Long Part", planned_seconds=7200,
-        elapsed_seconds=3540, remaining_seconds=3661, overrun=False, state=PartState.RUNNING,
+        active=True,
+        wall_clock_epoch=0.0,
+        direction=Direction.DOWN,
+        active_part_title="Long Part",
+        planned_seconds=7200,
+        elapsed_seconds=3540,
+        remaining_seconds=3661,
+        overrun=False,
+        state=PartState.RUNNING,
     )
 
     model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
@@ -1203,9 +1262,15 @@ def test_render_stopped_countdown_shows_elapsed_result():
     from solin.core.timer.models import TimerSnapshot
 
     snap = TimerSnapshot(
-        active=True, wall_clock_epoch=0.0, direction=Direction.DOWN,
-        active_part_title="Short Part", planned_seconds=5,
-        elapsed_seconds=3, remaining_seconds=2, overrun=False, state=PartState.STOPPED,
+        active=True,
+        wall_clock_epoch=0.0,
+        direction=Direction.DOWN,
+        active_part_title="Short Part",
+        planned_seconds=5,
+        elapsed_seconds=3,
+        remaining_seconds=2,
+        overrun=False,
+        state=PartState.STOPPED,
     )
     model = build_render_model(snap, ClockConfig(direction=Direction.DOWN))
 
@@ -1246,7 +1311,8 @@ def test_store_load_normalizes_unused_midweek_missing_current_parts(tmp_path):
     try:
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
         sch.parts = [
-            p for p in sch.parts
+            p
+            for p in sch.parts
             if p.section not in {Section.OPENING_COMMENTS, Section.CONCLUDING_COMMENTS}
             and p.kind is not PartKind.CBS
         ]
@@ -1274,7 +1340,8 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
     try:
         sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
         sch.parts = [
-            p for p in sch.parts
+            p
+            for p in sch.parts
             if p.section not in {Section.OPENING_COMMENTS, Section.CONCLUDING_COMMENTS}
             and p.kind is not PartKind.CBS
         ]
@@ -1296,3 +1363,39 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
         assert all(p["section"] != Section.CONCLUDING_COMMENTS.value for p in saved["parts"])
     finally:
         settings.clear()
+
+
+def test_is_part_duration_editable_respects_part_state_and_fixed_total_single_part_sections():
+    from solin.core.timer.schedule_factory import is_part_duration_editable
+
+    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+    opening = sch.parts[0]
+    ministry_parts = sch.parts_in(Section.MINISTRY)
+    living_parts = sch.parts_in(Section.LIVING)
+    cbs = next(p for p in living_parts if p.kind is PartKind.CBS)
+
+    assert is_part_duration_editable(sch, opening) is True
+    assert all(is_part_duration_editable(sch, p) for p in ministry_parts)
+    assert is_part_duration_editable(sch, cbs) is True
+
+    # Running and stopped parts cannot have their planned duration altered.
+    opening.state = PartState.RUNNING
+    assert is_part_duration_editable(sch, opening) is False
+    opening.state = PartState.STOPPED
+    assert is_part_duration_editable(sch, opening) is False
+    opening.state = PartState.IDLE
+    assert is_part_duration_editable(sch, opening) is True
+
+    # A fixed-total section reduced to 1 configurable part locks that part's duration,
+    # while CBS in Living remains independently editable.
+    set_section_part_count(sch, Section.LIVING, 1)
+    living_after = sch.parts_in(Section.LIVING)
+    single_living = next(p for p in living_after if p.kind is not PartKind.CBS)
+    cbs_after = next(p for p in living_after if p.kind is PartKind.CBS)
+    assert is_part_duration_editable(sch, single_living) is False
+    assert is_part_duration_editable(sch, cbs_after) is True
+
+    set_section_part_count(sch, Section.MINISTRY, 1)
+    assert is_part_duration_editable(sch, sch.parts_in(Section.MINISTRY)[0]) is False
+    set_section_part_count(sch, Section.MINISTRY, 2)
+    assert all(is_part_duration_editable(sch, p) for p in sch.parts_in(Section.MINISTRY))

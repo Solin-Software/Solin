@@ -6,7 +6,7 @@ from PIL import Image
 import pytest
 
 from solin.core.media.formats import MediaKind
-from solin.core.remote_control.thumbnails import (
+from solin.core.remote_control.media.thumbnails import (
     private_media_thumbnail_source,
     render_image_thumbnail_bytes,
     render_media_placeholder_thumbnail,

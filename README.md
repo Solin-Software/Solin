@@ -44,7 +44,7 @@ steps. For beta versions and release notes, browse
 | Compose | Combine cameras, network video feeds, media, and text in scenes. Preview them, switch with transitions, and record. |
 | Coordinate | Use meeting timers and separate profiles. Integrate with OBS and Zoom for setups that need them. |
 | Collaborate | Link a shared folder, keep a local cache, and exchange playlist archives. Receive files from a phone over Wi-Fi. |
-| Control remotely | Browse meetings and playlists and control playback from a phone, tablet, or another computer on your local network. |
+| Control remotely | Browse meetings and playlists, control playback, and view or control the meeting timer from a phone, tablet, or another computer on your local network. |
 
 Office document conversion requires LibreOffice. Linked folders use your
 existing folder-sync service. Camera and meeting-app integrations depend on
