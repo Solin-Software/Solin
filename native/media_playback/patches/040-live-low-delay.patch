@@ -1,0 +1,14 @@
+--- a/shared/media-playback/media-playback/decode.c
++++ b/shared/media-playback/media-playback/decode.c
+@@ -88,6 +88,11 @@
+ 	if (c->thread_count == 1 && c->codec_id != AV_CODEC_ID_PNG && c->codec_id != AV_CODEC_ID_TIFF &&
+ 	    c->codec_id != AV_CODEC_ID_JPEG2000 && c->codec_id != AV_CODEC_ID_MPEG4 && c->codec_id != AV_CODEC_ID_WEBP)
+ 		c->thread_count = 0;
++	/* Frame threading holds back one frame per decoder thread, up to ~16 on
++	 * many-core machines: a permanent half second behind a live camera. Live
++	 * video keeps slice threads; finite media keeps frame threads for 4K. */
++	if (!d->audio && !d->m->is_local_file)
++		c->flags |= AV_CODEC_FLAG_LOW_DELAY;
+ 
+ 	ret = avcodec_open2(c, d->codec, NULL);
+ 	if (ret < 0)

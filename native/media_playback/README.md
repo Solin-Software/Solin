@@ -70,6 +70,11 @@ The UI notification debounce is independent of clock accounting. Accepted seeks
 and clock resets discard pending read accounting. Pause/stop/error/completion take
 precedence over buffering callbacks. Live inputs retain their existing timing policy.
 
+Live video (IP cameras) decodes with `AV_CODEC_FLAG_LOW_DELAY`, which leaves slice
+threads but no frame threads. Each frame thread holds one frame back, so upstream's
+automatic threading kept a camera ~500 ms behind on a 24-core machine. Finite media
+and audio keep the upstream codec configuration.
+
 The builder qualifies a candidate in a separate process before installing the
 module and its matching data directory.
 `media-playback-manifest.json` records the relative plugin path, plugin SHA-256,

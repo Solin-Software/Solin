@@ -145,6 +145,28 @@ target_include_directories(solin-media-seek-tests PRIVATE "${CMAKE_CURRENT_BINAR
 set_target_properties(solin-media-seek-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES)
 add_test(NAME media_seek_contract COMMAND solin-media-seek-tests)
 
+# Open real FFmpeg decoders through the patched codec setup: live video must not
+# use frame threading, finite media and audio keep the upstream configuration.
+file(READ "${playback}/decode.c" decode_source)
+string(FIND "${decode_source}" "static int mp_open_codec(" codec_start)
+string(FIND "${decode_source}" "static uint16_t get_max_luminance(" codec_end)
+if(codec_start LESS 0 OR codec_end LESS codec_start)
+    message(FATAL_ERROR "Pinned codec setup function boundaries changed")
+endif()
+math(EXPR codec_length "${codec_end}-${codec_start}")
+string(SUBSTRING "${decode_source}" ${codec_start} ${codec_length} codec_function)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/codec-under-test.h" "${codec_function}")
+add_executable(solin-media-codec-tests tests/codec_contract_tests.c)
+target_include_directories(solin-media-codec-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(solin-media-codec-tests PRIVATE solin-media-runtime)
+set_target_properties(solin-media-codec-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES
+    BUILD_RPATH "${SOLIN_OBS_RUNTIME};${SOLIN_OBS_RUNTIME}/Frameworks")
+add_test(NAME media_codec_contract COMMAND solin-media-codec-tests)
+if(WIN32)
+    set_tests_properties(media_codec_contract PROPERTIES
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${SOLIN_OBS_RUNTIME}")
+endif()
+
 string(FIND "${media_source}" "static int interrupt_callback(" interrupt_start)
 string(FIND "${media_source}" "static void reset_ts(" interrupt_end)
 if(interrupt_start LESS 0 OR interrupt_end LESS interrupt_start)

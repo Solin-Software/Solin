@@ -69,5 +69,10 @@
       "013-cancellation.patch",
       "021-native-tempo.patch"
     ]
+  },
+  {
+    "file": "040-live-low-delay.patch",
+    "purpose": "Decode live video without frame-threading delay",
+    "upstream": "candidate"
   }
 ]

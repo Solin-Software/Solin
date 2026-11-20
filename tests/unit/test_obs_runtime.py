@@ -1225,7 +1225,8 @@ def test_camera_reconnect_without_capture_does_not_start_or_instantiate(
 
 
 class _RtspSource:
-    def __init__(self, settings: dict) -> None:
+    def __init__(self, settings: dict, kind: str = "ffmpeg_source") -> None:
+        self.kind = kind
         self.settings = dict(settings)
         self.updates: list[dict] = []
         self.audio_mixers = 0x3F
@@ -1239,18 +1240,45 @@ class _RtspSource:
         self.releases += 1
 
 
-def _rtsp_runtime(monkeypatch) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource]]:
+def _rtsp_runtime(
+    monkeypatch, source_types: tuple[str, ...] = ("ffmpeg_source",)
+) -> tuple[obs_runtime.ObsRuntime, list[_RtspSource]]:
     created: list[_RtspSource] = []
     runtime = obs_runtime.ObsRuntime()
     monkeypatch.setattr(runtime, "ensure_started", lambda *args, **kwargs: None)
-    runtime._pylibobs = SimpleNamespace(Source=SimpleNamespace(
-        create=lambda kind, name, settings: created.append(_RtspSource(settings)) or created[-1],
-    ))
+    runtime._pylibobs = SimpleNamespace(
+        Source=SimpleNamespace(
+            create=lambda kind, name, settings: created.append(_RtspSource(settings, kind))
+            or created[-1],
+        ),
+        enum_source_types=lambda: list(source_types),
+    )
     return runtime, created
 
 
 def _rtsp_settings(uri: str = "rtsp://camera/live", options: str = "rtsp_transport=tcp max_delay=200000 allowed_media_types=video"):
     return {"is_local_file": False, "input": uri, "ffmpeg_options": options}
+
+
+def test_shared_rtsp_source_uses_the_low_delay_solin_media_source(monkeypatch) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch, ("ffmpeg_source", "solin_media_source"))
+
+    runtime.rtsp_source("cam", "rtsp://camera/live", _rtsp_settings())
+
+    # Its live decoder skips frame threading, ~500 ms behind the room microphone.
+    assert [source.kind for source in created] == ["solin_media_source"]
+
+
+def test_shared_rtsp_source_falls_back_without_the_bundled_module(monkeypatch, caplog) -> None:
+    runtime, created = _rtsp_runtime(monkeypatch)
+
+    with caplog.at_level("WARNING"):
+        runtime.rtsp_source("cam1", "rtsp://camera/one", _rtsp_settings("rtsp://camera/one"))
+        runtime.rtsp_source("cam2", "rtsp://camera/two", _rtsp_settings("rtsp://camera/two"))
+
+    # A runtime without the module still shows the camera; the warning is logged once.
+    assert [source.kind for source in created] == ["ffmpeg_source", "ffmpeg_source"]
+    assert sum("Solin media source is unavailable" in r.message for r in caplog.records) == 1
 
 
 def test_shared_rtsp_source_follows_transport_and_buffer_edits(monkeypatch) -> None:
