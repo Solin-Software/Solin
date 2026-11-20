@@ -1,12 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from types import SimpleNamespace
 
 import pytest
 
 from solin.core.integrations.automation.zoom import controls as controls_module
-from solin.core.integrations.automation.zoom.controls import Automation, Element, ZoomControls
+from solin.core.integrations.automation.zoom.controls import (
+    BUTTON,
+    CHECKBOX,
+    LIST,
+    MENUITEM,
+    SPLITBUTTON,
+    TABITEM,
+    Automation,
+    Element,
+    ZoomControls,
+)
 from solin.core.integrations.automation.zoom.native import Window
 from solin.core.integrations.automation.zoom.sequences import run_sequence
 from solin.core.integrations.automation.zoom.state import (
@@ -428,16 +438,136 @@ def test_menu_fallback_does_not_repeat_an_existing_native_click(invoked):
     assert len(clicks) == int(invoked)
 
 
-def test_mute_all_does_not_confirm_an_unverified_self_unmute_permission():
-    controls, element, _ = _action_controls()
+def _control(name, kind=BUTTON, *, left=0):
+    return Element(None, name, kind, "", (left, 0, left + 10, 10))
+
+
+@pytest.mark.parametrize("participants_already_open", [False, True])
+def test_unrelated_lists_do_not_prevent_opening_participants(participants_already_open):
+    controls, _, _ = _action_controls()
+    toolbar_button = _control("Participantes")
+    mute = _control("Desativar Som de Todos")
+    listing = _control(
+        "Lista de participantes, use a tecla de seta para navegar"
+        if participants_already_open
+        else "Lista de chats",
+        LIST,
+    )
+    pressed = []
     controls.desktop.focus = lambda _: None
-    controls._participants = lambda: [element]
-    controls._mute_button = lambda _: element
-    controls._popup = lambda *_: (controls.window, element)
+    controls.desktop.windows = lambda **_: []
+    controls.automation.root = lambda _: object()
+
+    def elements(_, *kinds):
+        visible = [listing, mute] if pressed else [listing]
+        return [element for element in visible if element.kind in kinds]
+
+    controls.automation.elements = elements
+    controls._buttons = lambda: [toolbar_button]
+    controls._press = pressed.append
+
+    if participants_already_open:
+        with pytest.raises(ZoomAutomationError, match="host_controls_not_found"):
+            controls._participants()
+        assert not pressed
+    else:
+        assert mute in controls._participants()
+        assert pressed == [toolbar_button]
+
+
+@pytest.mark.parametrize("opens_panel_from_grid", [False, True])
+def test_participants_can_open_from_the_toolbar_overflow(opens_panel_from_grid):
+    controls, _, _ = _action_controls()
+    toolbar = object()
+    grid = object()
+    popup = Window(3, controls.window.pid, "ZGridMultiLevelPopupWndClass", 100)
+    more = _control("Mais controles da reunião", MENUITEM)
+    toolbar_button = _control("Participantes, abrir painel, 1 participantes")
+    item = _control("Participantes linha 2, coluna 3 6 de 13 fixado", TABITEM)
+    unrelated = _control("Participantes adicionais linha 1, coluna 1 1 de 13 fixado", TABITEM)
+    mute = _control("Desativar Som de Todos")
+    opened = []
+    pressed = []
+    controls.desktop.focus = lambda _: None
+    controls.desktop.windows = lambda *_, **__: []
+    controls._toolbar = lambda: toolbar
+    controls._buttons = lambda: [toolbar_button] if item in pressed else []
+    controls._participant_controls = lambda: (
+        [mute] if (toolbar_button in pressed or (opens_panel_from_grid and item in pressed)) else []
+    )
+    controls.automation.elements = lambda root, *_: [unrelated, item] if root is grid else [more]
+
+    def open_menu(button, window=None, *, popup_class):
+        opened.append((button, popup_class))
+        return popup, grid
+
+    def press(button, window=None):
+        if button == item:
+            assert window == popup
+        pressed.append(button)
+        return False
+
+    controls._open_menu = open_menu
+    controls._press = press
+
+    assert mute in controls._participants()
+    assert opened == [(more, popup.class_name)]
+    assert pressed == ([item] if opens_panel_from_grid else [item, toolbar_button])
+
+
+@pytest.mark.parametrize(
+    ("retry_supported", "panel_opens", "count_changes"),
+    [(True, True, False), (True, True, True), (True, False, False), (False, False, False)],
+)
+def test_participants_retries_invoke_without_clicking(retry_supported, panel_opens, count_changes):
+    name = "Participants, open panel, 1 participants"
+    mute = _control("Mute all")
+    invocations = []
+    pattern = SimpleNamespace(Invoke=lambda: invocations.append(True))
+    controls, toolbar_button, clicks = _action_controls(old_name=name, new_name=name)
+    cached_button = toolbar_button.raw.BuildUpdatedCache(controls.automation.cache)
+
+    def current_name():
+        return "Participants, open panel, 2 participants" if count_changes and invocations else name
+
+    toolbar_button.raw.BuildUpdatedCache = lambda _: replace(cached_button, name=current_name())
+    controls.automation.pattern = lambda *_: pattern if not invocations or retry_supported else None
+    controls.desktop.focus = lambda _: None
+    controls.desktop.windows = lambda *_, **__: []
+    controls._buttons = lambda: [replace(toolbar_button, name=current_name())]
+    controls._participant_controls = lambda: [mute] if panel_opens and len(invocations) == 2 else []
+
+    def wait(read, *, code, **_):
+        value = read()
+        if not value:
+            raise ZoomAutomationError(code)
+        return value
+
+    controls._wait = wait
+
+    if panel_opens:
+        assert mute in controls._participants()
+    else:
+        with pytest.raises(ZoomAutomationError, match="participants_panel_not_opened"):
+            controls._participants()
+    assert len(invocations) == (2 if retry_supported else 1)
+    assert not clicks
+
+
+def test_mute_all_does_not_confirm_an_unverified_self_unmute_permission():
+    controls, _, _ = _action_controls()
+    controls.desktop.focus = lambda _: None
+    mute = _control("Mute all")
+    controls._participant_controls = lambda: [mute]
+    controls._popup = lambda *_: (controls.window, object())
     pressed = []
     controls._press = lambda *args: pressed.append(args)
     toggled = []
-    controls.automation.elements = lambda *_: [element]
+    controls.automation.elements = lambda _, kind: (
+        [_control("Allow participants to unmute themselves", CHECKBOX)]
+        if kind == CHECKBOX
+        else [_control("Yes")]
+    )
     controls.automation.pattern = lambda *_: SimpleNamespace(
         CurrentToggleState=1, Toggle=lambda: toggled.append(True)
     )
@@ -451,3 +581,110 @@ def test_mute_all_does_not_confirm_an_unverified_self_unmute_permission():
         controls.mute_all(False)
     assert toggled == [True]
     assert len(pressed) == 1  # Only opens the dialog; no confirmation is sent.
+
+
+@pytest.mark.parametrize("join", [True, False])
+def test_unknown_audio_never_selects_a_control_by_position_or_shortcut(join):
+    controls, _, _ = _action_controls()
+    controls._buttons = lambda: [
+        _control("Other action" if join else "Other action, Alt+Q"),
+        _control("Start my video"),
+    ]
+    controls.desktop.focus = lambda _: None
+    controls._press = lambda *_: pytest.fail("Pressed an unrecognized audio control")
+    controls._toolbar = lambda: None
+    controls.automation.elements = lambda *_: [_control("Other menu", MENUITEM)]
+    controls._open_menu = lambda *_: pytest.fail("Opened a menu for unknown audio")
+
+    with pytest.raises(ZoomAutomationError, match="audio_control_not_found"):
+        (controls.join_audio if join else controls.leave_audio)()
+
+
+@pytest.mark.parametrize("matching_items", [0, 1, 2])
+def test_leave_audio_uses_only_unambiguous_localized_menu_actions(matching_items):
+    controls, _, _ = _action_controls()
+    buttons = [_control("Desativar som, som ativado no momento")]
+    controls._buttons = lambda: buttons
+    toolbar = object()
+    menu = object()
+    controls._toolbar = lambda: toolbar
+    audio_menu = _control("Configurações de Áudio", MENUITEM)
+    leave = _control("Sair com o áudio do computador", MENUITEM)
+    controls.automation.elements = lambda root, *_: (
+        [_control("Other menu", MENUITEM), audio_menu]
+        if root is toolbar
+        else [leave] * matching_items + [_control("Other action", MENUITEM)] * 2
+    )
+    opened = []
+    pressed = []
+
+    def open_menu(element):
+        opened.append(element)
+        return controls.window, menu
+
+    def press(element, _):
+        pressed.append(element)
+        buttons[:] = [_control("Conectar áudio")]
+
+    controls._open_menu = open_menu
+    controls._press = press
+    if matching_items == 1:
+        controls.leave_audio()
+        assert pressed == [leave]
+    else:
+        with pytest.raises(ZoomAutomationError, match="leave_audio_control_not_found"):
+            controls.leave_audio()
+        assert not pressed
+    assert opened == [audio_menu]
+
+
+def test_mute_all_recognizes_localized_controls_with_shortcut_hidden():
+    controls, _, _ = _action_controls()
+    mute = _control("Desativar Som de Todos")
+    wrong = _control("Mute all upon entry, Alt+M")
+    controls._participant_controls = lambda: [wrong, mute]
+    controls.desktop.focus = lambda _: None
+    pressed = []
+    controls._press = lambda element, _: pressed.append(element)
+    dialog = object()
+    controls._popup = lambda *_: (controls.window, dialog)
+    permission = _control("Permitir que participantes ativem seu próprio som", CHECKBOX)
+    confirm = _control("Sim", left=20)
+    cancel = _control("Não", left=0)
+    controls.automation.elements = lambda _, kind: (
+        [_control("Other option", CHECKBOX), permission] if kind == CHECKBOX else [cancel, confirm]
+    )
+    controls.automation.pattern = lambda element, _: (
+        SimpleNamespace(CurrentToggleState=0) if element == permission else None
+    )
+    controls.desktop.windows = lambda *_, **__: []
+
+    controls.mute_all(False)
+
+    assert pressed == [mute, confirm]
+
+
+def test_ask_all_to_unmute_matches_the_localized_more_button_and_menu_action():
+    controls, _, _ = _action_controls()
+    mute = _control("Mute all, Alt+M")
+    more = _control("Mais opções para gerenciar todos os participantes", SPLITBUTTON)
+    wrong_more = _control("Mais opções de intérprete", SPLITBUTTON)
+    controls._participant_controls = lambda: [mute, wrong_more, more]
+    opened = []
+
+    def open_menu(element, window):
+        opened.append(element)
+        return window, object()
+
+    controls._open_menu = open_menu
+    ask = _control("Pedir a todos para ativar o som", MENUITEM)
+    controls.automation.elements = lambda *_: [_control("Other action", MENUITEM), ask]
+    controls.automation.pattern = lambda *_: None
+    controls.desktop.windows = lambda *_, **__: []
+    pressed = []
+    controls._press = lambda element, _: pressed.append(element)
+
+    controls.ask_all_to_unmute()
+
+    assert opened == [more]
+    assert pressed == [ask]
