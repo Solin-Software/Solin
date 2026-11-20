@@ -10,8 +10,8 @@
     "upstream": "candidate"
   },
   {
-    "file": "020-list-item-bool.patch",
-    "purpose": "Return the boolean member of boolean list items (MSVC 19.52 rejects the double conversion)",
-    "upstream": "candidate"
+    "file": "020-boolean-list-item.patch",
+    "purpose": "Read boolean list items from the boolean union member",
+    "upstream": "https://github.com/obsproject/obs-studio/commit/1a44b7f40140ec202da2658ba74068da8adb5a7e"
   }
 ]
