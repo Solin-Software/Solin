@@ -8,5 +8,10 @@
     "file": "010-wasapi-preroll.patch",
     "purpose": "Prime Windows audio monitoring before starting the endpoint and rearm idle playback",
     "upstream": "candidate"
+  },
+  {
+    "file": "020-list-item-bool.patch",
+    "purpose": "Return the boolean member of boolean list items (MSVC 19.52 rejects the double conversion)",
+    "upstream": "candidate"
   }
 ]
