@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import sys
 import time
 from collections.abc import Callable
@@ -15,27 +14,38 @@ from typing import Any
 from solin.core.foundation.constants import IS_COMPILED
 
 from .i18n_labels import (
+    ALLOW_UNMUTE_TEXT,
+    ASK_UNMUTE_TEXT,
+    AUDIO_MENU_TEXT,
     AUDIO_MUTED_TEXT,
     AUDIO_UNMUTED_TEXT,
+    CONFIRM_MUTE_ALL_TEXT,
     CONNECT_AUDIO_TEXT,
-    PARTICIPANTS_TEXT,
-    VIDEO_STARTED_TEXT,
-    VIDEO_STOPPED_TEXT,
     JOIN_AUDIO_TEXT,
     LEAVE_AUDIO_TEXT,
+    MUTE_ALL_TEXT,
+    PARTICIPANTS_LIST_TEXT,
+    PARTICIPANTS_MORE_TEXT,
+    PARTICIPANTS_TEXT,
+    TOOLBAR_OVERFLOW_TEXT,
+    VIDEO_STARTED_TEXT,
+    VIDEO_STOPPED_TEXT,
 )
 from .native import FLOATING_CLASS, TOOLBAR_CLASS, Window, WindowsDesktop
 from .state import AudioState, MeetingState, VideoState, ZoomAutomationError
 from .text_match import (
     _audio_button_state_from_text,
-    _toolbar_action_match_score,
+    _grid_item_title,
+    _label_match_score,
     _video_button_state_from_text,
 )
 
 BUTTON, CHECKBOX, MENUITEM, SPLITBUTTON = 50000, 50002, 50011, 50031
+LIST, TABITEM = 50008, 50019
 INVOKE, TOGGLE = 10000, 10015
-_HOTKEY = re.compile(r"(?<![\w+])[^\s,()]+(?:\+[^\s,()]+)+(?![\w+])")
-_SEPARATOR = re.compile(r"^\d+ of \d+$")
+_OVERFLOW_WINDOW_CLASS = "ZGridMultiLevelPopupWndClass"
+_AUDIO_TEXT = AUDIO_MUTED_TEXT + AUDIO_UNMUTED_TEXT + CONNECT_AUDIO_TEXT
+_VIDEO_TEXT = VIDEO_STARTED_TEXT + VIDEO_STOPPED_TEXT
 log = logging.getLogger(__name__)
 
 
@@ -194,38 +204,32 @@ class ZoomControls:
         )
 
     @staticmethod
-    def _named(elements: list[Element], labels: list[str]) -> Element | None:
+    def _named(
+        elements: list[Element], labels: list[str], *, decorated: bool = False
+    ) -> Element | None:
         matches = [
-            (score, element)
+            element
             for element in elements
-            if (score := _toolbar_action_match_score(element.name, labels)) > 0
+            if _label_match_score(element.name, labels, decorated=decorated)
         ]
-        return max(matches, key=lambda item: item[0])[1] if matches else None
+        return matches[0] if len(matches) == 1 else None
 
     def _buttons(self) -> list[Element]:
         return self.automation.elements(self._toolbar(), BUTTON)
 
     def _audio(self) -> Element:
-        buttons = self._buttons()
-        match = self._named(buttons, AUDIO_MUTED_TEXT + AUDIO_UNMUTED_TEXT + CONNECT_AUDIO_TEXT)
-        # The first toolbar action is audio; unlike microphone/video state,
-        # connection can also be distinguished by presence of its shortcut.
-        if match:
-            return match
-        if buttons and len(buttons) > 1:
-            return buttons[0]
+        button = self._named(self._buttons(), _AUDIO_TEXT, decorated=True)
+        if button:
+            return button
         raise ZoomAutomationError("audio_control_not_found")
 
-    def _audio_joined(self) -> bool:
-        button = self._audio()
-        state = _audio_button_state_from_text(button.name)
-        if state != AudioState.UNKNOWN:
-            return state != AudioState.DISCONNECTED
-        return bool(_HOTKEY.search(button.name))
+    def _read_audio_state(self, buttons: list[Element]) -> AudioState:
+        button = self._named(buttons, _AUDIO_TEXT, decorated=True)
+        return _audio_button_state_from_text(button.name) if button else AudioState.UNKNOWN
 
     def _video(self) -> Element:
         buttons = self._buttons()
-        button = self._named(buttons, VIDEO_STARTED_TEXT + VIDEO_STOPPED_TEXT)
+        button = self._named(buttons, _VIDEO_TEXT, decorated=True)
         if button:
             return button
         raise ZoomAutomationError("video_state_unknown")
@@ -240,7 +244,9 @@ class ZoomControls:
             raise ZoomAutomationError("control_changed")
         return refreshed
 
-    def _press(self, element: Element, window: Window | None = None) -> bool:
+    def _press(
+        self, element: Element, window: Window | None = None, *, click_fallback: bool = True
+    ) -> bool:
         element = self._refresh_action(element)
         try:
             pattern = self.automation.pattern(element, INVOKE)
@@ -256,8 +262,10 @@ class ZoomControls:
                 0x80040200,  # UIA_E_NOTSUPPORTED
             }:
                 raise ZoomAutomationError("invoke_failed") from exc
-            element = self._refresh_action(element)
-        self.desktop.click(window or self.window, element.rect)
+            if click_fallback:
+                element = self._refresh_action(element)
+        if click_fallback:
+            self.desktop.click(window or self.window, element.rect)
         return False
 
     def _popup(self, class_name: str, *, timeout: float = 3) -> tuple[Window, Element]:
@@ -269,11 +277,17 @@ class ZoomControls:
 
         return self._wait(read, timeout=timeout, code="dialog_not_found")
 
-    def _open_menu(self, element: Element, window: Window | None = None) -> tuple[Window, Element]:
+    def _open_menu(
+        self,
+        element: Element,
+        window: Window | None = None,
+        *,
+        popup_class: str = "WCN_ModelessWnd",
+    ) -> tuple[Window, Element]:
         self.desktop.focus(window or self.window)
         invoked = self._press(element, window)
         try:
-            return self._popup("WCN_ModelessWnd", timeout=0.5)
+            return self._popup(popup_class, timeout=0.5)
         except ZoomAutomationError as exc:
             if exc.code != "dialog_not_found":
                 raise
@@ -281,19 +295,22 @@ class ZoomControls:
         if invoked:
             refreshed = self._refresh_action(element)
             self.desktop.click(window or self.window, refreshed.rect)
-        return self._popup("WCN_ModelessWnd")
+        return self._popup(popup_class)
 
     def join_audio(self) -> None:
-        if self._audio_joined():
+        if _audio_button_state_from_text(self._audio().name) != AudioState.DISCONNECTED:
             return
         self.desktop.focus(self.window)
-        self._press(self._audio())
+        button = self._audio()
+        if _audio_button_state_from_text(button.name) != AudioState.DISCONNECTED:
+            return
+        self._press(button)
         # Some clients connect immediately, others show the computer-audio dialog.
         pressed_dialog = False
 
         def connect():
             nonlocal pressed_dialog
-            if self._audio_joined():
+            if self._read_audio_state(self._buttons()).is_connected:
                 return True
             dialogs = self.desktop.windows("zJoinAudioWndClass", pid=self.window.pid)
             if len(dialogs) == 1 and not pressed_dialog:
@@ -304,31 +321,28 @@ class ZoomControls:
                     raise ZoomAutomationError("join_audio_control_not_found")
                 self._press(button, dialog)
                 pressed_dialog = True
-                return self._audio_joined()
+                return self._read_audio_state(self._buttons()).is_connected is True
             return False
 
         self._wait(connect, timeout=5, code="audio_not_connected")
 
     def leave_audio(self) -> None:
-        if not self._audio_joined():
+        if _audio_button_state_from_text(self._audio().name) == AudioState.DISCONNECTED:
             return
-        menus = self.automation.elements(self._toolbar(), MENUITEM)
-        if not menus:
+        menus = self.automation.elements(self._toolbar(), MENUITEM, SPLITBUTTON, BUTTON)
+        audio_menu = self._named(menus, AUDIO_MENU_TEXT, decorated=True)
+        if audio_menu is None:
             raise ZoomAutomationError("audio_menu_not_found")
-        self.desktop.focus(self.window)
-        menu_window, menu = self._open_menu(menus[0])
-        items = [
-            el
-            for el in self.automation.elements(menu, MENUITEM)
-            if el.name and not _SEPARATOR.fullmatch(el.name.strip())
-        ]
+        menu_window, menu = self._open_menu(audio_menu)
+        items = self.automation.elements(menu, MENUITEM)
         button = self._named(items, LEAVE_AUDIO_TEXT)
-        if button is None and len(items) >= 2:
-            button = items[-2]
         if button is None:
             raise ZoomAutomationError("leave_audio_control_not_found")
         self._press(button, menu_window)
-        self._wait(lambda: not self._audio_joined(), code="audio_not_disconnected")
+        self._wait(
+            lambda: self._read_audio_state(self._buttons()) == AudioState.DISCONNECTED,
+            code="audio_not_disconnected",
+        )
 
     def set_microphone(self, enabled: bool) -> None:
         wanted = AudioState.UNMUTED if enabled else AudioState.MUTED
@@ -392,51 +406,101 @@ class ZoomControls:
         if not self.desktop.valid(self._panel_window):
             self._panel_window = self.window
         root = self.automation.root(self._panel_window.handle)
-        return self.automation.elements(root, BUTTON, SPLITBUTTON)
+        return self.automation.elements(root, BUTTON, SPLITBUTTON, LIST)
 
     def _mute_button(self, elements: list[Element]) -> Element | None:
-        return next(
-            (
-                el
-                for el in elements
-                if el.kind == BUTTON and re.search(r"(?<![\w+])Alt\+M(?![\w+])", el.name)
-            ),
-            None,
+        return self._named(
+            [el for el in elements if el.kind == BUTTON], MUTE_ALL_TEXT, decorated=True
         )
 
-    def _participants(self) -> list[Element]:
+    @staticmethod
+    def _has_participant_list(elements: list[Element]) -> bool:
+        return any(
+            el.kind == LIST and _label_match_score(el.name, PARTICIPANTS_LIST_TEXT)
+            for el in elements
+        )
+
+    def _find_participant_panel(self) -> list[Element] | None:
         elements = self._participant_controls()
-        if self._mute_button(elements):
+        if self._has_participant_list(elements) or self._mute_button(elements):
             return elements
         # Detached participant panels are top-level windows in the same process.
         for window in self.desktop.windows(pid=self.window.pid):
-            if window.handle == self.window.handle:
+            if window.handle == self._panel_window.handle:
                 continue
             detached = self.automation.elements(
-                self.automation.root(window.handle), BUTTON, SPLITBUTTON
+                self.automation.root(window.handle), BUTTON, SPLITBUTTON, LIST
             )
-            if self._mute_button(detached):
+            if self._has_participant_list(detached) or self._mute_button(detached):
                 self._panel_window = window
                 return detached
-        if self.automation.elements(self._root(), 50008):
-            raise ZoomAutomationError("host_controls_not_found")
-        button = self._named(self._buttons(), PARTICIPANTS_TEXT)
-        if button is None:
+        return None
+
+    def _participants_button(self) -> Element | None:
+        return self._named(self._buttons(), PARTICIPANTS_TEXT, decorated=True)
+
+    def _select_participants_from_overflow(self) -> None:
+        if self.desktop.windows(_OVERFLOW_WINDOW_CLASS, pid=self.window.pid):
+            window, menu = self._popup(_OVERFLOW_WINDOW_CLASS)
+        else:
+            buttons = self.automation.elements(self._toolbar(), MENUITEM, BUTTON, SPLITBUTTON)
+            more = self._named(buttons, TOOLBAR_OVERFLOW_TEXT)
+            if more is None:
+                raise ZoomAutomationError("participants_control_not_found")
+            window, menu = self._open_menu(more, popup_class=_OVERFLOW_WINDOW_CLASS)
+        items = [
+            item
+            for item in self.automation.elements(menu, TABITEM)
+            if _label_match_score(_grid_item_title(item.name), PARTICIPANTS_TEXT)
+        ]
+        if len(items) != 1:
             raise ZoomAutomationError("participants_control_not_found")
+        self._press(items[0], window)
+
+    def _open_participants_panel(self) -> list[Element]:
         self.desktop.focus(self.window)
-        self._press(button)
+        button = self._participants_button()
+        if button is None:
+            self._select_participants_from_overflow()
+            # Some Zoom layouts move the selected item onto the toolbar.
+            available = self._wait(
+                lambda: self._find_participant_panel() or self._participants_button(),
+                timeout=2,
+                code="participants_control_not_found",
+            )
+            if isinstance(available, list):
+                return available
+            button = available
 
-        def opened():
-            for window in [self.window, *self.desktop.windows(pid=self.window.pid)]:
-                controls = self.automation.elements(
-                    self.automation.root(window.handle), BUTTON, SPLITBUTTON
-                )
-                if self._mute_button(controls):
-                    self._panel_window = window
-                    return controls
-            return None
+        if panel := self._find_participant_panel():
+            return panel
+        invoked = self._press(button)
+        code = "participants_panel_not_opened"
+        if invoked:
+            try:
+                return self._wait(self._find_participant_panel, timeout=0.5, code=code)
+            except ZoomAutomationError as exc:
+                if exc.code != code:
+                    raise
+            # The accessible name includes a participant count that can change while waiting.
+            retry_button = self._participants_button()
+            if panel := self._find_participant_panel():
+                return panel
+            if retry_button is not None:
+                log.warning("Zoom Participants Invoke did not open the panel; retrying Invoke")
+                self._press(retry_button, click_fallback=False)
+        return self._wait(self._find_participant_panel, timeout=3, code=code)
 
-        return self._wait(opened, code="host_controls_not_found")
+    def _participants(self) -> list[Element]:
+        panel = self._find_participant_panel() or self._open_participants_panel()
+        if self._mute_button(panel):
+            return panel
+
+        def host_controls() -> list[Element] | None:
+            panel = self._find_participant_panel()
+            return panel if panel and self._mute_button(panel) else None
+
+        return self._wait(host_controls, timeout=1, code="host_controls_not_found")
 
     def mute_all(self, allow_unmute: bool) -> None:
         button = self._mute_button(self._participants())
@@ -446,9 +510,12 @@ class ZoomControls:
         self._press(button, self._panel_window)
         dialog_window, dialog = self._popup("zChangeNameWndClass")
         checkboxes = self.automation.elements(dialog, CHECKBOX)
-        if len(checkboxes) != 1:
+        checkbox = self._named(checkboxes, ALLOW_UNMUTE_TEXT)
+        if checkbox is None:
             raise ZoomAutomationError("allow_unmute_control_not_found")
-        checkbox = checkboxes[0]
+        confirm = self._named(self.automation.elements(dialog, BUTTON), CONFIRM_MUTE_ALL_TEXT)
+        if confirm is None:
+            raise ZoomAutomationError("confirm_control_not_found")
         toggle = self.automation.pattern(checkbox, TOGGLE)
         if toggle is None:
             raise ZoomAutomationError("allow_unmute_state_unknown")
@@ -458,14 +525,7 @@ class ZoomControls:
         self._wait(
             lambda: toggle.CurrentToggleState == wanted, timeout=1, code="allow_unmute_not_changed"
         )
-        buttons = self.automation.elements(dialog, BUTTON)
-        if not buttons:
-            raise ZoomAutomationError("confirm_control_not_found")
-        lowest = max(b.rect[1] for b in buttons)
-        row = sorted([b for b in buttons if abs(b.rect[1] - lowest) <= 8], key=lambda b: b.rect[0])
-        if len(row) != 2:
-            raise ZoomAutomationError("confirm_control_not_found")
-        self._press(row[0], dialog_window)
+        self._press(confirm, dialog_window)
         self._wait(
             lambda: not self.desktop.windows("zChangeNameWndClass", pid=self.window.pid),
             code="mute_all_not_confirmed",
@@ -473,22 +533,14 @@ class ZoomControls:
 
     def ask_all_to_unmute(self) -> None:
         elements = self._participants()
-        mute = self._mute_button(elements)
-        index = elements.index(mute) if mute else len(elements)
-        more = next((el for el in elements[index + 1 :] if el.kind == SPLITBUTTON), None)
+        more = self._named(elements, PARTICIPANTS_MORE_TEXT, decorated=True)
         if more is None:
             raise ZoomAutomationError("participants_menu_not_found")
         menu_window, menu = self._open_menu(more, self._panel_window)
-        group = []
-        for el in self.automation.elements(menu, MENUITEM):
-            if _SEPARATOR.fullmatch(el.name.strip()):
-                if group:
-                    break
-            elif el.name:
-                group.append(el)
-        if not 1 <= len(group) <= 2 or self.automation.pattern(group[0], TOGGLE):
+        button = self._named(self.automation.elements(menu, MENUITEM), ASK_UNMUTE_TEXT)
+        if button is None:
             raise ZoomAutomationError("ask_unmute_control_not_found")
-        self._press(group[0], menu_window)
+        self._press(button, menu_window)
         self._wait(
             lambda: not self.desktop.windows("WCN_ModelessWnd", pid=self.window.pid),
             code="ask_unmute_not_sent",
@@ -505,10 +557,9 @@ class ZoomControls:
         if panel is None:
             return MeetingState(in_meeting=True)
         buttons = self.automation.elements(panel, BUTTON)
-        audio = self._named(buttons, AUDIO_MUTED_TEXT + AUDIO_UNMUTED_TEXT + CONNECT_AUDIO_TEXT)
-        video = self._named(buttons, VIDEO_STARTED_TEXT + VIDEO_STOPPED_TEXT)
+        video = self._named(buttons, _VIDEO_TEXT, decorated=True)
         return MeetingState(
             in_meeting=True,
-            audio=_audio_button_state_from_text(audio.name) if audio else AudioState.UNKNOWN,
+            audio=self._read_audio_state(buttons),
             video=_video_button_state_from_text(video.name) if video else VideoState.UNKNOWN,
         )
