@@ -90,7 +90,9 @@ It also exercises the upstream format initialization and interrupt callback to
 verify finite/live input cancellation while retaining remote-only timeout options.
 Terminal contracts cover failure/EOF mapping, masked I/O errors, corrupt final
 packets, cancellation, state-transition races and immediate Play/Restart after
-failure. Native integration tests cover local/HTTP transport, output pitch,
+failure. The rate contract runs the decoder worker with a controlled clock to
+verify position continuity and frame deadlines across both timely and late
+wakes. Native integration tests cover local/HTTP transport, output pitch,
 audio continuity, A/V synchronization, non-unity EOF drain and finite starvation:
 
 ```text
