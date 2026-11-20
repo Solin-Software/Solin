@@ -49,6 +49,65 @@ class SequenceResult:
         return not self.cancelled and not self.failed_steps
 
 
+class RaisedHandsStatus(StrEnum):
+    INACTIVE = "inactive"
+    NO_MEETING = "no_meeting"
+    PANEL_CLOSED = "panel_closed"
+    UNAVAILABLE = "unavailable"
+    PARTIAL = "partial"
+    READY = "ready"
+
+
+class ParticipantAction(StrEnum):
+    LOWER_HAND = "lower_hand"
+    REQUEST_UNMUTE = "request_unmute"
+    MUTE_AND_LOWER = "mute_and_lower"
+
+    @property
+    def steps(self) -> tuple[str, ...]:
+        return ("mute", "lower_hand") if self is self.MUTE_AND_LOWER else (self.value,)
+
+
+class ParticipantStepStatus(StrEnum):
+    CHANGED = "changed"
+    ALREADY_SET = "already_set"
+    REQUESTED = "requested"
+
+
+@dataclass(frozen=True, slots=True)
+class ParticipantStepResult:
+    step: str
+    status: ParticipantStepStatus
+
+
+@dataclass(frozen=True, slots=True)
+class RaisedHand:
+    name: str
+    audio: AudioState
+    reference: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RaisedHandsSnapshot:
+    status: RaisedHandsStatus = RaisedHandsStatus.INACTIVE
+    hands: tuple[RaisedHand, ...] = ()
+    chronological: bool = False
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParticipantActionResult:
+    action: ParticipantAction
+    reference: str
+    completed_steps: tuple[ParticipantStepResult, ...] = ()
+    failure: StepFailure | None = None
+    cancelled: bool = False
+
+    @property
+    def ok(self) -> bool:
+        return self.failure is None and not self.cancelled
+
+
 class ZoomAutomationError(RuntimeError):
     """Stable error code from the native automation boundary."""
 

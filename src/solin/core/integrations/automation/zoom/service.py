@@ -12,17 +12,39 @@ from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signa
 
 from solin.core.foundation.constants import IS_COMPILED, ZOOM_AUTOMATION_ARGUMENT
 
+from .protocol import (
+    MAX_MESSAGE_BYTES,
+    PARTICIPANT_ACTIONS,
+    PROTOCOL_VERSION,
+    RAISED_HANDS,
+    parse_participant_result,
+    parse_participant_step,
+    parse_snapshot,
+    valid_reference,
+)
 from .sequences import SEQUENCES
-from .state import SequenceResult, StepFailure
-from .protocol import MAX_MESSAGE_BYTES, PROTOCOL_VERSION
+from .state import (
+    ParticipantAction,
+    ParticipantActionResult,
+    ParticipantStepResult,
+    RaisedHandsSnapshot,
+    RaisedHandsStatus,
+    SequenceResult,
+    StepFailure,
+)
 
 log = logging.getLogger(__name__)
+_WRITES = SEQUENCES | PARTICIPANT_ACTIONS
+_RAISED_HANDS_INTERVAL_MS = 1500
+_PANEL_RECHECK_INTERVAL_MS = 5000
 
 
 @dataclass(frozen=True, slots=True)
 class _Request:
     id: int
     command: str
+    reference: str | None = None
+    monitor_generation: int = 0
 
 
 class ZoomService(QObject):
@@ -31,9 +53,11 @@ class ZoomService(QObject):
     busy_changed = Signal(bool)
     operation_finished = Signal(object)
     sequence_progress = Signal(str)
+    raised_hands_changed = Signal(object)
+    participant_action_finished = Signal(object)
     error = Signal(str)
 
-    def __init__(self, parent: QObject | None = None):
+    def __init__(self, parent: QObject | None = None, *, raised_hands_enabled: bool = False):
         super().__init__(parent)
         self._active = False
         self._connected = False
@@ -42,7 +66,13 @@ class ZoomService(QObject):
         self._buffer = bytearray()
         self._pending: _Request | None = None
         self._next_id = 0
-        self._queued_sequence: str | None = None
+        self._queued_operation: _Request | None = None
+        self._participant_steps: list[ParticipantStepResult] = []
+        self._raised_hands_enabled = raised_hands_enabled
+        self._monitoring = False
+        self._monitor_generation = 0
+        self._open_panel_once = False
+        self._snapshot = RaisedHandsSnapshot()
         self._restart_delay_ms = 1000
         self._poll = QTimer(self)
         self._poll.setInterval(1000)
@@ -65,9 +95,13 @@ class ZoomService(QObject):
 
     @property
     def is_busy(self) -> bool:
-        return self._queued_sequence is not None or bool(
-            self._pending and self._pending.command in SEQUENCES
+        return self._queued_operation is not None or bool(
+            self._pending and self._pending.command in _WRITES
         )
+
+    @property
+    def raised_hands_snapshot(self) -> RaisedHandsSnapshot:
+        return self._snapshot
 
     def start(self) -> None:
         if not self.is_available or self._active:
@@ -81,6 +115,7 @@ class ZoomService(QObject):
         was_active = self._active
         self._active = False
         self._poll.stop()
+        self.stop_raised_hands_monitoring()
         process = self._process
         self._retire(cancelled=True)
         if wait and process is not None:
@@ -98,18 +133,51 @@ class ZoomService(QObject):
         if self._process is None:
             self._launch()
         elif self._ready:
-            self._send("meeting")
+            if self._monitoring and self._connected:
+                open_panel, self._open_panel_once = self._open_panel_once, False
+                self._send(RAISED_HANDS, open_panel=open_panel)
+            else:
+                self._send("meeting")
 
     def request_pre_meeting(self) -> bool:
-        return self._request_sequence("pre_meeting")
+        return self._queue_operation("pre_meeting")
 
     def request_post_meeting(self) -> bool:
-        return self._request_sequence("post_meeting")
+        return self._queue_operation("post_meeting")
 
-    def _request_sequence(self, sequence: str) -> bool:
+    def start_raised_hands_monitoring(self) -> bool:
+        if not self._active or not self._raised_hands_enabled or self._monitoring:
+            return False
+        self._monitoring = self._open_panel_once = True
+        self._monitor_generation += 1
+        status = RaisedHandsStatus.UNAVAILABLE if self._connected else RaisedHandsStatus.NO_MEETING
+        self._publish_hands(RaisedHandsSnapshot(status))
+        self.refresh()
+        return True
+
+    def stop_raised_hands_monitoring(self) -> None:
+        if not self._monitoring:
+            return
+        self._monitoring = self._open_panel_once = False
+        self._monitor_generation += 1
+        self._publish_hands(RaisedHandsSnapshot())
+
+    def request_participant_action(self, action: ParticipantAction, reference: str) -> bool:
+        if not isinstance(action, ParticipantAction) or not self._has_reference(reference):
+            return False
+        return self._queue_operation(action.value, reference)
+
+    def _has_reference(self, reference: str) -> bool:
+        return (
+            self._monitoring
+            and valid_reference(reference)
+            and any(hand.reference == reference for hand in self._snapshot.hands)
+        )
+
+    def _queue_operation(self, command: str, reference: str | None = None) -> bool:
         if not self._active or not self._connected or self.is_busy:
             return False
-        self._queued_sequence = sequence
+        self._queued_operation = _Request(0, command, reference)
         self.busy_changed.emit(True)
         if self._pending is None:
             self._dispatch()
@@ -137,25 +205,49 @@ class ZoomService(QObject):
         self._deadline.start(10000)
         process.start(sys.executable, arguments)
 
-    def _send(self, command: str) -> None:
+    def _send(
+        self, command: str, *, reference: str | None = None, open_panel: bool = False
+    ) -> None:
         if self._process is None or not self._ready:
             return
         self._next_id += 1
-        self._pending = _Request(self._next_id, command)
-        payload = json.dumps({"id": self._next_id, "command": command}).encode() + b"\n"
-        self._deadline.start(35000 if command in SEQUENCES else 3000)
+        self._pending = _Request(self._next_id, command, reference, self._monitor_generation)
+        request: dict[str, object] = {"id": self._next_id, "command": command}
+        if command == RAISED_HANDS:
+            request["open_panel"] = open_panel
+        if reference is not None:
+            request["reference"] = reference
+        payload = json.dumps(request).encode() + b"\n"
+        timeout = 3000
+        if command in SEQUENCES:
+            timeout = 35000
+        elif command in PARTICIPANT_ACTIONS:
+            timeout = 18000
+        elif open_panel:
+            timeout = 10000
+        self._deadline.start(timeout)
         if self._process.write(payload) != len(payload):
             self._retire(code="worker_failed")
 
     def _dispatch(self) -> None:
         if self._pending is not None or not self._active:
             return
-        if self._queued_sequence:
-            sequence = self._queued_sequence
-            self._queued_sequence = None
-            self._send(sequence)
-        else:
+        operation, self._queued_operation = self._queued_operation, None
+        if operation is None:
             self.refresh()
+        elif operation.reference is None:
+            self._send(operation.command)
+        elif self._has_reference(operation.reference):
+            self._send(operation.command, reference=operation.reference)
+        else:
+            self.busy_changed.emit(False)
+            self.participant_action_finished.emit(
+                ParticipantActionResult(
+                    ParticipantAction(operation.command),
+                    operation.reference,
+                    failure=StepFailure("target", "participant_changed"),
+                )
+            )
 
     def _read(self, process: QProcess) -> None:
         if process is not self._process:
@@ -171,6 +263,8 @@ class ZoomService(QObject):
                 if not isinstance(message, dict):
                     raise ValueError("Invalid worker message")
                 self._receive(message)
+                if process is not self._process:
+                    return
             if len(self._buffer) > MAX_MESSAGE_BYTES:
                 raise ValueError("Oversized worker message")
         except (ValueError, TypeError, KeyError):
@@ -193,59 +287,138 @@ class ZoomService(QObject):
                 raise ValueError("Unexpected progress")
             self.sequence_progress.emit(message["step"])
             return
-        if pending.command == "meeting":
-            if "error" in message:
-                self._set_connected(False)
+        if "participant_step" in message:
+            if pending.reference is None:
+                raise ValueError("Unexpected participant progress")
+            self._participant_steps.append(
+                parse_participant_step(
+                    message["participant_step"],
+                    ParticipantAction(pending.command),
+                    len(self._participant_steps),
+                )
+            )
+            return
+        error = message.get("error")
+        if error is not None and not isinstance(error, str):
+            raise ValueError("Invalid worker error")
+        command = pending.command
+        if command == "meeting":
+            connected = False if error else message.get("connected")
+            if type(connected) is not bool:
+                raise ValueError("Invalid connection state")
+        elif command == RAISED_HANDS:
+            snapshot = (
+                self._snapshot_from_error(error) if error else parse_snapshot(message["snapshot"])
+            )
+        elif pending.reference is not None:
+            action = ParticipantAction(command)
+            if error:
+                completed = tuple(self._participant_steps)
+                participant_result = ParticipantActionResult(
+                    action, pending.reference, completed, StepFailure("worker", error)
+                )
             else:
-                if type(message.get("connected")) is not bool:
-                    raise ValueError("Invalid connection state")
-                self._set_connected(message["connected"])
-                self._restart_delay_ms = 1000
+                participant_result = parse_participant_result(
+                    message["result"], action, pending.reference
+                )
+                if tuple(self._participant_steps) != participant_result.completed_steps:
+                    raise ValueError("Inconsistent participant action progress")
         else:
-            if "error" in message:
-                outcome = SequenceResult(
-                    pending.command, (StepFailure("meeting", str(message["error"])),)
-                )
-            else:
-                result = message["result"]
-                if result["sequence"] != pending.command or type(result["cancelled"]) is not bool:
-                    raise ValueError("Invalid operation result")
-                failures = result["failed_steps"]
-                if not isinstance(failures, list) or len(failures) > 4:
-                    raise ValueError("Invalid operation failures")
-                if any(
-                    not isinstance(f, dict)
-                    or not isinstance(f.get("step"), str)
-                    or not isinstance(f.get("code"), str)
-                    for f in failures
-                ):
-                    raise ValueError("Invalid operation failure")
-                outcome = SequenceResult(
-                    pending.command,
-                    tuple(StepFailure(f["step"], f["code"]) for f in failures),
-                    result["cancelled"],
-                )
+            outcome = self._sequence_result(command, message, error)
+
         self._deadline.stop()
         self._pending = None
-        if pending.command in SEQUENCES:
+        self._participant_steps.clear()
+        if command == "meeting":
+            self._set_connected(connected)
+            if not error:
+                self._restart_delay_ms = 1000
+        elif command == RAISED_HANDS:
+            if error == "meeting_not_found":
+                self._set_connected(False)
+            elif self._monitoring and pending.monitor_generation == self._monitor_generation:
+                self._publish_hands(snapshot)
+        elif pending.reference is not None:
+            failure = participant_result.failure
+            if failure is not None:
+                if failure.code == "meeting_not_found":
+                    self._set_connected(False)
+                elif failure.code == "panel_closed" and self._monitoring:
+                    self._publish_hands(RaisedHandsSnapshot(RaisedHandsStatus.PANEL_CLOSED))
+            self.busy_changed.emit(False)
+            self.participant_action_finished.emit(participant_result)
+        else:
             if any(f.code == "meeting_not_found" for f in outcome.failed_steps):
                 self._set_connected(False)
             log.debug(
                 "Zoom %s completed in %s ms: %s",
-                pending.command,
+                command,
                 message.get("elapsed_ms"),
                 outcome,
             )
             self.busy_changed.emit(False)
             self.operation_finished.emit(outcome)
         # Avoid an immediate endless chain of connection queries.
-        if self._queued_sequence is not None:
+        if self._queued_operation is not None or (
+            self._monitoring and self._open_panel_once and self._connected
+        ):
             self._dispatch()
 
-    def _set_connected(self, connected: bool) -> None:
-        self._poll.setInterval(5000 if connected else 1000)
-        if self._connected != connected:
-            self._connected = connected
+    @staticmethod
+    def _sequence_result(command: str, message: dict, error: str | None) -> SequenceResult:
+        if error:
+            return SequenceResult(command, (StepFailure("meeting", error),))
+        result = message["result"]
+        if result["sequence"] != command or type(result["cancelled"]) is not bool:
+            raise ValueError("Invalid operation result")
+        failures = result["failed_steps"]
+        if not isinstance(failures, list) or len(failures) > 4:
+            raise ValueError("Invalid operation failures")
+        if any(
+            not isinstance(f, dict)
+            or not isinstance(f.get("step"), str)
+            or not isinstance(f.get("code"), str)
+            for f in failures
+        ):
+            raise ValueError("Invalid operation failure")
+        return SequenceResult(
+            command,
+            tuple(StepFailure(f["step"], f["code"]) for f in failures),
+            result["cancelled"],
+        )
+
+    @staticmethod
+    def _snapshot_from_error(error: str) -> RaisedHandsSnapshot:
+        if error == "meeting_not_found":
+            return RaisedHandsSnapshot(RaisedHandsStatus.NO_MEETING)
+        if error == "panel_closed":
+            return RaisedHandsSnapshot(RaisedHandsStatus.PANEL_CLOSED)
+        return RaisedHandsSnapshot(RaisedHandsStatus.UNAVAILABLE, error=error)
+
+    def _publish_hands(self, snapshot: RaisedHandsSnapshot) -> None:
+        previous, self._snapshot = self._snapshot, snapshot
+        self._set_poll_interval()
+        if snapshot != previous:
+            self.raised_hands_changed.emit(snapshot)
+
+    def _set_poll_interval(self) -> None:
+        if not self._connected:
+            interval = 1000
+        elif self._monitoring and self._snapshot.status is RaisedHandsStatus.READY:
+            interval = _RAISED_HANDS_INTERVAL_MS
+        else:
+            interval = _PANEL_RECHECK_INTERVAL_MS
+        if interval != self._poll.interval():
+            self._poll.setInterval(interval)
+
+    def _set_connected(self, connected: bool, *, error: str | None = None) -> None:
+        changed = self._connected != connected
+        self._connected = connected
+        if self._monitoring and not connected:
+            self._publish_hands(self._snapshot_from_error(error or "meeting_not_found"))
+        else:
+            self._set_poll_interval()
+        if changed:
             self.connection_changed.emit(connected)
 
     def _timed_out(self) -> None:
@@ -268,10 +441,12 @@ class ZoomService(QObject):
 
     def _retire(self, *, code: str | None = None, cancelled: bool = False) -> None:
         process, self._process = self._process, None
-        sequence = self._queued_sequence
-        if self._pending and self._pending.command in SEQUENCES:
-            sequence = self._pending.command
-        self._queued_sequence = None
+        operation = self._queued_operation
+        if self._pending and self._pending.command in _WRITES:
+            operation = self._pending
+        completed = tuple(self._participant_steps)
+        self._participant_steps.clear()
+        self._queued_operation = None
         self._pending = None
         self._ready = False
         self._buffer.clear()
@@ -281,15 +456,27 @@ class ZoomService(QObject):
                 process.deleteLater()
             else:
                 process.kill()
-        self._set_connected(False)
+        self._set_connected(False, error=code)
         if code:
             log.warning("Zoom automation worker retired: %s", code)
             self._poll.setInterval(self._restart_delay_ms)
             self._restart_delay_ms = min(30000, self._restart_delay_ms * 2)
-        if sequence:
+        if operation is not None:
+            failure = StepFailure("worker", code) if code else None
             self.busy_changed.emit(False)
-            self.operation_finished.emit(
-                SequenceResult(sequence, (StepFailure("worker", code),) if code else (), cancelled)
-            )
+            if operation.reference is None:
+                self.operation_finished.emit(
+                    SequenceResult(operation.command, (failure,) if failure else (), cancelled)
+                )
+            else:
+                self.participant_action_finished.emit(
+                    ParticipantActionResult(
+                        ParticipantAction(operation.command),
+                        operation.reference,
+                        completed,
+                        failure,
+                        cancelled,
+                    )
+                )
         elif code:
             self.error.emit(code)

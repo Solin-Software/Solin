@@ -424,6 +424,9 @@ available on a particular machine.
   COM client with `--verify-zoom-runtime` before accepting the artifact; no Zoom
   meeting is required. Meeting automation is enabled by default on Windows and
   respects an explicitly saved preference.
+  The raised-hands backend is opt-in through `ZoomService(raised_hands_enabled=True)`.
+  Starting a monitor can open Participants once. Later reads are passive and
+  report when the panel is closed or the participant list is incomplete.
   Background-song linking is available whenever background playback is enabled,
   including manual playback without scheduled days. An application controller
   stops playback on manual meeting start, respecting the configured fade and

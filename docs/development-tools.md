@@ -37,3 +37,5 @@ the same result for another contributor or a build runner.
 On Windows, `python scripts/benchmark_zoom.py --samples 30` measures native
 meeting discovery and cached audio/video reads with P50 and P95 timings. Open
 a Zoom meeting first. The benchmark does not change meeting controls or focus.
+Add `--raised-hands` with the Participants panel open to also measure passive
+raised-hand reads, including their snapshot status and UIA queries per read.

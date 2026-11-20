@@ -40,10 +40,11 @@ from .text_match import (
     _video_button_state_from_text,
 )
 
-BUTTON, CHECKBOX, MENUITEM, SPLITBUTTON = 50000, 50002, 50011, 50031
-LIST, TABITEM = 50008, 50019
+BUTTON, CHECKBOX, MENUITEM, SPLITBUTTON, WINDOW = 50000, 50002, 50011, 50031, 50032
+LISTITEM, LIST, TABITEM, TEXT = 50007, 50008, 50019, 50020
 INVOKE, TOGGLE = 10000, 10015
 _OVERFLOW_WINDOW_CLASS = "ZGridMultiLevelPopupWndClass"
+_PARTICIPANT_WINDOW_CLASS = "ZPlistPopupContainerWndClass"
 _AUDIO_TEXT = AUDIO_MUTED_TEXT + AUDIO_UNMUTED_TEXT + CONNECT_AUDIO_TEXT
 _VIDEO_TEXT = VIDEO_STARTED_TEXT + VIDEO_STOPPED_TEXT
 log = logging.getLogger(__name__)
@@ -123,6 +124,58 @@ class Automation:
         self.query_count += 1
         found = root.raw.FindAllBuildCache(4, condition, self.cache)
         return [self._element(found.GetElement(index)) for index in range(found.Length)]
+
+    def participant_rows(self, listing: Element) -> list[tuple[Element, tuple[str, ...]]]:
+        # Zoom exposes the display name as a Text descendant, below intermediate
+        # panes. Cache the rows and their descendants in one provider request.
+        cache = self.cache.Clone()
+        cache.TreeScope = 7  # TreeScope_Subtree
+        condition = self.client.CreatePropertyCondition(30003, LISTITEM)
+        self.query_count += 1
+        rows = listing.raw.FindAllBuildCache(2, condition, cache)
+        result = []
+        for index in range(rows.Length):
+            raw = rows.GetElement(index)
+            names = tuple(
+                child.CachedName
+                for child in self._cached_descendants(raw)
+                if child.CachedControlType == TEXT and child.CachedName
+            )
+            result.append((self._element(raw), names))
+        return result
+
+    @staticmethod
+    def _cached_descendants(raw):
+        pending = [raw]
+        while pending:
+            children = pending.pop().GetCachedChildren()
+            if children:
+                for index in range(children.Length):
+                    child = children.GetElement(index)
+                    yield child
+                    pending.append(child)
+
+    def compare(self, first: Element, second: Element) -> bool:
+        return bool(self.client.CompareElements(first.raw, second.raw))
+
+    def refresh(self, element: Element) -> Element:
+        self.query_count += 1
+        return self._element(element.raw.BuildUpdatedCache(self.cache))
+
+    def outside_list(self, element: Element, root: Element) -> bool:
+        walker = self.client.ControlViewWalker
+        parent = element.raw
+        for _ in range(32):
+            self.query_count += 1
+            parent = walker.GetParentElementBuildCache(parent, self.cache)
+            if not parent:
+                return False
+            kind = parent.CachedControlType
+            if kind in (LIST, LISTITEM):
+                return False
+            if kind == WINDOW:
+                return bool(self.client.CompareElements(parent, root.raw))
+        return False
 
     def pattern(self, element: Element, pattern: int):
         interface = (
@@ -238,8 +291,7 @@ class ZoomControls:
         self.check_meeting()
         # Refresh geometry immediately before an action; windows may have moved
         # since discovery. A changed action label must never be toggled blindly.
-        self.automation.query_count += 1
-        refreshed = self.automation._element(element.raw.BuildUpdatedCache(self.automation.cache))
+        refreshed = self.automation.refresh(element)
         if refreshed.name != element.name or not refreshed.raw.CachedIsEnabled:
             raise ZoomAutomationError("control_changed")
         return refreshed
@@ -420,21 +472,50 @@ class ZoomControls:
             for el in elements
         )
 
-    def _find_participant_panel(self) -> list[Element] | None:
-        elements = self._participant_controls()
-        if self._has_participant_list(elements) or self._mute_button(elements):
+    def _find_participant_panel(self, *, require_list: bool = False) -> list[Element] | None:
+        def matches(elements: list[Element]) -> bool:
+            return self._has_participant_list(elements) or (
+                not require_list and self._mute_button(elements) is not None
+            )
+
+        if require_list:
+            self._panel_window = self.window
+            elements = self.automation.elements(self._root(), LIST)
+            windows = (_PARTICIPANT_WINDOW_CLASS,)
+            kinds = (LIST,)
+        else:
+            elements = self._participant_controls()
+            windows = ()
+            kinds = (BUTTON, SPLITBUTTON, LIST)
+        if matches(elements):
             return elements
         # Detached participant panels are top-level windows in the same process.
-        for window in self.desktop.windows(pid=self.window.pid):
+        panels = []
+        for window in self.desktop.windows(*windows, pid=self.window.pid):
             if window.handle == self._panel_window.handle:
                 continue
-            detached = self.automation.elements(
-                self.automation.root(window.handle), BUTTON, SPLITBUTTON, LIST
-            )
-            if self._has_participant_list(detached) or self._mute_button(detached):
-                self._panel_window = window
-                return detached
+            detached = self.automation.elements(self.automation.root(window.handle), *kinds)
+            if matches(detached):
+                panels.append((window, detached))
+        if len(panels) > 1:
+            raise ZoomAutomationError("participants_panel_ambiguous")
+        if panels:
+            self._panel_window, elements = panels[0]
+            return elements
         return None
+
+    def participant_list(self, *, open_if_closed: bool = False) -> tuple[Window, Element] | None:
+        panel = self._find_participant_panel(require_list=True)
+        if panel is None:
+            if not open_if_closed:
+                return None
+            panel = self._open_participants_panel(require_list=True)
+        listing = self._named(panel, PARTICIPANTS_LIST_TEXT)
+        if listing is None:
+            raise ZoomAutomationError("participants_list_ambiguous")
+        if listing.raw.CachedIsOffscreen:
+            raise ZoomAutomationError("participants_list_unavailable")
+        return self._panel_window, listing
 
     def _participants_button(self) -> Element | None:
         return self._named(self._buttons(), PARTICIPANTS_TEXT, decorated=True)
@@ -457,14 +538,17 @@ class ZoomControls:
             raise ZoomAutomationError("participants_control_not_found")
         self._press(items[0], window)
 
-    def _open_participants_panel(self) -> list[Element]:
+    def _open_participants_panel(self, *, require_list: bool = False) -> list[Element]:
+        def find_panel():
+            return self._find_participant_panel(require_list=require_list)
+
         self.desktop.focus(self.window)
         button = self._participants_button()
         if button is None:
             self._select_participants_from_overflow()
             # Some Zoom layouts move the selected item onto the toolbar.
             available = self._wait(
-                lambda: self._find_participant_panel() or self._participants_button(),
+                lambda: find_panel() or self._participants_button(),
                 timeout=2,
                 code="participants_control_not_found",
             )
@@ -472,24 +556,24 @@ class ZoomControls:
                 return available
             button = available
 
-        if panel := self._find_participant_panel():
+        if panel := find_panel():
             return panel
         invoked = self._press(button)
         code = "participants_panel_not_opened"
         if invoked:
             try:
-                return self._wait(self._find_participant_panel, timeout=0.5, code=code)
+                return self._wait(find_panel, timeout=0.5, code=code)
             except ZoomAutomationError as exc:
                 if exc.code != code:
                     raise
             # The accessible name includes a participant count that can change while waiting.
             retry_button = self._participants_button()
-            if panel := self._find_participant_panel():
+            if panel := find_panel():
                 return panel
             if retry_button is not None:
                 log.warning("Zoom Participants Invoke did not open the panel; retrying Invoke")
                 self._press(retry_button, click_fallback=False)
-        return self._wait(self._find_participant_panel, timeout=3, code=code)
+        return self._wait(find_panel, timeout=3, code=code)
 
     def _participants(self) -> list[Element]:
         panel = self._find_participant_panel() or self._open_participants_panel()
