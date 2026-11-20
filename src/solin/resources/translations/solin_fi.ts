@@ -10518,6 +10518,71 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
         <source>End of meeting</source>
         <translation>Kokouksen loppu</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands</source>
+        <translation>Nostetut kädet</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Lower hand</source>
+        <translation>Laske käsi</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Ask to unmute</source>
+        <translation>Pyydä poistamaan mykistys</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute and lower hand</source>
+        <translation>Mykistä ja laske käsi</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Open Participants in Zoom to resume.</source>
+        <translation>Jatka avaamalla Zoomin osallistujapaneeli.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Waiting for a Zoom meeting.</source>
+        <translation>Odotetaan Zoom-kokousta.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Could not read the Participants list.</source>
+        <translation>Osallistujaluetteloa ei voitu lukea.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Checking Zoom Participants…</source>
+        <translation>Tarkistetaan Zoomin osallistujapaneelia…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Only part of the Participants list is available.</source>
+        <translation>Vain osa osallistujaluettelosta on käytettävissä.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No raised hands.</source>
+        <translation>Ei nostettuja käsiä.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant action could not be completed.</source>
+        <translation>Osallistujan toimintoa ei voitu suorittaa loppuun.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted. Could not confirm the hand was lowered.</source>
+        <translation>Osallistuja mykistettiin. Käden laskemista ei voitu vahvistaa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Unmute requested.</source>
+        <translation>Mykistyksen poistamista pyydetty.</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>

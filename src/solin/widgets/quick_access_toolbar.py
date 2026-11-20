@@ -450,10 +450,17 @@ class QuickAccessToolbar(QQuickWidget):
             return self._zoom_panel
         from solin.widgets.zoom_panel import ZoomPanel
 
-        panel = ZoomPanel(self)
+        raised_hands_available = bool(self._zoom and self._zoom.raised_hands_available)
+        panel = ZoomPanel(self, raised_hands_available=raised_hands_available)
         if self._zoom:
             panel.cancel_requested.connect(self._zoom.cancel)
             panel.set_busy(self._zoom.is_busy)
+            if raised_hands_available:
+                self._zoom.raised_hands_changed.connect(panel.set_raised_hands_snapshot)
+                self._zoom.participant_action_finished.connect(panel.set_participant_action_result)
+                panel.raised_hands_toggled.connect(self._on_zoom_hands_toggled)
+                panel.participant_action_requested.connect(self._on_zoom_participant_action)
+                panel.set_raised_hands_snapshot(self._zoom.raised_hands_snapshot)
         panel.before_meeting_requested.connect(self.zoom_before_meeting_requested)
         panel.meeting_start_requested.connect(self.zoom_meeting_start_requested)
         panel.after_meeting_requested.connect(self.zoom_after_meeting_requested)
@@ -587,6 +594,17 @@ class QuickAccessToolbar(QQuickWidget):
     def _on_zoom_busy(self, busy: bool) -> None:
         if self._zoom_panel is not None:
             self._zoom_panel.set_busy(busy)
+
+    def _on_zoom_hands_toggled(self, enabled: bool) -> None:
+        if enabled:
+            if not self._zoom.start_raised_hands_monitoring():
+                self._zoom_panel.set_raised_hands_snapshot(self._zoom.raised_hands_snapshot)
+        else:
+            self._zoom.stop_raised_hands_monitoring()
+
+    def _on_zoom_participant_action(self, action, reference: str) -> None:
+        if not self._zoom.request_participant_action(action, reference):
+            self._zoom_panel.reject_participant_action()
 
     def set_remote_control_status(
         self,

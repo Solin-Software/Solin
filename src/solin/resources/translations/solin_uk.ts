@@ -10558,6 +10558,71 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>End of meeting</source>
         <translation>Кінець зібрання</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands</source>
+        <translation>Підняті руки</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Lower hand</source>
+        <translation>Опустити руку</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Ask to unmute</source>
+        <translation>Попросити ввімкнути звук</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute and lower hand</source>
+        <translation>Вимкнути звук і опустити руку</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Open Participants in Zoom to resume.</source>
+        <translation>Щоб продовжити, відкрийте панель «Учасники» в Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Waiting for a Zoom meeting.</source>
+        <translation>Очікування конференції Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Could not read the Participants list.</source>
+        <translation>Не вдалося прочитати список учасників.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Checking Zoom Participants…</source>
+        <translation>Перевірка панелі «Учасники» в Zoom…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Only part of the Participants list is available.</source>
+        <translation>Доступна лише частина списку учасників.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No raised hands.</source>
+        <translation>Немає піднятих рук.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant action could not be completed.</source>
+        <translation>Не вдалося виконати дію для учасника.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted. Could not confirm the hand was lowered.</source>
+        <translation>Звук учасника вимкнено. Не вдалося підтвердити, що руку опущено.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Unmute requested.</source>
+        <translation>Запит на ввімкнення звуку надіслано.</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>

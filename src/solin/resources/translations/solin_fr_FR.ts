@@ -10518,6 +10518,71 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
         <source>End of meeting</source>
         <translation>Fin de la réunion</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands</source>
+        <translation>Mains levées</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Lower hand</source>
+        <translation>Baisser la main</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Ask to unmute</source>
+        <translation>Demander de réactiver le micro</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute and lower hand</source>
+        <translation>Couper le micro et baisser la main</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Open Participants in Zoom to resume.</source>
+        <translation>Ouvrez le panneau Participants dans Zoom pour reprendre.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Waiting for a Zoom meeting.</source>
+        <translation>En attente d’une réunion Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Could not read the Participants list.</source>
+        <translation>Impossible de lire la liste des participants.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Checking Zoom Participants…</source>
+        <translation>Vérification du panneau Participants de Zoom…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Only part of the Participants list is available.</source>
+        <translation>Seule une partie de la liste des participants est disponible.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No raised hands.</source>
+        <translation>Aucune main levée.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant action could not be completed.</source>
+        <translation>Impossible de terminer l’action pour ce participant.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted. Could not confirm the hand was lowered.</source>
+        <translation>Micro coupé. Impossible de confirmer que la main a été baissée.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Unmute requested.</source>
+        <translation>Réactivation du micro demandée.</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>

@@ -10518,6 +10518,71 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <source>End of meeting</source>
         <translation>Mwisho wa mkutano</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands</source>
+        <translation>Mikono iliyoinuliwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Lower hand</source>
+        <translation>Shusha mkono</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Ask to unmute</source>
+        <translation>Omba awashe sauti</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute and lower hand</source>
+        <translation>Zima sauti na ushushe mkono</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Open Participants in Zoom to resume.</source>
+        <translation>Fungua kidirisha cha Washiriki kwenye Zoom ili kuendelea.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Waiting for a Zoom meeting.</source>
+        <translation>Inasubiri mkutano wa Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Could not read the Participants list.</source>
+        <translation>Orodha ya washiriki haikuweza kusomwa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Checking Zoom Participants…</source>
+        <translation>Inakagua kidirisha cha Washiriki cha Zoom…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Only part of the Participants list is available.</source>
+        <translation>Sehemu tu ya orodha ya washiriki inapatikana.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No raised hands.</source>
+        <translation>Hakuna mikono iliyoinuliwa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant action could not be completed.</source>
+        <translation>Kitendo kwa mshiriki hakikuweza kukamilishwa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted. Could not confirm the hand was lowered.</source>
+        <translation>Sauti ya mshiriki imezimwa. Haikuwezekana kuthibitisha kwamba mkono ulishushwa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Unmute requested.</source>
+        <translation>Ombi la kuwasha sauti limetolewa.</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>

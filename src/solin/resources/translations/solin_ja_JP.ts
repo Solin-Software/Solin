@@ -10478,6 +10478,71 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>End of meeting</source>
         <translation>集会の終了</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands</source>
+        <translation>挙手</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Lower hand</source>
+        <translation>手を下ろす</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Ask to unmute</source>
+        <translation>ミュート解除を求める</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute and lower hand</source>
+        <translation>ミュートして手を下ろす</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Open Participants in Zoom to resume.</source>
+        <translation>再開するには Zoom の参加者パネルを開いてください。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Waiting for a Zoom meeting.</source>
+        <translation>Zoom ミーティングを待機中です。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Could not read the Participants list.</source>
+        <translation>参加者リストを読み取れませんでした。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Checking Zoom Participants…</source>
+        <translation>Zoom の参加者パネルを確認中…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Only part of the Participants list is available.</source>
+        <translation>参加者リストは一部のみ利用できます。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>No raised hands.</source>
+        <translation>挙手している参加者はいません。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant action could not be completed.</source>
+        <translation>参加者への操作を完了できませんでした。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted. Could not confirm the hand was lowered.</source>
+        <translation>参加者をミュートしました。手が下ろされたことは確認できませんでした。</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Unmute requested.</source>
+        <translation>ミュート解除をリクエストしました。</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>

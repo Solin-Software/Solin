@@ -13,7 +13,18 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_ZOOM_AFTER_MEETING,
 )
 from solin.core.integrations.automation import shortcuts
-from solin.core.integrations.automation.zoom.state import SequenceResult, StepFailure
+from solin.core.integrations.automation.zoom.state import (
+    AudioState,
+    ParticipantAction,
+    ParticipantActionResult,
+    ParticipantStepResult,
+    ParticipantStepStatus,
+    RaisedHand,
+    RaisedHandsSnapshot,
+    RaisedHandsStatus,
+    SequenceResult,
+    StepFailure,
+)
 from solin.widgets.zoom_panel import ZoomPanel
 
 
@@ -221,6 +232,52 @@ def test_popup_disables_actions_without_meeting_and_during_operation():
         assert not panel._integration.isHidden() and panel._link.isChecked()
         panel.set_background_song_link(False, False)
         assert panel._integration.isHidden()
+    finally:
+        panel.deleteLater()
+
+
+def test_popup_revalidates_selection_when_raised_hands_reorder_or_disappear():
+    panel = ZoomPanel(raised_hands_available=True)
+    panel.set_connected(True)
+    first = RaisedHand("First", AudioState.MUTED, "a" * 32)
+    second = RaisedHand("Second", AudioState.UNMUTED, "b" * 32)
+    commands = []
+    panel.participant_action_requested.connect(lambda action, ref: commands.append((action, ref)))
+    try:
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (first, second)))
+        panel._hands_list.setCurrentRow(0)
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (second, first)))
+        panel._participant_buttons[ParticipantAction.LOWER_HAND].click()
+        assert commands == [(ParticipantAction.LOWER_HAND, first.reference)]
+
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (second,)))
+        assert not any(button.isEnabled() for button in panel._participant_buttons.values())
+        panel._hands_list.setCurrentRow(0)
+        assert panel._participant_buttons[ParticipantAction.MUTE_AND_LOWER].isEnabled()
+        assert not panel._participant_buttons[ParticipantAction.REQUEST_UNMUTE].isEnabled()
+        panel.set_busy(True)
+        assert not any(button.isEnabled() for button in panel._participant_buttons.values())
+    finally:
+        panel.deleteLater()
+
+
+def test_popup_shows_partial_result_even_after_participant_is_removed_from_the_list():
+    panel = ZoomPanel(raised_hands_available=True)
+    try:
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY))
+        assert panel._hands_feedback.isHidden()
+        panel.set_participant_action_result(
+            ParticipantActionResult(
+                ParticipantAction.MUTE_AND_LOWER,
+                "a" * 32,
+                (ParticipantStepResult("mute", ParticipantStepStatus.CHANGED),),
+                StepFailure("lower_hand", "participant_state_not_changed"),
+            )
+        )
+        assert not panel._hands_feedback.isHidden()
+        assert panel._hands_list.isHidden()
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot())
+        assert panel._hands_feedback.isHidden()
     finally:
         panel.deleteLater()
 

@@ -103,6 +103,10 @@ class ZoomService(QObject):
     def raised_hands_snapshot(self) -> RaisedHandsSnapshot:
         return self._snapshot
 
+    @property
+    def raised_hands_available(self) -> bool:
+        return self.is_available and self._raised_hands_enabled
+
     def start(self) -> None:
         if not self.is_available or self._active:
             return

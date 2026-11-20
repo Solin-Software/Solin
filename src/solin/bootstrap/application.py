@@ -1,6 +1,7 @@
 import os
 import logging
 import sys
+from functools import partial
 from uuid import uuid4
 
 from solin.core.foundation.qt_logging import (
@@ -395,7 +396,7 @@ def _build_main_window_service_factories(
         auto_key_dispatcher=AutoKeyDispatcher,
         obs_websocket=OBSWebSocketService,
         ndi_receiver=NDIReceiverService,
-        zoom=ZoomService,
+        zoom=partial(ZoomService, raised_hands_enabled=True),
         background_song=BackgroundSongService,
         yeartext=lambda parent: YeartextService(
             cache_file=runtime_paths.cache_dir / "yeartext_cache.json",
