@@ -140,6 +140,19 @@ if(WIN32)
     set_tests_properties(media_tempo_contract PROPERTIES
         ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${SOLIN_OBS_RUNTIME}")
 endif()
+add_executable(solin-media-rate-tests tests/rate_contract_tests.c rate_tempo.c
+    "${playback}/decode.c")
+target_link_libraries(solin-media-rate-tests PRIVATE solin-media-runtime)
+set_target_properties(solin-media-rate-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES
+    BUILD_RPATH "${SOLIN_OBS_RUNTIME};${SOLIN_OBS_RUNTIME}/Frameworks")
+add_test(NAME media_rate_contract COMMAND solin-media-rate-tests video.mp4)
+set_tests_properties(media_rate_contract PROPERTIES TIMEOUT 10
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/fixtures/media_extract")
+if(WIN32)
+    set_tests_properties(media_rate_contract PROPERTIES
+        ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${SOLIN_OBS_RUNTIME}")
+endif()
+
 add_executable(solin-media-seek-tests tests/seek_contract_tests.c)
 target_include_directories(solin-media-seek-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 set_target_properties(solin-media-seek-tests PROPERTIES C_STANDARD 17 C_STANDARD_REQUIRED YES)
