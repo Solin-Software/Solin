@@ -40,6 +40,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 log = logging.getLogger(__name__)
 
+# Registered by native/media_playback (libobs_media_source.MEDIA_SOURCE_ID).
+_SOLIN_MEDIA_SOURCE_ID = "solin_media_source"
+
 # Solin audio routing modes. OBS monitoring itself is an on/off switch.
 MONITORING_NONE = 0
 MONITORING_MONITOR_ONLY = 1
@@ -285,6 +288,7 @@ class ObsRuntime:
         self._video_observers: Any | None = None
         self._rtsp_sources: dict[str, Any] = {}
         self._rtsp_source_seq = 0
+        self._rtsp_fallback_logged = False
         self._camera_source_seq = 0
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
@@ -547,7 +551,7 @@ class ObsRuntime:
             self._rtsp_source_seq += 1
             try:
                 source = self.ob.Source.create(
-                    "ffmpeg_source", f"solin-shared-rtsp-{self._rtsp_source_seq}", settings
+                    self._rtsp_source_kind(), f"solin-shared-rtsp-{self._rtsp_source_seq}", settings
                 )
             except Exception:  # noqa: BLE001 - source-creation boundary
                 log.warning("Could not create the IP camera source", exc_info=True)
@@ -567,6 +571,24 @@ class ObsRuntime:
             _show_newest_frame(source)
             self._rtsp_sources[camera_id] = (source, dict(settings))
             return source
+
+    def _rtsp_source_kind(self) -> str:
+        """Solin's media source when the bundled module is loaded, else upstream's.
+
+        Its live-input decoder skips frame threading, which otherwise holds back
+        one frame per thread (~500 ms on a 24-core machine) and puts the virtual
+        camera visibly behind the room microphone. A runtime without the module
+        (a development pylibobs) still shows the camera, just later.
+        """
+        try:
+            if _SOLIN_MEDIA_SOURCE_ID in self.ob.enum_source_types():
+                return _SOLIN_MEDIA_SOURCE_ID
+        except Exception:  # noqa: BLE001 - plugin enumeration boundary
+            log.debug("Could not enumerate source types", exc_info=True)
+        if not self._rtsp_fallback_logged:
+            self._rtsp_fallback_logged = True
+            log.warning("The bundled Solin media source is unavailable; IP cameras use ffmpeg_source")
+        return "ffmpeg_source"
 
     def _release_rtsp_sources(self) -> None:
         for source, _settings in self._rtsp_sources.values():
