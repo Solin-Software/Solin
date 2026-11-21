@@ -10,6 +10,7 @@ import pytest
 
 from solin.bootstrap import entrypoint
 from solin.core.foundation.constants import CAMERA_DISCOVERY_ARGUMENT, LIBOBS_SIDECAR_ARGUMENT, ZOOM_AUTOMATION_ARGUMENT
+from solin.core.integrations.automation.zoom.protocol import PROTOCOL_VERSION
 from solin.core.scenes.ipc_protocol import SceneIpcEnvelope, encode_envelope, read_envelope
 from tests._paths import REPO_ROOT
 
@@ -57,7 +58,7 @@ def test_launcher_zoom_discovery_protocol_does_not_load_qt(tmp_path):
                             capture_output=True, timeout=10, cwd=tmp_path)
     assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert messages[0] == {"ready": 1}
+    assert messages[0] == {"ready": PROTOCOL_VERSION}
     assert messages[1]["id"] == 1 and type(messages[1]["connected"]) is bool
 
 
