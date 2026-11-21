@@ -7,6 +7,7 @@ Item {
     id: root
     required property var spec
     required property var domain
+    required property Component groupDelegate
     property int depth: 0
     property var state: domain ? domain.state : ({})
     property bool expanded: !spec.collapsible || settingsNavigation.expanded(spec.id)
@@ -34,8 +35,7 @@ Item {
             }
         }
         for (let i = 0; i < childGroups.count; i++) {
-            const loader = childGroups.itemAt(i)
-            const child = loader ? loader.item : null
+            const child = childGroups.itemAt(i)
             if (!child)
                 continue
             const row = child.reveal(key)
@@ -151,27 +151,10 @@ Item {
 
                 Repeater {
                     id: childGroups
-                    model: root.spec.children || []
-                    delegate: Loader {
-                        id: childLoader
-                        required property var modelData
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 12
-                        Layout.rightMargin: 12
-                        Layout.topMargin: 8
-                        Layout.bottomMargin: 10
-                        Layout.preferredHeight: item ? item.implicitHeight : 0
-                        Component.onCompleted: setSource("SettingsGroup.qml", {
-                            "spec": modelData,
-                            "domain": root.domain,
-                            "depth": root.depth + 1
-                        })
-                        Connections {
-                            target: childLoader.item
-                            ignoreUnknownSignals: true
-                            function onChoose(row, owner) { root.choose(row, owner) }
-                        }
-                    }
+                    model: (root.spec.children || []).map(spec => ({
+                        spec: spec, domain: root.domain, depth: root.depth + 1
+                    }))
+                    delegate: root.groupDelegate
                 }
             }
         }
