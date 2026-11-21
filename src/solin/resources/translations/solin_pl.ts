@@ -10515,8 +10515,8 @@ Oba urządzenia muszą być w tej samej sieci Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>Rozłącz swoje audio i wideo i zezwól wszystkim na wyłączenie wyciszenia.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>Rozłącz swoje audio i wideo i poproś wszystkich o wyłączenie wyciszenia.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10542,11 +10542,6 @@ Oba urządzenia muszą być w tej samej sieci Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>Zatrzymaj pieśń na początku zebrania; odtwarzaj ją przed/po zebraniu. Zatrzymanie pieśni zgodnie z harmonogramem również przygotowuje Zoom.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Spotkanie Zoom</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10622,6 +10617,81 @@ Oba urządzenia muszą być w tej samej sieci Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>Wysłano prośbę o wyłączenie wyciszenia.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>Zebranie</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>Synchronizuj odtwarzanie ze sterowaniem spotkaniem.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>Automatyzacja w toku…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>Monitoruj podniesione ręce</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>Mikrofon wyciszony</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>Mikrofon włączony</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>Brak połączenia z dźwiękiem</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>Stan mikrofonu nieznany</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Włącz monitorowanie, aby zobaczyć podniesione ręce w Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>Monitorowanie wyłączone</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>Monitorowanie wstrzymane</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>Lista niedostępna</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>Nowo podniesione ręce pojawią się tu podczas spotkania.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>Ręka opuszczona.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>Wyciszono uczestnika i opuszczono jego rękę.</translation>
     </message>
 </context>
 <context>

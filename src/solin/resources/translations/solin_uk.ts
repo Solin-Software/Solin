@@ -10515,8 +10515,8 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>Відключити свої звук і відео та дозволити всім вмикати звук.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>Відключити свої звук і відео та попросити всіх увімкнути звук.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10542,11 +10542,6 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>Зупинити пісню на початку зібрання; відтворювати до/після зібрання. Зупинка пісні за розкладом також готує Zoom.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Зустріч у Zoom</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10622,6 +10617,81 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>Запит на ввімкнення звуку надіслано.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>Зібрання</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>Синхронізуйте відтворення з керуванням конференцією.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>Триває автоматизація…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>Відстежувати підняті руки</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>Мікрофон вимкнено</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>Мікрофон увімкнено</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>Аудіо від’єднано</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>Стан мікрофона невідомий</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Увімкніть відстеження, щоб бачити підняті руки в Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>Відстеження вимкнено</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>Відстеження призупинено</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>Список недоступний</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>Нові підняті руки з’являтимуться тут під час конференції.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>Руку опущено.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>Мікрофон учасника вимкнено, руку опущено.</translation>
     </message>
 </context>
 <context>

@@ -3,7 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtTest import QTest
 
 from solin.controllers.zoom_meeting_controller import ZoomMeetingController
 from solin.core.integrations.automation.auto_key_actions import (
@@ -236,27 +237,54 @@ def test_popup_disables_actions_without_meeting_and_during_operation():
         panel.deleteLater()
 
 
-def test_popup_revalidates_selection_when_raised_hands_reorder_or_disappear():
+def test_popup_keeps_row_actions_bound_to_the_same_participant_after_a_reorder():
     panel = ZoomPanel(raised_hands_available=True)
     panel.set_connected(True)
-    first = RaisedHand("First", AudioState.MUTED, "a" * 32)
-    second = RaisedHand("Second", AudioState.UNMUTED, "b" * 32)
+    panel._tabs.setCurrentIndex(1)
+    first = RaisedHand("Same name", AudioState.MUTED, "a" * 32)
+    second = RaisedHand("Same name", AudioState.UNMUTED, "b" * 32)
     commands = []
     panel.participant_action_requested.connect(lambda action, ref: commands.append((action, ref)))
     try:
         panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (first, second)))
-        panel._hands_list.setCurrentRow(0)
+        lower = panel._rows[first.reference].button(ParticipantAction.LOWER_HAND)
+        QTest.mousePress(lower, Qt.MouseButton.LeftButton)
         panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (second, first)))
-        panel._participant_buttons[ParticipantAction.LOWER_HAND].click()
+        QTest.mouseRelease(lower, Qt.MouseButton.LeftButton)
         assert commands == [(ParticipantAction.LOWER_HAND, first.reference)]
 
         panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (second,)))
-        assert not any(button.isEnabled() for button in panel._participant_buttons.values())
-        panel._hands_list.setCurrentRow(0)
-        assert panel._participant_buttons[ParticipantAction.MUTE_AND_LOWER].isEnabled()
-        assert not panel._participant_buttons[ParticipantAction.REQUEST_UNMUTE].isEnabled()
+        lower.click()
+        row = panel._rows[second.reference]
+        assert row.button(ParticipantAction.REQUEST_UNMUTE).isHidden()
+        row.button(ParticipantAction.MUTE_AND_LOWER).click()
         panel.set_busy(True)
-        assert not any(button.isEnabled() for button in panel._participant_buttons.values())
+        row.button(ParticipantAction.LOWER_HAND).click()
+        assert commands == [
+            (ParticipantAction.LOWER_HAND, first.reference),
+            (ParticipantAction.MUTE_AND_LOWER, second.reference),
+        ]
+    finally:
+        panel.deleteLater()
+
+
+def test_popup_does_not_retarget_an_audio_click_when_the_microphone_state_changes():
+    panel = ZoomPanel(raised_hands_available=True)
+    panel.set_connected(True)
+    reference = "a" * 32
+    commands = []
+    panel.participant_action_requested.connect(lambda action, ref: commands.append((action, ref)))
+    try:
+        muted = RaisedHand("Speaker", AudioState.MUTED, reference)
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (muted,)))
+        row = panel._rows[reference]
+        request = row.button(ParticipantAction.REQUEST_UNMUTE)
+        QTest.mousePress(request, Qt.MouseButton.LeftButton)
+        unmuted = RaisedHand("Speaker", AudioState.UNMUTED, reference)
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY, (unmuted,)))
+        QTest.mouseRelease(request, Qt.MouseButton.LeftButton)
+        assert commands == []
+        assert row.button(ParticipantAction.MUTE_AND_LOWER).isEnabled()
     finally:
         panel.deleteLater()
 
@@ -265,7 +293,7 @@ def test_popup_shows_partial_result_even_after_participant_is_removed_from_the_l
     panel = ZoomPanel(raised_hands_available=True)
     try:
         panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY))
-        assert panel._hands_feedback.isHidden()
+        assert panel._feedback_line.isHidden()
         panel.set_participant_action_result(
             ParticipantActionResult(
                 ParticipantAction.MUTE_AND_LOWER,
@@ -274,10 +302,26 @@ def test_popup_shows_partial_result_even_after_participant_is_removed_from_the_l
                 StepFailure("lower_hand", "participant_state_not_changed"),
             )
         )
-        assert not panel._hands_feedback.isHidden()
-        assert panel._hands_list.isHidden()
+        assert not panel._feedback_line.isHidden()
+        assert panel._roster.isHidden()
         panel.set_raised_hands_snapshot(RaisedHandsSnapshot())
-        assert panel._hands_feedback.isHidden()
+        assert panel._feedback_line.isHidden()
+    finally:
+        panel.deleteLater()
+
+
+def test_popup_acknowledges_a_confirmed_hand_action():
+    panel = ZoomPanel(raised_hands_available=True)
+    try:
+        panel.set_raised_hands_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.READY))
+        panel.set_participant_action_result(
+            ParticipantActionResult(
+                ParticipantAction.LOWER_HAND,
+                "a" * 32,
+                (ParticipantStepResult("lower_hand", ParticipantStepStatus.CHANGED),),
+            )
+        )
+        assert not panel._feedback_line.isHidden()
     finally:
         panel.deleteLater()
 

@@ -10435,8 +10435,8 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>내 오디오와 비디오를 연결 해제하고 모두가 음소거를 해제할 수 있게 합니다.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>내 오디오와 비디오 연결을 해제하고 모두에게 음소거 해제를 요청합니다.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10462,11 +10462,6 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>집회 시작 시 노래를 멈추고 집회 전후에 재생합니다. 노래가 예약된 시간에 멈출 때도 Zoom을 준비합니다.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Zoom 회의</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10542,6 +10537,81 @@ Both devices must be on the same Wi-Fi network.</source>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>음소거 해제를 요청했습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>집회</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>재생을 회의 제어와 연동합니다.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>자동화 실행 중…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>손 들기 모니터링</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>마이크 음소거됨</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>마이크 켜짐</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>오디오 연결 끊김</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>마이크 상태 알 수 없음</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Zoom에서 손을 든 참가자를 보려면 모니터링을 켜세요.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>모니터링 꺼짐</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>모니터링 일시 중지됨</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>목록을 사용할 수 없음</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>회의 중 새로 손을 든 참가자가 여기에 표시됩니다.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>손을 내렸습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>참가자의 마이크를 음소거하고 손을 내렸습니다.</translation>
     </message>
 </context>
 <context>

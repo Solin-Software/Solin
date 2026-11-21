@@ -424,9 +424,10 @@ available on a particular machine.
   COM client with `--verify-zoom-runtime` before accepting the artifact; no Zoom
   meeting is required. Meeting automation is enabled by default on Windows and
   respects an explicitly saved preference.
-  The Zoom toolbar popup offers opt-in raised-hand monitoring. Enabling it can
-  open Participants once. Later reads are passive, and the popup tells the
-  operator when the panel needs to be reopened or the list is incomplete.
+  The Zoom toolbar popup offers opt-in monitoring in the Raised hands tab, with
+  individual controls alongside each participant. Enabling it can open
+  Participants once. Later reads are passive, and the popup indicates when the
+  panel needs to be reopened or the list is incomplete.
   Background-song linking is available whenever background playback is enabled,
   including manual playback without scheduled days. An application controller
   stops playback on manual meeting start, respecting the configured fade and

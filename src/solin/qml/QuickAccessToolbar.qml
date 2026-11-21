@@ -272,6 +272,7 @@ Item {
 
             // ── Zoom ─────────────────────────────────────────────────
             Item {
+                objectName: "toolbarZoomButton"
                 visible: bridge.zoomVisible
                 width: 30; height: 30
 

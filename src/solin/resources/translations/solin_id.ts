@@ -10435,8 +10435,8 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>Putuskan audio dan video Anda dan izinkan semua peserta membuka suara.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>Putuskan audio dan video Anda dan minta semua peserta mengaktifkan suara.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10462,11 +10462,6 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>Hentikan lagu saat perhimpunan dimulai; putar sebelum/sesudah perhimpunan. Penghentian lagu terjadwal juga menyiapkan Zoom.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Pertemuan Zoom</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10542,6 +10537,81 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>Permintaan untuk mengaktifkan suara telah dibuat.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>Perhimpunan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>Sinkronkan pemutaran dengan kontrol rapat.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>Otomatisasi sedang berlangsung…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>Pantau tangan yang diangkat</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>Mikrofon dibisukan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>Mikrofon aktif</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>Audio terputus</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>Status mikrofon tidak diketahui</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Aktifkan pemantauan untuk melihat tangan yang diangkat di Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>Pemantauan nonaktif</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>Pemantauan dijeda</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>Daftar tidak tersedia</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>Peserta yang baru mengangkat tangan muncul di sini selama rapat.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>Tangan diturunkan.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>Mikrofon peserta dibisukan dan tangan diturunkan.</translation>
     </message>
 </context>
 <context>

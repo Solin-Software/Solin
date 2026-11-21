@@ -15,9 +15,16 @@ import sys
 from solin.styles.theme import PALETTE
 
 # Declared without eagerly constructing the SVG returned by __getattr__.
+ICON_CHECK: str
 ICON_CURSOR_HOVER: str
+ICON_INFO_CIRCLE: str
+ICON_MICROPHONE: str
+ICON_MICROPHONE_OFF: str
 ICON_PEOPLE: str
+ICON_PLAY: str
+ICON_RAISED_HAND: str
 ICON_REMOTE_CONTROL: str
+ICON_SLIDERS: str
 ICON_VIDEO: str
 ICON_ZOOM: str
 
@@ -232,6 +239,10 @@ _ICON_NAMES = frozenset(
         "ICON_FOLDER",
         "ICON_FOLDER_LINK",
         "ICON_ZOOM",
+        "ICON_MICROPHONE",
+        "ICON_MICROPHONE_OFF",
+        "ICON_RAISED_HAND",
+        "ICON_SLIDERS",
         "ICON_PEOPLE",
         "ICON_INFO_CIRCLE",
         "ICON_SPEAKER_PHONE",
@@ -1110,6 +1121,34 @@ def _build_icon_svg(name: str) -> str:
             "14 9.32 14 10v2.9c0 .678.26 1.324.712 1.772l2.817 2.48c.573.567 1.471.108 1.471-.751"
             'V6.635c0-.86-.898-1.318-1.471-.752z"/>'
             "</svg>"
+        )
+    elif name in {"ICON_MICROPHONE", "ICON_MICROPHONE_OFF"}:
+        path = (
+            '<rect x="9" y="2" width="6" height="12" rx="3"/>'
+            '<path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4"/>'
+            if name == "ICON_MICROPHONE"
+            else '<path d="M3 3l18 18M9 9v2a3 3 0 0 0 5 2.2M9 4.5a3 3 0 0 1 6 0V10'
+            'M5 10v1a7 7 0 0 0 11.2 5.6M19 10v1a7 7 0 0 1-.4 2.3M12 18v4"/>'
+        )
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" '
+            f'stroke-linejoin="round">{path}</svg>'
+        )
+    elif name == "ICON_RAISED_HAND":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'
+            '<path d="M8 13V6a1.5 1.5 0 0 1 3 0v4-6a1.5 1.5 0 0 1 3 0v6-4'
+            'a1.5 1.5 0 0 1 3 0v4-1a1.5 1.5 0 0 1 3 0v5a8 8 0 0 1-8 8h-1a6 6 0 0 1-4.6-2.1L3 16'
+            'a1.7 1.7 0 0 1 2.6-2.2L8 16"/></svg>'
+        )
+    elif name == "ICON_SLIDERS":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="1.6" stroke-linecap="round">'
+            '<path d="M3 5h4m4 0h10M3 12h11m4 0h3M3 19h6m4 0h8M7 2.5v5m7 2v5m-5 2v5"/>'
+            '</svg>'
         )
     elif name == "ICON_PEOPLE":
         return (

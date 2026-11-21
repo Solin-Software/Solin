@@ -10475,8 +10475,8 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>Verbreek je audio en video en sta iedereen toe het dempen op te heffen.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>Verbreek je audio en video en vraag iedereen om de demping op te heffen.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10502,11 +10502,6 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>Stop het lied bij het begin van de vergadering; speel het ervoor/erna af. Het gepland stoppen van het lied bereidt ook Zoom voor.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Zoom-vergadering</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10582,6 +10577,81 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>Opheffing van demping aangevraagd.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>Vergadering</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>Synchroniseer het afspelen met de vergaderbediening.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>Automatisering bezig…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>Opgestoken handen volgen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>Microfoon gedempt</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>Microfoon aan</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>Audio niet verbonden</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>Microfoonstatus onbekend</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Zet het volgen aan om opgestoken handen in Zoom te zien.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>Volgen staat uit</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>Volgen gepauzeerd</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>Lijst niet beschikbaar</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>Nieuwe opgestoken handen verschijnen hier tijdens de vergadering.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>Hand neergelaten.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>Microfoon van deelnemer gedempt en hand neergelaten.</translation>
     </message>
 </context>
 <context>

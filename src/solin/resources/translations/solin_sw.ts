@@ -10475,8 +10475,8 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Disconnect your audio and video and allow everyone to unmute.</source>
-        <translation>Tenganisha sauti na video yako na uruhusu wote kuwasha sauti.</translation>
+        <source>Disconnect your audio and video and ask everyone to unmute.</source>
+        <translation>Tenganisha sauti na video yako na uwaombe wote wawashe sauti.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10502,11 +10502,6 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom.</source>
         <translation>Simamisha wimbo mkutano unapoanza; ucheze kabla/baada ya mkutano. Kusimama kwa wimbo kulikoratibiwa pia huandaa Zoom.</translation>
-    </message>
-    <message>
-        <location filename="../../widgets/zoom_panel.py"/>
-        <source>Zoom Meeting</source>
-        <translation>Mkutano wa Zoom</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
@@ -10582,6 +10577,81 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <location filename="../../widgets/zoom_panel.py"/>
         <source>Unmute requested.</source>
         <translation>Ombi la kuwasha sauti limetolewa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Meeting</source>
+        <translation>Mkutano</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Sync playback with meeting controls.</source>
+        <translation>Sawazisha uchezaji na vidhibiti vya mkutano.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Automation in progress…</source>
+        <translation>Uendeshaji otomatiki unaendelea…</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitor raised hands</source>
+        <translation>Fuatilia mikono iliyoinuliwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone muted</source>
+        <translation>Maikrofoni imezimwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone on</source>
+        <translation>Maikrofoni imewashwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Audio disconnected</source>
+        <translation>Sauti haijaunganishwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Microphone status unknown</source>
+        <translation>Hali ya maikrofoni haijulikani</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Enable monitoring to see raised hands in Zoom.</source>
+        <translation>Washa ufuatiliaji ili kuona mikono iliyoinuliwa kwenye Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring is off</source>
+        <translation>Ufuatiliaji umezimwa</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Monitoring paused</source>
+        <translation>Ufuatiliaji umesitishwa kwa muda</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>List unavailable</source>
+        <translation>Orodha haipatikani</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>New raised hands appear here during the meeting.</source>
+        <translation>Mikono mipya iliyoinuliwa itaonekana hapa wakati wa mkutano.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Hand lowered.</source>
+        <translation>Mkono umeshushwa.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Participant muted and hand lowered.</source>
+        <translation>Maikrofoni ya mshiriki imezimwa na mkono umeshushwa.</translation>
     </message>
 </context>
 <context>

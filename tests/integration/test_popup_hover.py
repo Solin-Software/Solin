@@ -414,7 +414,10 @@ def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     monkeypatch.setattr(service, "_send", lambda command, **kwargs: commands.append((command, kwargs)))
     toolbar._on_zoom_clicked()
     popup = toolbar._zoom_panel
-    assert not popup._monitor_hands.isHidden()
+    assert popup._meeting_page.isVisible()
+    assert not popup._hands_page.isVisible()
+    QTest.mouseClick(popup._tabs, Qt.MouseButton.LeftButton, pos=popup._tabs.tabRect(1).center())
+    assert popup._monitor_hands.isVisible()
     assert not popup._monitor_hands.isChecked()
 
     popup._monitor_hands.click()
@@ -422,20 +425,46 @@ def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     reference = "1" * 32
     hand = RaisedHand("Participant", AudioState.MUTED, reference)
     service._publish_hands(RaisedHandsSnapshot(RaisedHandsStatus.READY, (hand,)))
-    popup._hands_list.setCurrentRow(0)
-    popup._participant_buttons[ParticipantAction.REQUEST_UNMUTE].click()
+    popup._rows[reference].button(ParticipantAction.REQUEST_UNMUTE).click()
     assert commands == [("request_unmute", {"reference": reference})]
     service.busy_changed.emit(False)
+    assert not popup._count.isHidden()
+    assert popup._tabs.accessibleTabName(1) != popup._tabs.tabText(1)
+    popup._tabs.setCurrentIndex(0)
+    assert not popup._hands_page.isVisible()
+    assert popup._count.isVisible()
+    popup._tabs.setCurrentIndex(1)
 
     popup.hide()
     toolbar._on_zoom_clicked()
-    assert popup._monitor_hands.isChecked()
+    assert popup._monitor_hands.isVisible() and popup._monitor_hands.isChecked()
     service._publish_hands(RaisedHandsSnapshot(RaisedHandsStatus.PANEL_CLOSED))
     assert not popup._hands_status.isHidden()
-    assert popup._hands_list.count() == 0
+    assert popup._roster.isHidden()
+    assert popup._count.isHidden()
     popup._monitor_hands.click()
     assert service.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
-    assert popup._hands_status.isHidden()
+    assert not popup._hands_status.isHidden()
+    assert not popup._monitor_hands.isChecked()
+
+
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
+def test_zoom_popup_opens_from_its_button_in_the_qml_toolbar(toolbar_host):
+    parent, toolbar = toolbar_host
+    toolbar.qml_load_handle.start()
+    parent.show()
+    toolbar.show()
+    _activate(parent)
+    wait_until(lambda: toolbar.status() == QQuickWidget.Status.Ready, description="toolbar QML load")
+    toolbar.reposition()
+    root = toolbar.rootObject()
+    button = root.findChild(QQuickItem, "toolbarZoomButton")
+    assert button.isVisible()
+    point = button.mapToItem(root, QPointF(button.width() / 2, button.height() / 2)).toPoint()
+    mouse_click(toolbar, Qt.MouseButton.LeftButton, pos=point)
+    popup = toolbar._zoom_panel
+    assert popup is not None and popup.isVisible()
+    popup.close()
 
 
 def test_toolbar_destruction_cancels_queued_reposition(toolbar_host, monkeypatch):
