@@ -18,6 +18,28 @@ Item {
     signal choose(var row, var owner)
     signal backRequested()
 
+    function topLevelGroups(isHistory) {
+        return section.groups.filter(group => (group.id === "releaseHistory") === isHistory)
+            .map(spec => ({ spec: spec, domain: root.domains[spec.domain], depth: 0 }))
+    }
+
+    Component {
+        id: settingsGroupDelegate
+        SettingsGroup {
+            required property var modelData
+            spec: modelData.spec
+            domain: modelData.domain
+            depth: modelData.depth
+            groupDelegate: settingsGroupDelegate
+            Layout.fillWidth: true
+            Layout.leftMargin: depth > 0 ? 12 : 0
+            Layout.rightMargin: depth > 0 ? 12 : 0
+            Layout.topMargin: depth > 0 ? 8 : 0
+            Layout.bottomMargin: depth > 0 ? 10 : 0
+            onChoose: (row, owner) => root.choose(row, owner)
+        }
+    }
+
     function restorePosition() {
         Qt.callLater(function() {
             if (settingsNavigation.targetKey) {
@@ -173,14 +195,8 @@ Item {
 
                 Repeater {
                     id: groups
-                    model: root.section.groups.filter(group => group.id !== "releaseHistory")
-                    delegate: SettingsGroup {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spec: modelData
-                        domain: root.domains[spec.domain]
-                        onChoose: (row, owner) => root.choose(row, owner)
-                    }
+                    model: root.topLevelGroups(false)
+                    delegate: settingsGroupDelegate
                 }
 
                 Repeater {
@@ -231,14 +247,8 @@ Item {
 
                 Repeater {
                     id: historyGroups
-                    model: root.section.groups.filter(group => group.id === "releaseHistory")
-                    delegate: SettingsGroup {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spec: modelData
-                        domain: root.domains[spec.domain]
-                        onChoose: (row, owner) => root.choose(row, owner)
-                    }
+                    model: root.topLevelGroups(true)
+                    delegate: settingsGroupDelegate
                 }
 
                 Loader {
