@@ -31,16 +31,24 @@ def _measure(read: Callable, count: int) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=30)
+    parser.add_argument(
+        "--raised-hands", action="store_true", help="Also read the open Participants panel"
+    )
     arguments = parser.parse_args()
     if sys.platform != "win32":
         parser.error("Zoom UI Automation is available only on Windows")
     if not 10 <= arguments.samples <= 1000:
         parser.error("--samples must be between 10 and 1000")
     sys.coinit_flags = 0
+    import ctypes
+
     from solin.core.integrations.automation.zoom.controls import Automation, ZoomControls
     from solin.core.integrations.automation.zoom.native import WindowsDesktop
+    from solin.core.integrations.automation.zoom.participants import ZoomRaisedHands
+    from solin.core.integrations.automation.zoom.state import ZoomAutomationError
 
     desktop = WindowsDesktop()
+    desktop.user.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
     if desktop.meeting() is None:
         parser.error("Open a Zoom meeting before measuring snapshots")
     automation = Automation()
@@ -51,6 +59,27 @@ def main() -> int:
         ),
         "uia_queries": automation.query_count,
     }
+    if arguments.raised_hands:
+        monitor = ZoomRaisedHands()
+        before = automation.query_count
+        status = ""
+
+        def read_hands() -> None:
+            nonlocal status
+            snapshot = monitor.snapshot(ZoomControls(desktop, automation), open_if_closed=False)
+            status = snapshot.status.value
+
+        try:
+            timings = _measure(read_hands, arguments.samples)
+        except ZoomAutomationError as error:
+            parser.error(f"Open a readable Zoom Participants panel: {error.code}")
+        result["raised_hands"] = {
+            **timings,
+            "status": status,
+            "uia_queries_per_read": round(
+                (automation.query_count - before) / (arguments.samples + 1), 2
+            ),
+        }
     print(json.dumps(result, indent=2))
     return 0
 

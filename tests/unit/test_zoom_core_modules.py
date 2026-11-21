@@ -357,13 +357,12 @@ def _action_controls(*, old_name="Unmute", new_name="Unmute", pattern=None):
     original = Element(
         SimpleNamespace(BuildUpdatedCache=lambda _: updated), old_name, 50000, "", (0, 0, 10, 10)
     )
-    automation = SimpleNamespace(
-        errors=(OSError,),
-        cache=object(),
-        query_count=0,
-        _element=lambda raw: raw,
-        pattern=lambda *_: pattern,
-    )
+    automation = Automation.__new__(Automation)
+    automation.errors = (OSError,)
+    automation.cache = object()
+    automation.query_count = 0
+    automation._element = lambda raw: raw
+    automation.pattern = lambda *_: pattern
     return ZoomControls(desktop, automation), original, clicks
 
 
