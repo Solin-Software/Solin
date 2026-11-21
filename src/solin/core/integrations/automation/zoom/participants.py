@@ -216,11 +216,21 @@ class ZoomRaisedHands:
             if self._panel and self._same_panel(controls, window, listing)
             else None
         )
-        entries = controls.automation.participant_rows(listing)
+        heading, count = _read_heading(controls, window, cached)
+        # A changed total can make stale, incomplete rows look complete. Reuse
+        # the last heading observation and retry once before reporting PARTIAL.
+        for _ in range(2):
+            entries = controls.automation.participant_rows(listing)
+            heading, count_after = _read_heading(controls, window, heading)
+            if count_after == count:
+                break
+            count = count_after
+        else:
+            count = None
+
         rows = tuple(
             row for element, names in entries if (row := _read_row(element, names)) is not None
         )
-        heading, count = _read_heading(controls, window, cached)
         complete = count == len(rows) == len(entries) and all(
             row.hand_raised is not None for row in rows
         )

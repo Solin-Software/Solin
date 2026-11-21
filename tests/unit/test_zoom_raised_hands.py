@@ -182,6 +182,33 @@ def test_complete_empty_partial_and_closed_are_distinct():
     controls.read_panel.assert_called_with(open_if_closed=False)
 
 
+@pytest.mark.parametrize("stabilizes", [True, False])
+def test_roster_count_changes_during_a_read(stabilizes):
+    local = _participant("Local", hand=False)
+    leaving = _participant("Leaving")
+    remaining = _participant("Remaining")
+    controls = _Zoom()
+    controls.count = 3
+    observations = iter(
+        [
+            # Only two of three rows were exposed when Leaving left the meeting.
+            ([local, leaving], 2),
+            ([local, remaining], 2) if stabilizes else ([remaining], 1),
+        ]
+    )
+
+    def participant_rows(_listing):
+        entries, controls.count = next(observations)
+        return entries
+
+    controls.automation.participant_rows = participant_rows
+    snapshot = ZoomRaisedHands().snapshot(controls, open_if_closed=False)
+
+    assert snapshot.status is (RaisedHandsStatus.READY if stabilizes else RaisedHandsStatus.PARTIAL)
+    assert [hand.name for hand in snapshot.hands] == ["Remaining"]
+    assert (snapshot.hands[0].reference is not None) is stabilizes
+
+
 def test_participant_named_like_count_heading_does_not_prove_coverage():
     controls = _Zoom(_participant("Participants (1)"))
     native_query = controls.automation.elements
