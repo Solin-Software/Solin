@@ -39,11 +39,13 @@ from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.ui.popup_hover import PopupHoverController
 from solin.ui.incremental_load import IncrementalLoadState
+from solin.widgets.background_song_popup import BackgroundSongPopup
 from solin.widgets.common.popup_hover_button import PopupHoverButton
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.widgets.quick_access_toolbar import QuickAccessToolbar
-from solin.widgets.obs_scene_popup import _SceneChipButton
+from solin.widgets.obs_scene_popup import OBSScenePopup, _SceneChipButton
 from solin.widgets.scenes.control_popup import SceneControlPopup
-from tests._qt import mouse_click, mouse_move, wait_for_geometry, wait_until
+from tests._qt import dispose_widget, mouse_click, mouse_move, wait_for_geometry, wait_until
 
 
 def _wait_until(predicate, timeout=2000):
@@ -593,6 +595,61 @@ def test_lowering_a_zoom_hand_keeps_the_panel_open_until_a_solin_click(
     finally:
         other_window.close()
         other_window.deleteLater()
+
+
+@pytest.fixture
+def embedded_panel_host(monkeypatch):
+    host = QWidget()
+    host.resize(900, 600)
+    try:
+        with monkeypatch.context() as platform:
+            platform.setattr(QGuiApplication, "platformName", lambda: "wayland")
+            yield host
+    finally:
+        dispose_widget(host)
+
+
+def test_embedded_background_song_panel_stays_hidden_on_startup(embedded_panel_host):
+    host = embedded_panel_host
+    service = SimpleNamespace(is_playing=False)
+    panel = BackgroundSongPopup(service, host, defer_build=True)
+    host.show()
+    QApplication.processEvents()
+
+    assert not panel.isVisible()
+
+
+def test_embedded_panel_stays_open_on_a_press_inside(embedded_panel_host):
+    host = embedded_panel_host
+    panel = ToolbarPanel(host)
+    panel.setGeometry(20, 20, 200, 120)
+    background = QWidget(panel)
+    background.setGeometry(10, 10, 100, 80)
+    outside = QPushButton("Outside the panel", host)
+    outside.move(300, 20)
+    clicked = QSignalSpy(outside.clicked)
+    host.show()
+    panel._show_anchored(host)
+
+    QTest.mouseClick(background, Qt.MouseButton.LeftButton)
+    assert panel.isVisible()
+
+    QTest.mouseClick(outside, Qt.MouseButton.LeftButton)
+    assert not panel.isVisible()
+    assert clicked.count() == 1
+
+
+def test_embedded_panel_that_fits_stays_within_the_host(embedded_panel_host):
+    host = embedded_panel_host
+    anchor = QWidget(host)
+    anchor.setGeometry(350, 496, 280, 40)
+    panel = OBSScenePopup(host)
+    panel.setFixedHeight(540)
+    host.show()
+    panel.show_above(anchor)
+
+    assert panel.isVisible()
+    assert host.rect().contains(panel.geometry())
 
 
 def test_toolbar_destruction_cancels_queued_reposition(toolbar_host, monkeypatch):

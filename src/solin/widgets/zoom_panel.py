@@ -771,7 +771,8 @@ class ZoomPanel(ToolbarPanel):
         if y < screen.top() + 4:
             y = anchor.bottom() + 11
         y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
-        self.setGeometry(QRect(self._panel_position(x, y), QSize(self.width(), height)))
+        size = QSize(self.width(), height)
+        self.setGeometry(QRect(self._panel_position(x, y, size=size), size))
 
     def show_above(self, anchor: QWidget) -> None:
         self._anchor_rect = QRect(anchor.mapToGlobal(anchor.rect().topLeft()), anchor.size())

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from weakref import ReferenceType, WeakKeyDictionary, ref
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt
 from PySide6.QtGui import QGuiApplication, QHideEvent, QKeyEvent, QMouseEvent, QWindow
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtWidgets import QApplication, QWidget
@@ -40,6 +40,10 @@ class ToolbarPanel(QWidget):
         self._anchor: QWidget | None = None
         self._trigger: QQuickItem | None = None
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        if self._embedded:
+            self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
+            # An implicit child show would bypass the anchored show path.
+            self.hide()
 
     @classmethod
     def open_for(cls, host: QWidget) -> ToolbarPanel | None:
@@ -54,11 +58,17 @@ class ToolbarPanel(QWidget):
         screen = QGuiApplication.screenAt(anchor.mapToGlobal(anchor.rect().center()))
         return (screen or anchor.screen()).availableGeometry()
 
-    def _panel_position(self, x: int, y: int) -> QPoint:
+    def _panel_position(self, x: int, y: int, *, size: QSize | None = None) -> QPoint:
         position = QPoint(x, y)
-        if self._embedded and self._floating_parent is not None:
-            return self._floating_parent.mapFromGlobal(position)
-        return position
+        host = self._floating_parent
+        if not self._embedded or host is None:
+            return position
+        local_position = host.mapFromGlobal(position)
+        panel_size = self.size() if size is None else size
+        return QPoint(
+            max(0, min(local_position.x(), host.width() - panel_size.width())),
+            max(0, min(local_position.y(), host.height() - panel_size.height())),
+        )
 
     def _show_anchored(self, anchor: QWidget, *, trigger: QQuickItem | None = None) -> None:
         parent = self.parentWidget()
