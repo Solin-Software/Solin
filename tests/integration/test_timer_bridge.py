@@ -40,30 +40,40 @@ def timer_context(tmp_path, monkeypatch, qt_object_owner):
     session = TimerSession(repository, _WEEK)
     engine = TimerEngine(qt_object_owner)
     automation = _Automation(qt_object_owner)
+    hand_alert = TimerHandAlertController(
+        ZoomSettingsStore(SettingsStore.for_namespace("test", "prefs")), qt_object_owner,
+    )
     bridge = TimerBridge(
         engine=engine, session=session, output=None, monitors=None, pdf_export=None,
-        media_countdown_automation=automation, parent=qt_object_owner,
+        hand_alert=hand_alert, media_countdown_automation=automation, parent=qt_object_owner,
     )
     return SimpleNamespace(
         clock=clock, repository=repository, session=session, engine=engine, bridge=bridge,
+        hand_alert=hand_alert,
     )
 
 
 def test_manual_hand_control_updates_the_projection_without_changing_the_clock(timer_context):
     ctx = timer_context
     output = ClockRenderBridge(ctx.engine, lambda: ctx.session.clock_config, parent=ctx.engine)
-    settings = ZoomSettingsStore(SettingsStore.for_namespace("test", "prefs"))
-    alert = TimerHandAlertController(settings, ctx.engine)
+    alert = ctx.hand_alert
     alert.alert_changed.connect(output.set_hand_alert)
     clock_updates = QSignalSpy(output.modelChanged)
     alert_updates = QSignalSpy(output.handAlertChanged)
 
+    assert not ctx.bridge.manualHandAvailable
+    ctx.bridge.setManualHand(True)
+    assert not ctx.bridge.manualHandRaised
+
     alert.set_outputs(available=True)
-    alert.set_integrated(True)
-    alert.set_manual(True)
+    assert ctx.bridge.manualHandAvailable
+    ctx.bridge.setManualHand(True)
+    assert ctx.bridge.manualHandRaised
     assert output.property("handAlert") == {"kind": "manual"}
-    alert.set_manual(True)
+    ctx.bridge.setManualHand(True)
     alert.set_outputs(available=False)
+    assert not ctx.bridge.manualHandAvailable
+    assert not ctx.bridge.manualHandRaised
     assert not output.property("handAlert")
     assert alert_updates.count() == 2
     assert clock_updates.count() == 0

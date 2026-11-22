@@ -181,6 +181,7 @@ class _AdvancedTimerProbe(QObject):
     liveStateChanged = Signal()
     clockConfigChanged = Signal()
     monitorsChanged = Signal()
+    manualHandChanged = Signal()
     weekChanged = Signal()
     weekShift = Signal(int)
 
@@ -226,6 +227,21 @@ class _AdvancedTimerProbe(QObject):
             "display_seconds": 96,
         }
         self.adjustments: list[tuple[str, int]] = []
+        self.output_available = False
+        self.manual_hand = False
+
+    @Property(bool, notify=manualHandChanged)
+    def manualHandAvailable(self) -> bool:  # noqa: N802 - QML API
+        return self.output_available
+
+    @Property(bool, notify=manualHandChanged)
+    def manualHandRaised(self) -> bool:  # noqa: N802 - QML API
+        return self.manual_hand
+
+    @Slot(bool)
+    def setManualHand(self, raised: bool) -> None:  # noqa: N802 - QML API
+        self.manual_hand = raised
+        self.manualHandChanged.emit()
 
     @Slot(str, int)
     def adjustPart(self, part_id: str, seconds: int) -> None:  # noqa: N802 - QML API
@@ -1270,9 +1286,11 @@ def test_timer_view_moves_mode_selector_below_header_when_compact(
 def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width(
     width: int,
     compact_navigation: bool,
+    request: pytest.FixtureRequest,
 ) -> None:
     timer = _AdvancedTimerProbe()
     widget = QQuickWidget()
+    request.addfinalizer(lambda: dispose_widget(widget))
     widget.resize(width, 760)
     configure_qml_host(
         widget,
@@ -1298,6 +1316,28 @@ def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width
     assert navigation.property("width") <= content.property("width")
     assert bool(compact_layout.property("visible")) is compact_navigation
     assert bool(wide_layout.property("visible")) is not compact_navigation
+
+    visible_navigation = compact_layout if compact_navigation else wide_layout
+    manual_hand = _find_visual(visible_navigation, "timerManualHandButton")
+    export_pdf = _find_visual(visible_navigation, "timerExportPdfButton")
+    assert manual_hand is not None and manual_hand.isVisible()
+    assert export_pdf is not None and export_pdf.isVisible()
+    assert manual_hand.parentItem() == export_pdf.parentItem()
+    assert 0 <= manual_hand.x() < manual_hand.x() + manual_hand.width() <= export_pdf.x()
+
+    assert not manual_hand.isEnabled()
+    button_center = manual_hand.mapToItem(
+        root, QPointF(manual_hand.width() / 2, manual_hand.height() / 2),
+    ).toPoint()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=button_center)
+    assert not timer.manual_hand
+    timer.output_available = True
+    timer.manualHandChanged.emit()
+    assert manual_hand.isEnabled()
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=button_center)
+    assert timer.manual_hand
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=button_center)
+    assert not timer.manual_hand
 
     settings_buttons = [
         button
@@ -1325,7 +1365,6 @@ def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width
     assert action_origin.x() >= 0
     assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
     assert widget.errors() == []
-    widget.deleteLater()
 
 
 @pytest.mark.parametrize(("width", "height"), [(320, 400), (640, 520), (960, 760)])

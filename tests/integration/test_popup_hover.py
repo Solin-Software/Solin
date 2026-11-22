@@ -431,18 +431,16 @@ def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     assert popup._timer_integration.isVisible()
     assert not popup._timer_integration.isChecked()
     assert popup._manual_hand.isVisible()
-    assert not popup._manual_hand.isEnabled()
-    popup._manual_hand.click()
-    assert not alerts.alert.manual
-    popup._timer_integration.click()
-    assert alerts.integrated
     assert popup._manual_hand.isEnabled()
     popup._manual_hand.click()
     assert alerts.alert.manual
-    assert not popup._monitor_hands.isChecked()
-    popup._manual_hand.click()
-    assert not alerts.alert.manual
+    assert not alerts.integrated
+    popup._timer_integration.click()
     assert alerts.integrated
+    assert alerts.alert.manual
+    alerts.set_manual(False)
+    assert not popup._manual_hand.isChecked()
+    assert not alerts.alert.manual
     assert not popup._monitor_hands.isChecked()
 
     popup._monitor_hands.click()
@@ -503,8 +501,6 @@ def test_zoom_popup_sample_names_are_dev_only(toolbar_host, monkeypatch, is_dev)
     alerts.set_outputs(available=True)
     assert len(alerts.alert.names) == 15
     assert not popup._timer_integration.isChecked()
-    assert not popup._manual_hand.isEnabled()
-    popup._timer_integration.click()
     popup._manual_hand.click()
     button.click()
     assert not popup._rows
@@ -513,7 +509,7 @@ def test_zoom_popup_sample_names_are_dev_only(toolbar_host, monkeypatch, is_dev)
     button.click()
     toolbar.set_zoom_enabled(False)
     assert not alerts.alert.names
-    assert not alerts.alert.manual
+    assert alerts.alert.manual
     assert not button.isChecked()
 
 

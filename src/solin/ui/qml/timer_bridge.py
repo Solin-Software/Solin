@@ -47,6 +47,8 @@ from solin.controllers.timer_pdf_export_controller import TimerPdfExportControll
 from solin.styles.theme import current_theme_scheme
 
 if TYPE_CHECKING:
+    from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
+
     _QVARIANT = object
 else:
     _QVARIANT = "QVariant"
@@ -175,6 +177,7 @@ class TimerBridge(QObject):
     liveStateChanged = Signal()
     clockConfigChanged = Signal()
     monitorsChanged = Signal()
+    manualHandChanged = Signal()
     weekChanged = Signal()
     # Direction hint for the QML parts-list transition: -1 = earlier (slide in
     # from the left), +1 = later (from the right), 0 = no direction (fade only).
@@ -194,6 +197,7 @@ class TimerBridge(QObject):
         session: TimerSession,
         output,
         monitors: TimerMonitorController,
+        hand_alert: TimerHandAlertController,
         pdf_export: TimerPdfExportController,
         media_countdown_automation,
         language_manager=None,
@@ -204,6 +208,7 @@ class TimerBridge(QObject):
         self._session = session
         self._output = output
         self._monitors = monitors
+        self._hand_alert = hand_alert
         self._pdf_export = pdf_export
         self._media_countdown_automation = media_countdown_automation
         self._language_manager = language_manager
@@ -213,11 +218,26 @@ class TimerBridge(QObject):
 
         self._engine.state_changed.connect(self._on_engine_state)
         self._engine.tick.connect(self._on_engine_tick)
+        self._hand_alert.controls_changed.connect(self.manualHandChanged)
         self._media_countdown_automation.state_changed.connect(
             self.mediaCountdownChanged
         )
 
         self._engine.set_schedule(self._schedule)
+
+    # ── Exposed: manual hand alert ──────────────────────────────────────────
+
+    @Property(bool, notify=manualHandChanged)
+    def manualHandAvailable(self) -> bool:
+        return self._hand_alert.available
+
+    @Property(bool, notify=manualHandChanged)
+    def manualHandRaised(self) -> bool:
+        return self._hand_alert.manual
+
+    @Slot(bool)
+    def setManualHand(self, raised: bool) -> None:
+        self._hand_alert.set_manual(raised)
 
     # ── Schedule lifecycle ─────────────────────────────────────────────────
 

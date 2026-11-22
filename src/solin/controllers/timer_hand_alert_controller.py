@@ -75,14 +75,12 @@ class TimerHandAlertController(QObject):
         if self._available and enabled != self._integrated:
             self._settings.set_raised_hands_timer_integration_enabled(enabled)
             self._integrated = enabled
-            if not enabled:
-                self._manual = False
             self._publish()
             self.controls_changed.emit()
 
     @Slot(bool)
     def set_manual(self, enabled: bool) -> None:
-        if self._available and self._integrated and enabled != self._manual:
+        if self._available and enabled != self._manual:
             self._manual = enabled
             self._publish()
             self.controls_changed.emit()
