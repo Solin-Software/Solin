@@ -18,12 +18,13 @@ import wave
 
 import pytest
 
+from tests.fixtures.av_clip import write_av_clip
 from tests.integration.test_native_media_startup import _wait_for
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(sys.platform != "win32", reason="WASAPI process loopback requires Windows"),
-]
+pytestmark = pytest.mark.integration
+_requires_windows_loopback = pytest.mark.skipif(
+    sys.platform != "win32", reason="WASAPI process loopback requires Windows",
+)
 
 _MODULE = "tests.integration.test_native_audio_monitoring"
 _SAMPLE_RATE = 48000
@@ -156,6 +157,15 @@ def _write_tone(path):
         output.writeframes(period * (_SAMPLE_RATE // period_frames) * (_PLAY_SECONDS + 8))
 
 
+def _write_monitoring_av_clip(path: Path) -> None:
+    write_av_clip(
+        path,
+        duration=(_PLAY_SECONDS + 8) * 2,
+        alternate_colors=True,
+        constant_frequency=_FREQUENCY,
+    )
+
+
 def _assert_continuous_tone(directory, started):
     metadata = json.loads((directory / "blocks.json").read_text(encoding="utf-8"))
     raw = (directory / "loopback.f32").read_bytes()
@@ -254,11 +264,7 @@ def _play(source_id, speed=100, video=False):
             return _SKIP
         path = directory / ("tone.avi" if video else "tone.wav")
         if video:
-            from tests.integration.test_native_media_rate import _write_av_clip
-
-            _write_av_clip(
-                path, duration=(_PLAY_SECONDS + 8) * 2, periodic=True, constant_frequency=_FREQUENCY
-            )
+            _write_monitoring_av_clip(path)
         else:
             _write_tone(path)
         title = stack.enter_context(_window())
@@ -353,6 +359,15 @@ def _play(source_id, speed=100, video=False):
     return 0
 
 
+def test_monitoring_av_fixture_can_be_generated_without_an_audio_device(tmp_path):
+    path = tmp_path / "tone.avi"
+    _write_monitoring_av_clip(path)
+    with path.open("rb") as fixture:
+        header = fixture.read(12)
+    assert header[:4] == b"RIFF" and header[8:] == b"AVI "
+
+
+@_requires_windows_loopback
 @pytest.mark.parametrize("source_id", ["ffmpeg_source", "solin_media_source"])
 def test_native_monitoring_preserves_continuous_pcm(source_id):
     from tests.e2e._windows_process import run_windows_process_tree
@@ -365,6 +380,7 @@ def test_native_monitoring_preserves_continuous_pcm(source_id):
     assert result.returncode == 0, f"Native monitoring exited {result.returncode}:\n{diagnostics}"
 
 
+@_requires_windows_loopback
 @pytest.mark.parametrize("speed", [100, 200])
 def test_native_av_monitoring_preserves_sample_clock_and_pcm(speed):
     from tests.e2e._windows_process import run_windows_process_tree
