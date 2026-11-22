@@ -280,6 +280,8 @@ def _native_audio():
 
 _AV_FRAME_NUMBER_BITS = 8
 _AV_FRAME_NUMBER_ROWS = 4
+_AV_LOW_TONE_HZ = 400
+_AV_HIGH_TONE_HZ = 1000
 
 
 def _write_av_clip(path, *, duration=5, constant_frequency=None):
@@ -368,9 +370,9 @@ def _write_av_clip(path, *, duration=5, constant_frequency=None):
         # Repeat the strip on both edges so row order cannot affect the number.
         strip = number_row * _AV_FRAME_NUMBER_ROWS
         picture = strip + pixel * (width * (width - 2 * _AV_FRAME_NUMBER_ROWS)) + strip
-        frequency = (
-            constant_frequency if constant_frequency is not None else (1000 if blue else 400)
-        )
+        frequency = constant_frequency
+        if frequency is None:
+            frequency = _AV_HIGH_TONE_HZ if blue else _AV_LOW_TONE_HZ
         pcm = b"".join(
             struct.pack("<h", round(16000 * math.sin(2 * math.pi * frequency * i / rate)))
             for i in range(samples_per_frame)
@@ -388,6 +390,16 @@ def _write_av_clip(path, *, duration=5, constant_frequency=None):
 class _AVSample(NamedTuple):
     timestamp_ns: int
     observed_at: float
+
+
+class _AVVideoFrame(NamedTuple):
+    number: int | None
+    sample: _AVSample
+
+
+class _AVOutput(NamedTuple):
+    signals: dict[str, _AVSample]
+    video_frames: tuple[_AVVideoFrame, ...]
 
 
 def _observe_av_output(runtime, media, resources, *, resumed: Event | None = None):
@@ -410,8 +422,8 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
     info = ffi.new("struct obs_audio_info *")
     assert get_lib().obs_get_audio_info(info)
     sample_rate = int(info.samples_per_sec)
-    samples = {}
-    last_video_frame = None
+    signals: dict[str, _AVSample] = {}
+    video_frames: list[_AVVideoFrame] = []
     lock = Lock()
 
     def capture_audio(_mix, planes, frames, timestamp_ns):
@@ -423,17 +435,25 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
         if max(pcm, default=0) < 0.01:
             return
         crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
-        tone = "low_tone" if crossings * sample_rate / frames < 750 else "high_tone"
+        if crossings < 2:
+            return
+        # The block can start or end between crossings. Allow one cycle of error.
+        frequency_step = sample_rate / frames
+        frequency = crossings * frequency_step
+        if abs(frequency - _AV_LOW_TONE_HZ) <= frequency_step:
+            tone = "low_tone"
+        elif abs(frequency - _AV_HIGH_TONE_HZ) <= frequency_step:
+            tone = "high_tone"
+        else:
+            return
         with lock:
             sample = _AVSample(timestamp_ns, observed_at)
-            samples.setdefault(tone, sample)
+            signals.setdefault(tone, sample)
             if after_release:
-                samples.setdefault("resumed_audio", sample)
+                signals.setdefault("resumed_audio", sample)
 
     def capture_video(planes, strides, width, height, _format, timestamp_ns):
-        nonlocal last_video_frame
-        after_release = resumed is not None and resumed.is_set()
-        observed_at = time.monotonic()
+        sample = _AVSample(timestamp_ns, time.monotonic())
         pixels, stride = planes[0], strides[0]
         offset = (height // 2) * stride + (width // 2) * 4
         blue, _green, red, _alpha = pixels[offset:offset + 4]
@@ -443,26 +463,24 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
         elif blue > 200 and red < 20:
             color = "blue_frame"
         else:
-            return
+            color = None
+        frame_number = None
+        if resumed is not None and color is not None:
+            tile_width = width // _AV_FRAME_NUMBER_BITS
+            number_start = (_AV_FRAME_NUMBER_ROWS // 2) * stride + (tile_width // 2) * 4
+            frame_number = sum(
+                (pixels[number_start + bit * tile_width * 4] >= 128) << bit
+                for bit in range(_AV_FRAME_NUMBER_BITS)
+            )
         with lock:
-            sample = _AVSample(timestamp_ns, observed_at)
-            samples.setdefault(color, sample)
+            if color is not None:
+                signals.setdefault(color, sample)
             if resumed is not None:
-                tile_width = width // _AV_FRAME_NUMBER_BITS
-                number_start = (_AV_FRAME_NUMBER_ROWS // 2) * stride + (tile_width // 2) * 4
-                frame_number = sum(
-                    (pixels[number_start + bit * tile_width * 4] >= 128) << bit
-                    for bit in range(_AV_FRAME_NUMBER_BITS)
-                )
-                if after_release:
-                    if last_video_frame is not None and frame_number > last_video_frame:
-                        samples.setdefault("resumed_video", sample)
-                elif last_video_frame is None or frame_number > last_video_frame:
-                    last_video_frame = frame_number
+                video_frames.append(_AVVideoFrame(frame_number, sample))
 
     def snapshot():
         with lock:
-            return samples.copy()
+            return _AVOutput(signals.copy(), tuple(video_frames))
 
     audio = add_raw_audio_callback(capture_audio, channels=1)
     resources.callback(remove_raw_audio_callback, audio)
@@ -477,23 +495,55 @@ def _av_sync():
         assert media.open(str(path))
         output = _observe_av_output(runtime, media, resources)
         assert _wait_for(
-            lambda: _playing(media, 600) and {"low_tone", "red_frame"} <= output().keys(),
+            lambda: _playing(media, 600) and {"low_tone", "red_frame"} <= output().signals.keys(),
             timeout=8,
         ), "Program output did not establish both initial A/V signals"
-        before_update = output()
+        before_update = output().signals
         assert not {"high_tone", "blue_frame"} & before_update.keys(), before_update
         acknowledged = Event()
         resources.callback(runtime.observe_source_updates(media.source, acknowledged.set))
         media.set_speed(150)
         assert acknowledged.wait(0.25), "The native rate update was not acknowledged"
         assert _poll(media) < 2000, "The transition preceded the rate update"
-        assert _wait_for(lambda: {"high_tone", "blue_frame"} <= output().keys(), timeout=5), (
-            "Program output did not reach both 2 s transitions", output(),
+        assert _wait_for(
+            lambda: {"high_tone", "blue_frame"} <= output().signals.keys(), timeout=5,
+        ), (
+            "Program output did not reach both 2 s transitions", output().signals,
         )
-        transitions = output()
+        transitions = output().signals
         skew = (transitions["high_tone"].timestamp_ns - transitions["blue_frame"].timestamp_ns) / 1e9
         print("A/V output transition skew", skew, flush=True)
         assert abs(skew) <= 0.45, skew
+
+
+def _video_recovery(
+    frames: tuple[_AVVideoFrame, ...], hold_started_ns: int, released_ns: int,
+) -> _AVSample:
+    # Split the ordered OBS output by frame time. A queued frame can arrive
+    # after HTTP release, and OBS can emit copies of it with newer timestamps.
+    frozen_number = next(
+        (frame.number for frame in reversed(frames) if frame.sample.timestamp_ns <= hold_started_ns),
+        None,
+    )
+    assert frozen_number is not None, "Program output did not establish a frame before the hold"
+    held_numbers = [
+        frame.number for frame in frames
+        if hold_started_ns < frame.sample.timestamp_ns <= released_ns
+    ]
+    assert held_numbers, "Program output did not deliver any frames during the hold"
+    assert all(number == frozen_number for number in held_numbers), (
+        "Program output changed during the hold", frozen_number, held_numbers,
+    )
+    resumed = next(
+        (
+            frame.sample for frame in frames
+            if frame.sample.timestamp_ns > released_ns
+            and frame.number is not None and frame.number > frozen_number
+        ),
+        None,
+    )
+    assert resumed is not None, "Program output did not advance after the HTTP release"
+    return resumed
 
 
 def _av_starvation(speed):
@@ -524,12 +574,13 @@ def _av_starvation(speed):
 
         assert _wait_for(frozen, timeout=6), (media.state, media.position_ms)
         frozen_at = _poll(media)
+        hold_started_ns = runtime.context.video_frame_time_ns
         frame_before = _capture_prepared_source(runtime, media)["center_bgra"]
         assert frame_before == _RED_BGRA.hex(), (frozen_at, frame_before)
         time.sleep(1.5)
         assert abs(_poll(media) - frozen_at) <= 100, (frozen_at, media.position_ms)
         assert _capture_prepared_source(runtime, media)["center_bgra"] == frame_before
-        before_release = output()
+        before_release = output().signals
         assert {"low_tone", "red_frame"} <= before_release.keys(), before_release
         assert not {"high_tone", "blue_frame"} & before_release.keys(), (
             "Playback reached the transition before the HTTP stall", before_release,
@@ -537,6 +588,9 @@ def _av_starvation(speed):
 
         released = time.monotonic()
         release.set()
+        # This is the graphics clock used to timestamp program frames, not the
+        # wall-clock time at which a pending video callback happens to run.
+        released_video_ns = runtime.context.video_frame_time_ns
         assert _wait_for(lambda: _poll(media) > frozen_at + 100, timeout=5), (
             media.state,
             media.position_ms,
@@ -551,13 +605,15 @@ def _av_starvation(speed):
             elapsed,
         )
 
-        expected = {"resumed_audio", "resumed_video", "high_tone", "blue_frame"}
-        assert _wait_for(lambda: expected <= output().keys(), timeout=3), (
-            "Program output did not resume and reach both transitions after release", output(),
+        expected = {"resumed_audio", "high_tone", "blue_frame"}
+        assert _wait_for(lambda: expected <= output().signals.keys(), timeout=3), (
+            "Program output did not reach both transitions after release", output().signals,
         )
-        transitions = output()
+        program = output()
+        transitions = program.signals
         audio_resume = transitions["resumed_audio"].observed_at - released
-        video_resume = transitions["resumed_video"].observed_at - released
+        resumed_video = _video_recovery(program.video_frames, hold_started_ns, released_video_ns)
+        video_resume = resumed_video.observed_at - released
         video_transition = transitions["blue_frame"].observed_at - released
         # Match the same marker using OBS timestamps, independent of callback delivery.
         skew = (transitions["high_tone"].timestamp_ns - transitions["blue_frame"].timestamp_ns) / 1e9
