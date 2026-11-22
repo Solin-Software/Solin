@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QObject, Signal
 
-from solin.core.timer.models import ClockConfig, Direction, TimerSnapshot
+from solin.core.timer.hand_alert import TimerHandAlert
+from solin.core.timer.models import ClockConfig, ClockMode, Direction, TimerSnapshot
 from solin.ui.qml.timer_output import ClockRenderBridge
 
 
@@ -60,3 +63,19 @@ def test_clock_render_bridge_accepts_tick_payload_and_refreshes_config():
     assert engine.snapshot_calls == 2
     assert len(emissions) == 2
     assert bridge.property("model")["show_seconds"] is False
+
+
+def test_named_alert_adds_a_configured_digital_readout_to_an_analog_clock():
+    epoch = time.mktime((2026, 11, 21, 22, 21, 7, 0, 0, -1))
+    engine = _Engine(_snapshot(epoch))
+    config = ClockConfig(mode=ClockMode.ANALOG, hour_format_24h=True, show_seconds=False)
+    bridge = ClockRenderBridge(engine, lambda: config)
+    face = bridge.property("model")["clock"]
+
+    bridge.set_hand_alert(TimerHandAlert(names=("Ana",)))
+    name_alert_face = bridge.property("model")["clock"]
+
+    assert name_alert_face.pop("compact_readout")["primary_text"] == "22:21"
+    assert name_alert_face == face
+    bridge.set_hand_alert(TimerHandAlert())
+    assert bridge.property("model")["clock"] == face

@@ -10653,6 +10653,26 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
         <source>Participant muted and hand lowered.</source>
         <translation>Micro du participant coupé et main baissée.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>Intégrer au minuteur</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Les mains levées dans Zoom s’afficheront à l’écran du minuteur.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>Afficher la main sur le minuteur</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>Tester les mains levées</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12560,6 +12580,26 @@ Utilisez le bouton de lecture pour projeter · Faites glisser la poignée ⠿ po
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>Cette partie de la réunion n’est plus disponible.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>Mains levées</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>Main levée</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>Tout afficher</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>Fermer la liste des mains levées</translation>
     </message>
 </context>
 <context>

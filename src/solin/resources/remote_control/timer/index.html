@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="../shared/styles/base.css">
     <link rel="stylesheet" href="./styles/layout.css">
     <link rel="stylesheet" href="./styles/components.css">
+    <link rel="stylesheet" href="./styles/hand-alert.css">
     <script type="module" src="./scripts/app.js"></script>
   </head>
   <body>
@@ -29,6 +30,13 @@
 
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <defs>
+        <symbol id="icon-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 13V6a1.5 1.5 0 0 1 3 0v4-6a1.5 1.5 0 0 1 3 0v6-4a1.5 1.5 0 0 1 3 0v4-1a1.5 1.5 0 0 1 3 0v5a8 8 0 0 1-8 8h-1a6 6 0 0 1-4.6-2.1L3 16a1.7 1.7 0 0 1 2.6-2.2L8 16"></path>
+        </symbol>
+        <symbol id="icon-hand-filled" viewBox="0 0 64 64" fill="currentColor">
+          <path d="M22 35V15a4 4 0 0 1 8 0v15h1V8a4 4 0 0 1 8 0v22h1V12a4 4 0 0 1 8 0v19h1V20a4 4 0 0 1 8 0v17c0 14-8.4 23-21 23h-1c-7 0-12.4-3.5-16.6-9L8.5 38.5a5 5 0 0 1 7.4-6.7l6.1 5.3Z"></path>
+          <path d="M22 37c4.9.7 8.2 3.5 10 8.2" fill="none" stroke="#995810" stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round"></path>
+        </symbol>
         <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
           <circle cx="12" cy="12" r="3"></circle>
@@ -140,76 +148,140 @@
       <canvas id="stage-canvas" class="stage-canvas" aria-hidden="true"></canvas>
       <p id="stage-sr-readout" class="visually-hidden" aria-live="off"></p>
 
-      <header id="stage-hud" class="stage-hud">
-        <div class="stage-hud-bar">
-          <div class="stage-brand">
-            <img src="./icons/icon-192.png" alt="" width="34" height="34">
-            <div class="stage-brand-copy">
-              <strong data-i18n="app.title">Solin Timer</strong>
-              <span id="stage-profile-name" data-i18n="app.timer">Meeting timer</span>
-            </div>
-            <span id="stage-part-pill" class="stage-part-pill" hidden></span>
-          </div>
-
-          <div class="stage-actions">
-            <div id="stage-connection-chip" class="connection-chip connection-chip--stage" role="status">
-              <span class="status-dot" aria-hidden="true"></span>
-              <span id="stage-connection-label" data-i18n="connection.connecting">Connecting…</span>
+      <div class="stage-overlays">
+        <header id="stage-hud" class="stage-hud">
+          <div class="stage-hud-bar">
+            <div class="stage-brand">
+              <img src="./icons/icon-192.png" alt="" width="34" height="34">
+              <div class="stage-brand-copy">
+                <strong data-i18n="app.title">Solin Timer</strong>
+                <span id="stage-profile-name" data-i18n="app.timer">Meeting timer</span>
+              </div>
+              <span id="stage-part-pill" class="stage-part-pill" hidden></span>
             </div>
 
-            <button
-              id="stage-install-button"
-              class="stage-pill-button"
-              type="button"
-              aria-label="Install Solin Timer"
-              data-i18n-aria-label="app.installSolin"
-              hidden
-            >
-              <span class="css-icon css-icon--install" aria-hidden="true"></span>
-              <span class="desktop-label" data-i18n="app.installApp">Install app</span>
-            </button>
+            <div class="stage-actions">
+              <div id="stage-connection-chip" class="connection-chip connection-chip--stage" role="status">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span id="stage-connection-label" data-i18n="connection.connecting">Connecting…</span>
+              </div>
 
-            <a
-              id="stage-setup-link"
-              class="stage-icon-button"
-              href="?setup=1"
-              aria-label="Set up this device"
-              data-i18n-aria-label="login.setUpDevice"
-            >
-              <svg class="ui-icon" aria-hidden="true" focusable="false">
-                <use href="#icon-shield"></use>
-              </svg>
-            </a>
+              <button
+                id="stage-install-button"
+                class="stage-pill-button"
+                type="button"
+                aria-label="Install Solin Timer"
+                data-i18n-aria-label="app.installSolin"
+                hidden
+              >
+                <span class="css-icon css-icon--install" aria-hidden="true"></span>
+                <span class="desktop-label" data-i18n="app.installApp">Install app</span>
+              </button>
 
-            <button
-              id="stage-fullscreen-button"
-              class="stage-icon-button"
-              type="button"
-              aria-label="Enter fullscreen"
-              data-i18n-aria-label="stage.enterFullscreen"
-              hidden
-            >
-              <svg id="stage-fullscreen-icon" class="ui-icon" aria-hidden="true" focusable="false">
-                <use href="#icon-fullscreen"></use>
-              </svg>
-            </button>
+              <a
+                id="stage-setup-link"
+                class="stage-icon-button"
+                href="?setup=1"
+                aria-label="Set up this device"
+                data-i18n-aria-label="login.setUpDevice"
+              >
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-shield"></use>
+                </svg>
+              </a>
 
-            <button id="stage-signin-button" class="stage-cta-button" type="button" hidden>
-              <svg class="ui-icon" aria-hidden="true" focusable="false">
-                <use href="#icon-lock"></use>
-              </svg>
-              <span data-i18n="stage.signIn">Sign in</span>
-            </button>
+              <button
+                id="stage-fullscreen-button"
+                class="stage-icon-button"
+                type="button"
+                aria-label="Enter fullscreen"
+                data-i18n-aria-label="stage.enterFullscreen"
+                hidden
+              >
+                <svg id="stage-fullscreen-icon" class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-fullscreen"></use>
+                </svg>
+              </button>
 
-            <button id="stage-control-button" class="stage-cta-button" type="button" hidden>
-              <svg class="ui-icon" aria-hidden="true" focusable="false">
-                <use href="#icon-sliders"></use>
-              </svg>
-              <span data-i18n="stage.controlParts">Control parts</span>
-            </button>
+              <button id="stage-signin-button" class="stage-cta-button" type="button" hidden>
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-lock"></use>
+                </svg>
+                <span data-i18n="stage.signIn">Sign in</span>
+              </button>
+
+              <button id="stage-control-button" class="stage-cta-button" type="button" hidden>
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-sliders"></use>
+                </svg>
+                <span data-i18n="stage.controlParts">Control parts</span>
+              </button>
+            </div>
           </div>
+        </header>
+
+        <div id="stage-hand-alert" class="stage-hand-alert">
+          <div id="stage-hand-alert-scrim" class="stage-hand-alert-scrim" aria-hidden="true" hidden></div>
+          <svg
+            id="stage-hand-alert-manual"
+            class="stage-hand-alert-manual"
+            role="img"
+            aria-label="Hand raised"
+            data-i18n-aria-label="stage.handAlert.manual"
+            focusable="false"
+            hidden
+          >
+            <use href="#icon-hand-filled"></use>
+          </svg>
+          <section
+            id="stage-hand-alert-card"
+            class="stage-hand-alert-card"
+            aria-labelledby="stage-hand-alert-title stage-hand-alert-count"
+            hidden
+          >
+            <header id="stage-hand-alert-header" class="stage-hand-alert-header">
+              <svg class="ui-icon stage-hand-alert-icon" aria-hidden="true" focusable="false">
+                <use href="#icon-hand"></use>
+              </svg>
+              <h2 id="stage-hand-alert-title" data-i18n="stage.handAlert.raised">Raised hands</h2>
+              <span id="stage-hand-alert-count" class="stage-hand-alert-count"></span>
+              <span id="stage-hand-alert-time" class="stage-hand-alert-time" dir="ltr" hidden>
+                <span id="stage-hand-alert-primary"></span>
+                <span class="stage-hand-alert-time-side">
+                  <span id="stage-hand-alert-suffix" class="stage-hand-alert-time-suffix" hidden></span>
+                  <span id="stage-hand-alert-seconds" class="stage-hand-alert-time-seconds" hidden></span>
+                </span>
+              </span>
+              <button
+                id="stage-hand-alert-close"
+                class="stage-hand-alert-close"
+                type="button"
+                aria-label="Close raised hands list"
+                data-i18n-aria-label="stage.handAlert.close"
+                hidden
+              >
+                <span class="css-icon css-icon--close" aria-hidden="true"></span>
+              </button>
+            </header>
+            <ul id="stage-hand-alert-list" class="stage-hand-alert-list" role="list" hidden></ul>
+            <footer id="stage-hand-alert-footer" class="stage-hand-alert-footer" hidden>
+              <span id="stage-hand-alert-remaining"></span>
+              <button
+                id="stage-hand-alert-expand"
+                class="stage-hand-alert-expand"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="stage-hand-alert-card"
+              >
+                <span data-i18n="stage.handAlert.showAll">Show all</span>
+                <svg class="ui-icon" aria-hidden="true" focusable="false">
+                  <use href="#icon-expand"></use>
+                </svg>
+              </button>
+            </footer>
+          </section>
         </div>
-      </header>
+      </div>
 
       <p id="stage-hint" class="stage-hint" data-i18n="stage.tapHint">Tap anywhere to hide or show controls</p>
     </section>

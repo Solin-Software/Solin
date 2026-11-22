@@ -10613,6 +10613,26 @@ Both devices must be on the same Wi-Fi network.</source>
         <source>Participant muted and hand lowered.</source>
         <translation>참가자의 마이크를 음소거하고 손을 내렸습니다.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>타이머와 연동</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Zoom에서 손을 든 참가자가 타이머 화면에 표시됩니다.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>타이머에 손 표시</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>손들기 테스트</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12515,6 +12535,26 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>이 집회 파트는 더 이상 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>손을 든 참가자</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>손을 들었습니다</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>모두 보기</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>손을 든 참가자 목록 닫기</translation>
     </message>
 </context>
 <context>

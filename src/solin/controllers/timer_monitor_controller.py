@@ -44,6 +44,9 @@ class TimerMonitorController:
             )
         return rows
 
+    def has_reserved_screen(self) -> bool:
+        return any(self._allocation.is_timer_reserved(screen) for screen in self._secondary_screens())
+
     def request_reserve(
         self,
         index: int,

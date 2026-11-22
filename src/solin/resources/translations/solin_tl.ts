@@ -10653,6 +10653,26 @@ Dapat nakakonekta ang dalawang device sa iisang Wi-Fi network.</translation>
         <source>Participant muted and hand lowered.</source>
         <translation>Na-mute ang kalahok at ibinaba ang kamay.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>Iugnay sa timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Lalabas sa screen ng timer ang mga nakataas na kamay sa Zoom.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>Ipakita ang kamay sa timer</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>Subukan ang mga nakataas na kamay</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12560,6 +12580,26 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>Hindi na available ang bahaging ito ng pulong.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>Mga nakataas na kamay</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>Nakataas ang kamay</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>Ipakita lahat</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>Isara ang listahan ng mga nakataas ang kamay</translation>
     </message>
 </context>
 <context>

@@ -44,6 +44,7 @@ from ..core.remote_control.timer.contracts import (
 )
 from ..core.remote_control.timer.http import TimerRemoteDependencies, TimerRemoteHttpModule
 from ..core.remote_control.timer.state import RemoteTimerStateStore, TimerCommandSession
+from ..core.timer.hand_alert import TimerHandAlert
 from ..core.timer.models import ClockConfig, MeetingType, PartState, Section
 from ..core.timer.schedule_factory import is_part_duration_editable
 from ..styles.theme import current_theme_scheme
@@ -91,7 +92,9 @@ class RemoteTimerAdapter(QObject):
     def __init__(self, dependencies: RemoteTimerAdapterDependencies, parent: QObject) -> None:
         super().__init__(parent)
         self._dependencies = dependencies
-        self._state = RemoteTimerStateStore()
+        self._state = RemoteTimerStateStore(
+            hand_alert_policy=dependencies.feature_flags.hand_alert_policy
+        )
         self._active = False
         self._bridge: QtCommandBridge[TimerRemoteCommand, TimerCommandError] = QtCommandBridge(
             self._execute_command,
@@ -115,6 +118,10 @@ class RemoteTimerAdapter(QObject):
         self._active = bool(active)
         if self._active:
             self.refresh_all()
+
+    def set_hand_alert(self, alert: TimerHandAlert) -> None:
+        if self._state.update_hand_alert(alert) and self._active:
+            self.snapshot_updated.emit()
 
     def build_http_module(
         self,

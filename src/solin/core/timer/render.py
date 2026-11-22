@@ -40,17 +40,19 @@ def format_fixed_countdown(remaining_seconds: int, total_seconds: int) -> str:
     return f"{hours:0{hour_width}d}:{minutes:02d}:{seconds:02d}"
 
 
-def _fmt_clock(epoch: float, config: ClockConfig) -> tuple[str, str, str]:
-    """Return (primary_text, seconds_text, ampm_text) for the wall clock."""
-    lt = time.localtime(epoch)
+def _digital_clock_fields(lt: time.struct_time, config: ClockConfig) -> dict[str, str]:
+    """The digital form of a wall-clock instant, using the configured format."""
     if config.hour_format_24h:
         text = time.strftime("%H:%M", lt)
-        seconds = time.strftime("%S", lt) if config.show_seconds else ""
-        return text, seconds, ""
-    text = time.strftime("%I:%M", lt).lstrip("0")
-    seconds = time.strftime("%S", lt) if config.show_seconds else ""
-    ampm = time.strftime("%p", lt) if config.show_ampm else ""
-    return text, seconds, ampm
+    else:
+        text = time.strftime("%I:%M", lt).lstrip("0")
+    return {
+        "primary_text": text,
+        "seconds_text": time.strftime("%S", lt) if config.show_seconds else "",
+        "secondary_text": (
+            time.strftime("%p", lt) if not config.hour_format_24h and config.show_ampm else ""
+        ),
+    }
 
 
 def _fmt_duration(seconds: float) -> tuple[str, str]:
@@ -90,33 +92,26 @@ def _blank_face(config: ClockConfig) -> dict:
     }
 
 
-def _clock_face(epoch: float, config: ClockConfig) -> dict:
+def _clock_face(epoch: float, config: ClockConfig, *, compact_readout: bool) -> dict:
     face = _blank_face(config)
+    lt = time.localtime(math.floor(epoch))
     if config.mode in (ClockMode.ANALOG, ClockMode.ANALOG_DIGITAL):
         # The timer engine ticks faster than once per second so countdowns stay
         # smooth. Analog clocks should not inherit that cadence: the second hand
         # advances in whole-second steps, while minute/hour hands follow that
         # same stable wall-clock instant.
-        whole_epoch = math.floor(epoch)
-        lt = time.localtime(whole_epoch)
         second = lt.tm_sec
         minute = lt.tm_min + second / 60.0
         hour = (lt.tm_hour % 12) + minute / 60.0
         face["second_angle"] = second * 6.0
         face["minute_angle"] = minute * 6.0
         face["hour_angle"] = hour * 30.0
-        # Analog projection is face-only unless the combined face is selected.
-        if config.mode is ClockMode.ANALOG_DIGITAL:
-            text, seconds, ampm = _fmt_clock(epoch, config)
-            face["primary_text"] = text
-            face["seconds_text"] = seconds
-            face["secondary_text"] = ampm
-        return face
+        if config.mode is ClockMode.ANALOG:
+            if compact_readout:
+                face["compact_readout"] = _digital_clock_fields(lt, config)
+            return face
 
-    text, seconds, ampm = _fmt_clock(epoch, config)
-    face["primary_text"] = text
-    face["seconds_text"] = seconds
-    face["secondary_text"] = ampm
+    face.update(_digital_clock_fields(lt, config))
     return face
 
 
@@ -169,13 +164,16 @@ def _select_active_display(config: ClockConfig) -> str:
     return "timer"
 
 
-def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
+def build_render_model(
+    snapshot: TimerSnapshot, config: ClockConfig, *, compact_readout: bool = False
+) -> dict:
     """Flat dict consumed by ClockFace.qml.
 
     Keys:
         active          — bool: a meeting part is running/frozen.
         display_mode    — "clock" | "timer" | "clock_timer".
-        clock           — render payload for the configured wall clock.
+        clock           — render payload for the configured wall clock, with
+                          optional digital compact_readout for the analog face.
         timer           — render payload for the active part timer.
         mode            — "analog" | "analog_digital" | "digital" (governs
                           the currently selected single-face payload).
@@ -190,7 +188,7 @@ def build_render_model(snapshot: TimerSnapshot, config: ClockConfig) -> dict:
         text_scale_pct  — int, 10..100 percent of the largest fitting content.
         hour_angle / minute_angle / second_angle — degrees, for analog idle.
     """
-    clock_face = _clock_face(snapshot.wall_clock_epoch, config)
+    clock_face = _clock_face(snapshot.wall_clock_epoch, config, compact_readout=compact_readout)
     timer_face = _timer_face(snapshot) if snapshot.active else _blank_face(config)
     display_mode = "clock"
     selected_face = clock_face

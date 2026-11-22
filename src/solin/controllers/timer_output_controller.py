@@ -16,6 +16,7 @@ from __future__ import annotations
 from PySide6.QtCore import QTimer
 
 from ..core.timer.application import TimerSession
+from ..core.timer.hand_alert import TimerHandAlert
 from ..core.timer.models import ClockConfig
 from ..core.projection.monitor_allocation import OWNER_TIMER
 from ..ui.screens import ScreenManager
@@ -56,6 +57,9 @@ class TimerOutputController:
     @property
     def clock_config(self):
         return self._clock_config
+
+    def set_hand_alert(self, alert: TimerHandAlert) -> None:
+        self._bridge.set_hand_alert(alert)
 
     # ── Visibility (reserve vs. show) ──────────────────────────────────────
 

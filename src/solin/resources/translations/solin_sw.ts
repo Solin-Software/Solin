@@ -10653,6 +10653,26 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <source>Participant muted and hand lowered.</source>
         <translation>Maikrofoni ya mshiriki imezimwa na mkono umeshushwa.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>Unganisha na kipima muda</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Mikono iliyoinuliwa kwenye Zoom itaonekana kwenye skrini ya kipima muda.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>Onyesha mkono kwenye kipima muda</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>Jaribu mikono iliyoinuliwa</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12560,6 +12580,26 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>Sehemu hii ya mkutano haipatikani tena.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>Mikono iliyoinuliwa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>Mkono umeinuliwa</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>Onyesha wote</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>Funga orodha ya mikono iliyoinuliwa</translation>
     </message>
 </context>
 <context>

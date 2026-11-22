@@ -47,6 +47,7 @@ from solin.widgets.background_song_popup import BackgroundSongPopup
 if TYPE_CHECKING:
     from solin.controllers.program_recording_controller import ProgramRecordingController
     from solin.controllers.scene_runtime_controller import SceneRuntimeController
+    from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 
 
 # Quick-Access Toolbar (floating, bottom-center)
@@ -193,6 +194,7 @@ class QuickAccessToolbar(QQuickWidget):
         background_song_service=None,
         scene_runtime: SceneRuntimeController | None = None,
         program_recording: ProgramRecordingController | None = None,
+        timer_hand_alert: TimerHandAlertController | None = None,
     ):
         super().__init__(parent)
         self._obs = obs_service
@@ -202,6 +204,7 @@ class QuickAccessToolbar(QQuickWidget):
         self._background_song = background_song_service
         self._scene_runtime = scene_runtime
         self._program_recording = program_recording
+        self._timer_hand_alert = timer_hand_alert
         self._minimized = False
         self._obs_connected = False
         self._screen_count = 0
@@ -335,6 +338,8 @@ class QuickAccessToolbar(QQuickWidget):
 
         # ── Zoom Panel (native QWidget popup) ─────────────────────────────
         self._zoom_panel = None
+        if timer_hand_alert is not None:
+            timer_hand_alert.controls_changed.connect(self._sync_zoom_timer_controls)
         self._bridge.set_zoom_visible(self._zoom_enabled)
         if self._zoom is not None:
             self._zoom.enabled_changed.connect(self.set_zoom_enabled)
@@ -451,7 +456,12 @@ class QuickAccessToolbar(QQuickWidget):
         from solin.widgets.zoom_panel import ZoomPanel
 
         raised_hands_available = bool(self._zoom and self._zoom.raised_hands_available)
-        panel = ZoomPanel(self, raised_hands_available=raised_hands_available)
+        alert = self._timer_hand_alert
+        panel = ZoomPanel(
+            self,
+            raised_hands_available=raised_hands_available,
+            hand_demo_available=alert is not None and alert.demo_available,
+        )
         if self._zoom:
             panel.cancel_requested.connect(self._zoom.cancel)
             panel.set_busy(self._zoom.is_busy)
@@ -468,7 +478,24 @@ class QuickAccessToolbar(QQuickWidget):
         panel.set_connected(self._zoom_connected)
         panel.set_background_song_link(*self._zoom_song_link)
         self._zoom_panel = panel
+        if alert is not None and raised_hands_available:
+            panel.timer_integration_toggled.connect(alert.set_integrated)
+            panel.manual_hand_toggled.connect(alert.set_manual)
+            if alert.demo_available:
+                panel.raised_hands_demo_toggled.connect(alert.set_demo)
+                alert.demo_changed.connect(panel.set_raised_hands_demo)
+                panel.set_raised_hands_demo(alert.demo_snapshot)
+            self._sync_zoom_timer_controls()
         return panel
+
+    def _sync_zoom_timer_controls(self) -> None:
+        alert = self._timer_hand_alert
+        if alert is not None and self._zoom_panel is not None:
+            self._zoom_panel.set_timer_hand_controls(
+                available=alert.available and bool(self._zoom and self._zoom.raised_hands_available),
+                integrated=alert.integrated,
+                manual=alert.manual,
+            )
 
     def _ensure_scene_popup(self):
         if self._scene_popup is not None:
@@ -581,8 +608,12 @@ class QuickAccessToolbar(QQuickWidget):
     def set_zoom_enabled(self, enabled: bool) -> None:
         self._zoom_enabled = enabled
         self._bridge.set_zoom_visible(enabled)
-        if not enabled and self._zoom_panel is not None:
-            self._zoom_panel.close()
+        if not enabled:
+            if self._zoom_panel is not None:
+                self._zoom_panel.close()
+            if self._timer_hand_alert is not None:
+                self._timer_hand_alert.set_manual(False)
+                self._timer_hand_alert.set_demo(False)
         self._update_separator()
         self.reposition()
 
@@ -596,11 +627,8 @@ class QuickAccessToolbar(QQuickWidget):
             self._zoom_panel.set_busy(busy)
 
     def _on_zoom_hands_toggled(self, enabled: bool) -> None:
-        if enabled:
-            if not self._zoom.start_raised_hands_monitoring():
-                self._zoom_panel.set_raised_hands_snapshot(self._zoom.raised_hands_snapshot)
-        else:
-            self._zoom.stop_raised_hands_monitoring()
+        if not self._zoom.set_raised_hands_monitoring(enabled):
+            self._zoom_panel.set_raised_hands_snapshot(self._zoom.raised_hands_snapshot)
 
     def _on_zoom_participant_action(self, action, reference: str) -> None:
         if not self._zoom.request_participant_action(action, reference):

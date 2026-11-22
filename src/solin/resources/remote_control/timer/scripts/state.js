@@ -123,7 +123,19 @@ export function normalizeLiveSnapshot(raw) {
     plannedSeconds: Math.max(0, Math.trunc(Number(src.plannedSeconds) || 0)),
     elapsedSeconds: Math.max(0, Number(src.elapsedSeconds) || 0),
     clockConfig,
+    handAlert: normalizeHandAlert(src.handAlert),
   };
+}
+
+function normalizeHandAlert(raw) {
+  if (raw?.kind === "manual") return { kind: "manual" };
+  if (raw?.kind !== "automatic" || !Number.isSafeInteger(raw.count) || raw.count < 1) {
+    return null;
+  }
+  const names = Array.isArray(raw.names)
+    ? raw.names.filter((name) => typeof name === "string" && name.trim()).slice(0, raw.count)
+    : [];
+  return { kind: "automatic", count: raw.count, names };
 }
 
 export function normalizeScheduleSnapshot(raw) {

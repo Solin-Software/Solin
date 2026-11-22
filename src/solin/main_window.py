@@ -93,6 +93,7 @@ from .controllers.signal_connection_controller import (
 )
 from .controllers.main_window_nav import MainPage
 from .controllers.timer_engine import TimerEngine
+from .controllers.timer_hand_alert_controller import TimerHandAlertController
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_pdf_export_controller import TimerPdfExportController
@@ -113,6 +114,10 @@ from .core.projection.application import (
     ObsSceneSession,
     ProjectionSession,
     projection_presentation_type,
+)
+from .core.remote_control.features import (
+    DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+    TimerRemoteHandAlertPolicy,
 )
 from .core.scenes.engine import MAXIMUM_OUTPUT_WINDOW_TARGETS, OutputWindowTarget
 from .core.scenes.model import BusId, SceneDocument
@@ -520,11 +525,13 @@ class MainWindow(QWidget):
         # subsystem (media/timer) owns each monitor — consulted by both the
         # media projection controller and the timer-output controller.
         self.timer_engine = TimerEngine(self)
+        self._timer_hand_alert = TimerHandAlertController(self._zoom_settings, self)
         self.timer_output = TimerOutputController(
             self.timer_engine,
             timer_session,
             self._monitor_allocation,
         )
+        self._timer_hand_alert.alert_changed.connect(self.timer_output.set_hand_alert)
         self._timer_output_startup_timer = QTimer(self)
         self._timer_output_startup_timer.setSingleShot(True)
         self._timer_output_startup_timer.timeout.connect(self._reconcile_timer_output_after_startup)
@@ -545,6 +552,8 @@ class MainWindow(QWidget):
             media_countdown_automation=self._media_countdown_automation,
             language_manager=lang_manager,
         )
+        self.timer_bridge.monitorsChanged.connect(self._refresh_timer_hand_alert_outputs)
+        self._refresh_timer_hand_alert_outputs()
 
         # OBS WebSocket integration
         self._obs_service = service_factories.obs_websocket(self._obs_settings, self)
@@ -554,7 +563,8 @@ class MainWindow(QWidget):
 
 
         # Zoom Meetings integration
-        self._zoom_service = service_factories.zoom(self)
+        self._zoom_service = service_factories.zoom(self._zoom_settings, self)
+        self._zoom_service.raised_hands_changed.connect(self._timer_hand_alert.set_zoom_snapshot)
 
         self._background_song_service = service_factories.background_song(
             self.lang,
@@ -632,6 +642,7 @@ class MainWindow(QWidget):
                 ndi_service=self._ndi_service,
                 zoom_service=self._zoom_service,
                 zoom_meetings=self._zoom_meetings,
+                timer_hand_alert=self._timer_hand_alert,
                 app_settings=self._app_settings,
                 about_settings_factory=service_factories.about_settings,
                 obs_settings=self._obs_settings,
@@ -1002,6 +1013,9 @@ class MainWindow(QWidget):
         )
         self.settings_widget.remote.remote_control_settings_changed.connect(
             self._ensure_remote_control_started
+        )
+        self.settings_widget.remote.remote_control_settings_changed.connect(
+            self._refresh_timer_hand_alert_outputs
         )
         startup.mark("main_window_signals_connected")
 
@@ -1454,6 +1468,17 @@ class MainWindow(QWidget):
             # callback with RPC_E_CANTCALLOUT_ININPUTSYNCCALL.
             self._benchmark_close_requested.emit()
 
+    def _refresh_timer_hand_alert_outputs(self) -> None:
+        settings = self._remote_control_settings
+        policy = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS.hand_alert_policy
+        remote = settings.enabled() and settings.timer_enabled()
+        self._timer_hand_alert.set_outputs(
+            available=(
+                self.timer_monitors.has_reserved_screen()
+                or (remote and policy is not TimerRemoteHandAlertPolicy.DISABLED)
+            ),
+        )
+
     def _ensure_remote_control_started(self) -> None:
         if self._remote_control is not None or not self._remote_control_settings.enabled():
             return
@@ -1499,9 +1524,12 @@ class MainWindow(QWidget):
                 timer_engine=self.timer_engine,
                 timer_bridge=self.timer_bridge,
                 settings_widget=self.settings_widget,
+                timer_feature_flags=DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
             ),
             self,
         )
+        self._timer_hand_alert.alert_changed.connect(controller.set_timer_hand_alert)
+        controller.set_timer_hand_alert(self._timer_hand_alert.alert)
         controller.runtime_status_reported.connect(self._quick_toolbar.set_remote_control_status)
         controller.session_inventory_reported.connect(self._quick_toolbar.set_remote_sessions)
         controller.public_viewers_reported.connect(self._quick_toolbar.set_remote_public_viewers)

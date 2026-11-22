@@ -19,6 +19,8 @@ from solin.styles.icons import (
     ICON_MUSIC,
     ICON_NAV_MEETINGS,
     ICON_NAV_PLAYLIST,
+    ICON_RAISED_HAND,
+    ICON_RAISED_HAND_FILLED,
     ICON_SEC_LIVING,
     ICON_SEC_MINISTRY,
     ICON_SEC_PUBLIC_TALK,
@@ -335,6 +337,8 @@ def test_timer_shell_is_fullscreen_first_with_modal_login_and_canonical_section_
     canonical_icons = {
         "home": ICON_HOME,
         "shield": ICON_SHIELD,
+        "hand": ICON_RAISED_HAND,
+        "hand-filled": ICON_RAISED_HAND_FILLED,
         "sec-treasures": ICON_SEC_TREASURES,
         "sec-ministry": ICON_SEC_MINISTRY,
         "sec-living": ICON_SEC_LIVING,

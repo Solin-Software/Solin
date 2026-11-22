@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..ui.fonts import timer_digit_font_family
 from solin.ui.qml.host import configure_qml_host
+from solin.ui.qml.timer_icons import TimerIconProvider
 from solin.ui.qml.timer_output import ClockRenderBridge
 from .window import exclude_from_aero_peek
 
@@ -62,6 +63,7 @@ class TimerOutputWindow(QWidget):
             self._qml,
             type_name="ClockFace",
             clear_color="#000000",
+            image_providers={"timericons": TimerIconProvider()},
             context_properties={
                 "timerDigitFontFamily": timer_digit_font_family(),
                 "clock": bridge,

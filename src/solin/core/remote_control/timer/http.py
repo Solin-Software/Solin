@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+import json
 import logging
 from pathlib import Path
 import time
@@ -34,6 +35,7 @@ from .contracts import (
     TimerCommandErrorCode,
     TimerCommandResult,
     TimerRemoteCommand,
+    hand_alert_payload,
     parse_timer_command,
 )
 from .state import (
@@ -74,6 +76,29 @@ class TimerRemoteDependencies:
     clock_ms: Callable[[], int] = _default_clock_ms
 
 
+class _TimerSessionWebSocket(web.WebSocketResponse):
+    def __init__(self, session_is_valid: Callable[[], bool]) -> None:
+        super().__init__(
+            timeout=WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
+            heartbeat=WEBSOCKET_HEARTBEAT_SECONDS,
+            receive_timeout=65.0,
+            max_msg_size=1_024,
+            compress=False,
+        )
+        self._session_is_valid = session_is_valid
+
+    async def send_json(
+        self,
+        data: JsonObject,
+        compress: int | None = None,
+        *,
+        dumps: Callable[[JsonObject], str] = json.dumps,
+    ) -> None:
+        # The shared sender calls this after acquiring the per-socket write lock.
+        if data["type"] == "session.revoked" or self._session_is_valid():
+            await super().send_json(data, compress=compress, dumps=dumps)
+
+
 class TimerRemoteHttpModule(ScopedRemoteHttpModule):
     """Mounted route module serving /remote/timer with public fullscreen + authenticated control."""
 
@@ -101,9 +126,10 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         self._public_reservations: dict[str, int] = {}
         self._public_reservation_count = 0
         self._public_event_sequence = 0
-        self._last_public_live_revision = dependencies.state.live_revision
-        self._last_auth_live_revision = dependencies.state.live_revision
-        self._last_auth_schedule_revision = dependencies.state.schedule_revision
+        snapshot = dependencies.state.snapshot()
+        self._last_public_live_revision = snapshot.public_live_revision
+        self._last_auth_live_revision = snapshot.live_revision
+        self._last_auth_schedule_revision = snapshot.schedule_revision
 
     def public_viewer_count(self) -> int:
         return len(self._public_websockets) if self.is_enabled() else 0
@@ -138,22 +164,26 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             snapshot = self._dependencies.state.snapshot(now_epoch_ms=now_ms)
             public_events: list[JsonObject] = []
             auth_events: list[JsonObject] = []
-            live_payload: JsonObject | None = None
 
-            if has_public and snapshot.live_revision != self._last_public_live_revision:
-                self._last_public_live_revision = snapshot.live_revision
-                live_payload = snapshot.live.to_dict()
+            if has_public and snapshot.public_live_revision != self._last_public_live_revision:
+                self._last_public_live_revision = snapshot.public_live_revision
                 public_events.append(
-                    self._public_event("timer.live", live_payload, snapshot=snapshot)
+                    self._public_event(
+                        "timer.live",
+                        self._live_payload(snapshot, authenticated=False),
+                        snapshot=snapshot,
+                    )
                 )
 
             if has_auth:
                 if snapshot.live_revision != self._last_auth_live_revision:
                     self._last_auth_live_revision = snapshot.live_revision
-                    if live_payload is None:
-                        live_payload = snapshot.live.to_dict()
                     auth_events.append(
-                        self._auth_event("timer.live", live_payload, snapshot=snapshot)
+                        self._auth_event(
+                            "timer.live",
+                            self._live_payload(snapshot, authenticated=True),
+                            snapshot=snapshot,
+                        )
                     )
 
                 if snapshot.schedule_revision != self._last_auth_schedule_revision:
@@ -240,9 +270,27 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             "profile": self._profile_payload(),
             "liveRevision": snapshot.live_revision,
             "scheduleRevision": snapshot.schedule_revision,
-            "live": snapshot.live.to_dict(),
+            "live": self._live_payload(snapshot, authenticated=True),
             "schedule": snapshot.schedule.to_dict(),
         }
+
+    def _live_payload(
+        self,
+        snapshot: RemoteTimerRuntimeSnapshot,
+        *,
+        authenticated: bool,
+    ) -> JsonObject:
+        payload = snapshot.live.to_dict()
+        if not authenticated:
+            payload["liveRevision"] = snapshot.public_live_revision
+        hand_alert = hand_alert_payload(
+            snapshot.hand_alert,
+            self._dependencies.state.hand_alert_policy,
+            authenticated=authenticated,
+        )
+        if hand_alert is not None:
+            payload["handAlert"] = hand_alert
+        return payload
 
     def _revocation_event(self, reason: str) -> JsonObject:
         return self._auth_event("session.revoked", {"reason": reason}, advance=False)
@@ -264,8 +312,8 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                 "eventSequence": self._public_event_sequence,
                 "profile": self._profile_payload(),
                 "tls": setup["tls"],
-                "liveRevision": snapshot.live_revision,
-                "live": snapshot.live.to_dict(),
+                "liveRevision": snapshot.public_live_revision,
+                "live": self._live_payload(snapshot, authenticated=False),
             }
         )
 
@@ -356,12 +404,12 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                 if first_public:
                     self._last_public_live_revision = max(
                         self._last_public_live_revision,
-                        snapshot.live_revision,
+                        snapshot.public_live_revision,
                     )
                 initial_event = self._public_event(
                     "public.snapshot",
                     {
-                        "live": snapshot.live.to_dict(),
+                        "live": self._live_payload(snapshot, authenticated=False),
                         "profile": self._profile_payload(),
                         "controlAvailable": self.control_available(),
                     },
@@ -390,13 +438,11 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         self._require_same_origin(request)
         session_token = self._require_session(request)
         self._reserve_auth_websocket(session_token)
-        socket = web.WebSocketResponse(
-            timeout=WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
-            heartbeat=WEBSOCKET_HEARTBEAT_SECONDS,
-            receive_timeout=65.0,
-            max_msg_size=1_024,
-            compress=False,
-        )
+
+        def session_is_valid() -> bool:
+            return self.is_enabled() and self._sessions.resolve(session_token) is not None
+
+        socket = _TimerSessionWebSocket(session_is_valid)
         try:
             await socket.prepare(request)
         finally:
@@ -405,6 +451,9 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         heartbeat_task: asyncio.Task[None] | None = None
         try:
             async with self._publication_lock:
+                if not session_is_valid():
+                    await socket.close(code=4401, message=b"Session expired", drain=False)
+                    return socket
                 first_auth = not self._auth_websockets
                 self._auth_websockets[socket] = asyncio.Lock()
                 self._websocket_sessions[socket] = session_token
@@ -426,7 +475,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                     self._auth_event(
                         "session.snapshot",
                         {
-                            "live": snapshot.live.to_dict(),
+                            "live": self._live_payload(snapshot, authenticated=True),
                             "schedule": snapshot.schedule.to_dict(),
                             "profile": self._profile_payload(),
                             "controlAvailable": self.control_available(),
@@ -497,7 +546,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                         "type": "heartbeat",
                         "serverInstanceId": snapshot.server_instance_id,
                         "sequence": self._public_event_sequence,
-                        "liveRevision": snapshot.live_revision,
+                        "liveRevision": snapshot.public_live_revision,
                         "serverEpochMs": snapshot.live.server_epoch_ms,
                         "utcOffsetMinutes": snapshot.live.utc_offset_minutes,
                     },
@@ -554,7 +603,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             "type": event_type,
             "serverInstanceId": runtime_snapshot.server_instance_id,
             "sequence": self._public_event_sequence if sequence is None else sequence,
-            "liveRevision": runtime_snapshot.live_revision,
+            "liveRevision": runtime_snapshot.public_live_revision,
             "payload": payload,
         }
 

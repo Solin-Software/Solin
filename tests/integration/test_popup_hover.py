@@ -23,7 +23,9 @@ from solin.core.integrations.automation.auto_key_actions import (
     EVENT_ZOOM_BEFORE_MEETING,
     EVENT_ZOOM_MEETING_STARTED,
 )
-from solin.core.integrations.automation.settings import AutoKeySettingsStore, OBSSettingsStore
+from solin.core.integrations.automation.settings import (
+    AutoKeySettingsStore, OBSSettingsStore, ZoomSettingsStore,
+)
 from solin.core.integrations.automation.zoom.service import ZoomService
 from solin.core.integrations.automation.zoom.state import (
     AudioState,
@@ -34,6 +36,7 @@ from solin.core.integrations.automation.zoom.state import (
 )
 from solin.core.scenes.presets import SceneSeedNames
 from solin.controllers.scene_runtime_controller import SceneRuntimeController
+from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.ui.popup_hover import PopupHoverController
 from solin.ui.incremental_load import IncrementalLoadState
 from solin.widgets.common.popup_hover_button import PopupHoverButton
@@ -374,9 +377,10 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory, monkeypat
                 QCoreApplication.sendPostedEvents(parent, QEvent.Type.DeferredDelete)
 
     request.addfinalizer(destroy_parent)
+    zoom_settings = ZoomSettingsStore(settings.settings)
     zoom = None
     if getattr(request, "param", False):
-        zoom = ZoomService(parent, raised_hands_enabled=True)
+        zoom = ZoomService(zoom_settings, parent, raised_hands_enabled=True)
         monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
         monkeypatch.setattr(zoom, "refresh", lambda: None)
         request.addfinalizer(zoom.stop)
@@ -396,6 +400,7 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory, monkeypat
         auto_key_settings=AutoKeySettingsStore(settings.settings),
         app_settings=settings,
         scene_runtime=scene_runtime,
+        timer_hand_alert=TimerHandAlertController(zoom_settings, parent),
     )
     def unload_toolbar():
         if shiboken6.isValid(toolbar):
@@ -418,6 +423,26 @@ def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     assert not popup._hands_page.isVisible()
     QTest.mouseClick(popup._tabs, Qt.MouseButton.LeftButton, pos=popup._tabs.tabRect(1).center())
     assert popup._monitor_hands.isVisible()
+    assert not popup._monitor_hands.isChecked()
+    assert not popup._timer_integration.isVisible()
+    assert not popup._manual_hand.isVisible()
+    alerts = toolbar._timer_hand_alert
+    alerts.set_outputs(available=True)
+    assert popup._timer_integration.isVisible()
+    assert not popup._timer_integration.isChecked()
+    assert popup._manual_hand.isVisible()
+    assert not popup._manual_hand.isEnabled()
+    popup._manual_hand.click()
+    assert not alerts.alert.manual
+    popup._timer_integration.click()
+    assert alerts.integrated
+    assert popup._manual_hand.isEnabled()
+    popup._manual_hand.click()
+    assert alerts.alert.manual
+    assert not popup._monitor_hands.isChecked()
+    popup._manual_hand.click()
+    assert not alerts.alert.manual
+    assert alerts.integrated
     assert not popup._monitor_hands.isChecked()
 
     popup._monitor_hands.click()
@@ -446,6 +471,50 @@ def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     assert service.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
     assert not popup._hands_status.isHidden()
     assert not popup._monitor_hands.isChecked()
+    alerts.set_outputs(available=False)
+    assert not popup._timer_integration.isVisible()
+    assert not popup._manual_hand.isVisible()
+
+
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
+@pytest.mark.parametrize("is_dev", [False, True])
+def test_zoom_popup_sample_names_are_dev_only(toolbar_host, monkeypatch, is_dev):
+    monkeypatch.setattr("solin.controllers.timer_hand_alert_controller.IS_DEV", is_dev)
+    _parent, toolbar = toolbar_host
+    alerts = toolbar._timer_hand_alert
+    toolbar._on_zoom_clicked()
+    popup = toolbar._zoom_panel
+    button = popup._demo_toggle
+    if not is_dev:
+        assert button is None
+        return
+    assert not button.isVisible()
+    popup._tabs.setCurrentIndex(1)
+    assert button.isVisible()
+    button.click()
+    assert len(popup._rows) == 15
+    assert not alerts.alert.names
+    assert all(
+        not row.button(ParticipantAction.LOWER_HAND).isEnabled()
+        for row in popup._rows.values()
+    )
+    assert not popup._monitor_hands.isChecked()
+
+    alerts.set_outputs(available=True)
+    assert len(alerts.alert.names) == 15
+    assert not popup._timer_integration.isChecked()
+    assert not popup._manual_hand.isEnabled()
+    popup._timer_integration.click()
+    popup._manual_hand.click()
+    button.click()
+    assert not popup._rows
+    assert alerts.alert.manual
+
+    button.click()
+    toolbar.set_zoom_enabled(False)
+    assert not alerts.alert.names
+    assert not alerts.alert.manual
+    assert not button.isChecked()
 
 
 @pytest.mark.parametrize("toolbar_host", [True], indirect=True)
@@ -508,11 +577,9 @@ def test_scene_panel_restores_and_persists_projection_controls(toolbar_host, set
     assert toolbar._ensure_solin_scene_popup() is popup
 
 
-def test_zoom_remains_available_without_an_open_meeting(toolbar_host):
-    from solin.core.integrations.automation.zoom.service import ZoomService
-
+def test_zoom_remains_available_without_an_open_meeting(toolbar_host, settings):
     _parent, toolbar = toolbar_host
-    toolbar._zoom = ZoomService(toolbar)
+    toolbar._zoom = ZoomService(ZoomSettingsStore(settings.settings), toolbar)
     toolbar.set_zoom_enabled(True)
     toolbar.set_zoom_connected(False)
     assert toolbar._bridge._zoom_visible
