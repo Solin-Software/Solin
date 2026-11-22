@@ -17,8 +17,10 @@ from solin.controllers.remote_timer_adapter import (
     RemoteTimerAdapterDependencies,
 )
 from solin.controllers.timer_engine import TimerEngine
+from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.core.foundation.resources import application_resource_path
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
+from solin.core.integrations.automation.settings import ZoomSettingsStore
 from solin.core.remote_control.features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
     TimerRemoteFeatureFlags,
@@ -54,6 +56,9 @@ class _MemorySettings:
 
     def string(self, key: str, default: str = "") -> str:
         return str(self.values.get(key, default) or "")
+
+    def value(self, key: str, default: bool, value_type: type[bool]) -> bool:
+        return value_type(self.values.get(key, default))
 
     def set_value(self, key: str, value: object, *, sync: bool = True) -> None:
         del sync
@@ -114,6 +119,7 @@ def _build_stack(
     engine = TimerEngine()
     engine._timer.stop()  # Deterministic tick control in tests
     engine.set_freeze_seconds(3)
+    hand_alert = TimerHandAlertController(ZoomSettingsStore(_MemorySettings()), engine)
     bridge = TimerBridge(
         engine=engine,
         session=session,
@@ -126,6 +132,7 @@ def _build_stack(
             unreserve=lambda _idx: True,
             set_visible=lambda _vis: None,
         ),
+        hand_alert=hand_alert,
         pdf_export=SimpleNamespace(export=lambda *_a, **_kw: None),
         media_countdown_automation=_MediaCountdownAutomationStub(),
     )
@@ -149,6 +156,8 @@ def _build_stack(
         bridge,
     )
     adapter.set_active(True)
+    hand_alert.set_outputs(available=True)
+    hand_alert.alert_changed.connect(adapter.set_hand_alert)
 
     root_assets = application_resource_path("remote_control")
     timer_sessions = InMemorySessionStore(scope=RemoteScope.TIMER)
@@ -313,7 +322,10 @@ def test_timer_hand_alert_policy_applies_to_bootstrap_and_live_streams(
                 TimerHandAlert(manual=True),
                 TimerHandAlert(),
             ):
-                adapter.set_hand_alert(alert)
+                if alert.names:
+                    adapter.set_hand_alert(alert)
+                else:
+                    bridge.setManualHand(alert.manual)
                 await app.publish_snapshot(RemoteScope.TIMER)
                 for ws, path, headers, _, mode in streams:
                     boot = await bootstrap(path, headers)

@@ -43,6 +43,22 @@ Item {
         border.width: 1
     }
 
+    component ManualHandButton: TimerButton {
+        id: manualHand
+        objectName: "timerManualHandButton"
+        enabled: timer.manualHandAvailable
+        variant: timer.manualHandRaised ? "soft" : "ghost"
+        iconName: timer.manualHandRaised ? "raised_hand_filled" : "raised_hand"
+        iconColorHex: timer.manualHandRaised ? String(appTheme.accentText).replace("#", "") : ""
+        iconSize: 15
+        tip: qsTranslate("ZoomPanel", "Show hand on timer")
+
+        Accessible.checkable: true
+        Accessible.checked: timer.manualHandRaised
+        Accessible.onPressAction: if (enabled) manualHand.clicked()
+        onClicked: timer.setManualHand(!timer.manualHandRaised)
+    }
+
     component WeekSummary: RowLayout {
         id: summary
         property bool showIcon: true
@@ -189,7 +205,9 @@ Item {
                         segWidth: 92
                         onPicked: function(i) { timer.setMeetingType(i === 1 ? "weekend" : "midweek") }
                     }
+                    ManualHandButton {}
                     TimerButton {
+                        objectName: "timerExportPdfButton"
                         iconName: "export"; iconSize: 15
                         tip: qsTr("Export PDF")
                         onClicked: timer.exportSchedulePdf()
@@ -248,7 +266,9 @@ Item {
                             stretch: true
                             onPicked: function(i) { timer.setMeetingType(i === 1 ? "weekend" : "midweek") }
                         }
+                        ManualHandButton {}
                         TimerButton {
+                            objectName: "timerExportPdfButton"
                             iconName: "export"; iconSize: 15
                             tip: qsTr("Export PDF")
                             onClicked: timer.exportSchedulePdf()

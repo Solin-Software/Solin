@@ -547,6 +547,7 @@ class MainWindow(QWidget):
             session=timer_session,
             output=self.timer_output,
             monitors=self.timer_monitors,
+            hand_alert=self._timer_hand_alert,
             pdf_export=TimerPdfExportController(self),
             media_countdown_automation=self._media_countdown_automation,
             language_manager=lang_manager,

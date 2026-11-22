@@ -20,16 +20,15 @@ def zoom_settings(tmp_path, monkeypatch):
     return ZoomSettingsStore(SettingsStore.for_namespace("test", "prefs"))
 
 
-def test_manual_requires_integration_and_automatic_names_take_priority(zoom_settings):
+def test_manual_works_independently_and_automatic_names_take_priority(zoom_settings):
     controller = TimerHandAlertController(zoom_settings)
     published = []
     controller.alert_changed.connect(published.append)
     controller.set_outputs(available=True)
     controller.set_manual(True)
-    assert not controller.manual
-    assert not published
+    assert controller.manual
+    assert published == [TimerHandAlert(manual=True)]
     controller.set_integrated(True)
-    controller.set_manual(True)
     ready = RaisedHandsSnapshot(
         RaisedHandsStatus.READY,
         (RaisedHand("Bia", AudioState.MUTED, None), RaisedHand("Ana", AudioState.MUTED, None)),
@@ -46,11 +45,13 @@ def test_manual_requires_integration_and_automatic_names_take_priority(zoom_sett
     assert published[-1] == TimerHandAlert(manual=True)
     controller.set_zoom_snapshot(ready)
     controller.set_integrated(False)
-    assert not controller.manual
-    assert published[-1] == TimerHandAlert()
+    assert controller.manual
+    assert published[-1] == TimerHandAlert(manual=True)
     controller.set_integrated(True)
     assert controller.alert.names == ("Bia", "Ana")
     controller.set_zoom_snapshot(RaisedHandsSnapshot(RaisedHandsStatus.INACTIVE))
+    assert controller.alert == TimerHandAlert(manual=True)
+    controller.set_manual(False)
     assert controller.alert == TimerHandAlert()
 
 

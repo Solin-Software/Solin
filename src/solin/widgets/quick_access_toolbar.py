@@ -614,7 +614,6 @@ class QuickAccessToolbar(QQuickWidget):
             if self._zoom_panel is not None:
                 self._zoom_panel.close()
             if self._timer_hand_alert is not None:
-                self._timer_hand_alert.set_manual(False)
                 self._timer_hand_alert.set_demo(False)
         self._update_separator()
         self.reposition()

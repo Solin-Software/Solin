@@ -467,7 +467,7 @@ class ZoomPanel(ToolbarPanel):
     def set_timer_hand_controls(self, *, available: bool, integrated: bool, manual: bool) -> None:
         self._timer_integration.setVisible(available)
         self._manual_hand.setVisible(available and self._tabs.currentIndex() == self._hands_tab)
-        self._manual_hand.setEnabled(available and integrated)
+        self._manual_hand.setEnabled(available)
         with QSignalBlocker(self._timer_integration), QSignalBlocker(self._manual_hand):
             self._timer_integration.setChecked(integrated)
             self._manual_hand.setChecked(manual)
