@@ -13,12 +13,12 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Lock
 import time
+from typing import NamedTuple
 import wave
 
 import pytest
 
 from tests.integration.test_native_media_startup import (
-    _BLUE_BGRA,
     _RED_BGRA,
     _capture_prepared_source,
     _native_media,
@@ -278,7 +278,7 @@ def _native_audio():
                 runtime.shutdown()
 
 
-def _write_av_clip(path, *, duration=5, periodic=False, constant_frequency=None):
+def _write_av_clip(path, *, duration=5, constant_frequency=None):
     """Interleave uncompressed video and PCM, optionally keeping one audio tone."""
     width, fps, rate = 64, 10, 48000
     frame_size = width * width * 3
@@ -352,7 +352,7 @@ def _write_av_clip(path, *, duration=5, periodic=False, constant_frequency=None)
     headers = chunk(b"LIST", b"hdrl" + chunk(b"avih", header) + video_list + audio_list)
     payload, index, offset = [], [], 4
     for frame in range(frame_count):
-        blue = bool((frame // fps) % 2) if periodic else frame >= 2 * fps
+        blue = frame >= 2 * fps
         pixel = b"\xff\0\0" if blue else b"\0\0\xff"
         frequency = (
             constant_frequency if constant_frequency is not None else (1000 if blue else 400)
@@ -371,7 +371,13 @@ def _write_av_clip(path, *, duration=5, periodic=False, constant_frequency=None)
     path.write_bytes(b"RIFF" + struct.pack("<I", len(data)) + data)
 
 
-def _av_sync():
+class _AVSample(NamedTuple):
+    timestamp_ns: int
+    observed_at: float
+
+
+def _observe_av_output(runtime, media, resources, *, resumed: Event | None = None):
+    """Observe the first occurrence of each fixture signal in OBS program output."""
     from pylibobs import VideoFormat
     from pylibobs._ffi import ffi, get_lib
     from pylibobs.callbacks import (
@@ -382,83 +388,88 @@ def _av_sync():
     )
     from solin.core.media.obs_runtime import MONITORING_NONE
 
+    runtime.set_source_monitoring(media.source, MONITORING_NONE)
+    media.source.audio_mixers = 1
+    channel = runtime.acquire_channel()
+    resources.callback(runtime.release_channel, channel)
+    runtime.set_channel_source(channel, media.source)
+    info = ffi.new("struct obs_audio_info *")
+    assert get_lib().obs_get_audio_info(info)
+    sample_rate = int(info.samples_per_sec)
+    samples = {}
+    lock = Lock()
+
+    def capture_audio(_mix, planes, frames, timestamp_ns):
+        after_release = resumed is not None and resumed.is_set()
+        observed_at = time.monotonic()
+        if not planes or not planes[0] or not frames:
+            return
+        pcm = array("f", planes[0])
+        if max(pcm, default=0) < 0.01:
+            return
+        crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
+        tone = "low_tone" if crossings * sample_rate / frames < 750 else "high_tone"
+        with lock:
+            sample = _AVSample(timestamp_ns, observed_at)
+            samples.setdefault(tone, sample)
+            if after_release:
+                samples.setdefault("resumed_audio", sample)
+
+    def capture_video(planes, strides, width, height, _format, timestamp_ns):
+        observed_at = time.monotonic()
+        offset = (height // 2) * strides[0] + (width // 2) * 4
+        blue, _green, red, _alpha = planes[0][offset:offset + 4]
+        # OBS program output may pass through YUV conversion.
+        if red > 200 and blue < 20:
+            color = "red_frame"
+        elif blue > 200 and red < 20:
+            color = "blue_frame"
+        else:
+            return
+        with lock:
+            samples.setdefault(color, _AVSample(timestamp_ns, observed_at))
+
+    def snapshot():
+        with lock:
+            return samples.copy()
+
+    audio = add_raw_audio_callback(capture_audio, channels=1)
+    resources.callback(remove_raw_audio_callback, audio)
+    video = add_raw_video_callback(capture_video, format=VideoFormat.BGRA, width=64, height=64)
+    resources.callback(remove_raw_video_callback, video)
+    return snapshot
+
+
+def _av_sync():
     with _native_media() as (runtime, media, path), ExitStack() as resources:
         _write_av_clip(path)
         assert media.open(str(path))
-        # Compare program output timestamps on OBS's common clock, rather than
-        # producer audio arrival against a render readback's Python return time.
-        runtime.set_source_monitoring(media.source, MONITORING_NONE)
-        media.source.audio_mixers = 1
-        channel = runtime.acquire_channel()
-        resources.callback(runtime.release_channel, channel)
-        runtime.set_channel_source(channel, media.source)
-        info = ffi.new("struct obs_audio_info *")
-        assert get_lib().obs_get_audio_info(info)
-        low_tone, high_tone, red_frame, blue_frame = Event(), Event(), Event(), Event()
-        transitions = {}
-        lock = Lock()
-
-        def capture_audio(_mix, planes, frames, timestamp_ns):
-            if not planes or not planes[0] or not frames:
-                return
-            pcm = array("f", planes[0])
-            if max(pcm, default=0) < 0.01:
-                return
-            crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
-            if crossings * int(info.samples_per_sec) / frames < 750:
-                low_tone.set()
-            else:
-                with lock:
-                    transitions.setdefault("audio", timestamp_ns)
-                high_tone.set()
-
-        def capture_video(planes, strides, width, height, _format, timestamp_ns):
-            offset = (height // 2) * strides[0] + (width // 2) * 4
-            blue, _green, red, _alpha = planes[0][offset:offset + 4]
-            # Program output passes through YUV conversion; require the actual
-            # dominant color without assuming a lossless RGB round trip.
-            if red > 200 and blue < 20:
-                red_frame.set()
-            elif blue > 200 and red < 20:
-                with lock:
-                    transitions.setdefault("video", timestamp_ns)
-                blue_frame.set()
-
-        audio = add_raw_audio_callback(capture_audio, channels=1)
-        resources.callback(remove_raw_audio_callback, audio)
-        video = add_raw_video_callback(
-            capture_video, format=VideoFormat.BGRA, width=64, height=64,
-        )
-        resources.callback(remove_raw_video_callback, video)
+        output = _observe_av_output(runtime, media, resources)
         assert _wait_for(
-            lambda: _playing(media, 600) and low_tone.is_set() and red_frame.is_set(),
+            lambda: _playing(media, 600) and {"low_tone", "red_frame"} <= output().keys(),
             timeout=8,
         ), "Program output did not establish both initial A/V signals"
-        assert not high_tone.is_set() and not blue_frame.is_set(), transitions
+        before_update = output()
+        assert not {"high_tone", "blue_frame"} & before_update.keys(), before_update
         acknowledged = Event()
         resources.callback(runtime.observe_source_updates(media.source, acknowledged.set))
         media.set_speed(150)
         assert acknowledged.wait(0.25), "The native rate update was not acknowledged"
         assert _poll(media) < 2000, "The transition preceded the rate update"
-        assert _wait_for(lambda: high_tone.is_set() and blue_frame.is_set(), timeout=5), (
-            "Program output did not reach both 2 s transitions", transitions,
+        assert _wait_for(lambda: {"high_tone", "blue_frame"} <= output().keys(), timeout=5), (
+            "Program output did not reach both 2 s transitions", output(),
         )
-        with lock:
-            skew = (transitions["audio"] - transitions["video"]) / 1_000_000_000
+        transitions = output()
+        skew = (transitions["high_tone"].timestamp_ns - transitions["blue_frame"].timestamp_ns) / 1e9
         print("A/V output transition skew", skew, flush=True)
         assert abs(skew) <= 0.45, skew
 
 
 def _av_starvation(speed):
-    from pylibobs._ffi import ffi, get_lib
-    from pylibobs.callbacks import (
-        add_source_audio_capture_callback,
-        remove_source_audio_capture_callback,
-    )
     from solin.core.scenes.libobs_media_source import STATE_PLAYING
 
     with _native_media() as (runtime, media, path), ExitStack() as stack:
-        _write_av_clip(path, duration=12, periodic=True)
+        _write_av_clip(path, duration=12)
         stall, stalled, release = Event(), Event(), Event()
         url = stack.enter_context(
             _serve_clip(path, stall_after=stall, stalled=stalled, release_read=release)
@@ -466,103 +477,74 @@ def _av_starvation(speed):
         stack.callback(media.close)
         stack.callback(release.set)
         assert media.open(url, speed_percent=speed)
-        info = ffi.new("struct obs_audio_info *")
-        assert get_lib().obs_get_audio_info(info)
-        events = []
-        lock = Lock()
+        output = _observe_av_output(runtime, media, stack, resumed=release)
+        assert _wait_for(lambda: _playing(media, 400), timeout=8), media.position_ms
+        stall.set()
+        assert stalled.wait(4), "Origin never reached its read barrier"
+        previous = _poll(media)
+        unchanged_since = time.monotonic()
 
-        def capture(planes, frames, _timestamp_ns, muted):
-            if muted or not planes or not planes[0] or not frames:
-                return
-            pcm = array("f", planes[0])
-            crossings = sum(a <= 0 < b for a, b in zip(pcm, pcm[1:], strict=False))
-            with lock:
-                events.append(
-                    (time.monotonic(), crossings * int(info.samples_per_sec) / frames >= 750)
-                )
+        def frozen():
+            nonlocal previous, unchanged_since
+            current = _poll(media)
+            if current != previous:
+                previous, unchanged_since = current, time.monotonic()
+            return time.monotonic() - unchanged_since >= 0.5
 
-        callback = add_source_audio_capture_callback(media.source, capture, channels=1)
-        try:
-            assert _wait_for(lambda: _playing(media, 400), timeout=8), media.position_ms
-            stall.set()
-            assert stalled.wait(4), "Origin never reached its read barrier"
-            previous = _poll(media)
-            unchanged_since = time.monotonic()
+        assert _wait_for(frozen, timeout=6), (media.state, media.position_ms)
+        frozen_at = _poll(media)
+        frame_before = _capture_prepared_source(runtime, media)["center_bgra"]
+        assert frame_before == _RED_BGRA.hex(), (frozen_at, frame_before)
+        time.sleep(1.5)
+        assert abs(_poll(media) - frozen_at) <= 100, (frozen_at, media.position_ms)
+        assert _capture_prepared_source(runtime, media)["center_bgra"] == frame_before
+        before_release = output()
+        assert {"low_tone", "red_frame"} <= before_release.keys(), before_release
+        assert not {"high_tone", "blue_frame"} & before_release.keys(), (
+            "Playback reached the transition before the HTTP stall", before_release,
+        )
 
-            def frozen():
-                nonlocal previous, unchanged_since
-                current = _poll(media)
-                if current != previous:
-                    previous, unchanged_since = current, time.monotonic()
-                return time.monotonic() - unchanged_since >= 0.5
+        released = time.monotonic()
+        release.set()
+        assert _wait_for(lambda: _poll(media) > frozen_at + 100, timeout=5), (
+            media.state,
+            media.position_ms,
+        )
+        assert media.state == STATE_PLAYING, media.state
+        time.sleep(0.4)
+        elapsed = time.monotonic() - released
+        resumed_at = _poll(media)
+        assert resumed_at - frozen_at <= elapsed * speed / 100 * 1000 + 400, (
+            frozen_at,
+            resumed_at,
+            elapsed,
+        )
 
-            assert _wait_for(frozen, timeout=6), (media.state, media.position_ms)
-            frozen_at = _poll(media)
-            assert frozen_at < 10000, frozen_at
-            frame_before = _capture_prepared_source(runtime, media)["center_bgra"]
-            assert frame_before in {_RED_BGRA.hex(), _BLUE_BGRA.hex()}, frame_before
-            time.sleep(1.5)
-            assert abs(_poll(media) - frozen_at) <= 100, (frozen_at, media.position_ms)
-            assert _capture_prepared_source(runtime, media)["center_bgra"] == frame_before
-            with lock:
-                events.clear()
-            released = time.monotonic()
-            release.set()
-            assert _wait_for(lambda: _poll(media) > frozen_at + 100, timeout=5), (
-                media.state,
-                media.position_ms,
-            )
-            assert media.state == STATE_PLAYING, media.state
-            time.sleep(0.4)
-            elapsed = time.monotonic() - released
-            resumed_at = _poll(media)
-            assert resumed_at - frozen_at <= elapsed * speed / 100 * 1000 + 400, (
-                frozen_at,
-                resumed_at,
-                elapsed,
-            )
-
-            deadline = time.monotonic() + 3
-            video_at = None
-            while time.monotonic() < deadline:
-                frame = _capture_prepared_source(runtime, media)["center_bgra"]
-                if frame != frame_before:
-                    video_at = time.monotonic()
-                    break
-            assert video_at is not None, "Video did not resume to its next transition"
-            assert video_at - released < 2.0, video_at - released
-            target = frame == _BLUE_BGRA.hex()
-
-            def matching_audio():
-                with lock:
-                    return next((when for when, blue in events if blue == target), None)
-
-            assert _wait_for(lambda: matching_audio() is not None, timeout=3), (
-                "Audio did not resume"
-            )
-            audio_at = matching_audio()
-            assert audio_at is not None
-            with lock:
-                first_audio_at = events[0][0]
-                audio_blocks = len(events)
-            assert first_audio_at - released < 0.75, first_audio_at - released
-            print(
-                "A/V starvation recovery",
-                {
-                    "speed": speed,
-                    "frozen_ms": frozen_at,
-                    "resumed_ms": resumed_at,
-                    "elapsed": elapsed,
-                    "audio_resume": first_audio_at - released,
-                    "video_transition": video_at - released,
-                    "audio_blocks": audio_blocks,
-                    "transition_skew": audio_at - video_at,
-                },
-                flush=True,
-            )
-            assert abs(audio_at - video_at) <= 0.5, (frozen_at, audio_at, video_at)
-        finally:
-            remove_source_audio_capture_callback(media.source, callback)
+        expected = {"resumed_audio", "high_tone", "blue_frame"}
+        assert _wait_for(lambda: expected <= output().keys(), timeout=3), (
+            "Program output did not reach both transitions after release", output(),
+        )
+        transitions = output()
+        audio_resume = transitions["resumed_audio"].observed_at - released
+        video_transition = transitions["blue_frame"].observed_at - released
+        # Match the same marker using OBS timestamps, independent of callback delivery.
+        skew = (transitions["high_tone"].timestamp_ns - transitions["blue_frame"].timestamp_ns) / 1e9
+        print(
+            "A/V starvation recovery",
+            {
+                "speed": speed,
+                "frozen_ms": frozen_at,
+                "resumed_ms": resumed_at,
+                "elapsed": elapsed,
+                "audio_resume": audio_resume,
+                "video_transition": video_transition,
+                "transition_skew": skew,
+            },
+            flush=True,
+        )
+        assert 0 <= audio_resume < 0.75, audio_resume
+        assert 0 <= video_transition < 2.0, video_transition
+        assert abs(skew) <= 0.5, skew
 
 
 def _assert_audio_continuity(recorded, sample_rate, speed):
