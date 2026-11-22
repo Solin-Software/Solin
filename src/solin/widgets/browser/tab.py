@@ -4,7 +4,8 @@ import json
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from sideview import NativeWebView, NativeWebViewError
 
@@ -16,8 +17,16 @@ from solin.ui.browser.native_adapters import (
     UrlValue,
 )
 from solin.core.network.browser_urls import normalize_browser_input
+from solin.ui.native_input import NATIVE_POINTER_PRESS
 
 log = logging.getLogger(__name__)
+
+_REPORT_NATIVE_POINTER_PRESS = """
+window.addEventListener("pointerdown", (event) => {
+    if (event.isTrusted)
+        window.nativeWebView.postMessage({type: "pointerPress"});
+}, true);
+"""
 
 
 class ProjectableWebView(NativeWebView):
@@ -58,6 +67,7 @@ class ProjectableWebView(NativeWebView):
         self.set_download_policy(lambda _url: False)
         self.set_devtools_enabled(False)
         self.install_script_bridge()
+        self.add_document_script(_REPORT_NATIVE_POINTER_PRESS)
         if overlay_js:
             self.add_document_script(overlay_js)
 
@@ -125,7 +135,13 @@ class ProjectableWebView(NativeWebView):
             return
 
         kind = payload.get("type")
-        if kind == "projectImage":
+        if kind == "pointerPress":
+            if (
+                self.isVisible()
+                and QGuiApplication.applicationState() == Qt.ApplicationState.ApplicationActive
+            ):
+                QCoreApplication.sendEvent(self, QEvent(NATIVE_POINTER_PRESS))
+        elif kind == "projectImage":
             self.bridge.project_image_signal.emit(str(payload.get("data") or ""))
         elif kind == "projectVideo":
             self.bridge.project_video_signal.emit(str(payload.get("url") or ""))

@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QEasingCurve, QEvent, QSize, QPropertyAnimation, Qt, Signal
-from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -21,10 +20,11 @@ from PySide6.QtWidgets import (
 from solin.core.media.formats import media_type_from_path
 from solin.styles.icons import ICON_CLOSE, ICON_IMAGE, ICON_MONITOR, ICON_TV, ICON_VIDEO, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 
 # ── Monitor Manager Popup ─────────────────────────────────────────────────────
 
-class MonitorManagerPopup(QWidget):
+class MonitorManagerPopup(ToolbarPanel):
     """
     Floating popup to manage projection windows and the idle screen.
 
@@ -46,7 +46,7 @@ class MonitorManagerPopup(QWidget):
     _POPUP_W = 340
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setFixedWidth(self._POPUP_W)
@@ -422,7 +422,10 @@ class MonitorManagerPopup(QWidget):
 
         # Sync idle media display
         self._sync_idle_ui(idle_media_path)
-        self.adjustSize()
+        if self._anchor is None:
+            self.adjustSize()
+        else:
+            self._position_above(self._anchor)
 
     def _sync_idle_ui(self, path: str):
         """Update idle section to reflect current path (empty = no media)."""
@@ -583,20 +586,8 @@ class MonitorManagerPopup(QWidget):
     # ─────────────────────────────────────────────────────────────────────
 
     def _on_pick_idle_media(self):
-        """Open file dialog and emit idle_media_changed if user picks a file.
-
-        Qt.WindowType.Popup closes automatically when it loses focus, which
-        means the dialog would never appear if opened synchronously from inside
-        the popup.  We hide first, then schedule the dialog via a zero-timer so
-        the event loop finishes closing the popup before the dialog opens.
-        """
+        """Open the file dialog and emit idle_media_changed if the user picks a file."""
         start_dir = os.path.dirname(self._idle_media_path) if self._idle_media_path else ""
-        self.hide()
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, lambda: self._open_file_dialog(start_dir))
-
-    def _open_file_dialog(self, start_dir: str):
-        """Slot deferred from _on_pick_idle_media — runs after popup is gone."""
         supported = (
             "Media files (*.jpg *.jpeg *.png *.bmp *.gif *.webp *.tiff *.tif "
             "*.mp4 *.mov *.mkv *.avi *.webm *.m4v *.wmv *.flv);;"
@@ -604,10 +595,8 @@ class MonitorManagerPopup(QWidget):
             "Videos (*.mp4 *.mov *.mkv *.avi *.webm *.m4v *.wmv *.flv);;"
             "All files (*)"
         )
-        # Use the MainWindow as parent so the dialog renders on the primary screen.
-        parent_win = self.parent() if self.parent() else None
         path, _ = QFileDialog.getOpenFileName(
-            parent_win, self.tr("Choose idle screen media"), start_dir, supported
+            self, self.tr("Choose idle screen media"), start_dir, supported
         )
         if path:
             self._sync_idle_ui(path)
@@ -625,31 +614,27 @@ class MonitorManagerPopup(QWidget):
 
     def show_above(self, anchor: QWidget):
         """Position the popup above (or below if no room) anchor and fade in."""
-        already_vis = self.isVisible()
-        self.adjustSize()
-        global_pos = anchor.mapToGlobal(anchor.rect().topLeft())
-        x = global_pos.x()
-        y = global_pos.y() - self.height() - 8
-        screen_geo = (
-            anchor.screen().availableGeometry()
-            if hasattr(anchor, "screen")
-            else QGuiApplication.primaryScreen().availableGeometry()
-        )
-        if x + self.width() > screen_geo.right():
-            x = screen_geo.right() - self.width() - 4
-        if y < screen_geo.top():
-            y = global_pos.y() + anchor.height() + 8
-        self.move(x, y)
-        if already_vis:
-            # Already showing — just reposition, no fade
+        self._position_above(anchor)
+        if self.isVisible():
             return
         self._opacity_effect.setOpacity(0.0)
-        self.show()
-        self.raise_()
+        self._show_anchored(anchor)
         self._fade_anim.stop()
         self._fade_anim.setStartValue(0.0)
         self._fade_anim.setEndValue(1.0)
         self._fade_anim.start()
+
+    def _position_above(self, anchor: QWidget) -> None:
+        self.adjustSize()
+        global_pos = anchor.mapToGlobal(anchor.rect().topLeft())
+        x = global_pos.x()
+        y = global_pos.y() - self.height() - 8
+        screen_geo = self._available_geometry(anchor)
+        if x + self.width() > screen_geo.right():
+            x = screen_geo.right() - self.width() - 4
+        if y < screen_geo.top():
+            y = global_pos.y() + anchor.height() + 8
+        self.move(self._panel_position(x, y))
 
     def hide_animated(self):
         """Fade out then hide."""

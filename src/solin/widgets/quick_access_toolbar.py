@@ -19,6 +19,7 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import QBitmap, QColor, QPainter, QRegion
+from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QApplication, QWidget
 
@@ -43,6 +44,7 @@ from solin.ui.qml.svg_icons import SvgIconProvider
 from solin.ui.incremental_load import IncrementalLoadHandle
 from solin.ui.popup_hover import PopupHoverController
 from solin.widgets.background_song_popup import BackgroundSongPopup
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 
 if TYPE_CHECKING:
     from solin.controllers.program_recording_controller import ProgramRecordingController
@@ -267,7 +269,7 @@ class QuickAccessToolbar(QQuickWidget):
             "obs",
             self._on_obs_clicked,
             lambda: (
-                self._bridge.pillVisible
+                self._can_open_panel_on_hover()
                 and self._obs_connected
                 and self._obs is not None
                 and self._obs.is_connected
@@ -275,8 +277,8 @@ class QuickAccessToolbar(QQuickWidget):
         )
         self._popup_hover.register(
             "scenes",
-            lambda: self._on_solin_scenes_clicked(False),
-            lambda: self._bridge.pillVisible and self._bridge.scenesVisible,
+            self._on_solin_scenes_clicked,
+            lambda: self._can_open_panel_on_hover() and bool(self._bridge.scenesVisible),
         )
         self._bridge.popupHoverRequested.connect(self._popup_hover.enter)
         self._bridge.popupHoverCancelled.connect(self._popup_hover.cancel)
@@ -431,7 +433,7 @@ class QuickAccessToolbar(QQuickWidget):
             return
         radius = _QAT_MINI_RADIUS if self._minimized else _QAT_PILL_RADIUS
         apply_corner_radius(self, radius)
-        QTimer.singleShot(0, lambda: apply_corner_radius(self, radius))
+        QTimer.singleShot(0, self, lambda: apply_corner_radius(self, radius))
 
     def _show_native_tooltip(
         self,
@@ -954,6 +956,9 @@ class QuickAccessToolbar(QQuickWidget):
             return self._browser_surface
         return self
 
+    def _can_open_panel_on_hover(self) -> bool:
+        return self._bridge.pillVisible and ToolbarPanel.open_for(self.window()) is None
+
     def _active_monitor_button(self) -> QWidget:
         if self._browser_overlay_mode and self._browser_monitor_btn is not None:
             return self._browser_monitor_btn
@@ -1209,14 +1214,7 @@ class QuickAccessToolbar(QQuickWidget):
         if not scenes:
             self._obs.request_scenes_refresh()
 
-    # A popup closes on the click that lands outside it, so when Qt dismisses it
-    # first the click reaches this button a hair later — within the same event
-    # cycle, a couple of milliseconds. Only that gap may suppress the reopen: a
-    # wider window also swallows the user's *next* deliberate click, which made
-    # the panel refuse to reappear when clicking at any normal pace.
-    _SCENE_PANEL_TOGGLE_GUARD_MS = 40
-
-    def _on_solin_scenes_clicked(self, pointer_activation: bool) -> None:
+    def _on_solin_scenes_clicked(self) -> None:
         hide_themed_tooltip()
         popup = self._ensure_solin_scene_popup()
         if popup is None or popup.docked:
@@ -1224,9 +1222,10 @@ class QuickAccessToolbar(QQuickWidget):
         if popup.isVisible():
             popup.hide()
             return
-        if pointer_activation and popup.dismissed_within(self._SCENE_PANEL_TOGGLE_GUARD_MS):
-            return
-        popup.show_above(self._active_surface())
+        surface = self._active_surface()
+        root = surface.rootObject()
+        trigger = root.findChild(QQuickItem, "toolbarScenesButton") if root is not None else None
+        popup.show_above(surface, trigger=trigger)
 
     def _on_background_song_clicked(self):
         hide_themed_tooltip()

@@ -40,7 +40,6 @@ class _SettingsWidgetStub:
 class _CountTargetStub:
     def __init__(self):
         self.counts = []
-        self._monitor_btn = "monitor-button"
 
     def set_screen_count(self, count):
         self.counts.append(count)
@@ -61,6 +60,10 @@ class _MonitorPopupStub:
 
     def show_above(self, anchor):
         self.anchor = anchor
+        self.hidden = False
+
+    def isVisible(self):
+        return self.anchor is not None and not self.hidden
 
     def hide_animated(self):
         self.hidden = True
@@ -171,7 +174,6 @@ def _projection_context(window: _WindowStub) -> ProjectionWindowContext:
         set_projection_screen_count=window.proj_bar.set_screen_count,
         set_toolbar_screen_count=window._quick_toolbar.set_screen_count,
         monitor_popup=lambda: window._monitor_popup,
-        monitor_anchor=lambda: window._quick_toolbar._monitor_btn,
         dialog_parent=window,
         timer_output=lambda: getattr(window, "timer_output", None),
         timer_bridge=lambda: getattr(window, "timer_bridge", None),
@@ -510,10 +512,13 @@ def test_on_monitor_toggle_activate_preserves_engine_idle_ownership(monkeypatch)
     created = _patch_projection_window(monkeypatch)
     _patch_secondary_screens(monkeypatch, [screen_a])
 
+    controller.on_monitor_manager_requested("button")
     controller.on_monitor_toggle(0, make_active=True)
 
     assert len(created) == 1
     assert created[0].yearly == [("Quote", "Reference", "E")]
+    assert window._monitor_popup.isVisible()
+    assert window._monitor_popup.populate_args[0][0]["active"]
 
 
 def test_open_projection_windows_preserves_engine_idle_ownership(monkeypatch):

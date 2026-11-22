@@ -63,7 +63,6 @@ class ProjectionWindowContext:
     set_projection_screen_count: Callable[[int], None]
     set_toolbar_screen_count: Callable[[int], None]
     monitor_popup: Callable[[], Any | None]
-    monitor_anchor: Callable[[], Any]
     dialog_parent: Any | None = None
     timer_output: Callable[[], Any | None] = _no_object
     timer_bridge: Callable[[], Any | None] = _no_object
@@ -250,7 +249,7 @@ class ProjectionWindowController:
 
         self._context.native_outputs_changed()
         self._context.sync_projection_integrations()
-        QTimer.singleShot(420, self._reopen_monitor_manager)
+        self._refresh_monitor_manager()
 
     def create_floating_window(self) -> FloatingPreviewWindow:
         quote, ref, api_code = self._yearly_text()
@@ -283,6 +282,10 @@ class ProjectionWindowController:
         popup = self._context.monitor_popup()
         if popup is None:
             return
+        self._populate_monitor_manager(popup)
+        popup.show_above(anchor_widget)
+
+    def _populate_monitor_manager(self, popup) -> None:
         secondary = self._context.secondary_screens()
         active_screens = {
             id(win.screen()): win for win in self._session.projection_windows
@@ -302,7 +305,6 @@ class ProjectionWindowController:
             floating_active=floating_active,
             idle_media_path=self._session.idle_media_path,
         )
-        popup.show_above(anchor_widget)
 
     def on_monitor_toggle(self, screen_index: int, make_active: bool) -> None:
         secondary = self._context.secondary_screens()
@@ -357,7 +359,7 @@ class ProjectionWindowController:
             self._set_screen_count(len(self._session.projection_windows))
 
         self._context.sync_projection_integrations()
-        QTimer.singleShot(420, self._reopen_monitor_manager)
+        self._refresh_monitor_manager()
 
     def on_monitor_all(self, make_active: bool) -> None:
         if make_active:
@@ -446,5 +448,7 @@ class ProjectionWindowController:
         self._context.set_toolbar_screen_count(count)
         self._context.native_outputs_changed()
 
-    def _reopen_monitor_manager(self) -> None:
-        self.on_monitor_manager_requested(self._context.monitor_anchor())
+    def _refresh_monitor_manager(self) -> None:
+        popup = self._context.monitor_popup()
+        if popup is not None and popup.isVisible():
+            self._populate_monitor_manager(popup)

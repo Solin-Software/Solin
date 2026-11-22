@@ -14,7 +14,8 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication, QIcon, QImage, QPainter, QPainterPath
+from PySide6.QtGui import QIcon, QImage, QPainter, QPainterPath
+from PySide6.QtQuick import QQuickItem
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -58,6 +59,7 @@ from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.horizontal_scroll_area import HorizontalScrollArea
 from solin.widgets.common.popup_dock_button import PopupDockButton
 from solin.widgets.common.popup_hover_button import PopupHoverButton
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.widgets.scenes.scene_window import SceneWindowGeometryStore, SceneWindowManager
 
 
@@ -335,7 +337,7 @@ class _SceneCard(QFrame):
         self.expand_button.raise_()
 
 
-class SceneControlPopup(QWidget):
+class SceneControlPopup(ToolbarPanel):
     """Fast manual scene control without conflating desired and applied state."""
 
     _PREFERRED_WIDTH = 420
@@ -366,22 +368,18 @@ class SceneControlPopup(QWidget):
         recording: ProgramRecordingController | None = None,
         window_geometry: SceneWindowGeometryStore | None = None,
     ) -> None:
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedWidth(self._PREFERRED_WIDTH)
         self._controller = controller
         self._recording = recording
-        self._floating_parent = parent
         self._docked = False
         self._hover_button_visible = False
         self._anchor_rect: QRect | None = None
         self._available_rect: QRect | None = None
         self._engine_visual_state = "unavailable"
-        self._hidden_at: float | None = None
         self._scene_cards: dict[str, _SceneCard] = {}
-        # Scene windows outlive the panel's popups: they belong to the main window,
-        # not to this popup, which closes as soon as a window takes focus.
+        # Scene windows belong to the main window and outlive the panel.
         self._scene_windows = SceneWindowManager(
             controller,
             parent_window=parent.window() if parent is not None else None,
@@ -875,9 +873,7 @@ class SceneControlPopup(QWidget):
             # revealed the control so detaching restores exactly that.
             self._hover_button_visible = self.hover_button.isVisibleTo(self)
             self.hover_button.hide()
-            # A docked panel is an ordinary child widget: drop the popup window
-            # flags (which also close it on outside clicks) and the fixed popup
-            # width so it can stretch across the window.
+            # Let the dock layout own the panel's size and position.
             # Set the translucency attribute *before* reparenting: setParent
             # recreates the native window, and the platform picks the window's
             # visual from this attribute at creation time (see the undock path).
@@ -907,10 +903,7 @@ class SceneControlPopup(QWidget):
             # one with the right visual.
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
             self.destroy()
-            self.setParent(
-                self._floating_parent,
-                Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
-            )
+            self.setParent(self._floating_parent, self._floating_flags)
             self.setFixedWidth(self._PREFERRED_WIDTH)
             self.hide()
             if host is not None and host_layout is not None and not host_layout.count():
@@ -921,31 +914,25 @@ class SceneControlPopup(QWidget):
         self._repolish(self._card)
         self._render()
 
-    def show_above(self, anchor: QWidget) -> None:
+    def show_above(self, anchor: QWidget, *, trigger: QQuickItem | None = None) -> None:
         if self._docked:
             return  # already attached to the window; nothing to pop up
         top_left = anchor.mapToGlobal(anchor.rect().topLeft())
         self._anchor_rect = QRect(top_left.x(), top_left.y(), anchor.width(), anchor.height())
-        screen = (
-            QGuiApplication.screenAt(self._anchor_rect.center()) or QGuiApplication.primaryScreen()
-        )
-        self._available_rect = screen.availableGeometry() if screen is not None else None
+        self._available_rect = self._available_geometry(anchor)
         self._fade.stop()
-        self.setWindowOpacity(0.0)
+        if self.isWindow():
+            self.setWindowOpacity(0.0)
         self._render()
-        self.show()
-        QTimer.singleShot(0, self._finish_show)
+        self._show_anchored(anchor, trigger=trigger)
+        QTimer.singleShot(0, self, self._finish_show)
 
     def _finish_show(self) -> None:
-        if not self.isVisible():
-            # Dismissed before the fade could start (a click straight back on the
-            # toolbar does this). Reset the opacity we pre-set, or the panel would
-            # be fully transparent the next time it opens.
-            self.setWindowOpacity(1.0)
+        if not self.isVisible() or self._docked:
             return
         self._sync_geometry()
-        self.raise_()
-        self.activateWindow()
+        if not self.isWindow():
+            return
         self._fade.setStartValue(0.0)
         self._fade.setEndValue(1.0)
         self._fade.start()
@@ -978,24 +965,11 @@ class SceneControlPopup(QWidget):
         # transparent — the next open has to be visible.
         self._fade.stop()
         self.setWindowOpacity(1.0)
-        self._hidden_at = time.monotonic()
         if not self._docked:
             # Nobody is looking: stop paying for thumbnail renders.
             self._thumbnails.stop()
             self._controller.set_thumbnail_egress(None, (), 0, 0)
         super().hideEvent(event)
-
-    def dismissed_within(self, milliseconds: int) -> bool:
-        """Whether the panel closed in the last ``milliseconds``.
-
-        Qt closes a popup on the click that lands outside it, so a click on the
-        toolbar button that opened it arrives *after* the dismissal. A host uses
-        this to tell that click apart from a fresh one and toggle closed instead
-        of immediately reopening.
-        """
-        if self._hidden_at is None:
-            return False
-        return (time.monotonic() - self._hidden_at) * 1000 < milliseconds
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
@@ -1057,7 +1031,7 @@ class SceneControlPopup(QWidget):
         if available is not None:
             x = max(available.left(), min(x, available.right() - self.width() + 1))
             y = max(available.top(), min(y, available.bottom() - self.height() + 1))
-        self.move(x, y)
+        self.move(self._panel_position(x, y))
 
     def apply_theme(self) -> None:
         self.hover_button.apply_theme()

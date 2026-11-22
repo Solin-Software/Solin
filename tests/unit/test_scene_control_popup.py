@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-import time
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -924,38 +923,6 @@ def test_panel_never_uses_a_graphics_effect_and_reopens_visible(controller_facto
     QCoreApplication.processEvents()
 
 
-def test_panel_reports_a_just_dismissed_close_so_the_toolbar_can_toggle(
-    controller_factory,
-) -> None:
-    # Qt closes a popup on the click that lands outside it, so the click that
-    # reaches the toolbar button arrives after the dismissal. Without this the
-    # button always reopened the panel instead of toggling it shut.
-    controller = controller_factory()
-    popup = SceneControlPopup(controller)
-    anchor = QWidget()
-    anchor.resize(40, 40)
-    anchor.show()
-    QCoreApplication.processEvents()
-
-    assert popup.dismissed_within(40) is False  # never shown yet
-
-    popup.show_above(anchor)
-    QCoreApplication.processEvents()
-    popup.hide()  # the outside click Qt delivers first
-    assert popup.dismissed_within(40) is True  # so the button leaves it closed
-
-    # The window must stay tight: a human's next deliberate click is far slower
-    # than the same-click dismissal, and suppressing it stopped the panel from
-    # ever reappearing when clicking at a normal pace.
-    time.sleep(0.08)
-    assert popup.dismissed_within(40) is False  # an 80ms-later click reopens it
-
-    popup.deleteLater()
-    anchor.close()
-    anchor.deleteLater()
-    QCoreApplication.processEvents()
-
-
 def test_undocking_restores_translucency_before_the_window_is_recreated(
     controller_factory,
 ) -> None:
@@ -981,7 +948,6 @@ def test_undocking_restores_translucency_before_the_window_is_recreated(
     QCoreApplication.processEvents()
     assert not popup.docked
     assert popup.testAttribute(translucent)  # and translucent again once floating
-    assert popup.windowFlags() & Qt.WindowType.Popup
 
     # Reopening still works after the round trip.
     anchor = QWidget()
@@ -1111,18 +1077,9 @@ def test_single_output_card_is_its_routing_button(
     popup = SceneControlPopup(controller, host)
     try:
         popup.projection_controls_button.setChecked(projection_visible)
-        # Cocoa popups receive input through the active owner without becoming
-        # the active native window themselves. Activate the real window first.
         show_and_activate(host)
         popup.set_docked(docked)
-        popup.show()
-        if not docked:
-            wait_until(
-                lambda: QApplication.activePopupWidget() is popup
-                and popup.windowHandle() is not None
-                and popup.windowHandle().isExposed(),
-                description="scene popup exposure and input ownership",
-            )
+        show_and_activate(popup)
         card = next(iter(popup._scene_cards.values()))
         button = card._program if role == "program" else card._projection
         assert button.geometry() == card.rect()
@@ -1142,7 +1099,7 @@ def test_single_output_card_is_its_routing_button(
         assert button.isChecked()
         button.setFocus()
         wait_until(button.hasFocus, description="scene routing button focus")
-        QTest.keyClick(host.windowHandle(), Qt.Key.Key_Space)
+        QTest.keyClick(popup.window().windowHandle(), Qt.Key.Key_Space)
         assert routed == [(card.scene_id, role)] * 3
         assert button.hasFocus()
         popup.projection_controls_button.setChecked(True)

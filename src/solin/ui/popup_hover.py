@@ -17,7 +17,7 @@ class _PopupTarget:
 
 
 class PopupHoverController(QObject):
-    """Share one cancellable timer; retain native popup focus and dismissal.
+    """Share one cancellable timer for hover activation.
 
     Registration opts a popup in without knowing its contents. The surface is
     resolved at entry, allowing hosts with more than one native rendering surface.

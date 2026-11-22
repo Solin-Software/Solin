@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication, QHideEvent, QShowEvent
+from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from solin.core.remote_control.security import RemoteScope, RemoteSessionInfo
 from solin.styles.icons import ICON_REMOTE_CONTROL, make_icon
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 
 
 class _RemoteSessionRow(QFrame):
@@ -181,7 +182,7 @@ class _RemoteSessionRow(QFrame):
         return self.tr("Active %1 d ago").replace("%1", str(days))
 
 
-class RemoteSessionsPopup(QWidget):
+class RemoteSessionsPopup(ToolbarPanel):
     """Operational session inventory opened from the floating toolbar."""
 
     disconnect_requested = Signal(str)
@@ -193,7 +194,7 @@ class RemoteSessionsPopup(QWidget):
     _ANCHOR_GAP = 10
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFixedWidth(self._WIDTH)
@@ -405,24 +406,20 @@ class RemoteSessionsPopup(QWidget):
             anchor.width(),
             anchor.height(),
         )
-        anchor_center = self._anchor_rect.center()
-        screen = QGuiApplication.screenAt(anchor_center) or QGuiApplication.primaryScreen()
-        self._available_rect = screen.availableGeometry() if screen is not None else None
+        self._available_rect = self._available_geometry(anchor)
 
         self._fade.stop()
         self._opacity.setOpacity(0.0)
         self._render()
         self.ensurePolished()
         self._sync_geometry()
-        self.show()
+        self._show_anchored(anchor)
         self._show_timer.start(0)
 
     def _finish_show(self) -> None:
         if not self.isVisible():
             return
         self._sync_geometry()
-        self.raise_()
-        self.activateWindow()
         self._fade.stop()
         self._fade.setStartValue(0.0)
         self._fade.setEndValue(1.0)
@@ -447,7 +444,7 @@ class RemoteSessionsPopup(QWidget):
             self.width(),
             self.height(),
         )
-        self.move(x, y)
+        self.move(self._panel_position(x, y))
 
     @classmethod
     def _popup_position(

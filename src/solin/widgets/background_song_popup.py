@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QEvent, QPropertyAnimation, QSize, Qt
-from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QFrame,
@@ -31,6 +30,7 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.widgets.common.themed_slider import ThemedHorizontalSlider
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.ui.incremental_load import IncrementalLoadHandle
 
 
@@ -54,7 +54,7 @@ _ACCENT = _PaletteToken("accent_hover")
 _RED = _PaletteToken("danger")
 
 
-class BackgroundSongPopup(QWidget):
+class BackgroundSongPopup(ToolbarPanel):
     """Small popup shown from the quick access toolbar."""
 
     _POP_W = 332
@@ -68,7 +68,7 @@ class BackgroundSongPopup(QWidget):
         *,
         defer_build: bool = False,
     ) -> None:
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self._service = service
         self._playing = service.is_playing
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -383,21 +383,16 @@ class BackgroundSongPopup(QWidget):
         global_pos = anchor.mapToGlobal(anchor.rect().topLeft())
         x = global_pos.x() + (anchor.width() - self.width()) // 2
         y = global_pos.y() - self.height() - 10
-        screen_geo = (
-            anchor.screen().availableGeometry()
-            if hasattr(anchor, "screen") and anchor.screen() is not None
-            else QGuiApplication.primaryScreen().availableGeometry()
-        )
+        screen_geo = self._available_geometry(anchor)
         if x < screen_geo.left() + 4:
             x = screen_geo.left() + 4
         if x + self.width() > screen_geo.right() - 4:
             x = screen_geo.right() - self.width() - 4
         if y < screen_geo.top() + 4:
             y = global_pos.y() + anchor.height() + 10
-        self.move(x, y)
+        self.move(self._panel_position(x, y))
         self._opacity_eff.setOpacity(0.0)
-        self.show()
-        self.raise_()
+        self._show_anchored(anchor)
         self._fade.stop()
         self._fade.setStartValue(0.0)
         self._fade.setEndValue(1.0)
