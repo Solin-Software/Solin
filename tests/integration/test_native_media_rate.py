@@ -278,11 +278,16 @@ def _native_audio():
                 runtime.shutdown()
 
 
+_AV_FRAME_NUMBER_BITS = 8
+_AV_FRAME_NUMBER_ROWS = 4
+
+
 def _write_av_clip(path, *, duration=5, constant_frequency=None):
     """Interleave uncompressed video and PCM, optionally keeping one audio tone."""
     width, fps, rate = 64, 10, 48000
     frame_size = width * width * 3
     frame_count = duration * fps
+    assert frame_count <= 1 << _AV_FRAME_NUMBER_BITS
     samples_per_frame = rate // fps
 
     def chunk(kind, data):
@@ -350,10 +355,19 @@ def _write_av_clip(path, *, duration=5, constant_frequency=None):
     video_list = chunk(b"LIST", b"strl" + chunk(b"strh", video) + chunk(b"strf", bitmap))
     audio_list = chunk(b"LIST", b"strl" + chunk(b"strh", audio) + chunk(b"strf", wave_format))
     headers = chunk(b"LIST", b"hdrl" + chunk(b"avih", header) + video_list + audio_list)
+    tile_size = width // _AV_FRAME_NUMBER_BITS * 3
     payload, index, offset = [], [], 4
     for frame in range(frame_count):
         blue = frame >= 2 * fps
         pixel = b"\xff\0\0" if blue else b"\0\0\xff"
+        # Number each frame with black and white tiles that survive OBS color conversion.
+        number_row = b"".join(
+            (b"\xff" if frame & (1 << bit) else b"\0") * tile_size
+            for bit in range(_AV_FRAME_NUMBER_BITS)
+        )
+        # Repeat the strip on both edges so row order cannot affect the number.
+        strip = number_row * _AV_FRAME_NUMBER_ROWS
+        picture = strip + pixel * (width * (width - 2 * _AV_FRAME_NUMBER_ROWS)) + strip
         frequency = (
             constant_frequency if constant_frequency is not None else (1000 if blue else 400)
         )
@@ -361,7 +375,7 @@ def _write_av_clip(path, *, duration=5, constant_frequency=None):
             struct.pack("<h", round(16000 * math.sin(2 * math.pi * frequency * i / rate)))
             for i in range(samples_per_frame)
         )
-        for kind, data in ((b"00db", pixel * (width * width)), (b"01wb", pcm)):
+        for kind, data in ((b"00db", picture), (b"01wb", pcm)):
             entry = chunk(kind, data)
             payload.append(entry)
             index.append(struct.pack("<4sIII", kind, 0x10, offset, len(data)))
@@ -377,7 +391,7 @@ class _AVSample(NamedTuple):
 
 
 def _observe_av_output(runtime, media, resources, *, resumed: Event | None = None):
-    """Observe the first occurrence of each fixture signal in OBS program output."""
+    """Observe fixture transitions and optional recovery in OBS program output."""
     from pylibobs import VideoFormat
     from pylibobs._ffi import ffi, get_lib
     from pylibobs.callbacks import (
@@ -397,6 +411,7 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
     assert get_lib().obs_get_audio_info(info)
     sample_rate = int(info.samples_per_sec)
     samples = {}
+    last_video_frame = None
     lock = Lock()
 
     def capture_audio(_mix, planes, frames, timestamp_ns):
@@ -416,9 +431,12 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
                 samples.setdefault("resumed_audio", sample)
 
     def capture_video(planes, strides, width, height, _format, timestamp_ns):
+        nonlocal last_video_frame
+        after_release = resumed is not None and resumed.is_set()
         observed_at = time.monotonic()
-        offset = (height // 2) * strides[0] + (width // 2) * 4
-        blue, _green, red, _alpha = planes[0][offset:offset + 4]
+        pixels, stride = planes[0], strides[0]
+        offset = (height // 2) * stride + (width // 2) * 4
+        blue, _green, red, _alpha = pixels[offset:offset + 4]
         # OBS program output may pass through YUV conversion.
         if red > 200 and blue < 20:
             color = "red_frame"
@@ -427,7 +445,20 @@ def _observe_av_output(runtime, media, resources, *, resumed: Event | None = Non
         else:
             return
         with lock:
-            samples.setdefault(color, _AVSample(timestamp_ns, observed_at))
+            sample = _AVSample(timestamp_ns, observed_at)
+            samples.setdefault(color, sample)
+            if resumed is not None:
+                tile_width = width // _AV_FRAME_NUMBER_BITS
+                number_start = (_AV_FRAME_NUMBER_ROWS // 2) * stride + (tile_width // 2) * 4
+                frame_number = sum(
+                    (pixels[number_start + bit * tile_width * 4] >= 128) << bit
+                    for bit in range(_AV_FRAME_NUMBER_BITS)
+                )
+                if after_release:
+                    if last_video_frame is not None and frame_number > last_video_frame:
+                        samples.setdefault("resumed_video", sample)
+                elif last_video_frame is None or frame_number > last_video_frame:
+                    last_video_frame = frame_number
 
     def snapshot():
         with lock:
@@ -520,12 +551,13 @@ def _av_starvation(speed):
             elapsed,
         )
 
-        expected = {"resumed_audio", "high_tone", "blue_frame"}
+        expected = {"resumed_audio", "resumed_video", "high_tone", "blue_frame"}
         assert _wait_for(lambda: expected <= output().keys(), timeout=3), (
-            "Program output did not reach both transitions after release", output(),
+            "Program output did not resume and reach both transitions after release", output(),
         )
         transitions = output()
         audio_resume = transitions["resumed_audio"].observed_at - released
+        video_resume = transitions["resumed_video"].observed_at - released
         video_transition = transitions["blue_frame"].observed_at - released
         # Match the same marker using OBS timestamps, independent of callback delivery.
         skew = (transitions["high_tone"].timestamp_ns - transitions["blue_frame"].timestamp_ns) / 1e9
@@ -537,13 +569,14 @@ def _av_starvation(speed):
                 "resumed_ms": resumed_at,
                 "elapsed": elapsed,
                 "audio_resume": audio_resume,
+                "video_resume": video_resume,
                 "video_transition": video_transition,
                 "transition_skew": skew,
             },
             flush=True,
         )
         assert 0 <= audio_resume < 0.75, audio_resume
-        assert 0 <= video_transition < 2.0, video_transition
+        assert 0 <= video_resume < 2.0, video_resume
         assert abs(skew) <= 0.5, skew
 
 
