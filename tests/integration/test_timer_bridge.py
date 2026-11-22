@@ -8,8 +8,10 @@ from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.timer_engine import TimerEngine
+from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.i18n.date import format_time_with_seconds
+from solin.core.integrations.automation.settings import ZoomSettingsStore
 from solin.core.timer.application import TimerSession
 from solin.core.timer.infrastructure import QSettingsTimerRepository
 from solin.core.timer.models import Direction, MeetingType, PartState, Section
@@ -45,6 +47,26 @@ def timer_context(tmp_path, monkeypatch, qt_object_owner):
     return SimpleNamespace(
         clock=clock, repository=repository, session=session, engine=engine, bridge=bridge,
     )
+
+
+def test_manual_hand_control_updates_the_projection_without_changing_the_clock(timer_context):
+    ctx = timer_context
+    output = ClockRenderBridge(ctx.engine, lambda: ctx.session.clock_config, parent=ctx.engine)
+    settings = ZoomSettingsStore(SettingsStore.for_namespace("test", "prefs"))
+    alert = TimerHandAlertController(settings, ctx.engine)
+    alert.alert_changed.connect(output.set_hand_alert)
+    clock_updates = QSignalSpy(output.modelChanged)
+    alert_updates = QSignalSpy(output.handAlertChanged)
+
+    alert.set_outputs(available=True)
+    alert.set_integrated(True)
+    alert.set_manual(True)
+    assert output.property("handAlert") == {"kind": "manual"}
+    alert.set_manual(True)
+    alert.set_outputs(available=False)
+    assert not output.property("handAlert")
+    assert alert_updates.count() == 2
+    assert clock_updates.count() == 0
 
 
 @pytest.mark.parametrize("direction", [Direction.DOWN, Direction.UP])

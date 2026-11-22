@@ -22,6 +22,7 @@ from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.remote_control.features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
     TimerRemoteFeatureFlags,
+    TimerRemoteHandAlertPolicy,
 )
 from solin.core.remote_control.security import (
     InMemorySessionStore,
@@ -37,6 +38,7 @@ from solin.core.remote_control.server import (
     RemoteControlHttpApplication,
 )
 from solin.core.timer.application import TimerSession
+from solin.core.timer.hand_alert import TimerHandAlert
 from solin.core.timer.models import ClockConfig, MeetingSchedule, MeetingType
 from solin.ui.qml.timer_bridge import TimerBridge
 
@@ -192,6 +194,160 @@ async def _login_headers(client: TestClient) -> dict[str, str]:
         "X-CSRF-Token": body["csrfToken"],
         "Cookie": f"{TIMER_SESSION_COOKIE_NAME}={cookie}",
     }
+
+
+@pytest.mark.parametrize(
+    ("policy", "public_mode", "auth_mode"),
+    [
+        (TimerRemoteHandAlertPolicy.PUBLIC_NAMES, "names", "names"),
+        (TimerRemoteHandAlertPolicy.PUBLIC_COUNT, "count", "names"),
+        (TimerRemoteHandAlertPolicy.AUTHENTICATED_ONLY, None, "names"),
+        (TimerRemoteHandAlertPolicy.DISABLED, None, None),
+    ],
+)
+def test_timer_hand_alert_policy_applies_to_bootstrap_and_live_streams(
+    policy: TimerRemoteHandAlertPolicy,
+    public_mode: str | None,
+    auth_mode: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _engine, _session, bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(hand_alert_policy=policy),
+    )
+    initial_alert = TimerHandAlert(names=("João", "Ana"))
+    reordered = TimerHandAlert(names=("Ana", "João"))
+
+    def expected_alert(alert: TimerHandAlert, mode: str | None) -> dict[str, object]:
+        if mode is not None and alert.names:
+            payload: dict[str, object] = {"kind": "automatic", "count": len(alert.names)}
+            if mode == "names":
+                payload["names"] = list(alert.names)
+            return {"handAlert": payload}
+        if mode is not None and alert.manual:
+            return {"handAlert": {"kind": "manual"}}
+        return {}
+
+    def alert_fields(live: dict) -> dict[str, object]:
+        return {key: value for key, value in live.items() if key == "handAlert"}
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            public_headers = {"Host": _HOST, "Origin": _ORIGIN}
+            # Seed the alert while the timer remote is inactive.
+            adapter.set_active(False)
+            adapter.set_hand_alert(initial_alert)
+            adapter.set_active(True)
+            schedule_revision = adapter.state.schedule_revision
+
+            login = await client.post(
+                "/remote/timer/api/auth/login",
+                headers=public_headers,
+                json={"username": "timer.op", "password": "timer secret battery staple"},
+            )
+            assert login.status == 200
+            login_payload = await login.json()
+            token = login.cookies[TIMER_SESSION_COOKIE_NAME].value
+            auth_headers = {
+                **public_headers,
+                "Cookie": f"{TIMER_SESSION_COOKIE_NAME}={token}",
+                "X-CSRF-Token": login_payload["csrfToken"],
+            }
+            assert alert_fields(login_payload["live"]) == expected_alert(initial_alert, auth_mode)
+
+            async def bootstrap(path: str, headers: dict[str, str]) -> dict:
+                response = await client.get(f"/remote/timer/api/{path}", headers=headers)
+                assert response.status == 200
+                body = await response.json()
+                assert body["liveRevision"] == body["live"]["liveRevision"]
+                return body
+
+            cookie_public_boot = await bootstrap("public", auth_headers)
+            assert cookie_public_boot["authenticated"] is True
+            assert alert_fields(cookie_public_boot["live"]) == expected_alert(
+                initial_alert, public_mode
+            )
+
+            public_ws = await client.ws_connect("/remote/timer/api/ws/public", headers=auth_headers)
+            auth_ws = await client.ws_connect("/remote/timer/api/ws", headers=auth_headers)
+            streams = (
+                (public_ws, "public", public_headers, "public.snapshot", public_mode),
+                (auth_ws, "bootstrap", auth_headers, "session.snapshot", auth_mode),
+            )
+            revisions: dict[str, int] = {}
+            for ws, path, headers, message_type, mode in streams:
+                boot = await bootstrap(path, headers)
+                expected = expected_alert(initial_alert, mode)
+                assert alert_fields(boot["live"]) == expected
+                event = await ws.receive_json(timeout=1)
+                assert event["type"] == message_type
+                revisions[path] = boot["liveRevision"]
+                assert (
+                    event["liveRevision"]
+                    == event["payload"]["live"]["liveRevision"]
+                    == revisions[path]
+                )
+                assert event["sequence"] == boot["eventSequence"]
+                assert alert_fields(event["payload"]["live"]) == expected
+
+            schedule_builds = 0
+            emissions = 0
+            build_schedule = adapter._build_schedule_snapshot
+
+            def track_schedule():
+                nonlocal schedule_builds
+                schedule_builds += 1
+                return build_schedule()
+
+            def track_emission() -> None:
+                nonlocal emissions
+                emissions += 1
+
+            monkeypatch.setattr(adapter, "_build_schedule_snapshot", track_schedule)
+            adapter.snapshot_updated.connect(track_emission)
+
+            previous_alert = initial_alert
+            for alert in (
+                reordered,
+                reordered,
+                TimerHandAlert(names=("João",)),
+                TimerHandAlert(manual=True),
+                TimerHandAlert(),
+            ):
+                adapter.set_hand_alert(alert)
+                await app.publish_snapshot(RemoteScope.TIMER)
+                for ws, path, headers, _, mode in streams:
+                    boot = await bootstrap(path, headers)
+                    expected = expected_alert(alert, mode)
+                    if expected != expected_alert(previous_alert, mode):
+                        revisions[path] += 1
+                        event = await ws.receive_json(timeout=1)
+                        assert event["type"] == "timer.live"
+                        assert (
+                            event["liveRevision"]
+                            == event["payload"]["liveRevision"]
+                            == revisions[path]
+                        )
+                        assert event["sequence"] == boot["eventSequence"]
+                        assert alert_fields(event["payload"]) == expected
+                    assert boot["liveRevision"] == revisions[path]
+                    assert alert_fields(boot["live"]) == expected
+                previous_alert = alert
+            assert schedule_builds == 0
+            assert emissions == (4 if auth_mode else 0)
+            assert adapter.state.schedule_revision == schedule_revision
+
+            bridge.startPart(adapter.state.schedule.parts[0].id)
+            await app.publish_snapshot(RemoteScope.TIMER)
+            for ws, path, *_ in streams:
+                event = await ws.receive_json(timeout=1)
+                assert event["type"] == "timer.live"
+                assert (
+                    event["liveRevision"] == event["payload"]["liveRevision"] == revisions[path] + 1
+                )
+                assert event["payload"]["active"] is True
+                assert "handAlert" not in event["payload"]
+
+    asyncio.run(scenario())
 
 
 def test_steady_state_timer_ticks_emit_zero_websocket_broadcasts() -> None:

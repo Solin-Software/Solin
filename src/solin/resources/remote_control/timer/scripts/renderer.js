@@ -9,6 +9,7 @@ import {
 } from "../../shared/scripts/dom.js";
 import { currentLocale, t } from "../../shared/scripts/i18n.js";
 import { ClockStageCanvas } from "./clock-face.js";
+import { StageHandAlert } from "./hand-alert.js";
 import {
   buildRenderModel,
   evaluateLiveSnapshot,
@@ -29,10 +30,12 @@ export { announce, showToast };
 
 export class Renderer {
   #stageCanvas;
+  #stageHandAlert;
   #lastScheduleKey = "";
 
   constructor() {
     this.#stageCanvas = new ClockStageCanvas(byId("stage-canvas"));
+    this.#stageHandAlert = new StageHandAlert();
   }
 
   invalidateStage() {
@@ -46,6 +49,13 @@ export class Renderer {
     this.#syncProfile(state);
     this.#syncConnection(state);
     this.#syncStageHud(state);
+    const showHandAlert =
+      state.view === "stage" &&
+      state.connection === "online" &&
+      !(state.loginModalOpen && state.controlAvailable);
+    this.#stageHandAlert.render(showHandAlert ? state.live.handAlert : null, {
+      immediate: !showHandAlert || Boolean(previous?.authenticated && !state.authenticated),
+    });
     this.#syncStickyVisibility(state);
     this.#syncMeetingBar(state);
     this.#syncScheduleList(state);
@@ -68,6 +78,7 @@ export class Renderer {
 
     if (state.view === "stage") {
       this.#stageCanvas.render(model);
+      this.#stageHandAlert.renderTime(evaluated, model);
     }
 
     const partPill = byId("stage-part-pill");

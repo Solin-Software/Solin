@@ -108,6 +108,21 @@ Rectangle {
         surfaceModel: root.transitionModel
     }
 
+    ClockHandAlert {
+        anchors.fill: parent
+        alert: clock.handAlert || ({})
+        reduceMotion: clock.reduceMotion === true
+        readoutFace: {
+            if (alert.kind !== "automatic")
+                return {}
+            if (root.model.display_mode === "clock") {
+                const face = root.model.clock || {}
+                return face.compact_readout || face
+            }
+            return root.model.timer || {}
+        }
+    }
+
     SequentialAnimation {
         id: transitionAnim
 

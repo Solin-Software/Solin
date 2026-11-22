@@ -10613,6 +10613,26 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <source>Participant muted and hand lowered.</source>
         <translation>Mikrofon peserta dibisukan dan tangan diturunkan.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>Integrasikan dengan pengatur waktu</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Tangan yang diangkat di Zoom akan muncul di layar pengatur waktu.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>Tampilkan tangan di pengatur waktu</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>Uji tangan terangkat</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12515,6 +12535,26 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>Bagian perhimpunan ini tidak lagi tersedia.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>Tangan terangkat</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>Tangan terangkat</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>Tampilkan semua</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>Tutup daftar tangan terangkat</translation>
     </message>
 </context>
 <context>

@@ -39,7 +39,7 @@ const SCHEDULE_BOUND_COMMANDS = new Set([
 ]);
 const inflightCommandKeys = new Set();
 
-const api = new RemoteApi("/remote/timer/api");
+let api = new RemoteApi("/remote/timer/api");
 let initialSetupPayload = null;
 
 await initializeLocalization({
@@ -251,7 +251,7 @@ function bindStaticEvents() {
   byId("duration-form").addEventListener("submit", handleDurationSubmit);
 
   window.addEventListener("keydown", handleGlobalKeydown);
-  window.addEventListener("offline", () => store.update({ connection: "offline" }));
+  window.addEventListener("offline", () => handleConnectionStatus("offline"));
   window.addEventListener("online", () => void recover());
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
@@ -270,12 +270,12 @@ function activeModalContainer() {
   if (store.state.durationModal.open && store.state.authenticated) {
     return byId("duration-modal");
   }
-  return null;
+  return document.querySelector('#stage-hand-alert-card[aria-modal="true"]');
 }
 
 function handleGlobalKeydown(event) {
+  const modal = activeModalContainer();
   if (event.key === "Tab") {
-    const modal = activeModalContainer();
     if (modal && !modal.hidden) {
       const focusable = Array.from(
         modal.querySelectorAll(
@@ -316,7 +316,7 @@ function handleGlobalKeydown(event) {
 
   if (
     store.state.view === "stage" &&
-    !store.state.loginModalOpen &&
+    !modal &&
     !store.state.hudVisible &&
     (event.key === " " || event.key === "Enter")
   ) {
@@ -512,14 +512,17 @@ async function handleLogin(event) {
   }
 
   setLoginBusy(true);
+  const loginApi = api;
   try {
-    const loginPayload = await api.login(username, password);
+    const loginPayload = await loginApi.login(username, password);
+    if (loginApi !== api) return;
     form.elements.password.value = "";
     applyLocalization(loginPayload.profile);
     applyAuthenticatedBootstrap(store, loginPayload, { targetView: "control" });
     connectWebSocket(AUTH_WS_PATH);
     showToast(t("login.success"), "success");
   } catch (error) {
+    if (loginApi !== api) return;
     errorNode.textContent = loginErrorMessage(error);
     errorNode.hidden = false;
     announce(errorNode.textContent);
@@ -556,15 +559,18 @@ function downgradeToPublicStage({ reason = "", notify = false } = {}) {
   clearWebsocketSync();
   eventStream.close();
   api.clearSecrets();
-  store.update({
+  // Requests started before the downgrade must not restore the old session.
+  api = new RemoteApi(api.apiRoot);
+  store.update((current) => ({
     view: "stage",
     authenticated: false,
     loginModalOpen: false,
     durationModal: { open: false, partId: "", title: "", initialText: "" },
     hudVisible: true,
+    live: { ...current.live, handAlert: null },
     schedule: normalizeScheduleSnapshot(null),
     scheduleRevision: 0,
-  });
+  }));
   armStageHudAutohide();
   connectWebSocket(PUBLIC_WS_PATH);
 
@@ -603,7 +609,7 @@ async function doRecover({ initial }) {
   if (!navigator.onLine) {
     store.update((current) => ({
       view: current.view === "boot" ? "stage" : current.view,
-      connection: "offline",
+      ...connectionPatch(current, "offline"),
     }));
     return false;
   }
@@ -612,29 +618,34 @@ async function doRecover({ initial }) {
     store.update({ connection: "connecting" });
   }
 
+  const recoveryApi = api;
   try {
-    const publicPayload = await api.publicBootstrap();
+    const publicPayload = await recoveryApi.publicBootstrap();
+    if (recoveryApi !== api || !navigator.onLine) return false;
     applyLocalization(publicPayload.profile);
     setupPage?.setInstallAvailable(pwa.isInstallAvailable());
     applyPublicBootstrap(store, publicPayload, { preserveView: !initial });
 
     if (publicPayload.authenticated && publicPayload.controlAvailable) {
       try {
-        const authPayload = await api.bootstrap();
+        const authPayload = await recoveryApi.bootstrap();
+        if (recoveryApi !== api || !navigator.onLine) return false;
         applyLocalization(authPayload.profile);
         const targetView = initial ? "stage" : store.state.view;
         applyAuthenticatedBootstrap(store, authPayload, { targetView });
         connectWebSocket(AUTH_WS_PATH);
         return true;
       } catch (authError) {
+        if (recoveryApi !== api) return false;
         if (!(authError instanceof ApiError && authError.status === 401)) {
           throw authError;
         }
         api.clearSecrets();
-        store.update({
+        store.update((current) => ({
           view: "stage",
           authenticated: false,
-        });
+          live: { ...current.live, handAlert: null },
+        }));
       }
     } else if (store.state.view === "control") {
       store.update({ view: "stage", authenticated: false });
@@ -643,9 +654,10 @@ async function doRecover({ initial }) {
     connectWebSocket(PUBLIC_WS_PATH);
     return true;
   } catch (error) {
+    if (recoveryApi !== api) return false;
     store.update((current) => ({
       view: current.view === "boot" ? "stage" : current.view,
-      connection: navigator.onLine ? "reconnecting" : "offline",
+      ...connectionPatch(current, navigator.onLine ? "reconnecting" : "offline"),
     }));
     if (initial) {
       connectWebSocket(PUBLIC_WS_PATH);
@@ -671,7 +683,14 @@ function handleConnectionStatus(status) {
     scheduleWebsocketSync();
     return;
   }
-  store.update({ connection: status });
+  store.update((current) => connectionPatch(current, status));
+}
+
+function connectionPatch(current, connection) {
+  if (connection === "offline" || connection === "reconnecting") {
+    return { connection, live: { ...current.live, handAlert: null } };
+  }
+  return { connection };
 }
 
 function scheduleWebsocketSync() {
@@ -697,6 +716,8 @@ function handleRemoteEvent(event) {
     });
     return;
   }
+
+  if (!navigator.onLine) return;
 
   const nextInstanceId = String(event.serverInstanceId ?? "");
   if (

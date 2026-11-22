@@ -116,6 +116,18 @@ class ZoomSettingsStore(_ProfilePrefsSettings):
     def set_background_song_linked(self, linked: bool) -> None:
         self.settings.set_value(SettingsKey.ZOOM_BACKGROUND_SONG_LINK, bool(linked))
 
+    def raised_hands_monitoring_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.ZOOM_RAISED_HANDS_MONITORING, False, bool))
+
+    def set_raised_hands_monitoring_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.ZOOM_RAISED_HANDS_MONITORING, bool(enabled))
+
+    def raised_hands_timer_integration_enabled(self) -> bool:
+        return bool(self.settings.value(SettingsKey.ZOOM_RAISED_HANDS_TIMER_INTEGRATION, False, bool))
+
+    def set_raised_hands_timer_integration_enabled(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.ZOOM_RAISED_HANDS_TIMER_INTEGRATION, bool(enabled))
+
 
 @dataclass(frozen=True, slots=True)
 class AutoKeySettingsStore(_ProfilePrefsSettings):

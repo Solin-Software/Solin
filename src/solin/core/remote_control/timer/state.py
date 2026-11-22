@@ -7,7 +7,9 @@ from dataclasses import dataclass, replace
 import time
 import uuid
 
+from ...timer.hand_alert import TimerHandAlert
 from ..command_gate import CommandDecision, CommandDisposition, CommandIdempotencyGate
+from ..features import TIMER_REMOTE_HAND_ALERT_POLICY, TimerRemoteHandAlertPolicy
 from ..validation import JsonObject
 from .contracts import (
     AdjustPartCommand,
@@ -22,6 +24,7 @@ from .contracts import (
     TimerLiveWireSnapshot,
     TimerRemoteCommand,
     TimerScheduleWireSnapshot,
+    hand_alert_payload,
 )
 
 
@@ -39,6 +42,9 @@ class RemoteTimerRuntimeSnapshot:
     server_instance_id: str
     live: TimerLiveWireSnapshot
     schedule: TimerScheduleWireSnapshot
+    # Public revisions track only changes a public viewer can observe.
+    public_live_revision: int = 0
+    hand_alert: TimerHandAlert = TimerHandAlert()
 
     def __post_init__(self) -> None:
         try:
@@ -61,6 +67,8 @@ class RemoteTimerRuntimeSnapshot:
         return self.schedule.schedule_revision
 
     def to_dict(self) -> JsonObject:
+        """Serialize timer state without audience-specific hand alert data."""
+
         return {
             "serverInstanceId": self.server_instance_id,
             "liveRevision": self.live_revision,
@@ -80,8 +88,12 @@ class RemoteTimerStateStore:
         live: TimerLiveWireSnapshot | None = None,
         schedule: TimerScheduleWireSnapshot | None = None,
         publication_lock: ReentrantLock | None = None,
+        hand_alert_policy: TimerRemoteHandAlertPolicy = TIMER_REMOTE_HAND_ALERT_POLICY,
     ) -> None:
+        if not isinstance(hand_alert_policy, TimerRemoteHandAlertPolicy):
+            raise TypeError("hand_alert_policy must be a TimerRemoteHandAlertPolicy")
         self._lock = publication_lock or ReentrantLock()
+        self._hand_alert_policy = hand_alert_policy
         instance_id = server_instance_id or str(uuid.uuid4())
         initial_live = replace(
             live
@@ -103,6 +115,10 @@ class RemoteTimerStateStore:
     @property
     def server_instance_id(self) -> str:
         return self._snapshot.server_instance_id
+
+    @property
+    def hand_alert_policy(self) -> TimerRemoteHandAlertPolicy:
+        return self._hand_alert_policy
 
     @property
     def live_revision(self) -> int:
@@ -145,8 +161,35 @@ class RemoteTimerStateStore:
             if live.comparable_key() == current.comparable_key():
                 return current
             updated = replace(live, live_revision=current.live_revision + 1)
-            self._snapshot = replace(self._snapshot, live=updated)
+            self._snapshot = replace(
+                self._snapshot,
+                live=updated,
+                public_live_revision=self._snapshot.public_live_revision + 1,
+            )
             return updated
+
+    def update_hand_alert(self, alert: TimerHandAlert) -> bool:
+        """Update the live alert and its audience revisions in one publication."""
+
+        policy = self._hand_alert_policy
+        if policy is TimerRemoteHandAlertPolicy.DISABLED:
+            return False
+        if alert.names and alert.manual:
+            alert = TimerHandAlert(names=alert.names)
+        with self._lock:
+            current = self._snapshot
+            if alert == current.hand_alert:
+                return False
+            public_changed = hand_alert_payload(
+                alert, policy, authenticated=False
+            ) != hand_alert_payload(current.hand_alert, policy, authenticated=False)
+            self._snapshot = replace(
+                current,
+                hand_alert=alert,
+                live=replace(current.live, live_revision=current.live_revision + 1),
+                public_live_revision=current.public_live_revision + int(public_changed),
+            )
+            return True
 
     def update_schedule(self, schedule: TimerScheduleWireSnapshot) -> TimerScheduleWireSnapshot:
         if not isinstance(schedule, TimerScheduleWireSnapshot):

@@ -38,11 +38,13 @@ from solin.styles.icons import (
     ICON_PEOPLE,
     ICON_PLAY,
     ICON_RAISED_HAND,
+    ICON_RAISED_HAND_FILLED,
     ICON_SLIDERS,
     ICON_ZOOM,
     make_icon,
 )
 from solin.styles.theme import PALETTE, qss_rgba
+from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.zoom_panel_controls import (
     ZoomRaisedHandRow,
     ZoomSwitch,
@@ -64,14 +66,20 @@ class ZoomPanel(QWidget):
     background_song_link_toggled = Signal(bool)
     cancel_requested = Signal()
     raised_hands_toggled = Signal(bool)
+    timer_integration_toggled = Signal(bool)
+    manual_hand_toggled = Signal(bool)
+    raised_hands_demo_toggled = Signal(bool)
     participant_action_requested = Signal(object, str)
 
-    def __init__(self, parent=None, *, raised_hands_available: bool = False) -> None:
+    def __init__(
+        self, parent=None, *, raised_hands_available: bool = False, hand_demo_available: bool = False
+    ) -> None:
         super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._connected = False
         self._busy = False
         self._hands_snapshot = RaisedHandsSnapshot()
+        self._hands_demo: RaisedHandsSnapshot | None = None
         self._participant_result: ParticipantActionResult | None = None
         self._participant_request_rejected = False
         self._rows: dict[str | tuple[int, str], ZoomRaisedHandRow] = {}
@@ -100,6 +108,16 @@ class ZoomPanel(QWidget):
         title = plain_label(self._card, "ZoomTitle")
         title.setText("Zoom")
         header.addWidget(title, 1)
+        self._demo_toggle: QPushButton | None = None
+        if raised_hands_available and hand_demo_available:
+            self._demo_toggle = QPushButton(self._card)
+            self._demo_toggle.setObjectName("ZoomQuietAction")
+            self._demo_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._demo_toggle.setMinimumHeight(28)
+            self._demo_toggle.setCheckable(True)
+            self._demo_toggle.toggled.connect(self.raised_hands_demo_toggled)
+            self._demo_toggle.hide()
+            header.addWidget(self._demo_toggle)
         self._card_layout.addLayout(header)
 
         self._tabs = QTabBar(self._card)
@@ -119,6 +137,16 @@ class ZoomPanel(QWidget):
         tabs_layout = QHBoxLayout()
         tabs_layout.setContentsMargins(15, 0, 15, 0)
         tabs_layout.addWidget(self._tabs, 1)
+        self._manual_hand = QPushButton(self._card)
+        self._manual_hand.setObjectName("ZoomManualHand")
+        self._manual_hand.setFixedSize(33, 32)
+        self._manual_hand.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._manual_hand.setCheckable(True)
+        self._manual_hand.setEnabled(False)
+        self._manual_hand.toggled.connect(self.manual_hand_toggled)
+        self._manual_hand.hide()
+        install_themed_tooltip(self._manual_hand)
+        tabs_layout.addWidget(self._manual_hand, alignment=Qt.AlignmentFlag.AlignVCenter)
         self._card_layout.addLayout(tabs_layout)
         self._card_layout.addWidget(self._divider(self._card))
         self._tabs.setVisible(raised_hands_available)
@@ -184,11 +212,8 @@ class ZoomPanel(QWidget):
     def _build_hands_page(self) -> None:
         self._hands_page = QWidget(self._card)
         self._hands_layout = hands = QVBoxLayout(self._hands_page)
-        hands.setContentsMargins(15, 5, 15, 12)
+        hands.setContentsMargins(15, 10, 15, 10)
         hands.setSpacing(0)
-        self._monitor_hands = ZoomSwitch(self._hands_page)
-        self._monitor_hands.toggled.connect(self.raised_hands_toggled)
-        hands.addWidget(self._monitor_hands)
 
         self._hands_status = QFrame(self._hands_page)
         self._hands_status.setObjectName("ZoomHandsStatus")
@@ -231,12 +256,31 @@ class ZoomPanel(QWidget):
         feedback.addWidget(self._feedback_icon)
         feedback.addWidget(self._hands_feedback, 1)
         hands.addWidget(self._feedback_line)
+        hands.addWidget(self._build_hands_footer())
         self._card_layout.addWidget(self._hands_page)
+
+    def _build_hands_footer(self) -> QWidget:
+        footer = QWidget(self._hands_page)
+        self._hands_footer_layout = layout = QVBoxLayout(footer)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._divider(footer))
+        self._monitor_hands = ZoomSwitch(footer)
+        self._monitor_hands.toggled.connect(self.raised_hands_toggled)
+        layout.addWidget(self._monitor_hands)
+        self._timer_integration = ZoomSwitch(footer, description=True)
+        self._timer_integration.toggled.connect(self.timer_integration_toggled)
+        layout.addWidget(self._timer_integration)
+        self._timer_integration.hide()
+        return footer
 
     def _show_tab(self, index: int) -> None:
         hands = index == self._hands_tab
         self._meeting_page.setVisible(not hands)
         self._hands_page.setVisible(hands)
+        self._manual_hand.setVisible(hands and not self._timer_integration.isHidden())
+        if self._demo_toggle is not None:
+            self._demo_toggle.setVisible(hands)
         self._update_tab_icons()
         self._sync_geometry()
 
@@ -262,6 +306,15 @@ class ZoomPanel(QWidget):
         self._busy_text.setText(self.tr("Automation in progress…"))
         self._cancel.setText(self.tr("Cancel"))
         self._monitor_hands.set_copy(self.tr("Monitor raised hands"))
+        manual_label = self.tr("Show hand on timer")
+        self._manual_hand.setAccessibleName(manual_label)
+        self._manual_hand.setToolTip(manual_label)
+        if self._demo_toggle is not None:
+            self._demo_toggle.setText(self.tr("Test raised hands"))
+        self._timer_integration.set_copy(
+            self.tr("Integrate with timer"),
+            self.tr("Raised hands in Zoom will appear on the timer display."),
+        )
         self._action_labels = {
             ParticipantAction.LOWER_HAND: self.tr("Lower hand"),
             ParticipantAction.REQUEST_UNMUTE: self.tr("Ask to unmute"),
@@ -342,6 +395,10 @@ class ZoomPanel(QWidget):
             QPushButton#ZoomAudioAction:hover {{background: {p.accent_muted_hover};}}
             QPushButton#ZoomQuietAction {{background: transparent; color: {p.text_secondary};}}
             QPushButton#ZoomQuietAction:hover {{background: {p.surface_hover}; color: {p.text_primary};}}
+            QPushButton#ZoomQuietAction:checked {{
+                background: {p.accent_muted}; border-color: {qss_rgba(p.accent_alt, 0.32)};
+                color: {p.accent_text};
+            }}
             QPushButton#ZoomAudioAction:pressed, QPushButton#ZoomQuietAction:pressed {{
                 background: {p.surface_hover_strong};
             }}
@@ -350,11 +407,23 @@ class ZoomPanel(QWidget):
             }}
             QPushButton#ZoomWorkflow:focus, QPushButton#ZoomAudioAction:focus,
             QPushButton#ZoomQuietAction:focus {{border-color: {p.accent_alt};}}
+            QPushButton#ZoomManualHand {{
+                background: {p.surface_hover}; border: 1px solid {p.border_muted};
+                border-radius: 8px;
+            }}
+            QPushButton#ZoomManualHand:hover {{border-color: {p.border_strong};}}
+            QPushButton#ZoomManualHand:checked {{
+                background: {qss_rgba(p.warning_text, 0.14)};
+                border-color: {qss_rgba(p.warning_text, 0.40)};
+            }}
+            QPushButton#ZoomManualHand:disabled {{background: transparent;}}
+            QPushButton#ZoomManualHand:focus {{border-color: {p.accent_alt};}}
             QFrame#ZoomHandRow {{border: none; border-top: 1px solid {p.border_muted};}}
             QFrame#ZoomHandsStatus {{background: {p.surface_hover}; border: none; border-radius: 8px;}}
             QWidget#ZoomFeedback {{border-top: 1px solid {p.border_muted};}}
         """)
         set_icon(self._header_icon, ICON_ZOOM, 17, p.accent_text)
+        self._update_manual_hand_icon()
         self._start.apply_theme(ICON_PLAY, p.accent_text)
         for button in (self._before, self._after, self._combined):
             button.apply_theme(ICON_PEOPLE, p.text_secondary)
@@ -393,16 +462,47 @@ class ZoomPanel(QWidget):
             self._link.setChecked(linked)
         self._sync_geometry()
 
+    def set_timer_hand_controls(self, *, available: bool, integrated: bool, manual: bool) -> None:
+        self._timer_integration.setVisible(available)
+        self._manual_hand.setVisible(available and self._tabs.currentIndex() == self._hands_tab)
+        self._manual_hand.setEnabled(available and integrated)
+        with QSignalBlocker(self._timer_integration), QSignalBlocker(self._manual_hand):
+            self._timer_integration.setChecked(integrated)
+            self._manual_hand.setChecked(manual)
+        self._update_manual_hand_icon()
+        self._sync_geometry()
+
+    def _update_manual_hand_icon(self) -> None:
+        checked = self._manual_hand.isChecked()
+        self._manual_hand.setIcon(
+            make_icon(
+                ICON_RAISED_HAND_FILLED if checked else ICON_RAISED_HAND,
+                17,
+                PALETTE.warning_text if checked else PALETTE.text_secondary,
+            )
+        )
+
+    def set_raised_hands_demo(self, snapshot: RaisedHandsSnapshot | None) -> None:
+        if self._demo_toggle is None or snapshot == self._hands_demo:
+            return
+        self._hands_demo = snapshot
+        with QSignalBlocker(self._demo_toggle):
+            self._demo_toggle.setChecked(snapshot is not None)
+        self._sync_roster()
+        self._refresh_raised_hands()
+        self._sync_geometry()
+
     def set_raised_hands_snapshot(self, snapshot: RaisedHandsSnapshot) -> None:
         if snapshot != self._hands_snapshot:
             self._hands_snapshot = snapshot
             if snapshot.status is RaisedHandsStatus.INACTIVE:
                 self._clear_participant_feedback()
-            self._sync_roster()
+            if self._hands_demo is None:
+                self._sync_roster()
         self._refresh()
 
     def _sync_roster(self) -> None:
-        snapshot = self._hands_snapshot
+        snapshot = self._hands_demo or self._hands_snapshot
         hands = (
             snapshot.hands
             if snapshot.status in (RaisedHandsStatus.READY, RaisedHandsStatus.PARTIAL)
@@ -432,12 +532,13 @@ class ZoomPanel(QWidget):
         if previous_keys != tuple(rows):
             while self._roster_layout.count():
                 self._roster_layout.takeAt(self._roster_layout.count() - 1)
-            previous_control: QWidget = self._monitor_hands
+            previous_control: QWidget = self._manual_hand
             for row in rows.values():
                 self._roster_layout.addWidget(row)
                 for button in row.tab_order():
                     QWidget.setTabOrder(previous_control, button)
                     previous_control = button
+            QWidget.setTabOrder(previous_control, self._monitor_hands)
         self._rows = rows
         if restore_focus:
             self._monitor_hands.setFocus()
@@ -467,6 +568,8 @@ class ZoomPanel(QWidget):
         self._participant_request_rejected = False
 
     def _raised_hands_status(self) -> tuple[str, str]:
+        if self._hands_demo is not None:
+            return "", ""
         status = self._hands_snapshot.status
         if status is RaisedHandsStatus.NO_MEETING or (
             status is RaisedHandsStatus.INACTIVE and not self._connected
@@ -524,7 +627,11 @@ class ZoomPanel(QWidget):
         with QSignalBlocker(self._monitor_hands):
             self._monitor_hands.setChecked(active)
         self._monitor_hands.setEnabled((active or self._connected) and not self._busy)
-        count = len(self._rows) if self._hands_snapshot.status is RaisedHandsStatus.READY else 0
+        count = (
+            len(self._rows)
+            if self._hands_demo is not None or self._hands_snapshot.status is RaisedHandsStatus.READY
+            else 0
+        )
         side = QTabBar.ButtonPosition.RightSide
         if count:
             text = str(count)
@@ -561,13 +668,14 @@ class ZoomPanel(QWidget):
         can_act = (
             self._connected
             and not self._busy
+            and self._hands_demo is None
             and self._hands_snapshot.status is RaisedHandsStatus.READY
         )
         for row in self._rows.values():
             row.set_actions_enabled(can_act)
         self._roster.setVisible(bool(self._rows))
 
-        feedback = self._participant_feedback()
+        feedback = self._participant_feedback() if self._hands_demo is None else ""
         self._hands_feedback.setText(feedback)
         self._feedback_line.setVisible(bool(feedback))
         if feedback:
@@ -628,6 +736,7 @@ class ZoomPanel(QWidget):
             button.fit(content_width)
         self._link.fit(content_width)
         self._monitor_hands.fit(content_width)
+        self._timer_integration.fit(content_width)
         self._hands_status.setFixedHeight(self._status_layout.totalHeightForWidth(content_width))
         self._feedback_line.setFixedHeight(self._feedback_layout.totalHeightForWidth(content_width))
         self._busy_strip.setFixedHeight(self._busy_layout.totalHeightForWidth(self.width() - 2))
@@ -638,6 +747,7 @@ class ZoomPanel(QWidget):
         for layout in (
             self._integration_layout,
             self._meeting_layout,
+            self._hands_footer_layout,
             self._hands_layout,
             self._card_layout,
         ):

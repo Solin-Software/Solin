@@ -96,6 +96,7 @@ class MainWindowUiContext:
     ndi_service: Any
     zoom_service: Any
     zoom_meetings: Any
+    timer_hand_alert: Any
     app_settings: Any
     about_settings_factory: Callable[[QObject], Any]
     obs_settings: Any
@@ -722,6 +723,7 @@ class MainWindowUiController:
             background_song_service=context.background_song_service,
             scene_runtime=context.scene_runtime,
             program_recording=context.program_recording,
+            timer_hand_alert=context.timer_hand_alert,
         )
         toolbar.monitor_clicked.connect(handlers.monitor_manager_requested)
         toolbar.obs_scene_change.connect(handlers.quick_obs_scene_change)

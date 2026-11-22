@@ -37,6 +37,7 @@ from ..core.remote_control.settings import (
 )
 from ..core.remote_control.timer.state import RemoteTimerStateStore
 from ..core.remote_control.validation import JsonObject
+from ..core.timer.hand_alert import TimerHandAlert
 from .remote_media_adapter import RemoteMediaAdapter, RemoteMediaAdapterDependencies
 from .remote_timer_adapter import RemoteTimerAdapter, RemoteTimerAdapterDependencies
 
@@ -165,6 +166,10 @@ class RemoteControlController(QObject):
     @property
     def timer_state(self) -> RemoteTimerStateStore:
         return self._timer_adapter.state
+
+    @Slot(object)
+    def set_timer_hand_alert(self, alert: TimerHandAlert) -> None:
+        self._timer_adapter.set_hand_alert(alert)
 
     @property
     def is_running(self) -> bool:

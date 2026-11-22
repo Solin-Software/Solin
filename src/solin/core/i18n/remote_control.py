@@ -276,6 +276,10 @@ REMOTE_CONTROL_TRANSLATION_SOURCES = (
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Expand timer"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "Wall clock"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "{title}: {time}"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Raised hands"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Hand raised"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Show all"),
+    QT_TRANSLATE_NOOP("_RemoteControlWeb", "Close raised hands list"),
     QT_TRANSLATE_NOOP("_RemoteControlWeb", "TIMER CONTROL"),
     QT_TRANSLATE_NOOP(
         "_RemoteControlWeb",

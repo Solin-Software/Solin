@@ -23,6 +23,7 @@ ICON_MICROPHONE_OFF: str
 ICON_PEOPLE: str
 ICON_PLAY: str
 ICON_RAISED_HAND: str
+ICON_RAISED_HAND_FILLED: str
 ICON_REMOTE_CONTROL: str
 ICON_SLIDERS: str
 ICON_VIDEO: str
@@ -242,6 +243,7 @@ _ICON_NAMES = frozenset(
         "ICON_MICROPHONE",
         "ICON_MICROPHONE_OFF",
         "ICON_RAISED_HAND",
+        "ICON_RAISED_HAND_FILLED",
         "ICON_SLIDERS",
         "ICON_PEOPLE",
         "ICON_INFO_CIRCLE",
@@ -1142,6 +1144,15 @@ def _build_icon_svg(name: str) -> str:
             '<path d="M8 13V6a1.5 1.5 0 0 1 3 0v4-6a1.5 1.5 0 0 1 3 0v6-4'
             'a1.5 1.5 0 0 1 3 0v4-1a1.5 1.5 0 0 1 3 0v5a8 8 0 0 1-8 8h-1a6 6 0 0 1-4.6-2.1L3 16'
             'a1.7 1.7 0 0 1 2.6-2.2L8 16"/></svg>'
+        )
+    elif name == "ICON_RAISED_HAND_FILLED":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="currentColor">'
+            '<path d="M22 35V15a4 4 0 0 1 8 0v15h1V8a4 4 0 0 1 8 0v22h1V12a4 4 0 0 1 8 0v19h1V20'
+            'a4 4 0 0 1 8 0v17c0 14-8.4 23-21 23h-1c-7 0-12.4-3.5-16.6-9L8.5 38.5'
+            'a5 5 0 0 1 7.4-6.7l6.1 5.3Z"/>'
+            '<path d="M22 37c4.9.7 8.2 3.5 10 8.2" fill="none" stroke="#995810" '
+            'stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round"/></svg>'
         )
     elif name == "ICON_SLIDERS":
         return (

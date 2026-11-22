@@ -8,6 +8,7 @@ from datetime import date
 from enum import StrEnum
 from typing import ClassVar, Final, TypeAlias
 
+from ...timer.hand_alert import TimerHandAlert
 from ...timer.models import (
     AnalogClockStyle,
     ClockConfig,
@@ -18,7 +19,11 @@ from ...timer.models import (
     PartTimerDisplay,
     Section,
 )
-from ..features import DEFAULT_TIMER_REMOTE_FEATURE_FLAGS, TimerRemoteFeatureFlags
+from ..features import (
+    DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+    TimerRemoteFeatureFlags,
+    TimerRemoteHandAlertPolicy,
+)
 from ..validation import (
     MAX_ERROR_TEXT_LENGTH,
     JsonObject,
@@ -71,6 +76,24 @@ _MIN_UTC_OFFSET_MINUTES: Final = -14 * 60
 _MAX_UTC_OFFSET_MINUTES: Final = 14 * 60
 _ALLOWED_ADJUST_DELTAS: Final = frozenset({-60, -1, 1, 60})
 _CONFIGURABLE_SECTIONS: Final = frozenset({Section.MINISTRY, Section.LIVING})
+
+
+def hand_alert_payload(
+    alert: TimerHandAlert,
+    policy: TimerRemoteHandAlertPolicy,
+    *,
+    authenticated: bool,
+) -> JsonObject | None:
+    if policy is TimerRemoteHandAlertPolicy.DISABLED or (
+        policy is TimerRemoteHandAlertPolicy.AUTHENTICATED_ONLY and not authenticated
+    ):
+        return None
+    if alert.names:
+        payload: JsonObject = {"kind": "automatic", "count": len(alert.names)}
+        if authenticated or policy is TimerRemoteHandAlertPolicy.PUBLIC_NAMES:
+            payload["names"] = list(alert.names)
+        return payload
+    return {"kind": "manual"} if alert.manual else None
 
 
 @dataclass(frozen=True, slots=True)

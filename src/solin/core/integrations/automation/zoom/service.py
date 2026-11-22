@@ -12,6 +12,7 @@ from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signa
 
 from solin.core.foundation.constants import IS_COMPILED, ZOOM_AUTOMATION_ARGUMENT
 
+from ..settings import ZoomSettingsStore
 from .protocol import (
     MAX_MESSAGE_BYTES,
     PARTICIPANT_ACTIONS,
@@ -57,8 +58,15 @@ class ZoomService(QObject):
     participant_action_finished = Signal(object)
     error = Signal(str)
 
-    def __init__(self, parent: QObject | None = None, *, raised_hands_enabled: bool = False):
+    def __init__(
+        self,
+        settings: ZoomSettingsStore,
+        parent: QObject | None = None,
+        *,
+        raised_hands_enabled: bool = False,
+    ):
         super().__init__(parent)
+        self._settings = settings
         self._active = False
         self._connected = False
         self._process: QProcess | None = None
@@ -111,6 +119,8 @@ class ZoomService(QObject):
         if not self.is_available or self._active:
             return
         self._active = True
+        if self._raised_hands_enabled and self._settings.raised_hands_monitoring_enabled():
+            self._apply_raised_hands_monitoring(True)
         self.enabled_changed.emit(True)
         self._poll.start()
         self.refresh()
@@ -119,7 +129,7 @@ class ZoomService(QObject):
         was_active = self._active
         self._active = False
         self._poll.stop()
-        self.stop_raised_hands_monitoring()
+        self._apply_raised_hands_monitoring(False)
         process = self._process
         self._retire(cancelled=True)
         if wait and process is not None:
@@ -149,22 +159,25 @@ class ZoomService(QObject):
     def request_post_meeting(self) -> bool:
         return self._queue_operation("post_meeting")
 
-    def start_raised_hands_monitoring(self) -> bool:
-        if not self._active or not self._raised_hands_enabled or self._monitoring:
+    def set_raised_hands_monitoring(self, enabled: bool) -> bool:
+        if not self._active or not self._raised_hands_enabled:
             return False
-        self._monitoring = self._open_panel_once = True
-        self._monitor_generation += 1
-        status = RaisedHandsStatus.UNAVAILABLE if self._connected else RaisedHandsStatus.NO_MEETING
-        self._publish_hands(RaisedHandsSnapshot(status))
-        self.refresh()
+        if enabled != self._monitoring:
+            self._settings.set_raised_hands_monitoring_enabled(enabled)
+            self._apply_raised_hands_monitoring(enabled)
+            if enabled:
+                self.refresh()
         return True
 
-    def stop_raised_hands_monitoring(self) -> None:
-        if not self._monitoring:
+    def _apply_raised_hands_monitoring(self, enabled: bool) -> None:
+        if self._monitoring == enabled:
             return
-        self._monitoring = self._open_panel_once = False
+        self._monitoring = self._open_panel_once = enabled
         self._monitor_generation += 1
-        self._publish_hands(RaisedHandsSnapshot())
+        status = RaisedHandsStatus.INACTIVE
+        if enabled:
+            status = RaisedHandsStatus.UNAVAILABLE if self._connected else RaisedHandsStatus.NO_MEETING
+        self._publish_hands(RaisedHandsSnapshot(status))
 
     def request_participant_action(self, action: ParticipantAction, reference: str) -> bool:
         if not isinstance(action, ParticipantAction) or not self._has_reference(reference):

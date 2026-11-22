@@ -6,8 +6,10 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QByteArray, QCoreApplication, QProcess
+from PySide6.QtCore import QByteArray, QCoreApplication, QProcess, QSettings
 
+from solin.core.foundation.settings_store import SettingsStore
+from solin.core.integrations.automation.settings import ZoomSettingsStore
 from solin.core.integrations.automation.zoom.protocol import RAISED_HANDS
 from solin.core.integrations.automation.zoom.service import ZoomService, _Request
 from solin.core.integrations.automation.zoom.state import (
@@ -22,8 +24,15 @@ from solin.core.integrations.automation.zoom.state import (
 
 
 @pytest.fixture
-def service():
-    service = ZoomService(None)
+def zoom_settings(tmp_path, monkeypatch):
+    path = str(tmp_path / "prefs.ini")
+    monkeypatch.setattr(SettingsStore, "_settings", lambda _: QSettings(path, QSettings.Format.IniFormat))
+    return ZoomSettingsStore(SettingsStore.for_namespace("test", "prefs"))
+
+
+@pytest.fixture
+def service(zoom_settings):
+    service = ZoomService(zoom_settings)
     yield service
     service.stop(wait=True)
     service.deleteLater()
@@ -159,8 +168,8 @@ def test_worker_startup_and_discovery_are_read_only(service):
 
 
 @pytest.fixture
-def monitor():
-    service = ZoomService(raised_hands_enabled=True)
+def monitor(zoom_settings):
+    service = ZoomService(zoom_settings, raised_hands_enabled=True)
     # Drive the real supervisor using an in-memory process queue.
     messages = []
     service._active = service._ready = True
@@ -193,14 +202,42 @@ def _ready():
 
 def test_raised_hands_flag_defaults_to_off(service):
     service._active = True
-    assert not service.start_raised_hands_monitoring()
+    assert not service.set_raised_hands_monitoring(True)
     assert service.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
+
+
+def test_monitoring_preference_is_restored_on_service_start(monkeypatch, zoom_settings):
+    monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
+    monkeypatch.setattr(ZoomService, "refresh", lambda self: None)
+    first = ZoomService(zoom_settings, raised_hands_enabled=True)
+    first.start()
+    try:
+        assert first.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
+        assert first.set_raised_hands_monitoring(True)
+    finally:
+        first.stop()
+    assert first.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
+
+    restored = ZoomService(zoom_settings, raised_hands_enabled=True)
+    restored.start()
+    try:
+        assert restored.raised_hands_snapshot.status is RaisedHandsStatus.NO_MEETING
+        assert restored.set_raised_hands_monitoring(False)
+    finally:
+        restored.stop()
+
+    restored.start()
+    try:
+        assert restored.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
+    finally:
+        restored.stop()
 
 
 def test_raised_hands_opens_once_then_pauses_and_resumes_passively(monitor):
     service, messages = monitor
-    assert service.start_raised_hands_monitoring()
-    assert not service.start_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
+    assert service.set_raised_hands_monitoring(True)
+    assert len(messages) == 1
     assert messages[-1]["command"] == "meeting"
     _reply(service, messages, connected=True)
     assert messages[-1]["command"] == RAISED_HANDS
@@ -229,10 +266,10 @@ def test_raised_hands_opens_once_then_pauses_and_resumes_passively(monitor):
 def test_monitor_discards_previous_activation_reply(monitor):
     service, messages = monitor
     service._set_connected(True)
-    assert service.start_raised_hands_monitoring()
-    service.stop_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
+    assert service.set_raised_hands_monitoring(False)
     assert service.raised_hands_snapshot.status is RaisedHandsStatus.INACTIVE
-    assert service.start_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
     _reply(service, messages, snapshot=_ready())
     assert not service.raised_hands_snapshot.hands
     assert messages[-1]["open_panel"] is True
@@ -241,7 +278,7 @@ def test_monitor_discards_previous_activation_reply(monitor):
 def test_monitor_does_not_reopen_after_losing_a_meeting(monitor):
     service, messages = monitor
     service._set_connected(True)
-    assert service.start_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
     _reply(service, messages, error="meeting_not_found")
     assert service.raised_hands_snapshot.status is RaisedHandsStatus.NO_MEETING
     service.refresh()
@@ -256,7 +293,7 @@ def test_monitor_does_not_reopen_after_losing_a_meeting(monitor):
 def test_participant_action_queues_behind_probe_and_checks_latest_target(monitor, lost_target):
     service, messages = monitor
     service._set_connected(True)
-    assert service.start_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
     _reply(service, messages, snapshot=_ready())
     service.refresh()
     assert service.request_participant_action(ParticipantAction.LOWER_HAND, _REFERENCE)
@@ -281,7 +318,7 @@ def test_participant_action_queues_behind_probe_and_checks_latest_target(monitor
 def test_worker_timeout_keeps_verified_participant_steps(monitor):
     service, messages = monitor
     service._set_connected(True)
-    assert service.start_raised_hands_monitoring()
+    assert service.set_raised_hands_monitoring(True)
     _reply(service, messages, snapshot=_ready())
     assert service.request_participant_action(ParticipantAction.MUTE_AND_LOWER, _REFERENCE)
     _reply(service, messages, participant_step={"step": "mute", "status": "changed"})

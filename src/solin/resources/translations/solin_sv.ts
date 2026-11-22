@@ -10652,6 +10652,26 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
         <source>Participant muted and hand lowered.</source>
         <translation>Deltagarens mikrofon stängdes av och handen sänktes.</translation>
     </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Integrate with timer</source>
+        <translation>Koppla till timern</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Raised hands in Zoom will appear on the timer display.</source>
+        <translation>Uppräckta händer i Zoom visas på timerskärmen.</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Show hand on timer</source>
+        <translation>Visa hand på timern</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Test raised hands</source>
+        <translation>Testa handuppräckning</translation>
+    </message>
 </context>
 <context>
     <name>ZoomPollWindow</name>
@@ -12559,6 +12579,26 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <location filename="../../core/i18n/remote_control.py" line="346"/>
         <source>This meeting part is no longer available.</source>
         <translation>Den här mötespunkten är inte längre tillgänglig.</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Raised hands</source>
+        <translation>Uppräckta händer</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Hand raised</source>
+        <translation>Handen är uppräckt</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Show all</source>
+        <translation>Visa alla</translation>
+    </message>
+    <message>
+        <location filename="../../core/i18n/remote_control.py"/>
+        <source>Close raised hands list</source>
+        <translation>Stäng listan över uppräckta händer</translation>
     </message>
 </context>
 <context>

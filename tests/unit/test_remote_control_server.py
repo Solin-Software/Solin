@@ -17,6 +17,10 @@ import pytest
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
 from solin.core.remote_control import server as server_module
 from solin.core.remote_control.certificates import TLSCertificateStore
+from solin.core.remote_control.features import (
+    TIMER_REMOTE_HAND_ALERT_POLICY,
+    TimerRemoteHandAlertPolicy,
+)
 from solin.core.remote_control.media.contracts import CommandError, RemoteCommand
 from solin.core.remote_control.media.http import (
     MediaRemoteDependencies,
@@ -56,6 +60,7 @@ from solin.core.remote_control.timer.state import (
     RemoteTimerStateStore,
     TimerCommandSession,
 )
+from solin.core.timer.hand_alert import TimerHandAlert
 from solin.core.timer.models import PartState
 
 
@@ -191,6 +196,7 @@ async def _harness(
     *,
     credentials_override: Any | None = None,
     timer_credentials_configured: bool = True,
+    timer_hand_alert_policy: TimerRemoteHandAlertPolicy = TIMER_REMOTE_HAND_ALERT_POLICY,
     sessions: InMemorySessionStore | None = None,
     timer_sessions: InMemorySessionStore | None = None,
     command_handler: Any | None = None,
@@ -244,7 +250,7 @@ async def _harness(
         timer_credentials.set_credentials("timer.op", "timer secret battery staple")
 
     state = RemoteControlStateStore()
-    timer_state = RemoteTimerStateStore()
+    timer_state = RemoteTimerStateStore(hand_alert_policy=timer_hand_alert_policy)
     session_store = sessions or InMemorySessionStore(scope=RemoteScope.MEDIA)
     timer_session_store = timer_sessions or InMemorySessionStore(scope=RemoteScope.TIMER)
     command_session = ProjectionCommandSession(state)
@@ -754,6 +760,65 @@ def test_timer_public_viewer_works_without_login_and_isolates_public_ws_pool(
             await auth_ws.close()
         finally:
             await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_timer_revocation_blocks_a_queued_hand_alert(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        harness = await _harness(
+            tmp_path,
+            timer_hand_alert_policy=TimerRemoteHandAlertPolicy.AUTHENTICATED_ONLY,
+        )
+        async with harness.client:
+            headers = await _authenticated_timer_headers(harness)
+            socket = await harness.client.ws_connect("/remote/timer/api/ws", headers=headers)
+            assert (await socket.receive_json(timeout=1))["type"] == "session.snapshot"
+            module = harness.timer_module
+            (server_socket,) = module._auth_websockets
+            (session,) = module.active_session_inventory()
+
+            queued = asyncio.Event()
+            send = module._send_many_to_map
+
+            async def observe_send(registry, server_socket, payloads):
+                if payloads[0]["type"] == "timer.live":
+                    queued.set()
+                await send(registry, server_socket, payloads)
+
+            revoked = asyncio.Event()
+            close_session = module._close_session_websockets
+
+            async def observe_revocation(token, reason):
+                revoked.set()
+                await close_session(token, reason)
+
+            monkeypatch.setattr(module, "_send_many_to_map", observe_send)
+            monkeypatch.setattr(module, "_close_session_websockets", observe_revocation)
+            harness.timer_state.update_hand_alert(TimerHandAlert(names=("Private name",)))
+
+            async with asyncio.TaskGroup() as tasks:
+                async with module._auth_websockets[server_socket]:
+                    tasks.create_task(harness.application.publish_snapshot(RemoteScope.TIMER))
+                    await asyncio.wait_for(queued.wait(), timeout=1)
+                    task = tasks.create_task(module.revoke_session(session.management_id))
+                    await asyncio.wait_for(revoked.wait(), timeout=1)
+
+                event = await socket.receive_json(timeout=1)
+                assert event["type"] == "session.revoked"
+                assert event["payload"] == {"reason": "revoked_device"}
+                await socket.close()
+            assert task.result()
+
+            auth_boot = await harness.client.get("/remote/timer/api/bootstrap", headers=headers)
+            assert auth_boot.status == 401
+            public_boot = await harness.client.get("/remote/timer/api/public", headers=headers)
+            body = await public_boot.json()
+            assert body["authenticated"] is False
+            assert "handAlert" not in body["live"]
 
     asyncio.run(scenario())
 
