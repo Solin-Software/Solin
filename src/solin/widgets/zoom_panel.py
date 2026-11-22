@@ -8,6 +8,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QRect,
     QSignalBlocker,
+    QSize,
     Qt,
     Signal,
 )
@@ -45,6 +46,7 @@ from solin.styles.icons import (
 )
 from solin.styles.theme import PALETTE, qss_rgba
 from solin.ui.themed_tooltip import install_themed_tooltip
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.widgets.zoom_panel_controls import (
     ZoomRaisedHandRow,
     ZoomSwitch,
@@ -59,7 +61,7 @@ _PANEL_WIDTH = 462
 _ROSTER_ROWS = 4
 
 
-class ZoomPanel(QWidget):
+class ZoomPanel(ToolbarPanel):
     before_meeting_requested = Signal()
     meeting_start_requested = Signal()
     after_meeting_requested = Signal()
@@ -74,7 +76,7 @@ class ZoomPanel(QWidget):
     def __init__(
         self, parent=None, *, raised_hands_available: bool = False, hand_demo_available: bool = False
     ) -> None:
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._connected = False
         self._busy = False
@@ -769,17 +771,16 @@ class ZoomPanel(QWidget):
         if y < screen.top() + 4:
             y = anchor.bottom() + 11
         y = max(screen.top() + 4, min(y, screen.bottom() - height - 4))
-        self.setGeometry(x, y, self.width(), height)
+        self.setGeometry(QRect(self._panel_position(x, y), QSize(self.width(), height)))
 
     def show_above(self, anchor: QWidget) -> None:
         self._anchor_rect = QRect(anchor.mapToGlobal(anchor.rect().topLeft()), anchor.size())
-        self._available_rect = anchor.screen().availableGeometry()
+        self._available_rect = self._available_geometry(anchor)
         self.setFixedWidth(min(_PANEL_WIDTH, self._available_rect.width() - 8))
         self._sync_geometry()
         self._fade.stop()
         self._opacity.setOpacity(0)
-        self.show()
-        self.raise_()
+        self._show_anchored(anchor)
         self._fade.setStartValue(0)
         self._fade.setEndValue(1)
         self._fade.start()

@@ -11,7 +11,7 @@ from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
-from PySide6.QtWidgets import QApplication, QDialog, QWidget
+from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QWidget
 
 from solin.core.foundation.settings_store import ProfileAppSettingsStore, SettingsStore
 from solin.core.foundation.settings_keys import SettingsKey
@@ -533,7 +533,66 @@ def test_zoom_popup_opens_from_its_button_in_the_qml_toolbar(toolbar_host):
     mouse_click(toolbar, Qt.MouseButton.LeftButton, pos=point)
     popup = toolbar._zoom_panel
     assert popup is not None and popup.isVisible()
-    popup.close()
+    QTest.keyClick(popup, Qt.Key.Key_Escape)
+    assert not popup.isVisible()
+
+
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
+@pytest.mark.parametrize("embedded", [False, True], ids=["window", "embedded"])
+def test_lowering_a_zoom_hand_keeps_the_panel_open_until_a_solin_click(
+    toolbar_host, monkeypatch, embedded
+):
+    parent, toolbar = toolbar_host
+    service = toolbar._zoom
+    outside_button = QPushButton("Outside the panel", parent)
+    outside_button.move(20, 20)
+    clicked = QSignalSpy(outside_button.clicked)
+    other_window = QWidget()
+    other_window.show()
+    parent.show()
+    _activate(parent)
+    commands = []
+
+    def send(command, **kwargs):
+        commands.append((command, kwargs))
+        other_window.raise_()
+        other_window.activateWindow()
+        app = QApplication.instance()
+        QApplication.sendEvent(app, QEvent(QEvent.Type.ApplicationDeactivate))
+
+    monkeypatch.setattr(service, "_send", send)
+    try:
+        with monkeypatch.context() as platform:
+            if embedded:
+                platform.setattr(QGuiApplication, "platformName", lambda: "wayland")
+            toolbar._on_zoom_clicked()
+        panel = toolbar._zoom_panel
+        if embedded:
+            assert parent.rect().contains(panel.geometry())
+        panel._tabs.setCurrentIndex(1)
+        panel._monitor_hands.click()
+        reference = "1" * 32
+        service._publish_hands(
+            RaisedHandsSnapshot(
+                RaisedHandsStatus.READY, (RaisedHand("Participant", AudioState.MUTED, reference),)
+            )
+        )
+        lower_hand = panel._rows[reference].button(ParticipantAction.LOWER_HAND)
+        QTest.mouseClick(lower_hand, Qt.MouseButton.LeftButton)
+        assert commands == [("lower_hand", {"reference": reference})]
+        assert QTest.qWaitForWindowActive(other_window, 2000)
+        assert panel.isVisible()
+
+        QTest.mouseClick(other_window, Qt.MouseButton.LeftButton)
+        _activate(parent)
+        assert panel.isVisible()
+
+        mouse_click(outside_button, Qt.MouseButton.LeftButton, pos=outside_button.rect().center())
+        assert not panel.isVisible()
+        assert clicked.count() == 1
+    finally:
+        other_window.close()
+        other_window.deleteLater()
 
 
 def test_toolbar_destruction_cancels_queued_reposition(toolbar_host, monkeypatch):
@@ -857,6 +916,11 @@ def test_qml_toolbar_hover_click_keyboard_and_tooltip_share_native_popup(
     popup = getattr(toolbar, popup_attr)
     assert popup is not None and popup.isVisible()
     assert popup.hover_button.isVisible()
+    if popup_id == "scenes":
+        mouse_click(toolbar, Qt.MouseButton.LeftButton, pos=point)
+        assert not popup.isVisible()
+        mouse_click(toolbar, Qt.MouseButton.LeftButton, pos=point)
+        assert popup.isVisible()
     popup.hover_button.click()
     popup.close()
     _activate(parent)

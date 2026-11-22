@@ -447,7 +447,6 @@ class MainWindow(QWidget):
                     lambda count: self._quick_toolbar.set_screen_count(count)
                 ),
                 monitor_popup=lambda: self._monitor_popup,
-                monitor_anchor=lambda: self._quick_toolbar._monitor_btn,
                 dialog_parent=self,
                 timer_output=lambda: getattr(self, "timer_output", None),
                 timer_bridge=lambda: getattr(self, "timer_bridge", None),

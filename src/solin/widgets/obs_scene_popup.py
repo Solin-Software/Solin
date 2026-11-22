@@ -10,7 +10,6 @@ from PySide6.QtCore import (
     Qt,
     Signal,
 )
-from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsOpacityEffect,
@@ -34,6 +33,7 @@ from solin.ui.themed_tooltip import install_themed_tooltip
 from solin.widgets.common.button_feedback import ButtonSuccessFlash
 from solin.widgets.common.flow_container import FlowContainer
 from solin.widgets.common.popup_hover_button import PopupHoverButton
+from solin.widgets.common.toolbar_panel import ToolbarPanel
 
 
 class _SceneChipButton(QPushButton):
@@ -47,7 +47,7 @@ class _SceneChipButton(QPushButton):
         super().mousePressEvent(event)
 
 
-class OBSScenePopup(QWidget):
+class OBSScenePopup(ToolbarPanel):
     """Floating popup with a flow grid of OBS scene chips."""
 
     scene_change_requested = Signal(str)
@@ -58,7 +58,7 @@ class OBSScenePopup(QWidget):
     _POP_MAX_W = 460
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -451,12 +451,7 @@ class OBSScenePopup(QWidget):
         x = global_pos.x() + (anchor.width() - self.width()) // 2
         y = global_pos.y() - self.height() - 10
 
-        screen = anchor.screen() if hasattr(anchor, "screen") else None
-        screen_geo = (
-            screen.availableGeometry()
-            if screen is not None
-            else QGuiApplication.primaryScreen().availableGeometry()
-        )
+        screen_geo = self._available_geometry(anchor)
         if x < screen_geo.left() + 4:
             x = screen_geo.left() + 4
         if x + self.width() > screen_geo.right() - 4:
@@ -464,10 +459,9 @@ class OBSScenePopup(QWidget):
         if y < screen_geo.top() + 4:
             y = global_pos.y() + anchor.height() + 10
 
-        self.move(x, y)
+        self.move(self._panel_position(x, y))
         self._opacity_eff.setOpacity(0.0)
-        self.show()
-        self.raise_()
+        self._show_anchored(anchor)
         self._fade.stop()
         self._fade.setStartValue(0.0)
         self._fade.setEndValue(1.0)
