@@ -39,7 +39,9 @@ from solin.controllers.scene_runtime_controller import SceneRuntimeController
 from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.ui.popup_hover import PopupHoverController
 from solin.ui.incremental_load import IncrementalLoadState
+from solin.widgets import quick_access_toolbar
 from solin.widgets.background_song_popup import BackgroundSongPopup
+from solin.widgets.common import toolbar_panel
 from solin.widgets.common.popup_hover_button import PopupHoverButton
 from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.widgets.quick_access_toolbar import QuickAccessToolbar
@@ -565,10 +567,11 @@ def test_lowering_a_zoom_hand_keeps_the_panel_open_until_a_solin_click(
     monkeypatch.setattr(service, "_send", send)
     try:
         with monkeypatch.context() as platform:
-            if embedded:
-                platform.setattr(QGuiApplication, "platformName", lambda: "wayland")
+            platform.setattr(toolbar_panel, "_uses_embedded_panels", lambda: embedded)
             toolbar._on_zoom_clicked()
         panel = toolbar._zoom_panel
+        assert panel is not None
+        assert panel.isWindow() is not embedded
         if embedded:
             assert parent.rect().contains(panel.geometry())
         panel._tabs.setCurrentIndex(1)
@@ -602,9 +605,8 @@ def embedded_panel_host(monkeypatch):
     host = QWidget()
     host.resize(900, 600)
     try:
-        with monkeypatch.context() as platform:
-            platform.setattr(QGuiApplication, "platformName", lambda: "wayland")
-            yield host
+        monkeypatch.setattr(toolbar_panel, "_uses_embedded_panels", lambda: True)
+        yield host
     finally:
         dispose_widget(host)
 
@@ -616,6 +618,7 @@ def test_embedded_background_song_panel_stays_hidden_on_startup(embedded_panel_h
     host.show()
     QApplication.processEvents()
 
+    assert not panel.isWindow()
     assert not panel.isVisible()
 
 
@@ -663,6 +666,30 @@ def test_toolbar_destruction_cancels_queued_reposition(toolbar_host, monkeypatch
     assert not shiboken6.isValid(toolbar)
     QApplication.processEvents()
     assert callbacks == []
+
+
+@pytest.mark.parametrize("destroy_before_delivery", [False, True], ids=["alive", "destroyed"])
+def test_deferred_mac_toolbar_rounding_runs_only_while_toolbar_exists(
+    toolbar_host, monkeypatch, destroy_before_delivery,
+):
+    _parent, toolbar = toolbar_host
+    monkeypatch.setattr(toolbar, "_reposition", lambda: None)
+    QApplication.processEvents()
+    calls = []
+    monkeypatch.setattr(quick_access_toolbar, "_MAC", True)
+    monkeypatch.setattr(
+        quick_access_toolbar, "apply_corner_radius", lambda widget, _radius: calls.append(widget),
+    )
+
+    toolbar._apply_mac_corners()
+    assert calls == [toolbar]
+    if destroy_before_delivery:
+        toolbar.deleteLater()
+        QCoreApplication.sendPostedEvents(toolbar, QEvent.Type.DeferredDelete)
+        assert not shiboken6.isValid(toolbar)
+
+    QApplication.processEvents()
+    assert calls == ([toolbar] if destroy_before_delivery else [toolbar, toolbar])
 
 
 def test_toolbar_prepares_popups_without_qt_camera_dependencies(toolbar_host):

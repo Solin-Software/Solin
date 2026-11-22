@@ -20,13 +20,16 @@ _PRESS_EVENTS = (
 )
 
 
+def _uses_embedded_panels() -> bool:
+    # Wayland delegates positioning of top-level windows to the compositor.
+    return QGuiApplication.platformName().startswith("wayland")
+
+
 class ToolbarPanel(QWidget):
     _open_panels: WeakKeyDictionary[QWidget, ReferenceType[ToolbarPanel]] = WeakKeyDictionary()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        # Wayland delegates the position of top-level windows to the compositor.
-        # Host an anchored panel inside the window on that platform.
-        self._embedded = parent is not None and QGuiApplication.platformName().startswith("wayland")
+        self._embedded = parent is not None and _uses_embedded_panels()
         self._floating_parent = parent.window() if self._embedded and parent is not None else parent
         self._floating_flags = (
             Qt.WindowType.Widget

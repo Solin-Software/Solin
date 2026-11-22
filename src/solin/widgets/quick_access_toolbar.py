@@ -433,7 +433,7 @@ class QuickAccessToolbar(QQuickWidget):
             return
         radius = _QAT_MINI_RADIUS if self._minimized else _QAT_PILL_RADIUS
         apply_corner_radius(self, radius)
-        QTimer.singleShot(0, lambda: apply_corner_radius(self, radius))
+        QTimer.singleShot(0, self, lambda: apply_corner_radius(self, radius))
 
     def _show_native_tooltip(
         self,
