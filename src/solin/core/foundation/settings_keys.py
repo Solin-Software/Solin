@@ -86,6 +86,7 @@ class SettingsKey:
 
     ZOOM_ENABLED: Final = "zoom/enabled"
     ZOOM_BACKGROUND_SONG_LINK: Final = "zoom/background_song_link"
+    ZOOM_MUTE_DURING_PLAYBACK: Final = "zoom/mute_during_playback"
     ZOOM_RAISED_HANDS_MONITORING: Final = "zoom/raised_hands/monitoring"
     ZOOM_RAISED_HANDS_TIMER_INTEGRATION: Final = "zoom/raised_hands/timer_integration"
 

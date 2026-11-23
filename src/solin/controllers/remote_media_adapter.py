@@ -652,7 +652,7 @@ class RemoteMediaAdapter(QObject):
         elif isinstance(command, ResumeCommand):
             if not snapshot.capabilities.can_resume:
                 return CommandError(CommandErrorCode.BLOCKED, "Playback cannot be resumed now.")
-            self._dependencies.media_controller.play()
+            self._dependencies.projection_bar.resume_playback()
         elif isinstance(command, SeekCommand):
             if not snapshot.capabilities.can_seek:
                 return CommandError(CommandErrorCode.BLOCKED, "Seeking is unavailable now.")

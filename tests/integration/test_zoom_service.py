@@ -10,7 +10,11 @@ from PySide6.QtCore import QByteArray, QCoreApplication, QProcess, QSettings
 
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.integrations.automation.settings import ZoomSettingsStore
-from solin.core.integrations.automation.zoom.protocol import RAISED_HANDS
+from solin.core.integrations.automation.zoom.protocol import (
+    PLAYBACK_MICROPHONE,
+    PROTOCOL_VERSION,
+    RAISED_HANDS,
+)
 from solin.core.integrations.automation.zoom.service import ZoomService, _Request
 from solin.core.integrations.automation.zoom.state import (
     ParticipantAction,
@@ -186,6 +190,114 @@ def monitor(zoom_settings):
 
 def _reply(service, messages, **fields):
     service._receive({"id": messages[-1]["id"], **fields})
+
+
+_PLAYBACK_OWNER = [123, 456]
+
+
+def test_playback_microphone_reconciles_latest_state_after_pending_commands(
+    monitor, monkeypatch, zoom_settings,
+):
+    monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
+    service, messages = monitor
+    service.refresh()
+    service.set_media_playing(True)
+    service.set_mute_during_playback(True)
+    assert [message["command"] for message in messages] == ["meeting"]
+
+    _reply(service, messages, connected=True)
+    assert messages[-1]["command"] == PLAYBACK_MICROPHONE
+    assert messages[-1]["muted"] is True
+    assert not service.is_busy
+
+    service.set_media_playing(False)
+    service.set_media_playing(True)
+    service.set_media_playing(False)
+    assert len(messages) == 2
+    _reply(service, messages, owner=_PLAYBACK_OWNER)
+    assert messages[-1]["muted"] is False
+    _reply(service, messages, owner=None)
+    assert len(messages) == 3
+
+    service.set_media_playing(True)
+    assert messages[-1]["muted"] is True
+    _reply(service, messages, owner=_PLAYBACK_OWNER)
+    assert zoom_settings.mute_during_playback()
+    service.set_mute_during_playback(False)
+    assert messages[-1]["muted"] is False
+    _reply(service, messages, owner=None)
+    assert not zoom_settings.mute_during_playback()
+
+
+@pytest.mark.parametrize("playing_after_restart", [False, True])
+def test_cancelling_another_action_preserves_playback_mute_until_restored(
+    monitor, monkeypatch, playing_after_restart,
+):
+    monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
+    service, messages = monitor
+    service.refresh()
+    _reply(service, messages, connected=True)
+    service.set_mute_during_playback(True)
+    service.set_media_playing(True)
+    _reply(service, messages, owner=_PLAYBACK_OWNER)
+
+    worker = service._process
+    killed = []
+    worker.kill = lambda: killed.append(True)
+    worker.state = lambda: QProcess.ProcessState.Running
+    results = []
+    service.operation_finished.connect(results.append)
+    assert service.request_pre_meeting()
+    service.cancel()
+    assert killed == [True]
+    assert results == [SequenceResult("pre_meeting", cancelled=True)]
+
+    if not playing_after_restart:
+        service.set_media_playing(False)
+    replacement = SimpleNamespace(
+        write=worker.write,
+        state=lambda: QProcess.ProcessState.NotRunning,
+        deleteLater=lambda: None,
+        waitForFinished=lambda _: True,
+    )
+    monkeypatch.setattr(service, "_launch", lambda: setattr(service, "_process", replacement))
+    service.refresh()
+    service._receive({"ready": PROTOCOL_VERSION})
+    _reply(service, messages, connected=True)
+
+    if playing_after_restart:
+        assert messages[-1]["muted"] is True
+        assert messages[-1]["owner"] == _PLAYBACK_OWNER
+        _reply(service, messages, owner=_PLAYBACK_OWNER)
+        service.set_media_playing(False)
+    assert messages[-1]["command"] == PLAYBACK_MICROPHONE
+    assert messages[-1]["muted"] is False
+    assert messages[-1]["owner"] == _PLAYBACK_OWNER
+    _reply(service, messages, owner=None)
+
+    service.set_media_playing(True)
+    assert messages[-1]["owner"] is None
+
+
+def test_zoom_disable_releases_playback_worker_before_restarting(monitor, monkeypatch):
+    monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
+    service, messages = monitor
+    service.refresh()
+    _reply(service, messages, connected=True)
+    service.set_mute_during_playback(True)
+    service.set_media_playing(True)
+    _reply(service, messages, owner=_PLAYBACK_OWNER)
+
+    worker = service._process
+    events = []
+    worker.state = lambda: QProcess.ProcessState.Running
+    worker.closeWriteChannel = lambda: events.append("eof")
+    monkeypatch.setattr(service, "_launch", lambda: events.append("launch"))
+    service.stop()
+    service.start()
+    assert events == ["eof"]
+    service._exited(worker)
+    assert events == ["eof", "launch"]
 
 
 _REFERENCE = "12345678" * 4

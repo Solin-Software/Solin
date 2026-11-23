@@ -16,17 +16,35 @@ from typing import TYPE_CHECKING
 from .protocol import (
     MAX_MESSAGE_BYTES,
     PARTICIPANT_ACTIONS,
+    PLAYBACK_MICROPHONE,
     PROTOCOL_VERSION,
     RAISED_HANDS,
+    PlaybackMicrophoneOwner,
+    parse_playback_microphone_owner,
     valid_request,
 )
 from .sequences import run_sequence
 from .state import ParticipantAction, ZoomAutomationError
 
 if TYPE_CHECKING:
+    from .controls import ZoomControls
     from .native import WindowsDesktop
 
 log = logging.getLogger(__name__)
+
+
+def _set_playback_microphone(
+    controls: ZoomControls, muted: bool, owner: PlaybackMicrophoneOwner | None,
+) -> PlaybackMicrophoneOwner | None:
+    """Restore only a confirmed playback mute in the same meeting window."""
+    window = controls.window
+    meeting = (window.handle, window.pid)
+    owns_mute = owner == meeting
+    if not muted and not owns_mute:
+        return None
+    controls.begin_step()
+    changed = controls.set_microphone(not muted, disconnected_ok=True)
+    return meeting if muted and (changed or owns_mute) else None
 
 
 def _write(message: dict) -> None:
@@ -103,6 +121,8 @@ def main() -> int:
         desktop.user.SetThreadDpiAwarenessContext(ctypes.c_void_p(-4))
         automation = None
         hands = ZoomRaisedHands()
+        # Retain a local copy only to release the mute on a graceful EOF.
+        microphone_owner: PlaybackMicrophoneOwner | None = None
         _write({"ready": PROTOCOL_VERSION})
         while line := sys.stdin.buffer.readline(MAX_MESSAGE_BYTES + 1):
             if len(line) > MAX_MESSAGE_BYTES:
@@ -116,6 +136,8 @@ def main() -> int:
             request_id, command = request["id"], request["command"]
             started = time.perf_counter()
             reply: dict = {"id": request_id}
+            if command == PLAYBACK_MICROPHONE:
+                microphone_owner = parse_playback_microphone_owner(request["owner"])
             try:
                 if command == "meeting":
                     # While a connected monitor is active, the service sends
@@ -147,6 +169,12 @@ def main() -> int:
                             ),
                         )
                         reply["result"] = asdict(outcome)
+                    elif command == PLAYBACK_MICROPHONE:
+                        with _restore_input(desktop):
+                            microphone_owner = _set_playback_microphone(
+                                controls, request["muted"], microphone_owner,
+                            )
+                        reply["owner"] = microphone_owner
                     else:
                         with _restore_input(desktop):
                             outcome = run_sequence(
@@ -170,6 +198,17 @@ def main() -> int:
                 reply["error"] = "automation_failed"
             reply["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 3)
             _write(reply)
+        if microphone_owner is not None and automation is not None:
+            try:
+                with _restore_input(desktop):
+                    _set_playback_microphone(
+                        ZoomControls(desktop, automation), False, microphone_owner,
+                    )
+            except ZoomAutomationError as exc:
+                if exc.code != "meeting_not_found":
+                    log.warning("Could not restore Zoom microphone on exit: %s", exc.code)
+            except Exception:  # noqa: BLE001 - exit must release COM even if Zoom failed
+                log.exception("Could not restore Zoom microphone on exit")
     finally:
         if hands is not None:
             hands.clear()

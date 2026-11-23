@@ -10545,8 +10545,13 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Sinkronkan pemutaran dengan kontrol rapat.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Bisukan mikrofon saat pemutaran</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Bisukan mikrofon Zoom Anda saat Solin memutar audio atau video. Jika Solin yang membisukannya, aktifkan kembali mikrofon saat pemutaran dijeda atau berhenti.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

@@ -10545,8 +10545,13 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>再生をミーティングの操作と連動させます。</translation>
+        <source>Mute microphone during playback</source>
+        <translation>再生中にマイクをミュート</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Solin で音声や動画を再生している間、Zoom のマイクをミュートします。Solin がミュートした場合は、再生の一時停止または停止時にミュートを解除します。</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

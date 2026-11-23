@@ -467,6 +467,9 @@ class QuickAccessToolbar(QQuickWidget):
         if self._zoom:
             panel.cancel_requested.connect(self._zoom.cancel)
             panel.set_busy(self._zoom.is_busy)
+            self._zoom.mute_during_playback_changed.connect(panel.set_mute_during_playback)
+            panel.mute_during_playback_toggled.connect(self._zoom.set_mute_during_playback)
+            panel.set_mute_during_playback(self._zoom.mute_during_playback)
             if raised_hands_available:
                 self._zoom.raised_hands_changed.connect(panel.set_raised_hands_snapshot)
                 self._zoom.participant_action_finished.connect(panel.set_participant_action_result)

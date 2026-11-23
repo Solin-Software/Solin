@@ -10584,8 +10584,13 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Synkronisera uppspelningen med möteskontrollerna.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Stäng av mikrofonen under uppspelning</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Stänger av din Zoom-mikrofon medan Solin spelar upp ljud eller video. Om Solin stängde av mikrofonen slås den på igen när uppspelningen pausas eller stoppas.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

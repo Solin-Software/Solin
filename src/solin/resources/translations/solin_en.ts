@@ -9295,8 +9295,13 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Sync playback with meeting controls.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Mute microphone during playback</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

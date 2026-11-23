@@ -325,7 +325,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # States: "off" | "gate" | "ready"
         #   off   → normal video playback
         #   gate  → first 3.5s of media time: playing muted, controls locked
-        #   ready → paused unmuted, play enabled, slider locked
+        #   ready → paused with audio still suppressed, play enabled, slider locked
         self._announce_state: str = "off"
         self._announce_gate_ms: int = 3500
         self._announce_timer = QTimer(self)
@@ -1131,8 +1131,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             overlay.set_title(title)
 
     def _enter_mode(self, mode: str | None) -> None:
-        """End mode-specific timer work before changing projected content."""
+        """End the previous projection's timer and announcement work."""
         self._stop_timer_internals()
+        self._cancel_announcement_mode()
         if mode != "video":
             self.cancel_auto_share_playback_wait()
         self._mode = mode
@@ -1148,7 +1149,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def activate_video(self, title: str, keep_expanded: bool = False, is_audio: bool = False):
         self._ensure_overlay_ready()
         self.cancel_auto_share_playback_wait()
-        self._cancel_announcement_mode()
         self._is_audio = is_audio
         self._enter_mode("video")
         self._image_pixmap = None
@@ -1346,7 +1346,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def activate_live_stream(self, title: str, keep_expanded: bool = False):
         self._ensure_overlay_ready()
-        self._cancel_announcement_mode()
         self._enter_mode("live_stream")
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
@@ -1495,8 +1494,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         Called by MainWindow right before media_ctrl.start_playback().
         """
         self._announce_state = "gate"
-        # Mute audio immediately (before the playback request starts streaming)
-        self.media.set_volume(0.0)
+        self.media.set_audio_suppressed(True)
         # Lock play button and seek slider — close button remains active
         self.play_btn.setEnabled(False)
         self._sync_protected_media_controls()
@@ -1507,15 +1505,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._announce_timer.start()
 
     def _on_announce_gate_expired(self) -> None:
-        """
-        Gate target reached in media time → pause, then unmute after a delay.
-
-        The delay is intentional: Qt's audio pipeline may still be processing
-        the last decoded frame when pause() is called. Restoring the volume
-        immediately causes that residual frame to play back audibly (a chirp).
-        Waiting ~80 ms lets the pipeline fully settle into the paused/silent
-        state before the volume is brought back up.
-        """
+        """Pause on the announcement frame and keep audio suppressed until play."""
         if self._announce_state != "gate":
             return
         if self.media.position < self._announce_gate_ms:
@@ -1523,35 +1513,27 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._announce_timer.stop()
         self._announce_state = "ready"
         self.media.pause()
-        # Delay unmute so the audio pipeline drains before volume is restored
-        actual_vol = 0.0 if self._muted else self._volume
-        QTimer.singleShot(
-            80,
-            lambda: self.media.set_volume(actual_vol)
-                    if self._announce_state == "ready" else None,
-        )
         # Only play button is re-enabled; slider remains locked
         self.play_btn.setEnabled(not self._auto_share_playback_waiting)
         self._sync_protected_media_controls()
         self._sync_fullscreen_media_controls()
 
     def _on_play_btn_clicked(self) -> None:
-        """
-        Central dispatcher for the play/pause button.
-        In READY state: seek to 0, release slider lock, start playback.
-        Otherwise: emit toggle_requested as usual.
-        """
-        if self._auto_share_playback_waiting:
+        if self._auto_share_playback_waiting or self._announce_state == "gate":
             return
         if self._announce_state == "ready":
+            self.resume_playback()
+        else:
+            self.toggle_requested.emit()
+
+    def resume_playback(self) -> None:
+        """Resume playback, restarting a prepared song with its configured audio."""
+        if self._announce_state == "ready":
             self._announce_state = "off"
-            # Unlock seek slider before seeking (setPosition fires positionChanged)
             self.media.seek(0)
-            self.media.play()
             self._sync_protected_media_controls()
-            self._sync_fullscreen_media_controls()
-            return
-        self.toggle_requested.emit()
+            self.media.set_audio_suppressed(False)
+        self.media.play()
 
     def _cancel_announcement_mode(self) -> None:
         """Aborts announcement mode and restores controls unconditionally."""
@@ -1559,16 +1541,13 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             return
         self._announce_timer.stop()
         self._announce_state = "off"
-        # Restore volume
-        actual_vol = 0.0 if self._muted else self._volume
-        self.media.set_volume(actual_vol)
+        self.media.set_audio_suppressed(False)
         # Restore controls
         self.play_btn.setEnabled(not self._auto_share_playback_waiting)
         self._sync_protected_media_controls()
         self._sync_fullscreen_media_controls()
 
     def deactivate(self):
-        self._cancel_announcement_mode()
         self._reset_app_fullscreen()
         self._enter_mode(None)
         self._image_pixmap = None

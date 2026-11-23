@@ -18,10 +18,24 @@ from .state import (
 )
 
 RAISED_HANDS = "raised_hands"
+PLAYBACK_MICROPHONE = "playback_microphone"
 PARTICIPANT_ACTIONS = frozenset(action.value for action in ParticipantAction)
-_COMMANDS = SEQUENCES | PARTICIPANT_ACTIONS | {"meeting", "inspect", RAISED_HANDS}
+_COMMANDS = SEQUENCES | PARTICIPANT_ACTIONS | {"meeting", "inspect", RAISED_HANDS, PLAYBACK_MICROPHONE}
 MAX_MESSAGE_BYTES = 64 * 1024
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
+
+type PlaybackMicrophoneOwner = tuple[int, int]
+
+
+def parse_playback_microphone_owner(value: object) -> PlaybackMicrophoneOwner | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or len(value) != 2:
+        raise ValueError("Invalid playback microphone owner")
+    handle, pid = value
+    if type(handle) is not int or handle <= 0 or type(pid) is not int or pid <= 0:
+        raise ValueError("Invalid playback microphone owner")
+    return handle, pid
 
 
 def valid_reference(value: object) -> bool:
@@ -39,6 +53,14 @@ def valid_request(request: object) -> bool:
     fields = {"id", "command"}
     if command == RAISED_HANDS:
         return set(request) == fields | {"open_panel"} and type(request["open_panel"]) is bool
+    if command == PLAYBACK_MICROPHONE:
+        if set(request) != fields | {"muted", "owner"} or type(request["muted"]) is not bool:
+            return False
+        try:
+            parse_playback_microphone_owner(request["owner"])
+        except ValueError:
+            return False
+        return True
     if command in PARTICIPANT_ACTIONS:
         return set(request) == fields | {"reference"} and valid_reference(request["reference"])
     return set(request) == fields

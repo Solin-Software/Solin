@@ -416,6 +416,20 @@ def toolbar_host(request, settings, tmp_path, scene_workspace_factory, monkeypat
 
 
 @pytest.mark.parametrize("toolbar_host", [True], indirect=True)
+def test_zoom_popup_restores_and_persists_playback_microphone_preference(toolbar_host, settings):
+    _parent, toolbar = toolbar_host
+    service = toolbar._zoom
+    service.set_mute_during_playback(True)
+    toolbar._on_zoom_clicked()
+    panel = toolbar._zoom_panel
+    assert panel._playback_mute.isVisible() and panel._playback_mute.isChecked()
+    panel._playback_mute.click()
+    assert not service.mute_during_playback
+    assert not ZoomSettingsStore(settings.settings).mute_during_playback()
+    panel.hide()
+
+
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
 def test_zoom_toolbar_popup_controls_raised_hands(toolbar_host, monkeypatch):
     _parent, toolbar = toolbar_host
     service = toolbar._zoom
@@ -731,13 +745,11 @@ def test_zoom_remains_available_without_an_open_meeting(toolbar_host, settings):
     assert not toolbar._zoom_panel.isVisible()
 
 
-def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host):
-    from unittest.mock import Mock
-
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
+def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host, monkeypatch):
     _parent, toolbar = toolbar_host
-    toolbar._zoom = SimpleNamespace(
-        request_pre_meeting=Mock(), cancel=Mock(), is_busy=False, raised_hands_available=False,
-    )
+    dispatched = []
+    monkeypatch.setattr(toolbar._zoom, "request_pre_meeting", lambda: dispatched.append(True))
     before = QSignalSpy(toolbar.zoom_before_meeting_requested)
     start = QSignalSpy(toolbar.zoom_meeting_start_requested)
     finish = QSignalSpy(toolbar.zoom_after_meeting_requested)
@@ -754,7 +766,7 @@ def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host):
     panel._after.click()
     assert before.count() == 2
     assert finish.count() == 1
-    toolbar._zoom.request_pre_meeting.assert_not_called()
+    assert dispatched == []
 
 
 @pytest.mark.parametrize(
@@ -769,11 +781,11 @@ def test_zoom_popup_relays_meeting_actions_to_the_coordinator(toolbar_host):
         (True, [AutoKeyAction("after", EVENT_ZOOM_AFTER_MEETING, "Ctrl+1")], True),
     ],
 )
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
 def test_zoom_popup_adapts_to_enabled_automatic_shortcuts(
     toolbar_host, global_enabled, configured_actions, split,
 ):
     _parent, toolbar = toolbar_host
-    toolbar._zoom = SimpleNamespace(is_busy=False, cancel=lambda: None, raised_hands_available=False)
     toolbar.set_zoom_enabled(True)
     toolbar._auto_key_settings.set_enabled(global_enabled)
     toolbar._auto_key_settings.save_actions(configured_actions)
@@ -788,9 +800,9 @@ def test_zoom_popup_adapts_to_enabled_automatic_shortcuts(
     panel.hide()
 
 
+@pytest.mark.parametrize("toolbar_host", [True], indirect=True)
 def test_zoom_popup_rechecks_actions_and_global_switch_on_each_open(toolbar_host):
     _parent, toolbar = toolbar_host
-    toolbar._zoom = SimpleNamespace(is_busy=False, cancel=lambda: None, raised_hands_available=False)
     toolbar.set_zoom_enabled(True)
     store = toolbar._auto_key_settings
 

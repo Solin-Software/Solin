@@ -230,9 +230,13 @@ def test_popup_disables_actions_without_meeting_and_during_operation():
         assert not panel._cancel.isHidden()
         panel.set_busy(False)
         panel.set_background_song_link(True, True)
-        assert not panel._integration.isHidden() and panel._link.isChecked()
+        assert not panel._link.isHidden() and panel._link.isChecked()
+        assert panel._link.geometry().top() < panel._playback_mute.geometry().top()
+        assert not panel._link.accessibleDescription()
+        assert not panel._playback_mute.accessibleDescription()
+        assert panel._link.toolTip() and panel._playback_mute.toolTip()
         panel.set_background_song_link(False, False)
-        assert panel._integration.isHidden()
+        assert panel._link.isHidden() and not panel._playback_mute.isHidden()
     finally:
         panel.deleteLater()
 

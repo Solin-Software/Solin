@@ -10585,8 +10585,13 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Synchroniseer het afspelen met de vergaderbediening.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Microfoon dempen tijdens afspelen</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Dempt je Zoom-microfoon terwijl Solin audio of video afspeelt. Als Solin de microfoon heeft gedempt, heft Solin de demping op zodra het afspelen pauzeert of stopt.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

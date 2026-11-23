@@ -10585,8 +10585,13 @@ Dapat nakakonekta ang dalawang device sa iisang Wi-Fi network.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>I-sync ang pag-play sa mga kontrol ng pulong.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>I-mute ang mikropono habang nagpe-play</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Imi-mute ang mikropono mo sa Zoom habang nagpe-play ng audio o video ang Solin. Kung Solin ang nag-mute nito, ia-unmute ito kapag na-pause o huminto ang pag-play.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
