@@ -6,7 +6,6 @@ import pytest
 
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.onboarding.application import (
-    OBSOnboardingConfiguration,
     OnboardingService,
     ProfileOnboardingCommand,
     ZoomShareOnboardingConfiguration,
@@ -153,13 +152,11 @@ def test_complete_onboarding_applies_settings_then_activates_profile(tmp_path):
         name="Central Hall",
         interface_language="pt_BR",
         media_language="T",
-        obs=OBSOnboardingConfiguration(
+        zoom_share=ZoomShareOnboardingConfiguration(
             enabled=True,
-            port=4455,
-            password="secret",
-            automatic_scene_switching=True,
-            default_scene="Default",
-            media_scene="Media",
+            hotkey="Ctrl+Shift+S",
+            click_x=300,
+            click_y=250,
         ),
     )
 
@@ -221,38 +218,6 @@ def test_delete_rolls_back_staged_data_when_registry_save_fails(tmp_path):
     assert storage.deleted == []
 
 
-def test_enabled_obs_configuration_rejects_invalid_port():
-    with pytest.raises(ValueError, match="between 1 and 65535"):
-        OBSOnboardingConfiguration(enabled=True, port=0)
-
-
-@pytest.mark.parametrize(
-    ("default_scene", "media_scene", "message"),
-    [
-        ("", "Media", "requires both scenes"),
-        ("Default", "", "requires both scenes"),
-        ("Same", "Same", "must be different"),
-    ],
-)
-def test_automatic_obs_configuration_requires_distinct_scenes(
-    default_scene,
-    media_scene,
-    message,
-):
-    with pytest.raises(ValueError, match=message):
-        OBSOnboardingConfiguration(
-            enabled=True,
-            automatic_scene_switching=True,
-            default_scene=default_scene,
-            media_scene=media_scene,
-        )
-
-
-def test_automatic_obs_configuration_requires_obs():
-    with pytest.raises(ValueError, match="requires OBS"):
-        OBSOnboardingConfiguration(automatic_scene_switching=True)
-
-
 @pytest.mark.parametrize(
     ("hotkey", "click_x", "click_y", "message"),
     [
@@ -285,3 +250,47 @@ def test_zoom_share_configuration_normalizes_hotkey():
     )
 
     assert configuration.hotkey == "Ctrl+Shift+S"
+
+
+def test_onboarding_can_retry_after_settings_failure_without_duplicate_profile(tmp_path):
+    setup = _Setup(fail=True)
+    profiles, registry, storage, preferences = _service(tmp_path)
+    onboarding = OnboardingService(profiles, setup)
+    command = ProfileOnboardingCommand("Main Hall", "en")
+
+    with pytest.raises(RuntimeError, match="setup failed"):
+        onboarding.complete(command)
+
+    assert profiles.active_id == ""
+    assert preferences.last_active == ""
+    setup.fail = False
+    profile = onboarding.complete(command)
+
+    assert profile.id == "main_hall"
+    assert [item.id for item in profiles.profiles] == [profile.id]
+    assert setup.commands == [(profile.id, command), (profile.id, command)]
+    assert registry.current == [profile]
+    assert storage.deleted == [profile.id]
+    assert preferences.last_active == profile.id
+
+
+def test_onboarding_command_normalizes_profile_choices_without_integration_opt_in():
+    command = ProfileOnboardingCommand(
+        name="  Main Hall  ",
+        interface_language="  ",
+        media_language=" E ",
+    )
+
+    assert command.name == "Main Hall"
+    assert command.interface_language == "en"
+    assert command.media_language == "E"
+    assert command.zoom_share.enabled is False
+    assert not hasattr(command, "obs")
+
+
+def test_disabled_zoom_share_allows_unconfigured_target():
+    configuration = ZoomShareOnboardingConfiguration()
+
+    assert configuration.enabled is False
+    assert configuration.hotkey == ""
+    assert configuration.click_x == configuration.click_y == -1

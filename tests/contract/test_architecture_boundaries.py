@@ -1729,14 +1729,6 @@ def test_shutdown_controller_receives_pending_deletion_queue():
     assert "queue_pending_deletion" in source
 
 
-def test_onboarding_obs_probe_receives_obs_service_factory():
-    path = PROJECT_ROOT / "src" / "solin" / "controllers" / "onboarding_obs_probe.py"
-    source = path.read_text(encoding="utf-8")
-
-    assert "OBSWebSocketService" not in source
-    assert "obs_service_factory" in source
-
-
 def test_onboarding_settings_adapter_receives_profile_store_factory():
     path = PROJECT_ROOT / "src" / "solin" / "core" / "onboarding" / "infrastructure.py"
     source = path.read_text(encoding="utf-8")

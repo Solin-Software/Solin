@@ -79,10 +79,7 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
     from solin.core.meetings.content_policy import MeetingContentPolicy
     from solin.core.profiles.infrastructure import create_local_profile_service
     from solin.core.onboarding.application import OnboardingService
-    from solin.core.integrations.automation.settings import (
-        AutoShareSettingsStore,
-        OBSSettingsStore,
-    )
+    from solin.core.integrations.automation.settings import AutoShareSettingsStore
     from solin.core.media.settings import MediaSettingsStore
     from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
     from solin.core.onboarding.infrastructure import (
@@ -132,7 +129,6 @@ def initialize_application_container(app, config: AppConfig) -> ApplicationConta
             background_song_settings=(
                 BackgroundSongSettingsStore.for_profile_settings(settings)
             ),
-            obs_settings=OBSSettingsStore.for_profile_settings(settings),
             auto_share_settings=AutoShareSettingsStore.for_profile_settings(settings),
         )
 

@@ -3505,12 +3505,12 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Välj ett alternativ, båda, eller ställ in dem senare.</translation>
+        <translation type="vanished">Välj ett alternativ, båda, eller ställ in dem senare.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Styr scener och kameror från Solin.</translation>
+        <translation type="vanished">Styr scener och kameror från Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3525,67 +3525,67 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Anslut OBS Studio</translation>
+        <translation type="vanished">Anslut OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Använd OBS-scener och kameror från Solin. Automatiskt byte är valfritt.</translation>
+        <translation type="vanished">Använd OBS-scener och kameror från Solin. Automatiskt byte är valfritt.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket-port</translation>
+        <translation type="vanished">WebSocket-port</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Lösenord (valfritt)</translation>
+        <translation type="vanished">Lösenord (valfritt)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Ansluter…</translation>
+        <translation type="vanished">Ansluter…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Anslut</translation>
+        <translation type="vanished">Anslut</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Behöver du hjälp med att ställa in OBS?</translation>
+        <translation type="vanished">Behöver du hjälp med att ställa in OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Automatiskt scenbyte</translation>
+        <translation type="vanished">Automatiskt scenbyte</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin byter scener medan media projiceras.</translation>
+        <translation type="vanished">Solin byter scener medan media projiceras.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Manuell kontroll av scener och kameror finns fortfarande.</translation>
+        <translation type="vanished">Manuell kontroll av scener och kameror finns fortfarande.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Standardscen</translation>
+        <translation type="vanished">Standardscen</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Mediescen</translation>
+        <translation type="vanished">Mediescen</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>Ställ in OBS senare</translation>
+        <translation type="vanished">Ställ in OBS senare</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3683,12 +3683,12 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Ansluten · automatiskt scenbyte</translation>
+        <translation type="vanished">Ansluten · automatiskt scenbyte</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Ansluten · manuella kontroller</translation>
+        <translation type="vanished">Ansluten · manuella kontroller</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3703,7 +3703,7 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Välj en scen</translation>
+        <translation type="vanished">Välj en scen</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3738,7 +3738,7 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Ange en port mellan 1 och 65535.</translation>
+        <translation type="vanished">Ange en port mellan 1 och 65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3753,17 +3753,17 @@ Mappen och dess synliga filer behålls.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Anslut till OBS eller välj Ställ in senare.</translation>
+        <translation type="vanished">Anslut till OBS eller välj Ställ in senare.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Välj båda OBS-scenerna.</translation>
+        <translation type="vanished">Välj båda OBS-scenerna.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Välj två olika OBS-scener.</translation>
+        <translation type="vanished">Välj två olika OBS-scener.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3819,6 +3819,38 @@ Mappen och dess synliga filer behålls.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Installera xdotool för att använda automatisk delning.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Solin-scener ingår. Automatisk skärmdelning i Zoom är valfritt.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Solin-scener</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Kombinera kameror och media till scener för dina möten.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>När du har skapat din profil öppnar du fliken Scener för att konfigurera kameror, källor och PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>För de flesta uppsättningar räcker Solin-scener med %1.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Ingår · konfigurera kameror i Scener</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Installera och aktivera tillägget för OBS virtuella kamera för att använda den.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Kräver v4l2loopback på Linux; kamerans namn kan variera beroende på konfigurationen.</translation>
     </message>
 </context>
 <context>

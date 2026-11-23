@@ -3523,12 +3523,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Виберіть один варіант, обидва або налаштуйте їх пізніше.</translation>
+        <translation type="vanished">Виберіть один варіант, обидва або налаштуйте їх пізніше.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Керуйте сценами й камерами із Solin.</translation>
+        <translation type="vanished">Керуйте сценами й камерами із Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3543,67 +3543,67 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Підключити OBS Studio</translation>
+        <translation type="vanished">Підключити OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Використовуйте сцени й камери OBS із Solin. Автоматичне перемикання необов’язкове.</translation>
+        <translation type="vanished">Використовуйте сцени й камери OBS із Solin. Автоматичне перемикання необов’язкове.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>Порт WebSocket</translation>
+        <translation type="vanished">Порт WebSocket</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Пароль (необов’язково)</translation>
+        <translation type="vanished">Пароль (необов’язково)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Підключення…</translation>
+        <translation type="vanished">Підключення…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Підключити</translation>
+        <translation type="vanished">Підключити</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Потрібна допомога з налаштуванням OBS?</translation>
+        <translation type="vanished">Потрібна допомога з налаштуванням OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Автоматичне перемикання сцен</translation>
+        <translation type="vanished">Автоматичне перемикання сцен</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin перемикає сцени під час проєктування медіа.</translation>
+        <translation type="vanished">Solin перемикає сцени під час проєктування медіа.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Ручне керування сценами й камерами залишається доступним.</translation>
+        <translation type="vanished">Ручне керування сценами й камерами залишається доступним.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Сцена за замовчуванням</translation>
+        <translation type="vanished">Сцена за замовчуванням</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Медіасцена</translation>
+        <translation type="vanished">Медіасцена</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>Налаштувати OBS пізніше</translation>
+        <translation type="vanished">Налаштувати OBS пізніше</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3701,12 +3701,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Підключено · автоматичне перемикання сцен</translation>
+        <translation type="vanished">Підключено · автоматичне перемикання сцен</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Підключено · ручне керування</translation>
+        <translation type="vanished">Підключено · ручне керування</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3721,7 +3721,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Виберіть сцену</translation>
+        <translation type="vanished">Виберіть сцену</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3756,7 +3756,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Введіть порт від 1 до 65535.</translation>
+        <translation type="vanished">Введіть порт від 1 до 65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3771,17 +3771,17 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Підключіться до OBS або виберіть Налаштувати пізніше.</translation>
+        <translation type="vanished">Підключіться до OBS або виберіть Налаштувати пізніше.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Виберіть обидві сцени OBS.</translation>
+        <translation type="vanished">Виберіть обидві сцени OBS.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Виберіть дві різні сцени OBS.</translation>
+        <translation type="vanished">Виберіть дві різні сцени OBS.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3837,6 +3837,38 @@ The folder and its visible files will be kept.</source>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Установіть xdotool, щоб використовувати автоматичну демонстрацію.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Сцени Solin уже включено. Автоматична демонстрація екрана в Zoom необов’язкова.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Сцени Solin</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Поєднуйте камери й медіафайли у сцени для ваших зібрань.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Після створення профілю відкрийте вкладку «Сцени», щоб налаштувати камери, джерела та PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Для більшості конфігурацій достатньо Сцен Solin із %1.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Включено · налаштуйте камери на вкладці «Сцени»</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Установіть і ввімкніть розширення віртуальної камери OBS, щоб користуватися нею.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>У Linux потрібен v4l2loopback; назва камери може відрізнятися залежно від його налаштувань.</translation>
     </message>
 </context>
 <context>

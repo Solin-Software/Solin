@@ -10,31 +10,6 @@ from solin.core.profiles.models import ProfileInfo, normalize_profile_name
 
 
 @dataclass(frozen=True, slots=True)
-class OBSOnboardingConfiguration:
-    enabled: bool = False
-    port: int = 4455
-    password: str = ""
-    automatic_scene_switching: bool = False
-    default_scene: str = ""
-    media_scene: str = ""
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "default_scene", self.default_scene.strip())
-        object.__setattr__(self, "media_scene", self.media_scene.strip())
-        if self.enabled and not 1 <= self.port <= 65535:
-            raise ValueError("OBS WebSocket port must be between 1 and 65535.")
-        if self.automatic_scene_switching and not self.enabled:
-            raise ValueError("Automatic OBS scene switching requires OBS.")
-        if self.automatic_scene_switching:
-            if not self.default_scene or not self.media_scene:
-                raise ValueError(
-                    "Automatic OBS scene switching requires both scenes."
-                )
-            if self.default_scene == self.media_scene:
-                raise ValueError("OBS scenes must be different.")
-
-
-@dataclass(frozen=True, slots=True)
 class ZoomShareOnboardingConfiguration:
     enabled: bool = False
     hotkey: str = ""
@@ -56,9 +31,6 @@ class ProfileOnboardingCommand:
     media_language: str = ""
     download_meeting_media: bool = False
     meeting_schedule: MeetingSchedule | None = None
-    obs: OBSOnboardingConfiguration = field(
-        default_factory=OBSOnboardingConfiguration
-    )
     zoom_share: ZoomShareOnboardingConfiguration = field(
         default_factory=ZoomShareOnboardingConfiguration
     )

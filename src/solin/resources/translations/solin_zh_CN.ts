@@ -3487,12 +3487,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>选择一个、两个都选，或稍后再设置。</translation>
+        <translation type="vanished">选择一个、两个都选，或稍后再设置。</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>从 Solin 控制场景和摄像头。</translation>
+        <translation type="vanished">从 Solin 控制场景和摄像头。</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3507,67 +3507,67 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>连接 OBS Studio</translation>
+        <translation type="vanished">连接 OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>从 Solin 使用 OBS 场景和摄像头。自动切换是可选的。</translation>
+        <translation type="vanished">从 Solin 使用 OBS 场景和摄像头。自动切换是可选的。</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket 端口</translation>
+        <translation type="vanished">WebSocket 端口</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>密码（可选）</translation>
+        <translation type="vanished">密码（可选）</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>正在连接…</translation>
+        <translation type="vanished">正在连接…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>连接</translation>
+        <translation type="vanished">连接</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>需要 OBS 设置帮助？</translation>
+        <translation type="vanished">需要 OBS 设置帮助？</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>自动切换场景</translation>
+        <translation type="vanished">自动切换场景</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>投影媒体时，Solin 会切换场景。</translation>
+        <translation type="vanished">投影媒体时，Solin 会切换场景。</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>仍可手动控制场景和摄像头。</translation>
+        <translation type="vanished">仍可手动控制场景和摄像头。</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>默认场景</translation>
+        <translation type="vanished">默认场景</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>媒体场景</translation>
+        <translation type="vanished">媒体场景</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>稍后设置 OBS</translation>
+        <translation type="vanished">稍后设置 OBS</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3665,12 +3665,12 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>已连接 · 自动切换场景</translation>
+        <translation type="vanished">已连接 · 自动切换场景</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>已连接 · 手动控制</translation>
+        <translation type="vanished">已连接 · 手动控制</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3685,7 +3685,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>选择场景</translation>
+        <translation type="vanished">选择场景</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3720,7 +3720,7 @@ The folder and its visible files will be kept.</source>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>请输入 1 到 65535 之间的端口。</translation>
+        <translation type="vanished">请输入 1 到 65535 之间的端口。</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3735,17 +3735,17 @@ The folder and its visible files will be kept.</source>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>请连接到 OBS，或选择稍后设置。</translation>
+        <translation type="vanished">请连接到 OBS，或选择稍后设置。</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>请选择两个 OBS 场景。</translation>
+        <translation type="vanished">请选择两个 OBS 场景。</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>请选择两个不同的 OBS 场景。</translation>
+        <translation type="vanished">请选择两个不同的 OBS 场景。</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3801,6 +3801,38 @@ The folder and its visible files will be kept.</source>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>安装 xdotool 以使用自动共享。</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Solin 场景功能已包含在内。Zoom 自动画面共享是可选功能。</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Solin 场景</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>将摄像机和媒体组合成场景，用于聚会。</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>创建配置文件后，打开“场景”选项卡以配置摄像机、来源和 PTZ。</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>对于大多数配置，Solin 场景配合 %1 就已足够。</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>已包含 · 在“场景”中配置摄像机</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>请安装并启用 OBS 虚拟摄像机扩展以使用它。</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Linux 上需要 v4l2loopback；摄像机名称可能因其配置而异。</translation>
     </message>
 </context>
 <context>

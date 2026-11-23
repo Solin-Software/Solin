@@ -3505,12 +3505,12 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Valitse yksi vaihtoehto, molemmat tai määritä ne myöhemmin.</translation>
+        <translation type="vanished">Valitse yksi vaihtoehto, molemmat tai määritä ne myöhemmin.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Ohjaa kohtauksia ja kameroita Solinista.</translation>
+        <translation type="vanished">Ohjaa kohtauksia ja kameroita Solinista.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3525,67 +3525,67 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Yhdistä OBS Studio</translation>
+        <translation type="vanished">Yhdistä OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Käytä OBS-kohtauksia ja kameroita Solinista. Automaattinen vaihto on valinnainen.</translation>
+        <translation type="vanished">Käytä OBS-kohtauksia ja kameroita Solinista. Automaattinen vaihto on valinnainen.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>WebSocket-portti</translation>
+        <translation type="vanished">WebSocket-portti</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Salasana (valinnainen)</translation>
+        <translation type="vanished">Salasana (valinnainen)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Yhdistetään…</translation>
+        <translation type="vanished">Yhdistetään…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Yhdistä</translation>
+        <translation type="vanished">Yhdistä</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Tarvitsetko apua OBS:n käyttöönotossa?</translation>
+        <translation type="vanished">Tarvitsetko apua OBS:n käyttöönotossa?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Automaattinen kohtausten vaihto</translation>
+        <translation type="vanished">Automaattinen kohtausten vaihto</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin vaihtaa kohtauksia, kun mediaa projisoidaan.</translation>
+        <translation type="vanished">Solin vaihtaa kohtauksia, kun mediaa projisoidaan.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Kohtausten ja kameroiden manuaaliset ohjaimet pysyvät käytettävissä.</translation>
+        <translation type="vanished">Kohtausten ja kameroiden manuaaliset ohjaimet pysyvät käytettävissä.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Oletuskohtaus</translation>
+        <translation type="vanished">Oletuskohtaus</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Mediakohtaus</translation>
+        <translation type="vanished">Mediakohtaus</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>Määritä OBS myöhemmin</translation>
+        <translation type="vanished">Määritä OBS myöhemmin</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3683,12 +3683,12 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Yhdistetty · automaattinen kohtausten vaihto</translation>
+        <translation type="vanished">Yhdistetty · automaattinen kohtausten vaihto</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Yhdistetty · manuaaliset ohjaimet</translation>
+        <translation type="vanished">Yhdistetty · manuaaliset ohjaimet</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3703,7 +3703,7 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Valitse kohtaus</translation>
+        <translation type="vanished">Valitse kohtaus</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3738,7 +3738,7 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Anna portti väliltä 1–65535.</translation>
+        <translation type="vanished">Anna portti väliltä 1–65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3753,17 +3753,17 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Yhdistä OBS:ään tai valitse Määritä myöhemmin.</translation>
+        <translation type="vanished">Yhdistä OBS:ään tai valitse Määritä myöhemmin.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Valitse molemmat OBS-kohtaukset.</translation>
+        <translation type="vanished">Valitse molemmat OBS-kohtaukset.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Valitse kaksi eri OBS-kohtausta.</translation>
+        <translation type="vanished">Valitse kaksi eri OBS-kohtausta.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3819,6 +3819,38 @@ Kansio ja sen näkyvät tiedostot säilytetään.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Asenna xdotool käyttääksesi automaattista jakamista.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Solinin näkymät sisältyvät sovellukseen. Automaattinen näytönjako Zoomissa on valinnainen.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Solinin näkymät</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Yhdistä kameroita ja mediaa näkymiksi kokouksiasi varten.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Kun olet luonut profiilin, avaa Näkymät-välilehti ja määritä kamerat, lähteet ja PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Useimpiin kokoonpanoihin riittävät Solinin näkymät ja %1.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Sisältyy sovellukseen · määritä kamerat Näkymät-välilehdellä</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Asenna ja ota käyttöön OBS:n virtuaalikameralaajennus, jotta voit käyttää sitä.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Vaatii Linuxissa v4l2loopbackin; kameran nimi voi vaihdella sen määritysten mukaan.</translation>
     </message>
 </context>
 <context>

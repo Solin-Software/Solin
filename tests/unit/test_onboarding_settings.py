@@ -9,7 +9,6 @@ from solin.core.meetings.schedule import (
     MeetingSlot,
 )
 from solin.core.onboarding.application import (
-    OBSOnboardingConfiguration,
     ProfileOnboardingCommand,
     ZoomShareOnboardingConfiguration,
 )
@@ -51,22 +50,6 @@ class _MeetingScheduleSettings:
         self.slots[kind] = (weekday, time_text)
 
 
-class _OBSSettings:
-    def __init__(self) -> None:
-        self.enabled = False
-        self.connection = None
-        self.scenes = None
-
-    def set_enabled(self, enabled: bool) -> None:
-        self.enabled = enabled
-
-    def set_connection(self, port: int, password: str) -> None:
-        self.connection = (port, password)
-
-    def set_scenes(self, default_scene: str, media_scene: str) -> None:
-        self.scenes = (default_scene, media_scene)
-
-
 class _BackgroundSongSettings:
     def __init__(self, enabled: bool = False) -> None:
         self.enabled = enabled
@@ -96,7 +79,6 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
     media_language_settings = _MediaLanguageSettings()
     media_settings = _MediaSettings()
     meeting_schedule_settings = _MeetingScheduleSettings()
-    obs_settings = _OBSSettings()
     auto_share_settings = _AutoShareSettings()
     requested_profiles = []
 
@@ -109,7 +91,6 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
                 media_settings=media_settings,
                 meeting_schedule_settings=meeting_schedule_settings,
                 background_song_settings=_BackgroundSongSettings(),
-                obs_settings=obs_settings,
                 auto_share_settings=auto_share_settings,
             )
         )
@@ -125,14 +106,6 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
             meeting_schedule=MeetingSchedule(
                 midweek=MeetingSlot.from_values(MIDWEEK, 2, "19:45"),
                 weekend=MeetingSlot.from_values(WEEKEND, 6, "10:00"),
-            ),
-            obs=OBSOnboardingConfiguration(
-                enabled=True,
-                port=4456,
-                password="secret",
-                automatic_scene_switching=True,
-                default_scene="Default",
-                media_scene="Media",
             ),
             zoom_share=ZoomShareOnboardingConfiguration(
                 enabled=True,
@@ -151,16 +124,12 @@ def test_qsettings_onboarding_settings_uses_injected_profile_stores():
         MIDWEEK: (2, "19:45"),
         WEEKEND: (6, "10:00"),
     }
-    assert obs_settings.enabled is True
-    assert obs_settings.connection == (4456, "secret")
-    assert obs_settings.scenes == ("Default", "Media")
     assert auto_share_settings.enabled is True
     assert auto_share_settings.hotkey == "Ctrl+Shift+S"
     assert auto_share_settings.click_position == (300, 250)
 
 
-def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
-    obs_settings = _OBSSettings()
+def test_qsettings_onboarding_settings_defaults_zoom_sharing_to_disabled():
     auto_share_settings = _AutoShareSettings()
     media_settings = _MediaSettings()
     meeting_schedule_settings = _MeetingScheduleSettings()
@@ -171,7 +140,6 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
             media_settings=media_settings,
             meeting_schedule_settings=meeting_schedule_settings,
             background_song_settings=_BackgroundSongSettings(),
-            obs_settings=obs_settings,
             auto_share_settings=auto_share_settings,
         )
     )
@@ -181,19 +149,11 @@ def test_qsettings_onboarding_settings_keeps_optional_integrations_disabled():
         ProfileOnboardingCommand(
             name="Main Hall",
             interface_language="en",
-            obs=OBSOnboardingConfiguration(
-                enabled=True,
-                automatic_scene_switching=False,
-                default_scene="Ignored",
-                media_scene="Ignored",
-            ),
         ),
     )
 
     assert media_settings.meetings_auto_download is False
     assert meeting_schedule_settings.slots == {}
-    assert obs_settings.enabled is True
-    assert obs_settings.scenes == ("", "")
     assert auto_share_settings.enabled is False
     assert auto_share_settings.hotkey == ""
     assert auto_share_settings.click_position is None
@@ -246,7 +206,6 @@ def test_onboarding_enables_background_song_only_with_configured_schedule(
             media_settings=_MediaSettings(),
             meeting_schedule_settings=_MeetingScheduleSettings(),
             background_song_settings=background_song_settings,
-            obs_settings=_OBSSettings(),
             auto_share_settings=_AutoShareSettings(),
         )
     )

@@ -3505,12 +3505,12 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location line="+1"/>
         <source>Choose one option, both, or set them up later.</source>
-        <translation>Chagua chaguo moja, zote mbili, au uzisanidi baadaye.</translation>
+        <translation type="vanished">Chagua chaguo moja, zote mbili, au uzisanidi baadaye.</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Control scenes and cameras from Solin.</source>
-        <translation>Dhibiti maonyesho na kamera kutoka Solin.</translation>
+        <translation type="vanished">Dhibiti maonyesho na kamera kutoka Solin.</translation>
     </message>
     <message>
         <location line="+11"/>
@@ -3525,67 +3525,67 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location line="+27"/>
         <source>Connect OBS Studio</source>
-        <translation>Unganisha OBS Studio</translation>
+        <translation type="vanished">Unganisha OBS Studio</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Use OBS scenes and cameras from Solin. Automatic switching is optional.</source>
-        <translation>Tumia maonyesho na kamera za OBS kutoka Solin. Kubadilisha kiotomatiki ni hiari.</translation>
+        <translation type="vanished">Tumia maonyesho na kamera za OBS kutoka Solin. Kubadilisha kiotomatiki ni hiari.</translation>
     </message>
     <message>
         <location line="+14"/>
         <source>WebSocket port</source>
-        <translation>Mlango wa WebSocket</translation>
+        <translation type="vanished">Mlango wa WebSocket</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Password (optional)</source>
-        <translation>Nenosiri (hiari)</translation>
+        <translation type="vanished">Nenosiri (hiari)</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Connecting…</source>
-        <translation>Inaunganisha…</translation>
+        <translation type="vanished">Inaunganisha…</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Connect</source>
-        <translation>Unganisha</translation>
+        <translation type="vanished">Unganisha</translation>
     </message>
     <message>
         <location line="+16"/>
         <source>Need help setting up OBS?</source>
-        <translation>Unahitaji msaada kusanidi OBS?</translation>
+        <translation type="vanished">Unahitaji msaada kusanidi OBS?</translation>
     </message>
     <message>
         <location line="+29"/>
         <source>Automatic scene switching</source>
-        <translation>Kubadilisha maonyesho kiotomatiki</translation>
+        <translation type="vanished">Kubadilisha maonyesho kiotomatiki</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Solin switches scenes while media is projected.</source>
-        <translation>Solin hubadilisha maonyesho wakati midia inaonyeshwa.</translation>
+        <translation type="vanished">Solin hubadilisha maonyesho wakati midia inaonyeshwa.</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Manual scene and camera controls remain available.</source>
-        <translation>Vidhibiti vya mkono vya maonyesho na kamera vitaendelea kupatikana.</translation>
+        <translation type="vanished">Vidhibiti vya mkono vya maonyesho na kamera vitaendelea kupatikana.</translation>
     </message>
     <message>
         <location line="+20"/>
         <source>Default scene</source>
-        <translation>Onyesho msingi</translation>
+        <translation type="vanished">Onyesho msingi</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Media scene</source>
-        <translation>Onyesho la midia</translation>
+        <translation type="vanished">Onyesho la midia</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>Set up OBS later</source>
-        <translation>Sanidi OBS baadaye</translation>
+        <translation type="vanished">Sanidi OBS baadaye</translation>
     </message>
     <message>
         <location line="+16"/>
@@ -3683,12 +3683,12 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location line="-7"/>
         <source>Connected · automatic scene switching</source>
-        <translation>Imeunganishwa · kubadilisha maonyesho kiotomatiki</translation>
+        <translation type="vanished">Imeunganishwa · kubadilisha maonyesho kiotomatiki</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Connected · manual controls</source>
-        <translation>Imeunganishwa · vidhibiti vya mkono</translation>
+        <translation type="vanished">Imeunganishwa · vidhibiti vya mkono</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -3703,7 +3703,7 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location line="+327"/>
         <source>Choose a scene</source>
-        <translation>Chagua onyesho</translation>
+        <translation type="vanished">Chagua onyesho</translation>
     </message>
     <message>
         <location line="+303"/>
@@ -3738,7 +3738,7 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location filename="../../ui/qml/onboarding.py" line="+259"/>
         <source>Enter a port between 1 and 65535.</source>
-        <translation>Weka mlango kati ya 1 na 65535.</translation>
+        <translation type="vanished">Weka mlango kati ya 1 na 65535.</translation>
     </message>
     <message>
         <location line="+47"/>
@@ -3753,17 +3753,17 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
     <message>
         <location line="+3"/>
         <source>Connect to OBS or choose Set up later.</source>
-        <translation>Unganisha OBS au chagua Kusanidi baadaye.</translation>
+        <translation type="vanished">Unganisha OBS au chagua Kusanidi baadaye.</translation>
     </message>
     <message>
         <location line="+8"/>
         <source>Choose both OBS scenes.</source>
-        <translation>Chagua maonyesho yote mawili ya OBS.</translation>
+        <translation type="vanished">Chagua maonyesho yote mawili ya OBS.</translation>
     </message>
     <message>
         <location line="+5"/>
         <source>Choose two different OBS scenes.</source>
-        <translation>Chagua maonyesho mawili tofauti ya OBS.</translation>
+        <translation type="vanished">Chagua maonyesho mawili tofauti ya OBS.</translation>
     </message>
     <message>
         <location line="+8"/>
@@ -3819,6 +3819,38 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
         <location line="+5"/>
         <source>Install xdotool to use automatic sharing.</source>
         <translation>Sakinisha xdotool ili kutumia kushiriki kiotomatiki.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes is included. Automatic Zoom sharing is optional.</source>
+        <translation>Mandhari za Solin zimejumuishwa. Kushiriki skrini kiotomatiki kwenye Zoom ni kwa hiari.</translation>
+    </message>
+    <message>
+        <source>Solin Scenes</source>
+        <translation>Mandhari za Solin</translation>
+    </message>
+    <message>
+        <source>Combine cameras and media into scenes for your meetings.</source>
+        <translation>Changanya kamera na midia katika mandhari kwa ajili ya mikutano yako.</translation>
+    </message>
+    <message>
+        <source>After creating your profile, open the Scenes tab to configure cameras, sources, and PTZ.</source>
+        <translation>Baada ya kuunda wasifu wako, fungua kichupo cha Mandhari ili kusanidi kamera, vyanzo na PTZ.</translation>
+    </message>
+    <message>
+        <source>For most setups, Solin Scenes with %1 is enough.</source>
+        <translation>Kwa mipangilio mingi, Mandhari za Solin pamoja na %1 zinatosha.</translation>
+    </message>
+    <message>
+        <source>Included · configure cameras in Scenes</source>
+        <translation>Imejumuishwa · sanidi kamera kwenye Mandhari</translation>
+    </message>
+    <message>
+        <source>Install and enable the OBS virtual camera extension to use it.</source>
+        <translation>Sakinisha na uwashe kiendelezi cha kamera pepe ya OBS ili kuitumia.</translation>
+    </message>
+    <message>
+        <source>Requires v4l2loopback on Linux; the camera name may vary with its configuration.</source>
+        <translation>Inahitaji v4l2loopback kwenye Linux; jina la kamera linaweza kutofautiana kulingana na usanidi wake.</translation>
     </message>
 </context>
 <context>
