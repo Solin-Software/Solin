@@ -55,8 +55,8 @@ class MeetingType(str, Enum):
 class Section(str, Enum):
     OPENING_COMMENTS = "opening_comments"
     TREASURES = "treasures"        # Treasures From God's Word
-    MINISTRY = "ministry"          # Apply Yourself to the Field Ministry (≈12 min)
-    LIVING = "living"              # Living as Christians (≈15 min before CBS)
+    MINISTRY = "ministry"          # Apply Yourself to the Field Ministry
+    LIVING = "living"              # Living as Christians
     CONCLUDING_COMMENTS = "concluding_comments"
     PUBLIC_TALK = "public_talk"    # Weekend public talk
     WATCHTOWER = "watchtower"      # Weekend Watchtower study
@@ -95,11 +95,18 @@ MEDIA_COUNTDOWN_PRESENTATION_OPTIONS: tuple[MediaCountdownPresentation, ...] = (
     MediaCountdownPresentation.YEARLY_TEXT,
 )
 
-# Sections whose parts must keep a fixed section total (redistribution applies).
-FIXED_TOTAL_SECONDS: dict[Section, int] = {
-    Section.MINISTRY: 12 * 60,
-    Section.LIVING: 15 * 60,
-}
+CONFIGURABLE_PART_SECTIONS = (Section.MINISTRY, Section.LIVING)
+MIN_SECTION_PART_COUNT = 1
+MAX_SECTION_PART_COUNT = 8
+MIN_PLANNED_PART_SECONDS = 60
+MAX_PLANNED_PART_SECONDS = 24 * 60 * 60 - 1
+
+
+class AssignmentSetup(str, Enum):
+    DEFAULT = "default"
+    DETECTED = "detected"
+    MANUAL = "manual"
+    LEGACY = "legacy"
 
 
 def _now() -> float:
@@ -294,6 +301,7 @@ class MeetingSchedule:
     week_monday: str  # ISO date, e.g. "2026-06-01"
     meeting_type: MeetingType
     parts: list[MeetingPart] = field(default_factory=list)
+    assignment_setup: AssignmentSetup = AssignmentSetup.DEFAULT
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
@@ -325,6 +333,7 @@ class MeetingSchedule:
             "week_monday": self.week_monday,
             "meeting_type": self.meeting_type.value,
             "parts": [p.to_dict() for p in self.parts],
+            "assignment_setup": self.assignment_setup.value,
         }
 
     @classmethod
@@ -333,6 +342,11 @@ class MeetingSchedule:
             week_monday=str(data["week_monday"]),
             meeting_type=MeetingType(data["meeting_type"]),
             parts=[MeetingPart.from_dict(p) for p in data.get("parts", [])],
+            assignment_setup=_enum_or_default(
+                AssignmentSetup,
+                data.get("assignment_setup", AssignmentSetup.LEGACY.value),
+                AssignmentSetup.MANUAL,
+            ),
         )
 
 

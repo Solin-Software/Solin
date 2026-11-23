@@ -10,6 +10,11 @@ from typing import ClassVar, Final, TypeAlias
 
 from ...timer.hand_alert import TimerHandAlert
 from ...timer.models import (
+    CONFIGURABLE_PART_SECTIONS,
+    MAX_PLANNED_PART_SECONDS,
+    MAX_SECTION_PART_COUNT,
+    MIN_PLANNED_PART_SECONDS,
+    MIN_SECTION_PART_COUNT,
     AnalogClockStyle,
     ClockConfig,
     ClockMode,
@@ -42,10 +47,6 @@ from ..validation import (
 
 __all__ = [
     "AdjustPartCommand",
-    "MAX_PLANNED_PART_SECONDS",
-    "MAX_SECTION_PART_COUNT",
-    "MIN_PLANNED_PART_SECONDS",
-    "MIN_SECTION_PART_COUNT",
     "NavigateWeekCommand",
     "ResetPartCommand",
     "SetMeetingTypeCommand",
@@ -68,14 +69,9 @@ __all__ = [
     "parse_timer_command",
 ]
 
-MIN_PLANNED_PART_SECONDS: Final = 60
-MAX_PLANNED_PART_SECONDS: Final = 24 * 60 * 60 - 1
-MIN_SECTION_PART_COUNT: Final = 1
-MAX_SECTION_PART_COUNT: Final = 8
 _MIN_UTC_OFFSET_MINUTES: Final = -14 * 60
 _MAX_UTC_OFFSET_MINUTES: Final = 14 * 60
 _ALLOWED_ADJUST_DELTAS: Final = frozenset({-60, -1, 1, 60})
-_CONFIGURABLE_SECTIONS: Final = frozenset({Section.MINISTRY, Section.LIVING})
 
 
 def hand_alert_payload(
@@ -640,7 +636,7 @@ class SetSectionCountCommand(_ScheduleBoundTimerCommand):
         super(SetSectionCountCommand, self).__post_init__()
         if not isinstance(self.section, Section):
             raise TypeError("section must be a Section")
-        if self.section not in _CONFIGURABLE_SECTIONS:
+        if self.section not in CONFIGURABLE_PART_SECTIONS:
             raise ValueError("section count is only configurable for ministry and living")
         require_int(self.count, field_name="count")
         if not MIN_SECTION_PART_COUNT <= self.count <= MAX_SECTION_PART_COUNT:

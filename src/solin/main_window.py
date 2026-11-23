@@ -97,6 +97,7 @@ from .controllers.timer_hand_alert_controller import TimerHandAlertController
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
 from .controllers.timer_pdf_export_controller import TimerPdfExportController
+from .controllers.timer_workbook_lookup import TimerWorkbookLookup
 from .controllers.timer_projection_controller import (
     TimerProjectionContext,
     TimerProjectionController,
@@ -124,7 +125,8 @@ from .core.scenes.model import BusId, SceneDocument
 from .core.scenes.output_health import OutputHealthStatus
 from .core.scenes.recording import ProgramRecordingState, ProgramRecordingStatus
 from .core.scenes.workspace import SceneWorkspaceService
-from .core.timer.application import TimerSession
+from .core.meetings.workbook import fetch_workbook
+from .core.timer.application import DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE, AssignmentAutofillScope, TimerSession
 from .core.i18n.manager import LanguageManager
 from .core.integrations.automation.screen_share import (
     execute_start_share,
@@ -542,6 +544,11 @@ class MainWindow(QWidget):
             reconcile_media=self._projection_targets.reconcile_projection_windows,
             deactivate_media_screen=self.projection_session.hide_media_on_screen_name,
         )
+        assignment_scope = DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE
+        workbook_lookup = (
+            None if assignment_scope is AssignmentAutofillScope.OFF
+            else TimerWorkbookLookup(fetch_workbook)
+        )
         self.timer_bridge = TimerBridge(
             engine=self.timer_engine,
             session=timer_session,
@@ -551,6 +558,8 @@ class MainWindow(QWidget):
             pdf_export=TimerPdfExportController(self),
             media_countdown_automation=self._media_countdown_automation,
             language_manager=lang_manager,
+            workbook_lookup=workbook_lookup,
+            assignment_scope=assignment_scope,
         )
         self.timer_bridge.monitorsChanged.connect(self._refresh_timer_hand_alert_outputs)
         self._refresh_timer_hand_alert_outputs()

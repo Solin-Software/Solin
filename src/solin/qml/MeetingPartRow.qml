@@ -221,6 +221,7 @@ Rectangle {
             fieldWidth: row.isActive ? Math.max(0, parent.width - buttonAreaWidth) : 70
             valueComponent: row.isActive ? liveValue : null
             editable: row.state === "idle"
+            onEditingChanged: if (editing) timer.deferAssignmentLookupForEdit()
             buttonsVisible: row.state !== "stopped"
             decTip: row.state === "running" ? qsTr("−1 s") : qsTr("−1 min")
             incTip: row.state === "running" ? qsTr("+1 s") : qsTr("+1 min")

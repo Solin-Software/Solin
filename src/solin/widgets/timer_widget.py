@@ -11,6 +11,7 @@ contract for media-window countdown projection.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal, QDateTime, QEvent, QUrl
+from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
@@ -74,6 +75,14 @@ class TimerWidget(QWidget):
         )
         layout.addWidget(self._qml)
 
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self.bridge.set_timer_page_visible(True)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        self.bridge.set_timer_page_visible(False)
+        super().hideEvent(event)
+
     # ── QML cursor lifecycle ───────────────────────────────────────────────
 
     def begin_qml_pointer_cursor(self) -> None:
@@ -128,6 +137,7 @@ class TimerWidget(QWidget):
         teardown is clean. Invoked by ShutdownController.cleanup_widgets().
         """
         self._reset_qml_pointer_cursor()
+        self.bridge.shutdown_assignment_lookup()
         self.qml_load_handle.cancel()
         try:
             self._qml.setSource(QUrl())

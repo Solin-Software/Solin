@@ -87,6 +87,13 @@ class TimerStateMachine:
         part = self._part(part_id)
         if part is None:
             return False
+        if (
+            part.state is PartState.IDLE
+            and part.started_at_epoch is None
+            and part.first_started_epoch is None
+            and part.accumulated_seconds == 0.0
+        ):
+            return False
         part.state = PartState.IDLE
         part.started_at_epoch = None
         part.first_started_epoch = None

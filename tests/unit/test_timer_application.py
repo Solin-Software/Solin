@@ -1,18 +1,26 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
-from solin.core.timer.application import TimerSession
+import pytest
+
+from solin.core.timer.application import (
+    AssignmentAutofillScope,
+    DetectedPartTiming,
+    TimerSession,
+)
 from solin.core.timer.models import (
+    AssignmentSetup,
     ClockConfig,
     ClockMode,
     Direction,
     MeetingSchedule,
     MeetingType,
+    PartKind,
     PartState,
     Section,
 )
-from solin.core.timer.schedule_factory import build_default_schedule
+from solin.core.timer.schedule_factory import build_default_schedule, configurable_parts_in
 from tests._paths import REPO_ROOT
 
 
@@ -132,6 +140,117 @@ def test_timer_session_updates_clock_and_visibility_through_repository() -> None
     assert session.timer_visible() is True
     session.set_timer_visible(False)
     assert session.timer_visible() is False
+
+
+
+def _detected_timings() -> list[DetectedPartTiming]:
+    return [
+        DetectedPartTiming(section, kind, seconds)
+        for section, kind, durations in [
+            (Section.OPENING_COMMENTS, PartKind.STANDARD, (120,)),
+            (Section.TREASURES, PartKind.STANDARD, (660, 540, 240)),
+            (Section.MINISTRY, PartKind.STANDARD, (180, 240, 300, None)),
+            (Section.LIVING, PartKind.STANDARD, (900,)),
+            (Section.LIVING, PartKind.CBS, (1500,)),
+            (Section.CONCLUDING_COMMENTS, PartKind.STANDARD, (240,)),
+        ]
+        for seconds in durations
+    ]
+
+
+@pytest.mark.parametrize("scope", list(AssignmentAutofillScope))
+def test_autofill_applies_only_enabled_parts_and_persists_once(scope) -> None:
+    repo = _Repository()
+    session = TimerSession(repo, _WEEK)
+    before = session.schedule.to_dict()
+    ministry_ids = [part.id for part in session.schedule.parts_in(Section.MINISTRY)]
+
+    applied = session.apply_detected_assignments(_WEEK, _detected_timings(), scope)
+
+    if scope is AssignmentAutofillScope.OFF:
+        assert not applied
+        assert session.schedule.to_dict() == before
+        assert repo.saved_schedules == []
+        return
+
+    assert applied
+    schedule = session.schedule
+    assert repo.saved_schedules == [schedule]
+    assert schedule.assignment_setup is AssignmentSetup.DETECTED
+    assert not session.can_autofill_assignments(_WEEK)
+    ministry = schedule.parts_in(Section.MINISTRY)
+    assert [p.id for p in ministry[:3]] == ministry_ids
+    assert [p.planned_seconds for p in ministry] == [180, 240, 300, 240]
+    assert [p.planned_seconds for p in configurable_parts_in(schedule, Section.LIVING)] == [900]
+    assert all("Part" in p.title for p in ministry)
+    extended = scope is AssignmentAutofillScope.ALL_MIDWEEK_DURATIONS
+    assert schedule.parts_in(Section.LIVING)[-1].planned_seconds == (1500 if extended else 1800)
+    assert schedule.parts_in(Section.TREASURES)[0].planned_seconds == (660 if extended else 600)
+    assert schedule.parts[0].planned_seconds == (120 if extended else 60)
+    assert schedule.parts[-1].planned_seconds == (240 if extended else 180)
+
+
+@pytest.mark.parametrize("change", ["none", "duration", "count", "live"])
+def test_legacy_autofill_checks_schedule_values_and_timing_without_ids(change) -> None:
+    repo = _Repository()
+    original = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+    if change == "duration":
+        original.parts[0].planned_seconds += 60
+    elif change == "count":
+        original.parts.pop(4)
+    elif change == "live":
+        original.parts[0].state = PartState.STOPPED
+        original.parts[0].accumulated_seconds = 32
+    legacy = original.to_dict()
+    legacy.pop("assignment_setup")
+    repo.schedules[(_WEEK, MeetingType.MIDWEEK)] = MeetingSchedule.from_dict(legacy)
+
+    session = TimerSession(repo, _WEEK)
+
+    assert session.can_autofill_assignments(_WEEK) is (change == "none")
+
+
+def test_autofill_is_ineligible_in_the_past_or_for_weekend() -> None:
+    repo = _Repository()
+    session = TimerSession(repo, _WEEK)
+    assert session.can_autofill_assignments(_WEEK)
+    session.previous_week()
+    assert not session.can_autofill_assignments(_WEEK)
+    session.next_week()
+    session.next_week()
+    assert session.can_autofill_assignments(_WEEK)
+    assert not session.can_autofill_assignments(_WEEK + timedelta(weeks=2))
+    assert session.set_meeting_type(MeetingType.WEEKEND)
+    assert not session.can_autofill_assignments(_WEEK)
+
+
+def test_unknown_part_count_does_not_partially_apply_or_prevent_retry() -> None:
+    repo = _Repository()
+    session = TimerSession(repo, _WEEK)
+    before = session.schedule.to_dict()
+    timings = [timing for timing in _detected_timings() if timing.section is not Section.LIVING]
+
+    assert not session.apply_detected_assignments(_WEEK, timings, AssignmentAutofillScope.VARIABLE_SECTIONS)
+    assert session.schedule.to_dict() == before
+    assert repo.saved_schedules == []
+    assert session.can_autofill_assignments(_WEEK)
+
+
+def test_manual_edits_protect_week_even_after_values_are_restored() -> None:
+    repo = _Repository()
+    session = TimerSession(repo, _WEEK)
+    part = session.schedule.parts[0]
+    planned = part.planned_seconds
+    assert not session.set_part_seconds(part.id, planned)
+    assert session.can_autofill_assignments(_WEEK)
+    assert session.set_part_seconds(part.id, planned + 60)
+    assert session.set_part_seconds(part.id, planned)
+    persisted = MeetingSchedule.from_dict(session.schedule.to_dict())
+    repo.schedules[(_WEEK, MeetingType.MIDWEEK)] = persisted
+
+    restored = TimerSession(repo, _WEEK)
+
+    assert not restored.can_autofill_assignments(_WEEK)
 
 
 def test_timer_source_boundaries_keep_application_pure_and_widget_injected() -> None:

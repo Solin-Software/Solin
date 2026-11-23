@@ -9,6 +9,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication
 
 from solin.core.timer.models import (
+    MAX_PLANNED_PART_SECONDS,
     AnalogClockStyle,
     ClockConfig,
     ClockMode,
@@ -20,15 +21,12 @@ from solin.core.timer.models import (
     PartState,
     PartTimerDisplay,
     Section,
-    FIXED_TOTAL_SECONDS,
 )
 from solin.core.timer.schedule_factory import (
-    adjust_part,
     build_default_schedule,
     configurable_count_for,
-    configurable_total_seconds,
     normalize_schedule,
-    redistribute_section,
+    set_part_seconds,
     schedule_has_timing_data,
     set_section_part_count,
 )
@@ -92,8 +90,7 @@ def test_midweek_default_section_totals():
     assert sch.parts[0].planned_seconds == 60
     assert sch.parts[-1].title == CONCLUDING_COMMENTS_TITLE
     assert sch.parts[-1].planned_seconds == 3 * 60
-    assert sch.section_total_seconds(Section.MINISTRY) == FIXED_TOTAL_SECONDS[Section.MINISTRY]
-    assert configurable_total_seconds(sch, Section.LIVING) == FIXED_TOTAL_SECONDS[Section.LIVING]
+    assert sch.section_total_seconds(Section.MINISTRY) == 12 * 60
     assert sch.section_total_seconds(Section.LIVING) == 45 * 60
     assert sch.count_for(Section.TREASURES) == 3
     assert [p.title for p in sch.parts_in(Section.TREASURES)] == [
@@ -323,76 +320,38 @@ def test_time_formatting_does_not_hide_unexpected_errors(monkeypatch):
         date_i18n.format_time_with_seconds(0, "HH:mm:ss")
 
 
-# ── Redistribution ────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("section", [Section.MINISTRY, Section.LIVING, Section.PUBLIC_TALK])
+def test_planned_duration_only_changes_the_selected_part(section):
+    meeting_type = MeetingType.WEEKEND if section is Section.PUBLIC_TALK else MeetingType.MIDWEEK
+    schedule = build_default_schedule(_WEEK, meeting_type)
+    part = schedule.parts_in(section)[0]
+    others = {item.id: item.planned_seconds for item in schedule.parts if item is not part}
+
+    assert set_part_seconds(part, 20 * 60)
+    assert part.planned_seconds == 20 * 60
+    assert {item.id: item.planned_seconds for item in schedule.parts if item is not part} == others
+    assert set_part_seconds(part, 1)
+    assert part.planned_seconds == 60
+    assert set_part_seconds(part, MAX_PLANNED_PART_SECONDS + 60)
+    assert part.planned_seconds == MAX_PLANNED_PART_SECONDS
 
 
-def test_redistribute_keeps_ministry_total():
-    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    first = sch.parts_in(Section.MINISTRY)[0]
-    redistribute_section(sch, first.id, first.planned_seconds + 120)
-    assert sch.section_total_seconds(Section.MINISTRY) == FIXED_TOTAL_SECONDS[Section.MINISTRY]
-    # The following part absorbed the +120s.
-    assert first.planned_seconds == _ministry_first_default() + 120
+def test_set_part_count_preserves_existing_parts_and_times():
+    schedule = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
+    first, second, third = schedule.parts_in(Section.MINISTRY)
+    assert set_part_seconds(second, 7 * 60)
+    set_section_part_count(schedule, Section.MINISTRY, 5)
+    ministry = schedule.parts_in(Section.MINISTRY)
 
+    assert len(ministry) == 5
+    assert ministry[:3] == [first, second, third]
+    assert [part.planned_seconds for part in ministry] == [240, 420, 240, 240, 240]
+    assert all(part.title == GENERIC_INDEXED_PART_TITLE for part in ministry)
 
-def test_adjust_last_part_borrows_backward():
-    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    living = [p for p in sch.parts_in(Section.LIVING) if p.kind is PartKind.STANDARD]
-    last = living[-1]
-    adjust_part(sch, last.id, +180)
-    assert configurable_total_seconds(sch, Section.LIVING) == FIXED_TOTAL_SECONDS[Section.LIVING]
-    assert last.planned_seconds == _living_last_default() + 180
-
-
-def test_cbs_is_not_part_of_living_redistribution():
-    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    cbs = sch.parts_in(Section.LIVING)[-1]
-    first_living = sch.parts_in(Section.LIVING)[0]
-
-    redistribute_section(sch, first_living.id, first_living.planned_seconds + 120)
-    assert cbs.kind is PartKind.CBS
-    assert cbs.planned_seconds == 30 * 60
-    assert configurable_total_seconds(sch, Section.LIVING) == FIXED_TOTAL_SECONDS[Section.LIVING]
-
-    redistribute_section(sch, cbs.id, 25 * 60)
-    assert cbs.planned_seconds == 25 * 60
-    assert configurable_total_seconds(sch, Section.LIVING) == FIXED_TOTAL_SECONDS[Section.LIVING]
-
-
-def test_redistribute_respects_minimum_floor():
-    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    parts = sch.parts_in(Section.MINISTRY)
-    # Grow the first part beyond the section total; others clamp at the floor
-    # but the section total is still preserved.
-    redistribute_section(sch, parts[0].id, FIXED_TOTAL_SECONDS[Section.MINISTRY])
-    assert sch.section_total_seconds(Section.MINISTRY) == FIXED_TOTAL_SECONDS[Section.MINISTRY]
-    assert all(p.planned_seconds >= 60 for p in parts)
-
-
-def test_non_fixed_section_sets_directly():
-    sch = build_default_schedule(_WEEK, MeetingType.WEEKEND)
-    talk = sch.parts_in(Section.PUBLIC_TALK)[0]
-    redistribute_section(sch, talk.id, 20 * 60)
-    assert talk.planned_seconds == 20 * 60
-
-
-def test_set_part_count_preserves_fixed_total():
-    sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-    set_section_part_count(sch, Section.MINISTRY, 5)
-    assert sch.count_for(Section.MINISTRY) == 5
-    assert sch.section_total_seconds(Section.MINISTRY) == FIXED_TOTAL_SECONDS[Section.MINISTRY]
-    assert [p.title for p in sch.parts_in(Section.MINISTRY)] == [
-        GENERIC_INDEXED_PART_TITLE,
-        GENERIC_INDEXED_PART_TITLE,
-        GENERIC_INDEXED_PART_TITLE,
-        GENERIC_INDEXED_PART_TITLE,
-        GENERIC_INDEXED_PART_TITLE,
-    ]
-    # Canonical ordering preserved: treasures, then ministry, then living.
-    order = [p.section for p in sch.parts]
-    assert (
-        order.index(Section.TREASURES) < order.index(Section.MINISTRY) < order.index(Section.LIVING)
-    )
+    set_section_part_count(schedule, Section.MINISTRY, 2)
+    assert schedule.parts_in(Section.MINISTRY) == [first, second]
+    assert second.planned_seconds == 420
+    assert schedule.parts_in(Section.LIVING)[-1].kind is PartKind.CBS
 
 
 def test_set_living_part_count_preserves_cbs():
@@ -409,7 +368,6 @@ def test_set_living_part_count_preserves_cbs():
         PartKind.CBS,
     ]
     assert configurable_count_for(sch, Section.LIVING) == 4
-    assert configurable_total_seconds(sch, Section.LIVING) == FIXED_TOTAL_SECONDS[Section.LIVING]
     assert [p.title for p in living if p.kind is PartKind.STANDARD] == [
         GENERIC_INDEXED_PART_TITLE,
         GENERIC_INDEXED_PART_TITLE,
@@ -448,22 +406,6 @@ def test_set_weekend_part_count_uses_translatable_indexed_titles():
         WATCHTOWER_STUDY_TITLE,
         WATCHTOWER_STUDY_INDEXED_PART_TITLE,
     ]
-
-
-def _ministry_first_default() -> int:
-    return (
-        build_default_schedule(_WEEK, MeetingType.MIDWEEK)
-        .parts_in(Section.MINISTRY)[0]
-        .planned_seconds
-    )
-
-
-def _living_last_default() -> int:
-    living = build_default_schedule(_WEEK, MeetingType.MIDWEEK).parts_in(Section.LIVING)
-    return [p for p in living if p.kind is PartKind.STANDARD][-1].planned_seconds
-
-
-# ── Engine lifecycle ──────────────────────────────────────────────────────────
 
 
 def test_state_machine_transitions_are_deterministic():
@@ -1365,7 +1307,7 @@ def test_store_load_preserves_used_midweek_missing_current_parts(tmp_path):
         settings.clear()
 
 
-def test_is_part_duration_editable_respects_part_state_and_fixed_total_single_part_sections():
+def test_is_part_duration_editable_respects_part_state_even_for_single_part_sections():
     from solin.core.timer.schedule_factory import is_part_duration_editable
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
@@ -1374,28 +1316,26 @@ def test_is_part_duration_editable_respects_part_state_and_fixed_total_single_pa
     living_parts = sch.parts_in(Section.LIVING)
     cbs = next(p for p in living_parts if p.kind is PartKind.CBS)
 
-    assert is_part_duration_editable(sch, opening) is True
-    assert all(is_part_duration_editable(sch, p) for p in ministry_parts)
-    assert is_part_duration_editable(sch, cbs) is True
+    assert is_part_duration_editable(opening) is True
+    assert all(is_part_duration_editable(p) for p in ministry_parts)
+    assert is_part_duration_editable(cbs) is True
 
     # Running and stopped parts cannot have their planned duration altered.
     opening.state = PartState.RUNNING
-    assert is_part_duration_editable(sch, opening) is False
+    assert is_part_duration_editable(opening) is False
     opening.state = PartState.STOPPED
-    assert is_part_duration_editable(sch, opening) is False
+    assert is_part_duration_editable(opening) is False
     opening.state = PartState.IDLE
-    assert is_part_duration_editable(sch, opening) is True
+    assert is_part_duration_editable(opening) is True
 
-    # A fixed-total section reduced to 1 configurable part locks that part's duration,
-    # while CBS in Living remains independently editable.
     set_section_part_count(sch, Section.LIVING, 1)
     living_after = sch.parts_in(Section.LIVING)
     single_living = next(p for p in living_after if p.kind is not PartKind.CBS)
     cbs_after = next(p for p in living_after if p.kind is PartKind.CBS)
-    assert is_part_duration_editable(sch, single_living) is False
-    assert is_part_duration_editable(sch, cbs_after) is True
+    assert is_part_duration_editable(single_living) is True
+    assert is_part_duration_editable(cbs_after) is True
 
     set_section_part_count(sch, Section.MINISTRY, 1)
-    assert is_part_duration_editable(sch, sch.parts_in(Section.MINISTRY)[0]) is False
+    assert is_part_duration_editable(sch.parts_in(Section.MINISTRY)[0]) is True
     set_section_part_count(sch, Section.MINISTRY, 2)
-    assert all(is_part_duration_editable(sch, p) for p in sch.parts_in(Section.MINISTRY))
+    assert all(is_part_duration_editable(p) for p in sch.parts_in(Section.MINISTRY))
