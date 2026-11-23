@@ -13,7 +13,8 @@ reservation, PDF export, and fullscreen output to explicitly injected adapters.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
@@ -23,16 +24,24 @@ from solin.core.i18n.meeting_schedule import (
     meeting_kind_label,
     meeting_weekday_names,
 )
+from solin.core.jw.language_context import jw_media_language_context
 from solin.core.meetings.meeting_weeks import current_monday
 from solin.core.meetings.section_meta import SECTION_META
-from solin.core.timer.application import TimerSession
+from solin.core.timer.application import (
+    DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE,
+    AssignmentAutofillScope,
+    DetectedPartTiming,
+    TimerSession,
+)
 from solin.core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
+    CONFIGURABLE_PART_SECTIONS,
     CLOCK_MODE_OPTIONS,
     MEDIA_COUNTDOWN_PRESENTATION_OPTIONS,
     PART_TIMER_DISPLAY_OPTIONS,
     ClockConfig,
     MeetingType,
+    PartKind,
     PartState,
     Section,
 )
@@ -48,6 +57,8 @@ from solin.styles.theme import current_theme_scheme
 
 if TYPE_CHECKING:
     from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
+    from solin.controllers.timer_workbook_lookup import TimerWorkbookLookup
+    from solin.core.meetings.workbook import Workbook
 
     _QVARIANT = object
 else:
@@ -81,10 +92,8 @@ _STANDALONE_SECTIONS = {
     Section.CONCLUDING_COMMENTS,
 }
 
-# Sections whose part count the operator may configure. Treasures is always its
-# 3 fixed parts, and the weekend (public talk + Watchtower study) is fixed too —
-# only the midweek Ministry and Living sections vary in number of parts.
-_CONFIGURABLE_COUNT = {Section.MINISTRY, Section.LIVING}
+log = logging.getLogger(__name__)
+
 _MIN_MANUAL_COUNTDOWN_SECONDS = 10
 _MAX_MANUAL_COUNTDOWN_SECONDS = 24 * 60 * 60 - 1
 
@@ -155,7 +164,7 @@ def parts_model_for_schedule(schedule, time_format: str = "HH:mm:ss") -> list[di
             "state": p.state.value,
             "firstOfSection": first,
             "showSectionHeader": show_section_header,
-            "configurableCount": section in _CONFIGURABLE_COUNT,
+            "configurableCount": section in CONFIGURABLE_PART_SECTIONS,
             "sectionCount": configurable_count_for(schedule, section),
             "sectionTotalLabel": (
                 _fmt_total(schedule.section_total_seconds(section))
@@ -201,6 +210,8 @@ class TimerBridge(QObject):
         pdf_export: TimerPdfExportController,
         media_countdown_automation,
         language_manager=None,
+        workbook_lookup: TimerWorkbookLookup | None = None,
+        assignment_scope: AssignmentAutofillScope = DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -215,8 +226,24 @@ class TimerBridge(QObject):
         self._clock_config: ClockConfig = session.clock_config
         self._schedule = session.schedule
         self._live: dict = {}
+        self._workbook_lookup = workbook_lookup
+        self._assignment_scope = assignment_scope
+        self._timer_page_visible = False
+        self._assignments_mode_active = False
+        self._assignment_lookup_deferred = False
+        self._assignment_target: tuple[date, str] | None = None
+        self._assignment_generation = 0
+        if workbook_lookup is not None:
+            workbook_lookup.setParent(self)
+            workbook_lookup.completed.connect(self._apply_workbook)
+            if language_manager is not None:
+                language_manager.language_changed.connect(self._refresh_assignment_lookup)
+                language_manager.jw_lang_service.media_language_changed.connect(
+                    self._refresh_assignment_lookup
+                )
 
         self._engine.state_changed.connect(self._on_engine_state)
+        self._engine.schedule_mutated.connect(self._record_live_schedule_change)
         self._engine.tick.connect(self._on_engine_tick)
         self._hand_alert.controls_changed.connect(self.manualHandChanged)
         self._media_countdown_automation.state_changed.connect(
@@ -242,10 +269,88 @@ class TimerBridge(QObject):
     # ── Schedule lifecycle ─────────────────────────────────────────────────
 
     def _replace_schedule(self, schedule) -> None:
+        if (
+            schedule.week_monday != self._schedule.week_monday
+            or schedule.meeting_type is not self._schedule.meeting_type
+        ):
+            self._assignment_lookup_deferred = False
         self._schedule = schedule
         self._engine.set_schedule(schedule)
-        self.scheduleChanged.emit()
-        self.liveStateChanged.emit()
+        self._refresh_assignment_lookup()
+
+    def set_timer_page_visible(self, visible: bool) -> None:
+        self._timer_page_visible = visible
+        if not visible:
+            self._assignment_lookup_deferred = False
+        self._refresh_assignment_lookup()
+
+    @Slot(bool)
+    def setAssignmentsModeActive(self, active: bool) -> None:
+        self._assignments_mode_active = active
+        if not active:
+            self._assignment_lookup_deferred = False
+        self._refresh_assignment_lookup()
+
+    @Slot()
+    def deferAssignmentLookupForEdit(self) -> None:
+        # Let the operator finish this visit without replacing an inline draft.
+        self._assignment_lookup_deferred = True
+        self._refresh_assignment_lookup()
+
+    def shutdown_assignment_lookup(self) -> None:
+        lookup, self._workbook_lookup = self._workbook_lookup, None
+        self._assignment_target = None
+        if lookup is not None:
+            lookup.shutdown()
+
+    def _eligible_assignment_target(self, current_week: date) -> tuple[date, str] | None:
+        if (
+            self._assignment_scope is AssignmentAutofillScope.OFF
+            or self._assignment_lookup_deferred
+            or not self._timer_page_visible
+            or not self._assignments_mode_active
+            or not self._session.can_autofill_assignments(current_week)
+        ):
+            return None
+        return self._session.week_monday, jw_media_language_context(self._language_manager).api_code
+
+    def _refresh_assignment_lookup(self, _language: str = "") -> None:
+        lookup = self._workbook_lookup
+        if lookup is None:
+            return
+        target = self._eligible_assignment_target(current_monday())
+        if target == self._assignment_target:
+            return
+        self._assignment_target = target
+        self._assignment_generation += 1
+        if target is None:
+            lookup.invalidate()
+        else:
+            lookup.request(self._assignment_generation, *target)
+
+    @Slot(object, object)
+    def _apply_workbook(self, generation: int, workbook: Workbook) -> None:
+        current_week = current_monday()
+        if (
+            self._assignment_target is None
+            or generation != self._assignment_generation
+            or self._assignment_target != self._eligible_assignment_target(current_week)
+        ):
+            return
+        timings = (
+            DetectedPartTiming(Section(part.section), PartKind(part.kind), part.duration_seconds)
+            for part in workbook.parts
+        )
+        try:
+            applied = self._session.apply_detected_assignments(
+                current_week, timings, self._assignment_scope,
+            )
+        except (OSError, RuntimeError, ValueError):
+            log.warning("Could not adopt detected timer assignments for %s", self._assignment_target,
+                        exc_info=True)
+            return
+        if applied:
+            self._replace_schedule(self._session.schedule)
 
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
@@ -257,12 +362,12 @@ class TimerBridge(QObject):
         self.clockConfigChanged.emit()
         self.monitorsChanged.emit()
 
+    def _record_live_schedule_change(self) -> None:
+        self._session.record_schedule_change()
+        self._refresh_assignment_lookup()
+
     def _on_engine_state(self, snapshot: dict) -> None:
-        # Engine transitions mutate run-state in place → persist so a meeting in
-        # progress survives a restart, then refresh the views.
         self._live = snapshot
-        if self._schedule is not None:
-            self._session.persist_live_state()
         self.scheduleChanged.emit()
         self.liveStateChanged.emit()
 
@@ -381,11 +486,13 @@ class TimerBridge(QObject):
         if part is not None and part.state is PartState.RUNNING:
             self._engine.adjust_elapsed(part_id, int(delta_seconds))
         elif self._session.adjust_part(part_id, int(delta_seconds)):
+            self._refresh_assignment_lookup()
             self.scheduleChanged.emit()
 
     @Slot(str, int)
     def setPartSeconds(self, part_id: str, seconds: int) -> None:
         if self._session.set_part_seconds(part_id, int(seconds)):
+            self._refresh_assignment_lookup()
             self.scheduleChanged.emit()
 
     @Slot(str, int)
@@ -395,8 +502,7 @@ class TimerBridge(QObject):
         except ValueError:
             return
         if self._session.set_section_count(sec, int(count)):
-            self._engine.set_schedule(self._schedule)
-            self.scheduleChanged.emit()
+            self._replace_schedule(self._session.schedule)
 
     # ── Exposed: clock config ──────────────────────────────────────────────
 

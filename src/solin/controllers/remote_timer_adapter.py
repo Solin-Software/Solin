@@ -264,7 +264,7 @@ class RemoteTimerAdapter(QObject):
             show_header = bool(raw.get("showSectionHeader", False))
             domain_part = schedule.part_by_id(part_id) if schedule is not None else None
             duration_editable = (
-                is_part_duration_editable(schedule, domain_part)
+                is_part_duration_editable(domain_part)
                 if schedule is not None and domain_part is not None
                 else part_state is PartState.IDLE
             )
@@ -370,7 +370,7 @@ class RemoteTimerAdapter(QObject):
                         TimerCommandErrorCode.BLOCKED,
                         "Elapsed-second adjustment requires a running part.",
                     )
-            elif not is_part_duration_editable(schedule, part):
+            elif not is_part_duration_editable(part):
                 return TimerCommandError(
                     TimerCommandErrorCode.BLOCKED,
                     "This meeting part duration cannot be changed.",
@@ -383,7 +383,7 @@ class RemoteTimerAdapter(QObject):
                     TimerCommandErrorCode.NOT_FOUND,
                     "The selected meeting part no longer exists.",
                 )
-            if not is_part_duration_editable(schedule, part):
+            if not is_part_duration_editable(part):
                 return TimerCommandError(
                     TimerCommandErrorCode.BLOCKED,
                     "This meeting part duration cannot be changed.",

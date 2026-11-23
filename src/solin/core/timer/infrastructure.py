@@ -21,8 +21,8 @@ from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
 
-from .models import ClockConfig, MeetingSchedule, MeetingType
-from .schedule_factory import normalize_schedule
+from .models import AssignmentSetup, ClockConfig, MeetingSchedule, MeetingType
+from .schedule_factory import build_default_schedule, normalize_schedule
 
 
 def _schedule_key(week_monday: str, meeting_type: MeetingType) -> str:
@@ -103,13 +103,21 @@ class QSettingsTimerRepository:
         meeting_type: MeetingType,
     ) -> MeetingSchedule | None:
         key = _schedule_key(week_monday.isoformat(), meeting_type)
-        raw = self._settings.string(key)
-        if not raw:
+        raw = self._settings.value(key)
+        if raw is None:
             return None
         try:
-            schedule = MeetingSchedule.from_dict(json.loads(raw))
-        except (ValueError, TypeError, KeyError):
-            return None
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError("Invalid schedule")
+            schedule = MeetingSchedule.from_dict(data)
+            if schedule.week_monday != week_monday.isoformat() or schedule.meeting_type is not meeting_type:
+                raise ValueError("Schedule does not match its key")
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            # Preserve an unreadable stored plan until the operator edits its fallback.
+            fallback = build_default_schedule(week_monday, meeting_type)
+            fallback.assignment_setup = AssignmentSetup.MANUAL
+            return fallback
         if normalize_schedule(schedule):
             self.save_schedule(schedule)
         return schedule

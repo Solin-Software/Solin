@@ -39,6 +39,8 @@ class TimerEngine(QObject):
     tick = Signal(dict)
     # Emitted only on discrete changes (lifecycle, elapsed adjustment, configuration).
     state_changed = Signal(dict)
+    # A persisted mutation of the selected schedule, independent of presentation.
+    schedule_mutated = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -91,7 +93,7 @@ class TimerEngine(QObject):
     def start_part(self, part_id: str) -> None:
         if self._state.start_part(part_id):
             self._cancel_revert()
-            self._emit_state()
+            self._emit_schedule_mutation()
 
     def stop_part(self, part_id: str | None = None) -> None:
         """Freeze a running part (defaults to the active one)."""
@@ -108,17 +110,17 @@ class TimerEngine(QObject):
             self._revert_timer.start(self._freeze_seconds * 1000)
         else:
             self._state.clear_stopped_part(pid)
-        self._emit_state()
+        self._emit_schedule_mutation()
 
     def reset_part(self, part_id: str) -> None:
         if self._pending_revert_id == part_id:
             self._cancel_revert()
         if self._state.reset_part(part_id):
-            self._emit_state()
+            self._emit_schedule_mutation()
 
     def adjust_elapsed(self, part_id: str, delta_seconds: int) -> None:
         if self._state.adjust_elapsed(part_id, delta_seconds):
-            self._emit_state()
+            self._emit_schedule_mutation()
 
     # ── Snapshot ──────────────────────────────────────────────────────────────
 
@@ -170,6 +172,10 @@ class TimerEngine(QObject):
 
     def _on_tick(self) -> None:
         self.tick.emit(self.snapshot().to_dict())
+
+    def _emit_schedule_mutation(self) -> None:
+        self.schedule_mutated.emit()
+        self._emit_state()
 
     def _emit_state(self) -> None:
         snap = self.snapshot().to_dict()

@@ -6,20 +6,14 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import logging
 import re
-import urllib.parse
 from typing import Any
 
+from solin.core.jw.wol_finder import finder_headers, finder_url
 from solin.core.network.http import HttpDecodeError, HttpError, get_json
 
 log = logging.getLogger(__name__)
 
-WOL_YEAR_TEXT_API_URL = "https://wol.jw.org/wol/finder"
 YEAR_TEXT_API_TIMEOUT = 12
-YEAR_TEXT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/158.0.0.0 Safari/537.36"
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,23 +51,7 @@ def parse_yeartext_html(html: str) -> tuple[str, str]:
 
 
 def yeartext_request_url(api_code: str, year: int) -> str:
-    params = {
-        "docid": f"110{year}800",
-        "format": "json",
-        "snip": "yes",
-        "wtlocale": api_code,
-    }
-    return f"{WOL_YEAR_TEXT_API_URL}?{urllib.parse.urlencode(params)}"
-
-
-def yeartext_request_headers() -> dict[str, str]:
-    return {
-        "User-Agent": YEAR_TEXT_USER_AGENT,
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        "Referer": "https://wol.jw.org/",
-        "X-Requested-With": "XMLHttpRequest",
-    }
+    return finder_url(docid=f"110{year}800", format="json", snip="yes", wtlocale=api_code)
 
 
 def fetch_yeartext(
@@ -89,7 +67,7 @@ def fetch_yeartext(
         data = http_get_json(
             url,
             timeout=YEAR_TEXT_API_TIMEOUT,
-            headers=yeartext_request_headers(),
+            headers=finder_headers(),
         )
     except HttpDecodeError as exc:
         raise YeartextFetchError(f"JSON invalido: {exc}") from exc

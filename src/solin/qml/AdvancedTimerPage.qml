@@ -418,8 +418,8 @@ Item {
                                 fieldWidth: 30
                                 decTip: qsTr("Fewer parts")
                                 incTip: qsTr("More parts")
-                                onDecremented: timer.setSectionCount(partGroup.modelData.section, Math.max(1, partGroup.modelData.sectionCount - 1))
-                                onIncremented: timer.setSectionCount(partGroup.modelData.section, Math.min(8, partGroup.modelData.sectionCount + 1))
+                                onDecremented: timer.setSectionCount(partGroup.modelData.section, partGroup.modelData.sectionCount - 1)
+                                onIncremented: timer.setSectionCount(partGroup.modelData.section, partGroup.modelData.sectionCount + 1)
                             }
                         }
 

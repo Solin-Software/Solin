@@ -479,7 +479,7 @@ def test_end_to_end_timer_part_and_schedule_commands_sync_public_and_controller_
                 == 420
             )
 
-            # 3. Set Ministry section count to 1 (locks single part) then 4 (re-enables)
+            # 3. The last remaining Ministry part is still independently editable.
             r3_single = await send(
                 {
                     "type": "set_section_count",
@@ -494,39 +494,22 @@ def test_end_to_end_timer_part_and_schedule_commands_sync_public_and_controller_
             ).json()
             ministry_single = [p for p in sched_single["parts"] if p["section"] == "ministry"]
             assert len(ministry_single) == 1
-            assert ministry_single[0]["durationEditable"] is False
+            assert ministry_single[0]["durationEditable"] is True
+            single_id = ministry_single[0]["id"]
 
-            blocked_adjust = await (
-                await client.post(
-                    "/remote/timer/api/commands",
-                    headers=headers,
-                    json={
-                        "commandId": str(uuid.uuid4()),
-                        "type": "adjust_part",
-                        "scheduleRevision": rev,
-                        "partId": ministry_single[0]["id"],
-                        "deltaSeconds": 60,
-                    },
-                )
-            ).json()
-            assert blocked_adjust["ok"] is False
-            assert blocked_adjust["error"]["code"] == "blocked"
-
-            blocked_set = await (
-                await client.post(
-                    "/remote/timer/api/commands",
-                    headers=headers,
-                    json={
-                        "commandId": str(uuid.uuid4()),
-                        "type": "set_part_seconds",
-                        "scheduleRevision": rev,
-                        "partId": ministry_single[0]["id"],
-                        "plannedSeconds": 600,
-                    },
-                )
-            ).json()
-            assert blocked_set["ok"] is False
-            assert blocked_set["error"]["code"] == "blocked"
+            adjusted = await send({
+                "type": "adjust_part",
+                "scheduleRevision": rev,
+                "partId": single_id,
+                "deltaSeconds": 60,
+            })
+            updated = await send({
+                "type": "set_part_seconds",
+                "scheduleRevision": adjusted["scheduleRevision"],
+                "partId": single_id,
+                "plannedSeconds": 600,
+            })
+            rev = updated["scheduleRevision"]
 
             r3 = await send(
                 {
@@ -541,6 +524,8 @@ def test_end_to_end_timer_part_and_schedule_commands_sync_public_and_controller_
             ministry_parts = [p for p in sched["parts"] if p["section"] == "ministry"]
             assert len(ministry_parts) == 4
             assert all(p["durationEditable"] is True for p in ministry_parts)
+            assert ministry_parts[0]["id"] == single_id
+            assert ministry_parts[0]["plannedSeconds"] == 600
 
             # 4. Start part, nudge +1s / -1s while running, stop, reset
             r4 = await send(

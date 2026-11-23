@@ -90,6 +90,7 @@ class _MediaCountdownProbe(QObject):
     def __init__(self) -> None:
         super().__init__()
         self.refreshes = 0
+        self.assignment_modes: list[bool] = []
         self.presentation_updates: list[int] = []
         self.enabled_updates: list[bool] = []
         self.lead_updates: list[int] = []
@@ -131,6 +132,10 @@ class _MediaCountdownProbe(QObject):
     @Property("QVariant", notify=mediaCountdownChanged)
     def mediaCountdown(self):  # noqa: N802 - QML API
         return self.model
+
+    @Slot(bool)
+    def setAssignmentsModeActive(self, active: bool) -> None:  # noqa: N802 - QML API
+        self.assignment_modes.append(active)
 
     @Slot()
     def refreshMediaCountdownPage(self) -> None:  # noqa: N802 - QML API
@@ -242,6 +247,10 @@ class _AdvancedTimerProbe(QObject):
     def setManualHand(self, raised: bool) -> None:  # noqa: N802 - QML API
         self.manual_hand = raised
         self.manualHandChanged.emit()
+
+    @Slot()
+    def deferAssignmentLookupForEdit(self) -> None:  # noqa: N802 - QML API
+        pass
 
     @Slot(str, int)
     def adjustPart(self, part_id: str, seconds: int) -> None:  # noqa: N802 - QML API
@@ -1270,6 +1279,7 @@ def test_timer_view_moves_mode_selector_below_header_when_compact(
     compact_selector = root.findChild(QObject, "timerModeSelectorCompact")
     assert wide_selector is not None
     assert compact_selector is not None
+    assert timer.assignment_modes == [True, False]
     assert root.property("compactHeader") is compact
     assert compact_selector.property("visible") is compact
     assert wide_selector.property("visible") is not compact

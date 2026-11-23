@@ -7,11 +7,13 @@ import pytest
 
 from solin.core.remote_control.command_gate import CommandDisposition
 from solin.core.remote_control.features import TimerRemoteFeatureFlags
-from solin.core.remote_control.timer.contracts import (
+from solin.core.timer.models import (
     MAX_PLANNED_PART_SECONDS,
     MAX_SECTION_PART_COUNT,
     MIN_PLANNED_PART_SECONDS,
     MIN_SECTION_PART_COUNT,
+)
+from solin.core.remote_control.timer.contracts import (
     AdjustPartCommand,
     NavigateWeekCommand,
     ResetPartCommand,

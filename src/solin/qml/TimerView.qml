@@ -28,6 +28,8 @@ Rectangle {
     readonly property bool compactHeader: width < 560
 
     property int mode: 0  // 0 = advanced, 1 = media countdown
+    onModeChanged: timer.setAssignmentsModeActive(mode === 0)
+    Component.onCompleted: timer.setAssignmentsModeActive(mode === 0)
 
     function iconHex(colorValue) {
         return String(colorValue).replace("#", "")
