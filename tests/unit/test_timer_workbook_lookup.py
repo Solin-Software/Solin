@@ -29,15 +29,17 @@ def _wait_until(predicate, timeout_ms: int = 2_000) -> None:
 def test_latest_pending_request_wins_and_completes_on_owner_thread() -> None:
     started = threading.Event()
     release = threading.Event()
+    first_request_cancelled: bool | None = None
     calls = []
     result = object()
 
     def fetch(monday, api_code, *, is_cancelled):
+        nonlocal first_request_cancelled
         calls.append((monday, api_code))
         if api_code == "first":
             started.set()
-            assert release.wait(2)
-            assert is_cancelled()
+            if release.wait(2):
+                first_request_cancelled = is_cancelled()
         return result
 
     lookup = TimerWorkbookLookup(fetch)
@@ -54,6 +56,8 @@ def test_latest_pending_request_wins_and_completes_on_owner_thread() -> None:
         lookup.request(3, MONDAY, "duplicate")
         release.set()
         _wait_until(lambda: bool(completed))
+        assert first_request_cancelled is not None, "First lookup timed out waiting for release"
+        assert first_request_cancelled, "Superseded lookup did not receive cancellation"
         assert calls == [(MONDAY, "first"), (MONDAY, "latest")]
         assert completed == [(3, result, lookup.thread())]
     finally:
