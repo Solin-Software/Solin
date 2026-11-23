@@ -66,6 +66,7 @@ class ZoomPanel(ToolbarPanel):
     meeting_start_requested = Signal()
     after_meeting_requested = Signal()
     background_song_link_toggled = Signal(bool)
+    mute_during_playback_toggled = Signal(bool)
     cancel_requested = Signal()
     raised_hands_toggled = Signal(bool)
     timer_integration_toggled = Signal(bool)
@@ -204,10 +205,13 @@ class ZoomPanel(ToolbarPanel):
         integration.setContentsMargins(0, 4, 0, 0)
         integration.setSpacing(6)
         integration.addWidget(self._divider(self._integration))
-        self._link = ZoomSwitch(self._integration, description=True)
+        self._link = ZoomSwitch(self._integration)
         self._link.toggled.connect(self.background_song_link_toggled)
         integration.addWidget(self._link)
-        self._integration.hide()
+        self._link.hide()
+        self._playback_mute = ZoomSwitch(self._integration)
+        self._playback_mute.toggled.connect(self.mute_during_playback_toggled)
+        integration.addWidget(self._playback_mute)
         actions.addWidget(self._integration)
         self._card_layout.addWidget(self._meeting_page)
 
@@ -297,14 +301,17 @@ class ZoomPanel(ToolbarPanel):
         self._before.set_copy(self.tr("Before meeting"), meeting_audio)
         self._after.set_copy(self.tr("End of meeting"), meeting_audio)
         self._combined.set_copy(self.tr("Before/after meeting"), meeting_audio)
-        self._link.set_copy(
-            self.tr("Link background song"), self.tr("Sync playback with meeting controls.")
-        )
+        self._link.set_copy(self.tr("Link background song"))
         self._link.setToolTip(
             self.tr(
                 "Stop the song at meeting start; play it before/after the meeting. Scheduled song stops also prepare Zoom."
             )
         )
+        self._playback_mute.set_copy(self.tr("Mute microphone during playback"))
+        self._playback_mute.setToolTip(self.tr(
+            "Mute your Zoom microphone while Solin plays audio or video. "
+            "Unmute it when playback pauses or stops if Solin muted it."
+        ))
         self._busy_text.setText(self.tr("Automation in progress…"))
         self._cancel.setText(self.tr("Cancel"))
         self._monitor_hands.set_copy(self.tr("Monitor raised hands"))
@@ -459,10 +466,14 @@ class ZoomPanel(ToolbarPanel):
         self._sync_geometry()
 
     def set_background_song_link(self, available: bool, linked: bool) -> None:
-        self._integration.setVisible(available)
+        self._link.setVisible(available)
         with QSignalBlocker(self._link):
             self._link.setChecked(linked)
         self._sync_geometry()
+
+    def set_mute_during_playback(self, enabled: bool) -> None:
+        with QSignalBlocker(self._playback_mute):
+            self._playback_mute.setChecked(enabled)
 
     def set_timer_hand_controls(self, *, available: bool, integrated: bool, manual: bool) -> None:
         self._timer_integration.setVisible(available)
@@ -737,6 +748,7 @@ class ZoomPanel(ToolbarPanel):
         for button in self._workflow_buttons:
             button.fit(content_width)
         self._link.fit(content_width)
+        self._playback_mute.fit(content_width)
         self._monitor_hands.fit(content_width)
         self._timer_integration.fit(content_width)
         self._hands_status.setFixedHeight(self._status_layout.totalHeightForWidth(content_width))

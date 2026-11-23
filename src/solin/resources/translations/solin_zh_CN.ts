@@ -10545,8 +10545,13 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>将播放与会议控制同步。</translation>
+        <source>Mute microphone during playback</source>
+        <translation>播放时将麦克风静音</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Solin 播放音频或视频时，将你的 Zoom 麦克风静音。如果麦克风由 Solin 静音，暂停或停止播放时会取消静音。</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

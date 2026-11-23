@@ -10585,8 +10585,13 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Sawazisha uchezaji na vidhibiti vya mkutano.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Nyamazisha maikrofoni wakati wa uchezaji</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Hunyamazisha maikrofoni yako ya Zoom wakati Solin inacheza sauti au video. Ikiwa Solin ndiyo iliyoizima sauti, huiwasha tena uchezaji unapositishwa kwa muda au unapokoma.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

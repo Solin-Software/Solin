@@ -116,6 +116,12 @@ class ZoomSettingsStore(_ProfilePrefsSettings):
     def set_background_song_linked(self, linked: bool) -> None:
         self.settings.set_value(SettingsKey.ZOOM_BACKGROUND_SONG_LINK, bool(linked))
 
+    def mute_during_playback(self) -> bool:
+        return bool(self.settings.value(SettingsKey.ZOOM_MUTE_DURING_PLAYBACK, False, bool))
+
+    def set_mute_during_playback(self, enabled: bool) -> None:
+        self.settings.set_value(SettingsKey.ZOOM_MUTE_DURING_PLAYBACK, enabled)
+
     def raised_hands_monitoring_enabled(self) -> bool:
         return bool(self.settings.value(SettingsKey.ZOOM_RAISED_HANDS_MONITORING, False, bool))
 

@@ -10585,8 +10585,13 @@ Les deux appareils doivent être sur le même réseau Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Sync playback with meeting controls.</source>
-        <translation>Synchroniser la lecture avec les commandes de réunion.</translation>
+        <source>Mute microphone during playback</source>
+        <translation>Couper le micro pendant la lecture</translation>
+    </message>
+    <message>
+        <location filename="../../widgets/zoom_panel.py"/>
+        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
+        <translation>Coupe votre micro Zoom pendant que Solin lit un fichier audio ou vidéo. Si Solin a coupé le micro, il le réactive lorsque la lecture est mise en pause ou s’arrête.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

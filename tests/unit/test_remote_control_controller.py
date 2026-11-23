@@ -41,6 +41,7 @@ from solin.core.remote_control.media.contracts import (
     ProjectionOrigin,
     ProjectionSource,
     RemoteMediaKind,
+    ResumeCommand,
 )
 from solin.core.remote_control.media.state import ProjectionCommandSession
 from solin.core.remote_control.media.thumbnails import render_media_placeholder_thumbnail
@@ -1419,6 +1420,31 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
     assert error.code is CommandErrorCode.PLAYBACK_STALE
     assert media.is_playing is True
     controller.stop()
+
+
+def test_remote_resume_uses_projection_playback_controls(tmp_path: Path) -> None:
+    controller, session, bar, media, _projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    session.state_type = "video"
+    session.state = {"type": "video", "title": "Prepared song"}
+    media.is_paused = True
+    resumes = []
+
+    def resume_playback() -> None:
+        resumes.append(True)
+        media.play()
+
+    bar.resume_playback = resume_playback
+    adapter._refresh_playback()
+    session_id = controller.media_state.playback.playback_session_id
+    assert session_id is not None
+
+    try:
+        assert adapter._execute_command(ResumeCommand(str(uuid.uuid4()), session_id)) is None
+        assert resumes == [True]
+        assert controller.media_state.playback.state is PlaybackState.PLAYING
+    finally:
+        controller.stop()
 
 
 def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(

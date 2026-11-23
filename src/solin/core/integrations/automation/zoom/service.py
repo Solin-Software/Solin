@@ -7,8 +7,9 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
+from time import monotonic
 
-from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QTimer, Qt, Signal
 
 from solin.core.foundation.constants import IS_COMPILED, ZOOM_AUTOMATION_ARGUMENT
 
@@ -16,10 +17,13 @@ from ..settings import ZoomSettingsStore
 from .protocol import (
     MAX_MESSAGE_BYTES,
     PARTICIPANT_ACTIONS,
+    PLAYBACK_MICROPHONE,
     PROTOCOL_VERSION,
     RAISED_HANDS,
+    PlaybackMicrophoneOwner,
     parse_participant_result,
     parse_participant_step,
+    parse_playback_microphone_owner,
     parse_snapshot,
     valid_reference,
 )
@@ -38,6 +42,9 @@ log = logging.getLogger(__name__)
 _WRITES = SEQUENCES | PARTICIPANT_ACTIONS
 _RAISED_HANDS_INTERVAL_MS = 1500
 _PANEL_RECHECK_INTERVAL_MS = 5000
+_WORKER_STOP_MS = 2000
+_PLAYBACK_MICROPHONE_TIMEOUT_MS = 18000
+_PLAYBACK_MICROPHONE_RETRY_SECONDS = 5.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +63,7 @@ class ZoomService(QObject):
     sequence_progress = Signal(str)
     raised_hands_changed = Signal(object)
     participant_action_finished = Signal(object)
+    mute_during_playback_changed = Signal(bool)
     error = Signal(str)
 
     def __init__(
@@ -70,12 +78,20 @@ class ZoomService(QObject):
         self._active = False
         self._connected = False
         self._process: QProcess | None = None
+        self._closing_process: QProcess | None = None
         self._ready = False
         self._buffer = bytearray()
         self._pending: _Request | None = None
         self._next_id = 0
         self._queued_operation: _Request | None = None
         self._participant_steps: list[ParticipantStepResult] = []
+        self._media_playing = False
+        self._mute_during_playback = settings.mute_during_playback()
+        self._playback_mute_sent: bool | None = None
+        self._playback_microphone_retry_at: float | None = None
+        # Keep confirmed ownership until the worker verifies restoration.
+        self._playback_microphone_owner: PlaybackMicrophoneOwner | None = None
+        self._playback_microphone_used = False
         self._raised_hands_enabled = raised_hands_enabled
         self._monitoring = False
         self._monitor_generation = 0
@@ -88,6 +104,10 @@ class ZoomService(QObject):
         self._deadline = QTimer(self)
         self._deadline.setSingleShot(True)
         self._deadline.timeout.connect(self._timed_out)
+        self._closing_deadline = QTimer(self)
+        self._closing_deadline.setSingleShot(True)
+        self._closing_deadline.setTimerType(Qt.TimerType.PreciseTimer)
+        self._closing_deadline.timeout.connect(self._kill_closing_process)
 
     @property
     def is_available(self) -> bool:
@@ -115,6 +135,23 @@ class ZoomService(QObject):
     def raised_hands_available(self) -> bool:
         return self.is_available and self._raised_hands_enabled
 
+    @property
+    def mute_during_playback(self) -> bool:
+        return self._mute_during_playback
+
+    def set_mute_during_playback(self, enabled: bool) -> None:
+        if not self.is_available or enabled == self._mute_during_playback:
+            return
+        self._settings.set_mute_during_playback(enabled)
+        self._mute_during_playback = enabled
+        self.mute_during_playback_changed.emit(enabled)
+        self._dispatch_playback_microphone()
+
+    def set_media_playing(self, playing: bool) -> None:
+        if playing != self._media_playing:
+            self._media_playing = playing
+            self._dispatch_playback_microphone()
+
     def start(self) -> None:
         if not self.is_available or self._active:
             return
@@ -125,15 +162,29 @@ class ZoomService(QObject):
         self._poll.start()
         self.refresh()
 
-    def stop(self, *, wait: bool = False, timeout: float = 2.0) -> None:
+    def stop(self, *, wait: bool = False, timeout: float | None = None) -> None:
         was_active = self._active
         self._active = False
         self._poll.stop()
         self._apply_raised_hands_monitoring(False)
-        process = self._process
-        self._retire(cancelled=True)
+        process = self._process or self._closing_process
+        pending_command = self._pending.command if self._pending is not None else None
+        restore_microphone = pending_command == PLAYBACK_MICROPHONE or (
+            self._playback_microphone_used and self._playback_microphone_owner is not None
+        )
+        self._retire(
+            cancelled=True,
+            restore_microphone=restore_microphone and pending_command not in _WRITES,
+        )
         if wait and process is not None:
-            process.waitForFinished(max(0, min(2000, int(timeout * 1000))))
+            wait_ms = (
+                max(0, self._closing_deadline.remainingTime())
+                if process is self._closing_process else _WORKER_STOP_MS
+            )
+            if timeout is not None:
+                wait_ms = min(wait_ms, max(0, int(timeout * 1000)))
+            if not process.waitForFinished(wait_ms) and process is self._closing_process:
+                self._kill_closing_process()
         if was_active:
             self.enabled_changed.emit(False)
 
@@ -142,11 +193,16 @@ class ZoomService(QObject):
             self._retire(cancelled=True)
 
     def refresh(self) -> None:
-        if not self._active or self._pending is not None or self.is_busy:
+        if (
+            not self._active or self._closing_process is not None
+            or self._pending is not None or self.is_busy
+        ):
             return
         if self._process is None:
             self._launch()
         elif self._ready:
+            if self._dispatch_playback_microphone():
+                return
             if self._monitoring and self._connected:
                 open_panel, self._open_panel_once = self._open_panel_once, False
                 self._send(RAISED_HANDS, open_panel=open_panel)
@@ -223,7 +279,8 @@ class ZoomService(QObject):
         process.start(sys.executable, arguments)
 
     def _send(
-        self, command: str, *, reference: str | None = None, open_panel: bool = False
+        self, command: str, *, reference: str | None = None, open_panel: bool = False,
+        muted: bool = False,
     ) -> None:
         if self._process is None or not self._ready:
             return
@@ -232,12 +289,17 @@ class ZoomService(QObject):
         request: dict[str, object] = {"id": self._next_id, "command": command}
         if command == RAISED_HANDS:
             request["open_panel"] = open_panel
+        elif command == PLAYBACK_MICROPHONE:
+            request["muted"] = muted
+            request["owner"] = self._playback_microphone_owner
         if reference is not None:
             request["reference"] = reference
         payload = json.dumps(request).encode() + b"\n"
         timeout = 3000
         if command in SEQUENCES:
             timeout = 35000
+        elif command == PLAYBACK_MICROPHONE:
+            timeout = _PLAYBACK_MICROPHONE_TIMEOUT_MS
         elif command in PARTICIPANT_ACTIONS:
             timeout = 18000
         elif open_panel:
@@ -245,6 +307,26 @@ class ZoomService(QObject):
         self._deadline.start(timeout)
         if self._process.write(payload) != len(payload):
             self._retire(code="worker_failed")
+
+    def _dispatch_playback_microphone(self) -> bool:
+        wanted = self._mute_during_playback and self._media_playing
+        if (
+            not self._active or not self._connected or not self._ready
+            or self._pending is not None or self.is_busy
+        ):
+            return False
+        if wanted == self._playback_mute_sent:
+            retry_at = self._playback_microphone_retry_at
+            if retry_at is None or monotonic() < retry_at:
+                return False
+        else:
+            self._playback_microphone_retry_at = None
+        if not wanted and self._playback_mute_sent is None and self._playback_microphone_owner is None:
+            return False
+        self._playback_mute_sent = wanted
+        self._playback_microphone_used = True
+        self._send(PLAYBACK_MICROPHONE, muted=wanted)
+        return True
 
     def _dispatch(self) -> None:
         if self._pending is not None or not self._active:
@@ -327,6 +409,11 @@ class ZoomService(QObject):
             snapshot = (
                 self._snapshot_from_error(error) if error else parse_snapshot(message["snapshot"])
             )
+        elif command == PLAYBACK_MICROPHONE:
+            if not error:
+                owner = parse_playback_microphone_owner(message["owner"])
+                if self._playback_mute_sent is False and owner is not None:
+                    raise ValueError("Unexpected playback microphone owner after restore")
         elif pending.reference is not None:
             action = ParticipantAction(command)
             if error:
@@ -355,6 +442,20 @@ class ZoomService(QObject):
                 self._set_connected(False)
             elif self._monitoring and pending.monitor_generation == self._monitor_generation:
                 self._publish_hands(snapshot)
+        elif command == PLAYBACK_MICROPHONE:
+            if error == "meeting_not_found":
+                # Reconcile the unfulfilled request when Zoom is connected again.
+                self._playback_mute_sent = None
+                self._set_connected(False)
+            elif error:
+                retry_pending = self._playback_microphone_retry_at is not None
+                self._playback_microphone_retry_at = monotonic() + _PLAYBACK_MICROPHONE_RETRY_SECONDS
+                if not retry_pending:
+                    log.warning("Zoom playback microphone action failed: %s", error)
+                    self.error.emit(error)
+            else:
+                self._playback_microphone_retry_at = None
+                self._playback_microphone_owner = owner
         elif pending.reference is not None:
             failure = participant_result.failure
             if failure is not None:
@@ -367,6 +468,9 @@ class ZoomService(QObject):
         else:
             if any(f.code == "meeting_not_found" for f in outcome.failed_steps):
                 self._set_connected(False)
+            if command == "pre_meeting" and self._mute_during_playback and self._media_playing:
+                # Meeting start can turn the microphone on during playback.
+                self._playback_mute_sent = None
             log.debug(
                 "Zoom %s completed in %s ms: %s",
                 command,
@@ -380,6 +484,8 @@ class ZoomService(QObject):
             self._monitoring and self._open_panel_once and self._connected
         ):
             self._dispatch()
+        else:
+            self._dispatch_playback_microphone()
 
     @staticmethod
     def _sequence_result(command: str, message: dict, error: str | None) -> SequenceResult:
@@ -436,6 +542,8 @@ class ZoomService(QObject):
         else:
             self._set_poll_interval()
         if changed:
+            if connected:
+                self._playback_mute_sent = None
             self.connection_changed.emit(connected)
 
     def _timed_out(self) -> None:
@@ -448,7 +556,17 @@ class ZoomService(QObject):
     def _exited(self, process: QProcess) -> None:
         if process is self._process:
             self._retire(code="worker_failed")
+        if process is self._closing_process:
+            self._closing_process = None
+            self._closing_deadline.stop()
+            if process.exitStatus() == QProcess.ExitStatus.NormalExit and process.exitCode() == 0:
+                self._playback_microphone_owner = None
+            self.refresh()
         process.deleteLater()
+
+    def _kill_closing_process(self) -> None:
+        if self._closing_process is not None:
+            self._closing_process.kill()
 
     @staticmethod
     def _log_stderr(process: QProcess) -> None:
@@ -456,7 +574,9 @@ class ZoomService(QObject):
         if data:
             log.warning("Zoom worker: %s", data[-8192:].strip())
 
-    def _retire(self, *, code: str | None = None, cancelled: bool = False) -> None:
+    def _retire(
+        self, *, code: str | None = None, cancelled: bool = False, restore_microphone: bool = False
+    ) -> None:
         process, self._process = self._process, None
         operation = self._queued_operation
         if self._pending and self._pending.command in _WRITES:
@@ -466,11 +586,20 @@ class ZoomService(QObject):
         self._queued_operation = None
         self._pending = None
         self._ready = False
+        self._playback_mute_sent = None
+        self._playback_microphone_retry_at = None
+        self._playback_microphone_used = False
         self._buffer.clear()
         self._deadline.stop()
         if process is not None:
             if process.state() == QProcess.ProcessState.NotRunning:
                 process.deleteLater()
+            elif restore_microphone:
+                # EOF drains the in-flight request and restores the microphone.
+                # Only a successful exit confirms release of the mute.
+                self._closing_process = process
+                self._closing_deadline.start(_PLAYBACK_MICROPHONE_TIMEOUT_MS)
+                process.closeWriteChannel()
             else:
                 process.kill()
         self._set_connected(False, error=code)

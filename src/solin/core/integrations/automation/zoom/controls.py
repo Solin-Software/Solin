@@ -396,10 +396,12 @@ class ZoomControls:
             code="audio_not_disconnected",
         )
 
-    def set_microphone(self, enabled: bool) -> None:
+    def set_microphone(self, enabled: bool, *, disconnected_ok: bool = False) -> bool:
+        """Return whether a change was dispatched and the target state verified."""
         wanted = AudioState.UNMUTED if enabled else AudioState.MUTED
-        self._set_media_state(
-            self._audio, _audio_button_state_from_text, wanted, "microphone_not_changed"
+        return self._set_media_state(
+            self._audio, _audio_button_state_from_text, wanted, "microphone_not_changed",
+            disconnected_ok=disconnected_ok,
         )
 
     def set_video(self, enabled: bool) -> None:
@@ -414,7 +416,9 @@ class ZoomControls:
         state: Callable[[str], AudioState | VideoState],
         wanted: AudioState | VideoState,
         code: str,
-    ) -> None:
+        *,
+        disconnected_ok: bool = False,
+    ) -> bool:
         # Zoom can accept Invoke while its media engine is transitioning and
         # silently discard it. Reconcile the desired state, never replay the
         # sequence or retry an uncertain COM failure. Each corrective dispatch
@@ -422,28 +426,36 @@ class ZoomControls:
         def read():
             element = find()
             current = state(element.name)
-            if current in (AudioState.UNKNOWN, AudioState.DISCONNECTED):
+            if current == AudioState.UNKNOWN or (
+                current == AudioState.DISCONNECTED and not disconnected_ok
+            ):
                 raise ZoomAutomationError(
                     "audio_state_unknown" if isinstance(current, AudioState) else "video_state_unknown"
                 )
             return element, current
 
+        def settled():
+            _, current = read()
+            return current if current in (wanted, AudioState.DISCONNECTED) else None
+
+        pressed = False
         for attempt in range(3):
             _, current = read()
-            if current == wanted:
-                return
+            if current in (wanted, AudioState.DISCONNECTED):
+                return pressed and current == wanted
             self.desktop.focus(self.window)
             element, current = read()
-            if current == wanted:
-                return
+            if current in (wanted, AudioState.DISCONNECTED):
+                return pressed and current == wanted
             self._press(element)
+            pressed = True
             try:
-                self._wait(
-                    lambda: read()[1] == wanted,
+                observed = self._wait(
+                    settled,
                     timeout=1 if attempt < 2 else 5,
                     code=code,
                 )
-                return
+                return observed == wanted
             except ZoomAutomationError as exc:
                 if exc.code != code or attempt == 2:
                     raise
@@ -453,6 +465,7 @@ class ZoomControls:
                     wanted,
                     attempt + 1,
                 )
+        return False
 
     def _participant_controls(self) -> list[Element]:
         if not self.desktop.valid(self._panel_window):

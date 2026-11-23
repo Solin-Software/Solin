@@ -42,6 +42,7 @@ class MediaController(QObject):
     # SolinPlaybackState (Qt-free). Signal(object) because a Python enum is not a
     # registered Qt metatype; consumers compare against SolinPlaybackState members.
     state_changed     = Signal(object)
+    audible_playback_changed = Signal(bool)
     duration_changed  = Signal(int)
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
@@ -91,6 +92,8 @@ class MediaController(QObject):
         self._request: MediaPlaybackRequest | None = None
         self._playback_rate = 1.0
         self._volume = 1.0  # 0.0–1.0; forwarded to the sidecar as a percent
+        self._audio_suppressed = False
+        self._last_audible_playback = False
         # True while a background cache copy is downloading behind a stream.
         self._caching_remote = False
         # True while the engine reports the stream re-establishing itself.
@@ -150,6 +153,11 @@ class MediaController(QObject):
         return self._engine_route_active and self._engine_state == ENGINE_STATE_PLAYING
 
     @property
+    def is_playing_audibly(self) -> bool:
+        """Whether playback is running with nonzero output volume."""
+        return self.is_playing and self._output_volume_percent() > 0
+
+    @property
     def is_paused(self) -> bool:
         return self._engine_route_active and self._engine_state == ENGINE_STATE_PAUSED
 
@@ -174,8 +182,14 @@ class MediaController(QObject):
         is_ready = getattr(route, "is_ready", None)
         return bool(is_ready()) if callable(is_ready) else True
 
-    def _volume_percent(self) -> int:
-        return max(0, round(self._volume * 100))
+    def _output_volume_percent(self) -> int:
+        return 0 if self._audio_suppressed else round(self._volume * 100)
+
+    def _publish_audible_playback(self) -> None:
+        audible = self.is_playing_audibly
+        if audible != self._last_audible_playback:
+            self._last_audible_playback = audible
+            self.audible_playback_changed.emit(audible)
 
     def _speed_percent(self) -> int:
         return max(1, round(self._playback_rate * 100))
@@ -208,7 +222,7 @@ class MediaController(QObject):
             url,
             is_local_file=not is_remote,  # libobs ffmpeg_source streams remote URLs
             autoplay=request.autoplay,
-            volume_percent=self._volume_percent(),
+            volume_percent=self._output_volume_percent(),
             speed_percent=self._speed_percent(),
             trim_start_ms=start_ms,
             trim_end_ms=end_trim_ms,
@@ -255,6 +269,7 @@ class MediaController(QObject):
             self.state_changed.emit(
                 ENGINE_STATE_TO_SOLIN.get(raw_state, SolinPlaybackState.STOPPED)
             )
+            self._publish_audible_playback()
         # Reflect the decoder's recovery state in the transport UI.
         recovering = raw_state == ENGINE_STATE_BUFFERING
         if recovering != self._engine_recovering:
@@ -278,6 +293,7 @@ class MediaController(QObject):
         self._request = request
         self._session.begin_playback(url, requested_playing=request.autoplay)
         self._engine_route_active = False
+        self._publish_audible_playback()
 
         if not self._route_should_handle(url):
             # libobs is the only engine; without a ready route there is nothing to
@@ -347,6 +363,7 @@ class MediaController(QObject):
         self._engine_duration_ms = 0
         self._engine_media_ended_emitted = False
         self.state_changed.emit(SolinPlaybackState.STOPPED)
+        self._publish_audible_playback()
         self.playback_source_changed.emit(False)
 
     def toggle_play_pause(self):
@@ -370,16 +387,23 @@ class MediaController(QObject):
 
     def set_volume(self, value: float):
         self._volume = max(0.0, min(1.0, float(value)))
-        if self._engine_route_active and self._engine_route is not None:
-            self._engine_route.set_properties(
-                volume_percent=self._volume_percent(),
-                speed_percent=self._speed_percent(),
-            )
+        self._apply_playback_properties()
+        self._publish_audible_playback()
+
+    def set_audio_suppressed(self, suppressed: bool) -> None:
+        """Temporarily silence output while keeping the configured volume."""
+        if suppressed != self._audio_suppressed:
+            self._audio_suppressed = suppressed
+            self._apply_playback_properties()
+            self._publish_audible_playback()
 
     def set_playback_rate(self, rate: float):
         self._playback_rate = max(0.1, rate)
+        self._apply_playback_properties()
+
+    def _apply_playback_properties(self) -> None:
         if self._engine_route_active and self._engine_route is not None:
             self._engine_route.set_properties(
-                volume_percent=self._volume_percent(),
+                volume_percent=self._output_volume_percent(),
                 speed_percent=self._speed_percent(),
             )

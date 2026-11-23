@@ -1,11 +1,4 @@
-"""Cache / download-policy behaviour of the engine-routed MediaController.
-
-libobs is the only media engine now: remote URLs stream through the sidecar's
-``ffmpeg_source`` directly, an already-cached copy is preferred, and (per cache
-policy) a background download populates the cache for offline reuse. The Qt
-streaming / http->local source-swap / buffer-bar / reconnect state machine is
-gone, so only the surviving cache decisions are exercised here.
-"""
+"""Cache policy and playback behaviour of the engine-routed MediaController."""
 
 from __future__ import annotations
 
@@ -19,6 +12,7 @@ from solin.core.media.playback_request import (
     MediaPlaybackRequest,
     PlaybackCachePolicy,
 )
+from solin.core.media.playback_state import ENGINE_STATE_PAUSED, ENGINE_STATE_PLAYING
 
 
 def _app():
@@ -76,10 +70,12 @@ class _FakeRoute:
     def __init__(self) -> None:
         self.opened: list[tuple[str, dict]] = []
         self.calls: list[str] = []
+        self.volume_percent = 0
 
     def open(self, path, **kwargs):
         self.opened.append((path, kwargs))
         self.calls.append("open")
+        self.volume_percent = kwargs["volume_percent"]
 
     def play(self):
         self.calls.append("play")
@@ -101,6 +97,7 @@ class _FakeRoute:
 
     def set_properties(self, **kwargs):
         self.calls.append("props")
+        self.volume_percent = kwargs["volume_percent"]
 
 
 def _controller_with_downloader(
@@ -363,10 +360,7 @@ def test_stopping_playback_stops_reporting_buffer(tmp_path):
 
 def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
     """The transport shows recovery while the engine reconnects a dropped stream."""
-    from solin.core.media.playback_state import (
-        ENGINE_STATE_BUFFERING,
-        ENGINE_STATE_PLAYING,
-    )
+    from solin.core.media.playback_state import ENGINE_STATE_BUFFERING
 
     controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
     controller.set_engine_media_route(_FakeRoute())
@@ -387,3 +381,42 @@ def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
 
     assert recovering == [True, False]
     controller.stop()
+
+
+def test_audible_playback_stays_inactive_until_suppressed_audio_is_released(tmp_path):
+    controller, _downloader = _controller_with_downloader(tmp_path, auto_download=False)
+    route = _FakeRoute()
+    controller.set_engine_media_route(route)
+    changes: list[bool] = []
+    controller.audible_playback_changed.connect(changes.append)
+
+    def report_state(state: int) -> None:
+        controller.on_engine_media_state(
+            SimpleNamespace(state=state, position_ms=3500, duration_ms=60000)
+        )
+
+    controller.set_audio_suppressed(True)
+    _start(controller, REMOTE)
+    report_state(ENGINE_STATE_PLAYING)
+    controller.set_volume(0.55)
+    controller.pause()
+
+    assert controller.is_playing
+    assert route.volume_percent == 0
+    assert changes == []
+
+    report_state(ENGINE_STATE_PAUSED)
+    controller.set_audio_suppressed(False)
+    assert route.volume_percent == 55
+    assert changes == []
+
+    controller.play()
+    report_state(ENGINE_STATE_PLAYING)
+    controller.set_volume(0)
+    controller.set_volume(0.55)
+    report_state(ENGINE_STATE_PAUSED)
+    controller.play()
+    report_state(ENGINE_STATE_PLAYING)
+    controller.stop()
+
+    assert changes == [True, False, True, False, True, False]

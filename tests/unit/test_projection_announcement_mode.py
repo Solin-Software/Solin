@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import solin.widgets.projection.bar as projection_bar
 
 
@@ -52,13 +50,13 @@ class _Signal:
 class _Media:
     def __init__(self):
         self.position = 0
-        self.volumes = []
+        self.audio_suppressed = False
         self.paused = 0
         self.seeks = []
         self.played = 0
 
-    def set_volume(self, volume):
-        self.volumes.append(volume)
+    def set_audio_suppressed(self, suppressed):
+        self.audio_suppressed = suppressed
 
     def pause(self):
         self.paused += 1
@@ -70,14 +68,12 @@ class _Media:
         self.played += 1
 
 
-def _make_bar(*, muted=False, volume=0.8):
+def _make_bar():
     bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
     bar._announce_state = "off"
     bar._auto_share_playback_waiting = False
     bar._announce_gate_ms = 3500
     bar._announce_timer = _Timer()
-    bar._muted = muted
-    bar._volume = volume
     bar.media = _Media()
     bar.play_btn = _Control()
     bar.seek_slider = _Control()
@@ -95,12 +91,12 @@ def _make_bar(*, muted=False, volume=0.8):
 
 
 def test_begin_announcement_mode_mutes_locks_controls_and_starts_gate_timer():
-    bar = _make_bar(volume=0.65)
+    bar = _make_bar()
 
     bar.begin_announcement_mode()
 
     assert bar._announce_state == "gate"
-    assert bar.media.volumes == [0.0]
+    assert bar.media.audio_suppressed
     assert bar.play_btn.enabled is False
     assert bar.seek_slider.enabled is False
     assert bar._announce_timer.started == 1
@@ -116,21 +112,13 @@ def test_announcement_gate_waits_for_media_time_before_pausing():
     assert bar._announce_state == "gate"
     assert bar.media.paused == 0
     assert bar._announce_timer.stopped == 0
-    assert bar.media.volumes == [0.0]
+    assert bar.media.audio_suppressed
     assert bar.play_btn.enabled is False
     assert bar.seek_slider.enabled is False
 
 
-def test_announcement_gate_pauses_unmutes_and_reenables_only_play(monkeypatch):
-    single_shots = []
-    monkeypatch.setattr(
-        projection_bar,
-        "QTimer",
-        SimpleNamespace(
-            singleShot=lambda ms, callback: single_shots.append(ms) or callback()
-        ),
-    )
-    bar = _make_bar(volume=0.55)
+def test_announcement_gate_pauses_and_keeps_audio_suppressed():
+    bar = _make_bar()
     bar.begin_announcement_mode()
     bar.media.position = bar._announce_gate_ms
 
@@ -139,36 +127,22 @@ def test_announcement_gate_pauses_unmutes_and_reenables_only_play(monkeypatch):
     assert bar._announce_state == "ready"
     assert bar._announce_timer.stopped == 1
     assert bar.media.paused == 1
-    assert single_shots == [80]
-    assert bar.media.volumes == [0.0, 0.55]
+    assert bar.media.audio_suppressed
     assert bar.play_btn.enabled is True
     assert bar.seek_slider.enabled is False
 
 
-def test_announcement_gate_keeps_volume_zero_when_user_had_muted(monkeypatch):
-    monkeypatch.setattr(
-        projection_bar,
-        "QTimer",
-        SimpleNamespace(singleShot=lambda _ms, callback: callback()),
-    )
-    bar = _make_bar(muted=True, volume=0.55)
-    bar.begin_announcement_mode()
-    bar.media.position = bar._announce_gate_ms
-
-    bar._on_announce_gate_expired()
-
-    assert bar.media.volumes == [0.0, 0.0]
-
-
 def test_play_button_in_ready_state_restarts_song_and_unlocks_slider():
     bar = _make_bar()
-    bar._announce_state = "ready"
-    bar.seek_slider.setEnabled(False)
+    bar.begin_announcement_mode()
+    bar.media.position = bar._announce_gate_ms
+    bar._on_announce_gate_expired()
 
     bar._on_play_btn_clicked()
 
     assert bar._announce_state == "off"
     assert bar.seek_slider.enabled is True
+    assert not bar.media.audio_suppressed
     assert bar.media.seeks == [0]
     assert bar.media.played == 1
     assert bar.toggle_requested.emitted == 0
@@ -238,14 +212,14 @@ def test_announcement_mode_retains_precedence_after_auto_share_resolution():
         assert bar.seek_slider.enabled is False
 
 
-def test_cancel_announcement_mode_restores_volume_controls_and_deferred_switch():
-    bar = _make_bar(volume=0.7)
+def test_cancel_announcement_mode_restores_audio_and_controls():
+    bar = _make_bar()
     bar.begin_announcement_mode()
 
     bar._cancel_announcement_mode()
 
     assert bar._announce_state == "off"
     assert bar._announce_timer.stopped == 1
-    assert bar.media.volumes == [0.0, 0.7]
+    assert not bar.media.audio_suppressed
     assert bar.play_btn.enabled is True
     assert bar.seek_slider.enabled is True

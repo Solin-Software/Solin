@@ -31,6 +31,7 @@ from solin.core.integrations.automation.zoom.text_match import (
     _audio_button_state_from_text,
     _video_button_state_from_text,
 )
+from solin.core.integrations.automation.zoom.worker import _set_playback_microphone
 
 
 def test_automation_rejects_unsupported_platform_before_importing_com(monkeypatch):
@@ -115,6 +116,38 @@ def test_video_recognition_and_immutable_state():
         MeetingState().in_meeting = True
     assert not SequenceResult("pre_meeting", cancelled=True).ok
     assert not SequenceResult("pre_meeting", (StepFailure("video", "unavailable"),)).ok
+
+
+@pytest.mark.parametrize(("already_muted", "same_meeting", "restored"), [
+    (False, True, True),
+    (True, True, False),
+    (False, False, False),
+])
+def test_playback_only_restores_its_own_mute_in_the_same_meeting(
+    already_muted, same_meeting, restored,
+):
+    actions = []
+    microphone_enabled = not already_muted
+
+    def set_microphone(enabled, *, disconnected_ok):
+        nonlocal microphone_enabled
+        assert disconnected_ok
+        actions.append(enabled)
+        changed = enabled != microphone_enabled
+        microphone_enabled = enabled
+        return changed
+
+    original = Window(1, 2, "meeting", 100)
+    current = replace(original, area=200, handle=1 if same_meeting else 3)
+    controls = SimpleNamespace(
+        window=original, begin_step=lambda: None, set_microphone=set_microphone,
+    )
+    owner = _set_playback_microphone(controls, muted=True, owner=None)
+    owner = _set_playback_microphone(controls, muted=True, owner=owner)
+    controls.window = current
+    owner = _set_playback_microphone(controls, muted=False, owner=owner)
+    assert actions == ([False, False, True] if restored else [False, False])
+    assert owner is None
 
 
 class Controls:
@@ -270,14 +303,16 @@ def test_media_state_reconciles_a_successful_dispatch_ignored_by_busy_provider(v
         return True
 
     def wait(read, **kwargs):
-        if not read():
+        observed = read()
+        if not observed:
             raise ZoomAutomationError(kwargs["code"])
+        return observed
 
     controls._press, controls._wait = press, wait
     if video:
         controls.set_video(True)
     else:
-        controls.set_microphone(True)
+        assert controls.set_microphone(True)
     assert state[0] == wanted
     assert len(presses) == 2
 
