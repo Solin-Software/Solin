@@ -10,6 +10,7 @@ from PySide6.QtCore import QByteArray, QCoreApplication, QProcess, QSettings
 
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.integrations.automation.settings import ZoomSettingsStore
+from solin.core.integrations.automation.zoom import service as zoom_service_module
 from solin.core.integrations.automation.zoom.protocol import (
     PLAYBACK_MICROPHONE,
     PROTOCOL_VERSION,
@@ -229,6 +230,36 @@ def test_playback_microphone_reconciles_latest_state_after_pending_commands(
     assert not zoom_settings.mute_during_playback()
 
 
+def test_playback_microphone_retries_a_failed_restore_without_retrying_immediately(
+    monitor, monkeypatch,
+):
+    monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
+    clock = [0.0]
+    monkeypatch.setattr(zoom_service_module, "monotonic", lambda: clock[0])
+    service, messages = monitor
+    service.refresh()
+    _reply(service, messages, connected=True)
+    service.set_mute_during_playback(True)
+    service.set_media_playing(True)
+    _reply(service, messages, owner=_PLAYBACK_OWNER)
+    service.set_media_playing(False)
+    failed_restore = messages[-1]
+    _reply(service, messages, error="microphone_not_changed")
+    assert messages[-1] == failed_restore
+
+    service.refresh()
+    assert messages[-1]["command"] == "meeting"
+    _reply(service, messages, connected=True)
+    clock[0] += 60
+    service.refresh()
+    assert messages[-1]["command"] == PLAYBACK_MICROPHONE
+    assert messages[-1]["muted"] is False
+    assert messages[-1]["owner"] == _PLAYBACK_OWNER
+    _reply(service, messages, owner=None)
+    service.refresh()
+    assert messages[-1]["command"] == "meeting"
+
+
 @pytest.mark.parametrize("playing_after_restart", [False, True])
 def test_cancelling_another_action_preserves_playback_mute_until_restored(
     monitor, monkeypatch, playing_after_restart,
@@ -279,7 +310,14 @@ def test_cancelling_another_action_preserves_playback_mute_until_restored(
     assert messages[-1]["owner"] is None
 
 
-def test_zoom_disable_releases_playback_worker_before_restarting(monitor, monkeypatch):
+@pytest.mark.parametrize(("exit_code", "exit_status", "should_restore"), [
+    (0, QProcess.ExitStatus.NormalExit, False),
+    (1, QProcess.ExitStatus.NormalExit, True),
+    (0, QProcess.ExitStatus.CrashExit, True),
+])
+def test_zoom_disable_waits_for_worker_and_only_discards_confirmed_restores(
+    monitor, monkeypatch, exit_code, exit_status, should_restore,
+):
     monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
     service, messages = monitor
     service.refresh()
@@ -288,16 +326,38 @@ def test_zoom_disable_releases_playback_worker_before_restarting(monitor, monkey
     service.set_media_playing(True)
     _reply(service, messages, owner=_PLAYBACK_OWNER)
 
-    worker = service._process
+    replacement = service._process
     events = []
-    worker.state = lambda: QProcess.ProcessState.Running
-    worker.closeWriteChannel = lambda: events.append("eof")
-    monkeypatch.setattr(service, "_launch", lambda: events.append("launch"))
+    worker = SimpleNamespace(
+        state=lambda: QProcess.ProcessState.Running,
+        closeWriteChannel=lambda: events.append("eof"),
+        exitCode=lambda: exit_code,
+        exitStatus=lambda: exit_status,
+        deleteLater=lambda: None,
+    )
+    service._process = worker
+
+    def launch():
+        events.append("launch")
+        service._process = replacement
+
+    monkeypatch.setattr(service, "_launch", launch)
     service.stop()
+    service.set_media_playing(False)
     service.start()
     assert events == ["eof"]
     service._exited(worker)
     assert events == ["eof", "launch"]
+    service._receive({"ready": PROTOCOL_VERSION})
+    probe = messages[-1]
+    assert probe["command"] == "meeting"
+    _reply(service, messages, connected=True)
+    if should_restore:
+        assert messages[-1]["command"] == PLAYBACK_MICROPHONE
+        assert messages[-1]["muted"] is False
+        assert messages[-1]["owner"] == _PLAYBACK_OWNER
+    else:
+        assert messages[-1] == probe
 
 
 _REFERENCE = "12345678" * 4

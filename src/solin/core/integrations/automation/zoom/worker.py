@@ -198,8 +198,9 @@ def main() -> int:
                 reply["error"] = "automation_failed"
             reply["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 3)
             _write(reply)
-        if microphone_owner is not None and automation is not None:
+        if microphone_owner is not None:
             try:
+                automation = automation or Automation()
                 with _restore_input(desktop):
                     _set_playback_microphone(
                         ZoomControls(desktop, automation), False, microphone_owner,
@@ -207,8 +208,10 @@ def main() -> int:
             except ZoomAutomationError as exc:
                 if exc.code != "meeting_not_found":
                     log.warning("Could not restore Zoom microphone on exit: %s", exc.code)
+                return 1
             except Exception:  # noqa: BLE001 - exit must release COM even if Zoom failed
                 log.exception("Could not restore Zoom microphone on exit")
+                return 1
     finally:
         if hands is not None:
             hands.clear()
