@@ -1,4 +1,4 @@
 """Canonical CalVer (YY.RELEASE.PATCH, optionally followed by bN)."""
 
-VERSION = "26.34.0b4"
+VERSION = "26.34.0b5"
 __version__ = VERSION
