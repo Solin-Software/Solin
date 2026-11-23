@@ -171,7 +171,18 @@ def test_manual_alert_only_pulses_the_hand_and_respects_reduced_motion(projectio
     center = hand.mapToItem(root, QPointF(hand.width() / 2, hand.height() / 2))
     assert center.x() == pytest.approx(root.width() / 2, abs=1)
     assert center.y() == pytest.approx(root.height() / 2, abs=1)
-    wait_until(lambda: hand.scale() > 1.01, description="visible hand pulse")
+    pulsed = False
+
+    def record_pulse() -> None:
+        nonlocal pulsed
+        pulsed = pulsed or hand.scale() > 1.01
+
+    # One event-loop pass can advance past the peak and back below the threshold.
+    hand.scaleChanged.connect(record_pulse)
+    try:
+        wait_until(lambda: pulsed, description="visible hand pulse")
+    finally:
+        hand.scaleChanged.disconnect(record_pulse)
 
     clock.suppress_motion()
     wait_until(lambda: hand.scale() == 1.0, description="stationary hand")
