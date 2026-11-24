@@ -1025,6 +1025,9 @@ class MainWindow(QWidget):
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
+        self.settings_widget.general.meeting_schedule_changed.connect(
+            self.timer_operations.on_meeting_schedule_changed
+        )
         self.settings_widget.general.yearly_text_changed.connect(
             self._program_content.update_yearly_text
         )

@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
 from typing import Protocol
 
+from ..meetings.schedule import REGULAR_MEETING_DURATION_SECONDS
+from ..meetings.schedule import MeetingSchedule as ProfileMeetingSchedule
 from .custom_schedule import (
+    TimerDurationBudgetError,
     TimerOperationError,
     duplicate_custom_schedule,
     edit_custom_schedule,
     validate_title,
 )
+from .pacing_models import PacingWindow
 from .models import (
     CONFIGURABLE_PART_SECTIONS,
     MAX_PLANNED_PART_SECONDS,
@@ -106,11 +110,16 @@ class TimerSession:
         repository: TimerRepository,
         current_week_monday: date,
         custom_repository: CustomTimerRepository | None = None,
+        *,
+        meeting_schedule: Callable[[], ProfileMeetingSchedule] | None = None,
+        current_week: Callable[[], date] | None = None,
     ) -> None:
         self._repository = repository
         self._custom_repository = custom_repository
         self._unrestored_custom_selection = False
         self._current_week_monday = current_week_monday
+        self._meeting_schedule = meeting_schedule
+        self._current_week = current_week or (lambda: self._current_week_monday)
         self._week_monday = current_week_monday
         self._meeting_type = repository.load_last_meeting_type()
         self._clock_config = repository.load_clock_config().clamped()
@@ -196,6 +205,7 @@ class TimerSession:
         except (OSError, RuntimeError):
             schedule.assignment_setup = previous_setup
             raise
+        schedule.has_unreadable_record = False
 
     def adjust_part(self, part_id: str, delta_seconds: int) -> bool:
         part = self._schedule.part_by_id(part_id)
@@ -216,11 +226,13 @@ class TimerSession:
         if part is None:
             return False
         previous = part.planned_seconds
+        previous_total = schedule.planned_total_seconds()
         if not set_part_seconds(part, seconds):
             return False
         try:
+            _require_duration_budget(schedule, previous_total=previous_total)
             self.record_schedule_change()
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, TimerDurationBudgetError):
             part.planned_seconds = previous
             raise
         return True
@@ -237,14 +249,16 @@ class TimerSession:
         if configurable_count_for(schedule, section) == normalized_count:
             return False
         previous = schedule.parts
+        previous_total = schedule.planned_total_seconds()
         set_section_part_count(schedule, section, normalized_count)
         removed_ids = {part.id for part in previous} - {part.id for part in schedule.parts}
         if any(part.id in removed_ids and part.state is PartState.RUNNING for part in previous):
             schedule.parts = previous
             raise TimerOperationError("blocked", "Stop the timer part before removing it.")
         try:
+            _require_duration_budget(schedule, previous_total=previous_total)
             self.record_schedule_change()
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, TimerDurationBudgetError):
             schedule.parts = previous
             raise
         return True
@@ -330,9 +344,59 @@ class TimerSession:
         edit_custom_schedule(candidate, action, **values)
         if candidate == schedule:
             return False
+        if action in ("set_pacing", "add_part", "set_part_seconds", "delete_part"):
+            previous_total = None if action == "set_pacing" else schedule.planned_total_seconds()
+            _require_duration_budget(
+                candidate, previous_total=previous_total, include_execution_window=action != "set_pacing",
+            )
         self._save_custom_revision(candidate)
         if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
             self._schedule = candidate
+        return True
+
+    def refresh_meeting_window(self) -> bool:
+        schedule = self._schedule
+        return isinstance(schedule, MeetingSchedule) and self._update_meeting_window(schedule, self._week_monday)
+
+    def set_meeting_pacing(self, automatic: bool) -> bool:
+        schedule = self._schedule
+        if not isinstance(schedule, MeetingSchedule) or type(automatic) is not bool:
+            raise TimerOperationError("invalid", "Choose a valid meeting pacing mode.")
+        self._require_stopped()
+        if schedule.automatic_pacing == automatic:
+            return False
+        window = schedule.pacing_run.window if schedule.pacing_run is not None else schedule.pacing_window
+        if automatic and window is None:
+            raise TimerOperationError("blocked", "Configure the meeting start before enabling automatic pacing.")
+        schedule.automatic_pacing = automatic
+        try:
+            self._repository.save_schedule(schedule)
+        except (OSError, RuntimeError):
+            schedule.automatic_pacing = not automatic
+            raise
+        schedule.has_unreadable_record = False
+        return True
+
+    def _update_meeting_window(self, schedule: MeetingSchedule, week_monday: date) -> bool:
+        if (
+            self._meeting_schedule is None or week_monday < self._current_week()
+            or schedule.has_unreadable_record or schedule_has_timing_data(schedule)
+        ):
+            return False
+        occurrence = self._meeting_schedule().occurrence_in_week(week_monday, schedule.meeting_type.value)
+        window = None
+        if occurrence is not None and schedule.planned_total_seconds() <= REGULAR_MEETING_DURATION_SECONDS:
+            start = int(occurrence.starts_at.timestamp())
+            window = PacingWindow(start, start + REGULAR_MEETING_DURATION_SECONDS)
+        previous = schedule.pacing_window
+        if window == previous:
+            return False
+        schedule.pacing_window = window
+        try:
+            self._repository.save_schedule(schedule)
+        except (OSError, RuntimeError):
+            schedule.pacing_window = previous
+            raise
         return True
 
     def _custom_store(self) -> CustomTimerRepository:
@@ -419,6 +483,10 @@ class TimerSession:
                     set_part_seconds(part, seconds)
 
         candidate.assignment_setup = AssignmentSetup.DETECTED
+        try:
+            _require_duration_budget(candidate)
+        except TimerDurationBudgetError:
+            return False
         self._repository.save_schedule(candidate)
         self._schedule = candidate
         return True
@@ -458,7 +526,7 @@ class TimerSession:
     def _load_meeting_schedule(self, week_monday: date, meeting_type: MeetingType) -> MeetingSchedule:
         schedule = self._repository.load_schedule(week_monday, meeting_type)
         if schedule is None:
-            return build_default_schedule(week_monday, meeting_type)
+            schedule = build_default_schedule(week_monday, meeting_type)
         if schedule.assignment_setup is AssignmentSetup.LEGACY:
             initial = build_default_schedule(week_monday, meeting_type)
             schedule.assignment_setup = (
@@ -467,7 +535,32 @@ class TimerSession:
                 and _schedule_shape(schedule) == _schedule_shape(initial)
                 else AssignmentSetup.MANUAL
             )
+        try:
+            self._update_meeting_window(schedule, week_monday)
+        except (OSError, RuntimeError):
+            log.warning("Could not save the meeting timer window.", exc_info=True)
         return schedule
+
+
+def _require_duration_budget(
+    schedule: TimerSchedule,
+    *,
+    previous_total: int | None = None,
+    include_execution_window: bool = False,
+) -> None:
+    window = schedule.pacing_window
+    if isinstance(schedule, MeetingSchedule):
+        available = REGULAR_MEETING_DURATION_SECONDS
+    else:
+        run = schedule.pacing_run
+        execution_window = run.window if include_execution_window and run is not None else None
+        limits = [item.duration_seconds for item in (window, execution_window) if item is not None]
+        if not limits:
+            return
+        available = min(limits)
+    requested = schedule.planned_total_seconds()
+    if requested > available and (previous_total is None or requested >= previous_total):
+        raise TimerDurationBudgetError(available, requested)
 
 
 def _schedule_shape(schedule: MeetingSchedule) -> list[tuple[str | None, PartKind, str, int]]:

@@ -272,6 +272,9 @@ class _TimerOperations(QObject):
             is_current_week=True,
         )
 
+    def pacing_snapshot(self) -> None:
+        return None
+
 
 def _controller(
     tmp_path: Path,

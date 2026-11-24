@@ -1,13 +1,17 @@
 """Contracts shared by the timer presentation and PDF export."""
 
+from types import SimpleNamespace
+
 from PySide6.QtCore import QCoreApplication, QTranslator
 from PySide6.QtPdf import QPdfDocument
 
+from solin.core.i18n.date import format_datetime, format_time_with_seconds
 from solin.core.i18n.timer_part_titles import display_part_title
 from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
 from solin.core.rendering import timer_report_pdf
 from solin.core.rendering.timer_report_pdf import (
     build_timer_pdf_rows,
+    build_timer_pdf_summary,
     default_pdf_filename,
     export_schedule_pdf,
 )
@@ -20,6 +24,7 @@ from solin.core.timer.models import (
     TimerPart,
     TimerSection,
 )
+from solin.core.timer.pacing_models import PacingWindow
 
 
 class _TimerTranslator(QTranslator):
@@ -109,3 +114,124 @@ def test_custom_schedule_exports_pdf_with_schedule_and_section_titles(tmp_path, 
     assert document.pageCount() >= 1
     assert headers[0] == ("Training", "")
     assert sections == [("Workshop", "Total 01:30")]
+
+
+def test_pdf_uses_observed_instants_and_adjusted_target():
+    part = TimerPart.new(None, "Discussion", 120)
+    part.state = PartState.STOPPED
+    part.first_started_epoch = 900
+    part.actual_started_epoch = 1000
+    part.actual_stopped_epoch = 1090
+    part.accumulated_seconds = 95
+    part.run_target_seconds = 90
+    schedule = CustomTimerSchedule.new("Training")
+    schedule.entries = [part]
+    schedule.pacing_window = PacingWindow(900, 2000)
+
+    row = build_timer_pdf_rows(schedule, now_epoch=1200, include_pacing=True)[0]
+    assert row.started_label == format_time_with_seconds(1000)
+    assert row.finished_label == format_time_with_seconds(1090)
+    assert row.planned_label == "02:00"
+    assert row.adjusted_label == "01:30"
+    assert row.result_label == "01:35"
+    assert row.delta_label == "+00:05"
+    assert build_timer_pdf_summary(schedule, now_epoch=1200, include_pacing=True).over_time_count == 1
+
+    default_row = build_timer_pdf_rows(schedule, now_epoch=1200)[0]
+    assert default_row.started_label == format_time_with_seconds(900)
+    assert default_row.finished_label == format_time_with_seconds(995)
+    assert default_row.adjusted_label == ""
+    assert default_row.delta_label == "-00:25"
+    assert build_timer_pdf_summary(schedule, now_epoch=1200).within_time_count == 1
+
+    schedule.pacing_window = None
+    assert build_timer_pdf_rows(schedule, now_epoch=1200, include_pacing=True)[0] == default_row
+    assert build_timer_pdf_summary(schedule, now_epoch=1200, include_pacing=True).within_time_count == 1
+
+
+def test_pdf_uses_legacy_time_fallback_when_observations_are_absent():
+    part = TimerPart.new(None, "Discussion", 120)
+    part.state = PartState.STOPPED
+    part.first_started_epoch = 900
+    part.accumulated_seconds = 95
+    schedule = CustomTimerSchedule.new("Training")
+    schedule.entries = [part]
+    schedule.pacing_window = PacingWindow(900, 2000)
+
+    row = build_timer_pdf_rows(schedule, now_epoch=1200, include_pacing=True)[0]
+    assert row.started_label == format_time_with_seconds(900)
+    assert row.finished_label == format_time_with_seconds(995)
+    assert row.adjusted_label == ""
+
+
+def test_pdf_shows_planned_window_and_labels_the_projected_end(tmp_path, monkeypatch):
+    schedule = CustomTimerSchedule.new("Training")
+    schedule.pacing_window = PacingWindow(1000, 2000)
+    snapshot = SimpleNamespace(start_epoch=1000, end_epoch=2000, adjusted_end_epoch=2100)
+    calls = []
+    summaries = []
+
+    def snapshot_for_schedule(actual_schedule, now):
+        calls.append((actual_schedule, now))
+        return snapshot
+
+    def capture_summary(painter, items):
+        summaries.append(items)
+
+    monkeypatch.setattr(timer_report_pdf, "pacing_snapshot", snapshot_for_schedule)
+    monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", capture_summary)
+    export_schedule_pdf(
+        schedule, tmp_path / "report.pdf", week_label="", meeting_type_label="", now_epoch=1500,
+        include_pacing=True,
+    )
+
+    assert calls == [(schedule, 1500)]
+    assert summaries[1] == [
+        ("Planned start", format_datetime(1000)),
+        ("Planned end", format_datetime(2000)),
+        ("Estimated end", format_datetime(2100)),
+    ]
+
+
+def test_pdf_exports_a_real_pacing_snapshot(tmp_path, monkeypatch):
+    schedule = CustomTimerSchedule.new("Training")
+    schedule.entries = [TimerPart.new(None, "Discussion", 600)]
+    schedule.pacing_window = PacingWindow(1000, 2000)
+    summaries = []
+    draw_summary = timer_report_pdf._PdfPainter.draw_summary
+
+    def capture_summary(painter, items):
+        summaries.append(items)
+        draw_summary(painter, items)
+
+    monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", capture_summary)
+    target = tmp_path / "paced-report.pdf"
+    export_schedule_pdf(
+        schedule, target, week_label="", meeting_type_label="", now_epoch=1000, include_pacing=True
+    )
+
+    document = QPdfDocument()
+    assert document.load(str(target)) == QPdfDocument.Error.None_
+    assert len(summaries) == 2
+    assert summaries[1][0][1] == format_datetime(1000)
+    assert summaries[1][1][1] == format_datetime(2000)
+    assert summaries[1][2][1] == format_datetime(2000)
+
+
+def test_pdf_omits_pacing_summary_by_default_and_without_window(tmp_path, monkeypatch):
+    schedule = CustomTimerSchedule.new("Training")
+    schedule.entries = [TimerPart.new(None, "Discussion", 600)]
+    schedule.pacing_window = PacingWindow(1000, 2000)
+    summaries = []
+    monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", lambda painter, items: summaries.append(items))
+
+    export_schedule_pdf(schedule, tmp_path / "default.pdf", week_label="", meeting_type_label="", now_epoch=1000)
+    assert len(summaries) == 1
+
+    summaries.clear()
+    schedule.pacing_window = None
+    export_schedule_pdf(
+        schedule, tmp_path / "no-window.pdf", week_label="", meeting_type_label="", now_epoch=1000,
+        include_pacing=True,
+    )
+    assert len(summaries) == 1

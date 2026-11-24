@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from datetime import date
+import logging
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -11,7 +12,11 @@ from ..core.meetings.meeting_weeks import current_monday
 from ..core.timer.application import AssignmentAutofillScope, DetectedPartTiming, TimerSession
 from ..core.timer.custom_schedule import TimerOperationError
 from ..core.timer.models import CustomTimerSchedule, MeetingType, PartState, Section
+from ..core.timer.pacing import PacingSnapshot
 from .timer_engine import TimerEngine
+
+
+log = logging.getLogger(__name__)
 
 
 class TimerOperations(QObject):
@@ -90,7 +95,27 @@ class TimerOperations(QObject):
         )
 
     def start_part(self, part_id: str) -> bool:
+        part = self.session.schedule.part_by_id(part_id)
+        if part is not None and part.state is not PartState.RUNNING:
+            self.refresh_meeting_window()
         return self.engine.start_part(part_id)
+
+    def pacing_snapshot(self, now: float | None = None) -> PacingSnapshot | None:
+        return self.engine.pacing_snapshot(now)
+
+    def refresh_meeting_window(self) -> bool:
+        return self._publish_schedule_edit(self.session.refresh_meeting_window())
+
+    @Slot()
+    def on_meeting_schedule_changed(self) -> None:
+        try:
+            self.refresh_meeting_window()
+        except (OSError, RuntimeError):
+            log.warning("Could not update the meeting timer window.", exc_info=True)
+
+    def set_meeting_pacing(self, automatic: bool) -> bool:
+        self.refresh_meeting_window()
+        return self._publish_schedule_edit(self.session.set_meeting_pacing(automatic))
 
     def stop_part(self, part_id: str | None = None) -> bool:
         return self.engine.stop_part(part_id)

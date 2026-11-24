@@ -38,9 +38,11 @@ from ..core.remote_control.timer.contracts import (
     CustomSchedulePartWireItem,
     CustomScheduleSectionWireItem,
     CustomScheduleWireItem,
+    PacingTransitionsWireSnapshot,
     NavigateWeekCommand,
     ResetPartCommand,
     SetMeetingTypeCommand,
+    SetMeetingPacingCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
     StartPartCommand,
@@ -51,12 +53,13 @@ from ..core.remote_control.timer.contracts import (
     TimerControlCapabilities,
     TimerLiveWireSnapshot,
     TimerPartWireItem,
+    TimerPacingWireSnapshot,
     TimerRemoteCommand,
     TimerScheduleWireSnapshot,
 )
 from ..core.remote_control.timer.http import TimerRemoteDependencies, TimerRemoteHttpModule
 from ..core.remote_control.timer.state import RemoteTimerStateStore, TimerCommandSession
-from ..core.timer.custom_schedule import TimerOperationError
+from ..core.timer.custom_schedule import TimerDurationBudgetError, TimerOperationError
 from ..core.timer.hand_alert import TimerHandAlert
 from ..core.timer.models import (
     CustomTimerSchedule,
@@ -67,6 +70,7 @@ from ..core.timer.models import (
     TimerPart,
     TimerSection,
 )
+from ..core.timer.pacing import adjustment_weight
 from ..styles.theme import current_theme_scheme
 from .qt_command_bridge import QtCommandBridge
 
@@ -241,9 +245,12 @@ class RemoteTimerAdapter(QObject):
         operations = self._dependencies.timer_operations
         session = operations.session
         schedule = session.schedule
+        pacing = operations.pacing_snapshot()
         raw_parts = parts_model_for_schedule(schedule, operations.time_format)
+        parts_by_id = {part.id: part for part in schedule.iter_parts()} if pacing is not None else {}
         items: list[TimerPartWireItem] = []
         for index, raw in enumerate(raw_parts, start=1):
+            part = parts_by_id.get(str(raw["id"]))
             section_value = raw.get("section") or ""
             try:
                 section = Section(section_value)
@@ -270,6 +277,8 @@ class RemoteTimerAdapter(QObject):
                     section_total_label=str(raw.get("sectionTotalLabel") or ""),
                     started_label=str(raw.get("startedLabel") or ""),
                     result_label=str(raw.get("resultLabel") or ""),
+                    effective_seconds=part.effective_seconds if part is not None else None,
+                    adjustment_weight=adjustment_weight(schedule, part) if part is not None else 0,
                 )
             )
         monday = session.week_monday
@@ -295,6 +304,7 @@ class RemoteTimerAdapter(QObject):
             meeting_type=session.meeting_type,
             parts=tuple(items),
             capabilities=capabilities,
+            pacing=TimerPacingWireSnapshot.from_snapshot(pacing) if pacing is not None else None,
             custom_schedule=(
                 self._custom_schedule_wire(schedule)
                 if isinstance(schedule, CustomTimerSchedule)
@@ -330,6 +340,9 @@ class RemoteTimerAdapter(QObject):
 
     @staticmethod
     def _custom_schedule_wire(schedule: CustomTimerSchedule) -> CustomScheduleWireItem:
+        window = schedule.pacing_window
+        transitions = window.transitions if window else None
+
         def part_item(part: TimerPart) -> CustomSchedulePartWireItem:
             return CustomSchedulePartWireItem(
                 id=part.id,
@@ -339,6 +352,8 @@ class RemoteTimerAdapter(QObject):
                 elapsed_seconds=part.accumulated_seconds,
                 first_started_epoch=part.first_started_epoch,
                 started_at_epoch=part.started_at_epoch,
+                effective_seconds=part.effective_seconds,
+                adjustment_weight=part.adjustment_weight,
             )
 
         entries = tuple(
@@ -356,6 +371,18 @@ class RemoteTimerAdapter(QObject):
             title=schedule.title,
             revision=schedule.revision,
             entries=entries,
+            start_epoch=window.start_epoch if window else None,
+            end_epoch=window.end_epoch if window else None,
+            automatic=schedule.automatic_pacing,
+            untracked_seconds=window.untracked_seconds if window else None,
+            transitions=(
+                PacingTransitionsWireSnapshot(
+                    tuple(transitions.before_part_seconds), transitions.closing_seconds
+                )
+                if transitions is not None
+                and (transitions.before_part_seconds or transitions.closing_seconds is not None)
+                else None
+            ),
         )
 
     def _execute_command(self, command: TimerRemoteCommand) -> TimerCommandError | str | None:
@@ -440,6 +467,12 @@ class RemoteTimerAdapter(QObject):
                 operations.set_section_count(command.section, command.count)
             elif isinstance(command, SetMeetingTypeCommand):
                 operations.set_meeting_type(command.meeting_type)
+            elif isinstance(command, SetMeetingPacingCommand):
+                if isinstance(schedule, CustomTimerSchedule):
+                    return TimerCommandError(
+                        TimerCommandErrorCode.BLOCKED, "A meeting schedule is required."
+                    )
+                operations.set_meeting_pacing(command.automatic)
             elif isinstance(command, NavigateWeekCommand):
                 operations.navigate_week(command.target.value)
             elif isinstance(command, CreateCustomScheduleCommand):
@@ -474,6 +507,11 @@ class RemoteTimerAdapter(QObject):
                 operations.reset_all()
             else:
                 return TimerCommandError(TimerCommandErrorCode.INVALID, "Unknown timer command.")
+        except TimerDurationBudgetError as error:
+            return TimerCommandError(
+                TimerCommandErrorCode.DURATION_BUDGET, str(error),
+                available_seconds=error.available_seconds, requested_seconds=error.requested_seconds,
+            )
         except TimerOperationError as error:
             code = TimerCommandErrorCode(error.code)
             return TimerCommandError(code, str(error), retryable=code is TimerCommandErrorCode.SCHEDULE_STALE)

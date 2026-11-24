@@ -23,6 +23,7 @@ from PySide6.QtGui import (
 from ..i18n.date import format_datetime, format_time_with_seconds
 from ..i18n.timer_schedule_view import parts_model_for_schedule
 from ..timer.models import CustomTimerSchedule, MeetingSchedule, MeetingType, PartState, Section
+from ..timer.pacing import pacing_snapshot
 
 
 _TR_CTX = "TimerPdfExport"
@@ -47,6 +48,10 @@ _TIMER_PDF_EXPORT_SOURCES = (
     QT_TRANSLATE_NOOP("TimerPdfExport", "Generated"),
     QT_TRANSLATE_NOOP("TimerPdfExport", "Within time"),
     QT_TRANSLATE_NOOP("TimerPdfExport", "Over time"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Planned start"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Planned end"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Estimated end"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Adjusted"),
 )
 
 @dataclass(frozen=True)
@@ -58,6 +63,7 @@ class TimerPdfRow:
     section_color: str
     title: str
     planned_label: str
+    adjusted_label: str
     started_label: str
     finished_label: str
     result_label: str
@@ -97,20 +103,28 @@ def _rounded_delta_seconds(elapsed_seconds: float, planned_seconds: int) -> int:
     return int(round(elapsed_seconds - planned_seconds))
 
 
+def _includes_pacing(schedule: MeetingSchedule | CustomTimerSchedule, enabled: bool) -> bool:
+    run = schedule.pacing_run
+    return enabled and (run.window if run else schedule.pacing_window) is not None
+
+
 def build_timer_pdf_summary(
     schedule: MeetingSchedule | CustomTimerSchedule,
     *,
     now_epoch: float | None = None,
+    include_pacing: bool = False,
 ) -> TimerPdfSummary:
-    """Count completed parts that stayed within the planned time vs. over time."""
+    """Count completed parts by whether they met their report target."""
     now = time.time() if now_epoch is None else float(now_epoch)
+    show_pacing = _includes_pacing(schedule, include_pacing)
     within_time = 0
     over_time = 0
 
     for part in schedule.parts:
         if part.state is not PartState.STOPPED:
             continue
-        if _rounded_delta_seconds(part.elapsed(now), part.planned_seconds) <= 0:
+        target = part.effective_seconds if show_pacing else part.planned_seconds
+        if _rounded_delta_seconds(part.elapsed(now), target) <= 0:
             within_time += 1
         else:
             over_time += 1
@@ -123,16 +137,21 @@ def build_timer_pdf_rows(
     *,
     now_epoch: float | None = None,
     time_format: str = "HH:mm:ss",
+    include_pacing: bool = False,
 ) -> list[TimerPdfRow]:
     """Build stable, testable rows for the timer PDF export."""
     now = time.time() if now_epoch is None else float(now_epoch)
+    show_pacing = _includes_pacing(schedule, include_pacing)
     rows: list[TimerPdfRow] = []
     presentation = parts_model_for_schedule(schedule, time_format)
     for part, view in zip(schedule.parts, presentation, strict=True):
         section = part.section if isinstance(part.section, Section) else part.section_id
 
-        started_epoch = part.first_started_epoch
+        started_epoch = part.actual_started_epoch if show_pacing else part.first_started_epoch
+        if started_epoch is None:
+            started_epoch = part.first_started_epoch
         elapsed = part.elapsed(now)
+        target = part.effective_seconds if show_pacing else part.planned_seconds
 
         started_label = (
             format_time_with_seconds(started_epoch, time_format)
@@ -145,14 +164,17 @@ def build_timer_pdf_rows(
 
         if part.state is PartState.RUNNING:
             result_label = _fmt_duration(elapsed)
-            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, part.planned_seconds))
+            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, target))
             finished_label = _tr("In progress")
             status_label = _tr("Running")
         elif part.state is PartState.STOPPED:
             result_label = _fmt_duration(elapsed)
-            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, part.planned_seconds))
-            if started_epoch is not None:
-                finished_label = format_time_with_seconds(started_epoch + elapsed, time_format)
+            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, target))
+            finished_epoch = part.actual_stopped_epoch if show_pacing else None
+            if finished_epoch is None and part.first_started_epoch is not None:
+                finished_epoch = part.first_started_epoch + elapsed
+            if finished_epoch is not None:
+                finished_label = format_time_with_seconds(finished_epoch, time_format)
             status_label = _tr("Completed")
         else:
             status_label = _tr("Not started")
@@ -165,6 +187,10 @@ def build_timer_pdf_rows(
             section_color=view["sectionColor"],
             title=view["title"],
             planned_label=_fmt_duration(part.planned_seconds),
+            adjusted_label=(
+                _fmt_duration(part.effective_seconds)
+                if show_pacing and part.effective_seconds != part.planned_seconds else ""
+            ),
             started_label=started_label,
             finished_label=finished_label,
             result_label=result_label,
@@ -308,11 +334,26 @@ class _PdfPainter:
                 color = "#047857"
             self.painter.setPen(QColor(color))
             text = metrics.elidedText(value, Qt.TextElideMode.ElideRight, max(10, int(width - 16)))
+            text_rect = QRectF(x + 8, self.y + 3, width - 16, row_h - 6)
+            if idx == 2 and row.adjusted_label:
+                text_rect.setHeight(row_h / 2 - 2)
             self.painter.drawText(
-                QRectF(x + 8, self.y + 3, width - 16, row_h - 6),
+                text_rect,
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                 text,
             )
+            if idx == 2 and row.adjusted_label:
+                self.painter.setFont(QFont("Segoe UI", 7))
+                adjusted = f'{row.adjusted_label} · {_tr("Adjusted")}'
+                adjusted = QFontMetricsF(self.painter.font()).elidedText(
+                    adjusted, Qt.TextElideMode.ElideRight, max(10, int(width - 16))
+                )
+                self.painter.drawText(
+                    QRectF(x + 8, self.y + row_h / 2, width - 16, row_h / 2 - 2),
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                    adjusted,
+                )
+                self.painter.setFont(QFont("Segoe UI", 9))
             x += width
         self.y += row_h
 
@@ -343,15 +384,20 @@ def export_schedule_pdf(
     time_format: str = "HH:mm:ss",
     generated_epoch: float | None = None,
     now_epoch: float | None = None,
+    include_pacing: bool = False,
 ) -> None:
     """Render ``schedule`` to a polished PDF at ``path``."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
 
     generated = time.time() if generated_epoch is None else float(generated_epoch)
-    rows = build_timer_pdf_rows(schedule, now_epoch=now_epoch, time_format=time_format)
+    now = time.time() if now_epoch is None else float(now_epoch)
+    rows = build_timer_pdf_rows(
+        schedule, now_epoch=now, time_format=time_format, include_pacing=include_pacing
+    )
 
-    summary = build_timer_pdf_summary(schedule, now_epoch=now_epoch)
+    summary = build_timer_pdf_summary(schedule, now_epoch=now, include_pacing=include_pacing)
+    pacing = pacing_snapshot(schedule, now) if _includes_pacing(schedule, include_pacing) else None
 
     title = _tr("Meeting timer report") if isinstance(schedule, MeetingSchedule) else schedule.title
     meta = (
@@ -392,6 +438,12 @@ def export_schedule_pdf(
             (_tr("Within time"), str(summary.within_time_count)),
             (_tr("Over time"), str(summary.over_time_count)),
         ])
+        if pacing is not None:
+            pdf.draw_summary([
+                (_tr("Planned start"), format_datetime(pacing.start_epoch, date_format)),
+                (_tr("Planned end"), format_datetime(pacing.end_epoch, date_format)),
+                (_tr("Estimated end"), format_datetime(pacing.adjusted_end_epoch, date_format)),
+            ])
         pdf.draw_table_header(columns)
 
         last_section: Section | str | None = None

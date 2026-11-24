@@ -16,6 +16,8 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
 from math import isfinite
 
+from .pacing_models import PacingRun, PacingWindow
+
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -103,6 +105,7 @@ MIN_PLANNED_PART_SECONDS = 60
 MIN_CUSTOM_PART_SECONDS = 1
 MAX_PLANNED_PART_SECONDS = 24 * 60 * 60 - 1
 MAX_TIMER_TITLE_LENGTH = 200
+MAX_ADJUSTMENT_WEIGHT = 10_000
 
 
 class AssignmentSetup(str, Enum):
@@ -240,6 +243,14 @@ class TimerPart:
     first_started_epoch: float | None = None
     accumulated_seconds: float = 0.0
     title_override: str | None = None
+    adjustment_weight: int = 0
+    actual_started_epoch: float | None = None
+    actual_stopped_epoch: float | None = None
+    run_target_seconds: int | None = None
+
+    @property
+    def effective_seconds(self) -> int:
+        return self.planned_seconds if self.run_target_seconds is None else self.run_target_seconds
 
     @property
     def section_id(self) -> str | None:
@@ -276,8 +287,8 @@ class TimerPart:
         return base
 
     def remaining(self, now: float | None = None) -> float:
-        """Planned − elapsed. Negative once the part overruns."""
-        return self.planned_seconds - self.elapsed(now)
+        """Effective target minus elapsed, negative on overrun."""
+        return self.effective_seconds - self.elapsed(now)
 
     def is_overrun(self, now: float | None = None) -> bool:
         return self.remaining(now) < 0
@@ -296,6 +307,10 @@ class TimerPart:
             "first_started_epoch": self.first_started_epoch,
             "accumulated_seconds": float(self.accumulated_seconds),
             "title_override": self.title_override,
+            "adjustment_weight": self.adjustment_weight,
+            "actual_started_epoch": self.actual_started_epoch,
+            "actual_stopped_epoch": self.actual_stopped_epoch,
+            "run_target_seconds": self.run_target_seconds,
         }
 
     @classmethod
@@ -304,6 +319,17 @@ class TimerPart:
             kind = PartKind(data.get("kind", PartKind.STANDARD.value))
         except ValueError:
             kind = PartKind.STANDARD
+        weight = data.get("adjustment_weight", 0)
+        actual_start = data.get("actual_started_epoch")
+        actual_stop = data.get("actual_stopped_epoch")
+        target = data.get("run_target_seconds")
+        if (
+            type(weight) is not int or not 0 <= weight <= MAX_ADJUSTMENT_WEIGHT
+            or any(value is not None and not isfinite(value) for value in (actual_start, actual_stop))
+            or (actual_stop is not None and (actual_start is None or actual_stop < actual_start))
+            or (target is not None and (type(target) is not int or not 1 <= target <= MAX_PLANNED_PART_SECONDS))
+        ):
+            raise ValueError("Invalid timer pacing data.")
         return cls(
             id=str(data["id"]),
             section=_section_from_id(data["section"]),
@@ -326,6 +352,10 @@ class TimerPart:
                 normalize_timer_title(data["title_override"])
                 if data.get("title_override") is not None else None
             ),
+            adjustment_weight=weight,
+            actual_started_epoch=actual_start,
+            actual_stopped_epoch=actual_stop,
+            run_target_seconds=target,
         )
 
 
@@ -356,6 +386,20 @@ class _OrderedTimerParts:
     def has_running_part(self) -> bool:
         return any(part.state is PartState.RUNNING for part in self.iter_parts())
 
+    def planned_total_seconds(self) -> int:
+        return sum(part.planned_seconds for part in self.iter_parts())
+
+    pacing_window: PacingWindow | None
+    automatic_pacing: bool
+    pacing_run: PacingRun | None
+
+    def _pacing_to_dict(self) -> dict:
+        return {
+            "pacing_window": self.pacing_window.to_dict() if self.pacing_window else None,
+            "automatic_pacing": self.automatic_pacing,
+            "pacing_run": self.pacing_run.to_dict() if self.pacing_run else None,
+        }
+
 
 @dataclass
 class MeetingSchedule(_OrderedTimerParts):
@@ -365,6 +409,10 @@ class MeetingSchedule(_OrderedTimerParts):
     meeting_type: MeetingType
     parts: list[TimerPart] = field(default_factory=list)
     assignment_setup: AssignmentSetup = AssignmentSetup.DEFAULT
+    pacing_window: PacingWindow | None = None
+    automatic_pacing: bool = False
+    pacing_run: PacingRun | None = None
+    has_unreadable_record: bool = field(default=False, compare=False, repr=False)
 
     def iter_parts(self) -> Iterator[TimerPart]:
         return iter(self.parts)
@@ -375,6 +423,7 @@ class MeetingSchedule(_OrderedTimerParts):
             "meeting_type": self.meeting_type.value,
             "parts": [p.to_dict() for p in self.parts],
             "assignment_setup": self.assignment_setup.value,
+            **self._pacing_to_dict(),
         }
 
     @classmethod
@@ -391,6 +440,9 @@ class MeetingSchedule(_OrderedTimerParts):
                 data.get("assignment_setup", AssignmentSetup.LEGACY.value),
                 AssignmentSetup.MANUAL,
             ),
+            pacing_window=PacingWindow.from_dict(data.get("pacing_window")),
+            automatic_pacing=_read_automatic_pacing(data),
+            pacing_run=PacingRun.from_dict(data.get("pacing_run")),
         )
 
 
@@ -411,6 +463,9 @@ class CustomTimerSchedule(_OrderedTimerParts):
     title: str
     entries: list[TimerPart | TimerSection] = field(default_factory=list)
     revision: int = 0
+    pacing_window: PacingWindow | None = None
+    automatic_pacing: bool = False
+    pacing_run: PacingRun | None = None
 
     @classmethod
     def new(cls, title: str) -> CustomTimerSchedule:
@@ -438,6 +493,7 @@ class CustomTimerSchedule(_OrderedTimerParts):
             "id": self.id,
             "title": self.title,
             "revision": self.revision,
+            **self._pacing_to_dict(),
             "entries": [
                 {
                     "type": "section", "id": entry.id, "title": entry.title,
@@ -453,7 +509,12 @@ class CustomTimerSchedule(_OrderedTimerParts):
         revision = data["revision"]
         if type(revision) is not int or revision < 0:
             raise ValueError("Invalid timer schedule revision.")
-        schedule = cls(data["id"], normalize_timer_title(data["title"]), revision=revision)
+        schedule = cls(
+            data["id"], normalize_timer_title(data["title"]), revision=revision,
+            pacing_window=PacingWindow.from_dict(data.get("pacing_window")),
+            automatic_pacing=_read_automatic_pacing(data),
+            pacing_run=PacingRun.from_dict(data.get("pacing_run")),
+        )
         for entry in data["entries"]:
             if entry["type"] == "section":
                 parent = entry["id"]
@@ -473,6 +534,13 @@ class CustomTimerSchedule(_OrderedTimerParts):
         if sum(part.state is PartState.RUNNING for part in parts) > 1:
             raise ValueError("Multiple running timer parts.")
         return schedule
+
+
+def _read_automatic_pacing(data: dict) -> bool:
+    value = data.get("automatic_pacing", False)
+    if type(value) is not bool:
+        raise ValueError("Invalid automatic pacing setting.")
+    return value
 
 
 def _encode_custom_part(part: TimerPart) -> dict:
@@ -524,7 +592,7 @@ class TimerSnapshot:
     active_part_id: str | None = None
     active_part_title: str = ""
     active_section: Section | str | None = None
-    planned_seconds: int = 0
+    planned_seconds: int = 0  # Target fixed at start, including any pacing adjustment.
     elapsed_seconds: float = 0.0
     remaining_seconds: float = 0.0
     overrun: bool = False

@@ -43,6 +43,7 @@ class TimerPdfExportController:
         meeting_type_label: str,
         date_format: str,
         time_format: str,
+        include_pacing: bool = False,
     ) -> None:
         documents = QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.DocumentsLocation
@@ -68,6 +69,7 @@ class TimerPdfExportController:
                 meeting_type_label=meeting_type_label,
                 date_format=date_format,
                 time_format=time_format,
+                include_pacing=include_pacing,
             )
         except Exception as exc:  # noqa: BLE001 - PDF export adapter boundary
             log.exception("Timer PDF export failed")

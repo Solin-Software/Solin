@@ -129,6 +129,7 @@ class QSettingsTimerRepository:
             # Preserve an unreadable stored plan until the operator edits its fallback.
             fallback = build_default_schedule(week_monday, meeting_type)
             fallback.assignment_setup = AssignmentSetup.MANUAL
+            fallback.has_unreadable_record = True
             return fallback
         if normalize_schedule(schedule):
             self.save_schedule(schedule)

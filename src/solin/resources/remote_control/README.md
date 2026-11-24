@@ -153,8 +153,8 @@ parts** when already authenticated:
   `scheduleRevision`, `weekMonday`, `weekLabel`, `isCurrentWeek`, `meetingType`, section-styled
   `parts` (including per-part `durationEditable`), and server-authoritative `capabilities`
   (`controlParts`, `adjustPlannedMinutes`, `setPlannedSeconds`, `setSectionCount`,
-  `switchMeetingType`, `navigateWeeks`, `manageCustomSchedules`). The last capability is
-  false by default. With it enabled, `customSchedule` describes the active custom schedule,
+  `switchMeetingType`, `navigateWeeks`, `manageCustomSchedules`, `managePacing`).
+  `manageCustomSchedules` is false by default. With it enabled, `customSchedule` describes the active custom schedule,
   including its ID, title, revision, and ordered root parts and sections, including empty sections.
 - `GET /remote/timer/api/custom-schedules` — authenticated, on-demand custom schedule catalog;
   unavailable when the capability or adapter is disabled. The Qt adapter obtains each snapshot on
@@ -174,6 +174,7 @@ parts** when already authenticated:
     operations enforce their own minimum)
   - `set_section_count` (`scheduleRevision`, `section` in `{"ministry", "living"}`, `count` `1..8`)
   - `set_meeting_type` (`meetingType` in `{"midweek", "weekend"}`)
+  - `set_meeting_pacing` (`scheduleRevision`, boolean `automatic`)
   - `navigate_week` (`target` in `{"previous", "next", "current"}`)
   - `create_custom_schedule` (`scheduleRevision`, `title`)
   - `duplicate_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `title`)
@@ -195,8 +196,28 @@ parts** when already authenticated:
   timer mutations against it are blocked, while public live viewing remains available.
   Changing the active week, meeting type, or schedule requires stopping the running part first.
 
+  Authenticated schedule snapshots carry `pacing` when the active schedule has a projection.
+  Parts in that snapshot carry `effectiveSeconds` and `adjustmentWeight`.
+  The clock can derive the projected finish from
+  `max(now, projection_anchor_epoch) + projection_tail_seconds`. When `complete` is true,
+  use the anchor as the frozen projection. Times use Unix seconds. The payload also gives the
+  tolerance and remaining adjustment capacity in each direction. Public viewers receive the
+  active clock and countdown.
+
+  `managePacing` is false by default and governs editing. It enables `set_meeting_pacing`.
+  With `manageCustomSchedules` also enabled,
+  custom edits include `set_pacing` (nullable `start_epoch` and `end_epoch`, boolean
+  `automatic`, optional `untracked_seconds`) and `set_adjustment_weight` (`part_id`,
+  `adjustment_weight`, zero disables adjustment). Custom catalog entries with a configured window
+  provide it in `pacingConfig`. `set_pacing_transition` requires `before_part_id` (a stable part ID or null
+  for closing) and `estimated_seconds` (a nonnegative integer or null to remove the estimate).
+  When estimates exist, `pacingConfig.transitions` contains `before_parts` (a mapping from part
+  IDs to seconds) and nullable `closing_seconds`. Setting both endpoints to null in monitor mode
+  clears the window.
+
   Error codes: `schedule_stale`, `blocked`, `not_found`, `unavailable`, `failed`, `invalid`,
-  `command_id_conflict`, `command_in_progress`. On `schedule_stale`, the client refreshes via
+  `command_id_conflict`, `command_in_progress`, `duration_budget`. A `duration_budget` error
+  includes `availableSeconds` and `requestedSeconds`. On `schedule_stale`, the client refreshes via
   `/remote/timer/api/schedule` rather than merging stale schedule state; on `401` or
   `session.revoked`, the client drops smoothly back to the live public fullscreen stage without
   blanking the timer.

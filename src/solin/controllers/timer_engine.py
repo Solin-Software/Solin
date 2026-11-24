@@ -24,6 +24,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from ..core.i18n.timer_part_titles import display_part_title
 from ..core.timer.models import Direction, TimerPart, TimerSchedule, TimerSnapshot
+from ..core.timer.pacing import DEFAULT_ALLOW_PACING_EXTENSION, PacingSnapshot
 from ..core.timer.part_titles import is_indexed_part_title_source
 from ..core.timer.state_machine import TimerStateMachine
 
@@ -41,9 +42,11 @@ class TimerEngine(QObject):
     # Emitted only on discrete changes (lifecycle, elapsed adjustment, configuration).
     state_changed = Signal(dict)
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self, parent: QObject | None = None, *, allow_pacing_extension: bool = DEFAULT_ALLOW_PACING_EXTENSION,
+    ) -> None:
         super().__init__(parent)
-        self._state = TimerStateMachine()
+        self._state = TimerStateMachine(allow_pacing_extension=allow_pacing_extension)
         self._save: Callable[[], None] | None = None
 
         # After a Stop, the frozen result stays on screen for this long before
@@ -160,6 +163,9 @@ class TimerEngine(QObject):
             snapshot,
             active_part_title=self._display_title_for_part(part),
         )
+
+    def pacing_snapshot(self, now: float | None = None) -> PacingSnapshot | None:
+        return self._state.pacing_snapshot(now)
 
     # ── Internals ─────────────────────────────────────────────────────────────
 

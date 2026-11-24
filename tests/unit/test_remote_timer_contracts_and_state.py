@@ -26,13 +26,16 @@ from solin.core.remote_control.timer.contracts import (
     CustomSchedulePartWireItem,
     CustomScheduleSectionWireItem,
     CustomScheduleWireItem,
+    PacingTransitionsWireSnapshot,
     AdjustPartCommand,
     NavigateWeekCommand,
     ResetPartCommand,
     SetMeetingTypeCommand,
+    SetMeetingPacingCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
     StartPartCommand,
+    TimerPacingWireSnapshot,
     StopPartCommand,
     TimerCommandError,
     TimerCommandErrorCode,
@@ -74,6 +77,115 @@ def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
         parse_timer_command(
             {**commands[1].to_dict(), "values": {"title": "x", "planned_seconds": True}}
         )
+
+
+def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
+    command_id = str(uuid.uuid4())
+    commands = (
+        SetMeetingPacingCommand(command_id, 0, True),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_pacing",
+            start_epoch=100, end_epoch=200, automatic=True,
+            untracked_seconds=30,
+        ),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_pacing",
+            start_epoch=None, end_epoch=None, automatic=False,
+        ),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_adjustment_weight",
+            part_id="part", adjustment_weight=100,
+        ),
+    )
+    for command in commands:
+        assert parse_timer_command(command.to_dict()) == command
+
+    payload = commands[1].to_dict()
+    for values in (
+        {"start_epoch": 100, "end_epoch": 200},
+        {"start_epoch": True, "end_epoch": 200, "automatic": True},
+        {"start_epoch": 100, "end_epoch": 200, "automatic": 1},
+        {"start_epoch": 100, "end_epoch": 200, "automatic": True, "untracked_seconds": -1},
+        {"start_epoch": 100, "end_epoch": 200, "automatic": True, "untracked_seconds": True},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**payload, "values": values})
+    nullable = {"start_epoch": None, "end_epoch": None, "automatic": False, "untracked_seconds": None}
+    assert parse_timer_command({**payload, "values": nullable}) == commands[2]
+    with pytest.raises((TypeError, ValueError)):
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_adjustment_weight",
+            part_id="part", adjustment_weight=-1,
+        )
+
+    disabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(can_manage_custom_schedules=True)
+        )
+    )
+    for command in commands:
+        assert disabled.validate_command_preconditions(command).code is TimerCommandErrorCode.BLOCKED
+
+    enabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(
+                can_manage_custom_schedules=True, can_manage_pacing=True
+            )
+        )
+    )
+    for command in commands:
+        assert enabled.validate_command_preconditions(command) is None
+    stale = replace(commands[0], schedule_revision=1)
+    assert enabled.validate_command_preconditions(stale).code is TimerCommandErrorCode.SCHEDULE_STALE
+
+
+def test_transition_edit_contract_and_capabilities() -> None:
+    command = EditCustomScheduleCommand(
+        str(uuid.uuid4()), 0, "schedule", 1, "set_pacing_transition",
+        before_part_id=None, estimated_seconds=None,
+    )
+    assert parse_timer_command(command.to_dict()) == command
+    for values in (
+        {}, {"before_part_id": None}, {"estimated_seconds": None},
+        {"before_part_id": "", "estimated_seconds": 1},
+        {"before_part_id": "part", "estimated_seconds": True},
+        {"before_part_id": "part", "estimated_seconds": -1},
+        {"before_part_id": "part", "estimated_seconds": 1, "extra": 1},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**command.to_dict(), "values": values})
+    for custom, pacing in ((False, False), (True, False), (False, True), (True, True)):
+        capabilities = TimerControlCapabilities(
+            can_manage_custom_schedules=custom, can_manage_pacing=pacing,
+        )
+        assert capabilities.allows_command(command) is (custom and pacing)
+
+
+def test_transition_catalog_wire_data_is_immutable() -> None:
+    transitions = PacingTransitionsWireSnapshot((("part", 60),), 300)
+    schedule = CustomScheduleWireItem("id", "Event", 1, ())
+    assert "pacingConfig" not in schedule.to_dict()
+    configured = replace(schedule, start_epoch=100, end_epoch=600, transitions=transitions)
+    data = configured.to_dict()
+    data["pacingConfig"]["transitions"]["before_parts"]["part"] = 0
+    assert configured.to_dict()["pacingConfig"]["transitions"] == {
+        "before_parts": {"part": 60}, "closing_seconds": 300,
+    }
+    assert "transitions" not in replace(configured, transitions=None).to_dict()["pacingConfig"]
+
+
+def test_pacing_wire_snapshot_is_immutable_and_readable_without_edit_permission() -> None:
+    assert "pacing" not in TimerScheduleWireSnapshot.empty().to_dict()
+    schedule = replace(
+        TimerScheduleWireSnapshot.empty(),
+        pacing=TimerPacingWireSnapshot(50, 200, False, False, 100, 100, 0, 0, 30),
+    )
+    payload = schedule.to_dict()
+    assert payload["capabilities"]["managePacing"] is False
+    payload["pacing"]["end_epoch"] = 999
+    assert schedule.to_dict()["pacing"]["end_epoch"] == 200
+    store = RemoteTimerStateStore(schedule=schedule)
+    assert store.update_schedule(schedule).schedule_revision == 0
 
 
 def test_custom_snapshot_keeps_empty_sections_progress_and_policy() -> None:

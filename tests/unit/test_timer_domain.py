@@ -517,7 +517,7 @@ def test_elapsed_adjustment_noops_and_floor_do_not_delay_the_next_tick():
 
 
 @pytest.mark.parametrize("delta", [-1, 1])
-def test_adjusted_duration_preserves_actual_finish_time_in_saved_reports(delta):
+def test_adjusted_duration_preserves_legacy_boundaries_in_saved_reports(delta):
     from solin.core.i18n.date import format_time_with_seconds
     from solin.core.rendering.timer_report_pdf import build_timer_pdf_rows
 

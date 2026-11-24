@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from itertools import pairwise
 
 from .models import (
     MAX_PLANNED_PART_SECONDS,
@@ -14,6 +15,7 @@ from .models import (
     PartState,
     Section,
 )
+from .pacing_models import PacingTransitions
 from .part_titles import (
     BIBLE_READING_TITLE,
     CBS_TITLE,
@@ -49,6 +51,12 @@ _DEFAULT_PART_SECONDS = {
     Section.WATCHTOWER: 60 * 60,
 }
 _CBS_DEFAULT = 30 * 60
+_OPENING_SECONDS = 5 * 60
+_CLOSING_SECONDS = 5 * 60
+_WEEKEND_SONG_SECONDS = 5 * 60
+_MIDWEEK_SONG_SECONDS = 3 * 60 + 30
+_CHANGEOVER_SECONDS = 20
+_COUNSEL_SECONDS = 60
 
 
 def _default_part(section: Section, index: int) -> TimerPart:
@@ -78,6 +86,30 @@ def build_default_schedule(week_monday: date, meeting_type: MeetingType) -> Meet
     else:
         parts = [_default_part(section, 0) for section in (Section.PUBLIC_TALK, Section.WATCHTOWER)]
     return MeetingSchedule(week_monday=week_monday.isoformat(), meeting_type=meeting_type, parts=parts)
+
+
+def meeting_pacing_transitions(schedule: MeetingSchedule) -> PacingTransitions:
+    """Estimate untimed meeting activities from the canonical order and roles."""
+    parts = schedule.parts
+    before = [(parts[0].id, _OPENING_SECONDS)] if parts else []
+    for previous, following in pairwise(parts):
+        seconds = None
+        if schedule.meeting_type is MeetingType.WEEKEND:
+            if previous.section is Section.PUBLIC_TALK and following.section is Section.WATCHTOWER:
+                seconds = _WEEKEND_SONG_SECONDS
+        elif following.section is Section.TREASURES:
+            seconds = _CHANGEOVER_SECONDS
+        elif following.section is Section.MINISTRY:
+            # The timer workbook data does not yet distinguish individual student assignments.
+            counsel = previous.section is Section.MINISTRY or previous.title == BIBLE_READING_TITLE
+            seconds = _CHANGEOVER_SECONDS + (_COUNSEL_SECONDS if counsel else 0)
+        elif following.section is Section.LIVING and previous.section is not Section.LIVING:
+            seconds = _MIDWEEK_SONG_SECONDS + (
+                _COUNSEL_SECONDS if previous.section is Section.MINISTRY else 0
+            )
+        if seconds is not None:
+            before.append((following.id, seconds))
+    return PacingTransitions(tuple(before), _CLOSING_SECONDS)
 
 
 def _is_cbs_part(part: TimerPart) -> bool:
@@ -127,7 +159,7 @@ def normalize_schedule(schedule: MeetingSchedule) -> bool:
 
 def schedule_has_timing_data(schedule: MeetingSchedule) -> bool:
     """True once any part has live or historical stopwatch data."""
-    return any(_part_has_timing_data(part) for part in schedule.parts)
+    return schedule.pacing_run is not None or any(_part_has_timing_data(part) for part in schedule.parts)
 
 
 def _part_has_timing_data(part: TimerPart) -> bool:

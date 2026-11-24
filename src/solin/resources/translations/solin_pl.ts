@@ -9974,6 +9974,26 @@ Dodaj warstwę, gdy zechcesz.</translation>
         <translation>Zapisano w:
 {path}</translation>
     </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Planned start</source>
+        <translation>Planowany początek</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="52"/>
+        <source>Planned end</source>
+        <translation>Planowany koniec</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="53"/>
+        <source>Estimated end</source>
+        <translation>Przewidywany koniec</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="54"/>
+        <source>Adjusted</source>
+        <translation>Dostosowano</translation>
+    </message>
 </context>
 <context>
     <name>TimerProjection</name>

@@ -9939,6 +9939,26 @@ Añada una cuando quiera.</translation>
         <translation>Guardado en:
 {path}</translation>
     </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Planned start</source>
+        <translation>Inicio previsto</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="52"/>
+        <source>Planned end</source>
+        <translation>Fin previsto</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="53"/>
+        <source>Estimated end</source>
+        <translation>Fin estimado</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="54"/>
+        <source>Adjusted</source>
+        <translation>Ajustado</translation>
+    </message>
 </context>
 <context>
     <name>TimerProjection</name>

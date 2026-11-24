@@ -24,6 +24,7 @@ from .contracts import (
     ResetPartCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
+    SetMeetingPacingCommand,
     StartPartCommand,
     TimerCommand,
     TimerCommandError,
@@ -263,6 +264,7 @@ class RemoteTimerStateStore:
                 SelectMeetingScheduleCommand,
                 RenamePartCommand,
                 ResetAllCommand,
+                SetMeetingPacingCommand,
             ),
         ):
             if command.schedule_revision != snapshot.schedule_revision:
