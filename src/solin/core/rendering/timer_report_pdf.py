@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,11 +21,8 @@ from PySide6.QtGui import (
 )
 
 from ..i18n.date import format_datetime, format_time_with_seconds
-from ..i18n.timer_part_titles import display_part_title
-from ..meetings.colors import section_colors
-from ..meetings.section_meta import SECTION_META
-from ..timer.models import MeetingSchedule, MeetingType, PartState, Section
-from ..timer.part_titles import is_indexed_part_title_source
+from ..i18n.timer_schedule_view import parts_model_for_schedule
+from ..timer.models import CustomTimerSchedule, MeetingSchedule, MeetingType, PartState, Section
 
 
 _TR_CTX = "TimerPdfExport"
@@ -51,26 +49,10 @@ _TIMER_PDF_EXPORT_SOURCES = (
     QT_TRANSLATE_NOOP("TimerPdfExport", "Over time"),
 )
 
-_SECTION_CODES = {
-    Section.OPENING_COMMENTS: "opening_comments",
-    Section.TREASURES: "tgw",
-    Section.MINISTRY: "ayfm",
-    Section.LIVING: "lac",
-    Section.CONCLUDING_COMMENTS: "concluding_comments",
-    Section.PUBLIC_TALK: "public_talk",
-    Section.WATCHTOWER: "wt",
-}
-
-_STANDALONE_SECTIONS = {
-    Section.OPENING_COMMENTS,
-    Section.CONCLUDING_COMMENTS,
-}
-
-
 @dataclass(frozen=True)
 class TimerPdfRow:
     number: int
-    section: Section
+    section: Section | str | None
     show_section_header: bool
     section_label: str
     section_color: str
@@ -91,18 +73,6 @@ class TimerPdfSummary:
 
 def _tr(text: str) -> str:
     return QCoreApplication.translate(_TR_CTX, text)
-
-
-def _section_label(section: Section) -> str:
-    code = _SECTION_CODES.get(section, "")
-    source = SECTION_META.get(code, (section.value, 215))[0]
-    return QCoreApplication.translate("_Section", source)
-
-
-def _section_color(section: Section) -> str:
-    code = _SECTION_CODES.get(section, "")
-    hue = SECTION_META.get(code, ("", 215))[1]
-    return section_colors(hue)["accent"]
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -128,7 +98,7 @@ def _rounded_delta_seconds(elapsed_seconds: float, planned_seconds: int) -> int:
 
 
 def build_timer_pdf_summary(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     *,
     now_epoch: float | None = None,
 ) -> TimerPdfSummary:
@@ -149,7 +119,7 @@ def build_timer_pdf_summary(
 
 
 def build_timer_pdf_rows(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     *,
     now_epoch: float | None = None,
     time_format: str = "HH:mm:ss",
@@ -157,14 +127,9 @@ def build_timer_pdf_rows(
     """Build stable, testable rows for the timer PDF export."""
     now = time.time() if now_epoch is None else float(now_epoch)
     rows: list[TimerPdfRow] = []
-    section_positions: dict[Section, int] = {}
-    for number, part in enumerate(schedule.parts, start=1):
-        section_position = section_positions.get(part.section, 0) + 1
-        section_positions[part.section] = section_position
-        indexed_number: int | None = None
-        if is_indexed_part_title_source(part.title):
-            indexed_number = section_position
-        show_section_header = part.section not in _STANDALONE_SECTIONS
+    presentation = parts_model_for_schedule(schedule, time_format)
+    for part, view in zip(schedule.parts, presentation, strict=True):
+        section = part.section if isinstance(part.section, Section) else part.section_id
 
         started_epoch = part.first_started_epoch
         elapsed = part.elapsed(now)
@@ -193,12 +158,12 @@ def build_timer_pdf_rows(
             status_label = _tr("Not started")
 
         rows.append(TimerPdfRow(
-            number=number,
-            section=part.section,
-            show_section_header=show_section_header,
-            section_label=_section_label(part.section),
-            section_color=_section_color(part.section),
-            title=display_part_title(part, indexed_number=indexed_number),
+            number=view["displayNumber"],
+            section=section,
+            show_section_header=view["showSectionHeader"],
+            section_label=view["sectionTitle"],
+            section_color=view["sectionColor"],
+            title=view["title"],
             planned_label=_fmt_duration(part.planned_seconds),
             started_label=started_label,
             finished_label=finished_label,
@@ -209,7 +174,10 @@ def build_timer_pdf_rows(
     return rows
 
 
-def default_pdf_filename(schedule: MeetingSchedule) -> str:
+def default_pdf_filename(schedule: MeetingSchedule | CustomTimerSchedule) -> str:
+    if not isinstance(schedule, MeetingSchedule):
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", schedule.title).strip(" .")
+        return f"Solin timer {name or 'schedule'}.pdf"
     meeting = "midweek" if schedule.meeting_type is MeetingType.MIDWEEK else "weekend"
     return f"Solin timer {schedule.week_monday} {meeting}.pdf"
 
@@ -366,7 +334,7 @@ class _PdfPainter:
 
 
 def export_schedule_pdf(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     path: str | Path,
     *,
     week_label: str,
@@ -385,19 +353,21 @@ def export_schedule_pdf(
 
     summary = build_timer_pdf_summary(schedule, now_epoch=now_epoch)
 
-    title = _tr("Meeting timer report")
+    title = _tr("Meeting timer report") if isinstance(schedule, MeetingSchedule) else schedule.title
     meta = (
         _tr("{meeting_type} - {week}")
         .replace("{meeting_type}", meeting_type_label)
         .replace("{week}", week_label)
     )
+    if not isinstance(schedule, MeetingSchedule):
+        meta = ""
     generated_label = format_datetime(generated, date_format)
+    totals: dict[Section | str | None, int] = {}
+    for row, part in zip(rows, schedule.parts, strict=True):
+        totals[row.section] = totals.get(row.section, 0) + part.planned_seconds
     section_totals = {
-        section: _tr("Total {time}").replace(
-            "{time}",
-            _fmt_duration(schedule.section_total_seconds(section)),
-        )
-        for section in {row.section for row in rows}
+        section: _tr("Total {time}").replace("{time}", _fmt_duration(total))
+        for section, total in totals.items()
     }
 
     pdf = _PdfPainter(target)
@@ -424,18 +394,18 @@ def export_schedule_pdf(
         ])
         pdf.draw_table_header(columns)
 
-        last_section: Section | None = None
+        last_section: Section | str | None = None
         shaded = False
         for row in rows:
-            if row.show_section_header and row.section is not last_section:
+            if row.show_section_header and row.section != last_section:
                 pdf.ensure_space(66, title, meta, columns)
                 pdf.draw_section(
                     row.section_label,
                     row.section_color,
                     section_totals.get(row.section, ""),
                 )
-                last_section = row.section
                 shaded = False
+            last_section = row.section
             pdf.ensure_space(38, title, meta, columns)
             pdf.draw_row(row, columns, shaded=shaded)
             shaded = not shaded

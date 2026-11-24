@@ -7,7 +7,7 @@ from datetime import date
 from .models import (
     MAX_PLANNED_PART_SECONDS,
     MIN_PLANNED_PART_SECONDS,
-    MeetingPart,
+    TimerPart,
     MeetingSchedule,
     MeetingType,
     PartKind,
@@ -51,16 +51,16 @@ _DEFAULT_PART_SECONDS = {
 _CBS_DEFAULT = 30 * 60
 
 
-def _default_part(section: Section, index: int) -> MeetingPart:
+def _default_part(section: Section, index: int) -> TimerPart:
     if section is Section.TREASURES and index < len(_TREASURES_DEFAULTS):
         title, seconds = _TREASURES_DEFAULTS[index]
     else:
         title, seconds = _default_title(section, index), _DEFAULT_PART_SECONDS[section]
-    return MeetingPart.new(section, title, seconds)
+    return TimerPart.new(section, title, seconds)
 
 
-def _cbs_part() -> MeetingPart:
-    return MeetingPart.new(
+def _cbs_part() -> TimerPart:
+    return TimerPart.new(
         Section.LIVING,
         CBS_TITLE,
         _CBS_DEFAULT,
@@ -80,11 +80,11 @@ def build_default_schedule(week_monday: date, meeting_type: MeetingType) -> Meet
     return MeetingSchedule(week_monday=week_monday.isoformat(), meeting_type=meeting_type, parts=parts)
 
 
-def _is_cbs_part(part: MeetingPart) -> bool:
+def _is_cbs_part(part: TimerPart) -> bool:
     return part.section is Section.LIVING and (part.kind is PartKind.CBS or part.title == CBS_TITLE)
 
 
-def configurable_parts_in(schedule: MeetingSchedule, section: Section) -> list[MeetingPart]:
+def configurable_parts_in(schedule: MeetingSchedule, section: Section) -> list[TimerPart]:
     """Parts controlled by the section count."""
     if section is Section.LIVING:
         return [p for p in schedule.parts_in(section) if not _is_cbs_part(p)]
@@ -95,11 +95,11 @@ def configurable_count_for(schedule: MeetingSchedule, section: Section) -> int:
     return len(configurable_parts_in(schedule, section))
 
 
-def is_part_duration_editable(part: MeetingPart) -> bool:
+def is_part_duration_editable(part: TimerPart) -> bool:
     return part.state is PartState.IDLE
 
 
-def set_part_seconds(part: MeetingPart, seconds: int) -> bool:
+def set_part_seconds(part: TimerPart, seconds: int) -> bool:
     seconds = max(MIN_PLANNED_PART_SECONDS, min(int(seconds), MAX_PLANNED_PART_SECONDS))
     if not is_part_duration_editable(part) or part.planned_seconds == seconds:
         return False
@@ -130,7 +130,7 @@ def schedule_has_timing_data(schedule: MeetingSchedule) -> bool:
     return any(_part_has_timing_data(part) for part in schedule.parts)
 
 
-def _part_has_timing_data(part: MeetingPart) -> bool:
+def _part_has_timing_data(part: TimerPart) -> bool:
     return (
         part.state is not PartState.IDLE
         or part.started_at_epoch is not None
@@ -235,6 +235,6 @@ def _default_insert_index(schedule: MeetingSchedule, section: Section) -> int:
     ]
     target_rank = order.index(section)
     for i, p in enumerate(schedule.parts):
-        if order.index(p.section) > target_rank:
+        if isinstance(p.section, Section) and order.index(p.section) > target_rank:
             return i
     return len(schedule.parts)

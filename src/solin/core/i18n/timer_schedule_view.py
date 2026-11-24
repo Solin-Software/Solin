@@ -1,0 +1,148 @@
+"""Shared presentation of timer schedules for desktop, remote, and reports."""
+
+from __future__ import annotations
+
+from ..meetings.colors import section_colors
+from ..meetings.section_meta import SECTION_META
+from ..timer.models import (
+    CONFIGURABLE_PART_SECTIONS,
+    CustomTimerSchedule,
+    MeetingSchedule,
+    PartState,
+    Section,
+    TimerSection,
+)
+from ..timer.part_titles import is_indexed_part_title_source
+from ..timer.schedule_factory import configurable_count_for, is_part_duration_editable
+from ...styles.theme import current_theme_scheme
+from .date import format_time_with_seconds
+from .meeting_sections import translate_meeting_section_title
+from .timer_part_titles import display_part_title
+
+_SECTION_CODES = {
+    Section.OPENING_COMMENTS: "opening_comments",
+    Section.TREASURES: "tgw",
+    Section.MINISTRY: "ayfm",
+    Section.LIVING: "lac",
+    Section.CONCLUDING_COMMENTS: "concluding_comments",
+    Section.PUBLIC_TALK: "public_talk",
+    Section.WATCHTOWER: "wt",
+}
+
+_STANDALONE_SECTIONS = {
+    Section.OPENING_COMMENTS,
+    Section.CONCLUDING_COMMENTS,
+}
+
+
+def section_palette(section: Section | str | None) -> dict[str, str]:
+    code = _SECTION_CODES.get(section, "") if isinstance(section, Section) else ""
+    hue = SECTION_META.get(code, ("", 215))[1]
+    colors = section_colors(hue, current_theme_scheme())
+    return {
+        "accent": colors["accent"],
+        "text": colors["text"],
+        "badge": colors["badge"],
+        "border": colors["border"],
+    }
+
+
+def _fmt_mmss(seconds: float) -> str:
+    total = int(round(abs(seconds)))
+    sign = "-" if seconds < 0 else ""
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{sign}{h}:{m:02d}:{s:02d}"
+    return f"{sign}{m:02d}:{s:02d}"
+
+
+def _fmt_total(seconds: float) -> str:
+    """A compact section-total label: '30 min' on whole minutes, else 'MM:SS'."""
+    s = int(round(seconds))
+    if s % 60 == 0:
+        return f"{s // 60} min"
+    return _fmt_mmss(s)
+
+
+def _started_label(epoch: float | None, time_format: str = "HH:mm:ss") -> str:
+    if epoch is None:
+        return ""
+    return format_time_with_seconds(epoch, time_format)
+
+
+def section_title(section: Section | str | None, custom_title: str = "") -> str:
+    """Return the localized official title or the literal custom section title."""
+    if not isinstance(section, Section):
+        return custom_title
+    code = _SECTION_CODES.get(section, "")
+    source = SECTION_META.get(code, (section.value, 215))[0]
+    return translate_meeting_section_title(source)
+
+
+def parts_model_for_schedule(
+    schedule: MeetingSchedule | CustomTimerSchedule, time_format: str = "HH:mm:ss",
+) -> list[dict]:
+    """Build ordered presentation rows from either kind of timer schedule."""
+    is_meeting = isinstance(schedule, MeetingSchedule)
+    allow_duration_edits = is_meeting or not schedule.has_running_part()
+    sections = (
+        {entry.id: entry for entry in schedule.entries if isinstance(entry, TimerSection)}
+        if isinstance(schedule, CustomTimerSchedule) else {}
+    )
+    parts = schedule.parts
+    totals: dict[str | None, int] = {}
+    counts: dict[str | None, int] = {}
+    for part in parts:
+        section = part.section if is_meeting else part.section_id
+        totals[section] = totals.get(section, 0) + part.planned_seconds
+        counts[section] = counts.get(section, 0) + 1
+
+    configurable_counts: dict[str | None, int] = (
+        {
+            section: configurable_count_for(schedule, section)
+            for section in totals if isinstance(section, Section)
+        }
+        if isinstance(schedule, MeetingSchedule) else counts
+    )
+    rows = []
+    seen_sections: set[object] = set()
+    section_positions: dict[object, int] = {}
+    for number, part in enumerate(parts, start=1):
+        section = part.section if is_meeting else part.section_id
+        section_position = section_positions.get(section, 0) + 1
+        section_positions[section] = section_position
+        first = section not in seen_sections
+        seen_sections.add(section)
+        palette = section_palette(section)
+        indexed_number = section_position if is_indexed_part_title_source(part.title) else None
+        show_section_header = (
+            section not in _STANDALONE_SECTIONS if is_meeting else section is not None
+        )
+        section_value = section.value if isinstance(section, Section) else (section or "")
+        custom_section = sections.get(section_value)
+        title = section_title(section, custom_section.title if custom_section else "")
+        rows.append({
+            "id": part.id,
+            "section": section_value,
+            "sectionKey": section_value,
+            "sectionTitle": title,
+            "sectionColor": palette["accent"],
+            "sectionTextColor": palette["text"],
+            "sectionBadgeBg": palette["badge"],
+            "sectionBorderColor": palette["border"],
+            "title": display_part_title(part, indexed_number=indexed_number),
+            "displayNumber": number,
+            "plannedSeconds": part.planned_seconds,
+            "plannedLabel": _fmt_mmss(part.planned_seconds),
+            "state": part.state.value,
+            "firstOfSection": first,
+            "showSectionHeader": show_section_header,
+            "configurableCount": is_meeting and section in CONFIGURABLE_PART_SECTIONS,
+            "sectionCount": configurable_counts.get(section, 0),
+            "sectionTotalLabel": _fmt_total(totals[section]) if show_section_header else "",
+            "durationEditable": allow_duration_edits and is_part_duration_editable(part),
+            "startedLabel": _started_label(part.first_started_epoch, time_format),
+            "resultLabel": _fmt_mmss(part.accumulated_seconds) if part.state is PartState.STOPPED else "",
+        })
+    return rows

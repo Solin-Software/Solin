@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import date, timedelta
 from io import BytesIO
 import json
 from pathlib import Path
@@ -49,6 +49,7 @@ from solin.core.remote_control.security import RemoteScope
 from solin.core.timer.models import (
     ClockConfig,
     Direction,
+    MeetingSchedule,
     MeetingType,
     PartState,
     TimerSnapshot,
@@ -256,18 +257,20 @@ class _TimerEngine(QObject):
         )
 
 
-class _TimerBridge(QObject):
-    scheduleChanged = Signal()
-    clockConfigChanged = Signal()
-    weekChanged = Signal()
+class _TimerOperations(QObject):
+    changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
-        self.clockConfig = ClockConfig().to_dict()
-        self.parts: list[dict[str, Any]] = []
-        self.meetingType = MeetingType.MIDWEEK.value
-        self.weekLabel = "13–19 Jul 2026"
-        self.isCurrentWeek = True
+        self.engine = _TimerEngine()
+        self.time_format = "HH:mm:ss"
+        self.session = SimpleNamespace(
+            schedule=MeetingSchedule(week_monday="2026-07-13", meeting_type=MeetingType.MIDWEEK),
+            clock_config=ClockConfig(),
+            week_monday=date(2026, 7, 13),
+            meeting_type=MeetingType.MIDWEEK,
+            is_current_week=True,
+        )
 
 
 def _controller(
@@ -284,8 +287,7 @@ def _controller(
     media_controller = _MediaController()
     media_projection = _MediaProjection()
     media_thumbnail_extractor = _MediaThumbnailExtractor()
-    timer_engine = _TimerEngine()
-    timer_bridge = _TimerBridge()
+    timer_operations = _TimerOperations()
     controller = RemoteControlController(
         RemoteControlDependencies(
             runtime_paths=SimpleNamespace(data_dir=tmp_path),
@@ -319,8 +321,7 @@ def _controller(
             media_projection=media_projection,
             projection_stop=SimpleNamespace(stop_projection=lambda: None),
             playback_protection=_PlaybackProtection(),
-            timer_engine=timer_engine,
-            timer_bridge=timer_bridge,
+            timer_operations=timer_operations,
             settings_widget=_SettingsWidget(),
             timer_feature_flags=timer_feature_flags,
         ),

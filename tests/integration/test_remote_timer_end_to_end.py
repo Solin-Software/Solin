@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date
+from pathlib import Path
 import statistics
 import threading
 import time
@@ -17,6 +18,7 @@ from solin.controllers.remote_timer_adapter import (
     RemoteTimerAdapterDependencies,
 )
 from solin.controllers.timer_engine import TimerEngine
+from solin.controllers.timer_operations import TimerOperations
 from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.core.foundation.resources import application_resource_path
 from solin.core.foundation.settings_store import ProfileAppSettingsStore
@@ -41,6 +43,7 @@ from solin.core.remote_control.server import (
 )
 from solin.core.timer.application import TimerSession
 from solin.core.timer.hand_alert import TimerHandAlert
+from solin.core.timer.infrastructure import JsonCustomTimerRepository
 from solin.core.timer.models import ClockConfig, MeetingSchedule, MeetingType
 from solin.ui.qml.timer_bridge import TimerBridge
 
@@ -113,16 +116,20 @@ class _MediaCountdownAutomationStub(QObject):
 def _build_stack(
     *,
     feature_flags: TimerRemoteFeatureFlags = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
+    custom_directory: Path | None = None,
 ):
     repo = _InMemoryTimerRepository()
-    session = TimerSession(repo, date(2026, 7, 13))
+    custom_repository = (
+        JsonCustomTimerRepository(custom_directory) if custom_directory is not None else None
+    )
+    session = TimerSession(repo, date(2026, 7, 13), custom_repository=custom_repository)
     engine = TimerEngine()
     engine._timer.stop()  # Deterministic tick control in tests
     engine.set_freeze_seconds(3)
     hand_alert = TimerHandAlertController(ZoomSettingsStore(_MemorySettings()), engine)
+    operations = TimerOperations(engine, session)
     bridge = TimerBridge(
-        engine=engine,
-        session=session,
+        operations=operations,
         output=SimpleNamespace(set_clock_config=lambda _cfg: None),
         monitors=SimpleNamespace(
             model=lambda: [],
@@ -149,8 +156,7 @@ def _build_stack(
             active_profile_id="profile-1",
             active_profile_name="Main Auditorium",
             credentials=credentials,
-            timer_engine=engine,
-            timer_bridge=bridge,
+            timer_operations=bridge.operations,
             feature_flags=feature_flags,
         ),
         bridge,
@@ -801,3 +807,268 @@ def test_abort_pending_commands_unblocks_server_waiter_without_pumping_qt() -> N
     # Late queued Qt slot delivery after loop closure is a safe no-op.
     _APP.processEvents()
     assert dispatched == []
+
+
+def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
+    engine, _session, _bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=True),
+        custom_directory=tmp_path / "custom-timers",
+    )
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            public_headers = {"Host": _HOST, "Origin": _ORIGIN}
+            denied = await client.get("/remote/timer/api/custom-schedules", headers=public_headers)
+            assert denied.status in (401, 403)
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            assert boot["schedule"]["capabilities"]["manageCustomSchedules"] is True
+            revision = boot["scheduleRevision"]
+
+            async def send(payload: dict[str, object], *, command_id: str | None = None) -> dict:
+                response = await client.post(
+                    "/remote/timer/api/commands",
+                    headers=headers,
+                    json={"commandId": command_id or str(uuid.uuid4()), **payload},
+                )
+                assert response.status == 200
+                return await response.json()
+
+            async def catalog() -> list[dict]:
+                response = await client.get("/remote/timer/api/custom-schedules", headers=headers)
+                assert response.status == 200
+                return (await response.json())["schedules"]
+
+            original_part = boot["schedule"]["parts"][0]
+            renamed = await send(
+                {
+                    "type": "rename_part",
+                    "scheduleRevision": revision,
+                    "partId": original_part["id"],
+                    "title": "Opening rehearsal",
+                }
+            )
+            assert renamed["ok"]
+            weekly = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert weekly["parts"][0]["id"] == original_part["id"]
+            assert weekly["parts"][0]["section"] == original_part["section"]
+            assert weekly["parts"][0]["title"] == "Opening rehearsal"
+            restored = await send(
+                {
+                    "type": "rename_part",
+                    "scheduleRevision": renamed["scheduleRevision"],
+                    "partId": original_part["id"],
+                    "title": None,
+                }
+            )
+            assert restored["ok"]
+            create = {
+                "type": "create_custom_schedule",
+                "scheduleRevision": restored["scheduleRevision"],
+                "title": "Training",
+            }
+            command_id = str(uuid.uuid4())
+            created = await send(create, command_id=command_id)
+            assert created["ok"]
+            assert await send(create, command_id=command_id) == created
+            schedules = await catalog()
+            assert len(schedules) == 1
+            schedule = schedules[0]
+            schedule_id = created["createdScheduleId"]
+            assert schedule["id"] == schedule_id
+
+            async def edit(action: str, values: dict, custom_revision: int) -> dict:
+                return await send(
+                    {
+                        "type": "edit_custom_schedule",
+                        "scheduleRevision": adapter.state.schedule_revision,
+                        "scheduleId": schedule_id,
+                        "customRevision": custom_revision,
+                        "action": action,
+                        "values": values,
+                    }
+                )
+
+            assert (await edit("add_section", {"title": "Warm-up"}, schedule["revision"]))["ok"]
+            schedule = (await catalog())[0]
+            section_id = schedule["entries"][0]["id"]
+            assert (
+                await edit(
+                    "add_part",
+                    {
+                        "title": "Stretch",
+                        "planned_seconds": 20,
+                        "section_id": section_id,
+                    },
+                    schedule["revision"],
+                )
+            )["ok"]
+            stale = await edit(
+                "add_part", {"title": "Stale", "planned_seconds": 30}, schedule["revision"]
+            )
+            assert stale["error"]["code"] == "schedule_stale"
+            schedule = (await catalog())[0]
+            selected = await send(
+                {
+                    "type": "select_custom_schedule",
+                    "scheduleRevision": adapter.state.schedule_revision,
+                    "scheduleId": schedule_id,
+                    "customRevision": schedule["revision"],
+                }
+            )
+            assert selected["ok"]
+            current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert current["customSchedule"]["id"] == schedule_id
+            assert current["capabilities"]["setSectionCount"] is False
+            assert current["capabilities"]["switchMeetingType"] is False
+            assert current["capabilities"]["navigateWeeks"] is False
+            part_id = current["parts"][0]["id"]
+            assert current["parts"][0]["plannedSeconds"] == 20
+            started = await send(
+                {
+                    "type": "start_part",
+                    "scheduleRevision": current["scheduleRevision"],
+                    "partId": part_id,
+                }
+            )
+            assert started["ok"]
+            current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            running_revision = current["scheduleRevision"]
+            running_part = current["customSchedule"]["entries"][0]["parts"][0]
+            assert running_part["startedAtEpoch"] is not None
+            adapter.refresh_all()
+            assert adapter.state.schedule_revision == running_revision
+            blocked = await edit(
+                "move_part",
+                {"part_id": part_id, "section_id": None},
+                current["customSchedule"]["revision"],
+            )
+            assert blocked["error"]["code"] == "blocked"
+            public = await (
+                await client.get("/remote/timer/api/public", headers=public_headers)
+            ).json()
+            assert "schedule" not in public and "customSchedule" not in str(public)
+            assert (await send({"type": "stop_part", "partId": part_id}))["ok"]
+
+            current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            copied = await send(
+                {
+                    "type": "duplicate_custom_schedule",
+                    "scheduleRevision": current["scheduleRevision"],
+                    "scheduleId": schedule_id,
+                    "customRevision": current["customSchedule"]["revision"],
+                    "title": "Second group",
+                }
+            )
+            assert copied["ok"]
+            copy = next(item for item in await catalog() if item["id"] == copied["createdScheduleId"])
+            assert copy["id"] != schedule_id
+            assert copy["entries"][0]["parts"][0]["state"] == "idle"
+            assert copy["entries"][0]["parts"][0]["elapsedSeconds"] == 0
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_custom_schedule_feature_is_disabled_by_default(tmp_path: Path) -> None:
+    engine, _session, _bridge, adapter, app = _build_stack(
+        custom_directory=tmp_path / "custom-timers"
+    )
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            assert boot["schedule"]["capabilities"]["manageCustomSchedules"] is False
+            assert (
+                await client.get("/remote/timer/api/custom-schedules", headers=headers)
+            ).status == 404
+            response = await client.post(
+                "/remote/timer/api/commands",
+                headers=headers,
+                json={
+                    "commandId": str(uuid.uuid4()),
+                    "type": "create_custom_schedule",
+                    "scheduleRevision": boot["scheduleRevision"],
+                    "title": "Training",
+                },
+            )
+            assert (await response.json())["error"]["code"] == "blocked"
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_catalog_read_failure_does_not_interrupt_live_timer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine, _session, bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=True),
+        custom_directory=tmp_path / "custom-timers",
+    )
+
+    def fail_catalog() -> None:
+        raise OSError("catalog unavailable")
+
+    monkeypatch.setattr(bridge.operations, "list_custom_schedules", fail_catalog)
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            response = await client.post(
+                "/remote/timer/api/commands",
+                headers=headers,
+                json={
+                    "commandId": str(uuid.uuid4()),
+                    "type": "start_part",
+                    "scheduleRevision": boot["scheduleRevision"],
+                    "partId": boot["schedule"]["parts"][0]["id"],
+                },
+            )
+            assert (await response.json())["ok"]
+            assert adapter.state.live.active
+            catalog = await client.get("/remote/timer/api/custom-schedules", headers=headers)
+            assert catalog.status == 503 or (await catalog.json())["error"]["code"] == "failed"
+            assert adapter.state.live.active
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_disabled_custom_feature_blocks_active_custom_controls(tmp_path: Path) -> None:
+    engine, _session, bridge, adapter, app = _build_stack(custom_directory=tmp_path / "custom-timers")
+    operations = bridge.operations
+    schedule = operations.create_custom_schedule("Private session")
+    operations.edit_custom_schedule(schedule.id, schedule.revision, "add_part", title="Exercise", planned_seconds=20)
+    operations.select_custom_schedule(schedule.id)
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            assert "customSchedule" not in boot["schedule"]
+            assert not boot["schedule"]["capabilities"]["controlParts"]
+            part_id = boot["schedule"]["parts"][0]["id"]
+            response = await client.post("/remote/timer/api/commands", headers=headers, json={
+                "commandId": str(uuid.uuid4()), "type": "start_part",
+                "scheduleRevision": boot["scheduleRevision"], "partId": part_id,
+            })
+            assert (await response.json())["error"]["code"] == "blocked"
+            assert not engine.snapshot().active
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()

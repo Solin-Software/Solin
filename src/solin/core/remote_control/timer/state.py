@@ -13,6 +13,14 @@ from ..features import TIMER_REMOTE_HAND_ALERT_POLICY, TimerRemoteHandAlertPolic
 from ..validation import JsonObject
 from .contracts import (
     AdjustPartCommand,
+    CreateCustomScheduleCommand,
+    EditCustomScheduleCommand,
+    DeleteCustomScheduleCommand,
+    DuplicateCustomScheduleCommand,
+    SelectCustomScheduleCommand,
+    SelectMeetingScheduleCommand,
+    RenamePartCommand,
+    ResetAllCommand,
     ResetPartCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
@@ -157,16 +165,7 @@ class RemoteTimerStateStore:
         if not isinstance(live, TimerLiveWireSnapshot):
             raise TypeError("live must be a TimerLiveWireSnapshot")
         with self._lock:
-            current = self._snapshot.live
-            if live.comparable_key() == current.comparable_key():
-                return current
-            updated = replace(live, live_revision=current.live_revision + 1)
-            self._snapshot = replace(
-                self._snapshot,
-                live=updated,
-                public_live_revision=self._snapshot.public_live_revision + 1,
-            )
-            return updated
+            return self.update_snapshots(self._snapshot.schedule, live).live
 
     def update_hand_alert(self, alert: TimerHandAlert) -> bool:
         """Update the live alert and its audience revisions in one publication."""
@@ -195,12 +194,37 @@ class RemoteTimerStateStore:
         if not isinstance(schedule, TimerScheduleWireSnapshot):
             raise TypeError("schedule must be a TimerScheduleWireSnapshot")
         with self._lock:
-            current = self._snapshot.schedule
-            comparable = replace(schedule, schedule_revision=current.schedule_revision)
-            if comparable == current:
+            return self.update_snapshots(schedule, self._snapshot.live).schedule
+
+    def update_snapshots(
+        self,
+        schedule: TimerScheduleWireSnapshot,
+        live: TimerLiveWireSnapshot,
+    ) -> RemoteTimerRuntimeSnapshot:
+        """Publish schedule and live state atomically."""
+        if not isinstance(schedule, TimerScheduleWireSnapshot):
+            raise TypeError("schedule must be a TimerScheduleWireSnapshot")
+        if not isinstance(live, TimerLiveWireSnapshot):
+            raise TypeError("live must be a TimerLiveWireSnapshot")
+        with self._lock:
+            current = self._snapshot
+            schedule_changed = (
+                replace(schedule, schedule_revision=current.schedule_revision) != current.schedule
+            )
+            live_changed = live.comparable_key() != current.live.comparable_key()
+            if not schedule_changed and not live_changed:
                 return current
-            updated = replace(schedule, schedule_revision=current.schedule_revision + 1)
-            self._snapshot = replace(self._snapshot, schedule=updated)
+            updated = replace(
+                current,
+                schedule=replace(schedule, schedule_revision=current.schedule_revision + 1)
+                if schedule_changed
+                else current.schedule,
+                live=replace(live, live_revision=current.live_revision + 1)
+                if live_changed
+                else current.live,
+                public_live_revision=current.public_live_revision + int(live_changed),
+            )
+            self._snapshot = updated
             return updated
 
     def validate_command_preconditions(
@@ -210,6 +234,14 @@ class RemoteTimerStateStore:
         if not isinstance(command, TimerCommand):
             raise TypeError("command must be a TimerCommand")
         snapshot = self.snapshot()
+        if (
+            snapshot.schedule.custom_schedule is not None
+            and not snapshot.schedule.capabilities.can_manage_custom_schedules
+        ):
+            return TimerCommandError(
+                TimerCommandErrorCode.BLOCKED,
+                "Custom timer control is disabled by policy.",
+            )
         if not snapshot.schedule.capabilities.allows_command(command):
             return TimerCommandError(
                 TimerCommandErrorCode.BLOCKED,
@@ -223,12 +255,20 @@ class RemoteTimerStateStore:
                 AdjustPartCommand,
                 SetPartSecondsCommand,
                 SetSectionCountCommand,
+                CreateCustomScheduleCommand,
+                EditCustomScheduleCommand,
+                DeleteCustomScheduleCommand,
+                DuplicateCustomScheduleCommand,
+                SelectCustomScheduleCommand,
+                SelectMeetingScheduleCommand,
+                RenamePartCommand,
+                ResetAllCommand,
             ),
         ):
             if command.schedule_revision != snapshot.schedule_revision:
                 return TimerCommandError(
                     TimerCommandErrorCode.SCHEDULE_STALE,
-                    "The meeting schedule changed; refresh before retrying.",
+                    "The timer schedule changed; refresh before retrying.",
                     retryable=True,
                 )
         return None
@@ -275,8 +315,13 @@ class TimerCommandSession:
     def prepare(self, command: TimerRemoteCommand) -> CommandDecision[TimerCommandResult]:
         return self._gate.prepare(command)
 
-    def complete_success(self, command: TimerRemoteCommand) -> TimerCommandResult:
-        return self._gate.complete_success(command)
+    def complete_success(
+        self, command: TimerRemoteCommand, *, created_schedule_id: str | None = None,
+    ) -> TimerCommandResult:
+        result = self._build_success(command)
+        if created_schedule_id is not None:
+            result = replace(result, created_schedule_id=created_schedule_id)
+        return self._gate.complete_success(command, result=result)
 
     def complete_failure(
         self,

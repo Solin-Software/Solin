@@ -631,6 +631,123 @@ def test_login_bootstrap_and_idempotent_command_flow(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
+def test_timer_custom_catalog_auth_policy_and_command_replay(tmp_path: Path) -> None:
+    from dataclasses import replace
+    from solin.core.remote_control.timer.contracts import (
+        CustomScheduleCatalogWireSnapshot,
+        CustomScheduleWireItem,
+        TimerControlCapabilities,
+    )
+
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        calls = []
+
+        async def catalog(query):
+            calls.append(query)
+            return CustomScheduleCatalogWireSnapshot(
+                (CustomScheduleWireItem("s", "Private", 1, ()),)
+            )
+
+        try:
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies, catalog_handler=catalog
+            )
+            path = "/remote/timer/api/custom-schedules"
+            anonymous = await harness.client.get(path, headers={"Host": _HOST})
+            assert anonymous.status == 401
+            headers = await _authenticated_timer_headers(harness)
+            assert (await harness.client.get(path, headers=headers)).status == 404
+            assert calls == []
+            capabilities = TimerControlCapabilities(can_manage_custom_schedules=True)
+            harness.timer_state.update_schedule(
+                replace(harness.timer_state.schedule, capabilities=capabilities)
+            )
+            response = await harness.client.get(path, headers=headers)
+            assert (await response.json())["schedules"][0]["title"] == "Private"
+            assert len(calls) == 1
+            assert (await harness.client.get(path, headers=headers)).status == 200
+            assert len(calls) == 2
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies, catalog_handler=None
+            )
+            assert (await harness.client.get(path, headers=headers)).status == 503
+
+            async def empty_result(_query):
+                return None
+
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies, catalog_handler=empty_result
+            )
+            assert (await harness.client.get(path, headers=headers)).status == 503
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies, catalog_handler=catalog
+            )
+            payload = {
+                "type": "create_custom_schedule",
+                "commandId": str(uuid.uuid4()),
+                "scheduleRevision": harness.timer_state.schedule_revision,
+                "title": "Event",
+            }
+            first = await harness.client.post(
+                "/remote/timer/api/commands", headers=headers, json=payload
+            )
+            replay = await harness.client.post(
+                "/remote/timer/api/commands", headers=headers, json=payload
+            )
+            assert (await first.json())["ok"] and (await replay.json())["ok"]
+            assert len(harness.timer_commands) == 1
+            conflict = await harness.client.post(
+                "/remote/timer/api/commands", headers=headers, json={**payload, "title": "Other"}
+            )
+            assert (await conflict.json())["error"]["code"] == "command_id_conflict"
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_timer_catalog_rechecks_session_after_main_thread_query(tmp_path: Path) -> None:
+    from dataclasses import replace
+    from solin.core.remote_control.timer.contracts import (
+        CustomScheduleCatalogWireSnapshot,
+        TimerControlCapabilities,
+    )
+
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        started = asyncio.Event()
+        finish = asyncio.Event()
+
+        async def catalog(_query):
+            started.set()
+            await finish.wait()
+            return CustomScheduleCatalogWireSnapshot(())
+
+        try:
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies, catalog_handler=catalog
+            )
+            harness.timer_state.update_schedule(
+                replace(
+                    harness.timer_state.schedule,
+                    capabilities=TimerControlCapabilities(can_manage_custom_schedules=True),
+                )
+            )
+            headers = await _authenticated_timer_headers(harness)
+            pending = asyncio.create_task(
+                harness.client.get("/remote/timer/api/custom-schedules", headers=headers)
+            )
+            await started.wait()
+            harness.timer_sessions.revoke_all()
+            finish.set()
+            assert (await pending).status == 401
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
 def test_media_and_timer_sessions_cookies_and_csrf_never_cross_contaminate(
     tmp_path: Path,
 ) -> None:
@@ -1454,9 +1571,7 @@ def test_websocket_snapshot_fanout_sends_to_clients_concurrently(
             )
             monkeypatch.setattr(harness.media_module, "_send_many_to_map", send_many)
             harness.state.update_catalog((), change_token="concurrent-fanout")
-            publish = asyncio.create_task(
-                harness.application.publish_snapshot(RemoteScope.MEDIA)
-            )
+            publish = asyncio.create_task(harness.application.publish_snapshot(RemoteScope.MEDIA))
 
             await asyncio.wait_for(all_started.wait(), timeout=1)
             assert maximum_active == len(sockets)
@@ -1553,10 +1668,7 @@ def test_desktop_can_revoke_one_or_all_sessions_across_scopes_without_restarting
             assert all(item.connected_socket_count == 1 for item in inventory)
             server_instance = harness.state.server_instance_id
 
-            assert (
-                await harness.application.revoke_session(f"media:{first.management_id}")
-                is True
-            )
+            assert await harness.application.revoke_session(f"media:{first.management_id}") is True
             revoked_event = await first_socket.receive_json()
             assert revoked_event["type"] == "session.revoked"
             assert revoked_event["payload"] == {"reason": "revoked_device"}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import uuid
+import threading
 
 import pytest
 
@@ -14,6 +15,17 @@ from solin.core.timer.models import (
     MIN_SECTION_PART_COUNT,
 )
 from solin.core.remote_control.timer.contracts import (
+    CreateCustomScheduleCommand,
+    EditCustomScheduleCommand,
+    DeleteCustomScheduleCommand,
+    DuplicateCustomScheduleCommand,
+    SelectCustomScheduleCommand,
+    SelectMeetingScheduleCommand,
+    RenamePartCommand,
+    ResetAllCommand,
+    CustomSchedulePartWireItem,
+    CustomScheduleSectionWireItem,
+    CustomScheduleWireItem,
     AdjustPartCommand,
     NavigateWeekCommand,
     ResetPartCommand,
@@ -36,6 +48,140 @@ from solin.core.remote_control.timer.state import (
     TimerCommandSession,
 )
 from solin.core.timer.models import Direction, MeetingType, PartState, Section
+
+
+def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
+    cid = str(uuid.uuid4())
+    commands = [
+        CreateCustomScheduleCommand(cid, 2, "Event"),
+        EditCustomScheduleCommand(cid, 2, "s", 3, "add_part", title="Part", planned_seconds=1),
+        EditCustomScheduleCommand(cid, 2, "s", 3, "move_part", part_id="p", before_id="q"),
+        DeleteCustomScheduleCommand(cid, 2, "s", 3),
+        DuplicateCustomScheduleCommand(cid, 2, "s", 3, "Copy"),
+        SelectCustomScheduleCommand(cid, 2, "s", 3),
+        SelectMeetingScheduleCommand(cid, 2),
+        RenamePartCommand(cid, 2, "p", None),
+        ResetAllCommand(cid, 2),
+        SetPartSecondsCommand(cid, 2, "p", 1),
+    ]
+    for command in commands:
+        assert parse_timer_command(command.to_dict()) == command
+    with pytest.raises(ValueError):
+        EditCustomScheduleCommand(cid, 2, "s", 3, "delete_part", part_id="p", title="extra")
+    with pytest.raises(ValueError):
+        EditCustomScheduleCommand(cid, 2, "s", 3, "move_section", section_id=None)
+    with pytest.raises((TypeError, ValueError)):
+        parse_timer_command(
+            {**commands[1].to_dict(), "values": {"title": "x", "planned_seconds": True}}
+        )
+
+
+def test_custom_snapshot_keeps_empty_sections_progress_and_policy() -> None:
+    part = CustomSchedulePartWireItem("p", "Part", 1, PartState.RUNNING, 12.0, 100.0, 120.0)
+    custom = CustomScheduleWireItem(
+        "s", "Event", 4, (CustomScheduleSectionWireItem("empty", "Empty", ()), part)
+    )
+    state = RemoteTimerStateStore(
+        schedule=replace(
+            TimerScheduleWireSnapshot.empty(),
+            custom_schedule=custom,
+        )
+    )
+    cid = str(uuid.uuid4())
+    assert (
+        state.validate_command_preconditions(StartPartCommand(cid, 0, "p")).code
+        is TimerCommandErrorCode.BLOCKED
+    )
+    assert state.schedule.to_dict()["capabilities"]["manageCustomSchedules"] is False
+    assert "customSchedule" not in state.schedule.to_dict()
+    assert custom.to_dict()["entries"][0]["parts"] == []
+    assert custom.to_dict()["entries"][1]["startedAtEpoch"] == 120.0
+    with pytest.raises(ValueError):
+        CustomSchedulePartWireItem("p", "Part", 1, PartState.RUNNING)
+
+
+def test_custom_command_gate_checks_revision_and_replays_results() -> None:
+    caps = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=True)
+    )
+    state = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty(capabilities=caps))
+    session = TimerCommandSession(state)
+    command = CreateCustomScheduleCommand(str(uuid.uuid4()), 0, "Event")
+    assert session.prepare(command).should_execute
+    result = session.complete_success(command)
+    state.update_schedule(replace(state.schedule, week_label="changed"))
+    assert session.prepare(command).result == result
+    assert (
+        session.prepare(replace(command, title="Different")).result.error.code
+        is TimerCommandErrorCode.COMMAND_ID_CONFLICT
+    )
+    stale = session.prepare(replace(command, command_id=str(uuid.uuid4())))
+    assert stale.result.error.code is TimerCommandErrorCode.SCHEDULE_STALE
+
+
+def test_atomic_snapshots_preserve_revisions_and_validate_before_publication() -> None:
+    state = RemoteTimerStateStore()
+    schedule = replace(state.schedule, week_label="context")
+    live = replace(state.live, active_part_title="context")
+    published = state.update_snapshots(schedule, live)
+    assert (
+        published.schedule_revision,
+        published.live_revision,
+        published.public_live_revision,
+    ) == (1, 1, 1)
+    assert state.update_snapshots(schedule, live) == published
+    with pytest.raises(TypeError):
+        state.update_snapshots(schedule, None)
+    assert state.snapshot() == published
+    changed = state.update_snapshots(replace(schedule, week_label="other"), live)
+    assert changed.schedule_revision == 2
+    assert changed.live_revision == published.live_revision
+    assert changed.public_live_revision == published.public_live_revision
+
+
+def test_atomic_snapshots_never_expose_mixed_contexts() -> None:
+    caps = TimerControlCapabilities(can_manage_custom_schedules=True)
+    state = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty(capabilities=caps))
+    barrier = threading.Barrier(2)
+    done = threading.Event()
+    failures = []
+
+    def writer() -> None:
+        barrier.wait()
+        for index in range(500):
+            label = str(index % 2)
+            schedule = replace(state.schedule, week_label=label)
+            live = replace(state.live, active_part_title=label)
+            state.update_snapshots(schedule, live)
+        done.set()
+
+    state.update_snapshots(
+        replace(state.schedule, week_label="0"),
+        replace(state.live, active_part_title="0"),
+    )
+    thread = threading.Thread(target=writer)
+    thread.start()
+    barrier.wait()
+    while True:
+        snapshot = state.snapshot()
+        if snapshot.schedule.week_label != snapshot.live.active_part_title:
+            failures.append(snapshot)
+            break
+        if done.is_set():
+            break
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not failures
+
+
+def test_custom_section_identity_serializes_without_enum_coercion() -> None:
+    for section in (None, "", "custom-section"):
+        assert (
+            replace(_part(), section=section, section_key=section or "").to_dict()["section"]
+            == section
+        )
+        live = TimerLiveWireSnapshot.idle(server_epoch_ms=1)
+        assert replace(live, active_section=section).to_dict()["activeSection"] == section
 
 
 def _part(part_id: str = "part-1", *, display_number: int = 1) -> TimerPartWireItem:
@@ -123,7 +269,7 @@ def test_parse_timer_command_round_trips_all_supported_command_types() -> None:
             "type": "set_part_seconds",
             "scheduleRevision": 0,
             "partId": "part-1",
-            "plannedSeconds": MIN_PLANNED_PART_SECONDS - 1,
+            "plannedSeconds": 0,
         },
         {
             "commandId": str(uuid.uuid4()),

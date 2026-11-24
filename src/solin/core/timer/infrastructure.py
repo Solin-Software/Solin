@@ -1,28 +1,37 @@
-"""QSettings persistence adapter for the advanced timer.
+"""Profile-local timer persistence for settings, weekly schedules and custom schedules.
 
 What is persisted (all under the injected ``Timer`` settings app):
-    • the global ``ClockConfig`` for the profile;
+    • the profile's ``ClockConfig``;
     • the last-selected meeting type and the timer-window visibility flag;
     • one ``MeetingSchedule`` per (week-monday, meeting-type), serialized as
       JSON *including* each part's live run-state (started_at / accumulated /
       state) so a meeting in progress is restored verbatim after a restart.
 
-Values are stored as JSON strings — robust across QSettings backends and
-trivially reusable as a future network payload.
+Custom schedules and the selected custom ID have separate atomic JSON files.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import re
 from datetime import date
+from pathlib import Path
 
 from solin.core.foundation.constants import QSETTINGS_TIMER_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
+from solin.core.storage.json_files import read_json_file, write_json_atomic
 
-from .models import AssignmentSetup, ClockConfig, MeetingSchedule, MeetingType
+from .custom_schedule import TimerOperationError
+from .models import AssignmentSetup, ClockConfig, CustomTimerSchedule, MeetingSchedule, MeetingType
 from .schedule_factory import build_default_schedule, normalize_schedule
+
+
+log = logging.getLogger(__name__)
+_CUSTOM_SCHEDULE_ID = re.compile(r"[0-9a-f]{32}")
+_CUSTOM_SCHEDULE_VERSION = 1
 
 
 def _schedule_key(week_monday: str, meeting_type: MeetingType) -> str:
@@ -66,6 +75,7 @@ class QSettingsTimerRepository:
         self._settings.set_value(
             SettingsKey.TIMER_CLOCK_CONFIG,
             json.dumps(config.clamped().to_dict()),
+            checked=True,
         )
 
     # ── Visibility flag (reserve vs. show) ────────────────────────────────────
@@ -93,7 +103,9 @@ class QSettingsTimerRepository:
             return MeetingType.MIDWEEK
 
     def save_last_meeting_type(self, meeting_type: MeetingType) -> None:
-        self._settings.set_value(SettingsKey.TIMER_LAST_MEETING_TYPE, meeting_type.value)
+        self._settings.set_value(
+            SettingsKey.TIMER_LAST_MEETING_TYPE, meeting_type.value, checked=True,
+        )
 
     # ── Schedules ─────────────────────────────────────────────────────────────
 
@@ -124,4 +136,66 @@ class QSettingsTimerRepository:
 
     def save_schedule(self, schedule: MeetingSchedule) -> None:
         key = _schedule_key(schedule.week_monday, schedule.meeting_type)
-        self._settings.set_value(key, json.dumps(schedule.to_dict()))
+        self._settings.set_value(key, json.dumps(schedule.to_dict()), checked=True)
+
+
+class JsonCustomTimerRepository:
+    """One atomic document per custom schedule in the active profile."""
+
+    def __init__(self, directory: Path) -> None:
+        self._directory = directory
+
+    def list_schedules(self) -> tuple[CustomTimerSchedule, ...]:
+        schedules = []
+        for path in sorted(self._directory.glob("*.json")):
+            if _CUSTOM_SCHEDULE_ID.fullmatch(path.stem):
+                schedule = self.load_schedule(path.stem)
+                if schedule is not None:
+                    schedules.append(schedule)
+        return tuple(sorted(schedules, key=lambda schedule: (schedule.title.casefold(), schedule.id)))
+
+    def load_schedule(self, schedule_id: str) -> CustomTimerSchedule | None:
+        path = self._path(schedule_id)
+        try:
+            data = read_json_file(path)
+        except FileNotFoundError:
+            return None
+        except (ValueError, UnicodeError):
+            log.warning("Unreadable custom timer schedule %s", schedule_id, exc_info=True)
+            return None
+        try:
+            if data["version"] != _CUSTOM_SCHEDULE_VERSION or data["id"] != schedule_id:
+                raise ValueError("Invalid timer schedule version or identity.")
+            return CustomTimerSchedule.from_dict(data)
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError):
+            log.warning("Invalid custom timer schedule %s", schedule_id, exc_info=True)
+            return None
+
+    def save_schedule(self, schedule: CustomTimerSchedule) -> None:
+        path = self._path(schedule.id)
+        write_json_atomic(path, dict(schedule.to_dict(), version=_CUSTOM_SCHEDULE_VERSION))
+
+    def delete_schedule(self, schedule_id: str) -> None:
+        self._path(schedule_id).unlink()
+
+    def load_selection(self) -> str | None:
+        try:
+            schedule_id = read_json_file(self._directory / "selection.json")
+        except FileNotFoundError:
+            return None
+        except (ValueError, UnicodeError):
+            log.warning("Unreadable custom timer selection.", exc_info=True)
+            return None
+        if isinstance(schedule_id, str) and _CUSTOM_SCHEDULE_ID.fullmatch(schedule_id):
+            return schedule_id
+        return None
+
+    def save_selection(self, schedule_id: str | None) -> None:
+        if schedule_id is not None:
+            self._path(schedule_id)
+        write_json_atomic(self._directory / "selection.json", schedule_id)
+
+    def _path(self, schedule_id: str) -> Path:
+        if not isinstance(schedule_id, str) or not _CUSTOM_SCHEDULE_ID.fullmatch(schedule_id):
+            raise TimerOperationError("invalid", "Invalid timer schedule ID.")
+        return self._directory / f"{schedule_id}.json"

@@ -14,7 +14,7 @@ from solin.core.timer.models import (
     ClockConfig,
     ClockMode,
     Direction,
-    MeetingPart,
+    TimerPart,
     MeetingSchedule,
     MeetingType,
     PartKind,
@@ -125,7 +125,7 @@ def test_weekend_default_parts():
 def test_timer_section_palette_uses_meeting_section_hues():
     from solin.core.meetings.section_meta import SECTION_META
     from solin.core.meetings.colors import section_colors
-    from solin.ui.qml.timer_bridge import section_palette
+    from solin.core.i18n.timer_schedule_view import section_palette
 
     section_codes = {
         Section.OPENING_COMMENTS: "opening_comments",
@@ -148,7 +148,7 @@ def test_timer_section_palette_uses_meeting_section_hues():
 
 def test_timer_parts_model_uses_global_display_numbers():
     _app()
-    from solin.ui.qml.timer_bridge import parts_model_for_schedule
+    from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     rows = parts_model_for_schedule(sch)
@@ -182,7 +182,7 @@ def test_timer_parts_model_uses_global_display_numbers():
 
 def test_timer_parts_model_formats_default_timer_part_titles():
     _app()
-    from solin.ui.qml.timer_bridge import parts_model_for_schedule
+    from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
 
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
     set_section_part_count(sch, Section.TREASURES, 4)
@@ -207,7 +207,7 @@ def test_timer_part_i18n_sources_cover_canonical_titles():
 
 def test_timer_parts_model_formats_started_time_with_locale_pattern():
     import time
-    from solin.ui.qml.timer_bridge import parts_model_for_schedule
+    from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
 
     epoch = time.mktime((2026, 1, 1, 5, 4, 3, 0, 0, -1))
     sch = build_default_schedule(_WEEK, MeetingType.MIDWEEK)
@@ -718,7 +718,7 @@ def test_engine_restores_running_part_from_schedule():
 
 
 def test_part_roundtrip_preserves_runstate():
-    part = MeetingPart.new(
+    part = TimerPart.new(
         Section.LIVING,
         CBS_TITLE,
         30 * 60,
@@ -727,17 +727,17 @@ def test_part_roundtrip_preserves_runstate():
     part.state = PartState.RUNNING
     part.started_at_epoch = 123456.0
     part.accumulated_seconds = 12.0
-    restored = MeetingPart.from_dict(part.to_dict())
+    restored = TimerPart.from_dict(part.to_dict())
     assert restored == part
     assert restored.kind is PartKind.CBS
 
 
 def test_part_roundtrip_defaults_missing_kind_to_standard():
-    part = MeetingPart.new(Section.LIVING, "Part 1", 300)
+    part = TimerPart.new(Section.LIVING, "Part 1", 300)
     raw = part.to_dict()
     raw.pop("kind")
 
-    restored = MeetingPart.from_dict(raw)
+    restored = TimerPart.from_dict(raw)
 
     assert restored.kind is PartKind.STANDARD
 

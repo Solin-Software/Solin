@@ -3,17 +3,18 @@ models.py — Solin timer domain
 ==============================
 Serializable, framework-agnostic value objects for the advanced timer.
 
-Everything here is plain Python (``dataclasses`` + ``enum``) with explicit
-``to_dict``/``from_dict`` so the same objects round-trip through QSettings
-(persistence) *and* a future JSON network payload without any Qt coupling.
+The models have explicit serialization for profile persistence and local
+snapshots. Remote adapters publish separate wire contracts.
 """
 
 from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, replace
 from enum import Enum
+from math import isfinite
 
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
@@ -99,7 +100,9 @@ CONFIGURABLE_PART_SECTIONS = (Section.MINISTRY, Section.LIVING)
 MIN_SECTION_PART_COUNT = 1
 MAX_SECTION_PART_COUNT = 8
 MIN_PLANNED_PART_SECONDS = 60
+MIN_CUSTOM_PART_SECONDS = 1
 MAX_PLANNED_PART_SECONDS = 24 * 60 * 60 - 1
+MAX_TIMER_TITLE_LENGTH = 200
 
 
 class AssignmentSetup(str, Enum):
@@ -192,11 +195,31 @@ class ClockConfig:
         return replace(self, text_scale_pct=scale, freeze_seconds=freeze)
 
 
-# ── MeetingPart ───────────────────────────────────────────────────────────────
+def normalize_timer_title(title: str) -> str:
+    if not isinstance(title, str):
+        raise ValueError("A timer name must be text.")
+    title = title.strip()
+    if (
+        not title or len(title) > MAX_TIMER_TITLE_LENGTH
+        or any(ord(character) < 32 or ord(character) == 127 for character in title)
+    ):
+        raise ValueError(f"A timer name must contain 1–{MAX_TIMER_TITLE_LENGTH} characters on one line.")
+    return title
+
+
+def section_id(section: Section | str | None) -> str | None:
+    return section.value if isinstance(section, Section) else section
+
+
+def _section_from_id(value: str | None) -> Section | str | None:
+    return _enum_or_default(Section, value, value)
+
+
+# ── TimerPart ─────────────────────────────────────────────────────────────────
 
 @dataclass
-class MeetingPart:
-    """A single timed segment of a meeting.
+class TimerPart:
+    """A single timed segment with its latest recorded progress.
 
     ``planned_seconds`` is the scheduled duration. The live progress is captured
     by ``started_at_epoch`` (the current wall-clock anchor) plus
@@ -206,7 +229,7 @@ class MeetingPart:
     """
 
     id: str
-    section: Section
+    section: Section | str | None
     title: str
     planned_seconds: int
     kind: PartKind = PartKind.STANDARD
@@ -216,17 +239,26 @@ class MeetingPart:
     # Corrected wall-clock start; retained across stops and cleared on reset.
     first_started_epoch: float | None = None
     accumulated_seconds: float = 0.0
+    title_override: str | None = None
+
+    @property
+    def section_id(self) -> str | None:
+        return section_id(self.section)
+
+    @property
+    def uses_canonical_title(self) -> bool:
+        return isinstance(self.section, Section) and self.title_override is None
 
     @staticmethod
     def new(
-        section: Section,
+        section: Section | str | None,
         title: str,
         planned_seconds: int,
         *,
         kind: PartKind = PartKind.STANDARD,
-    ) -> "MeetingPart":
-        return MeetingPart(
-            id=f"{section.value}-{uuid.uuid4().hex[:8]}",
+    ) -> TimerPart:
+        return TimerPart(
+            id=f"{section.value if isinstance(section, Section) else 'part'}-{uuid.uuid4().hex}",
             section=section,
             title=title,
             planned_seconds=int(planned_seconds),
@@ -255,7 +287,7 @@ class MeetingPart:
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "section": self.section.value,
+            "section": self.section_id,
             "title": self.title,
             "planned_seconds": int(self.planned_seconds),
             "kind": self.kind.value,
@@ -263,17 +295,18 @@ class MeetingPart:
             "started_at_epoch": self.started_at_epoch,
             "first_started_epoch": self.first_started_epoch,
             "accumulated_seconds": float(self.accumulated_seconds),
+            "title_override": self.title_override,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "MeetingPart":
+    def from_dict(cls, data: dict) -> TimerPart:
         try:
             kind = PartKind(data.get("kind", PartKind.STANDARD.value))
         except ValueError:
             kind = PartKind.STANDARD
         return cls(
             id=str(data["id"]),
-            section=Section(data["section"]),
+            section=_section_from_id(data["section"]),
             title=str(data.get("title", "")),
             planned_seconds=int(data.get("planned_seconds", 0)),
             kind=kind,
@@ -289,44 +322,52 @@ class MeetingPart:
                 else None
             ),
             accumulated_seconds=float(data.get("accumulated_seconds", 0.0)),
+            title_override=(
+                normalize_timer_title(data["title_override"])
+                if data.get("title_override") is not None else None
+            ),
         )
 
 
-# ── MeetingSchedule ───────────────────────────────────────────────────────────
+class _OrderedTimerParts:
+    """Common queries over the canonical execution order."""
 
-@dataclass
-class MeetingSchedule:
-    """The ordered list of parts for one (week, meeting-type) pair."""
+    def iter_parts(self) -> Iterator[TimerPart]:
+        raise NotImplementedError
 
-    week_monday: str  # ISO date, e.g. "2026-06-01"
-    meeting_type: MeetingType
-    parts: list[MeetingPart] = field(default_factory=list)
-    assignment_setup: AssignmentSetup = AssignmentSetup.DEFAULT
-
-    # ── Queries ───────────────────────────────────────────────────────────────
-
-    def part_by_id(self, part_id: str) -> MeetingPart | None:
-        for p in self.parts:
-            if p.id == part_id:
-                return p
-        return None
+    def part_by_id(self, part_id: str) -> TimerPart | None:
+        return next((part for part in self.iter_parts() if part.id == part_id), None)
 
     def index_of(self, part_id: str) -> int:
-        for i, p in enumerate(self.parts):
+        for i, p in enumerate(self.iter_parts()):
             if p.id == part_id:
                 return i
         return -1
 
-    def parts_in(self, section: Section) -> list[MeetingPart]:
-        return [p for p in self.parts if p.section is section]
+    def parts_in(self, section: Section | str | None) -> list[TimerPart]:
+        return [part for part in self.iter_parts() if part.section == section]
 
-    def section_total_seconds(self, section: Section) -> int:
+    def section_total_seconds(self, section: Section | str | None) -> int:
         return sum(p.planned_seconds for p in self.parts_in(section))
 
-    def count_for(self, section: Section) -> int:
+    def count_for(self, section: Section | str | None) -> int:
         return len(self.parts_in(section))
 
-    # ── Serialization ─────────────────────────────────────────────────────────
+    def has_running_part(self) -> bool:
+        return any(part.state is PartState.RUNNING for part in self.iter_parts())
+
+
+@dataclass
+class MeetingSchedule(_OrderedTimerParts):
+    """The ordered list of parts for one (week, meeting-type) pair."""
+
+    week_monday: str
+    meeting_type: MeetingType
+    parts: list[TimerPart] = field(default_factory=list)
+    assignment_setup: AssignmentSetup = AssignmentSetup.DEFAULT
+
+    def iter_parts(self) -> Iterator[TimerPart]:
+        return iter(self.parts)
 
     def to_dict(self) -> dict:
         return {
@@ -341,7 +382,10 @@ class MeetingSchedule:
         return cls(
             week_monday=str(data["week_monday"]),
             meeting_type=MeetingType(data["meeting_type"]),
-            parts=[MeetingPart.from_dict(p) for p in data.get("parts", [])],
+            parts=[
+                TimerPart.from_dict(dict(part, section=Section(part["section"])))
+                for part in data.get("parts", [])
+            ],
             assignment_setup=_enum_or_default(
                 AssignmentSetup,
                 data.get("assignment_setup", AssignmentSetup.LEGACY.value),
@@ -350,14 +394,127 @@ class MeetingSchedule:
         )
 
 
+@dataclass
+class TimerSection:
+    id: str
+    title: str
+    parts: list[TimerPart] = field(default_factory=list)
+
+    @classmethod
+    def new(cls, title: str) -> TimerSection:
+        return cls(f"section-{uuid.uuid4().hex}", normalize_timer_title(title))
+
+
+@dataclass
+class CustomTimerSchedule(_OrderedTimerParts):
+    id: str
+    title: str
+    entries: list[TimerPart | TimerSection] = field(default_factory=list)
+    revision: int = 0
+
+    @classmethod
+    def new(cls, title: str) -> CustomTimerSchedule:
+        return cls(uuid.uuid4().hex, normalize_timer_title(title))
+
+    @property
+    def parts(self) -> list[TimerPart]:
+        return list(self.iter_parts())
+
+    def iter_parts(self) -> Iterator[TimerPart]:
+        for entry in self.entries:
+            if isinstance(entry, TimerSection):
+                yield from entry.parts
+            else:
+                yield entry
+
+    def section_by_id(self, section_id: str) -> TimerSection | None:
+        return next(
+            (entry for entry in self.entries if isinstance(entry, TimerSection) and entry.id == section_id),
+            None,
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "revision": self.revision,
+            "entries": [
+                {
+                    "type": "section", "id": entry.id, "title": entry.title,
+                    "parts": [_encode_custom_part(part) for part in entry.parts],
+                }
+                if isinstance(entry, TimerSection) else dict(_encode_custom_part(entry), type="part")
+                for entry in self.entries
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CustomTimerSchedule:
+        revision = data["revision"]
+        if type(revision) is not int or revision < 0:
+            raise ValueError("Invalid timer schedule revision.")
+        schedule = cls(data["id"], normalize_timer_title(data["title"]), revision=revision)
+        for entry in data["entries"]:
+            if entry["type"] == "section":
+                parent = entry["id"]
+                schedule.entries.append(TimerSection(
+                    parent, normalize_timer_title(entry["title"]),
+                    [_decode_custom_part(part, parent) for part in entry["parts"]],
+                ))
+            elif entry["type"] == "part":
+                schedule.entries.append(_decode_custom_part(entry, None))
+            else:
+                raise ValueError("Invalid timer schedule entry.")
+        ids = [entry.id for entry in schedule.entries if isinstance(entry, TimerSection)]
+        parts = schedule.parts
+        ids.extend(part.id for part in parts)
+        if any(not isinstance(value, str) or not value for value in ids) or len(set(ids)) != len(ids):
+            raise ValueError("Invalid or duplicate timer entry ID.")
+        if sum(part.state is PartState.RUNNING for part in parts) > 1:
+            raise ValueError("Multiple running timer parts.")
+        return schedule
+
+
+def _encode_custom_part(part: TimerPart) -> dict:
+    data = part.to_dict()
+    for key in ("section", "kind", "title_override"):
+        del data[key]
+    return data
+
+
+def _decode_custom_part(data: dict, parent: str | None) -> TimerPart:
+    if not isinstance(data["id"], str) or not data["id"]:
+        raise ValueError("Invalid timer part ID.")
+    seconds = data["planned_seconds"]
+    if type(seconds) is not int or not MIN_CUSTOM_PART_SECONDS <= seconds <= MAX_PLANNED_PART_SECONDS:
+        raise ValueError("Invalid timer part duration.")
+    part = TimerPart.from_dict(dict(
+        data, section=None, title=normalize_timer_title(data["title"]),
+        kind=PartKind.STANDARD.value, title_override=None,
+    ))
+    part.section = parent
+    if (
+        not isfinite(part.accumulated_seconds)
+        or part.accumulated_seconds < 0
+        or (part.state is PartState.RUNNING) != (part.started_at_epoch is not None)
+        or any(value is not None and not isfinite(value) for value in (
+            part.started_at_epoch, part.first_started_epoch,
+        ))
+    ):
+        raise ValueError("Invalid timer part progress.")
+    return part
+
+
+TimerSchedule = MeetingSchedule | CustomTimerSchedule
+
+
 # ── TimerSnapshot ─────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class TimerSnapshot:
     """Immutable view of the live timer state.
 
-    This is the canonical payload the UI renders and a future network adapter
-    would serialize to JSON — built once by the engine each tick.
+    The engine produces this view for local rendering and remote publication.
     """
 
     # When no part is active the window shows the wall clock; ``active`` is False.
@@ -366,7 +523,7 @@ class TimerSnapshot:
     direction: Direction
     active_part_id: str | None = None
     active_part_title: str = ""
-    active_section: Section | None = None
+    active_section: Section | str | None = None
     planned_seconds: int = 0
     elapsed_seconds: float = 0.0
     remaining_seconds: float = 0.0
@@ -384,7 +541,7 @@ class TimerSnapshot:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["direction"] = self.direction.value
-        data["active_section"] = self.active_section.value if self.active_section else None
+        data["active_section"] = section_id(self.active_section)
         data["state"] = self.state.value
         data["display_seconds"] = self.display_seconds()
         return data
@@ -402,7 +559,7 @@ class TimerSnapshot:
                 else None
             ),
             active_part_title=str(data.get("active_part_title", "")),
-            active_section=Section(section) if section else None,
+            active_section=_section_from_id(section),
             planned_seconds=int(data.get("planned_seconds", 0)),
             elapsed_seconds=float(data.get("elapsed_seconds", 0.0)),
             remaining_seconds=float(data.get("remaining_seconds", 0.0)),

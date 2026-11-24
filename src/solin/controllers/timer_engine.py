@@ -17,12 +17,13 @@ Design notes:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from ..core.i18n.timer_part_titles import display_part_title
-from ..core.timer.models import Direction, MeetingPart, MeetingSchedule, TimerSnapshot
+from ..core.timer.models import Direction, TimerPart, TimerSchedule, TimerSnapshot
 from ..core.timer.part_titles import is_indexed_part_title_source
 from ..core.timer.state_machine import TimerStateMachine
 
@@ -39,12 +40,11 @@ class TimerEngine(QObject):
     tick = Signal(dict)
     # Emitted only on discrete changes (lifecycle, elapsed adjustment, configuration).
     state_changed = Signal(dict)
-    # A persisted mutation of the selected schedule, independent of presentation.
-    schedule_mutated = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._state = TimerStateMachine()
+        self._save: Callable[[], None] | None = None
 
         # After a Stop, the frozen result stays on screen for this long before
         # the window falls back to the wall clock (0 = revert immediately).
@@ -70,38 +70,50 @@ class TimerEngine(QObject):
         returns to the wall time."""
         self._freeze_seconds = max(0, int(seconds))
 
+    def set_persistence(self, save: Callable[[], None]) -> None:
+        self._save = save
+
     @property
     def direction(self) -> Direction:
         return self._state.direction
 
     @property
-    def schedule(self) -> MeetingSchedule | None:
+    def schedule(self) -> TimerSchedule | None:
         return self._state.schedule
 
-    def set_schedule(self, schedule: MeetingSchedule | None) -> None:
+    def set_schedule(
+        self, schedule: TimerSchedule | None, *, preserve_stopped: bool = False, notify: bool = True,
+    ) -> None:
         """Swap in a new schedule (e.g. week/meeting-type change).
 
         Any part already in the RUNNING state (restored from persistence)
         becomes the active part so a meeting in progress resumes seamlessly.
         """
-        self._cancel_revert()
-        self._state.set_schedule(schedule)
+        self._state.set_schedule(schedule, preserve_stopped=preserve_stopped)
+        if not preserve_stopped or self._pending_revert_id != self._state.active_part_id:
+            self._cancel_revert()
+        if notify:
+            self._emit_state()
+
+    def refresh_schedule(self) -> None:
         self._emit_state()
 
     # ── Part lifecycle ────────────────────────────────────────────────────────
 
-    def start_part(self, part_id: str) -> None:
-        if self._state.start_part(part_id):
+    def start_part(self, part_id: str) -> bool:
+        if self._commit(lambda: self._state.start_part(part_id)):
             self._cancel_revert()
-            self._emit_schedule_mutation()
+            self._emit_state()
+            return True
+        return False
 
-    def stop_part(self, part_id: str | None = None) -> None:
+    def stop_part(self, part_id: str | None = None) -> bool:
         """Freeze a running part (defaults to the active one)."""
         pid = part_id or self._state.active_part_id
         if pid is None:
-            return
-        if not self._state.stop_part(pid):
-            return
+            return False
+        if not self._commit(lambda: self._state.stop_part(pid)):
+            return False
         # Keep the frozen result on screen briefly, then fall back to the wall
         # clock. The part stays STOPPED in the schedule (its result is still
         # shown in the tab); only the clock window reverts.
@@ -110,17 +122,32 @@ class TimerEngine(QObject):
             self._revert_timer.start(self._freeze_seconds * 1000)
         else:
             self._state.clear_stopped_part(pid)
-        self._emit_schedule_mutation()
+        self._emit_state()
+        return True
 
-    def reset_part(self, part_id: str) -> None:
-        if self._pending_revert_id == part_id:
-            self._cancel_revert()
-        if self._state.reset_part(part_id):
-            self._emit_schedule_mutation()
+    def reset_part(self, part_id: str) -> bool:
+        if self._commit(lambda: self._state.reset_part(part_id)):
+            if self._pending_revert_id == part_id:
+                self._cancel_revert()
+            self._emit_state()
+            return True
+        return False
 
-    def adjust_elapsed(self, part_id: str, delta_seconds: int) -> None:
-        if self._state.adjust_elapsed(part_id, delta_seconds):
-            self._emit_schedule_mutation()
+    def reset_all(self) -> bool:
+        if not self._commit(self._state.reset_all):
+            return False
+        self._cancel_revert()
+        self._emit_state()
+        return True
+
+    def adjust_elapsed(self, part_id: str, delta_seconds: int) -> bool:
+        if self._commit(lambda: self._state.adjust_elapsed(part_id, delta_seconds)):
+            self._emit_state()
+            return True
+        return False
+
+    def _commit(self, transition: Callable[[], bool]) -> bool:
+        return transition() if self._save is None else self._state.commit_transition(transition, self._save)
 
     # ── Snapshot ──────────────────────────────────────────────────────────────
 
@@ -136,21 +163,21 @@ class TimerEngine(QObject):
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
-    def _active_part(self) -> MeetingPart | None:
+    def _active_part(self) -> TimerPart | None:
         schedule = self._state.schedule
         active_part_id = self._state.active_part_id
         if schedule is None or active_part_id is None:
             return None
         return schedule.part_by_id(active_part_id)
 
-    def _display_title_for_part(self, part: MeetingPart) -> str:
+    def _display_title_for_part(self, part: TimerPart) -> str:
         schedule = self._state.schedule
         if schedule is None:
             return part.title
         indexed_number: int | None = None
-        if is_indexed_part_title_source(part.title):
+        if part.uses_canonical_title and is_indexed_part_title_source(part.title):
             section_position = 0
-            for candidate in schedule.parts:
+            for candidate in schedule.iter_parts():
                 if candidate.section is part.section:
                     section_position += 1
                 if candidate.id == part.id:
@@ -172,10 +199,6 @@ class TimerEngine(QObject):
 
     def _on_tick(self) -> None:
         self.tick.emit(self.snapshot().to_dict())
-
-    def _emit_schedule_mutation(self) -> None:
-        self.schedule_mutated.emit()
-        self._emit_state()
 
     def _emit_state(self) -> None:
         snap = self.snapshot().to_dict()

@@ -17,7 +17,6 @@ from PySide6.QtCore import QTimer
 
 from ..core.timer.application import TimerSession
 from ..core.timer.hand_alert import TimerHandAlert
-from ..core.timer.models import ClockConfig
 from ..core.projection.monitor_allocation import OWNER_TIMER
 from ..ui.screens import ScreenManager
 from ..projection.timer_window import TimerOutputWindow
@@ -33,30 +32,14 @@ class TimerOutputController:
         session: TimerSession,
         allocation,
     ) -> None:
-        self._engine = engine
         self._session = session
         self._allocation = allocation
 
-        self._clock_config = session.clock_config
-        self._engine.set_direction(self._clock_config.direction)
-        self._engine.set_freeze_seconds(self._clock_config.freeze_seconds)
-
         # One shared render bridge feeds every clock window.
-        self._bridge = ClockRenderBridge(engine, lambda: self._clock_config)
+        self._bridge = ClockRenderBridge(engine, lambda: session.clock_config)
         self._windows: list[TimerOutputWindow] = []
 
     # ── Configuration ──────────────────────────────────────────────────────
-
-    def set_clock_config(self, config: ClockConfig) -> None:
-        """Apply a new ClockConfig: persist, sync direction, repaint windows."""
-        self._clock_config = config.clamped()
-        self._engine.set_direction(self._clock_config.direction)
-        self._engine.set_freeze_seconds(self._clock_config.freeze_seconds)
-        self._bridge.refresh_now()
-
-    @property
-    def clock_config(self):
-        return self._clock_config
 
     def set_hand_alert(self, alert: TimerHandAlert) -> None:
         self._bridge.set_hand_alert(alert)

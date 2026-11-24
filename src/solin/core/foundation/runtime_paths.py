@@ -100,6 +100,10 @@ class ProfilePaths:
         return self.profile_dir / "talk_theme_assets"
 
     @property
+    def timer_schedules_dir(self) -> Path:
+        return self.profile_dir / "timer_schedules"
+
+    @property
     def scenes_file(self) -> Path:
         return self.profile_dir / "scenes.json"
 

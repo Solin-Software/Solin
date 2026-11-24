@@ -1,0 +1,176 @@
+"""Owner-thread timer operations shared by desktop and remote adapters."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from datetime import date
+
+from PySide6.QtCore import QObject, Signal, Slot
+
+from ..core.meetings.meeting_weeks import current_monday
+from ..core.timer.application import AssignmentAutofillScope, DetectedPartTiming, TimerSession
+from ..core.timer.custom_schedule import TimerOperationError
+from ..core.timer.models import CustomTimerSchedule, MeetingType, PartState, Section
+from .timer_engine import TimerEngine
+
+
+class TimerOperations(QObject):
+    changed = Signal()
+    context_changed = Signal(int)
+    clock_changed = Signal()
+
+    def __init__(
+        self,
+        engine: TimerEngine,
+        session: TimerSession,
+        *,
+        time_format: Callable[[], str] = lambda: "HH:mm:ss",
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.engine = engine
+        self.session = session
+        self._time_format = time_format
+        self.engine.set_persistence(session.record_schedule_change)
+        self.engine.set_direction(session.clock_config.direction)
+        self.engine.set_freeze_seconds(session.clock_config.freeze_seconds)
+        self.engine.set_schedule(session.schedule)
+        self.engine.state_changed.connect(self._on_engine_change)
+
+    @property
+    def time_format(self) -> str:
+        return self._time_format()
+
+    @Slot(dict)
+    def _on_engine_change(self, _snapshot: dict) -> None:
+        self.changed.emit()
+
+    def _show_context(self, direction: int = 0) -> None:
+        if self.engine.schedule is not self.session.schedule:
+            self.engine.set_schedule(self.session.schedule, notify=False)
+        self.context_changed.emit(direction)
+        self.engine.refresh_schedule()
+
+    def _publish_schedule_edit(self, changed: bool) -> bool:
+        if changed:
+            schedule = self.session.schedule
+            if self.engine.schedule is schedule:
+                self.engine.refresh_schedule()
+            else:
+                self.engine.set_schedule(schedule, preserve_stopped=True)
+        return changed
+
+    def navigate_week(self, target: str) -> None:
+        if target == "previous":
+            self.session.previous_week()
+            direction = -1
+        elif target == "next":
+            self.session.next_week()
+            direction = 1
+        elif target == "current":
+            direction = self.session.go_to_current_week(current_monday())
+        else:
+            raise TimerOperationError("invalid", "Unknown meeting week.")
+        self._show_context(direction)
+
+    def set_meeting_type(self, meeting_type: MeetingType) -> bool:
+        if not self.session.set_meeting_type(meeting_type):
+            return False
+        self._show_context()
+        return True
+
+    def apply_detected_assignments(
+        self,
+        current_week: date,
+        timings: Iterable[DetectedPartTiming],
+        scope: AssignmentAutofillScope,
+    ) -> bool:
+        return self._publish_schedule_edit(
+            self.session.apply_detected_assignments(current_week, timings, scope),
+        )
+
+    def start_part(self, part_id: str) -> bool:
+        return self.engine.start_part(part_id)
+
+    def stop_part(self, part_id: str | None = None) -> bool:
+        return self.engine.stop_part(part_id)
+
+    def reset_part(self, part_id: str) -> bool:
+        return self.engine.reset_part(part_id)
+
+    def reset_all(self) -> bool:
+        if not isinstance(self.session.schedule, CustomTimerSchedule):
+            raise TimerOperationError("blocked", "Only custom timer schedules can be reset as a group.")
+        return self.engine.reset_all()
+
+    def adjust_part(self, part_id: str, delta_seconds: int) -> bool:
+        part = self.session.schedule.part_by_id(part_id)
+        if part is not None and part.state is PartState.RUNNING:
+            return self.engine.adjust_elapsed(part_id, delta_seconds)
+        return self._publish_schedule_edit(self.session.adjust_part(part_id, delta_seconds))
+
+    def set_part_seconds(self, part_id: str, seconds: int) -> bool:
+        return self._publish_schedule_edit(self.session.set_part_seconds(part_id, seconds))
+
+    def set_section_count(self, section: Section, count: int) -> bool:
+        return self._publish_schedule_edit(self.session.set_section_count(section, count))
+
+    def rename_part(self, part_id: str, title: str | None) -> bool:
+        return self._publish_schedule_edit(self.session.rename_part(part_id, title))
+
+    def update_clock(self, key: str, value: object) -> None:
+        config = self.session.update_clock(key, value)
+        if config is None:
+            return
+        self.engine.set_freeze_seconds(config.freeze_seconds)
+        if self.engine.direction is config.direction:
+            self.engine.refresh_schedule()
+        else:
+            self.engine.set_direction(config.direction)
+        self.clock_changed.emit()
+
+    def list_custom_schedules(self) -> tuple[CustomTimerSchedule, ...]:
+        return self.session.list_custom_schedules()
+
+    def get_custom_schedule(self, schedule_id: str) -> CustomTimerSchedule | None:
+        return self.session.get_custom_schedule(schedule_id)
+
+    def create_custom_schedule(self, title: str) -> CustomTimerSchedule:
+        schedule = self.session.create_custom_schedule(title)
+        self.changed.emit()
+        return schedule
+
+    def duplicate_custom_schedule(
+        self, schedule_id: str, title: str, expected_revision: int,
+    ) -> CustomTimerSchedule:
+        schedule = self.session.duplicate_custom_schedule(schedule_id, title, expected_revision)
+        self.changed.emit()
+        return schedule
+
+    def delete_custom_schedule(self, schedule_id: str, expected_revision: int) -> None:
+        self.session.delete_custom_schedule(schedule_id, expected_revision)
+        self.changed.emit()
+
+    def select_custom_schedule(self, schedule_id: str) -> bool:
+        if not self.session.select_custom_schedule(schedule_id):
+            return False
+        self._show_context()
+        return True
+
+    def select_meeting_schedule(self) -> bool:
+        if not self.session.select_meeting_schedule():
+            return False
+        self._show_context()
+        return True
+
+    def edit_custom_schedule(
+        self, schedule_id: str, expected_revision: int, action: str, **values: object,
+    ) -> bool:
+        if not self.session.edit_custom_schedule(schedule_id, expected_revision, action, **values):
+            return False
+        active = self.session.schedule
+        if isinstance(active, CustomTimerSchedule) and active.id == schedule_id:
+            self._publish_schedule_edit(True)
+        else:
+            self.changed.emit()
+        return True

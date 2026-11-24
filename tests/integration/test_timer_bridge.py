@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, QSettings, Signal
 from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.timer_engine import TimerEngine
+from solin.controllers.timer_operations import TimerOperations
 from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.i18n.date import format_time_with_seconds
@@ -78,7 +79,8 @@ def timer_context(tmp_path, monkeypatch, qt_object_owner):
     lookup = _Lookup(qt_object_owner)
     language = _Language(qt_object_owner)
     bridge = TimerBridge(
-        engine=engine, session=session, output=None, monitors=None, pdf_export=None,
+        operations=TimerOperations(engine, session, parent=qt_object_owner),
+        output=None, monitors=None, pdf_export=None,
         hand_alert=hand_alert, media_countdown_automation=automation, parent=qt_object_owner,
         language_manager=language, workbook_lookup=lookup,
     )
@@ -224,7 +226,7 @@ def test_lookup_waits_for_visible_assignments_and_can_retry_on_reentry(timer_con
     assert len(ctx.lookup.requests) == 2
 
 
-@pytest.mark.parametrize("action", ["duration", "count", "start-reset", "inline-edit"])
+@pytest.mark.parametrize("action", ["duration", "count", "rename", "start-reset", "inline-edit"])
 def test_stale_lookup_never_replaces_in_use_assignments(timer_context, action):
     ctx = timer_context
     initial = _show_assignments(ctx)
@@ -233,6 +235,8 @@ def test_stale_lookup_never_replaces_in_use_assignments(timer_context, action):
         ctx.bridge.setPartSeconds(part.id, 420)
     elif action == "count":
         ctx.bridge.setSectionCount("ministry", 4)
+    elif action == "rename":
+        assert ctx.bridge.operations.rename_part(part.id, "Edited assignment")
     elif action == "start-reset":
         ctx.bridge.startPart(part.id)
         ctx.bridge.resetPart(part.id)

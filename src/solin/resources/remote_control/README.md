@@ -153,7 +153,13 @@ parts** when already authenticated:
   `scheduleRevision`, `weekMonday`, `weekLabel`, `isCurrentWeek`, `meetingType`, section-styled
   `parts` (including per-part `durationEditable`), and server-authoritative `capabilities`
   (`controlParts`, `adjustPlannedMinutes`, `setPlannedSeconds`, `setSectionCount`,
-  `switchMeetingType`, `navigateWeeks`).
+  `switchMeetingType`, `navigateWeeks`, `manageCustomSchedules`). The last capability is
+  false by default. With it enabled, `customSchedule` describes the active custom schedule,
+  including its ID, title, revision, and ordered root parts and sections, including empty sections.
+- `GET /remote/timer/api/custom-schedules` — authenticated, on-demand custom schedule catalog;
+  unavailable when the capability or adapter is disabled. The Qt adapter obtains each snapshot on
+  the main thread. Part progress contains `state`, accumulated `elapsedSeconds`,
+  `startedAtEpoch`, and `firstStartedEpoch`. Catalog details are not sent to public viewers.
 - `GET /remote/timer/api/ws` — authenticated WebSocket emitting `session.snapshot` (`live` +
   `schedule` + `profile`), `timer.live`, `timer.schedule`, `profile.snapshot`,
   `session.revoked`, and `heartbeat`.
@@ -164,10 +170,30 @@ parts** when already authenticated:
   - `stop_part` (optional `partId`)
   - `reset_part` (`scheduleRevision`, `partId`)
   - `adjust_part` (`scheduleRevision`, `partId`, `deltaSeconds` in `{-60, -1, 1, 60}`)
-  - `set_part_seconds` (`scheduleRevision`, `partId`, `plannedSeconds` `60..86399`)
+  - `set_part_seconds` (`scheduleRevision`, `partId`, `plannedSeconds` `1..86399`; meeting
+    operations enforce their own minimum)
   - `set_section_count` (`scheduleRevision`, `section` in `{"ministry", "living"}`, `count` `1..8`)
   - `set_meeting_type` (`meetingType` in `{"midweek", "weekend"}`)
   - `navigate_week` (`target` in `{"previous", "next", "current"}`)
+  - `create_custom_schedule` (`scheduleRevision`, `title`)
+  - `duplicate_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `title`)
+  - `delete_custom_schedule`, `select_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`)
+  - `select_meeting_schedule`, `reset_all` (`scheduleRevision`)
+  - `rename_part` (`scheduleRevision`, `partId`, nullable `title`)
+  - `edit_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `action`, `values`)
+
+  These additional commands require `manageCustomSchedules`. Successful create and duplicate
+  results include `createdScheduleId`, including on replay. Edit `values` use the snake-case
+  operation arguments. Actions are `add_part` (`title`, `planned_seconds`, optional `section_id`,
+  `before_id`); `add_section` (`title`, optional `before_id`); `rename_part` (`part_id`, `title`);
+  `rename_section` (`section_id`, `title`); `rename_schedule` (`title`); `move_part` (`part_id`,
+  optional `section_id`, `before_id`); `move_section` (`section_id`, optional `before_id`);
+  `delete_part` (`part_id`); `delete_section` (`section_id`); and `set_part_seconds` (`part_id`,
+  `planned_seconds`). Null or omitted optional positions append at the root or section. Each edit
+  is one operation; clients refresh the catalog on demand. The adapter revalidates the custom
+  revision on the Qt thread. While a custom schedule is active with this capability disabled,
+  timer mutations against it are blocked, while public live viewing remains available.
+  Changing the active week, meeting type, or schedule requires stopping the running part first.
 
   Error codes: `schedule_stale`, `blocked`, `not_found`, `unavailable`, `failed`, `invalid`,
   `command_id_conflict`, `command_in_progress`. On `schedule_stale`, the client refreshes via

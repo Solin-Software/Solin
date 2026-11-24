@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from .models import (
     Direction,
-    MeetingPart,
-    MeetingSchedule,
     PartState,
+    TimerPart,
+    TimerSchedule,
     TimerSnapshot,
     _now,
 )
 
 
 class TimerStateMachine:
-    """Authoritative state for one live meeting timer.
+    """Authoritative state for one live timer.
 
     The state machine owns no scheduler, signals, persistence, or translation.
     Callers provide ``now`` when deterministic transition timing matters.
     """
 
     def __init__(self) -> None:
-        self._schedule: MeetingSchedule | None = None
+        self._schedule: TimerSchedule | None = None
         self._active_part_id: str | None = None
         self._direction = Direction.DOWN
 
@@ -29,7 +31,7 @@ class TimerStateMachine:
         return self._direction
 
     @property
-    def schedule(self) -> MeetingSchedule | None:
+    def schedule(self) -> TimerSchedule | None:
         return self._schedule
 
     @property
@@ -42,17 +44,45 @@ class TimerStateMachine:
         self._direction = direction
         return True
 
-    def set_schedule(self, schedule: MeetingSchedule | None) -> None:
+    def set_schedule(self, schedule: TimerSchedule | None, *, preserve_stopped: bool = False) -> None:
+        previous_id = self._active_part_id
         self._schedule = schedule
         self._active_part_id = None
         if schedule is None:
             return
         running = next(
-            (part for part in schedule.parts if part.state is PartState.RUNNING),
+            (part for part in schedule.iter_parts() if part.state is PartState.RUNNING),
             None,
         )
         if running is not None:
             self._active_part_id = running.id
+        elif preserve_stopped:
+            previous = self._part(previous_id)
+            if previous is not None and previous.state is PartState.STOPPED:
+                self._active_part_id = previous_id
+
+    def commit_transition(
+        self, transition: Callable[[], bool], save: Callable[[], None],
+    ) -> bool:
+        """Restore elapsed and active state if saving a transition fails."""
+        active = self._active_part_id
+        checkpoint = [
+            (part, part.state, part.started_at_epoch, part.first_started_epoch, part.accumulated_seconds)
+            for part in self._schedule.iter_parts()
+        ] if self._schedule is not None else []
+        if not transition():
+            return False
+        try:
+            save()
+        except (OSError, RuntimeError):
+            self._active_part_id = active
+            for part, state, started, first_started, elapsed in checkpoint:
+                part.state = state
+                part.started_at_epoch = started
+                part.first_started_epoch = first_started
+                part.accumulated_seconds = elapsed
+            raise
+        return True
 
     def start_part(self, part_id: str, *, now: float | None = None) -> bool:
         part = self._part(part_id)
@@ -65,8 +95,7 @@ class TimerStateMachine:
         if part.state is PartState.STOPPED:
             part.accumulated_seconds = 0.0
         part.started_at_epoch = transition_time
-        if part.first_started_epoch is None:
-            part.first_started_epoch = transition_time
+        part.first_started_epoch = transition_time
         part.state = PartState.RUNNING
         self._active_part_id = part.id
         return True
@@ -85,8 +114,9 @@ class TimerStateMachine:
 
     def reset_part(self, part_id: str) -> bool:
         part = self._part(part_id)
-        if part is None:
-            return False
+        return part is not None and self._reset_part(part)
+
+    def _reset_part(self, part: TimerPart) -> bool:
         if (
             part.state is PartState.IDLE
             and part.started_at_epoch is None
@@ -101,6 +131,14 @@ class TimerStateMachine:
         if self._active_part_id == part.id:
             self._active_part_id = None
         return True
+
+    def reset_all(self) -> bool:
+        if self._schedule is None:
+            return False
+        changed = False
+        for part in self._schedule.iter_parts():
+            changed = self._reset_part(part) or changed
+        return changed
 
     def adjust_elapsed(
         self,
@@ -152,7 +190,7 @@ class TimerStateMachine:
             wall_clock_epoch=snapshot_time,
             direction=self._direction,
             active_part_id=part.id,
-            active_part_title=part.title,
+            active_part_title=part.title_override or part.title,
             active_section=part.section,
             planned_seconds=part.planned_seconds,
             elapsed_seconds=elapsed,
@@ -161,7 +199,7 @@ class TimerStateMachine:
             state=part.state,
         )
 
-    def _part(self, part_id: str | None) -> MeetingPart | None:
+    def _part(self, part_id: str | None) -> TimerPart | None:
         if self._schedule is None or part_id is None:
             return None
         return self._schedule.part_by_id(part_id)
@@ -172,7 +210,7 @@ class TimerStateMachine:
             self._freeze_part(part, now=now)
 
     @staticmethod
-    def _freeze_part(part: MeetingPart, *, now: float) -> None:
+    def _freeze_part(part: TimerPart, *, now: float) -> None:
         part.accumulated_seconds = part.elapsed(now)
         part.started_at_epoch = None
         part.state = PartState.STOPPED

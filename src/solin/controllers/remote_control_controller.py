@@ -47,6 +47,7 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..core.remote_control.certificates import TLSIdentity
     from ..core.remote_control.server import RemoteControlServer
+    from .timer_operations import TimerOperations
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,8 +72,7 @@ class RemoteControlDependencies:
     media_projection: Any
     projection_stop: Any
     playback_protection: Any
-    timer_engine: Any
-    timer_bridge: Any
+    timer_operations: TimerOperations
     settings_widget: Any
     timer_feature_flags: TimerRemoteFeatureFlags = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS
 
@@ -139,8 +139,7 @@ class RemoteControlController(QObject):
                 active_profile_id=dependencies.active_profile_id,
                 active_profile_name=dependencies.active_profile_name,
                 credentials=dependencies.timer_credentials,
-                timer_engine=dependencies.timer_engine,
-                timer_bridge=dependencies.timer_bridge,
+                timer_operations=dependencies.timer_operations,
                 feature_flags=dependencies.timer_feature_flags,
             ),
             self,
