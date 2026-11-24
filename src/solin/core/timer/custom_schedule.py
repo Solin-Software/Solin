@@ -15,6 +15,7 @@ from .models import (
     PartState,
     TimerPart,
     TimerSection,
+    normalize_section_color,
     normalize_section_icon,
     normalize_timer_title,
 )
@@ -95,8 +96,17 @@ def _add_part(
 
 def _add_section(
     schedule: CustomTimerSchedule, *, title: str, before_id: str | None = None,
+    icon: CustomSectionIcon | str = CustomSectionIcon.DEFAULT,
+    color: str | None = None,
 ) -> None:
-    schedule.entries.insert(_before_index(schedule.entries, before_id), TimerSection.new(validate_title(title)))
+    schedule.entries.insert(
+        _before_index(schedule.entries, before_id),
+        TimerSection.new(
+            validate_title(title),
+            icon=_validate_section_icon(icon),
+            color=_validate_section_color(color),
+        ),
+    )
 
 
 def _rename_part(schedule: CustomTimerSchedule, *, part_id: str, title: str) -> None:
@@ -110,6 +120,13 @@ def _validate_section_icon(icon: object) -> CustomSectionIcon:
         raise TimerOperationError("invalid", str(error)) from error
 
 
+def _validate_section_color(color: object) -> str | None:
+    try:
+        return normalize_section_color(color)
+    except ValueError as error:
+        raise TimerOperationError("invalid", str(error)) from error
+
+
 def _rename_section(schedule: CustomTimerSchedule, *, section_id: str, title: str) -> None:
     _section(schedule, section_id).title = validate_title(title)
 
@@ -118,6 +135,12 @@ def _set_section_icon(
     schedule: CustomTimerSchedule, *, section_id: str, icon: CustomSectionIcon | str,
 ) -> None:
     _section(schedule, section_id).icon = _validate_section_icon(icon)
+
+
+def _set_section_color(
+    schedule: CustomTimerSchedule, *, section_id: str, color: str | None,
+) -> None:
+    _section(schedule, section_id).color = _validate_section_color(color)
 
 
 def _rename_schedule(schedule: CustomTimerSchedule, *, title: str) -> None:
@@ -235,6 +258,7 @@ _EDITORS: dict[str, Callable[..., None]] = {
     "rename_part": _rename_part,
     "rename_section": _rename_section,
     "set_section_icon": _set_section_icon,
+    "set_section_color": _set_section_color,
     "rename_schedule": _rename_schedule,
     "move_part": _move_part,
     "move_section": _move_section,
@@ -263,7 +287,7 @@ def duplicate_custom_schedule(source: CustomTimerSchedule, title: str) -> Custom
     duplicate = CustomTimerSchedule.new(validate_title(title))
     for entry in source.entries:
         if isinstance(entry, TimerSection):
-            section = TimerSection.new(entry.title, icon=entry.icon)
+            section = TimerSection.new(entry.title, icon=entry.icon, color=entry.color)
             section.parts.extend(
                 _duplicate_part(part, section.id)
                 for part in entry.parts

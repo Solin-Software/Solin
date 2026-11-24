@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..meetings.colors import section_colors
+from ..meetings.colors import section_colors, section_colors_from_hex
 from ..meetings.section_meta import SECTION_META
 from ..timer.models import (
     CONFIGURABLE_PART_SECTIONS,
@@ -37,17 +37,24 @@ _STANDALONE_SECTIONS = {
 
 CUSTOM_SECTION_DEFAULT_ICON_KEY = "section_group"
 
-_OFFICIAL_SECTION_ICON_KEYS: dict[Section, str] = {
-    Section.TREASURES: "treasures",
-    Section.MINISTRY: "ministry",
-    Section.LIVING: "living",
-    Section.PUBLIC_TALK: "public_talk",
-    Section.WATCHTOWER: "watchtower",
+# Canonical meeting sections resolve through the same semantic icon catalog
+# as custom sections, keeping one unified icon set across all schedules.
+_OFFICIAL_SECTION_ICONS: dict[Section, CustomSectionIcon] = {
+    Section.TREASURES: CustomSectionIcon.TREASURES,
+    Section.MINISTRY: CustomSectionIcon.MINISTRY,
+    Section.LIVING: CustomSectionIcon.LIVING,
+    Section.PUBLIC_TALK: CustomSectionIcon.PUBLIC_TALK,
+    Section.WATCHTOWER: CustomSectionIcon.WATCHTOWER,
 }
 
-_CUSTOM_SECTION_ICON_KEYS: dict[CustomSectionIcon, str] = {
+_SECTION_ICON_KEYS: dict[CustomSectionIcon, str] = {
     CustomSectionIcon.DEFAULT: CUSTOM_SECTION_DEFAULT_ICON_KEY,
     CustomSectionIcon.NONE: "",
+    CustomSectionIcon.TREASURES: "treasures",
+    CustomSectionIcon.MINISTRY: "ministry",
+    CustomSectionIcon.LIVING: "living",
+    CustomSectionIcon.PUBLIC_TALK: "public_talk",
+    CustomSectionIcon.WATCHTOWER: "watchtower",
     CustomSectionIcon.BOOK: "book",
     CustomSectionIcon.PEOPLE: "people",
     CustomSectionIcon.MICROPHONE: "microphone",
@@ -66,16 +73,26 @@ def section_icon_key(
 ) -> str:
     """Resolve a canonical or custom section choice to its visual icon key."""
     if isinstance(section, Section):
-        return _OFFICIAL_SECTION_ICON_KEYS.get(section, "")
+        official_icon = _OFFICIAL_SECTION_ICONS.get(section)
+        return _SECTION_ICON_KEYS.get(official_icon, "") if official_icon is not None else ""
     if section is None or custom_icon is None:
         return ""
-    return _CUSTOM_SECTION_ICON_KEYS.get(custom_icon, CUSTOM_SECTION_DEFAULT_ICON_KEY)
+    return _SECTION_ICON_KEYS.get(custom_icon, CUSTOM_SECTION_DEFAULT_ICON_KEY)
 
 
-def section_palette(section: Section | str | None) -> dict[str, str]:
-    code = _SECTION_CODES.get(section, "") if isinstance(section, Section) else ""
-    hue = SECTION_META.get(code, ("", 215))[1]
-    colors = section_colors(hue, current_theme_scheme())
+def section_palette(
+    section: Section | str | None,
+    custom_color: str | None = None,
+) -> dict[str, str]:
+    scheme = current_theme_scheme()
+    if isinstance(section, Section):
+        code = _SECTION_CODES.get(section, "")
+        hue = SECTION_META.get(code, ("", 215))[1]
+        colors = section_colors(hue, scheme)
+    elif custom_color:
+        colors = section_colors_from_hex(custom_color, scheme)
+    else:
+        colors = section_colors(215, scheme)
     return {
         "accent": colors["accent"],
         "text": colors["text"],
@@ -84,7 +101,8 @@ def section_palette(section: Section | str | None) -> dict[str, str]:
     }
 
 
-def _fmt_mmss(seconds: float) -> str:
+def format_mmss(seconds: float) -> str:
+    """Format a duration in seconds as MM:SS or H:MM:SS."""
     total = int(round(abs(seconds)))
     sign = "-" if seconds < 0 else ""
     h, rem = divmod(total, 3600)
@@ -94,12 +112,12 @@ def _fmt_mmss(seconds: float) -> str:
     return f"{sign}{m:02d}:{s:02d}"
 
 
-def _fmt_total(seconds: float) -> str:
+def format_total_duration(seconds: float) -> str:
     """A compact section-total label: '30 min' on whole minutes, else 'MM:SS'."""
     s = int(round(seconds))
     if s % 60 == 0:
         return f"{s // 60} min"
-    return _fmt_mmss(s)
+    return format_mmss(s)
 
 
 def _started_label(epoch: float | None, time_format: str = "HH:mm:ss") -> str:
@@ -151,13 +169,13 @@ def parts_model_for_schedule(
         section_positions[section] = section_position
         first = section not in seen_sections
         seen_sections.add(section)
-        palette = section_palette(section)
+        section_value = section.value if isinstance(section, Section) else (section or "")
+        custom_section = sections.get(section_value)
+        palette = section_palette(section, custom_section.color if custom_section else None)
         indexed_number = section_position if is_indexed_part_title_source(part.title) else None
         show_section_header = (
             section not in _STANDALONE_SECTIONS if is_meeting else section is not None
         )
-        section_value = section.value if isinstance(section, Section) else (section or "")
-        custom_section = sections.get(section_value)
         title = section_title(section, custom_section.title if custom_section else "")
         icon_key = section_icon_key(section, custom_section.icon if custom_section else None)
         rows.append({
@@ -165,23 +183,34 @@ def parts_model_for_schedule(
             "section": section_value,
             "sectionKey": section_value,
             "sectionIconKey": icon_key,
+            "sectionIconChoice": custom_section.icon.value if custom_section else "",
+            "sectionCustomColor": (custom_section.color or "") if custom_section else "",
             "sectionTitle": title,
             "sectionColor": palette["accent"],
             "sectionTextColor": palette["text"],
             "sectionBadgeBg": palette["badge"],
             "sectionBorderColor": palette["border"],
             "title": display_part_title(part, indexed_number=indexed_number),
+            "hasTitleOverride": part.title_override is not None,
             "displayNumber": number,
             "plannedSeconds": part.planned_seconds,
-            "plannedLabel": _fmt_mmss(part.planned_seconds),
+            "plannedLabel": format_mmss(part.planned_seconds),
+            "effectiveSeconds": part.effective_seconds,
+            "effectiveLabel": format_mmss(part.effective_seconds),
+            "hasAdjustedTarget": part.effective_seconds != part.planned_seconds,
+            "adjustmentWeight": part.adjustment_weight,
             "state": part.state.value,
             "firstOfSection": first,
             "showSectionHeader": show_section_header,
             "configurableCount": is_meeting and section in CONFIGURABLE_PART_SECTIONS,
             "sectionCount": configurable_counts.get(section, 0),
-            "sectionTotalLabel": _fmt_total(totals[section]) if show_section_header else "",
+            "sectionTotalLabel": format_total_duration(totals[section]) if show_section_header else "",
             "durationEditable": allow_duration_edits and is_part_duration_editable(part),
             "startedLabel": _started_label(part.first_started_epoch, time_format),
-            "resultLabel": _fmt_mmss(part.accumulated_seconds) if part.state is PartState.STOPPED else "",
+            "resultLabel": format_mmss(part.accumulated_seconds) if part.state is PartState.STOPPED else "",
+            "overTarget": (
+                part.state is PartState.STOPPED
+                and round(part.accumulated_seconds - part.effective_seconds) > 0
+            ),
         })
     return rows

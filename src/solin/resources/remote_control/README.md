@@ -188,8 +188,10 @@ parts** when already authenticated:
   operation arguments. Actions are `add_part` (`title`, `planned_seconds`, optional `section_id`,
   `before_id`); `add_section` (`title`, optional `before_id`); `rename_part` (`part_id`, `title`);
   `rename_section` (`section_id`, `title`); `set_section_icon` (`section_id`, `icon` in
-  `{"default", "none", "book", "people", "microphone", "music", "video", "calendar", "clock",
-  "marker", "check"}`); `rename_schedule` (`title`); `move_part` (`part_id`,
+  `{"default", "none", "treasures", "ministry", "living", "public_talk", "watchtower",
+  "book", "people", "microphone", "music", "video", "calendar", "clock", "marker",
+  "check"}`); `set_section_color` (`section_id`, nullable `color` in `#rrggbb` or
+  `"default"`); `rename_schedule` (`title`); `move_part` (`part_id`,
   optional `section_id`, `before_id`); `move_section` (`section_id`, optional `before_id`);
   `delete_part` (`part_id`); `delete_section` (`section_id`); and `set_part_seconds` (`part_id`,
   `planned_seconds`). Null or omitted optional positions append at the root or section. Each edit

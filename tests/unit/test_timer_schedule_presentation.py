@@ -114,7 +114,9 @@ def test_section_icon_keys_are_separate_from_grouping_and_preserve_official_symb
 
     default_section = TimerSection.new("Default group")
     default_section.parts.append(TimerPart.new(default_section.id, "Intro", 60))
-    chosen_section = TimerSection.new("Reading", icon=CustomSectionIcon.BOOK)
+    chosen_section = TimerSection.new(
+        "Reading", icon=CustomSectionIcon.TREASURES, color="#41b6c4",
+    )
     chosen_section.parts.append(TimerPart.new(chosen_section.id, "Passage", 120))
     no_icon_section = TimerSection.new("Plain", icon=CustomSectionIcon.NONE)
     no_icon_section.parts.append(TimerPart.new(no_icon_section.id, "Notes", 90))
@@ -126,9 +128,16 @@ def test_section_icon_keys_are_separate_from_grouping_and_preserve_official_symb
     assert [(row["sectionKey"], row["sectionIconKey"], row["showSectionHeader"]) for row in custom_rows] == [
         ("", "", False),
         (default_section.id, CUSTOM_SECTION_DEFAULT_ICON_KEY, True),
-        (chosen_section.id, "book", True),
+        (chosen_section.id, "treasures", True),
         (no_icon_section.id, "", True),
     ]
+    # Custom section color drives accent, readable text, and a darker/tinted badge background.
+    styled_row = custom_rows[2]
+    assert styled_row["sectionCustomColor"] == "#41b6c4"
+    assert styled_row["sectionColor"] == "#41b6c4"
+    assert styled_row["sectionBadgeBg"] != styled_row["sectionColor"]
+    assert styled_row["sectionBadgeBg"].startswith("#")
+    assert custom_rows[1]["sectionCustomColor"] == ""
 
 
 def test_custom_schedule_exports_pdf_with_schedule_and_section_titles(tmp_path, monkeypatch):

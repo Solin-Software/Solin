@@ -9,6 +9,7 @@ snapshots. Remote adapters publish separate wire contracts.
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -77,10 +78,15 @@ class PartState(str, Enum):
 
 
 class CustomSectionIcon(StrEnum):
-    """Persisted semantic icon choice for a custom timer section."""
+    """Persisted semantic icon choice for a timer section."""
 
     DEFAULT = "default"
     NONE = "none"
+    TREASURES = "treasures"
+    MINISTRY = "ministry"
+    LIVING = "living"
+    PUBLIC_TALK = "public_talk"
+    WATCHTOWER = "watchtower"
     BOOK = "book"
     PEOPLE = "people"
     MICROPHONE = "microphone"
@@ -93,6 +99,11 @@ class CustomSectionIcon(StrEnum):
 
 
 CUSTOM_SECTION_ICON_CATALOG: tuple[CustomSectionIcon, ...] = (
+    CustomSectionIcon.TREASURES,
+    CustomSectionIcon.MINISTRY,
+    CustomSectionIcon.LIVING,
+    CustomSectionIcon.PUBLIC_TALK,
+    CustomSectionIcon.WATCHTOWER,
     CustomSectionIcon.BOOK,
     CustomSectionIcon.PEOPLE,
     CustomSectionIcon.MICROPHONE,
@@ -103,6 +114,22 @@ CUSTOM_SECTION_ICON_CATALOG: tuple[CustomSectionIcon, ...] = (
     CustomSectionIcon.MARKER,
     CustomSectionIcon.CHECK,
 )
+
+# Curated reusable section color presets (hex strings), including the hues used
+# by official meeting sections so custom schedules share the exact same visual system.
+CUSTOM_SECTION_COLOR_PRESETS: tuple[tuple[str, str], ...] = (
+    ("teal", "#41b6c4"),
+    ("gold", "#c8bf41"),
+    ("crimson", "#c84145"),
+    ("amber", "#c88841"),
+    ("indigo", "#4d5bd4"),
+    ("blue", "#4b89dc"),
+    ("emerald", "#38b27b"),
+    ("violet", "#9466e8"),
+    ("neutral", "#8b949e"),
+)
+
+_SECTION_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 ANALOG_CLOCK_STYLE_OPTIONS: tuple[AnalogClockStyle, ...] = (
@@ -265,6 +292,29 @@ def _section_icon_from_persisted(value: object) -> CustomSectionIcon:
         except ValueError:
             return CustomSectionIcon.DEFAULT
     return CustomSectionIcon.DEFAULT
+
+
+def normalize_section_color(value: object) -> str | None:
+    """Validate an explicit custom-section color choice (None/'default' or #RRGGBB)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip().lower()
+        if not cleaned or cleaned == "default":
+            return None
+        if _SECTION_HEX_COLOR_RE.match(cleaned):
+            return cleaned
+    raise ValueError("Choose a valid timer section color.")
+
+
+def _section_color_from_persisted(value: object) -> str | None:
+    """Read a persisted section color, falling back safely to default (None)."""
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().lower()
+    if _SECTION_HEX_COLOR_RE.match(cleaned):
+        return cleaned
+    return None
 
 
 def _section_from_id(value: str | None) -> Section | str | None:
@@ -505,6 +555,7 @@ class TimerSection:
     title: str
     parts: list[TimerPart] = field(default_factory=list)
     icon: CustomSectionIcon = CustomSectionIcon.DEFAULT
+    color: str | None = None
 
     @classmethod
     def new(
@@ -512,11 +563,13 @@ class TimerSection:
         title: str,
         *,
         icon: CustomSectionIcon = CustomSectionIcon.DEFAULT,
+        color: str | None = None,
     ) -> TimerSection:
         return cls(
             f"section-{uuid.uuid4().hex}",
             normalize_timer_title(title),
             icon=normalize_section_icon(icon),
+            color=normalize_section_color(color),
         )
 
 
@@ -560,6 +613,7 @@ class CustomTimerSchedule(_OrderedTimerParts):
                 {
                     "type": "section", "id": entry.id, "title": entry.title,
                     "icon": entry.icon.value,
+                    "color": entry.color,
                     "parts": [_encode_custom_part(part) for part in entry.parts],
                 }
                 if isinstance(entry, TimerSection) else dict(_encode_custom_part(entry), type="part")
@@ -584,6 +638,7 @@ class CustomTimerSchedule(_OrderedTimerParts):
                     parent, normalize_timer_title(entry["title"]),
                     [_decode_custom_part(part, parent) for part in entry["parts"]],
                     icon=_section_icon_from_persisted(entry.get("icon")),
+                    color=_section_color_from_persisted(entry.get("color")),
                 ))
             elif entry["type"] == "part":
                 schedule.entries.append(_decode_custom_part(entry, None))

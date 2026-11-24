@@ -706,3 +706,58 @@ def test_custom_section_icons_persist_validate_move_and_duplicate(timer_runtime)
     assert loaded.parts[0].id == part_id
     assert loaded.parts[0].state is PartState.STOPPED
     assert loaded.parts[0].accumulated_seconds == 42.0
+
+
+def test_custom_sections_support_canonical_icons_and_persisted_colors(timer_runtime):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    schedule_id = operations.create_custom_schedule("Styled").id
+    schedule = _edit(
+        operations, schedule_id, "add_section",
+        title="Treasures-like", icon=CustomSectionIcon.TREASURES, color="#41B6C4",
+    )
+    assert schedule.entries[0].icon is CustomSectionIcon.TREASURES
+    assert schedule.entries[0].color == "#41b6c4"
+
+    schedule = _edit(operations, schedule_id, "add_section", title="Default styled")
+    second_id = schedule.entries[1].id
+    assert schedule.entries[1].color is None
+
+    # Update color, reset to default, and reject invalid color strings without mutating.
+    schedule = _edit(
+        operations, schedule_id, "set_section_color", section_id=second_id, color="#C84145",
+    )
+    assert schedule.section_by_id(second_id).color == "#c84145"
+
+    before_invalid = operations.get_custom_schedule(schedule_id)
+    for bad_color in ("red", "#fff", "#gggggg", "123456", 42, True):
+        with pytest.raises(TimerOperationError) as error:
+            operations.edit_custom_schedule(
+                schedule_id, before_invalid.revision, "set_section_color",
+                section_id=second_id, color=bad_color,
+            )
+        assert error.value.code == "invalid"
+    assert operations.get_custom_schedule(schedule_id) == before_invalid
+
+    # Duplicate preserves both canonical icon choices and custom colors.
+    duplicate = operations.duplicate_custom_schedule(schedule_id, "Styled copy", schedule.revision)
+    assert [(entry.icon, entry.color) for entry in duplicate.entries] == [
+        (CustomSectionIcon.TREASURES, "#41b6c4"),
+        (CustomSectionIcon.DEFAULT, "#c84145"),
+    ]
+
+    # Reset color back to default via "default" or None.
+    schedule = _edit(operations, schedule_id, "set_section_color", section_id=second_id, color="default")
+    assert schedule.section_by_id(second_id).color is None
+
+    # Legacy/corrupted persisted color falls back safely to None on load.
+    path = repository._path(schedule_id)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["entries"][1]["color"] = "not-a-color"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    reopened, _, _ = open_profile()
+    loaded = reopened.get_custom_schedule(schedule_id)
+    assert loaded.entries[0].icon is CustomSectionIcon.TREASURES
+    assert loaded.entries[0].color == "#41b6c4"
+    assert loaded.entries[1].color is None

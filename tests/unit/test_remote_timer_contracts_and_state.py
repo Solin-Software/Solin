@@ -258,10 +258,35 @@ def test_section_icon_contract_validates_choices_and_uses_custom_schedule_permis
         is TimerCommandErrorCode.SCHEDULE_STALE
     )
 
-    section_wire = CustomScheduleSectionWireItem("sec-1", "Study", (), icon=CustomSectionIcon.NONE)
-    assert section_wire.to_dict()["icon"] == "none"
+    section_wire = CustomScheduleSectionWireItem(
+        "sec-1", "Study", (), icon=CustomSectionIcon.TREASURES, color="#41b6c4",
+    )
+    assert section_wire.to_dict()["icon"] == "treasures"
+    assert section_wire.to_dict()["color"] == "#41b6c4"
     with pytest.raises(TypeError):
         CustomScheduleSectionWireItem("sec-1", "Study", (), icon="book")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        CustomScheduleSectionWireItem("sec-1", "Study", (), color="bad")
+
+    for color in ("#41b6c4", None):
+        color_cmd = EditCustomScheduleCommand(
+            cid, 0, "schedule-1", 1, "set_section_color", section_id="sec-1", color=color,
+        )
+        assert parse_timer_command(color_cmd.to_dict()) == color_cmd
+        assert disabled.validate_command_preconditions(color_cmd).code is TimerCommandErrorCode.BLOCKED
+        assert enabled.validate_command_preconditions(color_cmd) is None
+
+    color_base = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_color", section_id="sec-1", color="#41b6c4",
+    ).to_dict()
+    assert parse_timer_command({**color_base, "values": {"section_id": "sec-1", "color": "default"}}).color is None
+    for bad_values in (
+        {"section_id": "sec-1"},
+        {"section_id": "sec-1", "color": "red"},
+        {"section_id": "sec-1", "color": 123},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**color_base, "values": bad_values})
 
 
 def test_custom_command_gate_checks_revision_and_replays_results() -> None:

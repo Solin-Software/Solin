@@ -952,12 +952,21 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
             assert (
                 await edit(
                     "set_section_icon",
-                    {"section_id": section_id, "icon": "people"},
+                    {"section_id": section_id, "icon": "treasures"},
                     schedule["revision"],
                 )
             )["ok"]
             schedule = (await catalog())[0]
-            assert schedule["entries"][0]["icon"] == "people"
+            assert schedule["entries"][0]["icon"] == "treasures"
+            assert (
+                await edit(
+                    "set_section_color",
+                    {"section_id": section_id, "color": "#41b6c4"},
+                    schedule["revision"],
+                )
+            )["ok"]
+            schedule = (await catalog())[0]
+            assert schedule["entries"][0]["color"] == "#41b6c4"
             assert (
                 await edit(
                     "add_part",
@@ -991,8 +1000,9 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
             part_id = current["parts"][0]["id"]
             assert current["parts"][0]["plannedSeconds"] == 20
             assert current["parts"][0]["sectionKey"] == section_id
-            assert current["parts"][0]["sectionIconKey"] == "people"
-            assert current["customSchedule"]["entries"][0]["icon"] == "people"
+            assert current["parts"][0]["sectionIconKey"] == "treasures"
+            assert current["customSchedule"]["entries"][0]["icon"] == "treasures"
+            assert current["customSchedule"]["entries"][0]["color"] == "#41b6c4"
             started = await send(
                 {
                     "type": "start_part",

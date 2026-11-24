@@ -16,6 +16,7 @@ from ...timer.models import (
     MIN_SECTION_PART_COUNT,
     MIN_CUSTOM_PART_SECONDS,
     CustomSectionIcon,
+    normalize_section_color,
     normalize_section_icon,
     normalize_timer_title,
     AnalogClockStyle,
@@ -544,6 +545,7 @@ class CustomScheduleSectionWireItem:
     title: str
     parts: tuple[CustomSchedulePartWireItem, ...]
     icon: CustomSectionIcon = CustomSectionIcon.DEFAULT
+    color: str | None = None
 
     def __post_init__(self) -> None:
         require_identifier(self.id, field_name="id")
@@ -555,6 +557,8 @@ class CustomScheduleSectionWireItem:
             raise TypeError("parts must be a tuple of custom schedule parts")
         if not isinstance(self.icon, CustomSectionIcon):
             raise TypeError("icon must be a CustomSectionIcon")
+        if self.color is not None and normalize_section_color(self.color) != self.color:
+            raise ValueError("color must be a normalized hex color or None")
 
     def to_dict(self) -> JsonObject:
         return {
@@ -562,6 +566,7 @@ class CustomScheduleSectionWireItem:
             "id": self.id,
             "title": self.title,
             "icon": self.icon.value,
+            "color": self.color,
             "parts": [part.to_dict() for part in self.parts],
         }
 
@@ -1048,6 +1053,7 @@ _CUSTOM_EDIT_FIELDS = {
     "rename_part": ("part_id", "title"),
     "rename_section": ("section_id", "title"),
     "set_section_icon": ("section_id", "icon"),
+    "set_section_color": ("section_id", "color"),
     "rename_schedule": ("title",),
     "move_part": ("part_id", "section_id", "before_id"),
     "move_section": ("section_id", "before_id"),
@@ -1065,7 +1071,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
     fields = _CUSTOM_EDIT_FIELDS.get(command.action)
     if fields is None:
         raise ValueError("unknown custom schedule action")
-    for key in ("part_id", "section_id", "before_id", "title", "icon", "planned_seconds",
+    for key in ("part_id", "section_id", "before_id", "title", "icon", "color", "planned_seconds",
                 "start_epoch", "end_epoch", "adjustment_weight",
                 "untracked_seconds", "before_part_id", "estimated_seconds"):
         value = getattr(command, key)
@@ -1074,6 +1080,8 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
                 raise ValueError(f"{key} is not valid for this action")
             continue
         if value is None:
+            if command.action == "set_section_color" and key == "color":
+                continue
             if command.action == "set_pacing_transition" and key in ("before_part_id", "estimated_seconds"):
                 continue
             if key in ("start_epoch", "end_epoch", "untracked_seconds") and command.action == "set_pacing_window":
@@ -1089,6 +1097,9 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
         elif key == "icon":
             if not isinstance(value, CustomSectionIcon):
                 raise TypeError("icon must be a CustomSectionIcon")
+        elif key == "color":
+            if normalize_section_color(value) != value:
+                raise ValueError("color must be a normalized hex color or None")
         elif key in ("start_epoch", "end_epoch"):
             require_int(value, field_name=key)
         elif key in ("adjustment_weight", "untracked_seconds", "estimated_seconds"):
@@ -1109,6 +1120,7 @@ class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
     before_id: str | None = None
     title: str | None = None
     icon: CustomSectionIcon | None = None
+    color: str | None = None
     planned_seconds: int | None = None
     start_epoch: int | None = None
     end_epoch: int | None = None
@@ -1428,6 +1440,10 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
             if "icon" not in parsed_values:
                 raise ValueError("icon is required")
             parsed_values["icon"] = normalize_section_icon(parsed_values["icon"])
+        elif action == "set_section_color":
+            if "color" not in parsed_values:
+                raise ValueError("color is required")
+            parsed_values["color"] = normalize_section_color(parsed_values["color"])
         return EditCustomScheduleCommand(*args, action, **parsed_values)
 
     if command_type is TimerCommandType.START_PART:

@@ -367,6 +367,7 @@ class RemoteTimerAdapter(QObject):
                 title=entry.title,
                 parts=tuple(part_item(part) for part in entry.parts),
                 icon=entry.icon,
+                color=entry.color,
             )
             if isinstance(entry, TimerSection)
             else part_item(entry)
