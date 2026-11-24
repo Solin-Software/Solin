@@ -25,7 +25,8 @@ from ...timer.models import (
     PartTimerDisplay,
     Section,
 )
-from ...timer.pacing import PacingSnapshot
+from ...timer.pacing import PacingAvailability, PacingSnapshot
+from ...timer.pacing_models import PacingMode
 from ..features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
     TimerRemoteFeatureFlags,
@@ -66,7 +67,7 @@ __all__ = [
     "NavigateWeekCommand",
     "ResetPartCommand",
     "SetMeetingTypeCommand",
-    "SetMeetingPacingCommand",
+    "SetPacingModeCommand",
     "SetPartSecondsCommand",
     "SetSectionCountCommand",
     "StartPartCommand",
@@ -216,10 +217,10 @@ class TimerControlCapabilities:
         )
 
     def allows_command(self, command: TimerCommand) -> bool:
-        if isinstance(command, SetMeetingPacingCommand):
+        if isinstance(command, SetPacingModeCommand):
             return self.can_manage_pacing
         if isinstance(command, EditCustomScheduleCommand) and command.action in (
-            "set_pacing", "set_adjustment_weight", "set_pacing_transition"
+            "set_pacing_window", "set_adjustment_weight", "set_pacing_transition"
         ):
             return self.can_manage_custom_schedules and self.can_manage_pacing
         if isinstance(
@@ -589,7 +590,6 @@ class CustomScheduleWireItem:
     entries: tuple[CustomSchedulePartWireItem | CustomScheduleSectionWireItem, ...]
     start_epoch: int | None = None
     end_epoch: int | None = None
-    automatic: bool = False
     untracked_seconds: int | None = None
     transitions: PacingTransitionsWireSnapshot | None = None
 
@@ -598,8 +598,6 @@ class CustomScheduleWireItem:
         if normalize_timer_title(self.title) != self.title:
             raise ValueError("title must be normalized")
         require_nonnegative_int(self.revision, field_name="revision")
-        if not isinstance(self.automatic, bool):
-            raise TypeError("automatic must be a boolean")
         if (self.start_epoch is None) != (self.end_epoch is None):
             raise ValueError("pacing configuration requires both window endpoints")
         if self.start_epoch is not None:
@@ -623,7 +621,6 @@ class CustomScheduleWireItem:
             pacing_config: JsonObject = {
                 "start_epoch": self.start_epoch,
                 "end_epoch": self.end_epoch,
-                "automatic": self.automatic,
                 "untracked_seconds": self.untracked_seconds,
             }
             if self.transitions is not None:
@@ -678,7 +675,6 @@ class TimerPacingWireSnapshot:
     start_epoch: int
     end_epoch: int
     complete: bool
-    automatic: bool
     projection_anchor_epoch: float
     projection_tail_seconds: float
     available_shorten_seconds: int
@@ -688,7 +684,7 @@ class TimerPacingWireSnapshot:
     @classmethod
     def from_snapshot(cls, snapshot: PacingSnapshot) -> TimerPacingWireSnapshot:
         return cls(
-            snapshot.start_epoch, snapshot.end_epoch, snapshot.complete, snapshot.automatic,
+            snapshot.start_epoch, snapshot.end_epoch, snapshot.complete,
             snapshot.projection_anchor_epoch, snapshot.projection_tail_seconds,
             snapshot.available_shorten_seconds, snapshot.available_extend_seconds, snapshot.tolerance_seconds,
         )
@@ -698,7 +694,6 @@ class TimerPacingWireSnapshot:
             "start_epoch": self.start_epoch,
             "end_epoch": self.end_epoch,
             "complete": self.complete,
-            "automatic": self.automatic,
             "projection_anchor_epoch": self.projection_anchor_epoch,
             "projection_tail_seconds": self.projection_tail_seconds,
             "available_shorten_seconds": self.available_shorten_seconds,
@@ -718,6 +713,8 @@ class TimerScheduleWireSnapshot:
     capabilities: TimerControlCapabilities = TimerControlCapabilities()
     custom_schedule: CustomScheduleWireItem | None = None
     pacing: TimerPacingWireSnapshot | None = None
+    pacing_mode: PacingMode | None = None
+    pacing_availability: PacingAvailability | None = None
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.schedule_revision, field_name="schedule_revision")
@@ -748,6 +745,14 @@ class TimerScheduleWireSnapshot:
             raise TypeError("custom_schedule must be a CustomScheduleWireItem or None")
         if self.pacing is not None and not isinstance(self.pacing, TimerPacingWireSnapshot):
             raise TypeError("pacing must be a TimerPacingWireSnapshot or None")
+        if (self.pacing_mode is None) != (self.pacing_availability is None):
+            raise ValueError("pacing mode and availability must be provided together")
+        if self.pacing_mode is not None and not isinstance(self.pacing_mode, PacingMode):
+            raise TypeError("pacing_mode must be a PacingMode")
+        if self.pacing_availability is not None and not isinstance(self.pacing_availability, PacingAvailability):
+            raise TypeError("pacing_availability must be a PacingAvailability")
+        if (self.pacing is not None) != (self.pacing_availability is PacingAvailability.READY):
+            raise ValueError("a pacing projection is required exactly when available")
 
     @classmethod
     def empty(
@@ -781,6 +786,9 @@ class TimerScheduleWireSnapshot:
             result["customSchedule"] = self.custom_schedule.to_dict()
         if self.pacing is not None:
             result["pacing"] = self.pacing.to_dict()
+        if self.pacing_mode is not None and self.pacing_availability is not None:
+            result["pacingMode"] = self.pacing_mode.value
+            result["pacingAvailability"] = self.pacing_availability.value
         return result
 
 
@@ -801,7 +809,7 @@ class TimerCommandType(StrEnum):
     RENAME_PART = "rename_part"
     RESET_ALL = "reset_all"
     SELECT_MEETING_SCHEDULE = "select_meeting_schedule"
-    SET_MEETING_PACING = "set_meeting_pacing"
+    SET_PACING_MODE = "set_pacing_mode"
 
 
 class TimerWeekTarget(StrEnum):
@@ -1036,7 +1044,7 @@ _CUSTOM_EDIT_FIELDS = {
     "delete_part": ("part_id",),
     "delete_section": ("section_id",),
     "set_part_seconds": ("part_id", "planned_seconds"),
-    "set_pacing": ("start_epoch", "end_epoch", "automatic", "untracked_seconds"),
+    "set_pacing_window": ("start_epoch", "end_epoch", "untracked_seconds"),
     "set_adjustment_weight": ("part_id", "adjustment_weight"),
     "set_pacing_transition": ("before_part_id", "estimated_seconds"),
 }
@@ -1048,7 +1056,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
     if fields is None:
         raise ValueError("unknown custom schedule action")
     for key in ("part_id", "section_id", "before_id", "title", "planned_seconds",
-                "start_epoch", "end_epoch", "automatic", "adjustment_weight",
+                "start_epoch", "end_epoch", "adjustment_weight",
                 "untracked_seconds", "before_part_id", "estimated_seconds"):
         value = getattr(command, key)
         if key not in fields:
@@ -1058,9 +1066,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
         if value is None:
             if command.action == "set_pacing_transition" and key in ("before_part_id", "estimated_seconds"):
                 continue
-            if key in ("start_epoch", "end_epoch") and command.action == "set_pacing":
-                continue
-            if key == "untracked_seconds" and command.action == "set_pacing":
+            if key in ("start_epoch", "end_epoch", "untracked_seconds") and command.action == "set_pacing_window":
                 continue
             if key in _EDIT_OPTIONAL_FIELDS and (
                 key != "section_id" or command.action in ("add_part", "move_part")
@@ -1070,9 +1076,6 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
         if key == "title":
             if normalize_timer_title(value) != value:
                 raise ValueError("title must be normalized")
-        elif key == "automatic":
-            if not isinstance(value, bool):
-                raise TypeError("automatic must be a boolean")
         elif key in ("start_epoch", "end_epoch"):
             require_int(value, field_name=key)
         elif key in ("adjustment_weight", "untracked_seconds", "estimated_seconds"):
@@ -1095,7 +1098,6 @@ class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
     planned_seconds: int | None = None
     start_epoch: int | None = None
     end_epoch: int | None = None
-    automatic: bool | None = None
     adjustment_weight: int | None = None
     untracked_seconds: int | None = None
     before_part_id: str | None = None
@@ -1176,18 +1178,18 @@ class SelectMeetingScheduleCommand(_ScheduleBoundTimerCommand):
 
 
 @dataclass(frozen=True, slots=True)
-class SetMeetingPacingCommand(_ScheduleBoundTimerCommand):
-    automatic: bool
-    TYPE: ClassVar[TimerCommandType] = TimerCommandType.SET_MEETING_PACING
+class SetPacingModeCommand(_ScheduleBoundTimerCommand):
+    mode: PacingMode
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.SET_PACING_MODE
 
     def __post_init__(self) -> None:
-        super(SetMeetingPacingCommand, self).__post_init__()
-        if not isinstance(self.automatic, bool):
-            raise TypeError("automatic must be a boolean")
+        super(SetPacingModeCommand, self).__post_init__()
+        if not isinstance(self.mode, PacingMode):
+            raise TypeError("mode must be a PacingMode")
 
     def to_dict(self) -> JsonObject:
-        result = super(SetMeetingPacingCommand, self).to_dict()
-        result["automatic"] = self.automatic
+        result = super(SetPacingModeCommand, self).to_dict()
+        result["mode"] = self.mode.value
         return result
 
 
@@ -1208,7 +1210,7 @@ TimerRemoteCommand: TypeAlias = (
     | RenamePartCommand
     | ResetAllCommand
     | SelectMeetingScheduleCommand
-    | SetMeetingPacingCommand
+    | SetPacingModeCommand
 )
 
 
@@ -1344,12 +1346,10 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
         raise ValueError("command type is invalid") from exc
 
     base = {"commandId", "type", "scheduleRevision"}
-    if command_type is TimerCommandType.SET_MEETING_PACING:
-        reject_unknown_fields(payload, base | {"automatic"})
-        automatic = payload.get("automatic")
-        if not isinstance(automatic, bool):
-            raise TypeError("automatic must be a boolean")
-        return SetMeetingPacingCommand(command_id, payload_int(payload, "scheduleRevision"), automatic)
+    if command_type is TimerCommandType.SET_PACING_MODE:
+        reject_unknown_fields(payload, base | {"mode"})
+        mode = PacingMode(payload.get("mode"))
+        return SetPacingModeCommand(command_id, payload_int(payload, "scheduleRevision"), mode)
     if command_type in (TimerCommandType.RESET_ALL, TimerCommandType.SELECT_MEETING_SCHEDULE):
         reject_unknown_fields(payload, base)
         cls = (
@@ -1405,8 +1405,8 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
         if allowed is None:
             raise ValueError("unknown custom schedule action")
         reject_unknown_fields(values, set(allowed))
-        if action == "set_pacing" and not {"start_epoch", "end_epoch", "automatic"}.issubset(values):
-            raise ValueError("all pacing fields are required")
+        if action == "set_pacing_window" and not {"start_epoch", "end_epoch"}.issubset(values):
+            raise ValueError("both window endpoints are required")
         if action == "set_pacing_transition" and not {"before_part_id", "estimated_seconds"}.issubset(values):
             raise ValueError("all transition fields are required")
         return EditCustomScheduleCommand(*args, action, **dict(values))

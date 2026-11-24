@@ -31,7 +31,7 @@ from solin.core.remote_control.timer.contracts import (
     NavigateWeekCommand,
     ResetPartCommand,
     SetMeetingTypeCommand,
-    SetMeetingPacingCommand,
+    SetPacingModeCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
     StartPartCommand,
@@ -51,6 +51,8 @@ from solin.core.remote_control.timer.state import (
     TimerCommandSession,
 )
 from solin.core.timer.models import Direction, MeetingType, PartState, Section
+from solin.core.timer.pacing import PacingAvailability
+from solin.core.timer.pacing_models import PacingMode
 
 
 def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
@@ -82,15 +84,15 @@ def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
 def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
     command_id = str(uuid.uuid4())
     commands = (
-        SetMeetingPacingCommand(command_id, 0, True),
+        SetPacingModeCommand(command_id, 0, PacingMode.AUTOMATIC),
         EditCustomScheduleCommand(
-            command_id, 0, "schedule", 1, "set_pacing",
-            start_epoch=100, end_epoch=200, automatic=True,
+            command_id, 0, "schedule", 1, "set_pacing_window",
+            start_epoch=100, end_epoch=200,
             untracked_seconds=30,
         ),
         EditCustomScheduleCommand(
-            command_id, 0, "schedule", 1, "set_pacing",
-            start_epoch=None, end_epoch=None, automatic=False,
+            command_id, 0, "schedule", 1, "set_pacing_window",
+            start_epoch=None, end_epoch=None,
         ),
         EditCustomScheduleCommand(
             command_id, 0, "schedule", 1, "set_adjustment_weight",
@@ -102,16 +104,17 @@ def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
 
     payload = commands[1].to_dict()
     for values in (
-        {"start_epoch": 100, "end_epoch": 200},
-        {"start_epoch": True, "end_epoch": 200, "automatic": True},
-        {"start_epoch": 100, "end_epoch": 200, "automatic": 1},
-        {"start_epoch": 100, "end_epoch": 200, "automatic": True, "untracked_seconds": -1},
-        {"start_epoch": 100, "end_epoch": 200, "automatic": True, "untracked_seconds": True},
+        {"start_epoch": 100},
+        {"start_epoch": True, "end_epoch": 200},
+        {"start_epoch": 100, "end_epoch": 200, "untracked_seconds": -1},
+        {"start_epoch": 100, "end_epoch": 200, "untracked_seconds": True},
     ):
         with pytest.raises((TypeError, ValueError)):
             parse_timer_command({**payload, "values": values})
-    nullable = {"start_epoch": None, "end_epoch": None, "automatic": False, "untracked_seconds": None}
+    nullable = {"start_epoch": None, "end_epoch": None, "untracked_seconds": None}
     assert parse_timer_command({**payload, "values": nullable}) == commands[2]
+    with pytest.raises(ValueError):
+        parse_timer_command({**commands[0].to_dict(), "mode": "invalid"})
     with pytest.raises((TypeError, ValueError)):
         EditCustomScheduleCommand(
             command_id, 0, "schedule", 1, "set_adjustment_weight",
@@ -178,10 +181,13 @@ def test_pacing_wire_snapshot_is_immutable_and_readable_without_edit_permission(
     assert "pacing" not in TimerScheduleWireSnapshot.empty().to_dict()
     schedule = replace(
         TimerScheduleWireSnapshot.empty(),
-        pacing=TimerPacingWireSnapshot(50, 200, False, False, 100, 100, 0, 0, 30),
+        pacing=TimerPacingWireSnapshot(50, 200, False, 100, 100, 0, 0, 30),
+        pacing_mode=PacingMode.MONITOR,
+        pacing_availability=PacingAvailability.READY,
     )
     payload = schedule.to_dict()
     assert payload["capabilities"]["managePacing"] is False
+    assert payload["pacingMode"] == "monitor"
     payload["pacing"]["end_epoch"] = 999
     assert schedule.to_dict()["pacing"]["end_epoch"] == 200
     store = RemoteTimerStateStore(schedule=schedule)

@@ -174,7 +174,7 @@ parts** when already authenticated:
     operations enforce their own minimum)
   - `set_section_count` (`scheduleRevision`, `section` in `{"ministry", "living"}`, `count` `1..8`)
   - `set_meeting_type` (`meetingType` in `{"midweek", "weekend"}`)
-  - `set_meeting_pacing` (`scheduleRevision`, boolean `automatic`)
+  - `set_pacing_mode` (`scheduleRevision`, `mode` in `{"off", "monitor", "automatic"}`)
   - `navigate_week` (`target` in `{"previous", "next", "current"}`)
   - `create_custom_schedule` (`scheduleRevision`, `title`)
   - `duplicate_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `title`)
@@ -196,24 +196,30 @@ parts** when already authenticated:
   timer mutations against it are blocked, while public live viewing remains available.
   Changing the active week, meeting type, or schedule requires stopping the running part first.
 
-  Authenticated schedule snapshots carry `pacing` when the active schedule has a projection.
-  Parts in that snapshot carry `effectiveSeconds` and `adjustmentWeight`.
+  Authenticated schedule snapshots carry the profile's `pacingMode` and an availability code
+  in `pacingAvailability`. `missing_window` indicates that start and end are missing.
+  `awaiting_reset` indicates a configured window that applies after resetting the current run.
+  `no_projection` covers empty or historical schedules without enough timing data.
+  When availability is `ready`, `pacing` supplies the projection and parts carry
+  `effectiveSeconds` and their resolved `adjustmentWeight`. Clients show pacing when the mode
+  is `monitor` or `automatic`.
   The clock can derive the projected finish from
   `max(now, projection_anchor_epoch) + projection_tail_seconds`. When `complete` is true,
   use the anchor as the frozen projection. Times use Unix seconds. The payload also gives the
   tolerance and remaining adjustment capacity in each direction. Public viewers receive the
   active clock and countdown.
 
-  `managePacing` is false by default and governs editing. It enables `set_meeting_pacing`.
+  `managePacing` is false by default and governs editing. It enables `set_pacing_mode`,
+  which changes the profile preference. A running part keeps its current target.
   With `manageCustomSchedules` also enabled,
-  custom edits include `set_pacing` (nullable `start_epoch` and `end_epoch`, boolean
-  `automatic`, optional `untracked_seconds`) and `set_adjustment_weight` (`part_id`,
-  `adjustment_weight`, zero disables adjustment). Custom catalog entries with a configured window
+  custom edits include `set_pacing_window` (nullable `start_epoch` and `end_epoch`, optional
+  `untracked_seconds`) and `set_adjustment_weight` (`part_id`, `adjustment_weight`). A zero
+  weight removes the explicit selection. If no parts are selected, all parts of at least 60 seconds
+  receive equal weight. Custom catalog entries carry the configured weights and, when a window exists,
   provide it in `pacingConfig`. `set_pacing_transition` requires `before_part_id` (a stable part ID or null
   for closing) and `estimated_seconds` (a nonnegative integer or null to remove the estimate).
   When estimates exist, `pacingConfig.transitions` contains `before_parts` (a mapping from part
-  IDs to seconds) and nullable `closing_seconds`. Setting both endpoints to null in monitor mode
-  clears the window.
+  IDs to seconds) and nullable `closing_seconds`. Setting both endpoints to null clears the window.
 
   Error codes: `schedule_stale`, `blocked`, `not_found`, `unavailable`, `failed`, `invalid`,
   `command_id_conflict`, `command_in_progress`, `duration_budget`. A `duration_budget` error

@@ -12,6 +12,7 @@ from ..core.rendering.timer_report_pdf import (
     default_pdf_filename,
     export_schedule_pdf,
 )
+from ..core.timer.pacing_models import PacingMode
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class TimerPdfExportController:
         meeting_type_label: str,
         date_format: str,
         time_format: str,
-        include_pacing: bool = False,
+        pacing_mode: PacingMode = PacingMode.OFF,
     ) -> None:
         documents = QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.DocumentsLocation
@@ -69,7 +70,7 @@ class TimerPdfExportController:
                 meeting_type_label=meeting_type_label,
                 date_format=date_format,
                 time_format=time_format,
-                include_pacing=include_pacing,
+                pacing_mode=pacing_mode,
             )
         except Exception as exc:  # noqa: BLE001 - PDF export adapter boundary
             log.exception("Timer PDF export failed")

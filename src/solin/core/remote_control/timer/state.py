@@ -24,7 +24,7 @@ from .contracts import (
     ResetPartCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
-    SetMeetingPacingCommand,
+    SetPacingModeCommand,
     StartPartCommand,
     TimerCommand,
     TimerCommandError,
@@ -238,6 +238,7 @@ class RemoteTimerStateStore:
         if (
             snapshot.schedule.custom_schedule is not None
             and not snapshot.schedule.capabilities.can_manage_custom_schedules
+            and not isinstance(command, SetPacingModeCommand)
         ):
             return TimerCommandError(
                 TimerCommandErrorCode.BLOCKED,
@@ -264,7 +265,7 @@ class RemoteTimerStateStore:
                 SelectMeetingScheduleCommand,
                 RenamePartCommand,
                 ResetAllCommand,
-                SetMeetingPacingCommand,
+                SetPacingModeCommand,
             ),
         ):
             if command.schedule_revision != snapshot.schedule_revision:

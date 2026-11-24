@@ -19,7 +19,6 @@ from .custom_schedule import (
     edit_custom_schedule,
     validate_title,
 )
-from .pacing_models import PacingWindow
 from .models import (
     CONFIGURABLE_PART_SECTIONS,
     MAX_PLANNED_PART_SECONDS,
@@ -37,6 +36,7 @@ from .models import (
     Section,
     TimerSchedule,
 )
+from .pacing_models import PacingMode, PacingWindow
 from .schedule_factory import (
     build_default_schedule,
     configurable_count_for,
@@ -70,6 +70,10 @@ class TimerRepository(Protocol):
     def load_clock_config(self) -> ClockConfig: ...
 
     def save_clock_config(self, config: ClockConfig) -> None: ...
+
+    def load_pacing_mode(self) -> PacingMode: ...
+
+    def save_pacing_mode(self, mode: PacingMode) -> None: ...
 
     def get_timer_visible(self) -> bool: ...
 
@@ -123,6 +127,7 @@ class TimerSession:
         self._week_monday = current_week_monday
         self._meeting_type = repository.load_last_meeting_type()
         self._clock_config = repository.load_clock_config().clamped()
+        self._pacing_mode = repository.load_pacing_mode()
         custom = self._load_custom_selection()
         self._schedule: TimerSchedule = (
             custom or self._load_meeting_schedule(self._week_monday, self._meeting_type)
@@ -160,6 +165,10 @@ class TimerSession:
     @property
     def clock_config(self) -> ClockConfig:
         return self._clock_config
+
+    @property
+    def pacing_mode(self) -> PacingMode:
+        return self._pacing_mode
 
     @property
     def schedule(self) -> TimerSchedule:
@@ -344,10 +353,11 @@ class TimerSession:
         edit_custom_schedule(candidate, action, **values)
         if candidate == schedule:
             return False
-        if action in ("set_pacing", "add_part", "set_part_seconds", "delete_part"):
-            previous_total = None if action == "set_pacing" else schedule.planned_total_seconds()
+        if action in ("set_pacing_window", "add_part", "set_part_seconds", "delete_part"):
+            changes_window = action == "set_pacing_window"
+            previous_total = None if changes_window else schedule.planned_total_seconds()
             _require_duration_budget(
-                candidate, previous_total=previous_total, include_execution_window=action != "set_pacing",
+                candidate, previous_total=previous_total, include_execution_window=not changes_window,
             )
         self._save_custom_revision(candidate)
         if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
@@ -358,23 +368,13 @@ class TimerSession:
         schedule = self._schedule
         return isinstance(schedule, MeetingSchedule) and self._update_meeting_window(schedule, self._week_monday)
 
-    def set_meeting_pacing(self, automatic: bool) -> bool:
-        schedule = self._schedule
-        if not isinstance(schedule, MeetingSchedule) or type(automatic) is not bool:
-            raise TimerOperationError("invalid", "Choose a valid meeting pacing mode.")
-        self._require_stopped()
-        if schedule.automatic_pacing == automatic:
+    def set_pacing_mode(self, mode: PacingMode) -> bool:
+        if not isinstance(mode, PacingMode):
+            raise TimerOperationError("invalid", "Choose a valid timer pacing mode.")
+        if self._pacing_mode is mode:
             return False
-        window = schedule.pacing_run.window if schedule.pacing_run is not None else schedule.pacing_window
-        if automatic and window is None:
-            raise TimerOperationError("blocked", "Configure the meeting start before enabling automatic pacing.")
-        schedule.automatic_pacing = automatic
-        try:
-            self._repository.save_schedule(schedule)
-        except (OSError, RuntimeError):
-            schedule.automatic_pacing = not automatic
-            raise
-        schedule.has_unreadable_record = False
+        self._repository.save_pacing_mode(mode)
+        self._pacing_mode = mode
         return True
 
     def _update_meeting_window(self, schedule: MeetingSchedule, week_monday: date) -> bool:

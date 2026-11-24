@@ -1,7 +1,7 @@
 """Profile-local timer persistence for settings, weekly schedules and custom schedules.
 
 What is persisted (all under the injected ``Timer`` settings app):
-    • the profile's ``ClockConfig``;
+    • the profile's ``ClockConfig`` and pacing mode;
     • the last-selected meeting type and the timer-window visibility flag;
     • one ``MeetingSchedule`` per (week-monday, meeting-type), serialized as
       JSON *including* each part's live run-state (started_at / accumulated /
@@ -26,6 +26,7 @@ from solin.core.storage.json_files import read_json_file, write_json_atomic
 
 from .custom_schedule import TimerOperationError
 from .models import AssignmentSetup, ClockConfig, CustomTimerSchedule, MeetingSchedule, MeetingType
+from .pacing_models import PacingMode
 from .schedule_factory import build_default_schedule, normalize_schedule
 
 
@@ -77,6 +78,16 @@ class QSettingsTimerRepository:
             json.dumps(config.clamped().to_dict()),
             checked=True,
         )
+
+    def load_pacing_mode(self) -> PacingMode:
+        raw = self._settings.string(SettingsKey.TIMER_PACING_MODE)
+        try:
+            return PacingMode(raw)
+        except ValueError:
+            return PacingMode.OFF
+
+    def save_pacing_mode(self, mode: PacingMode) -> None:
+        self._settings.set_value(SettingsKey.TIMER_PACING_MODE, mode.value, checked=True)
 
     # ── Visibility flag (reserve vs. show) ────────────────────────────────────
 

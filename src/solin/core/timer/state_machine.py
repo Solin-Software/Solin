@@ -15,12 +15,12 @@ from .models import (
 )
 from .pacing import (
     DEFAULT_ALLOW_PACING_EXTENSION,
-    PacingSnapshot,
+    PacingState,
     effective_target_at_start,
-    pacing_snapshot,
+    pacing_state,
     transition_budget,
 )
-from .pacing_models import PacingRun
+from .pacing_models import PacingMode, PacingRun
 
 
 class TimerStateMachine:
@@ -98,7 +98,7 @@ class TimerStateMachine:
             raise
         return True
 
-    def start_part(self, part_id: str, *, now: float | None = None) -> bool:
+    def start_part(self, part_id: str, *, now: float | None = None, automatic: bool = False) -> bool:
         part = self._part(part_id)
         if part is None or part.state is PartState.RUNNING:
             return False
@@ -120,7 +120,7 @@ class TimerStateMachine:
         )
         part.run_target_seconds = effective_target_at_start(
             schedule, part, [item for item in parts if item.id not in reached], transition_time,
-            allow_extension=self.allow_pacing_extension,
+            automatic=automatic, allow_extension=self.allow_pacing_extension,
         )
 
         if part.state is PartState.STOPPED:
@@ -250,11 +250,10 @@ class TimerStateMachine:
             state=part.state,
         )
 
-    def pacing_snapshot(self, now: float | None = None) -> PacingSnapshot | None:
-        if self._schedule is None:
-            return None
-        return pacing_snapshot(
-            self._schedule, _now() if now is None else now, allow_extension=self.allow_pacing_extension,
+    def pacing_state(self, mode: PacingMode, now: float | None = None) -> PacingState:
+        return pacing_state(
+            self._schedule, _now() if now is None else now,
+            mode=mode, allow_extension=self.allow_pacing_extension,
         )
 
     def _part(self, part_id: str | None) -> TimerPart | None:

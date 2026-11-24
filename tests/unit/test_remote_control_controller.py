@@ -54,6 +54,8 @@ from solin.core.timer.models import (
     PartState,
     TimerSnapshot,
 )
+from solin.core.timer.pacing import PacingAvailability, PacingState
+from solin.core.timer.pacing_models import PacingMode
 
 
 _APP = QCoreApplication.instance() or QCoreApplication([])
@@ -272,8 +274,8 @@ class _TimerOperations(QObject):
             is_current_week=True,
         )
 
-    def pacing_snapshot(self) -> None:
-        return None
+    def pacing_state(self) -> PacingState:
+        return PacingState(PacingMode.OFF, PacingAvailability.MISSING_WINDOW)
 
 
 def _controller(

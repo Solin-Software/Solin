@@ -304,6 +304,7 @@ class TimerBridge(QObject):
             meeting_type_label=meeting_type_label,
             date_format=date_format,
             time_format=self.operations.time_format,
+            pacing_mode=self._session.pacing_mode,
         )
 
     # ── Exposed: part editing ──────────────────────────────────────────────

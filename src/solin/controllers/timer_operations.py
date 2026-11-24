@@ -12,7 +12,8 @@ from ..core.meetings.meeting_weeks import current_monday
 from ..core.timer.application import AssignmentAutofillScope, DetectedPartTiming, TimerSession
 from ..core.timer.custom_schedule import TimerOperationError
 from ..core.timer.models import CustomTimerSchedule, MeetingType, PartState, Section
-from ..core.timer.pacing import PacingSnapshot
+from ..core.timer.pacing import PacingState
+from ..core.timer.pacing_models import PacingMode
 from .timer_engine import TimerEngine
 
 
@@ -98,10 +99,10 @@ class TimerOperations(QObject):
         part = self.session.schedule.part_by_id(part_id)
         if part is not None and part.state is not PartState.RUNNING:
             self.refresh_meeting_window()
-        return self.engine.start_part(part_id)
+        return self.engine.start_part(part_id, automatic=self.session.pacing_mode is PacingMode.AUTOMATIC)
 
-    def pacing_snapshot(self, now: float | None = None) -> PacingSnapshot | None:
-        return self.engine.pacing_snapshot(now)
+    def pacing_state(self, now: float | None = None) -> PacingState:
+        return self.engine.pacing_state(self.session.pacing_mode, now)
 
     def refresh_meeting_window(self) -> bool:
         return self._publish_schedule_edit(self.session.refresh_meeting_window())
@@ -113,9 +114,11 @@ class TimerOperations(QObject):
         except (OSError, RuntimeError):
             log.warning("Could not update the meeting timer window.", exc_info=True)
 
-    def set_meeting_pacing(self, automatic: bool) -> bool:
-        self.refresh_meeting_window()
-        return self._publish_schedule_edit(self.session.set_meeting_pacing(automatic))
+    def set_pacing_mode(self, mode: PacingMode) -> bool:
+        if not self.session.set_pacing_mode(mode):
+            return False
+        self.changed.emit()
+        return True
 
     def stop_part(self, part_id: str | None = None) -> bool:
         return self.engine.stop_part(part_id)

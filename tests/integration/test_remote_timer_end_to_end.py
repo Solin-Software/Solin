@@ -46,8 +46,8 @@ from solin.core.timer.custom_schedule import TimerDurationBudgetError
 from solin.core.timer.hand_alert import TimerHandAlert
 from solin.core.timer.infrastructure import JsonCustomTimerRepository
 from solin.core.timer.models import ClockConfig, MeetingSchedule, MeetingType
-from solin.core.timer.pacing import PacingSnapshot, PacingStatus
-from solin.core.timer.pacing_models import PacingWindow
+from solin.core.timer.pacing import PacingAvailability, PacingSnapshot, PacingState, PacingStatus
+from solin.core.timer.pacing_models import PacingMode, PacingWindow
 from solin.core.timer.schedule_factory import build_default_schedule
 from solin.ui.qml.timer_bridge import TimerBridge
 
@@ -79,6 +79,7 @@ class _MemorySettings:
 class _InMemoryTimerRepository:
     def __init__(self) -> None:
         self.clock_config = ClockConfig()
+        self.pacing_mode = PacingMode.OFF
         self.visible = False
         self.meeting_type = MeetingType.MIDWEEK
         self.schedules: dict[tuple[str, str], dict] = {}
@@ -88,6 +89,12 @@ class _InMemoryTimerRepository:
 
     def save_clock_config(self, config: ClockConfig) -> None:
         self.clock_config = config
+
+    def load_pacing_mode(self) -> PacingMode:
+        return self.pacing_mode
+
+    def save_pacing_mode(self, mode: PacingMode) -> None:
+        self.pacing_mode = mode
 
     def get_timer_visible(self) -> bool:
         return self.visible
@@ -416,9 +423,9 @@ def test_steady_state_timer_ticks_emit_zero_websocket_broadcasts(allow_pacing_ed
                     headers=headers,
                     json={
                         "commandId": str(uuid.uuid4()),
-                        "type": "set_meeting_pacing",
+                        "type": "set_pacing_mode",
                         "scheduleRevision": schedule["scheduleRevision"],
-                        "automatic": True,
+                        "mode": "automatic",
                     },
                 )
                 assert (await edit.json())["error"]["code"] == "blocked"
@@ -721,7 +728,7 @@ def test_cross_thread_command_to_websocket_snapshot_p95_latency_stays_under_budg
         pacing_window=PacingWindow(start, start + 6300) if pacing_enabled else None,
     )
     if pacing_enabled:
-        assert _bridge.operations.set_meeting_pacing(True)
+        assert _bridge.operations.set_pacing_mode(PacingMode.AUTOMATIC)
     adapter.snapshot_updated.connect(lambda: None)
 
     stop_pumping = threading.Event()
@@ -1023,21 +1030,18 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
 
 
 def test_pacing_is_authenticated_and_anchor_does_not_churn(monkeypatch) -> None:
-    calls = []
     edits = []
 
-    def pacing_snapshot(_operations):
-        return PacingSnapshot(100, 200, time.time(), time.time(), PacingStatus.BEHIND, False, True, 150, 50, 0, 0)
+    def pacing_state(operations):
+        projection = PacingSnapshot(
+            100, 200, time.time(), time.time(), PacingStatus.BEHIND, False, 150, 50, 0, 0,
+        )
+        return PacingState(operations.session.pacing_mode, PacingAvailability.READY, projection)
 
-    monkeypatch.setattr(TimerOperations, "pacing_snapshot", pacing_snapshot, raising=False)
-    monkeypatch.setattr(
-        TimerOperations, "set_meeting_pacing",
-        lambda _operations, automatic: calls.append(automatic) or True,
-        raising=False,
-    )
+    monkeypatch.setattr(TimerOperations, "pacing_state", pacing_state)
     def edit_schedule(_operations, schedule_id, revision, action, **values):
         edits.append((schedule_id, revision, action, values))
-        if action == "set_pacing":
+        if action == "set_pacing_window":
             raise TimerDurationBudgetError(100, 120)
 
     monkeypatch.setattr(TimerOperations, "edit_custom_schedule", edit_schedule)
@@ -1060,18 +1064,20 @@ def test_pacing_is_authenticated_and_anchor_does_not_churn(monkeypatch) -> None:
             assert adapter.state.schedule_revision == revision
             command = {
                 "commandId": str(uuid.uuid4()),
-                "type": "set_meeting_pacing",
+                "type": "set_pacing_mode",
                 "scheduleRevision": revision,
-                "automatic": True,
+                "mode": "automatic",
             }
             first = await (await client.post("/remote/timer/api/commands", headers=headers, json=command)).json()
             second = await (await client.post("/remote/timer/api/commands", headers=headers, json=command)).json()
             assert first["ok"] and second == first
-            assert calls == [True]
+            published = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert published["pacingMode"] == "automatic"
+            assert published["scheduleRevision"] > revision
             edit = {
                 "commandId": str(uuid.uuid4()),
                 "type": "edit_custom_schedule",
-                "scheduleRevision": revision,
+                "scheduleRevision": published["scheduleRevision"],
                 "scheduleId": "schedule",
                 "customRevision": 2,
                 "action": "set_adjustment_weight",
@@ -1082,9 +1088,9 @@ def test_pacing_is_authenticated_and_anchor_does_not_churn(monkeypatch) -> None:
             assert edits[-1] == ("schedule", 2, "set_adjustment_weight", {"part_id": "part", "adjustment_weight": 100})
             edit.update({
                 "commandId": str(uuid.uuid4()),
-                "action": "set_pacing",
+                "action": "set_pacing_window",
                 "values": {
-                    "start_epoch": 100, "end_epoch": 200, "automatic": True,
+                    "start_epoch": 100, "end_epoch": 200,
                     "untracked_seconds": 30,
                 },
             })
@@ -1113,6 +1119,14 @@ def test_custom_pacing_round_trips_through_authenticated_remote(tmp_path: Path) 
     async def scenario() -> None:
         async with TestClient(TestServer(app.app)) as client:
             headers = await _login_headers(client)
+            published = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert published["pacingMode"] == "off"
+            assert published["pacingAvailability"] == "missing_window"
+            result = await (await client.post("/remote/timer/api/commands", headers=headers, json={
+                "commandId": str(uuid.uuid4()), "type": "set_pacing_mode",
+                "scheduleRevision": published["scheduleRevision"], "mode": "automatic",
+            })).json()
+            assert result["ok"]
             catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
             current = catalog["schedules"][0]
             start = int(time.time()) + 60
@@ -1122,10 +1136,10 @@ def test_custom_pacing_round_trips_through_authenticated_remote(tmp_path: Path) 
                 "scheduleRevision": adapter.state.schedule_revision,
                 "scheduleId": schedule.id,
                 "customRevision": current["revision"],
-                "action": "set_pacing",
+                "action": "set_pacing_window",
                 "values": {
                     "start_epoch": start, "end_epoch": start + 180,
-                    "automatic": True, "untracked_seconds": 30,
+                    "untracked_seconds": 30,
                 },
             }
             result = await (await client.post("/remote/timer/api/commands", headers=headers, json=command)).json()
@@ -1176,6 +1190,10 @@ def test_custom_pacing_round_trips_through_authenticated_remote(tmp_path: Path) 
             }
             published = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
             assert published["pacing"]["end_epoch"] == start + 180
+            assert published["pacingMode"] == "automatic"
+            assert published["pacingAvailability"] == "ready"
+            assert published["parts"][0]["adjustmentWeight"] > 0
+            assert catalog["schedules"][0]["entries"][0]["adjustmentWeight"] == 0
             revision = adapter.state.schedule_revision
             adapter.refresh_all()
             assert adapter.state.schedule_revision == revision

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
@@ -15,7 +16,7 @@ from .models import (
     TimerPart,
     TimerSchedule,
 )
-from .pacing_models import PacingTransitions, PacingWindow
+from .pacing_models import PacingMode, PacingTransitions, PacingWindow
 from .part_titles import SPIRITUAL_GEMS_TITLE, TREASURES_TALK_TITLE
 from .schedule_factory import meeting_pacing_transitions
 
@@ -31,6 +32,13 @@ class PacingStatus(StrEnum):
     BEHIND = "behind"
 
 
+class PacingAvailability(StrEnum):
+    READY = "ready"
+    MISSING_WINDOW = "missing_window"
+    AWAITING_RESET = "awaiting_reset"
+    NO_PROJECTION = "no_projection"
+
+
 @dataclass(frozen=True, slots=True)
 class PacingSnapshot:
     start_epoch: int
@@ -39,7 +47,6 @@ class PacingSnapshot:
     adjusted_end_epoch: float
     status: PacingStatus
     complete: bool
-    automatic: bool
     projection_anchor_epoch: float
     projection_tail_seconds: float
     available_shorten_seconds: int
@@ -60,11 +67,14 @@ class PacingSnapshot:
         )
 
 
-def adjustment_weight(schedule: TimerSchedule, part: TimerPart) -> int:
-    if part.planned_seconds < MIN_PLANNED_PART_SECONDS:
-        return 0
-    if not isinstance(schedule, MeetingSchedule):
-        return part.adjustment_weight
+@dataclass(frozen=True, slots=True)
+class PacingState:
+    mode: PacingMode
+    availability: PacingAvailability
+    projection: PacingSnapshot | None = None
+
+
+def _meeting_adjustment_weight(part: TimerPart) -> int:
     if part.kind is PartKind.CBS and part.section is Section.LIVING:
         return _CONGREGATION_BIBLE_STUDY_WEIGHT
     if part.section in (Section.LIVING, Section.WATCHTOWER) or (
@@ -72,6 +82,16 @@ def adjustment_weight(schedule: TimerSchedule, part: TimerPart) -> int:
     ):
         return DEFAULT_ADJUSTMENT_WEIGHT
     return 0
+
+
+def adjustment_weights(schedule: TimerSchedule, parts: Sequence[TimerPart]) -> dict[str, int]:
+    """Resolve eligibility against the whole schedule, including parts already reached."""
+    eligible = [part for part in parts if part.planned_seconds >= MIN_PLANNED_PART_SECONDS]
+    if isinstance(schedule, MeetingSchedule):
+        return {part.id: weight for part in eligible if (weight := _meeting_adjustment_weight(part))}
+    if any(part.adjustment_weight for part in parts):
+        return {part.id: part.adjustment_weight for part in eligible if part.adjustment_weight}
+    return dict.fromkeys((part.id for part in eligible), DEFAULT_ADJUSTMENT_WEIGHT)
 
 
 def resolve_transition_budget(
@@ -100,8 +120,8 @@ def transition_budget(
     return resolve_transition_budget(window, parts, estimates)
 
 
-def _candidates(schedule: TimerSchedule, parts: list[TimerPart]) -> list[tuple[TimerPart, int]]:
-    return [(part, weight) for part in parts if (weight := adjustment_weight(schedule, part))]
+def _candidates(parts: list[TimerPart], weights: dict[str, int]) -> list[tuple[TimerPart, int]]:
+    return [(part, weights[part.id]) for part in parts if part.id in weights]
 
 
 def _capacity(part: TimerPart, *, extend: bool) -> int:
@@ -158,19 +178,24 @@ def effective_target_at_start(
     remaining: list[TimerPart],
     now: float,
     *,
+    automatic: bool,
     allow_extension: bool,
 ) -> int:
-    run = schedule.pacing_run
-    if run is None or run.window is None or not schedule.automatic_pacing or not adjustment_weight(schedule, part):
+    window = schedule.effective_pacing_window
+    if not automatic or window is None:
         return part.planned_seconds
-    before, closing = transition_budget(schedule, run.window, list(schedule.iter_parts()))
+    parts = list(schedule.iter_parts())
+    weights = adjustment_weights(schedule, parts)
+    if part.id not in weights:
+        return part.planned_seconds
+    before, closing = transition_budget(schedule, window, parts)
     all_remaining = [part, *remaining]
     expected_end = now + part.planned_seconds + closing + sum(
         item.planned_seconds + before[item.id] for item in remaining
     )
-    candidates = _candidates(schedule, all_remaining)
+    candidates = _candidates(all_remaining, weights)
     correction = _correction(
-        expected_end - run.window.end_epoch,
+        expected_end - window.end_epoch,
         sum(_capacity(item, extend=False) for item, _ in candidates),
         sum(_capacity(item, extend=True) for item, _ in candidates) if allow_extension else 0,
     )
@@ -178,10 +203,11 @@ def effective_target_at_start(
 
 
 def pacing_snapshot(
-    schedule: TimerSchedule, now: float, *, allow_extension: bool = DEFAULT_ALLOW_PACING_EXTENSION,
+    schedule: TimerSchedule, now: float, *, automatic: bool = False,
+    allow_extension: bool = DEFAULT_ALLOW_PACING_EXTENSION,
 ) -> PacingSnapshot | None:
     run = schedule.pacing_run
-    window = run.window if run else schedule.pacing_window
+    window = schedule.effective_pacing_window
     if window is None:
         return None
     parts = list(schedule.iter_parts())
@@ -215,7 +241,7 @@ def pacing_snapshot(
         projected_end = max(now, anchor) + tail
 
     deviation = projected_end - window.end_epoch
-    candidates = _candidates(schedule, pending) if schedule.automatic_pacing and not complete else []
+    candidates = _candidates(pending, adjustment_weights(schedule, parts)) if automatic and pending else []
     shorten = sum(_capacity(part, extend=False) for part, _ in candidates)
     extend = sum(_capacity(part, extend=True) for part, _ in candidates) if allow_extension else 0
     adjusted_end = projected_end + _correction(deviation, shorten, extend)
@@ -226,5 +252,22 @@ def pacing_snapshot(
         status = PacingStatus.AHEAD
     return PacingSnapshot(
         window.start_epoch, window.end_epoch, projected_end, adjusted_end, status, complete,
-        schedule.automatic_pacing, anchor, tail, shorten, extend,
+        anchor, tail, shorten, extend,
     )
+
+
+def pacing_state(
+    schedule: TimerSchedule | None, now: float, *, mode: PacingMode,
+    allow_extension: bool = DEFAULT_ALLOW_PACING_EXTENSION,
+) -> PacingState:
+    if schedule is None:
+        return PacingState(mode, PacingAvailability.NO_PROJECTION)
+    if schedule.effective_pacing_window is None:
+        availability = (
+            PacingAvailability.MISSING_WINDOW if schedule.pacing_window is None
+            else PacingAvailability.AWAITING_RESET
+        )
+        return PacingState(mode, availability)
+    projection = pacing_snapshot(schedule, now, automatic=mode is PacingMode.AUTOMATIC, allow_extension=allow_extension)
+    availability = PacingAvailability.READY if projection else PacingAvailability.NO_PROJECTION
+    return PacingState(mode, availability, projection)

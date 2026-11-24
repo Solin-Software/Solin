@@ -24,7 +24,7 @@ from solin.core.timer.models import (
     TimerPart,
     TimerSection,
 )
-from solin.core.timer.pacing_models import PacingWindow
+from solin.core.timer.pacing_models import PacingMode, PacingWindow
 
 
 class _TimerTranslator(QTranslator):
@@ -171,8 +171,8 @@ def test_pdf_shows_planned_window_and_labels_the_projected_end(tmp_path, monkeyp
     calls = []
     summaries = []
 
-    def snapshot_for_schedule(actual_schedule, now):
-        calls.append((actual_schedule, now))
+    def snapshot_for_schedule(actual_schedule, now, *, automatic):
+        calls.append((actual_schedule, now, automatic))
         return snapshot
 
     def capture_summary(painter, items):
@@ -182,10 +182,10 @@ def test_pdf_shows_planned_window_and_labels_the_projected_end(tmp_path, monkeyp
     monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", capture_summary)
     export_schedule_pdf(
         schedule, tmp_path / "report.pdf", week_label="", meeting_type_label="", now_epoch=1500,
-        include_pacing=True,
+        pacing_mode=PacingMode.AUTOMATIC,
     )
 
-    assert calls == [(schedule, 1500)]
+    assert calls == [(schedule, 1500, True)]
     assert summaries[1] == [
         ("Planned start", format_datetime(1000)),
         ("Planned end", format_datetime(2000)),
@@ -207,7 +207,7 @@ def test_pdf_exports_a_real_pacing_snapshot(tmp_path, monkeypatch):
     monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", capture_summary)
     target = tmp_path / "paced-report.pdf"
     export_schedule_pdf(
-        schedule, target, week_label="", meeting_type_label="", now_epoch=1000, include_pacing=True
+        schedule, target, week_label="", meeting_type_label="", now_epoch=1000, pacing_mode=PacingMode.MONITOR
     )
 
     document = QPdfDocument()
@@ -232,6 +232,6 @@ def test_pdf_omits_pacing_summary_by_default_and_without_window(tmp_path, monkey
     schedule.pacing_window = None
     export_schedule_pdf(
         schedule, tmp_path / "no-window.pdf", week_label="", meeting_type_label="", now_epoch=1000,
-        include_pacing=True,
+        pacing_mode=PacingMode.MONITOR,
     )
     assert len(summaries) == 1

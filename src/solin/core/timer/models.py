@@ -390,13 +390,15 @@ class _OrderedTimerParts:
         return sum(part.planned_seconds for part in self.iter_parts())
 
     pacing_window: PacingWindow | None
-    automatic_pacing: bool
     pacing_run: PacingRun | None
+
+    @property
+    def effective_pacing_window(self) -> PacingWindow | None:
+        return self.pacing_run.window if self.pacing_run is not None else self.pacing_window
 
     def _pacing_to_dict(self) -> dict:
         return {
             "pacing_window": self.pacing_window.to_dict() if self.pacing_window else None,
-            "automatic_pacing": self.automatic_pacing,
             "pacing_run": self.pacing_run.to_dict() if self.pacing_run else None,
         }
 
@@ -410,7 +412,6 @@ class MeetingSchedule(_OrderedTimerParts):
     parts: list[TimerPart] = field(default_factory=list)
     assignment_setup: AssignmentSetup = AssignmentSetup.DEFAULT
     pacing_window: PacingWindow | None = None
-    automatic_pacing: bool = False
     pacing_run: PacingRun | None = None
     has_unreadable_record: bool = field(default=False, compare=False, repr=False)
 
@@ -441,7 +442,6 @@ class MeetingSchedule(_OrderedTimerParts):
                 AssignmentSetup.MANUAL,
             ),
             pacing_window=PacingWindow.from_dict(data.get("pacing_window")),
-            automatic_pacing=_read_automatic_pacing(data),
             pacing_run=PacingRun.from_dict(data.get("pacing_run")),
         )
 
@@ -464,7 +464,6 @@ class CustomTimerSchedule(_OrderedTimerParts):
     entries: list[TimerPart | TimerSection] = field(default_factory=list)
     revision: int = 0
     pacing_window: PacingWindow | None = None
-    automatic_pacing: bool = False
     pacing_run: PacingRun | None = None
 
     @classmethod
@@ -512,7 +511,6 @@ class CustomTimerSchedule(_OrderedTimerParts):
         schedule = cls(
             data["id"], normalize_timer_title(data["title"]), revision=revision,
             pacing_window=PacingWindow.from_dict(data.get("pacing_window")),
-            automatic_pacing=_read_automatic_pacing(data),
             pacing_run=PacingRun.from_dict(data.get("pacing_run")),
         )
         for entry in data["entries"]:
@@ -534,13 +532,6 @@ class CustomTimerSchedule(_OrderedTimerParts):
         if sum(part.state is PartState.RUNNING for part in parts) > 1:
             raise ValueError("Multiple running timer parts.")
         return schedule
-
-
-def _read_automatic_pacing(data: dict) -> bool:
-    value = data.get("automatic_pacing", False)
-    if type(value) is not bool:
-        raise ValueError("Invalid automatic pacing setting.")
-    return value
 
 
 def _encode_custom_part(part: TimerPart) -> dict:

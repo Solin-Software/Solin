@@ -20,6 +20,7 @@ from solin.core.timer.models import (
     PartState,
     Section,
 )
+from solin.core.timer.pacing_models import PacingMode
 from solin.core.timer.schedule_factory import build_default_schedule, configurable_parts_in
 from tests._paths import REPO_ROOT
 
@@ -35,6 +36,7 @@ class _Repository:
             freeze_seconds=-10,
         )
         self.timer_visible = True
+        self.pacing_mode = PacingMode.OFF
         self.last_meeting_type = MeetingType.MIDWEEK
         self.schedules: dict[tuple[date, MeetingType], MeetingSchedule] = {}
         self.saved_clock_configs: list[ClockConfig] = []
@@ -47,6 +49,12 @@ class _Repository:
     def save_clock_config(self, config: ClockConfig) -> None:
         self.saved_clock_configs.append(config)
         self.clock_config = config
+
+    def load_pacing_mode(self) -> PacingMode:
+        return self.pacing_mode
+
+    def save_pacing_mode(self, mode: PacingMode) -> None:
+        self.pacing_mode = mode
 
     def get_timer_visible(self) -> bool:
         return self.timer_visible

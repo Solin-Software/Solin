@@ -24,6 +24,7 @@ from ..i18n.date import format_datetime, format_time_with_seconds
 from ..i18n.timer_schedule_view import parts_model_for_schedule
 from ..timer.models import CustomTimerSchedule, MeetingSchedule, MeetingType, PartState, Section
 from ..timer.pacing import pacing_snapshot
+from ..timer.pacing_models import PacingMode
 
 
 _TR_CTX = "TimerPdfExport"
@@ -104,8 +105,7 @@ def _rounded_delta_seconds(elapsed_seconds: float, planned_seconds: int) -> int:
 
 
 def _includes_pacing(schedule: MeetingSchedule | CustomTimerSchedule, enabled: bool) -> bool:
-    run = schedule.pacing_run
-    return enabled and (run.window if run else schedule.pacing_window) is not None
+    return enabled and schedule.effective_pacing_window is not None
 
 
 def build_timer_pdf_summary(
@@ -384,7 +384,7 @@ def export_schedule_pdf(
     time_format: str = "HH:mm:ss",
     generated_epoch: float | None = None,
     now_epoch: float | None = None,
-    include_pacing: bool = False,
+    pacing_mode: PacingMode = PacingMode.OFF,
 ) -> None:
     """Render ``schedule`` to a polished PDF at ``path``."""
     target = Path(path)
@@ -392,12 +392,16 @@ def export_schedule_pdf(
 
     generated = time.time() if generated_epoch is None else float(generated_epoch)
     now = time.time() if now_epoch is None else float(now_epoch)
+    include_pacing = pacing_mode is not PacingMode.OFF
     rows = build_timer_pdf_rows(
         schedule, now_epoch=now, time_format=time_format, include_pacing=include_pacing
     )
 
     summary = build_timer_pdf_summary(schedule, now_epoch=now, include_pacing=include_pacing)
-    pacing = pacing_snapshot(schedule, now) if _includes_pacing(schedule, include_pacing) else None
+    pacing = (
+        pacing_snapshot(schedule, now, automatic=pacing_mode is PacingMode.AUTOMATIC)
+        if _includes_pacing(schedule, include_pacing) else None
+    )
 
     title = _tr("Meeting timer report") if isinstance(schedule, MeetingSchedule) else schedule.title
     meta = (

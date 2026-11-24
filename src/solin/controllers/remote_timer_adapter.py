@@ -42,7 +42,7 @@ from ..core.remote_control.timer.contracts import (
     NavigateWeekCommand,
     ResetPartCommand,
     SetMeetingTypeCommand,
-    SetMeetingPacingCommand,
+    SetPacingModeCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
     StartPartCommand,
@@ -70,7 +70,7 @@ from ..core.timer.models import (
     TimerPart,
     TimerSection,
 )
-from ..core.timer.pacing import adjustment_weight
+from ..core.timer.pacing import adjustment_weights
 from ..styles.theme import current_theme_scheme
 from .qt_command_bridge import QtCommandBridge
 
@@ -245,9 +245,11 @@ class RemoteTimerAdapter(QObject):
         operations = self._dependencies.timer_operations
         session = operations.session
         schedule = session.schedule
-        pacing = operations.pacing_snapshot()
+        pacing = operations.pacing_state()
         raw_parts = parts_model_for_schedule(schedule, operations.time_format)
-        parts_by_id = {part.id: part for part in schedule.iter_parts()} if pacing is not None else {}
+        pacing_parts = list(schedule.iter_parts()) if pacing.projection is not None else []
+        parts_by_id = {part.id: part for part in pacing_parts}
+        weights = adjustment_weights(schedule, pacing_parts)
         items: list[TimerPartWireItem] = []
         for index, raw in enumerate(raw_parts, start=1):
             part = parts_by_id.get(str(raw["id"]))
@@ -278,7 +280,7 @@ class RemoteTimerAdapter(QObject):
                     started_label=str(raw.get("startedLabel") or ""),
                     result_label=str(raw.get("resultLabel") or ""),
                     effective_seconds=part.effective_seconds if part is not None else None,
-                    adjustment_weight=adjustment_weight(schedule, part) if part is not None else 0,
+                    adjustment_weight=weights.get(part.id, 0) if part is not None else 0,
                 )
             )
         monday = session.week_monday
@@ -304,7 +306,9 @@ class RemoteTimerAdapter(QObject):
             meeting_type=session.meeting_type,
             parts=tuple(items),
             capabilities=capabilities,
-            pacing=TimerPacingWireSnapshot.from_snapshot(pacing) if pacing is not None else None,
+            pacing=TimerPacingWireSnapshot.from_snapshot(pacing.projection) if pacing.projection else None,
+            pacing_mode=pacing.mode,
+            pacing_availability=pacing.availability,
             custom_schedule=(
                 self._custom_schedule_wire(schedule)
                 if isinstance(schedule, CustomTimerSchedule)
@@ -373,7 +377,6 @@ class RemoteTimerAdapter(QObject):
             entries=entries,
             start_epoch=window.start_epoch if window else None,
             end_epoch=window.end_epoch if window else None,
-            automatic=schedule.automatic_pacing,
             untracked_seconds=window.untracked_seconds if window else None,
             transitions=(
                 PacingTransitionsWireSnapshot(
@@ -467,12 +470,8 @@ class RemoteTimerAdapter(QObject):
                 operations.set_section_count(command.section, command.count)
             elif isinstance(command, SetMeetingTypeCommand):
                 operations.set_meeting_type(command.meeting_type)
-            elif isinstance(command, SetMeetingPacingCommand):
-                if isinstance(schedule, CustomTimerSchedule):
-                    return TimerCommandError(
-                        TimerCommandErrorCode.BLOCKED, "A meeting schedule is required."
-                    )
-                operations.set_meeting_pacing(command.automatic)
+            elif isinstance(command, SetPacingModeCommand):
+                operations.set_pacing_mode(command.mode)
             elif isinstance(command, NavigateWeekCommand):
                 operations.navigate_week(command.target.value)
             elif isinstance(command, CreateCustomScheduleCommand):

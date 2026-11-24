@@ -24,7 +24,8 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from ..core.i18n.timer_part_titles import display_part_title
 from ..core.timer.models import Direction, TimerPart, TimerSchedule, TimerSnapshot
-from ..core.timer.pacing import DEFAULT_ALLOW_PACING_EXTENSION, PacingSnapshot
+from ..core.timer.pacing import DEFAULT_ALLOW_PACING_EXTENSION, PacingState
+from ..core.timer.pacing_models import PacingMode
 from ..core.timer.part_titles import is_indexed_part_title_source
 from ..core.timer.state_machine import TimerStateMachine
 
@@ -103,8 +104,8 @@ class TimerEngine(QObject):
 
     # ── Part lifecycle ────────────────────────────────────────────────────────
 
-    def start_part(self, part_id: str) -> bool:
-        if self._commit(lambda: self._state.start_part(part_id)):
+    def start_part(self, part_id: str, *, automatic: bool = False) -> bool:
+        if self._commit(lambda: self._state.start_part(part_id, automatic=automatic)):
             self._cancel_revert()
             self._emit_state()
             return True
@@ -164,8 +165,8 @@ class TimerEngine(QObject):
             active_part_title=self._display_title_for_part(part),
         )
 
-    def pacing_snapshot(self, now: float | None = None) -> PacingSnapshot | None:
-        return self._state.pacing_snapshot(now)
+    def pacing_state(self, mode: PacingMode, now: float | None = None) -> PacingState:
+        return self._state.pacing_state(mode, now)
 
     # ── Internals ─────────────────────────────────────────────────────────────
 

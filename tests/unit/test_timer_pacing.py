@@ -118,36 +118,50 @@ def test_transition_consumes_estimate_then_actual_time_without_extra_parts():
 def test_weighted_adjustment_is_applied_at_start_and_keeps_original_plan(start, shift):
     schedule = _custom(300, 300, 300)
     schedule.pacing_window = PacingWindow(1000, 1900, 0)
-    schedule.automatic_pacing = True
     first, second, fixed = schedule.parts
     first.adjustment_weight, second.adjustment_weight = 100, 80
     machine = TimerStateMachine()
     machine.set_schedule(schedule)
 
-    assert machine.start_part(first.id, now=start)
+    assert machine.start_part(first.id, now=start, automatic=True)
     assert machine.snapshot(now=start).remaining_seconds == 300 + shift * 56
     assert first.planned_seconds == second.effective_seconds == 300
-    assert pacing_snapshot(schedule, start).adjusted_end_epoch == 1900
+    assert pacing_snapshot(schedule, start, automatic=True).adjusted_end_epoch == 1900
     second_start = start + first.effective_seconds
-    assert machine.start_part(second.id, now=second_start)
+    assert machine.start_part(second.id, now=second_start, automatic=True)
     assert second.effective_seconds == 300 + shift * 44
-    assert machine.start_part(fixed.id, now=second_start + second.effective_seconds)
+    assert machine.start_part(fixed.id, now=second_start + second.effective_seconds + 60, automatic=True)
     assert fixed.effective_seconds == 300
+
+
+def test_unmarked_custom_parts_share_adjustment_with_equal_weights_above_the_floor():
+    schedule = _custom(120, 45, 120)
+    schedule.pacing_window = PacingWindow(1000, 1285, 0)
+    first, short, last = schedule.parts
+    machine = TimerStateMachine()
+    machine.set_schedule(schedule)
+
+    assert machine.start_part(first.id, now=1080, automatic=True)
+    assert first.effective_seconds == 80
+    assert machine.start_part(short.id, now=1160, automatic=True)
+    assert short.effective_seconds == 45
+    assert machine.start_part(last.id, now=1205, automatic=True)
+    assert last.effective_seconds == 80
+    assert pacing_snapshot(schedule, 1205, automatic=True).adjusted_end_epoch == 1285
 
 
 def test_saturation_redistributes_and_publishes_unrecoverable_delay():
     schedule = _custom(61, 120)
     schedule.pacing_window = PacingWindow(1000, 1181, 0)
-    schedule.automatic_pacing = True
     first, second = schedule.parts
     first.adjustment_weight, second.adjustment_weight = 100, 80
     machine = TimerStateMachine()
     machine.set_schedule(schedule)
 
-    assert machine.start_part(first.id, now=1090)
+    assert machine.start_part(first.id, now=1090, automatic=True)
     assert first.effective_seconds == 60
-    assert pacing_snapshot(schedule, 1090).residual_seconds == 29
-    assert machine.start_part(second.id, now=1150)
+    assert pacing_snapshot(schedule, 1090, automatic=True).residual_seconds == 29
+    assert machine.start_part(second.id, now=1150, automatic=True)
     assert second.effective_seconds == 60
     assert pacing_snapshot(schedule, 1150).status is PacingStatus.ON_TIME
 
@@ -155,15 +169,14 @@ def test_saturation_redistributes_and_publishes_unrecoverable_delay():
 def test_extension_flag_leaves_an_early_run_at_original_duration():
     schedule = _custom(120)
     schedule.pacing_window = PacingWindow(1000, 1300, 0)
-    schedule.automatic_pacing = True
     (part,) = schedule.parts
     part.adjustment_weight = 100
     machine = TimerStateMachine(allow_pacing_extension=False)
     machine.set_schedule(schedule)
 
-    assert machine.start_part(part.id, now=1000)
+    assert machine.start_part(part.id, now=1000, automatic=True)
     assert part.effective_seconds == 120
-    result = pacing_snapshot(schedule, 1000, allow_extension=False)
+    result = pacing_snapshot(schedule, 1000, automatic=True, allow_extension=False)
     assert result.status is PacingStatus.AHEAD
     assert result.adjusted_end_epoch == result.projected_end_epoch
 
@@ -171,21 +184,20 @@ def test_extension_flag_leaves_an_early_run_at_original_duration():
 def test_only_remaining_meeting_candidate_can_use_full_capacity():
     schedule = build_default_schedule(date(2026, 11, 23), MeetingType.MIDWEEK)
     schedule.pacing_window = PacingWindow(1000, 7300)
-    schedule.automatic_pacing = True
     study = schedule.parts_in(Section.LIVING)[-1]
     study.title_override = "Renamed study"
     concluding = schedule.parts_in(Section.CONCLUDING_COMMENTS)[0]
     machine = TimerStateMachine()
     machine.set_schedule(schedule)
 
-    assert machine.start_part(study.id, now=7100)
+    assert machine.start_part(study.id, now=7100, automatic=True)
     assert study.effective_seconds == 60
-    assert pacing_snapshot(schedule, 7100).residual_seconds > 0
-    assert machine.start_part(concluding.id, now=7160)
+    assert pacing_snapshot(schedule, 7100, automatic=True).residual_seconds > 0
+    assert machine.start_part(concluding.id, now=7160, automatic=True)
     assert concluding.effective_seconds == concluding.planned_seconds
     assert machine.stop_part(concluding.id, now=7340)
     assert pacing_snapshot(schedule, 8000).complete
-    assert machine.start_part(study.id, now=8100)
+    assert machine.start_part(study.id, now=8100, automatic=True)
     assert not pacing_snapshot(schedule, 8100).complete
 
 

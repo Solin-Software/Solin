@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from math import isfinite
 
 
 # Leave a day at each end for rendering in the local time zone.
 _MIN_WINDOW_EPOCH = int(datetime(1, 1, 2, tzinfo=UTC).timestamp())
 _MAX_WINDOW_EPOCH = int(datetime(9999, 12, 30, 23, 59, 59, tzinfo=UTC).timestamp())
+
+
+class PacingMode(StrEnum):
+    OFF = "off"
+    MONITOR = "monitor"
+    AUTOMATIC = "automatic"
 
 
 @dataclass(frozen=True, slots=True)

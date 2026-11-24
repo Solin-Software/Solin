@@ -156,29 +156,27 @@ def _set_part_seconds(
     if part.state is not PartState.IDLE:
         raise TimerOperationError("blocked", "Reset the timer part before changing its duration.")
     part.planned_seconds = _validate_seconds(planned_seconds)
-    if part.planned_seconds < MIN_PLANNED_PART_SECONDS:
-        part.adjustment_weight = 0
 
 
-def _set_pacing(
+def _set_pacing_window(
     schedule: CustomTimerSchedule, *, start_epoch: int | None, end_epoch: int | None,
-    automatic: bool, untracked_seconds: int = 0,
+    untracked_seconds: int | None = None,
 ) -> None:
-    if type(automatic) is not bool:
-        raise TimerOperationError("invalid", "Choose a valid timer pacing mode.")
-    if type(untracked_seconds) is not int or untracked_seconds < 0:
+    if untracked_seconds is not None and (type(untracked_seconds) is not int or untracked_seconds < 0):
         raise TimerOperationError("invalid", "Set a nonnegative duration for time outside parts.")
-    if start_epoch is None and end_epoch is None and not automatic and not untracked_seconds:
+    if start_epoch is None and end_epoch is None and not untracked_seconds:
         schedule.pacing_window = None
     elif start_epoch is None or end_epoch is None:
         raise TimerOperationError("invalid", "Set both the timer start and end.")
     else:
+        existing = schedule.pacing_window
+        if untracked_seconds is None:
+            untracked_seconds = existing.untracked_seconds if existing else 0
         try:
-            transitions = schedule.pacing_window.transitions if schedule.pacing_window else PacingTransitions()
+            transitions = existing.transitions if existing else PacingTransitions()
             schedule.pacing_window = PacingWindow(start_epoch, end_epoch, untracked_seconds, transitions)
         except ValueError as error:
             raise TimerOperationError("invalid", str(error)) from error
-    schedule.automatic_pacing = automatic
 
 
 def _set_pacing_transition(
@@ -227,7 +225,7 @@ _EDITORS: dict[str, Callable[..., None]] = {
     "delete_part": _delete_part,
     "delete_section": _delete_section,
     "set_part_seconds": _set_part_seconds,
-    "set_pacing": _set_pacing,
+    "set_pacing_window": _set_pacing_window,
     "set_pacing_transition": _set_pacing_transition,
     "set_adjustment_weight": _set_adjustment_weight,
 }
@@ -247,7 +245,6 @@ def edit_custom_schedule(schedule: CustomTimerSchedule, action: str, **values: o
 
 def duplicate_custom_schedule(source: CustomTimerSchedule, title: str) -> CustomTimerSchedule:
     duplicate = CustomTimerSchedule.new(validate_title(title))
-    duplicate.automatic_pacing = source.automatic_pacing
     for entry in source.entries:
         if isinstance(entry, TimerSection):
             section = TimerSection.new(entry.title)
