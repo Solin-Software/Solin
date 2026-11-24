@@ -10,10 +10,12 @@ from .models import (
     MAX_PLANNED_PART_SECONDS,
     MIN_CUSTOM_PART_SECONDS,
     MIN_PLANNED_PART_SECONDS,
+    CustomSectionIcon,
     CustomTimerSchedule,
     PartState,
     TimerPart,
     TimerSection,
+    normalize_section_icon,
     normalize_timer_title,
 )
 from .pacing_models import PacingTransitions, PacingWindow
@@ -101,8 +103,21 @@ def _rename_part(schedule: CustomTimerSchedule, *, part_id: str, title: str) -> 
     _part(schedule, part_id).title = validate_title(title)
 
 
+def _validate_section_icon(icon: object) -> CustomSectionIcon:
+    try:
+        return normalize_section_icon(icon)
+    except ValueError as error:
+        raise TimerOperationError("invalid", str(error)) from error
+
+
 def _rename_section(schedule: CustomTimerSchedule, *, section_id: str, title: str) -> None:
     _section(schedule, section_id).title = validate_title(title)
+
+
+def _set_section_icon(
+    schedule: CustomTimerSchedule, *, section_id: str, icon: CustomSectionIcon | str,
+) -> None:
+    _section(schedule, section_id).icon = _validate_section_icon(icon)
 
 
 def _rename_schedule(schedule: CustomTimerSchedule, *, title: str) -> None:
@@ -219,6 +234,7 @@ _EDITORS: dict[str, Callable[..., None]] = {
     "add_section": _add_section,
     "rename_part": _rename_part,
     "rename_section": _rename_section,
+    "set_section_icon": _set_section_icon,
     "rename_schedule": _rename_schedule,
     "move_part": _move_part,
     "move_section": _move_section,
@@ -247,7 +263,7 @@ def duplicate_custom_schedule(source: CustomTimerSchedule, title: str) -> Custom
     duplicate = CustomTimerSchedule.new(validate_title(title))
     for entry in source.entries:
         if isinstance(entry, TimerSection):
-            section = TimerSection.new(entry.title)
+            section = TimerSection.new(entry.title, icon=entry.icon)
             section.parts.extend(
                 _duplicate_part(part, section.id)
                 for part in entry.parts

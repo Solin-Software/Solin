@@ -50,7 +50,7 @@ from solin.core.remote_control.timer.state import (
     RemoteTimerStateStore,
     TimerCommandSession,
 )
-from solin.core.timer.models import Direction, MeetingType, PartState, Section
+from solin.core.timer.models import CustomSectionIcon, Direction, MeetingType, PartState, Section
 from solin.core.timer.pacing import PacingAvailability
 from solin.core.timer.pacing_models import PacingMode
 
@@ -213,9 +213,55 @@ def test_custom_snapshot_keeps_empty_sections_progress_and_policy() -> None:
     assert state.schedule.to_dict()["capabilities"]["manageCustomSchedules"] is False
     assert "customSchedule" not in state.schedule.to_dict()
     assert custom.to_dict()["entries"][0]["parts"] == []
+    assert custom.to_dict()["entries"][0]["icon"] == "default"
     assert custom.to_dict()["entries"][1]["startedAtEpoch"] == 120.0
     with pytest.raises(ValueError):
         CustomSchedulePartWireItem("p", "Part", 1, PartState.RUNNING)
+
+
+def test_section_icon_contract_validates_choices_and_uses_custom_schedule_permissions() -> None:
+    cid = str(uuid.uuid4())
+    for icon in (CustomSectionIcon.DEFAULT, CustomSectionIcon.BOOK, CustomSectionIcon.NONE):
+        command = EditCustomScheduleCommand(
+            cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=icon,
+        )
+        assert parse_timer_command(command.to_dict()) == command
+
+    base = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=CustomSectionIcon.BOOK,
+    ).to_dict()
+    for bad_values in (
+        {"section_id": "sec-1"},
+        {"icon": "book"},
+        {"section_id": "sec-1", "icon": "bogus"},
+        {"section_id": "sec-1", "icon": None},
+        {"section_id": "sec-1", "icon": True},
+        {"section_id": "sec-1", "icon": "book", "title": "extra"},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**base, "values": bad_values})
+
+    disabled = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty())
+    command = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=CustomSectionIcon.NONE,
+    )
+    assert disabled.validate_command_preconditions(command).code is TimerCommandErrorCode.BLOCKED
+
+    enabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(can_manage_custom_schedules=True)
+        )
+    )
+    assert enabled.validate_command_preconditions(command) is None
+    assert (
+        enabled.validate_command_preconditions(replace(command, schedule_revision=1)).code
+        is TimerCommandErrorCode.SCHEDULE_STALE
+    )
+
+    section_wire = CustomScheduleSectionWireItem("sec-1", "Study", (), icon=CustomSectionIcon.NONE)
+    assert section_wire.to_dict()["icon"] == "none"
+    with pytest.raises(TypeError):
+        CustomScheduleSectionWireItem("sec-1", "Study", (), icon="book")  # type: ignore[arg-type]
 
 
 def test_custom_command_gate_checks_revision_and_replays_results() -> None:

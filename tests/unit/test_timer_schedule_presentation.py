@@ -7,7 +7,10 @@ from PySide6.QtPdf import QPdfDocument
 
 from solin.core.i18n.date import format_datetime, format_time_with_seconds
 from solin.core.i18n.timer_part_titles import display_part_title
-from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
+from solin.core.i18n.timer_schedule_view import (
+    CUSTOM_SECTION_DEFAULT_ICON_KEY,
+    parts_model_for_schedule,
+)
 from solin.core.rendering import timer_report_pdf
 from solin.core.rendering.timer_report_pdf import (
     build_timer_pdf_rows,
@@ -16,6 +19,7 @@ from solin.core.rendering.timer_report_pdf import (
     export_schedule_pdf,
 )
 from solin.core.timer.models import (
+    CustomSectionIcon,
     CustomTimerSchedule,
     MeetingSchedule,
     MeetingType,
@@ -24,6 +28,7 @@ from solin.core.timer.models import (
     TimerPart,
     TimerSection,
 )
+from solin.core.timer.schedule_factory import build_default_schedule
 from solin.core.timer.pacing_models import PacingMode, PacingWindow
 
 
@@ -80,10 +85,50 @@ def test_meeting_presentation_keeps_canonical_section_and_editability():
     row = parts_model_for_schedule(schedule)[0]
     assert row["section"] == "ministry"
     assert row["sectionKey"] == "ministry"
+    assert row["sectionIconKey"] == "ministry"
     assert row["sectionTitle"]
     assert row["title"] == "Part 1"
     assert row["durationEditable"]
     assert row["configurableCount"]
+
+
+def test_section_icon_keys_are_separate_from_grouping_and_preserve_official_symbols():
+    from datetime import date
+
+    midweek = build_default_schedule(date(2026, 11, 23), MeetingType.MIDWEEK)
+    midweek_rows = parts_model_for_schedule(midweek)
+    by_section = {}
+    for row in midweek_rows:
+        by_section.setdefault(row["section"], row)
+    assert by_section["opening_comments"]["showSectionHeader"] is False
+    assert by_section["opening_comments"]["sectionIconKey"] == ""
+    assert by_section["concluding_comments"]["showSectionHeader"] is False
+    assert by_section["concluding_comments"]["sectionIconKey"] == ""
+    assert by_section["treasures"]["sectionIconKey"] == "treasures"
+    assert by_section["ministry"]["sectionIconKey"] == "ministry"
+    assert by_section["living"]["sectionIconKey"] == "living"
+
+    weekend = build_default_schedule(date(2026, 11, 23), MeetingType.WEEKEND)
+    weekend_rows = parts_model_for_schedule(weekend)
+    assert [row["sectionIconKey"] for row in weekend_rows] == ["public_talk", "watchtower"]
+
+    default_section = TimerSection.new("Default group")
+    default_section.parts.append(TimerPart.new(default_section.id, "Intro", 60))
+    chosen_section = TimerSection.new("Reading", icon=CustomSectionIcon.BOOK)
+    chosen_section.parts.append(TimerPart.new(chosen_section.id, "Passage", 120))
+    no_icon_section = TimerSection.new("Plain", icon=CustomSectionIcon.NONE)
+    no_icon_section.parts.append(TimerPart.new(no_icon_section.id, "Notes", 90))
+    root_part = TimerPart.new(None, "Standalone", 45)
+
+    custom = CustomTimerSchedule.new("Mixed")
+    custom.entries = [root_part, default_section, chosen_section, no_icon_section]
+    custom_rows = parts_model_for_schedule(custom)
+    assert [(row["sectionKey"], row["sectionIconKey"], row["showSectionHeader"]) for row in custom_rows] == [
+        ("", "", False),
+        (default_section.id, CUSTOM_SECTION_DEFAULT_ICON_KEY, True),
+        (chosen_section.id, "book", True),
+        (no_icon_section.id, "", True),
+    ]
 
 
 def test_custom_schedule_exports_pdf_with_schedule_and_section_titles(tmp_path, monkeypatch):

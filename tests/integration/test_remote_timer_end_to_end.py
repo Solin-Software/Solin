@@ -948,6 +948,16 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
             assert (await edit("add_section", {"title": "Warm-up"}, schedule["revision"]))["ok"]
             schedule = (await catalog())[0]
             section_id = schedule["entries"][0]["id"]
+            assert schedule["entries"][0]["icon"] == "default"
+            assert (
+                await edit(
+                    "set_section_icon",
+                    {"section_id": section_id, "icon": "people"},
+                    schedule["revision"],
+                )
+            )["ok"]
+            schedule = (await catalog())[0]
+            assert schedule["entries"][0]["icon"] == "people"
             assert (
                 await edit(
                     "add_part",
@@ -980,6 +990,9 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
             assert current["capabilities"]["navigateWeeks"] is False
             part_id = current["parts"][0]["id"]
             assert current["parts"][0]["plannedSeconds"] == 20
+            assert current["parts"][0]["sectionKey"] == section_id
+            assert current["parts"][0]["sectionIconKey"] == "people"
+            assert current["customSchedule"]["entries"][0]["icon"] == "people"
             started = await send(
                 {
                     "type": "start_part",
@@ -1004,9 +1017,20 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
                 await client.get("/remote/timer/api/public", headers=public_headers)
             ).json()
             assert "schedule" not in public and "customSchedule" not in str(public)
+            assert "sectionIconKey" not in str(public)
             assert (await send({"type": "stop_part", "partId": part_id}))["ok"]
 
             current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert (
+                await edit(
+                    "set_section_icon",
+                    {"section_id": section_id, "icon": "none"},
+                    current["customSchedule"]["revision"],
+                )
+            )["ok"]
+            current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert current["parts"][0]["sectionIconKey"] == ""
+            assert current["customSchedule"]["entries"][0]["icon"] == "none"
             copied = await send(
                 {
                     "type": "duplicate_custom_schedule",
@@ -1019,6 +1043,7 @@ def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
             assert copied["ok"]
             copy = next(item for item in await catalog() if item["id"] == copied["createdScheduleId"])
             assert copy["id"] != schedule_id
+            assert copy["entries"][0]["icon"] == "none"
             assert copy["entries"][0]["parts"][0]["state"] == "idle"
             assert copy["entries"][0]["parts"][0]["elapsedSeconds"] == 0
 

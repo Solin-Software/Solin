@@ -16,7 +16,15 @@ from solin.core.timer import models, state_machine
 from solin.core.timer.application import AssignmentAutofillScope, DetectedPartTiming, TimerSession
 from solin.core.timer.custom_schedule import TimerDurationBudgetError, TimerOperationError
 from solin.core.timer.infrastructure import JsonCustomTimerRepository, QSettingsTimerRepository
-from solin.core.timer.models import AssignmentSetup, CustomTimerSchedule, MeetingType, PartKind, PartState, Section
+from solin.core.timer.models import (
+    AssignmentSetup,
+    CustomSectionIcon,
+    CustomTimerSchedule,
+    MeetingType,
+    PartKind,
+    PartState,
+    Section,
+)
 from solin.core.timer.pacing import PacingAvailability
 from solin.core.timer.pacing_models import PacingMode
 from solin.core.timer.schedule_factory import build_default_schedule
@@ -621,3 +629,80 @@ def test_restarting_a_stopped_part_replaces_its_recorded_start(timer_runtime):
     part = restored.session.schedule.part_by_id(part_id)
     assert part.first_started_epoch == restarted_at
     assert part.accumulated_seconds == 8
+
+
+def test_custom_section_icons_persist_validate_move_and_duplicate(timer_runtime):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    schedule_id = operations.create_custom_schedule("Workshop").id
+    schedule = _edit(operations, schedule_id, "add_section", title="Study")
+    study_id = schedule.entries[0].id
+    assert schedule.entries[0].icon is CustomSectionIcon.DEFAULT
+
+    schedule = _edit(operations, schedule_id, "add_section", title="Practice")
+    practice_id = schedule.entries[1].id
+    schedule = _edit(operations, schedule_id, "add_section", title="Notes")
+    notes_id = schedule.entries[2].id
+    schedule = _edit(
+        operations, schedule_id, "add_part", title="Opening", planned_seconds=90, section_id=study_id,
+    )
+    part_id = schedule.parts[0].id
+
+    # Choose specific icon, remove icon, and reject invalid choices without mutating.
+    schedule = _edit(
+        operations, schedule_id, "set_section_icon", section_id=study_id, icon=CustomSectionIcon.BOOK,
+    )
+    schedule = _edit(
+        operations, schedule_id, "set_section_icon", section_id=practice_id, icon="none",
+    )
+    assert schedule.section_by_id(study_id).icon is CustomSectionIcon.BOOK
+    assert schedule.section_by_id(practice_id).icon is CustomSectionIcon.NONE
+    assert schedule.section_by_id(notes_id).icon is CustomSectionIcon.DEFAULT
+
+    before_invalid = operations.get_custom_schedule(schedule_id)
+    for bad_icon in ("unknown_symbol", "", None, 123, True):
+        with pytest.raises(TimerOperationError) as error:
+            operations.edit_custom_schedule(
+                schedule_id, before_invalid.revision, "set_section_icon",
+                section_id=study_id, icon=bad_icon,
+            )
+        assert error.value.code == "invalid"
+    assert operations.get_custom_schedule(schedule_id) == before_invalid
+
+    # Moving sections and parts keeps icons associated with their section IDs.
+    schedule = _edit(operations, schedule_id, "move_section", section_id=practice_id, before_id=study_id)
+    schedule = _edit(operations, schedule_id, "move_part", part_id=part_id, section_id=practice_id)
+    assert [(entry.id, entry.icon) for entry in schedule.entries] == [
+        (practice_id, CustomSectionIcon.NONE),
+        (study_id, CustomSectionIcon.BOOK),
+        (notes_id, CustomSectionIcon.DEFAULT),
+    ]
+
+    # Duplication preserves every icon choice, including NONE.
+    duplicate = operations.duplicate_custom_schedule(schedule_id, "Workshop copy", schedule.revision)
+    assert [(entry.title, entry.icon) for entry in duplicate.entries] == [
+        ("Practice", CustomSectionIcon.NONE),
+        ("Study", CustomSectionIcon.BOOK),
+        ("Notes", CustomSectionIcon.DEFAULT),
+    ]
+
+    # Legacy documents (missing "icon") and unknown persisted values fall back safely to DEFAULT.
+    path = repository._path(schedule_id)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw["entries"][0]["parts"][0]["state"] = PartState.STOPPED.value
+    raw["entries"][0]["parts"][0]["accumulated_seconds"] = 42.0
+    del raw["entries"][1]["icon"]
+    raw["entries"][2]["icon"] = "removed_legacy_icon"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    reopened, _, _ = open_profile()
+    loaded = reopened.get_custom_schedule(schedule_id)
+    assert loaded is not None
+    assert [(entry.id, entry.title, entry.icon) for entry in loaded.entries] == [
+        (practice_id, "Practice", CustomSectionIcon.NONE),
+        (study_id, "Study", CustomSectionIcon.DEFAULT),
+        (notes_id, "Notes", CustomSectionIcon.DEFAULT),
+    ]
+    assert loaded.parts[0].id == part_id
+    assert loaded.parts[0].state is PartState.STOPPED
+    assert loaded.parts[0].accumulated_seconds == 42.0

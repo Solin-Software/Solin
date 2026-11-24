@@ -15,6 +15,8 @@ from ...timer.models import (
     MAX_SECTION_PART_COUNT,
     MIN_SECTION_PART_COUNT,
     MIN_CUSTOM_PART_SECONDS,
+    CustomSectionIcon,
+    normalize_section_icon,
     normalize_timer_title,
     AnalogClockStyle,
     ClockConfig,
@@ -422,6 +424,7 @@ class TimerPartWireItem:
     result_label: str = ""
     effective_seconds: int | None = None
     adjustment_weight: int = 0
+    section_icon_key: str = ""
 
     def __post_init__(self) -> None:
         require_identifier(self.id, field_name="id")
@@ -433,6 +436,7 @@ class TimerPartWireItem:
         if self.section is not None:
             require_string(self.section, field_name="section", allow_empty=True)
         require_string(self.section_key, field_name="section_key", allow_empty=True)
+        require_string(self.section_icon_key, field_name="section_icon_key", allow_empty=True)
         require_string(
             self.section_header_title, field_name="section_header_title", allow_empty=True
         )
@@ -463,6 +467,7 @@ class TimerPartWireItem:
             "displayNumber": self.display_number,
             "section": self.section.value if isinstance(self.section, Section) else self.section,
             "sectionKey": self.section_key,
+            "sectionIconKey": self.section_icon_key,
             "sectionHeaderTitle": self.section_header_title,
             "title": self.title,
             "plannedSeconds": self.planned_seconds,
@@ -538,6 +543,7 @@ class CustomScheduleSectionWireItem:
     id: str
     title: str
     parts: tuple[CustomSchedulePartWireItem, ...]
+    icon: CustomSectionIcon = CustomSectionIcon.DEFAULT
 
     def __post_init__(self) -> None:
         require_identifier(self.id, field_name="id")
@@ -547,12 +553,15 @@ class CustomScheduleSectionWireItem:
             isinstance(p, CustomSchedulePartWireItem) for p in self.parts
         ):
             raise TypeError("parts must be a tuple of custom schedule parts")
+        if not isinstance(self.icon, CustomSectionIcon):
+            raise TypeError("icon must be a CustomSectionIcon")
 
     def to_dict(self) -> JsonObject:
         return {
             "type": "section",
             "id": self.id,
             "title": self.title,
+            "icon": self.icon.value,
             "parts": [part.to_dict() for part in self.parts],
         }
 
@@ -1038,6 +1047,7 @@ _CUSTOM_EDIT_FIELDS = {
     "add_section": ("title", "before_id"),
     "rename_part": ("part_id", "title"),
     "rename_section": ("section_id", "title"),
+    "set_section_icon": ("section_id", "icon"),
     "rename_schedule": ("title",),
     "move_part": ("part_id", "section_id", "before_id"),
     "move_section": ("section_id", "before_id"),
@@ -1055,7 +1065,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
     fields = _CUSTOM_EDIT_FIELDS.get(command.action)
     if fields is None:
         raise ValueError("unknown custom schedule action")
-    for key in ("part_id", "section_id", "before_id", "title", "planned_seconds",
+    for key in ("part_id", "section_id", "before_id", "title", "icon", "planned_seconds",
                 "start_epoch", "end_epoch", "adjustment_weight",
                 "untracked_seconds", "before_part_id", "estimated_seconds"):
         value = getattr(command, key)
@@ -1076,6 +1086,9 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
         if key == "title":
             if normalize_timer_title(value) != value:
                 raise ValueError("title must be normalized")
+        elif key == "icon":
+            if not isinstance(value, CustomSectionIcon):
+                raise TypeError("icon must be a CustomSectionIcon")
         elif key in ("start_epoch", "end_epoch"):
             require_int(value, field_name=key)
         elif key in ("adjustment_weight", "untracked_seconds", "estimated_seconds"):
@@ -1095,6 +1108,7 @@ class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
     section_id: str | None = None
     before_id: str | None = None
     title: str | None = None
+    icon: CustomSectionIcon | None = None
     planned_seconds: int | None = None
     start_epoch: int | None = None
     end_epoch: int | None = None
@@ -1111,9 +1125,9 @@ class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
     @property
     def values(self) -> dict[str, str | int | bool | None]:
         return {
-            key: getattr(self, key)
+            key: (value.value if isinstance(value, CustomSectionIcon) else value)
             for key in _CUSTOM_EDIT_FIELDS[self.action]
-            if key != "untracked_seconds" or self.untracked_seconds is not None
+            if (value := getattr(self, key)) is not None or key != "untracked_seconds"
         }
 
     def to_dict(self) -> JsonObject:
@@ -1409,7 +1423,12 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
             raise ValueError("both window endpoints are required")
         if action == "set_pacing_transition" and not {"before_part_id", "estimated_seconds"}.issubset(values):
             raise ValueError("all transition fields are required")
-        return EditCustomScheduleCommand(*args, action, **dict(values))
+        parsed_values = dict(values)
+        if action == "set_section_icon":
+            if "icon" not in parsed_values:
+                raise ValueError("icon is required")
+            parsed_values["icon"] = normalize_section_icon(parsed_values["icon"])
+        return EditCustomScheduleCommand(*args, action, **parsed_values)
 
     if command_type is TimerCommandType.START_PART:
         reject_unknown_fields(payload, {"commandId", "type", "scheduleRevision", "partId"})

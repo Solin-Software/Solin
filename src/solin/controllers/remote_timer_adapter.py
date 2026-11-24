@@ -266,6 +266,7 @@ class RemoteTimerAdapter(QObject):
                     display_number=int(raw.get("displayNumber", index)),
                     section=section,
                     section_key=str(raw.get("sectionKey") or section_value),
+                    section_icon_key=str(raw.get("sectionIconKey") or ""),
                     section_header_title=header_title,
                     title=public_title(raw.get("title"), f"Part {index}"),
                     planned_seconds=max(0, int(raw.get("plannedSeconds", 0))),
@@ -365,6 +366,7 @@ class RemoteTimerAdapter(QObject):
                 id=entry.id,
                 title=entry.title,
                 parts=tuple(part_item(part) for part in entry.parts),
+                icon=entry.icon,
             )
             if isinstance(entry, TimerSection)
             else part_item(entry)

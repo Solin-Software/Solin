@@ -6,6 +6,7 @@ from ..meetings.colors import section_colors
 from ..meetings.section_meta import SECTION_META
 from ..timer.models import (
     CONFIGURABLE_PART_SECTIONS,
+    CustomSectionIcon,
     CustomTimerSchedule,
     MeetingSchedule,
     PartState,
@@ -33,6 +34,42 @@ _STANDALONE_SECTIONS = {
     Section.OPENING_COMMENTS,
     Section.CONCLUDING_COMMENTS,
 }
+
+CUSTOM_SECTION_DEFAULT_ICON_KEY = "section_group"
+
+_OFFICIAL_SECTION_ICON_KEYS: dict[Section, str] = {
+    Section.TREASURES: "treasures",
+    Section.MINISTRY: "ministry",
+    Section.LIVING: "living",
+    Section.PUBLIC_TALK: "public_talk",
+    Section.WATCHTOWER: "watchtower",
+}
+
+_CUSTOM_SECTION_ICON_KEYS: dict[CustomSectionIcon, str] = {
+    CustomSectionIcon.DEFAULT: CUSTOM_SECTION_DEFAULT_ICON_KEY,
+    CustomSectionIcon.NONE: "",
+    CustomSectionIcon.BOOK: "book",
+    CustomSectionIcon.PEOPLE: "people",
+    CustomSectionIcon.MICROPHONE: "microphone",
+    CustomSectionIcon.MUSIC: "music",
+    CustomSectionIcon.VIDEO: "video",
+    CustomSectionIcon.CALENDAR: "calendar",
+    CustomSectionIcon.CLOCK: "clock",
+    CustomSectionIcon.MARKER: "marker",
+    CustomSectionIcon.CHECK: "check",
+}
+
+
+def section_icon_key(
+    section: Section | str | None,
+    custom_icon: CustomSectionIcon | None = None,
+) -> str:
+    """Resolve a canonical or custom section choice to its visual icon key."""
+    if isinstance(section, Section):
+        return _OFFICIAL_SECTION_ICON_KEYS.get(section, "")
+    if section is None or custom_icon is None:
+        return ""
+    return _CUSTOM_SECTION_ICON_KEYS.get(custom_icon, CUSTOM_SECTION_DEFAULT_ICON_KEY)
 
 
 def section_palette(section: Section | str | None) -> dict[str, str]:
@@ -122,10 +159,12 @@ def parts_model_for_schedule(
         section_value = section.value if isinstance(section, Section) else (section or "")
         custom_section = sections.get(section_value)
         title = section_title(section, custom_section.title if custom_section else "")
+        icon_key = section_icon_key(section, custom_section.icon if custom_section else None)
         rows.append({
             "id": part.id,
             "section": section_value,
             "sectionKey": section_value,
+            "sectionIconKey": icon_key,
             "sectionTitle": title,
             "sectionColor": palette["accent"],
             "sectionTextColor": palette["text"],

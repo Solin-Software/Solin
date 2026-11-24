@@ -13,7 +13,7 @@ import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, replace
-from enum import Enum
+from enum import Enum, StrEnum
 from math import isfinite
 
 from .pacing_models import PacingRun, PacingWindow
@@ -74,6 +74,35 @@ class PartState(str, Enum):
     IDLE = "idle"        # never started (or reset)
     RUNNING = "running"  # actively counting
     STOPPED = "stopped"  # frozen after a stop
+
+
+class CustomSectionIcon(StrEnum):
+    """Persisted semantic icon choice for a custom timer section."""
+
+    DEFAULT = "default"
+    NONE = "none"
+    BOOK = "book"
+    PEOPLE = "people"
+    MICROPHONE = "microphone"
+    MUSIC = "music"
+    VIDEO = "video"
+    CALENDAR = "calendar"
+    CLOCK = "clock"
+    MARKER = "marker"
+    CHECK = "check"
+
+
+CUSTOM_SECTION_ICON_CATALOG: tuple[CustomSectionIcon, ...] = (
+    CustomSectionIcon.BOOK,
+    CustomSectionIcon.PEOPLE,
+    CustomSectionIcon.MICROPHONE,
+    CustomSectionIcon.MUSIC,
+    CustomSectionIcon.VIDEO,
+    CustomSectionIcon.CALENDAR,
+    CustomSectionIcon.CLOCK,
+    CustomSectionIcon.MARKER,
+    CustomSectionIcon.CHECK,
+)
 
 
 ANALOG_CLOCK_STYLE_OPTIONS: tuple[AnalogClockStyle, ...] = (
@@ -212,6 +241,30 @@ def normalize_timer_title(title: str) -> str:
 
 def section_id(section: Section | str | None) -> str | None:
     return section.value if isinstance(section, Section) else section
+
+
+def normalize_section_icon(value: object) -> CustomSectionIcon:
+    """Validate an explicit custom-section icon choice."""
+    if isinstance(value, CustomSectionIcon):
+        return value
+    if isinstance(value, str):
+        try:
+            return CustomSectionIcon(value)
+        except ValueError:
+            pass
+    raise ValueError("Choose a valid timer section icon.")
+
+
+def _section_icon_from_persisted(value: object) -> CustomSectionIcon:
+    """Read a persisted section icon, falling back safely to the default."""
+    if isinstance(value, CustomSectionIcon):
+        return value
+    if isinstance(value, str):
+        try:
+            return CustomSectionIcon(value)
+        except ValueError:
+            return CustomSectionIcon.DEFAULT
+    return CustomSectionIcon.DEFAULT
 
 
 def _section_from_id(value: str | None) -> Section | str | None:
@@ -451,10 +504,20 @@ class TimerSection:
     id: str
     title: str
     parts: list[TimerPart] = field(default_factory=list)
+    icon: CustomSectionIcon = CustomSectionIcon.DEFAULT
 
     @classmethod
-    def new(cls, title: str) -> TimerSection:
-        return cls(f"section-{uuid.uuid4().hex}", normalize_timer_title(title))
+    def new(
+        cls,
+        title: str,
+        *,
+        icon: CustomSectionIcon = CustomSectionIcon.DEFAULT,
+    ) -> TimerSection:
+        return cls(
+            f"section-{uuid.uuid4().hex}",
+            normalize_timer_title(title),
+            icon=normalize_section_icon(icon),
+        )
 
 
 @dataclass
@@ -496,6 +559,7 @@ class CustomTimerSchedule(_OrderedTimerParts):
             "entries": [
                 {
                     "type": "section", "id": entry.id, "title": entry.title,
+                    "icon": entry.icon.value,
                     "parts": [_encode_custom_part(part) for part in entry.parts],
                 }
                 if isinstance(entry, TimerSection) else dict(_encode_custom_part(entry), type="part")
@@ -519,6 +583,7 @@ class CustomTimerSchedule(_OrderedTimerParts):
                 schedule.entries.append(TimerSection(
                     parent, normalize_timer_title(entry["title"]),
                     [_decode_custom_part(part, parent) for part in entry["parts"]],
+                    icon=_section_icon_from_persisted(entry.get("icon")),
                 ))
             elif entry["type"] == "part":
                 schedule.entries.append(_decode_custom_part(entry, None))

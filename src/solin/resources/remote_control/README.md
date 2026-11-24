@@ -151,11 +151,11 @@ parts** when already authenticated:
   `profile`, `liveRevision`, `scheduleRevision`, `live`, and `schedule`.
 - `GET /remote/timer/api/schedule` — authenticated `TimerScheduleWireSnapshot` containing
   `scheduleRevision`, `weekMonday`, `weekLabel`, `isCurrentWeek`, `meetingType`, section-styled
-  `parts` (including per-part `durationEditable`), and server-authoritative `capabilities`
+  `parts` (including per-part `durationEditable` and `sectionIconKey`), and server-authoritative `capabilities`
   (`controlParts`, `adjustPlannedMinutes`, `setPlannedSeconds`, `setSectionCount`,
   `switchMeetingType`, `navigateWeeks`, `manageCustomSchedules`, `managePacing`).
   `manageCustomSchedules` is false by default. With it enabled, `customSchedule` describes the active custom schedule,
-  including its ID, title, revision, and ordered root parts and sections, including empty sections.
+  including its ID, title, revision, and ordered root parts and sections (each with its persisted `icon` choice), including empty sections.
 - `GET /remote/timer/api/custom-schedules` — authenticated, on-demand custom schedule catalog;
   unavailable when the capability or adapter is disabled. The Qt adapter obtains each snapshot on
   the main thread. Part progress contains `state`, accumulated `elapsedSeconds`,
@@ -187,7 +187,9 @@ parts** when already authenticated:
   results include `createdScheduleId`, including on replay. Edit `values` use the snake-case
   operation arguments. Actions are `add_part` (`title`, `planned_seconds`, optional `section_id`,
   `before_id`); `add_section` (`title`, optional `before_id`); `rename_part` (`part_id`, `title`);
-  `rename_section` (`section_id`, `title`); `rename_schedule` (`title`); `move_part` (`part_id`,
+  `rename_section` (`section_id`, `title`); `set_section_icon` (`section_id`, `icon` in
+  `{"default", "none", "book", "people", "microphone", "music", "video", "calendar", "clock",
+  "marker", "check"}`); `rename_schedule` (`title`); `move_part` (`part_id`,
   optional `section_id`, `before_id`); `move_section` (`section_id`, optional `before_id`);
   `delete_part` (`part_id`); `delete_section` (`section_id`); and `set_part_seconds` (`part_id`,
   `planned_seconds`). Null or omitted optional positions append at the root or section. Each edit
