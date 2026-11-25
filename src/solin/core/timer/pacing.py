@@ -16,7 +16,7 @@ from .models import (
     TimerPart,
     TimerSchedule,
 )
-from .pacing_models import PacingMode, PacingTransitions, PacingWindow
+from .pacing_models import PacingMode, PacingTransitions, PacingWindow, ResolvedPacingWindow
 from .part_titles import SPIRITUAL_GEMS_TITLE, TREASURES_TALK_TITLE
 from .schedule_factory import meeting_pacing_transitions
 
@@ -95,7 +95,7 @@ def adjustment_weights(schedule: TimerSchedule, parts: Sequence[TimerPart]) -> d
 
 
 def resolve_transition_budget(
-    window: PacingWindow, parts: list[TimerPart], estimates: PacingTransitions,
+    window: ResolvedPacingWindow | PacingWindow, parts: list[TimerPart], estimates: PacingTransitions,
 ) -> tuple[dict[str, float], float]:
     """Keep explicit estimates and divide the remaining reserve among unknown intervals."""
     provided = dict(estimates.before_part_seconds)
@@ -114,7 +114,7 @@ def resolve_transition_budget(
 
 
 def transition_budget(
-    schedule: TimerSchedule, window: PacingWindow, parts: list[TimerPart],
+    schedule: TimerSchedule, window: ResolvedPacingWindow | PacingWindow, parts: list[TimerPart],
 ) -> tuple[dict[str, float], float]:
     estimates = meeting_pacing_transitions(schedule) if isinstance(schedule, MeetingSchedule) else window.transitions
     return resolve_transition_budget(window, parts, estimates)
@@ -181,7 +181,7 @@ def effective_target_at_start(
     automatic: bool,
     allow_extension: bool,
 ) -> int:
-    window = schedule.effective_pacing_window
+    window = schedule.resolve_pacing_window(now)
     if not automatic or window is None:
         return part.planned_seconds
     parts = list(schedule.iter_parts())
@@ -207,7 +207,7 @@ def pacing_snapshot(
     allow_extension: bool = DEFAULT_ALLOW_PACING_EXTENSION,
 ) -> PacingSnapshot | None:
     run = schedule.pacing_run
-    window = schedule.effective_pacing_window
+    window = schedule.resolve_pacing_window(now)
     if window is None:
         return None
     parts = list(schedule.iter_parts())

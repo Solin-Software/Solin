@@ -124,7 +124,10 @@ class TimerOperations(QObject):
         return self.engine.stop_part(part_id)
 
     def reset_part(self, part_id: str) -> bool:
-        return self.engine.reset_part(part_id)
+        changed = self.engine.reset_part(part_id)
+        if changed and self.session.schedule.pacing_run is None:
+            self.refresh_meeting_window()
+        return changed
 
     def reset_all(self) -> bool:
         if not isinstance(self.session.schedule, CustomTimerSchedule):
@@ -195,6 +198,23 @@ class TimerOperations(QObject):
         self, schedule_id: str, expected_revision: int, action: str, **values: object,
     ) -> bool:
         if not self.session.edit_custom_schedule(schedule_id, expected_revision, action, **values):
+            return False
+        active = self.session.schedule
+        if isinstance(active, CustomTimerSchedule) and active.id == schedule_id:
+            self._publish_schedule_edit(True)
+        else:
+            self.changed.emit()
+        return True
+
+    def replace_custom_schedule_entries(
+        self,
+        schedule_id: str,
+        expected_revision: int,
+        draft_entries: list[dict[str, object]],
+    ) -> bool:
+        if not self.session.replace_custom_schedule_entries(
+            schedule_id, expected_revision, draft_entries
+        ):
             return False
         active = self.session.schedule
         if isinstance(active, CustomTimerSchedule) and active.id == schedule_id:

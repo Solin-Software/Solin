@@ -197,14 +197,14 @@ def _set_part_seconds(
 
 
 def _set_pacing_window(
-    schedule: CustomTimerSchedule, *, start_epoch: int | None, end_epoch: int | None,
+    schedule: CustomTimerSchedule, *, start_time: str | None, end_time: str | None,
     untracked_seconds: int | None = None,
 ) -> None:
     if untracked_seconds is not None and (type(untracked_seconds) is not int or untracked_seconds < 0):
         raise TimerOperationError("invalid", "Set a nonnegative duration for time outside parts.")
-    if start_epoch is None and end_epoch is None and not untracked_seconds:
+    if start_time is None and end_time is None and not untracked_seconds:
         schedule.pacing_window = None
-    elif start_epoch is None or end_epoch is None:
+    elif start_time is None or end_time is None:
         raise TimerOperationError("invalid", "Set both the timer start and end.")
     else:
         existing = schedule.pacing_window
@@ -212,7 +212,7 @@ def _set_pacing_window(
             untracked_seconds = existing.untracked_seconds if existing else 0
         try:
             transitions = existing.transitions if existing else PacingTransitions()
-            schedule.pacing_window = PacingWindow(start_epoch, end_epoch, untracked_seconds, transitions)
+            schedule.pacing_window = PacingWindow(start_time, end_time, untracked_seconds, transitions)
         except ValueError as error:
             raise TimerOperationError("invalid", str(error)) from error
 
@@ -310,3 +310,92 @@ def _duplicate_part(part: TimerPart, section_id: str | None) -> TimerPart:
     duplicate = TimerPart.new(section_id, part.title, part.planned_seconds)
     duplicate.adjustment_weight = part.adjustment_weight
     return duplicate
+
+
+def replace_custom_schedule_entries(
+    schedule: CustomTimerSchedule,
+    draft_entries: Sequence[dict[str, object]],
+) -> None:
+    """Apply an entire edited custom-schedule structure atomically.
+
+    Existing parts and sections retain their stable IDs and recorded timing
+    data, newly created draft entries receive fresh IDs, deleted parts are
+    pruned from transition estimates, and all validation rules remain enforced.
+    """
+    if schedule.has_running_part():
+        raise TimerOperationError("blocked", "Stop the timer before editing this schedule.")
+
+    existing_parts = {part.id: part for part in schedule.iter_parts()}
+    existing_sections = {
+        entry.id: entry for entry in schedule.entries if isinstance(entry, TimerSection)
+    }
+    used_part_ids: set[str] = set()
+    used_section_ids: set[str] = set()
+
+    def build_part(raw: dict[str, object], section_id: str | None) -> TimerPart:
+        raw_id = str(raw.get("id") or "")
+        title = validate_title(str(raw.get("title") or ""))
+        raw_planned = raw.get("plannedSeconds")
+        planned_int = (
+            raw_planned
+            if type(raw_planned) is int
+            else (int(raw_planned) if isinstance(raw_planned, float) and raw_planned.is_integer() else -1)
+        )
+        planned = _validate_seconds(planned_int)
+        if raw_id and raw_id in existing_parts:
+            if raw_id in used_part_ids:
+                raise TimerOperationError("invalid", "Duplicate timer part in schedule.")
+            used_part_ids.add(raw_id)
+            part = existing_parts[raw_id]
+            if planned != part.planned_seconds and part.state is not PartState.IDLE:
+                raise TimerOperationError(
+                    "blocked", "Reset the timer part before changing its duration."
+                )
+            part.section = section_id
+            part.title = title
+            part.planned_seconds = planned
+            if planned < MIN_PLANNED_PART_SECONDS:
+                part.adjustment_weight = 0
+            return part
+        return TimerPart.new(section_id, title, planned)
+
+    new_entries: list[TimerPart | TimerSection] = []
+    for raw in draft_entries:
+        if not isinstance(raw, dict):
+            raise TimerOperationError("invalid", "Invalid timer schedule entry.")
+        kind = raw.get("type")
+        if kind == "part":
+            new_entries.append(build_part(raw, None))
+        elif kind == "section":
+            raw_id = str(raw.get("id") or "")
+            title = validate_title(str(raw.get("title") or ""))
+            icon = _validate_section_icon(raw.get("icon", CustomSectionIcon.DEFAULT))
+            color = _validate_section_color(raw.get("color"))
+            if raw_id and raw_id in existing_sections:
+                if raw_id in used_section_ids:
+                    raise TimerOperationError("invalid", "Duplicate timer section in schedule.")
+                used_section_ids.add(raw_id)
+                sec_id = raw_id
+            else:
+                sec_id = TimerSection.new(title, icon=icon, color=color).id
+            raw_parts = raw.get("parts")
+            if not isinstance(raw_parts, list):
+                raise TimerOperationError("invalid", "Invalid section parts list.")
+            parts = [build_part(item, sec_id) for item in raw_parts if isinstance(item, dict)]
+            new_entries.append(TimerSection(sec_id, title, parts, icon=icon, color=color))
+        else:
+            raise TimerOperationError("invalid", "Unknown timer schedule entry type.")
+
+    schedule.entries = new_entries
+    surviving_ids = {part.id for part in schedule.iter_parts()}
+    if (window := schedule.pacing_window) is not None and window.transitions.before_part_seconds:
+        before = tuple(
+            (pid, secs)
+            for pid, secs in window.transitions.before_part_seconds
+            if pid in surviving_ids
+        )
+        if before != window.transitions.before_part_seconds:
+            schedule.pacing_window = replace(
+                window,
+                transitions=replace(window.transitions, before_part_seconds=before),
+            )

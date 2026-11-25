@@ -378,8 +378,8 @@ class RemoteTimerAdapter(QObject):
             title=schedule.title,
             revision=schedule.revision,
             entries=entries,
-            start_epoch=window.start_epoch if window else None,
-            end_epoch=window.end_epoch if window else None,
+            start_time=window.start_time if window else None,
+            end_time=window.end_time if window else None,
             untracked_seconds=window.untracked_seconds if window else None,
             transitions=(
                 PacingTransitionsWireSnapshot(

@@ -11,6 +11,7 @@ from typing import ClassVar, Final, TypeAlias
 from ...timer.hand_alert import TimerHandAlert
 from ...timer.models import (
     CONFIGURABLE_PART_SECTIONS,
+    MAX_ADJUSTMENT_WEIGHT,
     MAX_PLANNED_PART_SECONDS,
     MAX_SECTION_PART_COUNT,
     MIN_SECTION_PART_COUNT,
@@ -29,7 +30,7 @@ from ...timer.models import (
     Section,
 )
 from ...timer.pacing import PacingAvailability, PacingSnapshot
-from ...timer.pacing_models import PacingMode
+from ...timer.pacing_models import PacingMode, normalize_time_of_day
 from ..features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
     TimerRemoteFeatureFlags,
@@ -602,8 +603,8 @@ class CustomScheduleWireItem:
     title: str
     revision: int
     entries: tuple[CustomSchedulePartWireItem | CustomScheduleSectionWireItem, ...]
-    start_epoch: int | None = None
-    end_epoch: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
     untracked_seconds: int | None = None
     transitions: PacingTransitionsWireSnapshot | None = None
 
@@ -612,12 +613,16 @@ class CustomScheduleWireItem:
         if normalize_timer_title(self.title) != self.title:
             raise ValueError("title must be normalized")
         require_nonnegative_int(self.revision, field_name="revision")
-        if (self.start_epoch is None) != (self.end_epoch is None):
+        if (self.start_time is None) != (self.end_time is None):
             raise ValueError("pacing configuration requires both window endpoints")
-        if self.start_epoch is not None:
-            require_int(self.start_epoch, field_name="start_epoch")
-        if self.end_epoch is not None:
-            require_int(self.end_epoch, field_name="end_epoch")
+        if self.start_time is not None:
+            if normalize_time_of_day(self.start_time) != self.start_time:
+                raise ValueError("start_time must be a normalized HH:MM string")
+        if self.end_time is not None:
+            if normalize_time_of_day(self.end_time) != self.end_time:
+                raise ValueError("end_time must be a normalized HH:MM string")
+            if self.start_time == self.end_time:
+                raise ValueError("end_time must differ from start_time")
         if self.untracked_seconds is not None:
             require_nonnegative_int(self.untracked_seconds, field_name="untracked_seconds")
         if self.transitions is not None and not isinstance(self.transitions, PacingTransitionsWireSnapshot):
@@ -631,10 +636,10 @@ class CustomScheduleWireItem:
             "revision": self.revision,
             "entries": [entry.to_dict() for entry in self.entries],
         }
-        if self.start_epoch is not None:
+        if self.start_time is not None:
             pacing_config: JsonObject = {
-                "start_epoch": self.start_epoch,
-                "end_epoch": self.end_epoch,
+                "start_time": self.start_time,
+                "end_time": self.end_time,
                 "untracked_seconds": self.untracked_seconds,
             }
             if self.transitions is not None:
@@ -1060,7 +1065,7 @@ _CUSTOM_EDIT_FIELDS = {
     "delete_part": ("part_id",),
     "delete_section": ("section_id",),
     "set_part_seconds": ("part_id", "planned_seconds"),
-    "set_pacing_window": ("start_epoch", "end_epoch", "untracked_seconds"),
+    "set_pacing_window": ("start_time", "end_time", "untracked_seconds"),
     "set_adjustment_weight": ("part_id", "adjustment_weight"),
     "set_pacing_transition": ("before_part_id", "estimated_seconds"),
 }
@@ -1072,7 +1077,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
     if fields is None:
         raise ValueError("unknown custom schedule action")
     for key in ("part_id", "section_id", "before_id", "title", "icon", "color", "planned_seconds",
-                "start_epoch", "end_epoch", "adjustment_weight",
+                "start_time", "end_time", "adjustment_weight",
                 "untracked_seconds", "before_part_id", "estimated_seconds"):
         value = getattr(command, key)
         if key not in fields:
@@ -1084,7 +1089,7 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
                 continue
             if command.action == "set_pacing_transition" and key in ("before_part_id", "estimated_seconds"):
                 continue
-            if key in ("start_epoch", "end_epoch", "untracked_seconds") and command.action == "set_pacing_window":
+            if key in ("start_time", "end_time", "untracked_seconds") and command.action == "set_pacing_window":
                 continue
             if key in _EDIT_OPTIONAL_FIELDS and (
                 key != "section_id" or command.action in ("add_part", "move_part")
@@ -1100,9 +1105,16 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
         elif key == "color":
             if normalize_section_color(value) != value:
                 raise ValueError("color must be a normalized hex color or None")
-        elif key in ("start_epoch", "end_epoch"):
-            require_int(value, field_name=key)
-        elif key in ("adjustment_weight", "untracked_seconds", "estimated_seconds"):
+        elif key in ("start_time", "end_time"):
+            if not isinstance(value, str):
+                raise TypeError(f"{key} must be a string")
+            if normalize_time_of_day(value) != value:
+                raise ValueError(f"{key} must be a normalized HH:MM string")
+        elif key == "adjustment_weight":
+            require_nonnegative_int(value, field_name=key)
+            if value > MAX_ADJUSTMENT_WEIGHT:
+                raise ValueError("adjustment_weight is out of range")
+        elif key in ("untracked_seconds", "estimated_seconds"):
             require_nonnegative_int(value, field_name=key)
         elif key == "planned_seconds":
             require_int(value, field_name=key)
@@ -1122,8 +1134,8 @@ class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
     icon: CustomSectionIcon | None = None
     color: str | None = None
     planned_seconds: int | None = None
-    start_epoch: int | None = None
-    end_epoch: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
     adjustment_weight: int | None = None
     untracked_seconds: int | None = None
     before_part_id: str | None = None
@@ -1431,7 +1443,7 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
         if allowed is None:
             raise ValueError("unknown custom schedule action")
         reject_unknown_fields(values, set(allowed))
-        if action == "set_pacing_window" and not {"start_epoch", "end_epoch"}.issubset(values):
+        if action == "set_pacing_window" and not {"start_time", "end_time"}.issubset(values):
             raise ValueError("both window endpoints are required")
         if action == "set_pacing_transition" and not {"before_part_id", "estimated_seconds"}.issubset(values):
             raise ValueError("all transition fields are required")

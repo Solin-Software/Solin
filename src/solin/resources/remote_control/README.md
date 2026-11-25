@@ -216,8 +216,8 @@ parts** when already authenticated:
   `managePacing` is false by default and governs editing. It enables `set_pacing_mode`,
   which changes the profile preference. A running part keeps its current target.
   With `manageCustomSchedules` also enabled,
-  custom edits include `set_pacing_window` (nullable `start_epoch` and `end_epoch`, optional
-  `untracked_seconds`) and `set_adjustment_weight` (`part_id`, `adjustment_weight`). A zero
+  custom edits include `set_pacing_window` (nullable `start_time` and `end_time` in `HH:MM`, optional
+  `untracked_seconds`) and `set_adjustment_weight` (`part_id`, `adjustment_weight` in `0..100`). A zero
   weight removes the explicit selection. If no parts are selected, all parts of at least 60 seconds
   receive equal weight. Custom catalog entries carry the configured weights and, when a window exists,
   provide it in `pacingConfig`. `set_pacing_transition` requires `before_part_id` (a stable part ID or null

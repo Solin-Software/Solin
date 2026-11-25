@@ -1,5 +1,6 @@
 """Contracts shared by the timer presentation and PDF export."""
 
+from datetime import datetime
 from types import SimpleNamespace
 
 from PySide6.QtCore import QCoreApplication, QTranslator
@@ -180,7 +181,7 @@ def test_pdf_uses_observed_instants_and_adjusted_target():
     part.run_target_seconds = 90
     schedule = CustomTimerSchedule.new("Training")
     schedule.entries = [part]
-    schedule.pacing_window = PacingWindow(900, 2000)
+    schedule.pacing_window = PacingWindow("19:00", "19:20")
 
     row = build_timer_pdf_rows(schedule, now_epoch=1200, include_pacing=True)[0]
     assert row.started_label == format_time_with_seconds(1000)
@@ -210,7 +211,7 @@ def test_pdf_uses_legacy_time_fallback_when_observations_are_absent():
     part.accumulated_seconds = 95
     schedule = CustomTimerSchedule.new("Training")
     schedule.entries = [part]
-    schedule.pacing_window = PacingWindow(900, 2000)
+    schedule.pacing_window = PacingWindow("19:00", "19:20")
 
     row = build_timer_pdf_rows(schedule, now_epoch=1200, include_pacing=True)[0]
     assert row.started_label == format_time_with_seconds(900)
@@ -220,7 +221,7 @@ def test_pdf_uses_legacy_time_fallback_when_observations_are_absent():
 
 def test_pdf_shows_planned_window_and_labels_the_projected_end(tmp_path, monkeypatch):
     schedule = CustomTimerSchedule.new("Training")
-    schedule.pacing_window = PacingWindow(1000, 2000)
+    schedule.pacing_window = PacingWindow("19:00", "19:20")
     snapshot = SimpleNamespace(start_epoch=1000, end_epoch=2000, adjusted_end_epoch=2100)
     calls = []
     summaries = []
@@ -248,9 +249,10 @@ def test_pdf_shows_planned_window_and_labels_the_projected_end(tmp_path, monkeyp
 
 
 def test_pdf_exports_a_real_pacing_snapshot(tmp_path, monkeypatch):
+    base = int(datetime(2026, 11, 25, 19, 0).timestamp())
     schedule = CustomTimerSchedule.new("Training")
     schedule.entries = [TimerPart.new(None, "Discussion", 600)]
-    schedule.pacing_window = PacingWindow(1000, 2000)
+    schedule.pacing_window = PacingWindow("19:00", "19:20")
     summaries = []
     draw_summary = timer_report_pdf._PdfPainter.draw_summary
 
@@ -261,31 +263,32 @@ def test_pdf_exports_a_real_pacing_snapshot(tmp_path, monkeypatch):
     monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", capture_summary)
     target = tmp_path / "paced-report.pdf"
     export_schedule_pdf(
-        schedule, target, week_label="", meeting_type_label="", now_epoch=1000, pacing_mode=PacingMode.MONITOR
+        schedule, target, week_label="", meeting_type_label="", now_epoch=base, pacing_mode=PacingMode.MONITOR
     )
 
     document = QPdfDocument()
     assert document.load(str(target)) == QPdfDocument.Error.None_
     assert len(summaries) == 2
-    assert summaries[1][0][1] == format_datetime(1000)
-    assert summaries[1][1][1] == format_datetime(2000)
-    assert summaries[1][2][1] == format_datetime(2000)
+    assert summaries[1][0][1] == format_datetime(base)
+    assert summaries[1][1][1] == format_datetime(base + 1200)
+    assert summaries[1][2][1] == format_datetime(base + 1200)
 
 
 def test_pdf_omits_pacing_summary_by_default_and_without_window(tmp_path, monkeypatch):
+    base = int(datetime(2026, 11, 25, 19, 0).timestamp())
     schedule = CustomTimerSchedule.new("Training")
     schedule.entries = [TimerPart.new(None, "Discussion", 600)]
-    schedule.pacing_window = PacingWindow(1000, 2000)
+    schedule.pacing_window = PacingWindow("19:00", "19:20")
     summaries = []
     monkeypatch.setattr(timer_report_pdf._PdfPainter, "draw_summary", lambda painter, items: summaries.append(items))
 
-    export_schedule_pdf(schedule, tmp_path / "default.pdf", week_label="", meeting_type_label="", now_epoch=1000)
+    export_schedule_pdf(schedule, tmp_path / "default.pdf", week_label="", meeting_type_label="", now_epoch=base)
     assert len(summaries) == 1
 
     summaries.clear()
     schedule.pacing_window = None
     export_schedule_pdf(
-        schedule, tmp_path / "no-window.pdf", week_label="", meeting_type_label="", now_epoch=1000,
+        schedule, tmp_path / "no-window.pdf", week_label="", meeting_type_label="", now_epoch=base,
         pacing_mode=PacingMode.MONITOR,
     )
     assert len(summaries) == 1

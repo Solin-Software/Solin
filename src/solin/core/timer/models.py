@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field, replace
 from enum import Enum, StrEnum
 from math import isfinite
 
-from .pacing_models import PacingRun, PacingWindow
+from .pacing_models import PacingRun, PacingWindow, ResolvedPacingWindow
 
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ MIN_PLANNED_PART_SECONDS = 60
 MIN_CUSTOM_PART_SECONDS = 1
 MAX_PLANNED_PART_SECONDS = 24 * 60 * 60 - 1
 MAX_TIMER_TITLE_LENGTH = 200
-MAX_ADJUSTMENT_WEIGHT = 10_000
+MAX_ADJUSTMENT_WEIGHT = 100
 
 
 class AssignmentSetup(str, Enum):
@@ -496,8 +496,15 @@ class _OrderedTimerParts:
     pacing_run: PacingRun | None
 
     @property
-    def effective_pacing_window(self) -> PacingWindow | None:
+    def effective_pacing_window(self) -> ResolvedPacingWindow | PacingWindow | None:
         return self.pacing_run.window if self.pacing_run is not None else self.pacing_window
+
+    def resolve_pacing_window(self, now: float) -> ResolvedPacingWindow | None:
+        if self.pacing_run is not None:
+            return self.pacing_run.window
+        if self.pacing_window is not None:
+            return self.pacing_window.resolve_at(now)
+        return None
 
     def _pacing_to_dict(self) -> dict:
         return {

@@ -87,12 +87,12 @@ def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
         SetPacingModeCommand(command_id, 0, PacingMode.AUTOMATIC),
         EditCustomScheduleCommand(
             command_id, 0, "schedule", 1, "set_pacing_window",
-            start_epoch=100, end_epoch=200,
+            start_time="19:30", end_time="20:30",
             untracked_seconds=30,
         ),
         EditCustomScheduleCommand(
             command_id, 0, "schedule", 1, "set_pacing_window",
-            start_epoch=None, end_epoch=None,
+            start_time=None, end_time=None,
         ),
         EditCustomScheduleCommand(
             command_id, 0, "schedule", 1, "set_adjustment_weight",
@@ -104,22 +104,24 @@ def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
 
     payload = commands[1].to_dict()
     for values in (
-        {"start_epoch": 100},
-        {"start_epoch": True, "end_epoch": 200},
-        {"start_epoch": 100, "end_epoch": 200, "untracked_seconds": -1},
-        {"start_epoch": 100, "end_epoch": 200, "untracked_seconds": True},
+        {"start_time": "19:30"},
+        {"start_time": True, "end_time": "20:30"},
+        {"start_time": "25:00", "end_time": "20:30"},
+        {"start_time": "19:30", "end_time": "20:30", "untracked_seconds": -1},
+        {"start_time": "19:30", "end_time": "20:30", "untracked_seconds": True},
     ):
         with pytest.raises((TypeError, ValueError)):
             parse_timer_command({**payload, "values": values})
-    nullable = {"start_epoch": None, "end_epoch": None, "untracked_seconds": None}
+    nullable = {"start_time": None, "end_time": None, "untracked_seconds": None}
     assert parse_timer_command({**payload, "values": nullable}) == commands[2]
     with pytest.raises(ValueError):
         parse_timer_command({**commands[0].to_dict(), "mode": "invalid"})
-    with pytest.raises((TypeError, ValueError)):
-        EditCustomScheduleCommand(
-            command_id, 0, "schedule", 1, "set_adjustment_weight",
-            part_id="part", adjustment_weight=-1,
-        )
+    for bad_weight in (-1, 101):
+        with pytest.raises((TypeError, ValueError)):
+            EditCustomScheduleCommand(
+                command_id, 0, "schedule", 1, "set_adjustment_weight",
+                part_id="part", adjustment_weight=bad_weight,
+            )
 
     disabled = RemoteTimerStateStore(
         schedule=TimerScheduleWireSnapshot.empty(
@@ -168,7 +170,7 @@ def test_transition_catalog_wire_data_is_immutable() -> None:
     transitions = PacingTransitionsWireSnapshot((("part", 60),), 300)
     schedule = CustomScheduleWireItem("id", "Event", 1, ())
     assert "pacingConfig" not in schedule.to_dict()
-    configured = replace(schedule, start_epoch=100, end_epoch=600, transitions=transitions)
+    configured = replace(schedule, start_time="19:30", end_time="20:30", transitions=transitions)
     data = configured.to_dict()
     data["pacingConfig"]["transitions"]["before_parts"]["part"] = 0
     assert configured.to_dict()["pacingConfig"]["transitions"] == {

@@ -114,8 +114,17 @@ class TimerStateMachine:
         if prior_run is not None:
             reached.update(item.id for item in parts if item.id in prior_run.reached_ids)
         reached.update(item.id for item in parts[:selected + 1])
+        resolved_window = (
+            prior_run.window
+            if prior_run is not None
+            else (
+                schedule.pacing_window.resolve_at(transition_time)
+                if schedule.pacing_window is not None
+                else None
+            )
+        )
         schedule.pacing_run = PacingRun(
-            prior_run.window if prior_run is not None else schedule.pacing_window,
+            resolved_window,
             frozenset(reached), transition_time,
         )
         part.run_target_seconds = effective_target_at_start(
@@ -156,9 +165,20 @@ class TimerStateMachine:
         schedule = self._schedule
         assert schedule is not None
         if (run := schedule.pacing_run) is not None:
-            schedule.pacing_run = replace(
-                run, reached_ids=run.reached_ids - {part_id}, completed_projection_epoch=None,
+            remaining_reached = run.reached_ids - {part_id}
+            has_any_part_data = any(
+                item.state is not PartState.IDLE
+                or item.started_at_epoch is not None
+                or item.first_started_epoch is not None
+                or abs(item.accumulated_seconds) > 0.0001
+                for item in schedule.iter_parts()
             )
+            if not remaining_reached and not has_any_part_data:
+                schedule.pacing_run = None
+            else:
+                schedule.pacing_run = replace(
+                    run, reached_ids=remaining_reached, completed_projection_epoch=None,
+                )
         return True
 
     def _reset_part(self, part: TimerPart) -> bool:

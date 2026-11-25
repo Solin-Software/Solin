@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime
 
 import pytest
 from PySide6.QtCore import QSettings
@@ -40,7 +40,7 @@ def timer_runtime(tmp_path, monkeypatch, qt_object_owner):
         return QSettings(path, QSettings.Format.IniFormat)
 
     monkeypatch.setattr(SettingsStore, "_settings", settings)
-    now = [10_000.0]
+    now = [datetime(2026, 11, 25, 19, 30).timestamp()]
     monkeypatch.setattr(models, "_now", lambda: now[0])
     monkeypatch.setattr(state_machine, "_now", lambda: now[0])
 
@@ -82,7 +82,7 @@ def test_pacing_preference_follows_the_profile_and_reports_a_missing_window(time
     assert operations.engine.snapshot(now[0]).planned_seconds == 120
     assert operations.stop_part()
 
-    _edit(operations, schedule_id, "set_pacing_window", start_epoch=10_000, end_epoch=10_180)
+    _edit(operations, schedule_id, "set_pacing_window", start_time="19:30", end_time="19:33")
     assert operations.pacing_state(now[0]).availability is PacingAvailability.AWAITING_RESET
     assert operations.reset_all()
     restored, _, _ = open_profile()
@@ -102,7 +102,7 @@ def test_changing_pacing_mode_while_running_only_affects_future_targets(timer_ru
     _edit(operations, schedule_id, "add_part", title="Talk", planned_seconds=120)
     schedule = _edit(operations, schedule_id, "add_part", title="Practice", planned_seconds=120)
     first, second = schedule.parts
-    _edit(operations, schedule_id, "set_pacing_window", start_epoch=10_000, end_epoch=10_240)
+    _edit(operations, schedule_id, "set_pacing_window", start_time="19:30", end_time="19:34")
     assert operations.select_custom_schedule(schedule_id)
     assert operations.set_pacing_mode(PacingMode.AUTOMATIC)
     now[0] += 80
@@ -124,12 +124,12 @@ def test_custom_budget_edits_are_atomic_and_running_window_survives_reopen(timer
     schedule = _edit(operations, schedule_id, "add_part", title="Talk", planned_seconds=120)
     part_id = schedule.parts[0].id
     schedule = _edit(
-        operations, schedule_id, "set_pacing_window", start_epoch=10_000, end_epoch=10_180,
+        operations, schedule_id, "set_pacing_window", start_time="19:30", end_time="19:33",
     )
     assert operations.set_pacing_mode(PacingMode.AUTOMATIC)
 
     for action, values in (
-        ("set_pacing_window", {"start_epoch": 10_000, "end_epoch": 10_119}),
+        ("set_pacing_window", {"start_time": "19:30", "end_time": "19:31"}),
         ("set_part_seconds", {"part_id": part_id, "planned_seconds": 181}),
         ("add_part", {"title": "Too long", "planned_seconds": 61}),
     ):
@@ -138,21 +138,23 @@ def test_custom_budget_edits_are_atomic_and_running_window_survives_reopen(timer
         assert error.value.requested_seconds > error.value.available_seconds
         assert repository.load_schedule(schedule_id) == schedule
 
+    expected_end_1 = int(datetime(2026, 11, 25, 19, 33).timestamp())
+    expected_end_2 = int(datetime(2026, 11, 25, 20, 2).timestamp())
     assert operations.select_custom_schedule(schedule_id)
     assert operations.start_part(part_id)
     now[0] += 45
     restored, _, _ = open_profile()
     assert restored.engine.snapshot(now=now[0]).remaining_seconds == 135
-    assert restored.pacing_state(now[0]).projection.end_epoch == 10_180
+    assert restored.pacing_state(now[0]).projection.end_epoch == expected_end_1
     assert restored.stop_part(part_id)
     changed = _edit(
-        restored, schedule_id, "set_pacing_window", start_epoch=20_000, end_epoch=20_120,
+        restored, schedule_id, "set_pacing_window", start_time="20:00", end_time="20:02",
     )
-    assert restored.pacing_state(now[0]).projection.end_epoch == 10_180
+    assert restored.pacing_state(now[0]).projection.end_epoch == expected_end_1
     duplicate = restored.duplicate_custom_schedule(schedule_id, "Copy", changed.revision)
     assert duplicate.pacing_window == changed.pacing_window and duplicate.pacing_run is None
     assert restored.reset_all()
-    assert restored.pacing_state(now[0]).projection.end_epoch == 20_120
+    assert restored.pacing_state(now[0]).projection.end_epoch == expected_end_2
 
 
 def test_adding_a_part_reopens_the_forecast_of_a_completed_schedule(timer_runtime):
@@ -160,7 +162,7 @@ def test_adding_a_part_reopens_the_forecast_of_a_completed_schedule(timer_runtim
     operations, _, _ = open_profile()
     schedule_id = operations.create_custom_schedule("Training").id
     schedule = _edit(operations, schedule_id, "add_part", title="Talk", planned_seconds=60)
-    _edit(operations, schedule_id, "set_pacing_window", start_epoch=10_000, end_epoch=10_120)
+    _edit(operations, schedule_id, "set_pacing_window", start_time="19:30", end_time="19:32")
     assert operations.select_custom_schedule(schedule_id)
     assert operations.start_part(schedule.parts[0].id)
     now[0] += 60
@@ -171,7 +173,7 @@ def test_adding_a_part_reopens_the_forecast_of_a_completed_schedule(timer_runtim
     restored, _, _ = open_profile()
     forecast = restored.pacing_state(now[0]).projection
     assert not forecast.complete
-    assert forecast.projected_end_epoch == 10_120
+    assert forecast.projected_end_epoch == int(datetime(2026, 11, 25, 19, 32).timestamp())
 
 
 def test_meeting_window_uses_profile_slot_for_untimed_weeks_and_freezes_on_start(timer_runtime):
@@ -186,10 +188,11 @@ def test_meeting_window_uses_profile_slot_for_untimed_weeks_and_freezes_on_start
 
     operations, _, settings = open_profile(meeting_schedule=load_settings)
     schedule = operations.session.schedule
-    start = datetime(2026, 11, 25, 19, 30)
-    assert schedule.pacing_window.start_epoch == start.timestamp()
-    assert schedule.pacing_window.end_epoch == (start + timedelta(minutes=105)).timestamp()
-    original = schedule.pacing_window
+    assert schedule.pacing_window.start_time == "19:30"
+    assert schedule.pacing_window.end_time == "21:15"
+    # Unstarted meeting resolves to today's date even if held on another weekday (e.g. Tuesday).
+    tuesday_start = int(datetime(2026, 11, 24, 19, 30).timestamp())
+    assert operations.pacing_state(tuesday_start).projection.end_epoch == tuesday_start + 105 * 60
 
     operations.navigate_week("previous")
     assert operations.session.schedule.pacing_window is None
@@ -200,22 +203,29 @@ def test_meeting_window_uses_profile_slot_for_untimed_weeks_and_freezes_on_start
     time_text[0] = "20:00"
     assert operations.refresh_meeting_window()
     updated = operations.session.schedule.pacing_window
-    assert updated.start_epoch == original.start_epoch + 1800
+    assert updated.start_time == "20:00"
+    assert updated.end_time == "21:45"
     with pytest.raises(TimerDurationBudgetError):
         operations.set_part_seconds(part.id, 6300)
     assert part.planned_seconds == 120
 
-    now[0] = updated.start_epoch + 60
+    now[0] = int(datetime(2026, 11, 25, 20, 1).timestamp())
     assert operations.start_part(part.id)
     now[0] += 60
     assert operations.stop_part(part.id)
-    assert operations.reset_part(part.id)
+    # While a recorded result exists, profile schedule changes do not alter the run's window.
     time_text[0] = "20:30"
     assert not operations.refresh_meeting_window()
     repository = QSettingsTimerRepository(settings)
     assert repository.load_schedule(_WEEK, MeetingType.MIDWEEK).pacing_window == updated
+
+    # Once every recorded part is reset back to idle, the meeting window syncs with the profile again.
+    assert operations.reset_part(part.id)
+    assert operations.session.schedule.pacing_run is None
+    assert operations.session.schedule.pacing_window.start_time == "20:30"
+    assert repository.load_schedule(_WEEK, MeetingType.MIDWEEK).pacing_window.start_time == "20:30"
     operations.navigate_week("next")
-    assert operations.session.schedule.pacing_window.start_epoch == updated.start_epoch + 7 * 86400 + 1800
+    assert operations.session.schedule.pacing_window.start_time == "20:30"
 
 
 def test_existing_timing_and_historical_over_budget_plan_are_preserved(timer_runtime):
@@ -253,10 +263,10 @@ def test_custom_window_can_cross_midnight(timer_runtime):
     open_profile, _ = timer_runtime
     operations, _, _ = open_profile()
     schedule = operations.create_custom_schedule("Midnight")
-    start = int(datetime(2026, 11, 24, 23, 55, tzinfo=UTC).timestamp())
-    end = int(datetime(2026, 11, 25, 0, 5, tzinfo=UTC).timestamp())
+    start = int(datetime(2026, 11, 24, 23, 55).timestamp())
+    end = int(datetime(2026, 11, 25, 0, 5).timestamp())
     schedule = _edit(
-        operations, schedule.id, "set_pacing_window", start_epoch=start, end_epoch=end,
+        operations, schedule.id, "set_pacing_window", start_time="23:55", end_time="00:05",
     )
     assert schedule.pacing_window.duration_seconds == 600
     schedule = _edit(operations, schedule.id, "add_part", title="Part", planned_seconds=600)
@@ -272,7 +282,7 @@ def test_custom_transition_estimates_follow_part_ids_and_survive_duplication(tim
         schedule = _edit(operations, schedule.id, "add_part", title=title, planned_seconds=100)
     first, second = schedule.parts
     schedule = _edit(
-        operations, schedule.id, "set_pacing_window", start_epoch=10_000, end_epoch=10_500,
+        operations, schedule.id, "set_pacing_window", start_time="19:30", end_time="19:39",
         untracked_seconds=300,
     )
     schedule = _edit(
@@ -299,24 +309,24 @@ def test_duration_edits_must_fit_frozen_window_until_reset(timer_runtime):
     open_profile, _ = timer_runtime
     operations, _, _ = open_profile()
     schedule = operations.create_custom_schedule("Two runs")
-    schedule = _edit(operations, schedule.id, "add_part", title="Opening", planned_seconds=100)
-    schedule = _edit(operations, schedule.id, "add_part", title="Second", planned_seconds=100)
+    schedule = _edit(operations, schedule.id, "add_part", title="Opening", planned_seconds=120)
+    schedule = _edit(operations, schedule.id, "add_part", title="Second", planned_seconds=120)
     first, second = schedule.parts
     schedule = _edit(
-        operations, schedule.id, "set_pacing_window", start_epoch=10_000, end_epoch=10_200,
+        operations, schedule.id, "set_pacing_window", start_time="19:30", end_time="19:34",
     )
     assert operations.select_custom_schedule(schedule.id)
     assert operations.start_part(first.id)
     assert operations.stop_part(first.id)
     schedule = _edit(
-        operations, schedule.id, "set_pacing_window", start_epoch=10_000, end_epoch=10_900,
+        operations, schedule.id, "set_pacing_window", start_time="19:30", end_time="19:45",
     )
     with pytest.raises(TimerDurationBudgetError) as error:
-        operations.set_part_seconds(second.id, 800)
-    assert error.value.available_seconds == 200
+        operations.set_part_seconds(second.id, 720)
+    assert error.value.available_seconds == 240
     assert operations.get_custom_schedule(schedule.id) == schedule
     assert operations.reset_all()
-    assert operations.set_part_seconds(second.id, 800)
+    assert operations.set_part_seconds(second.id, 720)
 
 
 def test_opening_unreadable_meeting_does_not_replace_persisted_record(timer_runtime):

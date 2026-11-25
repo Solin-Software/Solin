@@ -17,6 +17,7 @@ from .custom_schedule import (
     TimerOperationError,
     duplicate_custom_schedule,
     edit_custom_schedule,
+    replace_custom_schedule_entries,
     validate_title,
 )
 from .models import (
@@ -364,6 +365,27 @@ class TimerSession:
             self._schedule = candidate
         return True
 
+    def replace_custom_schedule_entries(
+        self,
+        schedule_id: str,
+        expected_revision: int,
+        draft_entries: list[dict[str, object]],
+    ) -> bool:
+        schedule = self._require_custom_schedule(schedule_id, expected_revision)
+        candidate = deepcopy(schedule)
+        replace_custom_schedule_entries(candidate, draft_entries)
+        if candidate == schedule:
+            return False
+        _require_duration_budget(
+            candidate,
+            previous_total=schedule.planned_total_seconds(),
+            include_execution_window=True,
+        )
+        self._save_custom_revision(candidate)
+        if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
+            self._schedule = candidate
+        return True
+
     def refresh_meeting_window(self) -> bool:
         schedule = self._schedule
         return isinstance(schedule, MeetingSchedule) and self._update_meeting_window(schedule, self._week_monday)
@@ -380,16 +402,41 @@ class TimerSession:
     def _update_meeting_window(self, schedule: MeetingSchedule, week_monday: date) -> bool:
         if (
             self._meeting_schedule is None or week_monday < self._current_week()
-            or schedule.has_unreadable_record or schedule_has_timing_data(schedule)
+            or schedule.has_unreadable_record
         ):
             return False
-        occurrence = self._meeting_schedule().occurrence_in_week(week_monday, schedule.meeting_type.value)
+        # Heal an orphaned empty pacing_run left behind after resetting every part.
+        cleared_orphan_run = False
+        if (
+            schedule.pacing_run is not None
+            and not schedule.pacing_run.reached_ids
+            and not any(
+                part.state is not PartState.IDLE
+                or part.started_at_epoch is not None
+                or part.first_started_epoch is not None
+                or abs(part.accumulated_seconds) > 0.0001
+                for part in schedule.parts
+            )
+        ):
+            schedule.pacing_run = None
+            cleared_orphan_run = True
+        if schedule_has_timing_data(schedule):
+            return False
+        slot = next(
+            (item for item in self._meeting_schedule().slots if item.kind == schedule.meeting_type.value),
+            None,
+        )
         window = None
-        if occurrence is not None and schedule.planned_total_seconds() <= REGULAR_MEETING_DURATION_SECONDS:
-            start = int(occurrence.starts_at.timestamp())
-            window = PacingWindow(start, start + REGULAR_MEETING_DURATION_SECONDS)
+        if (
+            slot is not None
+            and slot.start_minutes is not None
+            and schedule.planned_total_seconds() <= REGULAR_MEETING_DURATION_SECONDS
+        ):
+            window = PacingWindow.from_start_and_duration(
+                slot.time_text, REGULAR_MEETING_DURATION_SECONDS
+            )
         previous = schedule.pacing_window
-        if window == previous:
+        if window == previous and not cleared_orphan_run:
             return False
         schedule.pacing_window = window
         try:
