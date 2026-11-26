@@ -1,15 +1,4 @@
-"""
-timer_bridge.py — Solin
-=======================
-The QObject that exposes the timer domain to the QML timer tab and receives the
-operator's actions. It is the single seam between the pure domain
-(:mod:`solin.core.timer`) and the UI — and the natural place a *future* local
-network adapter would hook in, since every action funnels through here and every
-view is built from serializable domain objects.
-
-It presents a ``TimerSession`` and delegates scheduling, persistence, monitor
-reservation, PDF export, and fullscreen output to explicitly injected adapters.
-"""
+"""QML adapter for the profile timer and its projection controls."""
 
 from __future__ import annotations
 
@@ -19,41 +8,32 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QDateTime, QObject, Property, Signal, Slot
 
-from solin.core.i18n.date import format_time_with_seconds, week_label
+from solin.controllers.timer_operations import TimerOperations
+from solin.core.i18n.date import week_label
 from solin.core.i18n.meeting_schedule import (
     meeting_kind_label,
     meeting_weekday_names,
 )
+from solin.core.i18n.timer_schedule_view import parts_model_for_schedule
 from solin.core.jw.language_context import jw_media_language_context
 from solin.core.meetings.meeting_weeks import current_monday
-from solin.core.meetings.section_meta import SECTION_META
 from solin.core.timer.application import (
     DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE,
     AssignmentAutofillScope,
     DetectedPartTiming,
-    TimerSession,
 )
+from solin.core.timer.custom_schedule import TimerOperationError
 from solin.core.timer.models import (
     ANALOG_CLOCK_STYLE_OPTIONS,
-    CONFIGURABLE_PART_SECTIONS,
     CLOCK_MODE_OPTIONS,
     MEDIA_COUNTDOWN_PRESENTATION_OPTIONS,
     PART_TIMER_DISPLAY_OPTIONS,
-    ClockConfig,
     MeetingType,
     PartKind,
-    PartState,
     Section,
 )
-from solin.core.timer.schedule_factory import (
-    configurable_count_for,
-)
-from solin.core.i18n.timer_part_titles import display_part_title
-from solin.core.meetings.colors import section_colors
-from solin.core.timer.part_titles import is_indexed_part_title_source
 from solin.controllers.timer_monitor_controller import TimerMonitorController
 from solin.controllers.timer_pdf_export_controller import TimerPdfExportController
-from solin.styles.theme import current_theme_scheme
 
 if TYPE_CHECKING:
     from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
@@ -65,118 +45,10 @@ else:
     _QVARIANT = "QVariant"
 
 
-# Stable key per section — used by the QML to translate the header (via the
-# shared ``_Section`` translation context) and to pick its colour + SVG icon.
-_SECTION_KEYS = {
-    Section.OPENING_COMMENTS: "opening_comments",
-    Section.TREASURES: "treasures",
-    Section.MINISTRY: "ministry",
-    Section.LIVING: "living",
-    Section.CONCLUDING_COMMENTS: "concluding_comments",
-    Section.PUBLIC_TALK: "public_talk",
-    Section.WATCHTOWER: "watchtower",
-}
-
-_SECTION_CODES = {
-    Section.OPENING_COMMENTS: "opening_comments",
-    Section.TREASURES: "tgw",
-    Section.MINISTRY: "ayfm",
-    Section.LIVING: "lac",
-    Section.CONCLUDING_COMMENTS: "concluding_comments",
-    Section.PUBLIC_TALK: "public_talk",
-    Section.WATCHTOWER: "wt",
-}
-
-_STANDALONE_SECTIONS = {
-    Section.OPENING_COMMENTS,
-    Section.CONCLUDING_COMMENTS,
-}
-
 log = logging.getLogger(__name__)
 
 _MIN_MANUAL_COUNTDOWN_SECONDS = 10
 _MAX_MANUAL_COUNTDOWN_SECONDS = 24 * 60 * 60 - 1
-
-
-def section_palette(section: Section) -> dict[str, str]:
-    code = _SECTION_CODES.get(section, "")
-    hue = SECTION_META.get(code, ("", 215))[1]
-    colors = section_colors(hue, current_theme_scheme())
-    return {
-        "accent": colors["accent"],
-        "text": colors["text"],
-        "badge": colors["badge"],
-        "border": colors["border"],
-    }
-
-
-def _fmt_mmss(seconds: float) -> str:
-    total = int(round(abs(seconds)))
-    sign = "-" if seconds < 0 else ""
-    h, rem = divmod(total, 3600)
-    m, s = divmod(rem, 60)
-    if h > 0:
-        return f"{sign}{h}:{m:02d}:{s:02d}"
-    return f"{sign}{m:02d}:{s:02d}"
-
-
-def _fmt_total(seconds: float) -> str:
-    """A compact section-total label: '30 min' on whole minutes, else 'MM:SS'."""
-    s = int(round(seconds))
-    if s % 60 == 0:
-        return f"{s // 60} min"
-    return _fmt_mmss(s)
-
-
-def _started_label(epoch: float | None, time_format: str = "HH:mm:ss") -> str:
-    if epoch is None:
-        return ""
-    return format_time_with_seconds(epoch, time_format)
-
-
-def parts_model_for_schedule(schedule, time_format: str = "HH:mm:ss") -> list[dict]:
-    rows = []
-    seen_sections: set[str] = set()
-    section_positions: dict[Section, int] = {}
-    for number, p in enumerate(schedule.parts, start=1):
-        section = p.section
-        section_position = section_positions.get(section, 0) + 1
-        section_positions[section] = section_position
-        first = section.value not in seen_sections
-        seen_sections.add(section.value)
-        palette = section_palette(section)
-        indexed_number: int | None = None
-        if is_indexed_part_title_source(p.title):
-            indexed_number = section_position
-        show_section_header = section not in _STANDALONE_SECTIONS
-        rows.append({
-            "id": p.id,
-            "section": section.value,
-            "sectionKey": _SECTION_KEYS.get(section, section.value),
-            "sectionColor": palette["accent"],
-            "sectionTextColor": palette["text"],
-            "sectionBadgeBg": palette["badge"],
-            "sectionBorderColor": palette["border"],
-            "title": display_part_title(p, indexed_number=indexed_number),
-            "displayNumber": number,
-            "plannedSeconds": p.planned_seconds,
-            "plannedLabel": _fmt_mmss(p.planned_seconds),
-            "state": p.state.value,
-            "firstOfSection": first,
-            "showSectionHeader": show_section_header,
-            "configurableCount": section in CONFIGURABLE_PART_SECTIONS,
-            "sectionCount": configurable_count_for(schedule, section),
-            "sectionTotalLabel": (
-                _fmt_total(schedule.section_total_seconds(section))
-                if show_section_header
-                else ""
-            ),
-            "startedLabel": _started_label(p.first_started_epoch, time_format),
-            "resultLabel": (
-                _fmt_mmss(p.accumulated_seconds) if p.state is PartState.STOPPED else ""
-            ),
-        })
-    return rows
 
 
 class TimerBridge(QObject):
@@ -202,8 +74,7 @@ class TimerBridge(QObject):
     def __init__(
         self,
         *,
-        engine,
-        session: TimerSession,
+        operations: TimerOperations,
         output,
         monitors: TimerMonitorController,
         hand_alert: TimerHandAlertController,
@@ -215,22 +86,21 @@ class TimerBridge(QObject):
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._engine = engine
-        self._session = session
+        self.operations = operations
+        self._session = operations.session
         self._output = output
         self._monitors = monitors
         self._hand_alert = hand_alert
         self._pdf_export = pdf_export
         self._media_countdown_automation = media_countdown_automation
         self._language_manager = language_manager
-        self._clock_config: ClockConfig = session.clock_config
-        self._schedule = session.schedule
-        self._live: dict = {}
+        self._live = operations.engine.snapshot().to_dict()
         self._workbook_lookup = workbook_lookup
         self._assignment_scope = assignment_scope
         self._timer_page_visible = False
         self._assignments_mode_active = False
         self._assignment_lookup_deferred = False
+        self._assignment_context = (self._session.week_monday, self._session.meeting_type)
         self._assignment_target: tuple[date, str] | None = None
         self._assignment_generation = 0
         if workbook_lookup is not None:
@@ -242,15 +112,14 @@ class TimerBridge(QObject):
                     self._refresh_assignment_lookup
                 )
 
-        self._engine.state_changed.connect(self._on_engine_state)
-        self._engine.schedule_mutated.connect(self._record_live_schedule_change)
-        self._engine.tick.connect(self._on_engine_tick)
+        operations.engine.state_changed.connect(self._on_engine_state)
+        operations.engine.tick.connect(self._on_engine_tick)
+        operations.context_changed.connect(self._on_context_changed)
+        operations.clock_changed.connect(self.clockConfigChanged)
         self._hand_alert.controls_changed.connect(self.manualHandChanged)
         self._media_countdown_automation.state_changed.connect(
             self.mediaCountdownChanged
         )
-
-        self._engine.set_schedule(self._schedule)
 
     # ── Exposed: manual hand alert ──────────────────────────────────────────
 
@@ -268,15 +137,14 @@ class TimerBridge(QObject):
 
     # ── Schedule lifecycle ─────────────────────────────────────────────────
 
-    def _replace_schedule(self, schedule) -> None:
-        if (
-            schedule.week_monday != self._schedule.week_monday
-            or schedule.meeting_type is not self._schedule.meeting_type
-        ):
+    @Slot(int)
+    def _on_context_changed(self, direction: int) -> None:
+        context = (self._session.week_monday, self._session.meeting_type)
+        if context != self._assignment_context:
             self._assignment_lookup_deferred = False
-        self._schedule = schedule
-        self._engine.set_schedule(schedule)
-        self._refresh_assignment_lookup()
+            self._assignment_context = context
+        self.weekChanged.emit()
+        self.weekShift.emit(direction)
 
     def set_timer_page_visible(self, visible: bool) -> None:
         self._timer_page_visible = visible
@@ -342,15 +210,13 @@ class TimerBridge(QObject):
             for part in workbook.parts
         )
         try:
-            applied = self._session.apply_detected_assignments(
+            self.operations.apply_detected_assignments(
                 current_week, timings, self._assignment_scope,
             )
         except (OSError, RuntimeError, ValueError):
             log.warning("Could not adopt detected timer assignments for %s", self._assignment_target,
                         exc_info=True)
             return
-        if applied:
-            self._replace_schedule(self._session.schedule)
 
     def refresh_language(self) -> None:
         self.scheduleChanged.emit()
@@ -362,12 +228,9 @@ class TimerBridge(QObject):
         self.clockConfigChanged.emit()
         self.monitorsChanged.emit()
 
-    def _record_live_schedule_change(self) -> None:
-        self._session.record_schedule_change()
-        self._refresh_assignment_lookup()
-
     def _on_engine_state(self, snapshot: dict) -> None:
         self._live = snapshot
+        self._refresh_assignment_lookup()
         self.scheduleChanged.emit()
         self.liveStateChanged.emit()
 
@@ -378,12 +241,7 @@ class TimerBridge(QObject):
     # ── Exposed: schedule model ────────────────────────────────────────────
 
     def _parts_model(self) -> list:
-        time_format = getattr(
-            self._language_manager,
-            "time_with_seconds_format",
-            "HH:mm:ss",
-        )
-        return parts_model_for_schedule(self._schedule, time_format)
+        return parts_model_for_schedule(self._session.schedule, self.operations.time_format)
 
     parts = Property(_QVARIANT, _parts_model, notify=scheduleChanged)
 
@@ -411,24 +269,15 @@ class TimerBridge(QObject):
 
     @Slot()
     def previousWeek(self) -> None:
-        schedule = self._session.previous_week()
-        self.weekChanged.emit()
-        self.weekShift.emit(-1)
-        self._replace_schedule(schedule)
+        self._apply_command(self.operations.navigate_week, "previous")
 
     @Slot()
     def nextWeek(self) -> None:
-        schedule = self._session.next_week()
-        self.weekChanged.emit()
-        self.weekShift.emit(+1)
-        self._replace_schedule(schedule)
+        self._apply_command(self.operations.navigate_week, "next")
 
     @Slot()
     def goToCurrentWeek(self) -> None:
-        direction = self._session.go_to_current_week(current_monday())
-        self.weekChanged.emit()
-        self.weekShift.emit(direction)
-        self._replace_schedule(self._session.schedule)
+        self._apply_command(self.operations.navigate_week, "current")
 
     @Slot(str)
     def setMeetingType(self, value: str) -> None:
@@ -436,19 +285,10 @@ class TimerBridge(QObject):
             mt = MeetingType(value)
         except ValueError:
             return
-        if not self._session.set_meeting_type(mt):
-            return
-        self.weekChanged.emit()
-        self.weekShift.emit(0)   # switch midweek/weekend with a pure fade
-        self._replace_schedule(self._session.schedule)
+        self._apply_command(self.operations.set_meeting_type, mt)
 
     @Slot()
     def exportSchedulePdf(self) -> None:
-        time_format = getattr(
-            self._language_manager,
-            "time_with_seconds_format",
-            "HH:mm:ss",
-        )
         date_format = getattr(
             self._language_manager,
             "date_format",
@@ -459,41 +299,35 @@ class TimerBridge(QObject):
             else self.tr("Midweek")
         )
         self._pdf_export.export(
-            self._schedule,
+            self._session.schedule,
             week_label=self._week_label(),
             meeting_type_label=meeting_type_label,
             date_format=date_format,
-            time_format=time_format,
+            time_format=self.operations.time_format,
+            pacing_mode=self._session.pacing_mode,
         )
 
     # ── Exposed: part editing ──────────────────────────────────────────────
 
     @Slot(str)
     def startPart(self, part_id: str) -> None:
-        self._engine.start_part(part_id)
+        self._apply_command(self.operations.start_part, part_id)
 
     @Slot(str)
     def stopPart(self, part_id: str) -> None:
-        self._engine.stop_part(part_id)
+        self._apply_command(self.operations.stop_part, part_id)
 
     @Slot(str)
     def resetPart(self, part_id: str) -> None:
-        self._engine.reset_part(part_id)
+        self._apply_command(self.operations.reset_part, part_id)
 
     @Slot(str, int)
     def adjustPart(self, part_id: str, delta_seconds: int) -> None:
-        part = self._schedule.part_by_id(part_id)
-        if part is not None and part.state is PartState.RUNNING:
-            self._engine.adjust_elapsed(part_id, int(delta_seconds))
-        elif self._session.adjust_part(part_id, int(delta_seconds)):
-            self._refresh_assignment_lookup()
-            self.scheduleChanged.emit()
+        self._apply_command(self.operations.adjust_part, part_id, delta_seconds)
 
     @Slot(str, int)
     def setPartSeconds(self, part_id: str, seconds: int) -> None:
-        if self._session.set_part_seconds(part_id, int(seconds)):
-            self._refresh_assignment_lookup()
-            self.scheduleChanged.emit()
+        self._apply_command(self.operations.set_part_seconds, part_id, seconds)
 
     @Slot(str, int)
     def setSectionCount(self, section: str, count: int) -> None:
@@ -501,13 +335,20 @@ class TimerBridge(QObject):
             sec = Section(section)
         except ValueError:
             return
-        if self._session.set_section_count(sec, int(count)):
-            self._replace_schedule(self._session.schedule)
+        self._apply_command(self.operations.set_section_count, sec, count)
+
+    def _apply_command(self, command, *args) -> None:
+        try:
+            command(*args)
+        except TimerOperationError as error:
+            log.warning("Timer command rejected: %s", error)
+        except (OSError, RuntimeError):
+            log.warning("Could not apply timer command", exc_info=True)
 
     # ── Exposed: clock config ──────────────────────────────────────────────
 
     def _clock_model(self) -> dict:
-        return self._clock_config.to_dict()
+        return self._session.clock_config.to_dict()
 
     clockConfig = Property(_QVARIANT, _clock_model, notify=clockConfigChanged)
 
@@ -540,12 +381,7 @@ class TimerBridge(QObject):
 
     @Slot(str, "QVariant")
     def updateClock(self, key: str, value) -> None:
-        config = self._session.update_clock(key, value)
-        if config is None:
-            return
-        self._clock_config = config
-        self._output.set_clock_config(self._clock_config)
-        self.clockConfigChanged.emit()
+        self._apply_command(self.operations.update_clock, key, value)
 
     # ── Exposed: monitors ──────────────────────────────────────────────────
 

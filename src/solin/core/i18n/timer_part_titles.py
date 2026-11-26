@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
 
-from ..timer.models import MeetingPart
+from ..timer.models import TimerPart
 from ..timer.part_titles import is_indexed_part_title_source, is_static_part_title_source
 
 _TR_CTX = "_TimerPart"
@@ -39,7 +39,12 @@ def format_indexed_part_title(source: str, number: int) -> str:
     return template.replace("{number}", str(max(1, int(number))))
 
 
-def display_part_title(part: MeetingPart, *, indexed_number: int | None = None) -> str:
+def display_part_title(part: TimerPart, *, indexed_number: int | None = None) -> str:
+    override = part.title_override
+    if override is not None:
+        return override
+    if not part.uses_canonical_title:
+        return part.title
     if is_indexed_part_title_source(part.title) and indexed_number is not None:
         return format_indexed_part_title(part.title, indexed_number)
 

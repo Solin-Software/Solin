@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,11 +21,11 @@ from PySide6.QtGui import (
 )
 
 from ..i18n.date import format_datetime, format_time_with_seconds
-from ..i18n.timer_part_titles import display_part_title
-from ..meetings.colors import section_colors
-from ..meetings.section_meta import SECTION_META
-from ..timer.models import MeetingSchedule, MeetingType, PartState, Section
-from ..timer.part_titles import is_indexed_part_title_source
+from ..i18n.timer_schedule_view import parts_model_for_schedule
+from ..meetings.colors import section_colors_from_hex
+from ..timer.models import CustomTimerSchedule, MeetingSchedule, MeetingType, PartState, Section
+from ..timer.pacing import pacing_snapshot
+from ..timer.pacing_models import PacingMode
 
 
 _TR_CTX = "TimerPdfExport"
@@ -49,33 +50,22 @@ _TIMER_PDF_EXPORT_SOURCES = (
     QT_TRANSLATE_NOOP("TimerPdfExport", "Generated"),
     QT_TRANSLATE_NOOP("TimerPdfExport", "Within time"),
     QT_TRANSLATE_NOOP("TimerPdfExport", "Over time"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Planned start"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Planned end"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Estimated end"),
+    QT_TRANSLATE_NOOP("TimerPdfExport", "Adjusted"),
 )
-
-_SECTION_CODES = {
-    Section.OPENING_COMMENTS: "opening_comments",
-    Section.TREASURES: "tgw",
-    Section.MINISTRY: "ayfm",
-    Section.LIVING: "lac",
-    Section.CONCLUDING_COMMENTS: "concluding_comments",
-    Section.PUBLIC_TALK: "public_talk",
-    Section.WATCHTOWER: "wt",
-}
-
-_STANDALONE_SECTIONS = {
-    Section.OPENING_COMMENTS,
-    Section.CONCLUDING_COMMENTS,
-}
-
 
 @dataclass(frozen=True)
 class TimerPdfRow:
     number: int
-    section: Section
+    section: Section | str | None
     show_section_header: bool
     section_label: str
     section_color: str
     title: str
     planned_label: str
+    adjusted_label: str
     started_label: str
     finished_label: str
     result_label: str
@@ -91,18 +81,6 @@ class TimerPdfSummary:
 
 def _tr(text: str) -> str:
     return QCoreApplication.translate(_TR_CTX, text)
-
-
-def _section_label(section: Section) -> str:
-    code = _SECTION_CODES.get(section, "")
-    source = SECTION_META.get(code, (section.value, 215))[0]
-    return QCoreApplication.translate("_Section", source)
-
-
-def _section_color(section: Section) -> str:
-    code = _SECTION_CODES.get(section, "")
-    hue = SECTION_META.get(code, ("", 215))[1]
-    return section_colors(hue)["accent"]
 
 
 def _fmt_duration(seconds: float) -> str:
@@ -127,20 +105,27 @@ def _rounded_delta_seconds(elapsed_seconds: float, planned_seconds: int) -> int:
     return int(round(elapsed_seconds - planned_seconds))
 
 
+def _includes_pacing(schedule: MeetingSchedule | CustomTimerSchedule, enabled: bool) -> bool:
+    return enabled and schedule.effective_pacing_window is not None
+
+
 def build_timer_pdf_summary(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     *,
     now_epoch: float | None = None,
+    include_pacing: bool = False,
 ) -> TimerPdfSummary:
-    """Count completed parts that stayed within the planned time vs. over time."""
+    """Count completed parts by whether they met their report target."""
     now = time.time() if now_epoch is None else float(now_epoch)
+    show_pacing = _includes_pacing(schedule, include_pacing)
     within_time = 0
     over_time = 0
 
     for part in schedule.parts:
         if part.state is not PartState.STOPPED:
             continue
-        if _rounded_delta_seconds(part.elapsed(now), part.planned_seconds) <= 0:
+        target = part.effective_seconds if show_pacing else part.planned_seconds
+        if _rounded_delta_seconds(part.elapsed(now), target) <= 0:
             within_time += 1
         else:
             over_time += 1
@@ -149,25 +134,25 @@ def build_timer_pdf_summary(
 
 
 def build_timer_pdf_rows(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     *,
     now_epoch: float | None = None,
     time_format: str = "HH:mm:ss",
+    include_pacing: bool = False,
 ) -> list[TimerPdfRow]:
     """Build stable, testable rows for the timer PDF export."""
     now = time.time() if now_epoch is None else float(now_epoch)
+    show_pacing = _includes_pacing(schedule, include_pacing)
     rows: list[TimerPdfRow] = []
-    section_positions: dict[Section, int] = {}
-    for number, part in enumerate(schedule.parts, start=1):
-        section_position = section_positions.get(part.section, 0) + 1
-        section_positions[part.section] = section_position
-        indexed_number: int | None = None
-        if is_indexed_part_title_source(part.title):
-            indexed_number = section_position
-        show_section_header = part.section not in _STANDALONE_SECTIONS
+    presentation = parts_model_for_schedule(schedule, time_format)
+    for part, view in zip(schedule.parts, presentation, strict=True):
+        section = part.section if isinstance(part.section, Section) else part.section_id
 
-        started_epoch = part.first_started_epoch
+        started_epoch = part.actual_started_epoch if show_pacing else part.first_started_epoch
+        if started_epoch is None:
+            started_epoch = part.first_started_epoch
         elapsed = part.elapsed(now)
+        target = part.effective_seconds if show_pacing else part.planned_seconds
 
         started_label = (
             format_time_with_seconds(started_epoch, time_format)
@@ -180,26 +165,33 @@ def build_timer_pdf_rows(
 
         if part.state is PartState.RUNNING:
             result_label = _fmt_duration(elapsed)
-            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, part.planned_seconds))
+            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, target))
             finished_label = _tr("In progress")
             status_label = _tr("Running")
         elif part.state is PartState.STOPPED:
             result_label = _fmt_duration(elapsed)
-            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, part.planned_seconds))
-            if started_epoch is not None:
-                finished_label = format_time_with_seconds(started_epoch + elapsed, time_format)
+            delta_label = _fmt_delta(_rounded_delta_seconds(elapsed, target))
+            finished_epoch = part.actual_stopped_epoch if show_pacing else None
+            if finished_epoch is None and part.first_started_epoch is not None:
+                finished_epoch = part.first_started_epoch + elapsed
+            if finished_epoch is not None:
+                finished_label = format_time_with_seconds(finished_epoch, time_format)
             status_label = _tr("Completed")
         else:
             status_label = _tr("Not started")
 
         rows.append(TimerPdfRow(
-            number=number,
-            section=part.section,
-            show_section_header=show_section_header,
-            section_label=_section_label(part.section),
-            section_color=_section_color(part.section),
-            title=display_part_title(part, indexed_number=indexed_number),
+            number=view["displayNumber"],
+            section=section,
+            show_section_header=view["showSectionHeader"],
+            section_label=view["sectionTitle"],
+            section_color=view["sectionColor"],
+            title=view["title"],
             planned_label=_fmt_duration(part.planned_seconds),
+            adjusted_label=(
+                _fmt_duration(part.effective_seconds)
+                if show_pacing and part.effective_seconds != part.planned_seconds else ""
+            ),
             started_label=started_label,
             finished_label=finished_label,
             result_label=result_label,
@@ -209,7 +201,10 @@ def build_timer_pdf_rows(
     return rows
 
 
-def default_pdf_filename(schedule: MeetingSchedule) -> str:
+def default_pdf_filename(schedule: MeetingSchedule | CustomTimerSchedule) -> str:
+    if not isinstance(schedule, MeetingSchedule):
+        name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", schedule.title).strip(" .")
+        return f"Solin timer {name or 'schedule'}.pdf"
     meeting = "midweek" if schedule.meeting_type is MeetingType.MIDWEEK else "weekend"
     return f"Solin timer {schedule.week_monday} {meeting}.pdf"
 
@@ -295,11 +290,61 @@ class _PdfPainter:
         self.new_page(title, meta)
         self.draw_table_header(columns)
 
+    _SECTION_STRIP_ALPHA = 24
+    _MIN_TEXT_CONTRAST = 4.5
+    _FALLBACK_TEXT_COLOR = "#111827"
+
+    @staticmethod
+    def _relative_luminance(color: QColor) -> float:
+        def _channel(value: float) -> float:
+            return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+        return (
+            0.2126 * _channel(color.redF())
+            + 0.7152 * _channel(color.greenF())
+            + 0.0722 * _channel(color.blueF())
+        )
+
+    @classmethod
+    def _contrast_ratio(cls, first: QColor, second: QColor) -> float:
+        lighter, darker = sorted(
+            (cls._relative_luminance(first), cls._relative_luminance(second)), reverse=True,
+        )
+        return (lighter + 0.05) / (darker + 0.05)
+
+    @classmethod
+    def _section_strip_background(cls, accent: QColor) -> QColor:
+        """Opaque equivalent of the translucent accent strip painted on the white page."""
+        alpha = cls._SECTION_STRIP_ALPHA / 255.0
+        return QColor.fromRgbF(
+            1.0 - alpha + alpha * accent.redF(),
+            1.0 - alpha + alpha * accent.greenF(),
+            1.0 - alpha + alpha * accent.blueF(),
+        )
+
+    @classmethod
+    def _section_text_color(cls, accent: QColor) -> QColor:
+        """Derive a WCAG-AA-readable text color on the section strip, independent of UI theme."""
+        if not accent.isValid():
+            return QColor(cls._FALLBACK_TEXT_COLOR)
+        background = cls._section_strip_background(accent)
+        candidate = QColor(section_colors_from_hex(accent.name(), "light")["text"])
+        hue = max(0.0, candidate.hslHueF())
+        saturation = max(0.0, candidate.hslSaturationF())
+        lightness = candidate.lightnessF()
+        while cls._contrast_ratio(background, candidate) < cls._MIN_TEXT_CONTRAST:
+            lightness -= 0.04
+            if lightness <= 0.0:
+                return QColor(cls._FALLBACK_TEXT_COLOR)
+            candidate = QColor.fromHslF(hue, saturation, lightness)
+        return candidate
+
     def draw_section(self, label: str, color: str, total_label: str) -> None:
         accent = QColor(color)
         rect = QRectF(self.margin, self.y, self.width - self.margin * 2, 24)
-        self.rounded_rect(rect, QColor(accent.red(), accent.green(), accent.blue(), 24), "#e5e7eb", 6)
-        self.painter.setPen(accent)
+        strip = QColor(accent.red(), accent.green(), accent.blue(), self._SECTION_STRIP_ALPHA)
+        self.rounded_rect(rect, strip, "#e5e7eb", 6)
+        self.painter.setPen(self._section_text_color(accent))
         self.painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.painter.drawText(rect.adjusted(10, 2, -10, -2), Qt.AlignmentFlag.AlignVCenter, label)
         self.painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
@@ -340,11 +385,26 @@ class _PdfPainter:
                 color = "#047857"
             self.painter.setPen(QColor(color))
             text = metrics.elidedText(value, Qt.TextElideMode.ElideRight, max(10, int(width - 16)))
+            text_rect = QRectF(x + 8, self.y + 3, width - 16, row_h - 6)
+            if idx == 2 and row.adjusted_label:
+                text_rect.setHeight(row_h / 2 - 2)
             self.painter.drawText(
-                QRectF(x + 8, self.y + 3, width - 16, row_h - 6),
+                text_rect,
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                 text,
             )
+            if idx == 2 and row.adjusted_label:
+                self.painter.setFont(QFont("Segoe UI", 7))
+                adjusted = f'{row.adjusted_label} · {_tr("Adjusted")}'
+                adjusted = QFontMetricsF(self.painter.font()).elidedText(
+                    adjusted, Qt.TextElideMode.ElideRight, max(10, int(width - 16))
+                )
+                self.painter.drawText(
+                    QRectF(x + 8, self.y + row_h / 2, width - 16, row_h / 2 - 2),
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                    adjusted,
+                )
+                self.painter.setFont(QFont("Segoe UI", 9))
             x += width
         self.y += row_h
 
@@ -366,7 +426,7 @@ class _PdfPainter:
 
 
 def export_schedule_pdf(
-    schedule: MeetingSchedule,
+    schedule: MeetingSchedule | CustomTimerSchedule,
     path: str | Path,
     *,
     week_label: str,
@@ -375,29 +435,40 @@ def export_schedule_pdf(
     time_format: str = "HH:mm:ss",
     generated_epoch: float | None = None,
     now_epoch: float | None = None,
+    pacing_mode: PacingMode = PacingMode.OFF,
 ) -> None:
     """Render ``schedule`` to a polished PDF at ``path``."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
 
     generated = time.time() if generated_epoch is None else float(generated_epoch)
-    rows = build_timer_pdf_rows(schedule, now_epoch=now_epoch, time_format=time_format)
+    now = time.time() if now_epoch is None else float(now_epoch)
+    include_pacing = pacing_mode is not PacingMode.OFF
+    rows = build_timer_pdf_rows(
+        schedule, now_epoch=now, time_format=time_format, include_pacing=include_pacing
+    )
 
-    summary = build_timer_pdf_summary(schedule, now_epoch=now_epoch)
+    summary = build_timer_pdf_summary(schedule, now_epoch=now, include_pacing=include_pacing)
+    pacing = (
+        pacing_snapshot(schedule, now, automatic=pacing_mode is PacingMode.AUTOMATIC)
+        if _includes_pacing(schedule, include_pacing) else None
+    )
 
-    title = _tr("Meeting timer report")
+    title = _tr("Meeting timer report") if isinstance(schedule, MeetingSchedule) else schedule.title
     meta = (
         _tr("{meeting_type} - {week}")
         .replace("{meeting_type}", meeting_type_label)
         .replace("{week}", week_label)
     )
+    if not isinstance(schedule, MeetingSchedule):
+        meta = ""
     generated_label = format_datetime(generated, date_format)
+    totals: dict[Section | str | None, int] = {}
+    for row, part in zip(rows, schedule.parts, strict=True):
+        totals[row.section] = totals.get(row.section, 0) + part.planned_seconds
     section_totals = {
-        section: _tr("Total {time}").replace(
-            "{time}",
-            _fmt_duration(schedule.section_total_seconds(section)),
-        )
-        for section in {row.section for row in rows}
+        section: _tr("Total {time}").replace("{time}", _fmt_duration(total))
+        for section, total in totals.items()
     }
 
     pdf = _PdfPainter(target)
@@ -422,20 +493,26 @@ def export_schedule_pdf(
             (_tr("Within time"), str(summary.within_time_count)),
             (_tr("Over time"), str(summary.over_time_count)),
         ])
+        if pacing is not None:
+            pdf.draw_summary([
+                (_tr("Planned start"), format_datetime(pacing.start_epoch, date_format)),
+                (_tr("Planned end"), format_datetime(pacing.end_epoch, date_format)),
+                (_tr("Estimated end"), format_datetime(pacing.adjusted_end_epoch, date_format)),
+            ])
         pdf.draw_table_header(columns)
 
-        last_section: Section | None = None
+        last_section: Section | str | None = None
         shaded = False
         for row in rows:
-            if row.show_section_header and row.section is not last_section:
+            if row.show_section_header and row.section != last_section:
                 pdf.ensure_space(66, title, meta, columns)
                 pdf.draw_section(
                     row.section_label,
                     row.section_color,
                     section_totals.get(row.section, ""),
                 )
-                last_section = row.section
                 shaded = False
+            last_section = row.section
             pdf.ensure_space(38, title, meta, columns)
             pdf.draw_row(row, columns, shaded=shaded)
             shaded = not shaded

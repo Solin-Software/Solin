@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 import uuid
+import threading
 
 import pytest
 
@@ -14,13 +16,27 @@ from solin.core.timer.models import (
     MIN_SECTION_PART_COUNT,
 )
 from solin.core.remote_control.timer.contracts import (
+    CreateCustomScheduleCommand,
+    EditCustomScheduleCommand,
+    DeleteCustomScheduleCommand,
+    DuplicateCustomScheduleCommand,
+    SelectCustomScheduleCommand,
+    SelectMeetingScheduleCommand,
+    RenamePartCommand,
+    ResetAllCommand,
+    CustomSchedulePartWireItem,
+    CustomScheduleSectionWireItem,
+    CustomScheduleWireItem,
+    PacingTransitionsWireSnapshot,
     AdjustPartCommand,
     NavigateWeekCommand,
     ResetPartCommand,
     SetMeetingTypeCommand,
+    SetPacingModeCommand,
     SetPartSecondsCommand,
     SetSectionCountCommand,
     StartPartCommand,
+    TimerPacingWireSnapshot,
     StopPartCommand,
     TimerCommandError,
     TimerCommandErrorCode,
@@ -35,7 +51,340 @@ from solin.core.remote_control.timer.state import (
     RemoteTimerStateStore,
     TimerCommandSession,
 )
-from solin.core.timer.models import Direction, MeetingType, PartState, Section
+from solin.core.timer.models import CustomSectionIcon, Direction, MeetingType, PartState, Section
+from solin.core.timer.pacing import PacingAvailability
+from solin.core.timer.pacing_models import PacingMode
+
+
+def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
+    cid = str(uuid.uuid4())
+    commands = [
+        CreateCustomScheduleCommand(cid, 2, "Event"),
+        EditCustomScheduleCommand(cid, 2, "s", 3, "add_part", title="Part", planned_seconds=1),
+        EditCustomScheduleCommand(cid, 2, "s", 3, "move_part", part_id="p", before_id="q"),
+        DeleteCustomScheduleCommand(cid, 2, "s", 3),
+        DuplicateCustomScheduleCommand(cid, 2, "s", 3, "Copy"),
+        SelectCustomScheduleCommand(cid, 2, "s", 3),
+        SelectMeetingScheduleCommand(cid, 2),
+        RenamePartCommand(cid, 2, "p", None),
+        ResetAllCommand(cid, 2),
+        SetPartSecondsCommand(cid, 2, "p", 1),
+    ]
+    for command in commands:
+        assert parse_timer_command(command.to_dict()) == command
+    with pytest.raises(ValueError):
+        EditCustomScheduleCommand(cid, 2, "s", 3, "delete_part", part_id="p", title="extra")
+    with pytest.raises(ValueError):
+        EditCustomScheduleCommand(cid, 2, "s", 3, "move_section", section_id=None)
+    with pytest.raises((TypeError, ValueError)):
+        parse_timer_command(
+            {**commands[1].to_dict(), "values": {"title": "x", "planned_seconds": True}}
+        )
+
+
+def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
+    command_id = str(uuid.uuid4())
+    commands = (
+        SetPacingModeCommand(command_id, 0, PacingMode.AUTOMATIC),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_pacing_window",
+            start_time="19:30", end_time="20:30",
+            untracked_seconds=30,
+        ),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_pacing_window",
+            start_time=None, end_time=None,
+        ),
+        EditCustomScheduleCommand(
+            command_id, 0, "schedule", 1, "set_adjustment_weight",
+            part_id="part", adjustment_weight=100,
+        ),
+    )
+    for command in commands:
+        assert parse_timer_command(command.to_dict()) == command
+
+    payload = commands[1].to_dict()
+    for values in (
+        {"start_time": "19:30"},
+        {"start_time": "19:30", "end_time": None},
+        {"start_time": None, "end_time": "20:30"},
+        {"start_time": "19:30", "end_time": "19:30"},
+        {"start_time": None, "end_time": None, "untracked_seconds": 30},
+        {"start_time": True, "end_time": "20:30"},
+        {"start_time": "25:00", "end_time": "20:30"},
+        {"start_time": "19:30", "end_time": "20:30", "untracked_seconds": -1},
+        {"start_time": "19:30", "end_time": "20:30", "untracked_seconds": True},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**payload, "values": values})
+    nullable = {"start_time": None, "end_time": None, "untracked_seconds": None}
+    assert parse_timer_command({**payload, "values": nullable}) == commands[2]
+    with pytest.raises(ValueError):
+        parse_timer_command({**commands[0].to_dict(), "mode": "invalid"})
+    for bad_weight in (-1, 101):
+        with pytest.raises((TypeError, ValueError)):
+            EditCustomScheduleCommand(
+                command_id, 0, "schedule", 1, "set_adjustment_weight",
+                part_id="part", adjustment_weight=bad_weight,
+            )
+
+    disabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(can_manage_custom_schedules=True)
+        )
+    )
+    for command in commands:
+        assert disabled.validate_command_preconditions(command).code is TimerCommandErrorCode.BLOCKED
+
+    enabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(
+                can_manage_custom_schedules=True, can_manage_pacing=True
+            )
+        )
+    )
+    for command in commands:
+        assert enabled.validate_command_preconditions(command) is None
+    stale = replace(commands[0], schedule_revision=1)
+    assert enabled.validate_command_preconditions(stale).code is TimerCommandErrorCode.SCHEDULE_STALE
+
+
+def test_transition_edit_contract_and_capabilities() -> None:
+    command = EditCustomScheduleCommand(
+        str(uuid.uuid4()), 0, "schedule", 1, "set_pacing_transition",
+        before_part_id=None, estimated_seconds=None,
+    )
+    assert parse_timer_command(command.to_dict()) == command
+    for values in (
+        {}, {"before_part_id": None}, {"estimated_seconds": None},
+        {"before_part_id": "", "estimated_seconds": 1},
+        {"before_part_id": "part", "estimated_seconds": True},
+        {"before_part_id": "part", "estimated_seconds": -1},
+        {"before_part_id": "part", "estimated_seconds": 1, "extra": 1},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**command.to_dict(), "values": values})
+    for custom, pacing in ((False, False), (True, False), (False, True), (True, True)):
+        capabilities = TimerControlCapabilities(
+            can_manage_custom_schedules=custom, can_manage_pacing=pacing,
+        )
+        assert capabilities.allows_command(command) is (custom and pacing)
+
+
+def test_transition_catalog_wire_data_is_immutable() -> None:
+    transitions = PacingTransitionsWireSnapshot((("part", 60),), 300)
+    schedule = CustomScheduleWireItem("id", "Event", 1, ())
+    assert "pacingConfig" not in schedule.to_dict()
+    configured = replace(schedule, start_time="19:30", end_time="20:30", transitions=transitions)
+    data = configured.to_dict()
+    data["pacingConfig"]["transitions"]["before_parts"]["part"] = 0
+    assert configured.to_dict()["pacingConfig"]["transitions"] == {
+        "before_parts": {"part": 60}, "closing_seconds": 300,
+    }
+    assert "transitions" not in replace(configured, transitions=None).to_dict()["pacingConfig"]
+
+
+def test_pacing_wire_snapshot_is_immutable_and_readable_without_edit_permission() -> None:
+    assert "pacing" not in TimerScheduleWireSnapshot.empty().to_dict()
+    schedule = replace(
+        TimerScheduleWireSnapshot.empty(),
+        pacing=TimerPacingWireSnapshot(50, 200, False, 100, 100, 0, 0, 30),
+        pacing_mode=PacingMode.MONITOR,
+        pacing_availability=PacingAvailability.READY,
+    )
+    payload = schedule.to_dict()
+    assert payload["capabilities"]["managePacing"] is False
+    assert payload["pacingMode"] == "monitor"
+    payload["pacing"]["end_epoch"] = 999
+    assert schedule.to_dict()["pacing"]["end_epoch"] == 200
+    store = RemoteTimerStateStore(schedule=schedule)
+    assert store.update_schedule(schedule).schedule_revision == 0
+
+
+def test_custom_snapshot_keeps_empty_sections_progress_and_policy() -> None:
+    part = CustomSchedulePartWireItem("p", "Part", 1, PartState.RUNNING, 12.0, 100.0, 120.0)
+    custom = CustomScheduleWireItem(
+        "s", "Event", 4, (CustomScheduleSectionWireItem("empty", "Empty", ()), part)
+    )
+    state = RemoteTimerStateStore(
+        schedule=replace(
+            TimerScheduleWireSnapshot.empty(),
+            custom_schedule=custom,
+        )
+    )
+    cid = str(uuid.uuid4())
+    assert (
+        state.validate_command_preconditions(StartPartCommand(cid, 0, "p")).code
+        is TimerCommandErrorCode.BLOCKED
+    )
+    assert state.schedule.to_dict()["capabilities"]["manageCustomSchedules"] is False
+    assert "customSchedule" not in state.schedule.to_dict()
+    assert custom.to_dict()["entries"][0]["parts"] == []
+    assert custom.to_dict()["entries"][0]["icon"] == "default"
+    assert custom.to_dict()["entries"][1]["startedAtEpoch"] == 120.0
+    with pytest.raises(ValueError):
+        CustomSchedulePartWireItem("p", "Part", 1, PartState.RUNNING)
+
+
+def test_section_icon_contract_validates_choices_and_uses_custom_schedule_permissions() -> None:
+    cid = str(uuid.uuid4())
+    for icon in (CustomSectionIcon.DEFAULT, CustomSectionIcon.BOOK, CustomSectionIcon.NONE):
+        command = EditCustomScheduleCommand(
+            cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=icon,
+        )
+        assert parse_timer_command(command.to_dict()) == command
+
+    base = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=CustomSectionIcon.BOOK,
+    ).to_dict()
+    for bad_values in (
+        {"section_id": "sec-1"},
+        {"icon": "book"},
+        {"section_id": "sec-1", "icon": "bogus"},
+        {"section_id": "sec-1", "icon": None},
+        {"section_id": "sec-1", "icon": True},
+        {"section_id": "sec-1", "icon": "book", "title": "extra"},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**base, "values": bad_values})
+
+    disabled = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty())
+    command = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_icon", section_id="sec-1", icon=CustomSectionIcon.NONE,
+    )
+    assert disabled.validate_command_preconditions(command).code is TimerCommandErrorCode.BLOCKED
+
+    enabled = RemoteTimerStateStore(
+        schedule=TimerScheduleWireSnapshot.empty(
+            capabilities=TimerControlCapabilities(can_manage_custom_schedules=True)
+        )
+    )
+    assert enabled.validate_command_preconditions(command) is None
+    assert (
+        enabled.validate_command_preconditions(replace(command, schedule_revision=1)).code
+        is TimerCommandErrorCode.SCHEDULE_STALE
+    )
+
+    section_wire = CustomScheduleSectionWireItem(
+        "sec-1", "Study", (), icon=CustomSectionIcon.TREASURES, color="#41b6c4",
+    )
+    assert section_wire.to_dict()["icon"] == "treasures"
+    assert section_wire.to_dict()["color"] == "#41b6c4"
+    with pytest.raises(TypeError):
+        CustomScheduleSectionWireItem("sec-1", "Study", (), icon="book")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        CustomScheduleSectionWireItem("sec-1", "Study", (), color="bad")
+
+    for color in ("#41b6c4", None):
+        color_cmd = EditCustomScheduleCommand(
+            cid, 0, "schedule-1", 1, "set_section_color", section_id="sec-1", color=color,
+        )
+        assert parse_timer_command(color_cmd.to_dict()) == color_cmd
+        assert disabled.validate_command_preconditions(color_cmd).code is TimerCommandErrorCode.BLOCKED
+        assert enabled.validate_command_preconditions(color_cmd) is None
+
+    color_base = EditCustomScheduleCommand(
+        cid, 0, "schedule-1", 1, "set_section_color", section_id="sec-1", color="#41b6c4",
+    ).to_dict()
+    assert parse_timer_command({**color_base, "values": {"section_id": "sec-1", "color": "default"}}).color is None
+    for bad_values in (
+        {"section_id": "sec-1"},
+        {"section_id": "sec-1", "color": "red"},
+        {"section_id": "sec-1", "color": 123},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**color_base, "values": bad_values})
+
+
+def test_custom_command_gate_checks_revision_and_replays_results() -> None:
+    caps = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=True)
+    )
+    state = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty(capabilities=caps))
+    session = TimerCommandSession(state)
+    command = CreateCustomScheduleCommand(str(uuid.uuid4()), 0, "Event")
+    assert session.prepare(command).should_execute
+    result = session.complete_success(command)
+    state.update_schedule(replace(state.schedule, week_label="changed"))
+    assert session.prepare(command).result == result
+    assert (
+        session.prepare(replace(command, title="Different")).result.error.code
+        is TimerCommandErrorCode.COMMAND_ID_CONFLICT
+    )
+    stale = session.prepare(replace(command, command_id=str(uuid.uuid4())))
+    assert stale.result.error.code is TimerCommandErrorCode.SCHEDULE_STALE
+
+
+def test_atomic_snapshots_preserve_revisions_and_validate_before_publication() -> None:
+    state = RemoteTimerStateStore()
+    schedule = replace(state.schedule, week_label="context")
+    live = replace(state.live, active_part_title="context")
+    published = state.update_snapshots(schedule, live)
+    assert (
+        published.schedule_revision,
+        published.live_revision,
+        published.public_live_revision,
+    ) == (1, 1, 1)
+    assert state.update_snapshots(schedule, live) == published
+    with pytest.raises(TypeError):
+        state.update_snapshots(replace(schedule, week_label="mutated"), None)
+    assert state.snapshot() == published
+    changed = state.update_snapshots(replace(schedule, week_label="other"), live)
+    assert changed.schedule_revision == 2
+    assert changed.live_revision == published.live_revision
+    assert changed.public_live_revision == published.public_live_revision
+
+
+def test_atomic_snapshots_never_expose_mixed_contexts() -> None:
+    caps = TimerControlCapabilities(can_manage_custom_schedules=True)
+    state = RemoteTimerStateStore(schedule=TimerScheduleWireSnapshot.empty(capabilities=caps))
+    barrier = threading.Barrier(2)
+    done = threading.Event()
+    failures = []
+    writer_errors: list[BaseException] = []
+
+    def writer() -> None:
+        try:
+            barrier.wait(timeout=5)
+            for index in range(500):
+                label = str(index % 2)
+                schedule = replace(state.schedule, week_label=label)
+                live = replace(state.live, active_part_title=label)
+                state.update_snapshots(schedule, live)
+        except BaseException as error:  # noqa: BLE001 - surface thread errors to test thread
+            writer_errors.append(error)
+        finally:
+            done.set()
+
+    state.update_snapshots(
+        replace(state.schedule, week_label="0"),
+        replace(state.live, active_part_title="0"),
+    )
+    thread = threading.Thread(target=writer, daemon=True)
+    thread.start()
+    barrier.wait(timeout=5)
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        snapshot = state.snapshot()
+        if snapshot.schedule.week_label != snapshot.live.active_part_title:
+            failures.append(snapshot)
+            break
+        if done.is_set():
+            break
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert not writer_errors
+    assert not failures
+
+
+def test_custom_section_identity_serializes_without_enum_coercion() -> None:
+    for section in (None, "", "custom-section"):
+        assert (
+            replace(_part(), section=section, section_key=section or "").to_dict()["section"]
+            == section
+        )
+        live = TimerLiveWireSnapshot.idle(server_epoch_ms=1)
+        assert replace(live, active_section=section).to_dict()["activeSection"] == section
 
 
 def _part(part_id: str = "part-1", *, display_number: int = 1) -> TimerPartWireItem:
@@ -123,7 +472,7 @@ def test_parse_timer_command_round_trips_all_supported_command_types() -> None:
             "type": "set_part_seconds",
             "scheduleRevision": 0,
             "partId": "part-1",
-            "plannedSeconds": MIN_PLANNED_PART_SECONDS - 1,
+            "plannedSeconds": 0,
         },
         {
             "commandId": str(uuid.uuid4()),

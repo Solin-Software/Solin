@@ -9904,6 +9904,26 @@ Add one when you are ready.</source>
         <translation>保存先:
 {path}</translation>
     </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="51"/>
+        <source>Planned start</source>
+        <translation>予定開始</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="52"/>
+        <source>Planned end</source>
+        <translation>予定終了</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="53"/>
+        <source>Estimated end</source>
+        <translation>終了予測</translation>
+    </message>
+    <message>
+        <location filename="../../core/rendering/timer_report_pdf.py" line="54"/>
+        <source>Adjusted</source>
+        <translation>調整後</translation>
+    </message>
 </context>
 <context>
     <name>TimerProjection</name>

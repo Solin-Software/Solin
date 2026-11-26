@@ -13,6 +13,7 @@ from typing import Final
 
 from aiohttp import WSCloseCode, web
 
+from ...timer.models import Section
 from ..security import (
     InMemorySessionStore,
     LoginRateLimiter,
@@ -29,8 +30,18 @@ from ..server import (
     WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
     WEBSOCKET_HEARTBEAT_SECONDS,
 )
-from ..validation import JsonObject
+from ..validation import JsonObject, MAX_DISPLAY_TEXT_LENGTH
 from .contracts import (
+    CustomScheduleCatalogQuery,
+    CustomScheduleCatalogWireSnapshot,
+    CreateCustomScheduleCommand,
+    EditCustomScheduleCommand,
+    DeleteCustomScheduleCommand,
+    DuplicateCustomScheduleCommand,
+    SelectCustomScheduleCommand,
+    SelectMeetingScheduleCommand,
+    RenamePartCommand,
+    ResetAllCommand,
     TimerCommandError,
     TimerCommandErrorCode,
     TimerCommandResult,
@@ -51,7 +62,11 @@ _MAX_AUTH_WEBSOCKETS: Final = 16
 _MAX_PUBLIC_WEBSOCKETS: Final = 32
 _MAX_PUBLIC_WEBSOCKETS_PER_ADDRESS: Final = 6
 
-TimerCommandHandler = Callable[[TimerRemoteCommand], Awaitable[TimerCommandError | None]]
+TimerCommandHandler = Callable[[TimerRemoteCommand], Awaitable[TimerCommandError | str | None]]
+TimerCatalogHandler = Callable[
+    [CustomScheduleCatalogQuery],
+    Awaitable[CustomScheduleCatalogWireSnapshot | TimerCommandError | None],
+]
 
 
 def _default_clock_ms() -> int:
@@ -74,6 +89,7 @@ class TimerRemoteDependencies:
     profile_id: str = ""
     profile_name: str = ""
     clock_ms: Callable[[], int] = _default_clock_ms
+    catalog_handler: TimerCatalogHandler | None = None
 
 
 class _TimerSessionWebSocket(web.WebSocketResponse):
@@ -148,6 +164,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         app.router.add_get(f"{prefix}/api/public", self._public_bootstrap)
         app.router.add_get(f"{prefix}/api/ws/public", self._public_websocket)
         app.router.add_get(f"{prefix}/api/schedule", self._schedule)
+        app.router.add_get(f"{prefix}/api/custom-schedules", self._custom_schedules)
         app.router.add_post(f"{prefix}/api/commands", self._command)
         app.router.add_get(f"{prefix}/api/ws", self._auth_websocket)
 
@@ -209,9 +226,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             has_auth = bool(self._auth_websockets)
             if not has_public and not has_auth:
                 return
-            snapshot = self._dependencies.state.snapshot(
-                now_epoch_ms=self._dependencies.clock_ms()
-            )
+            snapshot = self._dependencies.state.snapshot(now_epoch_ms=self._dependencies.clock_ms())
             payload: JsonObject = {
                 **self._profile_payload(),
                 "controlAvailable": self.control_available(),
@@ -257,9 +272,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         await super().shutdown()
 
     def _bootstrap_payload(self, csrf_token: str, principal: str = "") -> JsonObject:
-        snapshot = self._dependencies.state.snapshot(
-            now_epoch_ms=self._dependencies.clock_ms()
-        )
+        snapshot = self._dependencies.state.snapshot(now_epoch_ms=self._dependencies.clock_ms())
         return {
             "authenticated": True,
             "controlAvailable": self.control_available(),
@@ -283,6 +296,8 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         payload = snapshot.live.to_dict()
         if not authenticated:
             payload["liveRevision"] = snapshot.public_live_revision
+            if not isinstance(snapshot.live.active_section, Section):
+                payload["activeSection"] = None
         hand_alert = hand_alert_payload(
             snapshot.hand_alert,
             self._dependencies.state.hand_alert_policy,
@@ -301,9 +316,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         token = request.cookies.get(self.cookie_name, "")
         has_valid_session = bool(token and self._sessions.resolve(token) is not None)
         setup = self._setup_payload()
-        snapshot = self._dependencies.state.snapshot(
-            now_epoch_ms=self._dependencies.clock_ms()
-        )
+        snapshot = self._dependencies.state.snapshot(now_epoch_ms=self._dependencies.clock_ms())
         return self._json_response(
             {
                 "authenticated": has_valid_session,
@@ -320,6 +333,31 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
     async def _schedule(self, request: web.Request) -> web.Response:
         self._require_session(request)
         return self._json_response(self._dependencies.state.schedule.to_dict())
+
+    async def _custom_schedules(self, request: web.Request) -> web.Response:
+        self._require_session(request)
+        snapshot = self._dependencies.state.snapshot()
+        if not snapshot.schedule.capabilities.can_manage_custom_schedules:
+            raise web.HTTPNotFound()
+        handler = self._dependencies.catalog_handler
+        if handler is None:
+            raise web.HTTPServiceUnavailable()
+        try:
+            result = await asyncio.wait_for(
+                handler(CustomScheduleCatalogQuery()), COMMAND_TIMEOUT_SECONDS
+            )
+        except Exception as error:  # noqa: BLE001 - catalog adapter boundary
+            log.warning("Custom timer catalog query failed: %s", type(error).__name__)
+            raise web.HTTPServiceUnavailable() from error
+        self._require_session(request)
+        snapshot = self._dependencies.state.snapshot()
+        if not snapshot.schedule.capabilities.can_manage_custom_schedules:
+            raise web.HTTPNotFound()
+        if isinstance(result, TimerCommandError):
+            return self._json_response({"error": result.to_dict()})
+        if not isinstance(result, CustomScheduleCatalogWireSnapshot):
+            raise web.HTTPServiceUnavailable()
+        return self._json_response(result.to_dict())
 
     async def _command(self, request: web.Request) -> web.Response:
         self._authorize_mutation(request)
@@ -352,22 +390,64 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         command: TimerRemoteCommand,
     ) -> TimerCommandResult:
         try:
-            command_error = await self._dependencies.command_handler(command)
+            if (
+                isinstance(
+                    command,
+                    (
+                        CreateCustomScheduleCommand,
+                        EditCustomScheduleCommand,
+                        DeleteCustomScheduleCommand,
+                        DuplicateCustomScheduleCommand,
+                        SelectCustomScheduleCommand,
+                        SelectMeetingScheduleCommand,
+                        RenamePartCommand,
+                        ResetAllCommand,
+                    ),
+                )
+                and self._dependencies.catalog_handler is None
+            ):
+                outcome = TimerCommandError(
+                    TimerCommandErrorCode.UNAVAILABLE, "Custom timer control is unavailable."
+                )
+            else:
+                outcome = await self._dependencies.command_handler(command)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 - desktop command adapter boundary
             log.exception("Remote timer command failed")
-            command_error = TimerCommandError(
+            outcome = TimerCommandError(
                 TimerCommandErrorCode.FAILED,
                 "The timer command could not be completed.",
             )
-        if command_error is None:
-            result = self._dependencies.command_session.complete_success(command)
-        else:
+        requires_created_id = isinstance(
+            command,
+            (CreateCustomScheduleCommand, DuplicateCustomScheduleCommand),
+        )
+        if isinstance(outcome, TimerCommandError):
             result = self._dependencies.command_session.complete_failure(
                 command,
-                command_error,
+                outcome,
             )
+        elif requires_created_id:
+            if (
+                isinstance(outcome, str)
+                and outcome.strip()
+                and len(outcome) <= MAX_DISPLAY_TEXT_LENGTH
+            ):
+                result = self._dependencies.command_session.complete_success(
+                    command,
+                    created_schedule_id=outcome,
+                )
+            else:
+                result = self._dependencies.command_session.complete_failure(
+                    command,
+                    TimerCommandError(
+                        TimerCommandErrorCode.FAILED,
+                        "The timer command did not return a created schedule ID.",
+                    ),
+                )
+        else:
+            result = self._dependencies.command_session.complete_success(command)
         try:
             await self.publish_snapshot()
         except Exception:  # noqa: BLE001 - snapshot fan-out must not alter command result
@@ -470,16 +550,17 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                         self._last_auth_schedule_revision,
                         snapshot.schedule_revision,
                     )
+                initial_payload: JsonObject = {
+                    "live": self._live_payload(snapshot, authenticated=True),
+                    "schedule": snapshot.schedule.to_dict(),
+                    "profile": self._profile_payload(),
+                    "controlAvailable": self.control_available(),
+                }
                 await self._send_auth(
                     socket,
                     self._auth_event(
                         "session.snapshot",
-                        {
-                            "live": self._live_payload(snapshot, authenticated=True),
-                            "schedule": snapshot.schedule.to_dict(),
-                            "profile": self._profile_payload(),
-                            "controlAvailable": self.control_available(),
-                        },
+                        initial_payload,
                         advance=False,
                         snapshot=snapshot,
                         sequence=self._event_sequence,
@@ -501,10 +582,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             current == address for current in self._public_websocket_addresses.values()
         )
         reserved_for_address = self._public_reservations.get(address, 0)
-        if (
-            len(self._public_websockets) + self._public_reservation_count
-            >= _MAX_PUBLIC_WEBSOCKETS
-        ):
+        if len(self._public_websockets) + self._public_reservation_count >= _MAX_PUBLIC_WEBSOCKETS:
             raise web.HTTPServiceUnavailable(text="Public viewer connection limit reached")
         if active_for_address + reserved_for_address >= _MAX_PUBLIC_WEBSOCKETS_PER_ADDRESS:
             raise web.HTTPTooManyRequests(text="Device viewer connection limit reached")
@@ -535,9 +613,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                     message=b"Remote service disabled",
                 )
                 return
-            snapshot = self._dependencies.state.snapshot(
-                now_epoch_ms=self._dependencies.clock_ms()
-            )
+            snapshot = self._dependencies.state.snapshot(now_epoch_ms=self._dependencies.clock_ms())
             await self._send_many_to_map(
                 self._public_websockets,
                 socket,
@@ -567,9 +643,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
             if self._sessions.resolve(session_token) is None:
                 await socket.close(code=4401, message=b"Session expired")
                 return
-            snapshot = self._dependencies.state.snapshot(
-                now_epoch_ms=self._dependencies.clock_ms()
-            )
+            snapshot = self._dependencies.state.snapshot(now_epoch_ms=self._dependencies.clock_ms())
             await self._send_auth(
                 socket,
                 {

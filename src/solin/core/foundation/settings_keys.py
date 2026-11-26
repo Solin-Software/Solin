@@ -94,6 +94,7 @@ class SettingsKey:
     AUTO_KEYS_ACTIONS: Final = "auto_keys/actions"
 
     TIMER_CLOCK_CONFIG: Final = "clock_config"
+    TIMER_PACING_MODE: Final = "pacing_mode"
     TIMER_VISIBLE: Final = "timer_visible"
     TIMER_LAST_MEETING_TYPE: Final = "last_meeting_type"
 

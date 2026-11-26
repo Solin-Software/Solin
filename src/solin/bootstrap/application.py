@@ -717,8 +717,9 @@ def _launch_profile_window(
 
     def build_main_window(main_window_class=None):
         from solin.core.meetings.meeting_weeks import current_monday
+        from solin.core.meetings.schedule_settings import MeetingScheduleSettingsStore
         from solin.core.timer.application import TimerSession
-        from solin.core.timer.infrastructure import QSettingsTimerRepository
+        from solin.core.timer.infrastructure import JsonCustomTimerRepository, QSettingsTimerRepository
 
         release_profile_owner = container.meeting_asset_lifecycle.register_profile_owner(profile_id)
 
@@ -730,6 +731,9 @@ def _launch_profile_window(
         timer_session = TimerSession(
             QSettingsTimerRepository.for_profile_settings(profile_context.settings),
             current_week_monday=current_monday(),
+            custom_repository=JsonCustomTimerRepository(profile_context.paths.timer_schedules_dir),
+            meeting_schedule=MeetingScheduleSettingsStore.for_profile_settings(profile_context.settings).load,
+            current_week=current_monday,
         )
         runtime = _build_main_window_runtime(
             lang_manager,

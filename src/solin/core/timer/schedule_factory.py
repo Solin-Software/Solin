@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from datetime import date
+from itertools import pairwise
 
 from .models import (
     MAX_PLANNED_PART_SECONDS,
     MIN_PLANNED_PART_SECONDS,
-    MeetingPart,
+    TimerPart,
     MeetingSchedule,
     MeetingType,
     PartKind,
     PartState,
     Section,
 )
+from .pacing_models import PacingTransitions
 from .part_titles import (
     BIBLE_READING_TITLE,
     CBS_TITLE,
@@ -49,18 +51,24 @@ _DEFAULT_PART_SECONDS = {
     Section.WATCHTOWER: 60 * 60,
 }
 _CBS_DEFAULT = 30 * 60
+_OPENING_SECONDS = 5 * 60
+_CLOSING_SECONDS = 5 * 60
+_WEEKEND_SONG_SECONDS = 5 * 60
+_MIDWEEK_SONG_SECONDS = 3 * 60 + 30
+_CHANGEOVER_SECONDS = 20
+_COUNSEL_SECONDS = 60
 
 
-def _default_part(section: Section, index: int) -> MeetingPart:
+def _default_part(section: Section, index: int) -> TimerPart:
     if section is Section.TREASURES and index < len(_TREASURES_DEFAULTS):
         title, seconds = _TREASURES_DEFAULTS[index]
     else:
         title, seconds = _default_title(section, index), _DEFAULT_PART_SECONDS[section]
-    return MeetingPart.new(section, title, seconds)
+    return TimerPart.new(section, title, seconds)
 
 
-def _cbs_part() -> MeetingPart:
-    return MeetingPart.new(
+def _cbs_part() -> TimerPart:
+    return TimerPart.new(
         Section.LIVING,
         CBS_TITLE,
         _CBS_DEFAULT,
@@ -80,11 +88,35 @@ def build_default_schedule(week_monday: date, meeting_type: MeetingType) -> Meet
     return MeetingSchedule(week_monday=week_monday.isoformat(), meeting_type=meeting_type, parts=parts)
 
 
-def _is_cbs_part(part: MeetingPart) -> bool:
+def meeting_pacing_transitions(schedule: MeetingSchedule) -> PacingTransitions:
+    """Estimate untimed meeting activities from the canonical order and roles."""
+    parts = schedule.parts
+    before = [(parts[0].id, _OPENING_SECONDS)] if parts else []
+    for previous, following in pairwise(parts):
+        seconds = None
+        if schedule.meeting_type is MeetingType.WEEKEND:
+            if previous.section is Section.PUBLIC_TALK and following.section is Section.WATCHTOWER:
+                seconds = _WEEKEND_SONG_SECONDS
+        elif following.section is Section.TREASURES:
+            seconds = _CHANGEOVER_SECONDS
+        elif following.section is Section.MINISTRY:
+            # The timer workbook data does not yet distinguish individual student assignments.
+            counsel = previous.section is Section.MINISTRY or previous.title == BIBLE_READING_TITLE
+            seconds = _CHANGEOVER_SECONDS + (_COUNSEL_SECONDS if counsel else 0)
+        elif following.section is Section.LIVING and previous.section is not Section.LIVING:
+            seconds = _MIDWEEK_SONG_SECONDS + (
+                _COUNSEL_SECONDS if previous.section is Section.MINISTRY else 0
+            )
+        if seconds is not None:
+            before.append((following.id, seconds))
+    return PacingTransitions(tuple(before), _CLOSING_SECONDS)
+
+
+def _is_cbs_part(part: TimerPart) -> bool:
     return part.section is Section.LIVING and (part.kind is PartKind.CBS or part.title == CBS_TITLE)
 
 
-def configurable_parts_in(schedule: MeetingSchedule, section: Section) -> list[MeetingPart]:
+def configurable_parts_in(schedule: MeetingSchedule, section: Section) -> list[TimerPart]:
     """Parts controlled by the section count."""
     if section is Section.LIVING:
         return [p for p in schedule.parts_in(section) if not _is_cbs_part(p)]
@@ -95,11 +127,11 @@ def configurable_count_for(schedule: MeetingSchedule, section: Section) -> int:
     return len(configurable_parts_in(schedule, section))
 
 
-def is_part_duration_editable(part: MeetingPart) -> bool:
+def is_part_duration_editable(part: TimerPart) -> bool:
     return part.state is PartState.IDLE
 
 
-def set_part_seconds(part: MeetingPart, seconds: int) -> bool:
+def set_part_seconds(part: TimerPart, seconds: int) -> bool:
     seconds = max(MIN_PLANNED_PART_SECONDS, min(int(seconds), MAX_PLANNED_PART_SECONDS))
     if not is_part_duration_editable(part) or part.planned_seconds == seconds:
         return False
@@ -127,10 +159,10 @@ def normalize_schedule(schedule: MeetingSchedule) -> bool:
 
 def schedule_has_timing_data(schedule: MeetingSchedule) -> bool:
     """True once any part has live or historical stopwatch data."""
-    return any(_part_has_timing_data(part) for part in schedule.parts)
+    return schedule.pacing_run is not None or any(_part_has_timing_data(part) for part in schedule.parts)
 
 
-def _part_has_timing_data(part: MeetingPart) -> bool:
+def _part_has_timing_data(part: TimerPart) -> bool:
     return (
         part.state is not PartState.IDLE
         or part.started_at_epoch is not None
@@ -235,6 +267,6 @@ def _default_insert_index(schedule: MeetingSchedule, section: Section) -> int:
     ]
     target_rank = order.index(section)
     for i, p in enumerate(schedule.parts):
-        if order.index(p.section) > target_rank:
+        if isinstance(p.section, Section) and order.index(p.section) > target_rank:
             return i
     return len(schedule.parts)

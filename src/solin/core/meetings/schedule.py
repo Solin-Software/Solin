@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, tzinfo
 from typing import Any
 
 MIDWEEK = "midweek"
@@ -11,6 +11,7 @@ WEEKEND = "weekend"
 UNCONFIGURED_WEEKDAY = -1
 DEFAULT_MIDWEEK_TIME = "19:30"
 DEFAULT_WEEKEND_TIME = "10:00"
+REGULAR_MEETING_DURATION_SECONDS = 105 * 60
 
 
 def normalize_weekday(value: Any) -> int:
@@ -67,6 +68,11 @@ class MeetingSlot:
     def time_text(self) -> str:
         return minutes_to_time_text(self.start_minutes)
 
+    def start_on(self, day: date, zone: tzinfo | None = None) -> datetime:
+        assert self.start_minutes is not None
+        hour, minute = divmod(self.start_minutes, 60)
+        return datetime.combine(day, time(hour, minute), tzinfo=zone)
+
     @classmethod
     def from_values(cls, kind: str, weekday: Any, time_text: Any) -> "MeetingSlot":
         return cls(
@@ -106,6 +112,14 @@ class MeetingSchedule:
     def slots(self) -> tuple[MeetingSlot, MeetingSlot]:
         return (self.midweek, self.weekend)
 
+    def occurrence_in_week(self, week_monday: date, kind: str) -> MeetingOccurrence | None:
+        """Resolve the profile's local meeting time for a specific program week."""
+        slot = next((item for item in self.slots if item.kind == kind), None)
+        if slot is None or not slot.is_configured:
+            return None
+        starts_at = slot.start_on(week_monday + timedelta(days=slot.weekday)).astimezone()
+        return MeetingOccurrence(slot, starts_at)
+
     def pre_meeting_occurrence(self, now: datetime) -> MeetingOccurrence | None:
         """Return today's next configured meeting if it has not started yet."""
 
@@ -113,12 +127,7 @@ class MeetingSchedule:
         for slot in self.slots:
             if not slot.is_configured or slot.weekday != now.weekday():
                 continue
-            assert slot.start_minutes is not None
-            starts_at = datetime.combine(
-                now.date(),
-                time(slot.start_minutes // 60, slot.start_minutes % 60),
-                tzinfo=now.tzinfo,
-            )
+            starts_at = slot.start_on(now.date(), now.tzinfo)
             if now < starts_at:
                 candidates.append(MeetingOccurrence(slot=slot, starts_at=starts_at))
         if not candidates:
@@ -132,14 +141,9 @@ class MeetingSchedule:
         for slot in self.slots:
             if not slot.is_configured:
                 continue
-            assert slot.start_minutes is not None
             days_ahead = (slot.weekday - now.weekday()) % 7
             meeting_date = now.date() + timedelta(days=days_ahead)
-            starts_at = datetime.combine(
-                meeting_date,
-                time(slot.start_minutes // 60, slot.start_minutes % 60),
-                tzinfo=now.tzinfo,
-            )
+            starts_at = slot.start_on(meeting_date, now.tzinfo)
             if starts_at <= now:
                 starts_at += timedelta(days=7)
             candidates.append(MeetingOccurrence(slot=slot, starts_at=starts_at))
@@ -151,6 +155,7 @@ __all__ = [
     "DEFAULT_MIDWEEK_TIME",
     "DEFAULT_WEEKEND_TIME",
     "MIDWEEK",
+    "REGULAR_MEETING_DURATION_SECONDS",
     "UNCONFIGURED_WEEKDAY",
     "WEEKEND",
     "MeetingOccurrence",

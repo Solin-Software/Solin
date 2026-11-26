@@ -11,10 +11,15 @@ from typing import ClassVar, Final, TypeAlias
 from ...timer.hand_alert import TimerHandAlert
 from ...timer.models import (
     CONFIGURABLE_PART_SECTIONS,
+    MAX_ADJUSTMENT_WEIGHT,
     MAX_PLANNED_PART_SECONDS,
     MAX_SECTION_PART_COUNT,
-    MIN_PLANNED_PART_SECONDS,
     MIN_SECTION_PART_COUNT,
+    MIN_CUSTOM_PART_SECONDS,
+    CustomSectionIcon,
+    normalize_section_color,
+    normalize_section_icon,
+    normalize_timer_title,
     AnalogClockStyle,
     ClockConfig,
     ClockMode,
@@ -24,6 +29,8 @@ from ...timer.models import (
     PartTimerDisplay,
     Section,
 )
+from ...timer.pacing import PacingAvailability, PacingSnapshot
+from ...timer.pacing_models import PacingMode, normalize_time_of_day
 from ..features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
     TimerRemoteFeatureFlags,
@@ -47,9 +54,24 @@ from ..validation import (
 
 __all__ = [
     "AdjustPartCommand",
+    "CreateCustomScheduleCommand",
+    "EditCustomScheduleCommand",
+    "DeleteCustomScheduleCommand",
+    "SelectCustomScheduleCommand",
+    "DuplicateCustomScheduleCommand",
+    "RenamePartCommand",
+    "ResetAllCommand",
+    "SelectMeetingScheduleCommand",
+    "CustomSchedulePartWireItem",
+    "CustomScheduleSectionWireItem",
+    "CustomScheduleWireItem",
+    "PacingTransitionsWireSnapshot",
+    "CustomScheduleCatalogWireSnapshot",
+    "CustomScheduleCatalogQuery",
     "NavigateWeekCommand",
     "ResetPartCommand",
     "SetMeetingTypeCommand",
+    "SetPacingModeCommand",
     "SetPartSecondsCommand",
     "SetSectionCountCommand",
     "StartPartCommand",
@@ -63,6 +85,7 @@ __all__ = [
     "TimerControlCapabilities",
     "TimerLiveWireSnapshot",
     "TimerPartWireItem",
+    "TimerPacingWireSnapshot",
     "TimerRemoteCommand",
     "TimerScheduleWireSnapshot",
     "TimerWeekTarget",
@@ -164,6 +187,8 @@ class TimerControlCapabilities:
     can_set_section_count: bool = True
     can_switch_meeting_type: bool = True
     can_navigate_weeks: bool = True
+    can_manage_custom_schedules: bool = False
+    can_manage_pacing: bool = False
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -173,6 +198,8 @@ class TimerControlCapabilities:
             "can_set_section_count",
             "can_switch_meeting_type",
             "can_navigate_weeks",
+            "can_manage_custom_schedules",
+            "can_manage_pacing",
         ):
             if not isinstance(getattr(self, field_name), bool):
                 raise TypeError(f"{field_name} must be a boolean")
@@ -189,9 +216,31 @@ class TimerControlCapabilities:
             can_set_section_count=flags.allow_schedule_structure_edits,
             can_switch_meeting_type=True,
             can_navigate_weeks=flags.allow_schedule_structure_edits,
+            can_manage_custom_schedules=flags.allow_custom_schedules,
+            can_manage_pacing=flags.allow_pacing,
         )
 
     def allows_command(self, command: TimerCommand) -> bool:
+        if isinstance(command, SetPacingModeCommand):
+            return self.can_manage_pacing
+        if isinstance(command, EditCustomScheduleCommand) and command.action in (
+            "set_pacing_window", "set_adjustment_weight", "set_pacing_transition"
+        ):
+            return self.can_manage_custom_schedules and self.can_manage_pacing
+        if isinstance(
+            command,
+            (
+                CreateCustomScheduleCommand,
+                EditCustomScheduleCommand,
+                DeleteCustomScheduleCommand,
+                SelectCustomScheduleCommand,
+                DuplicateCustomScheduleCommand,
+                SelectMeetingScheduleCommand,
+            ),
+        ):
+            return self.can_manage_custom_schedules
+        if isinstance(command, (RenamePartCommand, ResetAllCommand)):
+            return self.can_manage_custom_schedules and self.can_control_parts
         if isinstance(command, (StartPartCommand, StopPartCommand, ResetPartCommand)):
             return self.can_control_parts
         if isinstance(command, AdjustPartCommand):
@@ -209,7 +258,7 @@ class TimerControlCapabilities:
         return False
 
     def to_dict(self) -> JsonObject:
-        return {
+        result: JsonObject = {
             "controlParts": self.can_control_parts,
             "adjustPlannedMinutes": self.can_adjust_planned_minutes,
             "setPlannedSeconds": self.can_set_planned_seconds,
@@ -217,6 +266,9 @@ class TimerControlCapabilities:
             "switchMeetingType": self.can_switch_meeting_type,
             "navigateWeeks": self.can_navigate_weeks,
         }
+        result["manageCustomSchedules"] = self.can_manage_custom_schedules
+        result["managePacing"] = self.can_manage_pacing
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,7 +283,7 @@ class TimerLiveWireSnapshot:
     direction: Direction = Direction.DOWN
     active_part_id: str | None = None
     active_part_title: str = ""
-    active_section: Section | None = None
+    active_section: Section | str | None = None
     planned_seconds: int = 0
     elapsed_seconds: float = 0.0
     clock_config: TimerClockWireConfig = TimerClockWireConfig()
@@ -251,8 +303,10 @@ class TimerLiveWireSnapshot:
         if self.active_part_id is not None:
             require_identifier(self.active_part_id, field_name="active_part_id")
         require_string(self.active_part_title, field_name="active_part_title", allow_empty=True)
-        if self.active_section is not None and not isinstance(self.active_section, Section):
-            raise TypeError("active_section must be a Section or None")
+        if self.active_section is not None and not isinstance(self.active_section, str):
+            raise TypeError("active_section must be a string or None")
+        if self.active_section is not None:
+            require_string(self.active_section, field_name="active_section", allow_empty=True)
         require_nonnegative_int(self.planned_seconds, field_name="planned_seconds")
         elapsed = require_finite_float(self.elapsed_seconds, field_name="elapsed_seconds")
         if elapsed < 0.0:
@@ -342,7 +396,9 @@ class TimerLiveWireSnapshot:
             "direction": self.direction.value,
             "activePartId": self.active_part_id,
             "activePartTitle": self.active_part_title,
-            "activeSection": self.active_section.value if self.active_section else None,
+            "activeSection": self.active_section.value
+            if isinstance(self.active_section, Section)
+            else self.active_section,
             "plannedSeconds": self.planned_seconds,
             "elapsedSeconds": round(self.elapsed_seconds, 3),
             "clockConfig": self.clock_config.to_dict(),
@@ -353,7 +409,7 @@ class TimerLiveWireSnapshot:
 class TimerPartWireItem:
     id: str
     display_number: int
-    section: Section
+    section: Section | str | None
     section_key: str
     section_header_title: str
     title: str
@@ -368,20 +424,29 @@ class TimerPartWireItem:
     section_total_label: str = ""
     started_label: str = ""
     result_label: str = ""
+    effective_seconds: int | None = None
+    adjustment_weight: int = 0
+    section_icon_key: str = ""
 
     def __post_init__(self) -> None:
         require_identifier(self.id, field_name="id")
         require_nonnegative_int(self.display_number, field_name="display_number")
         if self.display_number < 1:
             raise ValueError("display_number must be positive")
-        if not isinstance(self.section, Section):
-            raise TypeError("section must be a Section")
-        require_identifier(self.section_key, field_name="section_key")
+        if self.section is not None and not isinstance(self.section, str):
+            raise TypeError("section must be a string or None")
+        if self.section is not None:
+            require_string(self.section, field_name="section", allow_empty=True)
+        require_string(self.section_key, field_name="section_key", allow_empty=True)
+        require_string(self.section_icon_key, field_name="section_icon_key", allow_empty=True)
         require_string(
             self.section_header_title, field_name="section_header_title", allow_empty=True
         )
         require_string(self.title, field_name="title")
         require_nonnegative_int(self.planned_seconds, field_name="planned_seconds")
+        if self.effective_seconds is not None:
+            require_nonnegative_int(self.effective_seconds, field_name="effective_seconds")
+        require_nonnegative_int(self.adjustment_weight, field_name="adjustment_weight")
         require_string(self.planned_label, field_name="planned_label")
         if not isinstance(self.state, PartState):
             raise TypeError("state must be a PartState")
@@ -399,11 +464,12 @@ class TimerPartWireItem:
         require_string(self.result_label, field_name="result_label", allow_empty=True)
 
     def to_dict(self) -> JsonObject:
-        return {
+        data: JsonObject = {
             "id": self.id,
             "displayNumber": self.display_number,
-            "section": self.section.value,
+            "section": self.section.value if isinstance(self.section, Section) else self.section,
             "sectionKey": self.section_key,
+            "sectionIconKey": self.section_icon_key,
             "sectionHeaderTitle": self.section_header_title,
             "title": self.title,
             "plannedSeconds": self.planned_seconds,
@@ -418,6 +484,241 @@ class TimerPartWireItem:
             "startedLabel": self.started_label,
             "resultLabel": self.result_label,
         }
+        if self.effective_seconds is not None:
+            data["effectiveSeconds"] = self.effective_seconds
+            data["adjustmentWeight"] = self.adjustment_weight
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class CustomSchedulePartWireItem:
+    id: str
+    title: str
+    planned_seconds: int
+    state: PartState = PartState.IDLE
+    elapsed_seconds: float = 0.0
+    first_started_epoch: float | None = None
+    started_at_epoch: float | None = None
+    effective_seconds: int | None = None
+    adjustment_weight: int = 0
+
+    def __post_init__(self) -> None:
+        require_identifier(self.id, field_name="id")
+        if normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+        require_int(self.planned_seconds, field_name="planned_seconds")
+        if self.effective_seconds is not None:
+            require_nonnegative_int(self.effective_seconds, field_name="effective_seconds")
+        require_nonnegative_int(self.adjustment_weight, field_name="adjustment_weight")
+        if not MIN_CUSTOM_PART_SECONDS <= self.planned_seconds <= MAX_PLANNED_PART_SECONDS:
+            raise ValueError("planned_seconds is out of range")
+        if not isinstance(self.state, PartState):
+            raise TypeError("state must be a PartState")
+        if require_finite_float(self.elapsed_seconds, field_name="elapsed_seconds") < 0:
+            raise ValueError("elapsed_seconds must not be negative")
+        if self.first_started_epoch is not None:
+            require_finite_float(self.first_started_epoch, field_name="first_started_epoch")
+        if self.started_at_epoch is not None:
+            require_finite_float(self.started_at_epoch, field_name="started_at_epoch")
+        if (self.state is PartState.RUNNING) != (self.started_at_epoch is not None):
+            raise ValueError("running state requires a start anchor")
+
+    def to_dict(self) -> JsonObject:
+        data: JsonObject = {
+            "type": "part",
+            "id": self.id,
+            "title": self.title,
+            "plannedSeconds": self.planned_seconds,
+            "state": self.state.value,
+            "elapsedSeconds": self.elapsed_seconds,
+            "firstStartedEpoch": self.first_started_epoch,
+            "startedAtEpoch": self.started_at_epoch,
+        }
+        if self.effective_seconds is not None:
+            data["effectiveSeconds"] = self.effective_seconds
+            data["adjustmentWeight"] = self.adjustment_weight
+        return data
+
+
+@dataclass(frozen=True, slots=True)
+class CustomScheduleSectionWireItem:
+    id: str
+    title: str
+    parts: tuple[CustomSchedulePartWireItem, ...]
+    icon: CustomSectionIcon = CustomSectionIcon.DEFAULT
+    color: str | None = None
+
+    def __post_init__(self) -> None:
+        require_identifier(self.id, field_name="id")
+        if normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+        if not isinstance(self.parts, tuple) or not all(
+            isinstance(p, CustomSchedulePartWireItem) for p in self.parts
+        ):
+            raise TypeError("parts must be a tuple of custom schedule parts")
+        if not isinstance(self.icon, CustomSectionIcon):
+            raise TypeError("icon must be a CustomSectionIcon")
+        if self.color is not None and normalize_section_color(self.color) != self.color:
+            raise ValueError("color must be a normalized hex color or None")
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "type": "section",
+            "id": self.id,
+            "title": self.title,
+            "icon": self.icon.value,
+            "color": self.color,
+            "parts": [part.to_dict() for part in self.parts],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PacingTransitionsWireSnapshot:
+    before_parts: tuple[tuple[str, int], ...]
+    closing_seconds: int | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.before_parts, tuple):
+            raise TypeError("before_parts must be a tuple")
+        ids: set[str] = set()
+        for item in self.before_parts:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise TypeError("transition estimates must be pairs")
+            part_id, seconds = item
+            require_identifier(part_id, field_name="part_id")
+            require_nonnegative_int(seconds, field_name="estimated_seconds")
+            if part_id in ids:
+                raise ValueError("transition part ids must be unique")
+            ids.add(part_id)
+        if self.closing_seconds is not None:
+            require_nonnegative_int(self.closing_seconds, field_name="closing_seconds")
+
+    def to_dict(self) -> JsonObject:
+        return {"before_parts": dict(self.before_parts), "closing_seconds": self.closing_seconds}
+
+
+@dataclass(frozen=True, slots=True)
+class CustomScheduleWireItem:
+    id: str
+    title: str
+    revision: int
+    entries: tuple[CustomSchedulePartWireItem | CustomScheduleSectionWireItem, ...]
+    start_time: str | None = None
+    end_time: str | None = None
+    untracked_seconds: int | None = None
+    transitions: PacingTransitionsWireSnapshot | None = None
+
+    def __post_init__(self) -> None:
+        require_identifier(self.id, field_name="id")
+        if normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+        require_nonnegative_int(self.revision, field_name="revision")
+        if (self.start_time is None) != (self.end_time is None):
+            raise ValueError("pacing configuration requires both window endpoints")
+        if self.start_time is not None:
+            if normalize_time_of_day(self.start_time) != self.start_time:
+                raise ValueError("start_time must be a normalized HH:MM string")
+        if self.end_time is not None:
+            if normalize_time_of_day(self.end_time) != self.end_time:
+                raise ValueError("end_time must be a normalized HH:MM string")
+            if self.start_time == self.end_time:
+                raise ValueError("end_time must differ from start_time")
+        if self.untracked_seconds is not None:
+            require_nonnegative_int(self.untracked_seconds, field_name="untracked_seconds")
+        if self.transitions is not None and not isinstance(self.transitions, PacingTransitionsWireSnapshot):
+            raise TypeError("transitions must be a pacing transitions snapshot")
+        _validate_custom_entries(self.entries)
+
+    def to_dict(self) -> JsonObject:
+        result: JsonObject = {
+            "id": self.id,
+            "title": self.title,
+            "revision": self.revision,
+            "entries": [entry.to_dict() for entry in self.entries],
+        }
+        if self.start_time is not None:
+            pacing_config: JsonObject = {
+                "start_time": self.start_time,
+                "end_time": self.end_time,
+                "untracked_seconds": self.untracked_seconds,
+            }
+            if self.transitions is not None:
+                pacing_config["transitions"] = self.transitions.to_dict()
+            result["pacingConfig"] = pacing_config
+        return result
+
+
+def _validate_custom_entries(
+    entries: tuple[CustomSchedulePartWireItem | CustomScheduleSectionWireItem, ...],
+) -> None:
+    if not isinstance(entries, tuple) or not all(
+        isinstance(e, (CustomSchedulePartWireItem, CustomScheduleSectionWireItem)) for e in entries
+    ):
+        raise TypeError("entries must be a tuple of custom schedule entries")
+    ids = [entry.id for entry in entries]
+    ids.extend(
+        part.id
+        for entry in entries
+        if isinstance(entry, CustomScheduleSectionWireItem)
+        for part in entry.parts
+    )
+    if len(ids) != len(set(ids)):
+        raise ValueError("custom schedule entry ids must be unique")
+
+
+@dataclass(frozen=True, slots=True)
+class CustomScheduleCatalogWireSnapshot:
+    schedules: tuple[CustomScheduleWireItem, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.schedules, tuple) or not all(
+            isinstance(s, CustomScheduleWireItem) for s in self.schedules
+        ):
+            raise TypeError("schedules must be a tuple of custom schedules")
+        if len({s.id for s in self.schedules}) != len(self.schedules):
+            raise ValueError("custom schedule ids must be unique")
+
+    def to_dict(self) -> JsonObject:
+        return {"schedules": [schedule.to_dict() for schedule in self.schedules]}
+
+
+@dataclass(frozen=True, slots=True)
+class CustomScheduleCatalogQuery:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class TimerPacingWireSnapshot:
+    """Stable projection anchors for authenticated clients to rebase locally."""
+
+    start_epoch: int
+    end_epoch: int
+    complete: bool
+    projection_anchor_epoch: float
+    projection_tail_seconds: float
+    available_shorten_seconds: int
+    available_extend_seconds: int
+    tolerance_seconds: int
+
+    @classmethod
+    def from_snapshot(cls, snapshot: PacingSnapshot) -> TimerPacingWireSnapshot:
+        return cls(
+            snapshot.start_epoch, snapshot.end_epoch, snapshot.complete,
+            snapshot.projection_anchor_epoch, snapshot.projection_tail_seconds,
+            snapshot.available_shorten_seconds, snapshot.available_extend_seconds, snapshot.tolerance_seconds,
+        )
+
+    def to_dict(self) -> JsonObject:
+        return {
+            "start_epoch": self.start_epoch,
+            "end_epoch": self.end_epoch,
+            "complete": self.complete,
+            "projection_anchor_epoch": self.projection_anchor_epoch,
+            "projection_tail_seconds": self.projection_tail_seconds,
+            "available_shorten_seconds": self.available_shorten_seconds,
+            "available_extend_seconds": self.available_extend_seconds,
+            "tolerance_seconds": self.tolerance_seconds,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -429,6 +730,10 @@ class TimerScheduleWireSnapshot:
     meeting_type: MeetingType
     parts: tuple[TimerPartWireItem, ...] = ()
     capabilities: TimerControlCapabilities = TimerControlCapabilities()
+    custom_schedule: CustomScheduleWireItem | None = None
+    pacing: TimerPacingWireSnapshot | None = None
+    pacing_mode: PacingMode | None = None
+    pacing_availability: PacingAvailability | None = None
 
     def __post_init__(self) -> None:
         require_nonnegative_int(self.schedule_revision, field_name="schedule_revision")
@@ -453,6 +758,20 @@ class TimerScheduleWireSnapshot:
             raise ValueError("schedule part ids must be unique")
         if not isinstance(self.capabilities, TimerControlCapabilities):
             raise TypeError("capabilities must be TimerControlCapabilities")
+        if self.custom_schedule is not None and not isinstance(
+            self.custom_schedule, CustomScheduleWireItem
+        ):
+            raise TypeError("custom_schedule must be a CustomScheduleWireItem or None")
+        if self.pacing is not None and not isinstance(self.pacing, TimerPacingWireSnapshot):
+            raise TypeError("pacing must be a TimerPacingWireSnapshot or None")
+        if (self.pacing_mode is None) != (self.pacing_availability is None):
+            raise ValueError("pacing mode and availability must be provided together")
+        if self.pacing_mode is not None and not isinstance(self.pacing_mode, PacingMode):
+            raise TypeError("pacing_mode must be a PacingMode")
+        if self.pacing_availability is not None and not isinstance(self.pacing_availability, PacingAvailability):
+            raise TypeError("pacing_availability must be a PacingAvailability")
+        if (self.pacing is not None) != (self.pacing_availability is PacingAvailability.READY):
+            raise ValueError("a pacing projection is required exactly when available")
 
     @classmethod
     def empty(
@@ -473,7 +792,7 @@ class TimerScheduleWireSnapshot:
         )
 
     def to_dict(self) -> JsonObject:
-        return {
+        result: JsonObject = {
             "scheduleRevision": self.schedule_revision,
             "weekMonday": self.week_monday,
             "weekLabel": self.week_label,
@@ -482,6 +801,14 @@ class TimerScheduleWireSnapshot:
             "parts": [part.to_dict() for part in self.parts],
             "capabilities": self.capabilities.to_dict(),
         }
+        if self.custom_schedule is not None and self.capabilities.can_manage_custom_schedules:
+            result["customSchedule"] = self.custom_schedule.to_dict()
+        if self.pacing is not None:
+            result["pacing"] = self.pacing.to_dict()
+        if self.pacing_mode is not None and self.pacing_availability is not None:
+            result["pacingMode"] = self.pacing_mode.value
+            result["pacingAvailability"] = self.pacing_availability.value
+        return result
 
 
 class TimerCommandType(StrEnum):
@@ -493,6 +820,15 @@ class TimerCommandType(StrEnum):
     SET_SECTION_COUNT = "set_section_count"
     SET_MEETING_TYPE = "set_meeting_type"
     NAVIGATE_WEEK = "navigate_week"
+    CREATE_CUSTOM_SCHEDULE = "create_custom_schedule"
+    EDIT_CUSTOM_SCHEDULE = "edit_custom_schedule"
+    DELETE_CUSTOM_SCHEDULE = "delete_custom_schedule"
+    SELECT_CUSTOM_SCHEDULE = "select_custom_schedule"
+    DUPLICATE_CUSTOM_SCHEDULE = "duplicate_custom_schedule"
+    RENAME_PART = "rename_part"
+    RESET_ALL = "reset_all"
+    SELECT_MEETING_SCHEDULE = "select_meeting_schedule"
+    SET_PACING_MODE = "set_pacing_mode"
 
 
 class TimerWeekTarget(StrEnum):
@@ -614,9 +950,9 @@ class SetPartSecondsCommand(_ScheduleBoundTimerCommand):
         super(SetPartSecondsCommand, self).__post_init__()
         require_identifier(self.part_id, field_name="part_id")
         require_int(self.planned_seconds, field_name="planned_seconds")
-        if not MIN_PLANNED_PART_SECONDS <= self.planned_seconds <= MAX_PLANNED_PART_SECONDS:
+        if not MIN_CUSTOM_PART_SECONDS <= self.planned_seconds <= MAX_PLANNED_PART_SECONDS:
             raise ValueError(
-                f"planned_seconds must be between {MIN_PLANNED_PART_SECONDS} and {MAX_PLANNED_PART_SECONDS}"
+                f"planned_seconds must be between {MIN_CUSTOM_PART_SECONDS} and {MAX_PLANNED_PART_SECONDS}"
             )
 
     def to_dict(self) -> JsonObject:
@@ -684,6 +1020,225 @@ class NavigateWeekCommand(TimerCommand):
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class CreateCustomScheduleCommand(_ScheduleBoundTimerCommand):
+    title: str
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.CREATE_CUSTOM_SCHEDULE
+
+    def __post_init__(self) -> None:
+        super(CreateCustomScheduleCommand, self).__post_init__()
+        if normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+
+    def to_dict(self) -> JsonObject:
+        result = super(CreateCustomScheduleCommand, self).to_dict()
+        result["title"] = self.title
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class _ExistingCustomScheduleCommand(_ScheduleBoundTimerCommand):
+    schedule_id: str
+    custom_revision: int
+
+    def __post_init__(self) -> None:
+        super(_ExistingCustomScheduleCommand, self).__post_init__()
+        require_identifier(self.schedule_id, field_name="schedule_id")
+        require_nonnegative_int(self.custom_revision, field_name="custom_revision")
+
+    def to_dict(self) -> JsonObject:
+        result = super(_ExistingCustomScheduleCommand, self).to_dict()
+        result.update({"scheduleId": self.schedule_id, "customRevision": self.custom_revision})
+        return result
+
+
+_CUSTOM_EDIT_FIELDS = {
+    "add_part": ("title", "planned_seconds", "section_id", "before_id"),
+    "add_section": ("title", "before_id"),
+    "rename_part": ("part_id", "title"),
+    "rename_section": ("section_id", "title"),
+    "set_section_icon": ("section_id", "icon"),
+    "set_section_color": ("section_id", "color"),
+    "rename_schedule": ("title",),
+    "move_part": ("part_id", "section_id", "before_id"),
+    "move_section": ("section_id", "before_id"),
+    "delete_part": ("part_id",),
+    "delete_section": ("section_id",),
+    "set_part_seconds": ("part_id", "planned_seconds"),
+    "set_pacing_window": ("start_time", "end_time", "untracked_seconds"),
+    "set_adjustment_weight": ("part_id", "adjustment_weight"),
+    "set_pacing_transition": ("before_part_id", "estimated_seconds"),
+}
+_EDIT_OPTIONAL_FIELDS = {"before_id", "section_id"}
+
+
+def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
+    fields = _CUSTOM_EDIT_FIELDS.get(command.action)
+    if fields is None:
+        raise ValueError("unknown custom schedule action")
+    for key in ("part_id", "section_id", "before_id", "title", "icon", "color", "planned_seconds",
+                "start_time", "end_time", "adjustment_weight",
+                "untracked_seconds", "before_part_id", "estimated_seconds"):
+        value = getattr(command, key)
+        if key not in fields:
+            if value is not None:
+                raise ValueError(f"{key} is not valid for this action")
+            continue
+        if value is None:
+            if command.action == "set_section_color" and key == "color":
+                continue
+            if command.action == "set_pacing_transition" and key in ("before_part_id", "estimated_seconds"):
+                continue
+            if key in ("start_time", "end_time", "untracked_seconds") and command.action == "set_pacing_window":
+                continue
+            if key in _EDIT_OPTIONAL_FIELDS and (
+                key != "section_id" or command.action in ("add_part", "move_part")
+            ):
+                continue
+            raise ValueError(f"{key} is required")
+        if key == "title":
+            if normalize_timer_title(value) != value:
+                raise ValueError("title must be normalized")
+        elif key == "icon":
+            if not isinstance(value, CustomSectionIcon):
+                raise TypeError("icon must be a CustomSectionIcon")
+        elif key == "color":
+            if normalize_section_color(value) != value:
+                raise ValueError("color must be a normalized hex color or None")
+        elif key in ("start_time", "end_time"):
+            if not isinstance(value, str):
+                raise TypeError(f"{key} must be a string")
+            if normalize_time_of_day(value) != value:
+                raise ValueError(f"{key} must be a normalized HH:MM string")
+        elif key == "adjustment_weight":
+            require_nonnegative_int(value, field_name=key)
+            if value > MAX_ADJUSTMENT_WEIGHT:
+                raise ValueError("adjustment_weight is out of range")
+        elif key in ("untracked_seconds", "estimated_seconds"):
+            require_nonnegative_int(value, field_name=key)
+        elif key == "planned_seconds":
+            require_int(value, field_name=key)
+            if not MIN_CUSTOM_PART_SECONDS <= value <= MAX_PLANNED_PART_SECONDS:
+                raise ValueError("planned_seconds is out of range")
+        else:
+            require_identifier(value, field_name=key)
+    if command.action == "set_pacing_window":
+        if (command.start_time is None) != (command.end_time is None):
+            raise ValueError("start_time and end_time must both be set or both be null")
+        if command.start_time is None:
+            if command.untracked_seconds:
+                raise ValueError("untracked_seconds requires a pacing window")
+        elif command.start_time == command.end_time:
+            raise ValueError("end_time must differ from start_time")
+
+
+@dataclass(frozen=True, slots=True)
+class EditCustomScheduleCommand(_ExistingCustomScheduleCommand):
+    action: str
+    part_id: str | None = None
+    section_id: str | None = None
+    before_id: str | None = None
+    title: str | None = None
+    icon: CustomSectionIcon | None = None
+    color: str | None = None
+    planned_seconds: int | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    adjustment_weight: int | None = None
+    untracked_seconds: int | None = None
+    before_part_id: str | None = None
+    estimated_seconds: int | None = None
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.EDIT_CUSTOM_SCHEDULE
+
+    def __post_init__(self) -> None:
+        super(EditCustomScheduleCommand, self).__post_init__()
+        _validate_custom_edit(self)
+
+    @property
+    def values(self) -> dict[str, str | int | bool | None]:
+        return {
+            key: (value.value if isinstance(value, CustomSectionIcon) else value)
+            for key in _CUSTOM_EDIT_FIELDS[self.action]
+            if (value := getattr(self, key)) is not None or key != "untracked_seconds"
+        }
+
+    def to_dict(self) -> JsonObject:
+        result = super(EditCustomScheduleCommand, self).to_dict()
+        result["action"] = self.action
+        result["values"] = {key: value for key, value in self.values.items()}
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteCustomScheduleCommand(_ExistingCustomScheduleCommand):
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.DELETE_CUSTOM_SCHEDULE
+
+
+@dataclass(frozen=True, slots=True)
+class SelectCustomScheduleCommand(_ExistingCustomScheduleCommand):
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.SELECT_CUSTOM_SCHEDULE
+
+
+@dataclass(frozen=True, slots=True)
+class DuplicateCustomScheduleCommand(_ExistingCustomScheduleCommand):
+    title: str
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE
+
+    def __post_init__(self) -> None:
+        super(DuplicateCustomScheduleCommand, self).__post_init__()
+        if normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+
+    def to_dict(self) -> JsonObject:
+        result = super(DuplicateCustomScheduleCommand, self).to_dict()
+        result["title"] = self.title
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class RenamePartCommand(_ScheduleBoundTimerCommand):
+    part_id: str
+    title: str | None
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.RENAME_PART
+
+    def __post_init__(self) -> None:
+        super(RenamePartCommand, self).__post_init__()
+        require_identifier(self.part_id, field_name="part_id")
+        if self.title is not None and normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+
+    def to_dict(self) -> JsonObject:
+        result = super(RenamePartCommand, self).to_dict()
+        result.update({"partId": self.part_id, "title": self.title})
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class ResetAllCommand(_ScheduleBoundTimerCommand):
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.RESET_ALL
+
+
+@dataclass(frozen=True, slots=True)
+class SelectMeetingScheduleCommand(_ScheduleBoundTimerCommand):
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.SELECT_MEETING_SCHEDULE
+
+
+@dataclass(frozen=True, slots=True)
+class SetPacingModeCommand(_ScheduleBoundTimerCommand):
+    mode: PacingMode
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.SET_PACING_MODE
+
+    def __post_init__(self) -> None:
+        super(SetPacingModeCommand, self).__post_init__()
+        if not isinstance(self.mode, PacingMode):
+            raise TypeError("mode must be a PacingMode")
+
+    def to_dict(self) -> JsonObject:
+        result = super(SetPacingModeCommand, self).to_dict()
+        result["mode"] = self.mode.value
+        return result
+
+
 TimerRemoteCommand: TypeAlias = (
     StartPartCommand
     | StopPartCommand
@@ -693,6 +1248,15 @@ TimerRemoteCommand: TypeAlias = (
     | SetSectionCountCommand
     | SetMeetingTypeCommand
     | NavigateWeekCommand
+    | CreateCustomScheduleCommand
+    | EditCustomScheduleCommand
+    | DeleteCustomScheduleCommand
+    | SelectCustomScheduleCommand
+    | DuplicateCustomScheduleCommand
+    | RenamePartCommand
+    | ResetAllCommand
+    | SelectMeetingScheduleCommand
+    | SetPacingModeCommand
 )
 
 
@@ -705,6 +1269,7 @@ class TimerCommandErrorCode(StrEnum):
     INVALID = "invalid"
     COMMAND_ID_CONFLICT = "command_id_conflict"
     COMMAND_IN_PROGRESS = "command_in_progress"
+    DURATION_BUDGET = "duration_budget"
 
 
 @dataclass(frozen=True, slots=True)
@@ -712,6 +1277,8 @@ class TimerCommandError:
     code: TimerCommandErrorCode
     message: str
     retryable: bool = False
+    available_seconds: int | None = None
+    requested_seconds: int | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.code, TimerCommandErrorCode):
@@ -723,13 +1290,25 @@ class TimerCommandError:
         )
         if not isinstance(self.retryable, bool):
             raise TypeError("retryable must be a boolean")
+        if self.available_seconds is not None or self.requested_seconds is not None:
+            if (
+                self.code is not TimerCommandErrorCode.DURATION_BUDGET
+                or self.available_seconds is None or self.requested_seconds is None
+            ):
+                raise ValueError("duration budget errors require both durations")
+            require_nonnegative_int(self.available_seconds, field_name="available_seconds")
+            require_nonnegative_int(self.requested_seconds, field_name="requested_seconds")
 
     def to_dict(self) -> JsonObject:
-        return {
+        data: JsonObject = {
             "code": self.code.value,
             "message": self.message,
             "retryable": self.retryable,
         }
+        if self.available_seconds is not None:
+            data["availableSeconds"] = self.available_seconds
+            data["requestedSeconds"] = self.requested_seconds
+        return data
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,6 +1318,7 @@ class TimerCommandResult:
     live_revision: int
     schedule_revision: int
     error: TimerCommandError | None = None
+    created_schedule_id: str | None = None
 
     def __post_init__(self) -> None:
         require_uuid(self.command_id, field_name="command_id")
@@ -750,6 +1330,10 @@ class TimerCommandResult:
             raise TypeError("error must be a TimerCommandError or None")
         if self.ok == (self.error is not None):
             raise ValueError("successful results cannot have errors; failed results require one")
+        if self.created_schedule_id is not None:
+            require_string(self.created_schedule_id, field_name="created_schedule_id")
+            if not self.ok:
+                raise ValueError("only a successful result can include a created timer schedule")
 
     @classmethod
     def success(
@@ -784,13 +1368,16 @@ class TimerCommandResult:
         )
 
     def to_dict(self) -> JsonObject:
-        return {
+        result: JsonObject = {
             "commandId": self.command_id,
             "ok": self.ok,
             "liveRevision": self.live_revision,
             "scheduleRevision": self.schedule_revision,
             "error": self.error.to_dict() if self.error is not None else None,
         }
+        if self.created_schedule_id is not None:
+            result["createdScheduleId"] = self.created_schedule_id
+        return result
 
 
 def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
@@ -803,6 +1390,81 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
         command_type = TimerCommandType(payload.get("type"))
     except (TypeError, ValueError) as exc:
         raise ValueError("command type is invalid") from exc
+
+    base = {"commandId", "type", "scheduleRevision"}
+    if command_type is TimerCommandType.SET_PACING_MODE:
+        reject_unknown_fields(payload, base | {"mode"})
+        mode = PacingMode(payload.get("mode"))
+        return SetPacingModeCommand(command_id, payload_int(payload, "scheduleRevision"), mode)
+    if command_type in (TimerCommandType.RESET_ALL, TimerCommandType.SELECT_MEETING_SCHEDULE):
+        reject_unknown_fields(payload, base)
+        cls = (
+            ResetAllCommand
+            if command_type is TimerCommandType.RESET_ALL
+            else SelectMeetingScheduleCommand
+        )
+        return cls(command_id, payload_int(payload, "scheduleRevision"))
+    if command_type is TimerCommandType.RENAME_PART:
+        reject_unknown_fields(payload, base | {"partId", "title"})
+        if "title" not in payload:
+            raise ValueError("title is required")
+        return RenamePartCommand(
+            command_id,
+            payload_int(payload, "scheduleRevision"),
+            payload_string(payload, "partId"),
+            payload_optional_string(payload, "title"),
+        )
+    if command_type is TimerCommandType.CREATE_CUSTOM_SCHEDULE:
+        reject_unknown_fields(payload, base | {"title"})
+        return CreateCustomScheduleCommand(
+            command_id, payload_int(payload, "scheduleRevision"), payload_string(payload, "title")
+        )
+    if command_type in (
+        TimerCommandType.EDIT_CUSTOM_SCHEDULE,
+        TimerCommandType.DELETE_CUSTOM_SCHEDULE,
+        TimerCommandType.SELECT_CUSTOM_SCHEDULE,
+        TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE,
+    ):
+        fields = base | {"scheduleId", "customRevision"}
+        if command_type is TimerCommandType.EDIT_CUSTOM_SCHEDULE:
+            fields |= {"action", "values"}
+        elif command_type is TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE:
+            fields.add("title")
+        reject_unknown_fields(payload, fields)
+        args = (
+            command_id,
+            payload_int(payload, "scheduleRevision"),
+            payload_string(payload, "scheduleId"),
+            payload_int(payload, "customRevision"),
+        )
+        if command_type is TimerCommandType.DELETE_CUSTOM_SCHEDULE:
+            return DeleteCustomScheduleCommand(*args)
+        if command_type is TimerCommandType.SELECT_CUSTOM_SCHEDULE:
+            return SelectCustomScheduleCommand(*args)
+        if command_type is TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE:
+            return DuplicateCustomScheduleCommand(*args, payload_string(payload, "title"))
+        action = payload_string(payload, "action")
+        values = payload.get("values")
+        if not isinstance(values, Mapping):
+            raise TypeError("values must be an object")
+        allowed = _CUSTOM_EDIT_FIELDS.get(action)
+        if allowed is None:
+            raise ValueError("unknown custom schedule action")
+        reject_unknown_fields(values, set(allowed))
+        if action == "set_pacing_window" and not {"start_time", "end_time"}.issubset(values):
+            raise ValueError("both window endpoints are required")
+        if action == "set_pacing_transition" and not {"before_part_id", "estimated_seconds"}.issubset(values):
+            raise ValueError("all transition fields are required")
+        parsed_values = dict(values)
+        if action == "set_section_icon":
+            if "icon" not in parsed_values:
+                raise ValueError("icon is required")
+            parsed_values["icon"] = normalize_section_icon(parsed_values["icon"])
+        elif action == "set_section_color":
+            if "color" not in parsed_values:
+                raise ValueError("color is required")
+            parsed_values["color"] = normalize_section_color(parsed_values["color"])
+        return EditCustomScheduleCommand(*args, action, **parsed_values)
 
     if command_type is TimerCommandType.START_PART:
         reject_unknown_fields(payload, {"commandId", "type", "scheduleRevision", "partId"})

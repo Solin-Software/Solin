@@ -122,6 +122,7 @@ EXPECTED_SETTINGS_KEYS = {
     "AUTO_KEYS_ENABLED": "auto_keys/enabled",
     "AUTO_KEYS_ACTIONS": "auto_keys/actions",
     "TIMER_CLOCK_CONFIG": "clock_config",
+    "TIMER_PACING_MODE": "pacing_mode",
     "TIMER_VISIBLE": "timer_visible",
     "TIMER_LAST_MEETING_TYPE": "last_meeting_type",
     "MONITOR_ALLOCATION": "allocation",

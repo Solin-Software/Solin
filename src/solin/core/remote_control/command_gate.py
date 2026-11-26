@@ -133,9 +133,9 @@ class CommandIdempotencyGate(Generic[CommandT, ErrorT, ResultT]):
                 return CommandDecision(CommandDisposition.REJECTED, record.result)
             return CommandDecision(CommandDisposition.ACCEPTED)
 
-    def complete_success(self, command: CommandT) -> ResultT:
+    def complete_success(self, command: CommandT, *, result: ResultT | None = None) -> ResultT:
         self._require_command(command)
-        return self._complete(command, self._build_success(command))
+        return self._complete(command, self._build_success(command) if result is None else result)
 
     def complete_failure(self, command: CommandT, error: ErrorT) -> ResultT:
         self._require_command(command)

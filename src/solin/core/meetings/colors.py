@@ -88,3 +88,52 @@ def section_colors(hue: int, scheme: ThemeScheme = "dark") -> dict:
         "item_bg": hsl_to_hex(hue, 20, 11),
         "item_bd": hsl_to_hex(hue, 25, 18),
     }
+
+
+def section_colors_from_hex(hex_color: str, scheme: ThemeScheme = "dark") -> dict[str, str]:
+    """Derive a theme-aware section palette from any ``#rrggbb`` color.
+
+    Keeps the chosen color recognizable for icon/text while generating a
+    subtle darker (dark theme) or tinted light (light theme) badge background,
+    matching the visual structure of ``section_colors(hue, scheme)``.
+    """
+    cleaned = hex_color.strip().lower()
+    r = int(cleaned[1:3], 16) / 255.0
+    g = int(cleaned[3:5], 16) / 255.0
+    b = int(cleaned[5:7], 16) / 255.0
+    h, l_val, s_val = colorsys.rgb_to_hls(r, g, b)
+    hue = int(round(h * 360.0)) % 360
+    sat_pct = int(round(s_val * 100.0))
+    light_pct = int(round(l_val * 100.0))
+
+    if sat_pct < 8:
+        if _is_light(scheme):
+            return {
+                "accent": cleaned,
+                "text": hsl_to_hex(0, 0, min(light_pct, 36)),
+                "badge": hsl_to_hex(0, 0, 92),
+                "border": hsl_to_hex(0, 0, 84),
+            }
+        return {
+            "accent": cleaned,
+            "text": hsl_to_hex(0, 0, max(light_pct, 68)),
+            "badge": hsl_to_hex(0, 0, 18),
+            "border": hsl_to_hex(0, 0, 25),
+        }
+
+    if _is_light(scheme):
+        text_color = cleaned if light_pct <= 42 else hsl_to_hex(hue, min(sat_pct, 64), 34)
+        return {
+            "accent": cleaned,
+            "text": text_color,
+            "badge": hsl_to_hex(hue, min(sat_pct, 55), 92),
+            "border": hsl_to_hex(hue, min(sat_pct, 38), 84),
+        }
+
+    text_color = cleaned if light_pct >= 56 else hsl_to_hex(hue, min(sat_pct, 58), 68)
+    return {
+        "accent": cleaned,
+        "text": text_color,
+        "badge": hsl_to_hex(hue, min(sat_pct, 36), 18),
+        "border": hsl_to_hex(hue, min(sat_pct, 34), 24),
+    }

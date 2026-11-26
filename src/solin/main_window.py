@@ -93,6 +93,7 @@ from .controllers.signal_connection_controller import (
 )
 from .controllers.main_window_nav import MainPage
 from .controllers.timer_engine import TimerEngine
+from .controllers.timer_operations import TimerOperations
 from .controllers.timer_hand_alert_controller import TimerHandAlertController
 from .controllers.timer_monitor_controller import TimerMonitorController
 from .controllers.timer_output_controller import TimerOutputController
@@ -526,6 +527,12 @@ class MainWindow(QWidget):
         # subsystem (media/timer) owns each monitor — consulted by both the
         # media projection controller and the timer-output controller.
         self.timer_engine = TimerEngine(self)
+        self.timer_operations = TimerOperations(
+            self.timer_engine,
+            timer_session,
+            time_format=lambda: lang_manager.time_with_seconds_format,
+            parent=self,
+        )
         self._timer_hand_alert = TimerHandAlertController(self._zoom_settings, self)
         self.timer_output = TimerOutputController(
             self.timer_engine,
@@ -550,8 +557,7 @@ class MainWindow(QWidget):
             else TimerWorkbookLookup(fetch_workbook)
         )
         self.timer_bridge = TimerBridge(
-            engine=self.timer_engine,
-            session=timer_session,
+            operations=self.timer_operations,
             output=self.timer_output,
             monitors=self.timer_monitors,
             hand_alert=self._timer_hand_alert,
@@ -1019,6 +1025,9 @@ class MainWindow(QWidget):
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
+        self.settings_widget.general.meeting_schedule_changed.connect(
+            self.timer_operations.on_meeting_schedule_changed
+        )
         self.settings_widget.general.yearly_text_changed.connect(
             self._program_content.update_yearly_text
         )
@@ -1532,8 +1541,7 @@ class MainWindow(QWidget):
                 media_projection=self._media_projection,
                 projection_stop=self._projection_stop,
                 playback_protection=self.playback_protection,
-                timer_engine=self.timer_engine,
-                timer_bridge=self.timer_bridge,
+                timer_operations=self.timer_operations,
                 settings_widget=self.settings_widget,
                 timer_feature_flags=DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
             ),

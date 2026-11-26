@@ -56,6 +56,9 @@ interrupting projection or the running timer.
 
 ## Protocol reference
 
-The complete HTTP, WebSocket, caching, CSP, and command contract for both web applications is
+Custom timer schedule management is disabled by default and is available only to authenticated
+timer controllers when explicitly enabled. Public live viewing remains available.
+
+The base HTTP, WebSocket, caching, CSP, and command contract for both web applications is
 documented in
 [`src/solin/resources/remote_control/README.md`](../src/solin/resources/remote_control/README.md).

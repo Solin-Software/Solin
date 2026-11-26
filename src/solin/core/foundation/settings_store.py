@@ -49,11 +49,15 @@ class SettingsStore:
     def string(self, key: str, default: str = "") -> str:
         return str(self.value(key, default, str) or "")
 
-    def set_value(self, key: str, value: Any, *, sync: bool = True) -> None:
+    def set_value(
+        self, key: str, value: Any, *, sync: bool = True, checked: bool = False,
+    ) -> None:
         settings = self._settings()
         settings.setValue(key, value)
-        if sync:
+        if sync or checked:
             settings.sync()
+        if checked and settings.status() != QSettings.Status.NoError:
+            raise OSError(f"Could not save settings for {self.namespace.application}.")
 
     def remove(self, key: str, *, sync: bool = True) -> None:
         settings = self._settings()
