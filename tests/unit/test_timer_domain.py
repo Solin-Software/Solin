@@ -1339,3 +1339,12 @@ def test_is_part_duration_editable_respects_part_state_even_for_single_part_sect
     assert is_part_duration_editable(sch.parts_in(Section.MINISTRY)[0]) is True
     set_section_part_count(sch, Section.MINISTRY, 2)
     assert all(is_part_duration_editable(p) for p in sch.parts_in(Section.MINISTRY))
+
+
+def test_normalize_timer_title_rejects_unicode_line_separators():
+    from solin.core.timer.models import normalize_timer_title
+
+    assert normalize_timer_title("  Opening Remarks  ") == "Opening Remarks"
+    for bad in ("Line\nBreak", "Line\rBreak", "Line\u2028Break", "Line\u2029Break", "Line\u0085Break"):
+        with pytest.raises(ValueError):
+            normalize_timer_title(bad)

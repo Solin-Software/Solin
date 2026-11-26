@@ -292,3 +292,16 @@ def test_pdf_omits_pacing_summary_by_default_and_without_window(tmp_path, monkey
         pacing_mode=PacingMode.MONITOR,
     )
     assert len(summaries) == 1
+
+
+def test_pdf_section_text_color_stays_readable_on_white_for_light_custom_colors():
+    from PySide6.QtGui import QColor
+
+    painter_cls = timer_report_pdf._PdfPainter
+    for hex_color in ("#ffffff", "#f8fafc", "#ffff00", "#fde047", "#00ffff", "#41b6c4", "#1e3a8a"):
+        accent = QColor(hex_color)
+        contrast = painter_cls._contrast_ratio(
+            painter_cls._section_strip_background(accent),
+            painter_cls._section_text_color(accent),
+        )
+        assert contrast >= 4.5, f"{hex_color} produced low PDF contrast {contrast:.2f}"

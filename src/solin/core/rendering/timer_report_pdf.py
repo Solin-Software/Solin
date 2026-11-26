@@ -22,6 +22,7 @@ from PySide6.QtGui import (
 
 from ..i18n.date import format_datetime, format_time_with_seconds
 from ..i18n.timer_schedule_view import parts_model_for_schedule
+from ..meetings.colors import section_colors_from_hex
 from ..timer.models import CustomTimerSchedule, MeetingSchedule, MeetingType, PartState, Section
 from ..timer.pacing import pacing_snapshot
 from ..timer.pacing_models import PacingMode
@@ -289,11 +290,61 @@ class _PdfPainter:
         self.new_page(title, meta)
         self.draw_table_header(columns)
 
+    _SECTION_STRIP_ALPHA = 24
+    _MIN_TEXT_CONTRAST = 4.5
+    _FALLBACK_TEXT_COLOR = "#111827"
+
+    @staticmethod
+    def _relative_luminance(color: QColor) -> float:
+        def _channel(value: float) -> float:
+            return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+        return (
+            0.2126 * _channel(color.redF())
+            + 0.7152 * _channel(color.greenF())
+            + 0.0722 * _channel(color.blueF())
+        )
+
+    @classmethod
+    def _contrast_ratio(cls, first: QColor, second: QColor) -> float:
+        lighter, darker = sorted(
+            (cls._relative_luminance(first), cls._relative_luminance(second)), reverse=True,
+        )
+        return (lighter + 0.05) / (darker + 0.05)
+
+    @classmethod
+    def _section_strip_background(cls, accent: QColor) -> QColor:
+        """Opaque equivalent of the translucent accent strip painted on the white page."""
+        alpha = cls._SECTION_STRIP_ALPHA / 255.0
+        return QColor.fromRgbF(
+            1.0 - alpha + alpha * accent.redF(),
+            1.0 - alpha + alpha * accent.greenF(),
+            1.0 - alpha + alpha * accent.blueF(),
+        )
+
+    @classmethod
+    def _section_text_color(cls, accent: QColor) -> QColor:
+        """Derive a WCAG-AA-readable text color on the section strip, independent of UI theme."""
+        if not accent.isValid():
+            return QColor(cls._FALLBACK_TEXT_COLOR)
+        background = cls._section_strip_background(accent)
+        candidate = QColor(section_colors_from_hex(accent.name(), "light")["text"])
+        hue = max(0.0, candidate.hslHueF())
+        saturation = max(0.0, candidate.hslSaturationF())
+        lightness = candidate.lightnessF()
+        while cls._contrast_ratio(background, candidate) < cls._MIN_TEXT_CONTRAST:
+            lightness -= 0.04
+            if lightness <= 0.0:
+                return QColor(cls._FALLBACK_TEXT_COLOR)
+            candidate = QColor.fromHslF(hue, saturation, lightness)
+        return candidate
+
     def draw_section(self, label: str, color: str, total_label: str) -> None:
         accent = QColor(color)
         rect = QRectF(self.margin, self.y, self.width - self.margin * 2, 24)
-        self.rounded_rect(rect, QColor(accent.red(), accent.green(), accent.blue(), 24), "#e5e7eb", 6)
-        self.painter.setPen(accent)
+        strip = QColor(accent.red(), accent.green(), accent.blue(), self._SECTION_STRIP_ALPHA)
+        self.rounded_rect(rect, strip, "#e5e7eb", 6)
+        self.painter.setPen(self._section_text_color(accent))
         self.painter.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.painter.drawText(rect.adjusted(10, 2, -10, -2), Qt.AlignmentFlag.AlignVCenter, label)
         self.painter.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, tzinfo
 
 import pytest
 
@@ -234,3 +234,124 @@ def test_unstarted_window_resolves_to_today_and_migrates_legacy_epochs():
         {"start_epoch": tuesday, "end_epoch": tuesday + 1800, "untracked_seconds": 60}
     )
     assert legacy == PacingWindow("19:30", "20:00", 60)
+
+    # Non-minute-aligned legacy window with reserves that exceed the truncated minute span
+    # clamps safely instead of rejecting the saved schedule.
+    non_aligned_start = int(datetime(2026, 11, 24, 19, 0, 0).timestamp())
+    non_aligned_end = int(datetime(2026, 11, 24, 19, 1, 59).timestamp())
+    migrated = PacingWindow.from_dict(
+        {
+            "start_epoch": non_aligned_start,
+            "end_epoch": non_aligned_end,
+            "untracked_seconds": 90,
+            "transitions": {"before_parts": {"p1": 90}, "closing_seconds": 80},
+        }
+    )
+    assert migrated == PacingWindow(
+        "19:00", "19:01", 60, PacingTransitions((("p1", 60),), closing_seconds=60),
+    )
+
+
+def test_reset_part_clears_pacing_run_when_only_skipped_ids_remain():
+    schedule = _custom(120, 120, 120)
+    schedule.pacing_window = PacingWindow("19:00", "19:10", 0)
+    first, second, third = schedule.parts
+    machine = TimerStateMachine()
+    machine.set_schedule(schedule)
+
+    # Skip first part, start & stop second, then reset second: no part has timing data,
+    # so the frozen pacing run must clear even though first was in reached_ids.
+    assert machine.start_part(second.id, now=_T0 + 120)
+    assert machine.stop_part(second.id, now=_T0 + 240)
+    assert schedule.pacing_run is not None
+    assert first.id in schedule.pacing_run.reached_ids
+
+    assert machine.reset_part(second.id)
+    assert schedule.pacing_run is None
+
+    # When another part still has recorded timing, resetting a later part keeps skipped IDs.
+    assert machine.start_part(second.id, now=_T0 + 120)
+    assert machine.stop_part(second.id, now=_T0 + 240)
+    assert machine.start_part(third.id, now=_T0 + 240)
+    assert machine.stop_part(third.id, now=_T0 + 360)
+    assert machine.reset_part(third.id)
+    assert schedule.pacing_run is not None
+    assert schedule.pacing_run.reached_ids == frozenset({first.id, second.id})
+
+
+class _SyntheticUsEasternTz(tzinfo):
+    """Self-contained US Eastern DST tzinfo for deterministic cross-platform tests.
+
+    2026 transitions:
+    - Spring forward: 2026-03-08 02:00 EST -> 03:00 EDT
+    - Fall back:      2026-11-01 02:00 EDT -> 01:00 EST
+    """
+
+    _SPRING_START = datetime(2026, 3, 8, 2, 0)
+    _SPRING_END = datetime(2026, 3, 8, 3, 0)
+    _SPRING_UTC = datetime(2026, 3, 8, 7, 0)
+    _FALL_START = datetime(2026, 11, 1, 1, 0)
+    _FALL_END = datetime(2026, 11, 1, 2, 0)
+    _FALL_UTC = datetime(2026, 11, 1, 6, 0)
+
+    def fromutc(self, dt: datetime) -> datetime:
+        utc_naive = dt.replace(tzinfo=None)
+        if self._SPRING_UTC <= utc_naive < self._FALL_UTC:
+            return (utc_naive - timedelta(hours=4)).replace(tzinfo=self, fold=0)
+        fold = 1 if self._FALL_UTC <= utc_naive < self._FALL_UTC + timedelta(hours=1) else 0
+        return (utc_naive - timedelta(hours=5)).replace(tzinfo=self, fold=fold)
+
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        if dt is None:
+            return timedelta(hours=-5)
+        naive = dt.replace(tzinfo=None)
+        if self._SPRING_START <= naive < self._SPRING_END:
+            return timedelta(hours=-4 if dt.fold else -5)
+        if self._FALL_START <= naive < self._FALL_END:
+            return timedelta(hours=-5 if dt.fold else -4)
+        if self._SPRING_END <= naive < self._FALL_START:
+            return timedelta(hours=-4)
+        return timedelta(hours=-5)
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        return timedelta(hours=1) if self.utcoffset(dt) == timedelta(hours=-4) else timedelta(0)
+
+    def tzname(self, dt: datetime | None) -> str:
+        return "EDT" if self.dst(dt) else "EST"
+
+
+def test_resolve_at_preserves_civil_endpoints_across_dst_transitions():
+    tz = _SyntheticUsEasternTz()
+
+    # Spring-forward: 01:30 EST -> 04:30 EDT spans 2 real hours, not 3.
+    spring_now = datetime(2026, 3, 8, 1, 0, tzinfo=tz).timestamp()
+    spring_window = PacingWindow(
+        "01:30", "04:30", untracked_seconds=9000,
+        transitions=PacingTransitions((("p1", 8000),), closing_seconds=7500),
+    )
+    resolved_spring = spring_window.resolve_at(spring_now, tz=tz)
+    assert datetime.fromtimestamp(resolved_spring.start_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 01:30"
+    assert datetime.fromtimestamp(resolved_spring.end_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 04:30"
+    assert resolved_spring.duration_seconds == 7200
+    assert resolved_spring.untracked_seconds == 7200
+    assert resolved_spring.transitions == PacingTransitions((("p1", 7200),), closing_seconds=7200)
+
+    # Evening meeting viewed before spring-forward still resolves to EDT evening wall times.
+    evening = PacingWindow("19:30", "21:15").resolve_at(spring_now, tz=tz)
+    assert datetime.fromtimestamp(evening.start_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 19:30"
+    assert datetime.fromtimestamp(evening.end_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 21:15"
+    assert evening.duration_seconds == 6300
+
+    # Nonexistent start inside the 02:00-03:00 gap shifts to 03:15 EDT (> 03:00 EDT end)
+    # and falls back cleanly to nominal duration (04:00 EDT) without raising.
+    gap_window = PacingWindow("02:15", "03:00").resolve_at(spring_now, tz=tz)
+    assert datetime.fromtimestamp(gap_window.start_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 03:15"
+    assert datetime.fromtimestamp(gap_window.end_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-03-08 04:00"
+    assert gap_window.duration_seconds == 2700
+
+    # Fall-back: 00:30 EDT -> 03:30 EST spans 4 real hours, not 3.
+    fall_now = datetime(2026, 11, 1, 0, 15, tzinfo=tz).timestamp()
+    resolved_fall = PacingWindow("00:30", "03:30").resolve_at(fall_now, tz=tz)
+    assert datetime.fromtimestamp(resolved_fall.start_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-11-01 00:30"
+    assert datetime.fromtimestamp(resolved_fall.end_epoch, tz=tz).strftime("%Y-%m-%d %H:%M") == "2026-11-01 03:30"
+    assert resolved_fall.duration_seconds == 14400

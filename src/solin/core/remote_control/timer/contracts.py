@@ -1122,6 +1122,14 @@ def _validate_custom_edit(command: EditCustomScheduleCommand) -> None:
                 raise ValueError("planned_seconds is out of range")
         else:
             require_identifier(value, field_name=key)
+    if command.action == "set_pacing_window":
+        if (command.start_time is None) != (command.end_time is None):
+            raise ValueError("start_time and end_time must both be set or both be null")
+        if command.start_time is None:
+            if command.untracked_seconds:
+                raise ValueError("untracked_seconds requires a pacing window")
+        elif command.start_time == command.end_time:
+            raise ValueError("end_time must differ from start_time")
 
 
 @dataclass(frozen=True, slots=True)

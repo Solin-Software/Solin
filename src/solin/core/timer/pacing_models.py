@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
 from math import isfinite
 
@@ -30,6 +30,41 @@ def normalize_time_of_day(value: object) -> str:
 def _minutes_of_day(hhmm: str) -> int:
     hour_text, minute_text = hhmm.split(":", 1)
     return int(hour_text) * 60 + int(minute_text)
+
+
+def _civil_to_epoch(
+    day: date, hour: int, minute: int, tz: tzinfo | None, *, fold: int = 0,
+) -> int:
+    naive = datetime(day.year, day.month, day.day, hour, minute, fold=fold)
+    if tz is None:
+        return int(naive.astimezone().timestamp())
+    return int(naive.replace(tzinfo=tz).timestamp())
+
+
+def _clamp_pacing_estimates(
+    untracked_seconds: int | None,
+    transitions: PacingTransitions,
+    max_seconds: int,
+) -> tuple[int | None, PacingTransitions]:
+    clamped_untracked = (
+        min(untracked_seconds, max_seconds)
+        if untracked_seconds is not None
+        else None
+    )
+    if (
+        any(seconds > max_seconds for _, seconds in transitions.before_part_seconds)
+        or (transitions.closing_seconds or 0) > max_seconds
+    ):
+        transitions = PacingTransitions(
+            tuple(
+                (part_id, min(seconds, max_seconds))
+                for part_id, seconds in transitions.before_part_seconds
+            ),
+            min(transitions.closing_seconds, max_seconds)
+            if transitions.closing_seconds is not None
+            else None,
+        )
+    return clamped_untracked, transitions
 
 
 class PacingMode(StrEnum):
@@ -167,28 +202,47 @@ class PacingWindow:
         end_min = _minutes_of_day(self.end_time)
         return ((end_min - start_min) % _MINUTES_PER_DAY) * 60
 
-    def resolve_at(self, now: float) -> ResolvedPacingWindow:
-        """Anchor this time-of-day window onto the local day of ``now``."""
-        local_now = datetime.fromtimestamp(now).astimezone()
+    def resolve_at(self, now: float, *, tz: tzinfo | None = None) -> ResolvedPacingWindow:
+        """Anchor this time-of-day window onto the local day of ``now``.
+
+        Start and end are resolved independently as local civil times so DST
+        transitions preserve the configured wall-clock endpoints. Ambiguous
+        local times use their first occurrence (``fold=0``), falling back to
+        ``fold=1`` for the end if needed; nonexistent spring-forward times
+        advance past the gap per PEP 495, and if that causes ``end <= start``
+        the end falls back to ``start + duration_seconds``. Reserves exceeding
+        a DST-shortened wall duration are clamped to fit.
+        """
+        local_now = (
+            datetime.fromtimestamp(now).astimezone()
+            if tz is None
+            else datetime.fromtimestamp(now, tz=tz)
+        )
         start_min = _minutes_of_day(self.start_time)
         end_min = _minutes_of_day(self.end_time)
         anchor_day = local_now.date()
+        crosses_midnight = end_min < start_min
         # If the window crosses midnight and we are in the post-midnight tail,
         # anchor the start to yesterday so the active window spans midnight cleanly.
-        if end_min < start_min and (local_now.hour * 60 + local_now.minute) < end_min:
+        if crosses_midnight and (local_now.hour * 60 + local_now.minute) < end_min:
             anchor_day -= timedelta(days=1)
-        start_dt = datetime.combine(
-            anchor_day,
-            time(start_min // 60, start_min % 60),
-            tzinfo=local_now.tzinfo,
+        end_day = anchor_day + timedelta(days=1) if crosses_midnight else anchor_day
+
+        start_epoch = _civil_to_epoch(anchor_day, start_min // 60, start_min % 60, tz, fold=0)
+        end_epoch = _civil_to_epoch(end_day, end_min // 60, end_min % 60, tz, fold=0)
+        if end_epoch <= start_epoch:
+            end_epoch = _civil_to_epoch(end_day, end_min // 60, end_min % 60, tz, fold=1)
+        if end_epoch <= start_epoch:
+            end_epoch = start_epoch + self.duration_seconds
+
+        untracked, transitions = _clamp_pacing_estimates(
+            self.untracked_seconds, self.transitions, end_epoch - start_epoch,
         )
-        start_epoch = int(start_dt.timestamp())
-        end_epoch = start_epoch + self.duration_seconds
         return ResolvedPacingWindow(
             start_epoch=start_epoch,
             end_epoch=end_epoch,
-            untracked_seconds=self.untracked_seconds,
-            transitions=self.transitions,
+            untracked_seconds=untracked,
+            transitions=transitions,
         )
 
     def to_dict(self) -> dict:
@@ -211,17 +265,22 @@ class PacingWindow:
             return cls(data["start_time"], data["end_time"], untracked, transitions)
         # Migrate persisted schedules created before windows became date-independent.
         if "start_epoch" in data and "end_epoch" in data:
-            start_epoch = data["start_epoch"]
-            end_epoch = data["end_epoch"]
-            if type(start_epoch) is not int or type(end_epoch) is not int or end_epoch <= start_epoch:
-                raise ValueError("Set a valid timer start and an end after the start.")
-            start_dt = datetime.fromtimestamp(start_epoch).astimezone()
-            end_dt = datetime.fromtimestamp(end_epoch).astimezone()
+            legacy = ResolvedPacingWindow(
+                data["start_epoch"], data["end_epoch"], untracked, transitions,
+            )
+            start_dt = datetime.fromtimestamp(legacy.start_epoch).astimezone()
+            end_dt = datetime.fromtimestamp(legacy.end_epoch).astimezone()
             start_str = start_dt.strftime("%H:%M")
             end_str = end_dt.strftime("%H:%M")
             if start_str == end_str:
                 return None
-            return cls(start_str, end_str, untracked, transitions)
+            migrated_duration = (
+                (_minutes_of_day(end_str) - _minutes_of_day(start_str)) % _MINUTES_PER_DAY
+            ) * 60
+            migrated_untracked, migrated_transitions = _clamp_pacing_estimates(
+                legacy.untracked_seconds, legacy.transitions, migrated_duration,
+            )
+            return cls(start_str, end_str, migrated_untracked, migrated_transitions)
         raise ValueError("Set a valid start and end time (HH:MM).")
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 import re
@@ -47,6 +47,8 @@ from solin.core.remote_control.server import (
     ScopedRemoteHttpModule,
 )
 from solin.core.remote_control.timer.contracts import (
+    CreateCustomScheduleCommand,
+    DuplicateCustomScheduleCommand,
     TimerCommandError,
     TimerLiveWireSnapshot,
     TimerRemoteCommand,
@@ -266,8 +268,10 @@ async def _harness(
         commands.append(command)
         return None
 
-    async def execute_timer(command: TimerRemoteCommand) -> TimerCommandError | None:
+    async def execute_timer(command: TimerRemoteCommand) -> TimerCommandError | str | None:
         timer_commands.append(command)
+        if isinstance(command, (CreateCustomScheduleCommand, DuplicateCustomScheduleCommand)):
+            return "created-schedule"
         return None
 
     default_setup = setup_provider or (
@@ -738,10 +742,149 @@ def test_timer_catalog_rechecks_session_after_main_thread_query(tmp_path: Path) 
             pending = asyncio.create_task(
                 harness.client.get("/remote/timer/api/custom-schedules", headers=headers)
             )
-            await started.wait()
-            harness.timer_sessions.revoke_all()
-            finish.set()
-            assert (await pending).status == 401
+            try:
+                await asyncio.wait_for(started.wait(), timeout=5)
+                harness.timer_sessions.revoke_all()
+                finish.set()
+                assert (await pending).status == 401
+            finally:
+                finish.set()
+                if not pending.done():
+                    pending.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await pending
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_timer_create_and_duplicate_commands_fail_when_handler_omits_created_id(
+    tmp_path: Path,
+) -> None:
+    from solin.core.remote_control.timer.contracts import (
+        CustomScheduleCatalogWireSnapshot,
+        TimerControlCapabilities,
+    )
+
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        calls = 0
+
+        async def broken_handler(_command):
+            nonlocal calls
+            calls += 1
+            return None
+
+        async def catalog(_query):
+            return CustomScheduleCatalogWireSnapshot(())
+
+        try:
+            harness.timer_module._dependencies = replace(
+                harness.timer_module._dependencies,
+                command_handler=broken_handler,
+                catalog_handler=catalog,
+            )
+            harness.timer_state.update_schedule(
+                replace(
+                    harness.timer_state.schedule,
+                    capabilities=TimerControlCapabilities(can_manage_custom_schedules=True),
+                )
+            )
+            headers = await _authenticated_timer_headers(harness)
+            for payload in (
+                {
+                    "commandId": str(uuid.uuid4()),
+                    "type": "create_custom_schedule",
+                    "scheduleRevision": harness.timer_state.schedule_revision,
+                    "title": "New Schedule",
+                },
+                {
+                    "commandId": str(uuid.uuid4()),
+                    "type": "duplicate_custom_schedule",
+                    "scheduleRevision": harness.timer_state.schedule_revision,
+                    "scheduleId": "sched-1",
+                    "customRevision": 1,
+                    "title": "Copy",
+                },
+            ):
+                first = await (
+                    await harness.client.post("/remote/timer/api/commands", headers=headers, json=payload)
+                ).json()
+                replay = await (
+                    await harness.client.post("/remote/timer/api/commands", headers=headers, json=payload)
+                ).json()
+                assert first["ok"] is False
+                assert first["error"]["code"] == "failed"
+                assert "createdScheduleId" not in first
+                assert replay == first
+            assert calls == 2
+        finally:
+            await harness.client.close()
+
+    asyncio.run(scenario())
+
+
+def test_public_timer_endpoints_omit_custom_section_ids_while_auth_preserves_them(
+    tmp_path: Path,
+) -> None:
+    from solin.core.remote_control.timer.contracts import TimerLiveWireSnapshot
+    from solin.core.timer.models import Direction, PartState, Section
+
+    async def scenario() -> None:
+        harness = await _harness(tmp_path)
+        try:
+            custom_live = TimerLiveWireSnapshot(
+                live_revision=0,
+                server_epoch_ms=1_700_000_000_000,
+                utc_offset_minutes=0,
+                active=True,
+                state=PartState.RUNNING,
+                direction=Direction.DOWN,
+                active_part_id="part-1",
+                active_part_title="Talk",
+                active_section="custom-section-uuid",
+                planned_seconds=300,
+                elapsed_seconds=5.0,
+            )
+            harness.timer_state.update_live(custom_live)
+            public_headers = {"Host": _HOST, "Origin": _ORIGIN}
+            auth_headers = await _authenticated_timer_headers(harness)
+
+            public_boot = await (
+                await harness.client.get("/remote/timer/api/public", headers=public_headers)
+            ).json()
+            assert public_boot["live"]["activeSection"] is None
+
+            auth_boot = await (
+                await harness.client.get("/remote/timer/api/bootstrap", headers=auth_headers)
+            ).json()
+            assert auth_boot["live"]["activeSection"] == "custom-section-uuid"
+
+            public_ws = await harness.client.ws_connect(
+                "/remote/timer/api/ws/public", headers=public_headers,
+            )
+            snap = await public_ws.receive_json(timeout=2)
+            assert snap["type"] == "public.snapshot"
+            assert snap["payload"]["live"]["activeSection"] is None
+
+            # Publishing a live change to another custom section still redacts public activeSection.
+            harness.timer_state.update_live(
+                replace(custom_live, active_part_id="part-2", active_section="custom-section-2")
+            )
+            await harness.timer_module.publish_snapshot()
+            live_event = await public_ws.receive_json(timeout=2)
+            assert live_event["type"] == "timer.live"
+            assert live_event["payload"]["activeSection"] is None
+
+            # Canonical meeting sections remain visible to public viewers.
+            harness.timer_state.update_live(
+                replace(custom_live, active_part_id="part-3", active_section=Section.TREASURES)
+            )
+            await harness.timer_module.publish_snapshot()
+            meeting_event = await public_ws.receive_json(timeout=2)
+            assert meeting_event["payload"]["activeSection"] == "treasures"
+            await public_ws.close()
         finally:
             await harness.client.close()
 

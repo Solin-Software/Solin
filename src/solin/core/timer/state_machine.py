@@ -173,7 +173,7 @@ class TimerStateMachine:
                 or abs(item.accumulated_seconds) > 0.0001
                 for item in schedule.iter_parts()
             )
-            if not remaining_reached and not has_any_part_data:
+            if not has_any_part_data:
                 schedule.pacing_run = None
             else:
                 schedule.pacing_run = replace(

@@ -13,6 +13,7 @@ from typing import Final
 
 from aiohttp import WSCloseCode, web
 
+from ...timer.models import Section
 from ..security import (
     InMemorySessionStore,
     LoginRateLimiter,
@@ -29,7 +30,7 @@ from ..server import (
     WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
     WEBSOCKET_HEARTBEAT_SECONDS,
 )
-from ..validation import JsonObject
+from ..validation import JsonObject, MAX_DISPLAY_TEXT_LENGTH
 from .contracts import (
     CustomScheduleCatalogQuery,
     CustomScheduleCatalogWireSnapshot,
@@ -295,6 +296,8 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
         payload = snapshot.live.to_dict()
         if not authenticated:
             payload["liveRevision"] = snapshot.public_live_revision
+            if not isinstance(snapshot.live.active_section, Section):
+                payload["activeSection"] = None
         hand_alert = hand_alert_payload(
             snapshot.hand_alert,
             self._dependencies.state.hand_alert_policy,
@@ -416,15 +419,35 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
                 TimerCommandErrorCode.FAILED,
                 "The timer command could not be completed.",
             )
+        requires_created_id = isinstance(
+            command,
+            (CreateCustomScheduleCommand, DuplicateCustomScheduleCommand),
+        )
         if isinstance(outcome, TimerCommandError):
             result = self._dependencies.command_session.complete_failure(
                 command,
                 outcome,
             )
+        elif requires_created_id:
+            if (
+                isinstance(outcome, str)
+                and outcome.strip()
+                and len(outcome) <= MAX_DISPLAY_TEXT_LENGTH
+            ):
+                result = self._dependencies.command_session.complete_success(
+                    command,
+                    created_schedule_id=outcome,
+                )
+            else:
+                result = self._dependencies.command_session.complete_failure(
+                    command,
+                    TimerCommandError(
+                        TimerCommandErrorCode.FAILED,
+                        "The timer command did not return a created schedule ID.",
+                    ),
+                )
         else:
-            result = self._dependencies.command_session.complete_success(
-                command, created_schedule_id=outcome,
-            )
+            result = self._dependencies.command_session.complete_success(command)
         try:
             await self.publish_snapshot()
         except Exception:  # noqa: BLE001 - snapshot fan-out must not alter command result

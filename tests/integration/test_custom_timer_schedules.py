@@ -350,6 +350,7 @@ def test_over_budget_workbook_application_keeps_blank_meeting_unchanged(timer_ru
     open_profile, _ = timer_runtime
     operations, _, settings = open_profile()
     original = operations.session.schedule
+    before = original.to_dict()
     timings = (
         *(DetectedPartTiming(Section.MINISTRY, PartKind.STANDARD, 1200) for _ in range(3)),
         *(DetectedPartTiming(Section.LIVING, PartKind.STANDARD, 1200) for _ in range(2)),
@@ -358,6 +359,7 @@ def test_over_budget_workbook_application_keeps_blank_meeting_unchanged(timer_ru
 
     assert not operations.apply_detected_assignments(_WEEK, timings, AssignmentAutofillScope.VARIABLE_SECTIONS)
     assert operations.session.schedule is original
+    assert operations.session.schedule.to_dict() == before
     assert original.assignment_setup is AssignmentSetup.DEFAULT
     assert QSettingsTimerRepository(settings).load_schedule(_WEEK, MeetingType.MIDWEEK) is None
     assert not changes.count()
@@ -771,3 +773,24 @@ def test_custom_sections_support_canonical_icons_and_persisted_colors(timer_runt
     assert loaded.entries[0].icon is CustomSectionIcon.TREASURES
     assert loaded.entries[0].color == "#41b6c4"
     assert loaded.entries[1].color is None
+
+
+def test_replace_custom_schedule_entries_rejects_non_dict_nested_parts(timer_runtime):
+    open_profile, _ = timer_runtime
+    operations, _, _ = open_profile()
+    schedule_id = operations.create_custom_schedule("Atomic").id
+    schedule = _edit(operations, schedule_id, "add_section", title="Block")
+    section_id = schedule.entries[0].id
+    schedule = _edit(
+        operations, schedule_id, "add_part", title="Keep me", planned_seconds=120, section_id=section_id,
+    )
+    before = operations.get_custom_schedule(schedule_id).to_dict()
+
+    with pytest.raises(TimerOperationError) as error:
+        operations.replace_custom_schedule_entries(
+            schedule_id,
+            schedule.revision,
+            [{"type": "section", "id": section_id, "title": "Block", "parts": [None]}],
+        )
+    assert error.value.code == "invalid"
+    assert operations.get_custom_schedule(schedule_id).to_dict() == before

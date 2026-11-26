@@ -138,6 +138,8 @@ class RemoteTimerAdapter(QObject):
         self._active = bool(active)
         if self._active:
             self.refresh_all()
+        else:
+            self.abort_pending_commands()
 
     def set_hand_alert(self, alert: TimerHandAlert) -> None:
         if self._state.update_hand_alert(alert) and self._active:

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 import uuid
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, replace
@@ -260,7 +261,7 @@ def normalize_timer_title(title: str) -> str:
     title = title.strip()
     if (
         not title or len(title) > MAX_TIMER_TITLE_LENGTH
-        or any(ord(character) < 32 or ord(character) == 127 for character in title)
+        or any(unicodedata.category(character) in ("Cc", "Zl", "Zp") for character in title)
     ):
         raise ValueError(f"A timer name must contain 1–{MAX_TIMER_TITLE_LENGTH} characters on one line.")
     return title

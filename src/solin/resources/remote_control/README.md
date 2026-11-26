@@ -183,7 +183,10 @@ parts** when already authenticated:
   - `rename_part` (`scheduleRevision`, `partId`, nullable `title`)
   - `edit_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `action`, `values`)
 
-  These additional commands require `manageCustomSchedules`. Successful create and duplicate
+  `set_pacing_mode` requires `managePacing` (see below). The custom-schedule commands
+  (`create_custom_schedule`, `duplicate_custom_schedule`, `delete_custom_schedule`,
+  `select_custom_schedule`, `select_meeting_schedule`, `reset_all`, `rename_part`, and
+  `edit_custom_schedule`) require `manageCustomSchedules`. Successful create and duplicate
   results include `createdScheduleId`, including on replay. Edit `values` use the snake-case
   operation arguments. Actions are `add_part` (`title`, `planned_seconds`, optional `section_id`,
   `before_id`); `add_section` (`title`, optional `before_id`); `rename_part` (`part_id`, `title`);

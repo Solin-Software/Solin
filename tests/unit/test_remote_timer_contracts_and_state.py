@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 import uuid
 import threading
 
@@ -105,6 +106,10 @@ def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
     payload = commands[1].to_dict()
     for values in (
         {"start_time": "19:30"},
+        {"start_time": "19:30", "end_time": None},
+        {"start_time": None, "end_time": "20:30"},
+        {"start_time": "19:30", "end_time": "19:30"},
+        {"start_time": None, "end_time": None, "untracked_seconds": 30},
         {"start_time": True, "end_time": "20:30"},
         {"start_time": "25:00", "end_time": "20:30"},
         {"start_time": "19:30", "end_time": "20:30", "untracked_seconds": -1},
@@ -322,7 +327,7 @@ def test_atomic_snapshots_preserve_revisions_and_validate_before_publication() -
     ) == (1, 1, 1)
     assert state.update_snapshots(schedule, live) == published
     with pytest.raises(TypeError):
-        state.update_snapshots(schedule, None)
+        state.update_snapshots(replace(schedule, week_label="mutated"), None)
     assert state.snapshot() == published
     changed = state.update_snapshots(replace(schedule, week_label="other"), live)
     assert changed.schedule_revision == 2
@@ -336,24 +341,30 @@ def test_atomic_snapshots_never_expose_mixed_contexts() -> None:
     barrier = threading.Barrier(2)
     done = threading.Event()
     failures = []
+    writer_errors: list[BaseException] = []
 
     def writer() -> None:
-        barrier.wait()
-        for index in range(500):
-            label = str(index % 2)
-            schedule = replace(state.schedule, week_label=label)
-            live = replace(state.live, active_part_title=label)
-            state.update_snapshots(schedule, live)
-        done.set()
+        try:
+            barrier.wait(timeout=5)
+            for index in range(500):
+                label = str(index % 2)
+                schedule = replace(state.schedule, week_label=label)
+                live = replace(state.live, active_part_title=label)
+                state.update_snapshots(schedule, live)
+        except BaseException as error:  # noqa: BLE001 - surface thread errors to test thread
+            writer_errors.append(error)
+        finally:
+            done.set()
 
     state.update_snapshots(
         replace(state.schedule, week_label="0"),
         replace(state.live, active_part_title="0"),
     )
-    thread = threading.Thread(target=writer)
+    thread = threading.Thread(target=writer, daemon=True)
     thread.start()
-    barrier.wait()
-    while True:
+    barrier.wait(timeout=5)
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
         snapshot = state.snapshot()
         if snapshot.schedule.week_label != snapshot.live.active_part_title:
             failures.append(snapshot)
@@ -362,6 +373,7 @@ def test_atomic_snapshots_never_expose_mixed_contexts() -> None:
             break
     thread.join(timeout=5)
     assert not thread.is_alive()
+    assert not writer_errors
     assert not failures
 
 

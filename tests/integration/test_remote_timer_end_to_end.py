@@ -386,9 +386,16 @@ def test_timer_hand_alert_policy_applies_to_bootstrap_and_live_streams(
 
 
 @pytest.mark.parametrize("allow_pacing_edits", (False, True))
-def test_steady_state_timer_ticks_emit_zero_websocket_broadcasts(allow_pacing_edits: bool) -> None:
+def test_steady_state_timer_ticks_emit_zero_websocket_broadcasts(
+    allow_pacing_edits: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime
+    from solin.core.timer import state_machine as timer_state_machine
+
+    fixed_now = datetime(2026, 7, 13, 19, 0).timestamp()
+    monkeypatch.setattr(timer_state_machine, "_now", lambda: fixed_now)
     window = PacingWindow("19:30", "21:15")
-    expected_end = window.resolve_at(time.time()).end_epoch
+    expected_end = window.resolve_at(fixed_now).end_epoch
     engine, _session, _bridge, adapter, app = _build_stack(
         feature_flags=TimerRemoteFeatureFlags(allow_pacing=allow_pacing_edits),
         pacing_window=window,
@@ -1142,7 +1149,14 @@ def test_pacing_is_authenticated_and_anchor_does_not_churn(monkeypatch) -> None:
         engine._revert_timer.stop()
 
 
-def test_custom_pacing_round_trips_through_authenticated_remote(tmp_path: Path) -> None:
+def test_custom_pacing_round_trips_through_authenticated_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datetime import datetime
+    from solin.core.timer import state_machine as timer_state_machine
+
+    fixed_now = datetime(2026, 7, 13, 19, 0).timestamp()
+    monkeypatch.setattr(timer_state_machine, "_now", lambda: fixed_now)
     engine, _session, bridge, adapter, app = _build_stack(
         feature_flags=TimerRemoteFeatureFlags(allow_pacing=True, allow_custom_schedules=True),
         custom_directory=tmp_path / "timers",
@@ -1223,7 +1237,7 @@ def test_custom_pacing_round_trips_through_authenticated_remote(tmp_path: Path) 
                 "before_parts": {}, "closing_seconds": 20,
             }
             published = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
-            assert published["pacing"]["end_epoch"] == PacingWindow("19:30", "19:33").resolve_at(time.time()).end_epoch
+            assert published["pacing"]["end_epoch"] == PacingWindow("19:30", "19:33").resolve_at(fixed_now).end_epoch
             assert published["pacingMode"] == "automatic"
             assert published["pacingAvailability"] == "ready"
             assert published["parts"][0]["adjustmentWeight"] > 0
@@ -1332,6 +1346,46 @@ def test_disabled_custom_feature_blocks_active_custom_controls(tmp_path: Path) -
             })
             assert (await response.json())["error"]["code"] == "blocked"
             assert not engine.snapshot().active
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_deactivating_remote_timer_adapter_aborts_pending_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from solin.core.remote_control.timer.contracts import (
+        StopPartCommand,
+        TimerCommandError,
+        TimerCommandErrorCode,
+    )
+
+    engine, _session, _bridge, adapter, _app = _build_stack()
+    executed: list[object] = []
+    monkeypatch.setattr(adapter._bridge, "_handler", lambda cmd: executed.append(cmd))
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        envelopes: list[object] = []
+        adapter._bridge.requested.disconnect(adapter._bridge._dispatch)
+        adapter._bridge.requested.connect(envelopes.append)
+        try:
+            task = loop.create_task(adapter._bridge.execute(StopPartCommand(str(uuid.uuid4()))))
+            await asyncio.sleep(0)
+            assert len(envelopes) == 1
+            adapter.set_active(False)
+            result = await asyncio.wait_for(task, timeout=2)
+            assert isinstance(result, TimerCommandError)
+            assert result.code is TimerCommandErrorCode.FAILED
+            # Even if the already-queued Qt signal fires afterward, it must not execute.
+            adapter._bridge._dispatch(envelopes[0])
+            assert not executed
+        finally:
+            adapter._bridge.requested.disconnect(envelopes.append)
+            adapter._bridge.requested.connect(adapter._bridge._dispatch)
 
     try:
         asyncio.run(scenario())

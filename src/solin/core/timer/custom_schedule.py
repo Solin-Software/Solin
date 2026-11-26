@@ -379,9 +379,9 @@ def replace_custom_schedule_entries(
             else:
                 sec_id = TimerSection.new(title, icon=icon, color=color).id
             raw_parts = raw.get("parts")
-            if not isinstance(raw_parts, list):
+            if not isinstance(raw_parts, list) or any(not isinstance(item, dict) for item in raw_parts):
                 raise TimerOperationError("invalid", "Invalid section parts list.")
-            parts = [build_part(item, sec_id) for item in raw_parts if isinstance(item, dict)]
+            parts = [build_part(item, sec_id) for item in raw_parts]
             new_entries.append(TimerSection(sec_id, title, parts, icon=icon, color=color))
         else:
             raise TimerOperationError("invalid", "Unknown timer schedule entry type.")
