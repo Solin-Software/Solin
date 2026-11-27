@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any, Protocol
 
 from PySide6.QtCore import QObject
+
+if TYPE_CHECKING:
+    from solin.core.scenes.engine import SceneEngineAck
 
 
 class PrefetchDownloader(Protocol):
@@ -40,7 +44,7 @@ class MediaPlaybackRoute(Protocol):
     def open(
         self, path: str, *, is_local_file: bool, autoplay: bool,
         volume_percent: int, speed_percent: int, trim_start_ms: int, trim_end_ms: int,
-    ) -> None: ...
+    ) -> tuple[str, Future[SceneEngineAck]]: ...
 
     def play(self) -> None: ...
 

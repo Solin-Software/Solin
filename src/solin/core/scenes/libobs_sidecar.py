@@ -44,7 +44,12 @@ from solin.core.scenes.engine import (
     camera_still_camera_id,
     is_scene_render_channel,
 )
-from solin.core.scenes.media_control import ContentSourceKind
+from solin.core.scenes.media_control import (
+    MEDIA_SLOT_BACKGROUND,
+    ContentSourceKind,
+    MediaPlaybackNativeState,
+    MediaPlaybackState,
+)
 from solin.core.scenes.idle import IdleScreenState
 from solin.core.scenes.output_health import OutputHealth, OutputHealthStatus
 from solin.core.scenes.camera_recovery import LocalCameraRecovery
@@ -74,6 +79,8 @@ _NO_RUNTIME_ENV = "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME"
 # How often the media poller samples + reports playback state (position/state) so
 # the app's transport UI (scrubber, play/pause, ended) stays live.
 _MEDIA_POLL_INTERVAL_S = 0.25
+# Keep the return of audio responsive without increasing transport IPC traffic.
+_MEDIA_AUDIO_POLL_INTERVAL_S = 0.04
 # Each open scene window renders its scene every frame tick; bound how many
 # the app can ask for so a runaway client cannot exhaust the render budget.
 _MAXIMUM_SCENE_WINDOW_FEEDS = 12
@@ -392,6 +399,8 @@ class LibobsSidecarEngine:
         self._requested_video_epoch: int | None = None
         self._reported_video_epoch: int | None = None
         self._media_lock = threading.Lock()
+        self._media_event_lock = threading.Lock()
+        self._media_request_ids: dict[int, str] = {}
         self._media_poller: threading.Thread | None = None
         self._media_poll_stop = threading.Event()
         self._media_trim_start_ms = 0
@@ -511,11 +520,12 @@ class LibobsSidecarEngine:
         from solin.core.scenes.libobs_media_source import LibobsMediaSource
         from solin.core.scenes.libobs_recorder import LibobsRecorder
         from solin.core.scenes.libobs_virtual_camera import LibobsVirtualCamera
+        from solin.core.scenes.media_audio_activity import playback_silence_hold_ms
 
         self._virtual_camera = LibobsVirtualCamera(runtime)
         self._recorder = LibobsRecorder(runtime)
         self._audio_mixer = LibobsAudioMixer(runtime)
-        self._media_source = LibobsMediaSource(runtime)
+        self._media_source = LibobsMediaSource(runtime, silence_hold_ms=playback_silence_hold_ms())
         # Background audio slot: monitored, but not composited into the scene.
         self._bg_media_source = LibobsMediaSource(runtime)
 
@@ -1160,8 +1170,6 @@ class LibobsSidecarEngine:
     # ── media control (Fork A: libobs decodes; app drives over IPC) ─────────
 
     def _media_slot(self, payload: Mapping[str, object]) -> int:
-        from solin.core.scenes.media_control import MEDIA_SLOT_BACKGROUND
-
         return MEDIA_SLOT_BACKGROUND if _payload_int(payload, "slot") else 0
 
     def _media_for_slot(self, slot: int) -> Any | None:
@@ -1199,6 +1207,10 @@ class LibobsSidecarEngine:
                 volume_percent=volume,
                 speed_percent=speed,
             )
+            if opened:
+                self._media_request_ids[slot] = request.request_id
+            else:
+                self._media_request_ids.pop(slot, None)
             if opened and not slot:
                 if self._scene_graph is not None:
                     for token, binding in tuple(self._prepared_content.items()):
@@ -1219,7 +1231,11 @@ class LibobsSidecarEngine:
                     media.require_video_frame()
                 self._collect_retired_presentations()
         if not opened:
-            self._emit_media_state(7, 0, 0, path, slot=slot, error_code="media_open_failed")
+            with self._media_event_lock:
+                self._emit_media_state(MediaPlaybackNativeState(
+                    MediaPlaybackState.ERROR, 0, 0, path, error_code="media_open_failed",
+                    slot=slot, source_request_id=request.request_id,
+                ))
             return _ack(request, applied=False, error_code="media_open_failed",
                         error_message="could not open the media source")
         self._ensure_media_poller()
@@ -1235,7 +1251,7 @@ class LibobsSidecarEngine:
         action = str(request.payload.get("action") or "")
         position_ms = max(0, _payload_int(request.payload, "position_ms"))
         trim_start = self._media_trim_start_ms if not slot else 0
-        reverted = False
+        closed_request_id = None
         with self._media_lock:
             if action == "play":
                 media.play()
@@ -1265,13 +1281,18 @@ class LibobsSidecarEngine:
                     self._media_trim_start_ms = 0
                     self._media_trim_end_from_ms = 0
                     self._media_trim_ended = False
-                reverted = True
+                closed_request_id = self._media_request_ids.pop(slot, None)
             else:
                 return _ack(request, applied=False, error_code="invalid_media_action",
                             error_message=f"unknown media action {action!r}")
-        if reverted:
+        if action == "close":
             self._maybe_stop_media_poller()
-            self._emit_media_state(5, 0, 0, "", slot=slot)  # STOPPED, so the app clears state
+            if closed_request_id is not None:
+                with self._media_event_lock:
+                    self._emit_media_state(MediaPlaybackNativeState(
+                        MediaPlaybackState.STOPPED, 0, 0, slot=slot,
+                        source_request_id=closed_request_id,
+                    ))
         else:
             self._emit_media_state_now(slot)
         return _ack(request, applied=True)
@@ -1373,8 +1394,8 @@ class LibobsSidecarEngine:
                 except Exception:  # noqa: BLE001 - preserve ownership for a later cleanup retry
                     log.warning("Could not collect the retired idle presentation", exc_info=True)
 
-    def _sample_media(self, slot: int = 0) -> tuple[int, int, int, str] | None:
-        """Read (state, position_ms, duration_ms, path) for ``slot``, or None.
+    def _sample_media(self, slot: int = 0) -> MediaPlaybackNativeState | None:
+        """Read the current playback, including confirmed foreground silence.
 
         The foreground slot (0) is trim-adjusted: positions/durations are reported
         relative to the trim window and the trim end is enforced by pausing and
@@ -1390,12 +1411,8 @@ class LibobsSidecarEngine:
             position = media.position_ms
             state = media.state
             duration = media.duration_ms
-            path = media.path
-            if slot:
-                # Background audio: raw, no trim.
-                return (state, max(0, position), max(0, duration), path)
-            start = self._media_trim_start_ms
-            trim_from_end = self._media_trim_end_from_ms
+            start = self._media_trim_start_ms if not slot else 0
+            trim_from_end = self._media_trim_end_from_ms if not slot else 0
             # Resolve the trim end against the real duration (the app can't know it
             # before decode); trim_end is "ms removed from the end". Only enforce a
             # window that is actually inside the media and wider than the start —
@@ -1408,46 +1425,45 @@ class LibobsSidecarEngine:
             if effective_end and position >= effective_end and state == STATE_PLAYING:
                 media.pause()
                 self._media_trim_ended = True
-            if self._media_trim_ended:
+            if not slot and self._media_trim_ended:
                 state = STATE_ENDED  # latched: keep reporting ENDED past the trim end
-        window_end = effective_end if effective_end else duration
-        rel_position = max(0, position - start)
-        rel_duration = max(0, window_end - start) if window_end else 0
-        return (state, rel_position, rel_duration, path)
+            window_end = effective_end or duration
+            return MediaPlaybackNativeState(
+                MediaPlaybackState(state),
+                max(0, position - start),
+                max(0, window_end - start),
+                media.path,
+                slot=slot,
+                audio_silent=not slot and media.audio_is_silent(state, position),
+                source_request_id=self._media_request_ids[slot],
+            )
 
     def _emit_media_state_now(self, slot: int = 0) -> None:
-        snapshot = self._sample_media(slot)
-        if snapshot is not None:
-            self._emit_media_state(*snapshot, slot=slot)
+        with self._media_event_lock:
+            snapshot = self._sample_media(slot)
+            if snapshot is not None:
+                self._emit_media_state(snapshot)
 
-    def _emit_media_state(
-        self,
-        state: int,
-        position_ms: int,
-        duration_ms: int,
-        path: str,
-        *,
-        slot: int = 0,
-        error_code: str = "",
-    ) -> None:
+    def _emit_media_state(self, snapshot: MediaPlaybackNativeState) -> None:
         sink = self._event_sink
         if sink is None:
             return
         envelope = SceneIpcEnvelope(
             message_type="media_playback_state",
-            request_id="event-media",
+            request_id=snapshot.source_request_id,
             session_id=self._session_id,
             process_generation=self._process_generation,
             sequence=0,
             document_revision=0,
             deadline_monotonic_ms=int(time.monotonic() * 1000) + 2000,
             payload={
-                "state": max(0, int(state)),
-                "position_ms": max(0, int(position_ms)),
-                "duration_ms": max(0, int(duration_ms)),
-                "path": str(path or ""),
-                "error_code": str(error_code or ""),
-                "slot": int(slot),
+                "state": int(snapshot.state),
+                "position_ms": snapshot.position_ms,
+                "duration_ms": snapshot.duration_ms,
+                "path": snapshot.path,
+                "error_code": snapshot.error_code,
+                "slot": snapshot.slot,
+                "audio_silent": snapshot.audio_silent,
             },
         )
         try:
@@ -1480,14 +1496,28 @@ class LibobsSidecarEngine:
             poller.join(timeout=1.0)
 
     def _media_poll_loop(self) -> None:
-        from solin.core.scenes.media_control import MEDIA_SLOT_BACKGROUND
-
-        while not self._media_poll_stop.wait(_MEDIA_POLL_INTERVAL_S):
-            for slot in (0, MEDIA_SLOT_BACKGROUND):
-                snapshot = self._sample_media(slot)
+        next_transport_report = time.monotonic()
+        last_foreground = None
+        while not self._media_poll_stop.is_set():
+            foreground = self._media_source
+            monitor = foreground is not None and foreground.monitors_audio_activity
+            until_report = max(0.0, next_transport_report - time.monotonic())
+            interval = min(until_report, _MEDIA_AUDIO_POLL_INTERVAL_S) if monitor else until_report
+            if self._media_poll_stop.wait(interval):
+                return
+            now = time.monotonic()
+            transport_due = now >= next_transport_report
+            with self._media_event_lock:
+                snapshot = self._sample_media()
                 if snapshot is not None:
-                    self._emit_media_state(*snapshot, slot=slot)
-            self._emit_video_ready()
+                    current = (snapshot.source_request_id, snapshot.state, snapshot.audio_silent)
+                    if transport_due or current != last_foreground:
+                        self._emit_media_state(snapshot)
+                    last_foreground = current
+            if transport_due:
+                self._emit_media_state_now(MEDIA_SLOT_BACKGROUND)
+                self._emit_video_ready()
+                next_transport_report = now + _MEDIA_POLL_INTERVAL_S
 
     def _emit_video_ready(self) -> None:
         # Loading is asynchronous. Publish readiness from the control poller,
@@ -2418,6 +2448,7 @@ class LibobsSidecarEngine:
                 log.warning("Could not release the empty content source", exc_info=True)
         self._content_presentation_epoch = None
         self._media_epoch = None
+        self._media_request_ids.clear()
         idle, self._idle_source = self._idle_source, None
         for owner, _source in tuple(self._idle_presentations.values()):
             try:

@@ -226,7 +226,7 @@ the current configuration. A rejected manual mode is not silently substituted.
 | --- | --- |
 | Scene document schema | 14 |
 | Shared scene resource schema | 3 |
-| Scene IPC protocol | 12 |
+| Scene IPC protocol | 13 |
 
 Scene schema 12 and resource schema 1 accept a missing or boolean `keep_active`
 field in legacy camera configurations and remove it during migration. Other

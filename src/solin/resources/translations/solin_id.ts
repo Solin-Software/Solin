@@ -11610,8 +11610,8 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Bisukan mikrofon Zoom Anda saat Solin memutar audio atau video. Jika Solin yang membisukannya, aktifkan kembali mikrofon saat pemutaran dijeda atau berhenti.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Bisukan mikrofon Zoom Anda saat Solin memutar audio atau video. Jika Solin yang membisukannya, mikrofon dapat diaktifkan kembali saat hening berkepanjangan atau saat pemutaran dijeda maupun berhenti.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

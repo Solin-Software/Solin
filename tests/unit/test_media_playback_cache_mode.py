@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+from concurrent.futures import Future
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
@@ -12,7 +12,7 @@ from solin.core.media.playback_request import (
     MediaPlaybackRequest,
     PlaybackCachePolicy,
 )
-from solin.core.media.playback_state import ENGINE_STATE_PAUSED, ENGINE_STATE_PLAYING
+from solin.core.scenes.media_control import MediaPlaybackNativeState, MediaPlaybackState
 
 
 def _app():
@@ -76,6 +76,7 @@ class _FakeRoute:
         self.opened.append((path, kwargs))
         self.calls.append("open")
         self.volume_percent = kwargs["volume_percent"]
+        return "", Future()
 
     def play(self):
         self.calls.append("play")
@@ -360,8 +361,6 @@ def test_stopping_playback_stops_reporting_buffer(tmp_path):
 
 def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
     """The transport shows recovery while the engine reconnects a dropped stream."""
-    from solin.core.media.playback_state import ENGINE_STATE_BUFFERING
-
     controller, _downloader = _controller_with_downloader(tmp_path, auto_download=True)
     controller.set_engine_media_route(_FakeRoute())
     _start(controller, REMOTE)
@@ -369,13 +368,11 @@ def test_a_dropped_stream_reports_recovering_not_stopped(tmp_path):
     controller.playback_recovery_changed.connect(recovering.append)
 
     controller.on_engine_media_state(
-        SimpleNamespace(state=ENGINE_STATE_BUFFERING, position_ms=30_000,
-                        duration_ms=140_000, path=REMOTE, error_code="")
+        MediaPlaybackNativeState(MediaPlaybackState.BUFFERING, 30_000, 140_000, path=REMOTE)
     )
     QCoreApplication.processEvents()
     controller.on_engine_media_state(
-        SimpleNamespace(state=ENGINE_STATE_PLAYING, position_ms=30_100,
-                        duration_ms=140_000, path=REMOTE, error_code="")
+        MediaPlaybackNativeState(MediaPlaybackState.PLAYING, 30_100, 140_000, path=REMOTE)
     )
     QCoreApplication.processEvents()
 
@@ -388,16 +385,16 @@ def test_audible_playback_stays_inactive_until_suppressed_audio_is_released(tmp_
     route = _FakeRoute()
     controller.set_engine_media_route(route)
     changes: list[bool] = []
-    controller.audible_playback_changed.connect(changes.append)
+    controller.playback_audio_expected_changed.connect(changes.append)
 
-    def report_state(state: int) -> None:
+    def report_state(state: MediaPlaybackState) -> None:
         controller.on_engine_media_state(
-            SimpleNamespace(state=state, position_ms=3500, duration_ms=60000)
+            MediaPlaybackNativeState(state, 3500, 60000)
         )
 
     controller.set_audio_suppressed(True)
     _start(controller, REMOTE)
-    report_state(ENGINE_STATE_PLAYING)
+    report_state(MediaPlaybackState.PLAYING)
     controller.set_volume(0.55)
     controller.pause()
 
@@ -405,18 +402,18 @@ def test_audible_playback_stays_inactive_until_suppressed_audio_is_released(tmp_
     assert route.volume_percent == 0
     assert changes == []
 
-    report_state(ENGINE_STATE_PAUSED)
+    report_state(MediaPlaybackState.PAUSED)
     controller.set_audio_suppressed(False)
     assert route.volume_percent == 55
     assert changes == []
 
     controller.play()
-    report_state(ENGINE_STATE_PLAYING)
+    report_state(MediaPlaybackState.PLAYING)
     controller.set_volume(0)
     controller.set_volume(0.55)
-    report_state(ENGINE_STATE_PAUSED)
+    report_state(MediaPlaybackState.PAUSED)
     controller.play()
-    report_state(ENGINE_STATE_PLAYING)
+    report_state(MediaPlaybackState.PLAYING)
     controller.stop()
 
     assert changes == [True, False, True, False, True, False]

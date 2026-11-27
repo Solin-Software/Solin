@@ -11650,8 +11650,8 @@ Beide apparaten moeten verbonden zijn met hetzelfde wifinetwerk.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Dempt je Zoom-microfoon terwijl Solin audio of video afspeelt. Als Solin de microfoon heeft gedempt, heft Solin de demping op zodra het afspelen pauzeert of stopt.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Dempt je Zoom-microfoon terwijl Solin audio of video afspeelt. Als Solin de microfoon heeft gedempt, kan Solin de demping opheffen bij aanhoudende stilte of zodra het afspelen pauzeert of stopt.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

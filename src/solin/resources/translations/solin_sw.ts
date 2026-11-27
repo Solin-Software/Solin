@@ -11650,8 +11650,8 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Hunyamazisha maikrofoni yako ya Zoom wakati Solin inacheza sauti au video. Ikiwa Solin ndiyo iliyoizima sauti, huiwasha tena uchezaji unapositishwa kwa muda au unapokoma.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Hunyamazisha maikrofoni yako ya Zoom wakati Solin inacheza sauti au video. Ikiwa Solin ndiyo iliyoizima sauti, inaweza kuiwasha tena kukiwa na ukimya wa muda mrefu au uchezaji unapositishwa kwa muda au unapokoma.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

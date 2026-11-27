@@ -11650,8 +11650,8 @@ Dapat nakakonekta ang dalawang device sa iisang Wi-Fi network.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Imi-mute ang mikropono mo sa Zoom habang nagpe-play ng audio o video ang Solin. Kung Solin ang nag-mute nito, ia-unmute ito kapag na-pause o huminto ang pag-play.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Imi-mute ang mikropono mo sa Zoom habang nagpe-play ng audio o video ang Solin. Kung Solin ang nag-mute nito, maaari itong i-unmute kapag matagal na tahimik ang media o kapag na-pause o huminto ang pag-play.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

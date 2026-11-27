@@ -72,6 +72,8 @@ class MediaPlaybackNativeState:
     path: str = ""
     error_code: str = ""
     slot: int = MEDIA_SLOT_FOREGROUND
+    audio_silent: bool = False
+    source_request_id: str = ""
 
     def __post_init__(self) -> None:
         if not isinstance(self.state, MediaPlaybackState):
@@ -84,6 +86,8 @@ class MediaPlaybackNativeState:
                 raise ValueError(f"Invalid {name}")
         _bounded_text(self.path, MAXIMUM_MEDIA_PATH_LENGTH, "media path")
         _bounded_text(self.error_code, 128, "media error code")
+        if type(self.audio_silent) is not bool:
+            raise ValueError("Invalid media audio silence state")
 
 
 def _bounded_text(value: object, maximum: int, field_name: str) -> None:
