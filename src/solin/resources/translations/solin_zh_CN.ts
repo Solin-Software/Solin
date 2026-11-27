@@ -23,49 +23,103 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+113"/>
-        <location line="+119"/>
+        <source>Could not load custom schedules. Try again.</source>
+        <translation>无法加载自定义日程。请重试。</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the estimates before saving.</source>
+        <translation>保存前请输入开始和结束时间，或清除估算值。</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>权重（0–100）：权重越高，调整幅度越大。当其他部分的权重为正数时，权重为 0 的部分保持不变。如果所有权重均为 0，则符合条件的部分将被平均调整。</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location line="+199"/>
         <source>Clock</source>
         <translation>时钟</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-214"/>
         <source>Digital</source>
         <translation>数字</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog</source>
         <translation>模拟</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog + digital</source>
         <translation>模拟 + 数字</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Signature</source>
         <extracomment>&quot;Signature&quot; is the proper name of this clock face. Keep it unchanged.</extracomment>
         <translation>Signature</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Classic</source>
         <translation>经典</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <location line="+54"/>
+        <location line="+31"/>
         <source>Timer</source>
         <translation>计时器</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-83"/>
         <source>Clock + timer</source>
         <translation>时钟 + 计时器</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+5"/>
+        <source>Off</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor only</source>
+        <translation>仅监控</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor and adjust</source>
+        <translation>监控并调整</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Forecasts the finish time without changing part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>预测结束时间而不更改环节目标。按配置文件保存，同时适用于“聚会”和“日程”。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Forecasts the finish time and adjusts upcoming eligible part targets. Changing mode during a run keeps the active target.</source>
+        <translation>预测结束时间并自动调整后续符合条件的环节目标。运行期间切换模式会保留当前目标。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Does not forecast finish time or adjust part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>不预测结束时间，也不调整环节目标。按配置文件保存，同时适用于“聚会”和“日程”。</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Pacing</source>
+        <translation>进度控制</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Mode</source>
+        <translation>模式</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Clock face</source>
         <translation>钟面</translation>
     </message>
@@ -75,12 +129,12 @@
         <translation>模拟样式</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Format</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+7"/>
         <source>24-hour</source>
         <translation>24小时</translation>
     </message>
@@ -90,24 +144,24 @@
         <translation>12小时</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+3"/>
+        <location line="+9"/>
+        <location line="+7"/>
         <source>Show seconds</source>
         <translation>显示秒数</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+3"/>
+        <location line="+6"/>
+        <location line="+6"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Part timer</source>
         <translation>环节计时器</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>During parts</source>
         <translation>节目进行期间</translation>
     </message>
@@ -117,7 +171,7 @@
         <translation>计时方向</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Count down</source>
         <translation>倒计时</translation>
     </message>
@@ -127,59 +181,59 @@
         <translation>正计时</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Hold duration when stopped</source>
         <translation>停止时保持时长</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Less</source>
         <translation>减少</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More</source>
         <translation>增加</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Display</source>
         <translation>显示</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Display size</source>
         <translation>显示大小</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+22"/>
         <source>Monitors</source>
         <translation>显示器</translation>
     </message>
     <message>
-        <location line="+2"/>
         <location line="+5"/>
+        <location line="+4"/>
         <source>Show timer</source>
         <translation>显示计时器</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+58"/>
         <source>Reserved for the timer · %1</source>
         <translation>已为计时器预留 · %1</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+16"/>
         <source>Unreserve</source>
         <translation>取消预留</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+358"/>
+        <location line="+170"/>
         <source>Reserve</source>
         <translation>预留</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-167"/>
         <source>Reserve this monitor for the timer</source>
         <translation>为计时器预留此显示器</translation>
     </message>
@@ -189,27 +243,150 @@
         <translation>未检测到副显示器</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>切换日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Meetings</source>
+        <translation>聚会</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Schedules</source>
+        <translation>日程</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Show the timer on a monitor to raise hand</source>
+        <translation>在显示器上显示计时器后才能举手</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clear hand alert</source>
+        <translation>清除举手提醒</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Raise hand</source>
+        <translation>举手</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Add at least one part to export PDF</source>
+        <translation>请至少添加一个环节以导出 PDF</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Timer settings</source>
+        <translation>计时器设置</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Previous week</source>
         <translation>上周</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+50"/>
         <source>Not the current week</source>
         <translation>不是当前周</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+15"/>
         <source>Next week</source>
         <translation>下周</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Back to this week</source>
+        <location line="+12"/>
+        <source>Current week</source>
+        <translation>本周</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back to current week</source>
         <translation>返回本周</translation>
     </message>
     <message>
+        <location line="+59"/>
+        <location line="+5"/>
+        <location line="+172"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <source>New schedule</source>
+        <translation>新建日程</translation>
+    </message>
+    <message>
+        <location line="-173"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>创建日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <source>Edit schedule</source>
+        <translation>编辑日程</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Stop the running timer before organizing this schedule.</source>
+        <translation>编排此日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Organize parts and sections</source>
+        <translation>编排环节和板块</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>More schedule actions</source>
+        <translation>更多日程操作</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Reload</source>
+        <translation>重新加载</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>No custom schedules yet</source>
+        <translation>暂无自定义日程</translation>
+    </message>
+    <message>
         <location line="+10"/>
+        <source>Create a schedule for trainings, assemblies, or any timed event. Sections and target times are optional.</source>
+        <translation>可为培训、大会或任何需要计时的活动创建日程。板块和目标时间为可选项。</translation>
+    </message>
+    <message>
+        <location line="+200"/>
+        <source>Timing and pacing…</source>
+        <translation>时间与进度控制…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Rename schedule…</source>
+        <translation>重命名日程…</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <source>Duplicate</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <source>Reset results</source>
+        <translation>重置结果</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <location line="-484"/>
         <source>Midweek</source>
         <translation>周中</translation>
     </message>
@@ -219,49 +396,703 @@
         <translation>周末</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-171"/>
+        <location line="+4"/>
         <source>Export PDF</source>
         <translation>导出 PDF</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Meeting parts</source>
-        <translation>聚会环节</translation>
-    </message>
-    <message>
-        <location line="+85"/>
-        <source>Parts</source>
+        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <source>Part</source>
         <translation>环节</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
+        <source>Planned</source>
+        <translation>计划</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Result</source>
+        <translation>结果</translation>
+    </message>
+    <message>
+        <location line="+188"/>
         <source>Fewer parts</source>
         <translation>减少环节</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More parts</source>
         <translation>增加环节</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>%1 total</source>
-        <translation>总计 %1</translation>
+        <location line="+38"/>
+        <source>Empty section</source>
+        <translation>空板块</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+345"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location line="+354"/>
+        <source>Delete part</source>
+        <translation>删除环节</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename section…</source>
+        <translation>重命名板块…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Section appearance…</source>
+        <translation>板块外观…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <source>Add part to section</source>
+        <translation>向板块添加环节</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <source>Delete section</source>
+        <translation>删除板块</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>显示器正被媒体使用</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>媒体当前正在使用 %1。要为计时器预留它并将媒体移出此显示器吗？</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location line="+130"/>
+        <location line="+66"/>
+        <location line="+48"/>
+        <location line="+106"/>
+        <location line="+102"/>
+        <location line="+271"/>
+        <location line="+404"/>
+        <location line="+52"/>
+        <location line="+37"/>
+        <location line="+34"/>
+        <location line="+132"/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <source>Projected %1 min behind</source>
+        <translation>预计延迟 %1 分钟</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Projected %1 min ahead</source>
+        <translation>预计提前 %1 分钟</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On schedule</source>
+        <translation>准时</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projected end %1 · Target %2</source>
+        <translation>预计结束 %1 · 目标 %2</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Part overtime</source>
+        <translation>环节超时</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In progress</source>
+        <translation>进行中</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Completed (over target)</source>
+        <translation>已完成（超时）</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Completed</source>
+        <translation>已完成</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Schedule completed</source>
+        <translation>日程已完成</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selected part</source>
+        <translation>已选环节</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready</source>
+        <translation>就绪</translation>
+    </message>
+    <message>
+        <location line="+82"/>
+        <location line="+540"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <source>Edit part…</source>
+        <translation>编辑环节…</translation>
+    </message>
+    <message>
+        <location line="-527"/>
+        <location line="+377"/>
+        <source>No parts in this schedule</source>
+        <translation>此日程中没有环节</translation>
+    </message>
+    <message>
+        <location line="-318"/>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+395"/>
+        <source>Target %1 · Planned %2</source>
+        <translation>目标 %1 · 计划 %2</translation>
+    </message>
+    <message>
+        <location line="-404"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <source>Target %1</source>
+        <translation>目标 %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+396"/>
+        <source>Planned %1</source>
+        <translation>计划 %1</translation>
+    </message>
+    <message>
+        <location line="-376"/>
+        <location line="+313"/>
+        <location line="+5"/>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <location line="-316"/>
+        <location line="+312"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <source>Restart</source>
+        <translation>重新开始</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <location line="+309"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <source>Start</source>
+        <translation>开始</translation>
+    </message>
+    <message>
+        <location line="-290"/>
+        <location line="+383"/>
+        <source>Adjust time</source>
+        <translation>调整时间</translation>
+    </message>
+    <message>
+        <location line="-372"/>
+        <location line="+408"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <source>Reset</source>
+        <translation>重置</translation>
+    </message>
+    <message>
+        <location line="-405"/>
+        <location line="+406"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <source>Reset this part</source>
+        <translation>重置此环节</translation>
+    </message>
+    <message>
+        <location line="-358"/>
+        <source>Reset all results</source>
+        <translation>重置全部结果</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Set the meeting time in Profile settings to track schedule pacing.</source>
+        <translation>请在配置文件设置中设置聚会时间，以跟踪日程进度。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set start and end times in the menu (⋯) to track pacing.</source>
+        <translation>请在菜单 (⋯) 中设置开始和结束时间，以跟踪进度。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+239"/>
+        <source>Configure meeting time</source>
+        <translation>配置聚会时间</translation>
+    </message>
+    <message>
+        <location line="-238"/>
+        <location line="+238"/>
+        <source>Set schedule time</source>
+        <translation>设置日程时间</translation>
+    </message>
+    <message>
+        <location line="-219"/>
+        <source>The configured time window will take effect after resetting results.</source>
+        <translation>配置的时间段将在重置结果后生效。</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Up next</source>
+        <translation>下一环节</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+196"/>
+        <source>Start next part</source>
+        <translation>开始下一环节</translation>
+    </message>
+    <message>
+        <location line="-55"/>
+        <source>Meeting time not set</source>
+        <translation>未设置聚会时间</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Schedule time not set</source>
+        <translation>未设置日程时间</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset results to apply time window</source>
+        <translation>重置结果以应用时间段</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Set time</source>
+        <translation>设置时间</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Adjust</source>
+        <translation>调整</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Next</source>
+        <translation>下一个</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <source>Editing: %1</source>
+        <translation>正在编辑：%1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Drag items to reorder, add parts or sections, then save your changes.</source>
+        <translation>拖动项目以重新排序，添加环节或板块，然后保存更改。</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location line="+56"/>
+        <source>Add section</source>
+        <translation>添加板块</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location line="+70"/>
+        <source>Add part</source>
+        <translation>添加环节</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location line="+195"/>
+        <location line="+48"/>
+        <location line="+482"/>
+        <location line="+405"/>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>This schedule has no parts yet.</source>
+        <translation>此日程尚无环节。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use Add part or Add section above to build it.</source>
+        <translation>请使用上方的“添加环节”或“添加板块”来编排日程。</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <location line="+354"/>
+        <source>Move up</source>
+        <translation>上移</translation>
+    </message>
+    <message>
+        <location line="-342"/>
+        <location line="+354"/>
+        <source>Move down</source>
+        <translation>下移</translation>
+    </message>
+    <message>
+        <location line="-344"/>
+        <location line="+3"/>
+        <location line="+176"/>
+        <location line="+175"/>
+        <location line="+3"/>
+        <source>Move to…</source>
+        <translation>移动到…</translation>
+    </message>
+    <message>
+        <location line="-228"/>
+        <source>Change section icon and color</source>
+        <translation>更改板块图标和颜色</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Move section up</source>
+        <translation>上移板块</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Move section down</source>
+        <translation>下移板块</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Move section</source>
+        <translation>移动板块</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Empty the section before deleting it</source>
+        <translation>删除板块前请先清空其中的环节</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Empty section — drag a part here or click +</source>
+        <translation>空板块 — 将环节拖到此处或点击 +</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <source>%1 (copy)</source>
+        <translation>%1（副本）</translation>
+    </message>
+    <message>
+        <location line="+160"/>
+        <source>No section (root)</source>
+        <translation>无板块（顶层）</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>No icon</source>
+        <translation>无图标</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default</source>
+        <translation>默认</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Edit part</source>
+        <translation>编辑环节</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+368"/>
+        <source>Part name</source>
+        <translation>环节名称</translation>
+    </message>
+    <message>
+        <location line="-362"/>
+        <source>Restore default</source>
+        <translation>恢复默认</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Planned duration</source>
+        <translation>计划时长</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reset this part to change its planned duration.</source>
+        <translation>请先重置此环节，再更改其计划时长。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This part&apos;s duration is fixed.</source>
+        <translation>此环节的时长为固定值。</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <location line="+129"/>
+        <location line="+218"/>
+        <source>Enter a valid duration (e.g., 5 or 05:00).</source>
+        <translation>请输入有效的时长（例如：5 或 05:00）。</translation>
+    </message>
+    <message>
+        <location line="-280"/>
+        <source>Schedule name</source>
+        <translation>日程名称</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>e.g., Volunteer training</source>
+        <translation>例如：志愿人员培训</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>First part (optional — sections and times can be added later)</source>
+        <translation>首个环节（可选 — 板块和时间可稍后添加）</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Part name (e.g., Welcome)</source>
+        <translation>环节名称（例如：欢迎词）</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Create schedule</source>
+        <translation>创建日程</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Rename schedule</source>
+        <translation>重命名日程</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Rename section</source>
+        <translation>重命名板块</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Duration</source>
+        <translation>时长</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Section (optional)</source>
+        <translation>板块（可选）</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Section name</source>
+        <translation>板块名称</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>e.g., Practice</source>
+        <translation>例如：练习</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Color (optional)</source>
+        <translation>颜色（可选）</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+156"/>
+        <source>Default color</source>
+        <translation>默认颜色</translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <source>Section appearance</source>
+        <translation>板块外观</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Section preview</source>
+        <translation>板块预览</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Section color</source>
+        <translation>板块颜色</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Custom hex</source>
+        <translation>自定义十六进制色值</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Section icon</source>
+        <translation>板块图标</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>请使用 6 位十六进制颜色代码，例如 #41b6c4。</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Schedule timing and pacing</source>
+        <translation>日程时间与进度控制</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Total planned parts: %1</source>
+        <translation>计划环节总计：%1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Set start and end times so the timer can track whether you are ahead or behind, and adjust remaining parts when Automatic mode is active.</source>
+        <translation>设置开始和结束时间后，计时器可跟踪进度是提前还是延迟，并在自动模式启用时调整剩余环节。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Start (HH:MM)</source>
+        <translation>开始时间 (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>End (HH:MM)</source>
+        <translation>结束时间 (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>允许自动调整的环节</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>在自动模式下，仅已勾选的环节会被缩短或延长以按时结束。未勾选的环节保持计划时长。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>在自动模式下，已勾选的环节可缩短或延长以按时结束。若未勾选任何环节，所有不少于 1 分钟的环节将平均调整。</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Under 1 min</source>
+        <translation>不足 1 分钟</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Advanced options</source>
+        <translation>高级选项</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Weight (0–100): the higher the weight, the more this part will be adjusted compared to parts with a lower weight. 0 keeps the part fixed.</source>
+        <translation>权重 (0–100)：权重越高，该环节相比低权重环节的自动调整幅度越大。设为 0 则保持时长固定。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
+        <translation>环节外的预计时间（秒）：用于演讲者交替、诗歌或通知的总时间。环节前的特定间隔以及最后环节后的时间（例如结束诗歌和祷告）将优先预留；剩余时间则分配给其他间隔。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Estimated time outside parts (sec)</source>
+        <translation>环节外的预计时间（秒）</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Weight</source>
+        <translation>权重</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Break before (sec)</source>
+        <translation>前序间隔（秒）</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Time after last part (sec)</source>
+        <translation>末环节后时间（秒）</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Clear time</source>
+        <translation>清除时间</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Duplicate schedule</source>
+        <translation>复制日程</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Creates a copy of the structure with all results reset.</source>
+        <translation>创建日程结构的副本，并重置全部结果。</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Delete schedule?</source>
+        <translation>删除日程？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>“%1” and its recorded results will be permanently removed.</source>
+        <translation>“%1”及其已记录的结果将被永久删除。</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Reset results?</source>
+        <translation>重置结果？</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All recorded times in this schedule will be cleared. The structure stays intact.</source>
+        <translation>此日程中所有已记录的时间将被清除，日程结构保持不变。</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <location line="+9"/>
+        <location line="+11"/>
+        <source>Before “%1”</source>
+        <translation>在“%1”之前</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+9"/>
+        <location line="+14"/>
+        <source>At the end</source>
+        <translation>在末尾</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Move “%1”</source>
+        <translation>移动“%1”</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Destination</source>
+        <translation>目标位置</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Position</source>
+        <translation>位置</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Move</source>
+        <translation>移动</translation>
     </message>
 </context>
 <context>
@@ -2682,52 +3513,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>无法添加任何媒体。</translation>
-    </message>
-</context>
-<context>
-    <name>MeetingPartRow</name>
-    <message>
-        <location filename="../../qml/MeetingPartRow.qml" line="+127"/>
-        <source>Started %1</source>
-        <translation>已开始 %1</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>−1 min</source>
-        <translation>−1分钟</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>+1 min</source>
-        <translation>+1分钟</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>duration</source>
-        <translation>时长</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Stop</source>
-        <translation>停止</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reset</source>
-        <translation>重置</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Start</source>
-        <translation>开始</translation>
-    </message>
-    <message>
-        <source>−1 s</source>
-        <translation>−1 s</translation>
-    </message>
-    <message>
-        <source>+1 s</source>
-        <translation>+1 s</translation>
     </message>
 </context>
 <context>
@@ -9768,7 +10553,52 @@ Add one when you are ready.</source>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../../ui/qml/timer_bridge.py" line="+333"/>
+        <location filename="../../ui/qml/timer_bridge.py" line="+365"/>
+        <source>Total duration ({requested}) exceeds the schedule window ({available}).</source>
+        <translation>总时长 ({requested}) 超出了日程时间段 ({available})。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+846"/>
+        <location line="+186"/>
+        <source>This schedule was updated elsewhere. Reload it before making changes.</source>
+        <translation>此日程已在别处更新。请先重新加载再进行更改。</translation>
+    </message>
+    <message>
+        <location line="-1028"/>
+        <source>Stop the running timer before making this change.</source>
+        <translation>进行此更改前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Move or delete the section&apos;s parts before deleting the section.</source>
+        <translation>删除板块前，请先移动或删除其中的环节。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset the part before changing its duration.</source>
+        <translation>更改时长前，请先重置该环节。</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This action is currently unavailable.</source>
+        <translation>此操作当前不可用。</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+828"/>
+        <location line="+16"/>
+        <location line="+170"/>
+        <source>The selected item no longer exists.</source>
+        <translation>所选项目已不存在。</translation>
+    </message>
+    <message>
+        <location line="-833"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>切换日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Weekend</source>
         <translation>周末</translation>
     </message>
@@ -9778,7 +10608,169 @@ Add one when you are ready.</source>
         <translation>周中</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+173"/>
+        <source>Diamond</source>
+        <translation>钻石</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wheat</source>
+        <translation>小麦</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sheep</source>
+        <translation>绵羊</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Speaker</source>
+        <translation>演讲者</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tower</source>
+        <translation>高塔</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Book</source>
+        <translation>书本</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>People</source>
+        <translation>人员</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>麦克风</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Music</source>
+        <translation>音乐</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Video</source>
+        <translation>视频</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Calendar</source>
+        <translation>日历</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clock</source>
+        <translation>时钟</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Marker</source>
+        <translation>标记</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check</source>
+        <translation>勾选</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Teal</source>
+        <translation>青色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gold</source>
+        <translation>金色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Crimson</source>
+        <translation>绯红色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amber</source>
+        <translation>琥珀色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indigo</source>
+        <translation>靛蓝色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blue</source>
+        <translation>蓝色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Emerald</source>
+        <translation>翠绿色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Violet</source>
+        <translation>紫罗兰色</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neutral</source>
+        <translation>中性色</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>创建日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set a valid duration for the first part.</source>
+        <translation>请为首个环节设置有效的时长。</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <location line="+43"/>
+        <location line="+55"/>
+        <location line="+604"/>
+        <source>Could not save changes. Try again.</source>
+        <translation>无法保存更改，请重试。</translation>
+    </message>
+    <message>
+        <source>Could not finish creating the schedule. Check the schedule list before trying again.</source>
+        <translation>未能完成日程创建。请先检查日程列表，再重试。</translation>
+    </message>
+    <message>
+        <source>Could not change the schedule or restore the previous selection.</source>
+        <translation>无法切换日程或恢复之前的选择。</translation>
+    </message>
+    <message>
+        <location line="-684"/>
+        <location line="+40"/>
+        <source>The selected schedule no longer exists.</source>
+        <translation>所选日程已不存在。</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Stop the running timer before deleting a schedule.</source>
+        <translation>删除日程前，请先停止正在运行的计时器。</translation>
+    </message>
+    <message>
+        <location line="+325"/>
+        <source>Enter valid start and end times (HH:MM).</source>
+        <translation>请输入有效的开始和结束时间 (HH:MM)。</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>End time must be different from start time.</source>
+        <translation>结束时间必须与开始时间不同。</translation>
+    </message>
+    <message>
+        <location line="+370"/>
         <source>this monitor</source>
         <translation>此显示器</translation>
     </message>
@@ -9950,7 +10942,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+76"/>
+        <location filename="../../qml/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>计时器</translation>
     </message>
@@ -9967,8 +10959,8 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Assignments</source>
-        <translation>任务</translation>
+        <source>Schedule</source>
+        <translation>日程</translation>
     </message>
     <message>
         <location line="-18"/>

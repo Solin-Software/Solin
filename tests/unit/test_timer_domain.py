@@ -1348,3 +1348,87 @@ def test_normalize_timer_title_rejects_unicode_line_separators():
     for bad in ("Line\nBreak", "Line\rBreak", "Line\u2028Break", "Line\u2029Break", "Line\u0085Break"):
         with pytest.raises(ValueError):
             normalize_timer_title(bad)
+
+
+def test_timing_settings_validate_before_mutating_and_honor_optional_updates():
+    from solin.core.timer.custom_schedule import (
+        TimerOperationError,
+        edit_custom_schedule,
+        replace_custom_timing_settings,
+    )
+    from solin.core.timer.models import CustomTimerSchedule
+
+    schedule = CustomTimerSchedule.new("Schedule")
+    edit_custom_schedule(schedule, "add_part", title="Part", planned_seconds=300)
+    part = schedule.parts[0]
+    with pytest.raises(TimerOperationError):
+        replace_custom_timing_settings(
+            schedule, start_time="19:30", end_time=None, weights={part.id: 50},
+        )
+    assert part.adjustment_weight == 0
+    assert schedule.pacing_window is None
+
+    replace_custom_timing_settings(
+        schedule, start_time="19:30", end_time="20:00",
+        untracked_seconds=120, update_untracked=True,
+    )
+    replace_custom_timing_settings(
+        schedule, start_time="19:30", end_time="20:05",
+        untracked_seconds=999999, update_untracked=False,
+    )
+    assert schedule.pacing_window.untracked_seconds == 120
+    replace_custom_timing_settings(
+        schedule, start_time="19:30", end_time="20:05", update_untracked=True,
+    )
+    assert schedule.pacing_window.untracked_seconds is None
+
+
+@pytest.mark.parametrize("edit_mode", ["part", "structure"])
+def test_shortened_custom_part_keeps_weight_when_timing_settings_are_saved(edit_mode):
+    from solin.core.timer.custom_schedule import (
+        edit_custom_schedule,
+        replace_custom_schedule_entries,
+        replace_custom_timing_settings,
+    )
+    from solin.core.timer.models import CustomTimerSchedule
+
+    schedule = CustomTimerSchedule.new("Schedule")
+    edit_custom_schedule(schedule, "add_part", title="Part", planned_seconds=300)
+    part_id = schedule.parts[0].id
+    edit_custom_schedule(schedule, "set_adjustment_weight", part_id=part_id, adjustment_weight=50)
+
+    def change_duration(seconds):
+        if edit_mode == "part":
+            edit_custom_schedule(schedule, "set_part_seconds", part_id=part_id, planned_seconds=seconds)
+        else:
+            replace_custom_schedule_entries(schedule, [{
+                "type": "part", "id": part_id, "title": "Part", "plannedSeconds": seconds,
+            }])
+
+    change_duration(60)
+    assert schedule.parts[0].adjustment_weight == 50
+    change_duration(30)
+    part = schedule.parts[0]
+    assert part.planned_seconds == 30
+    assert part.adjustment_weight == 50
+    replace_custom_timing_settings(
+        schedule, start_time=None, end_time=None, weights={part_id: part.adjustment_weight},
+    )
+    assert schedule.parts[0].adjustment_weight == 50
+
+
+def test_custom_schedule_load_preserves_ineligible_weight_without_adjusting_the_part():
+    from solin.core.timer.custom_schedule import edit_custom_schedule
+    from solin.core.timer.models import CustomTimerSchedule
+    from solin.core.timer.pacing import adjustment_weights
+
+    schedule = CustomTimerSchedule.new("Schedule")
+    edit_custom_schedule(schedule, "add_part", title="Short", planned_seconds=30)
+    edit_custom_schedule(schedule, "add_part", title="Eligible", planned_seconds=60)
+    saved = schedule.to_dict()
+    for entry in saved["entries"]:
+        entry["adjustment_weight"] = 50
+
+    loaded = CustomTimerSchedule.from_dict(saved)
+    assert [part.adjustment_weight for part in loaded.parts] == [50, 50]
+    assert adjustment_weights(loaded, loaded.parts) == {loaded.parts[1].id: 50}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -18,6 +18,7 @@ from .custom_schedule import (
     duplicate_custom_schedule,
     edit_custom_schedule,
     replace_custom_schedule_entries,
+    replace_custom_timing_settings,
     validate_title,
 )
 from .models import (
@@ -122,6 +123,7 @@ class TimerSession:
         self._repository = repository
         self._custom_repository = custom_repository
         self._unrestored_custom_selection = False
+        self._meeting_revision = 0
         self._current_week_monday = current_week_monday
         self._meeting_schedule = meeting_schedule
         self._current_week = current_week or (lambda: self._current_week_monday)
@@ -216,6 +218,11 @@ class TimerSession:
             schedule.assignment_setup = previous_setup
             raise
         schedule.has_unreadable_record = False
+        self._meeting_revision += 1
+
+    @property
+    def meeting_revision(self) -> int:
+        return self._meeting_revision
 
     def adjust_part(self, part_id: str, delta_seconds: int) -> bool:
         part = self._schedule.part_by_id(part_id)
@@ -294,6 +301,54 @@ class TimerSession:
             raise
         return True
 
+    def edit_part(self, part_id: str, title: str | None, seconds: int | None) -> bool:
+        """Save the fields changed by the part editor as a single operation."""
+        schedule = self._schedule
+        part = schedule.part_by_id(part_id)
+        if part is None:
+            raise TimerOperationError("not_found", "The timer part no longer exists.")
+        if isinstance(schedule, CustomTimerSchedule):
+            candidate = deepcopy(schedule)
+            if title is not None:
+                edit_custom_schedule(candidate, "rename_part", part_id=part_id, title=title)
+            if seconds is not None:
+                edit_custom_schedule(candidate, "set_part_seconds", part_id=part_id, planned_seconds=seconds)
+            if candidate == schedule:
+                return False
+            if seconds is not None:
+                _require_duration_budget(
+                    candidate, previous_total=schedule.planned_total_seconds(), include_execution_window=True,
+                )
+            self._save_custom_revision(candidate)
+            self._schedule = candidate
+            return True
+
+        previous_title = part.title_override
+        previous_seconds = part.planned_seconds
+        next_title = validate_title(title) if title is not None else previous_title
+        if seconds is not None:
+            if type(seconds) is not int or not MIN_PLANNED_PART_SECONDS <= seconds <= MAX_PLANNED_PART_SECONDS:
+                raise TimerOperationError(
+                    "invalid", f"Set a duration between {MIN_PLANNED_PART_SECONDS} and {MAX_PLANNED_PART_SECONDS} seconds."
+                )
+            if part.state is not PartState.IDLE:
+                raise TimerOperationError("blocked", "Reset the timer part before changing its duration.")
+        next_seconds = previous_seconds if seconds is None else seconds
+        if (next_title, next_seconds) == (previous_title, previous_seconds):
+            return False
+        previous_total = schedule.planned_total_seconds()
+        part.title_override = next_title
+        part.planned_seconds = next_seconds
+        try:
+            if seconds is not None:
+                _require_duration_budget(schedule, previous_total=previous_total)
+            self.record_schedule_change()
+        except (OSError, RuntimeError, TimerDurationBudgetError):
+            part.title_override = previous_title
+            part.planned_seconds = previous_seconds
+            raise
+        return True
+
     def list_custom_schedules(self) -> tuple[CustomTimerSchedule, ...]:
         if self._custom_repository is None:
             return ()
@@ -305,36 +360,124 @@ class TimerSession:
             return deepcopy(active)
         return self._custom_store().load_schedule(schedule_id)
 
-    def create_custom_schedule(self, title: str) -> CustomTimerSchedule:
+    def create_custom_schedule(
+        self,
+        title: str,
+        *,
+        first_part_title: str | None = None,
+        first_part_seconds: int = 0,
+        select: bool = False,
+    ) -> CustomTimerSchedule:
         schedule = CustomTimerSchedule.new(validate_title(title))
-        self._custom_store().save_schedule(schedule)
+        if first_part_title is not None:
+            edit_custom_schedule(schedule, "add_part", title=first_part_title, planned_seconds=first_part_seconds)
+            _require_duration_budget(schedule)
+        self._save_new_custom_schedule(schedule, select=select)
         return schedule
 
     def duplicate_custom_schedule(
-        self, schedule_id: str, title: str, expected_revision: int,
+        self, schedule_id: str, title: str, expected_revision: int, *, select: bool = False,
     ) -> CustomTimerSchedule:
         source = self._require_custom_schedule(schedule_id, expected_revision)
         schedule = duplicate_custom_schedule(source, title)
-        self._custom_store().save_schedule(schedule)
+        self._save_new_custom_schedule(schedule, select=select)
         return schedule
 
-    def delete_custom_schedule(self, schedule_id: str, expected_revision: int) -> None:
-        schedule = self._require_custom_schedule(schedule_id, expected_revision)
-        if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
-            raise TimerOperationError("blocked", "Select another schedule before deleting this one.")
-        if schedule.has_running_part():
-            raise TimerOperationError("blocked", "Stop the timer before deleting this schedule.")
-        self._custom_store().delete_schedule(schedule_id)
+    def _save_new_custom_schedule(self, schedule: CustomTimerSchedule, *, select: bool) -> None:
+        if select:
+            self._require_stopped()
+        store = self._custom_store()
+        try:
+            store.save_schedule(schedule)
+            if select:
+                self._persist_custom_selection(schedule.id)
+        except (OSError, RuntimeError, TimerOperationError) as error:
+            selection_uncertain = isinstance(error, TimerOperationError) and error.code == "selection_restore_failed"
+            if selection_uncertain or not self._discard_new_custom_schedule(store, schedule.id):
+                raise TimerOperationError(
+                    "created_without_selection",
+                    "Could not finish creating the schedule. Check the schedule list before trying again.",
+                ) from error
+            raise
+        if select:
+            self._activate_custom_schedule(schedule)
 
-    def select_custom_schedule(self, schedule_id: str) -> bool:
-        if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
+    @staticmethod
+    def _discard_new_custom_schedule(store: CustomTimerRepository, schedule_id: str) -> bool:
+        try:
+            store.delete_schedule(schedule_id)
+        except FileNotFoundError:
+            pass
+        except (OSError, RuntimeError):
+            log.warning("Could not roll back created custom timer schedule %s", schedule_id, exc_info=True)
+            return False
+        return True
+
+    @staticmethod
+    def _restore_custom_selection(store: CustomTimerRepository, previous_id: str | None) -> bool:
+        try:
+            if store.load_selection() != previous_id:
+                store.save_selection(previous_id)
+        except (OSError, RuntimeError):
+            log.warning("Could not restore the previous custom timer selection.", exc_info=True)
+            return False
+        return True
+
+    def _persist_custom_selection(
+        self, schedule_id: str | None, *, delete_schedule_id: str | None = None,
+    ) -> None:
+        store = self._custom_store()
+        previous_selection = store.load_selection()
+        try:
+            store.save_selection(schedule_id)
+            if delete_schedule_id is not None:
+                store.delete_schedule(delete_schedule_id)
+        except (OSError, RuntimeError) as error:
+            # The atomic writer can fail after replacing the selection file.
+            if not self._restore_custom_selection(store, previous_selection):
+                raise TimerOperationError(
+                    "selection_restore_failed",
+                    "Could not change the schedule or restore the previous selection.",
+                ) from error
+            raise
+
+    def delete_custom_schedule(
+        self, schedule_id: str, expected_revision: int, *, replace_active: bool = False,
+    ) -> bool:
+        schedule = self._require_custom_schedule(schedule_id, expected_revision)
+        if schedule.has_running_part() or (replace_active and self._schedule.has_running_part()):
+            raise TimerOperationError("blocked", "Stop the timer before deleting this schedule.")
+        store = self._custom_store()
+        if schedule is not self._schedule:
+            store.delete_schedule(schedule_id)
+            return False
+        if not replace_active:
+            raise TimerOperationError("blocked", "Select another schedule before deleting this one.")
+
+        replacement = next((item for item in self.list_custom_schedules() if item.id != schedule_id), None)
+        next_schedule = replacement or self._load_meeting_schedule(self._week_monday, self._meeting_type)
+        self._persist_custom_selection(
+            replacement.id if replacement is not None else None, delete_schedule_id=schedule_id,
+        )
+        if isinstance(next_schedule, CustomTimerSchedule):
+            self._activate_custom_schedule(next_schedule)
+        else:
+            self._schedule = next_schedule
+            self._meeting_revision += 1
+        return True
+
+    def select_custom_schedule(self, schedule_id: str, *, expected_revision: int | None = None) -> bool:
+        schedule = self._require_custom_schedule(schedule_id, expected_revision)
+        if schedule is self._schedule:
             return False
         self._require_stopped()
-        schedule = self._require_custom_schedule(schedule_id)
-        self._custom_store().save_selection(schedule_id)
+        self._persist_custom_selection(schedule_id)
+        self._activate_custom_schedule(schedule)
+        return True
+
+    def _activate_custom_schedule(self, schedule: CustomTimerSchedule) -> None:
         self._unrestored_custom_selection = False
         self._schedule = schedule
-        return True
 
     def select_meeting_schedule(self) -> bool:
         if isinstance(self._schedule, MeetingSchedule):
@@ -342,8 +485,9 @@ class TimerSession:
             return False
         self._require_stopped()
         schedule = self._load_meeting_schedule(self._week_monday, self._meeting_type)
-        self._custom_store().save_selection(None)
+        self._persist_custom_selection(None)
         self._schedule = schedule
+        self._meeting_revision += 1
         return True
 
     def edit_custom_schedule(
@@ -360,9 +504,7 @@ class TimerSession:
             _require_duration_budget(
                 candidate, previous_total=previous_total, include_execution_window=not changes_window,
             )
-        self._save_custom_revision(candidate)
-        if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
-            self._schedule = candidate
+        self._commit_custom_edit(schedule, candidate)
         return True
 
     def replace_custom_schedule_entries(
@@ -381,14 +523,58 @@ class TimerSession:
             previous_total=schedule.planned_total_seconds(),
             include_execution_window=True,
         )
-        self._save_custom_revision(candidate)
-        if isinstance(self._schedule, CustomTimerSchedule) and self._schedule.id == schedule_id:
-            self._schedule = candidate
+        self._commit_custom_edit(schedule, candidate)
         return True
+
+    def replace_custom_timing_settings(
+        self,
+        schedule_id: str,
+        expected_revision: int,
+        *,
+        start_time: str | None,
+        end_time: str | None,
+        untracked_seconds: int | None = None,
+        update_untracked: bool = False,
+        weights: Mapping[str, int] | None = None,
+        before_parts: Mapping[str, int | None] | None = None,
+        closing_seconds: int | None = None,
+        update_closing: bool = False,
+    ) -> bool:
+        schedule = self._require_custom_schedule(schedule_id, expected_revision)
+        candidate = deepcopy(schedule)
+        replace_custom_timing_settings(
+            candidate,
+            start_time=start_time,
+            end_time=end_time,
+            untracked_seconds=untracked_seconds,
+            update_untracked=update_untracked,
+            weights=weights,
+            before_parts=before_parts,
+            closing_seconds=closing_seconds,
+            update_closing=update_closing,
+        )
+        if candidate == schedule:
+            return False
+        if candidate.pacing_window != schedule.pacing_window:
+            _require_duration_budget(
+                candidate, previous_total=None, include_execution_window=False,
+            )
+        self._commit_custom_edit(schedule, candidate)
+        return True
+
+    def _commit_custom_edit(self, original: CustomTimerSchedule, candidate: CustomTimerSchedule) -> None:
+        self._save_custom_revision(candidate)
+        if self._schedule is original:
+            self._schedule = candidate
 
     def refresh_meeting_window(self) -> bool:
         schedule = self._schedule
-        return isinstance(schedule, MeetingSchedule) and self._update_meeting_window(schedule, self._week_monday)
+        if not isinstance(schedule, MeetingSchedule):
+            return False
+        if not self._update_meeting_window(schedule, self._week_monday):
+            return False
+        self._meeting_revision += 1
+        return True
 
     def set_pacing_mode(self, mode: PacingMode) -> bool:
         if not isinstance(mode, PacingMode):
@@ -406,6 +592,7 @@ class TimerSession:
         ):
             return False
         # Heal an orphaned empty pacing_run left behind after resetting every part.
+        previous_run = schedule.pacing_run
         cleared_orphan_run = False
         if (
             schedule.pacing_run is not None
@@ -443,6 +630,7 @@ class TimerSession:
             self._repository.save_schedule(schedule)
         except (OSError, RuntimeError):
             schedule.pacing_window = previous
+            schedule.pacing_run = previous_run
             raise
         return True
 
@@ -536,6 +724,7 @@ class TimerSession:
             return False
         self._repository.save_schedule(candidate)
         self._schedule = candidate
+        self._meeting_revision += 1
         return True
 
     def update_clock(self, key: str, value: object) -> ClockConfig | None:
@@ -568,6 +757,7 @@ class TimerSession:
         self._week_monday = week_monday
         self._meeting_type = meeting_type
         self._schedule = schedule
+        self._meeting_revision += 1
         return schedule
 
     def _load_meeting_schedule(self, week_monday: date, meeting_type: MeetingType) -> MeetingSchedule:

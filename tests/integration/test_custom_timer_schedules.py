@@ -25,7 +25,7 @@ from solin.core.timer.models import (
     PartState,
     Section,
 )
-from solin.core.timer.pacing import PacingAvailability
+from solin.core.timer.pacing import PacingAvailability, adjustment_weights
 from solin.core.timer.pacing_models import PacingMode
 from solin.core.timer.schedule_factory import build_default_schedule
 
@@ -61,6 +61,104 @@ def _edit(operations, schedule_id, action, **values):
     assert schedule is not None
     assert operations.edit_custom_schedule(schedule_id, schedule.revision, action, **values)
     return operations.get_custom_schedule(schedule_id)
+
+
+@pytest.mark.parametrize("use_draft", [False, True])
+def test_shortening_an_explicitly_adjustable_part_preserves_its_selection(timer_runtime, use_draft):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    schedule = operations.create_custom_schedule("Training", first_part_title="Talk", first_part_seconds=90)
+    _edit(operations, schedule.id, "add_part", title="Practice", planned_seconds=120)
+    first, second = operations.get_custom_schedule(schedule.id).parts
+    current = _edit(operations, schedule.id, "set_adjustment_weight", part_id=first.id, adjustment_weight=100)
+
+    if use_draft:
+        assert operations.replace_custom_schedule_entries(schedule.id, current.revision, [
+            {"type": "part", "id": first.id, "title": first.title, "plannedSeconds": 59},
+            {"type": "part", "id": second.id, "title": second.title, "plannedSeconds": 120},
+        ])
+    else:
+        _edit(operations, schedule.id, "set_part_seconds", part_id=first.id, planned_seconds=59)
+
+    saved = repository.load_schedule(schedule.id)
+    assert saved.parts[0].adjustment_weight == 100
+    assert not adjustment_weights(saved, saved.parts)
+    with pytest.raises(TimerOperationError):
+        operations.edit_custom_schedule(
+            saved.id, saved.revision, "set_adjustment_weight", part_id=first.id, adjustment_weight=50,
+        )
+    with pytest.raises(TimerOperationError):
+        operations.replace_custom_timing_settings(
+            saved.id, saved.revision, start_time=None, end_time=None, weights={first.id: 50},
+        )
+    restored = _edit(
+        operations, schedule.id, "set_part_seconds", part_id=first.id, planned_seconds=90,
+    )
+    assert adjustment_weights(restored, restored.parts) == {first.id: 100}
+    short = _edit(operations, schedule.id, "set_part_seconds", part_id=first.id, planned_seconds=59)
+    cleared = _edit(operations, short.id, "set_adjustment_weight", part_id=first.id, adjustment_weight=0)
+    assert set(adjustment_weights(cleared, cleared.parts)) == {second.id}
+    with pytest.raises(TimerOperationError):
+        operations.edit_custom_schedule(
+            cleared.id, cleared.revision, "set_adjustment_weight", part_id=first.id, adjustment_weight=50,
+        )
+
+
+def test_failed_active_delete_does_not_publish_a_replacement(timer_runtime, monkeypatch):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    original = operations.create_custom_schedule("First", select=True)
+    replacement = operations.create_custom_schedule("Second")
+    snapshots = []
+    operations.changed.connect(lambda: snapshots.append(operations.session.schedule.id))
+    remove = repository.delete_schedule
+
+    def fail_delete(_schedule_id):
+        raise OSError("disk error")
+
+    monkeypatch.setattr(repository, "delete_schedule", fail_delete)
+    with pytest.raises(OSError):
+        operations.delete_custom_schedule(original.id, original.revision, replace_active=True)
+    assert snapshots == []
+    assert operations.engine.schedule.id == original.id
+    assert repository.load_selection() == original.id
+    assert repository.load_schedule(original.id) is not None
+
+    monkeypatch.setattr(repository, "delete_schedule", remove)
+    assert operations.delete_custom_schedule(original.id, original.revision, replace_active=True)
+    assert snapshots == [replacement.id]
+    assert operations.engine.schedule.id == replacement.id
+    assert repository.load_selection() == replacement.id
+    assert repository.load_schedule(original.id) is None
+
+
+@pytest.mark.parametrize("action", ["create", "delete", "select"])
+def test_selection_write_error_after_replacement_preserves_context(timer_runtime, monkeypatch, action):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    original = operations.create_custom_schedule("First", select=True)
+    other = operations.create_custom_schedule("Second")
+    updates = QSignalSpy(operations.changed)
+    save_selection = repository.save_selection
+
+    def fail_after_replacement(schedule_id):
+        save_selection(schedule_id)
+        if schedule_id != original.id:
+            raise OSError("directory sync failed after rename")
+
+    monkeypatch.setattr(repository, "save_selection", fail_after_replacement)
+    with pytest.raises(OSError):
+        if action == "create":
+            operations.create_custom_schedule("New", select=True)
+        elif action == "delete":
+            operations.delete_custom_schedule(original.id, original.revision, replace_active=True)
+        else:
+            operations.select_custom_schedule(other.id, expected_revision=other.revision)
+
+    assert updates.count() == 0
+    assert operations.engine.schedule.id == original.id
+    assert repository.load_selection() == original.id
+    assert {schedule.id for schedule in repository.list_schedules()} == {original.id, other.id}
 
 
 def test_pacing_preference_follows_the_profile_and_reports_a_missing_window(timer_runtime):
@@ -794,3 +892,38 @@ def test_replace_custom_schedule_entries_rejects_non_dict_nested_parts(timer_run
         )
     assert error.value.code == "invalid"
     assert operations.get_custom_schedule(schedule_id).to_dict() == before
+
+
+def test_part_edit_persists_both_fields_once_and_rejects_invalid_or_failed_write(
+    timer_runtime, monkeypatch,
+):
+    open_profile, _ = timer_runtime
+    operations, repository, _ = open_profile()
+    schedule = operations.create_custom_schedule(
+        "Event", first_part_title="Original", first_part_seconds=120,
+    )
+    operations.select_custom_schedule(schedule.id)
+    part_id = schedule.parts[0].id
+    changes = QSignalSpy(operations.changed)
+    with pytest.raises(TimerOperationError):
+        operations.edit_part(part_id, "Invalid edit", 86400)
+    assert operations.get_custom_schedule(schedule.id) == schedule
+    assert repository.load_schedule(schedule.id) == schedule
+    assert changes.count() == 0
+
+    def failed_write(_schedule):
+        raise OSError("storage unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(repository, "save_schedule", failed_write)
+        with pytest.raises(OSError):
+            operations.edit_part(part_id, "Failed edit", 180)
+        assert operations.get_custom_schedule(schedule.id) == schedule
+        assert changes.count() == 0
+
+    assert operations.edit_part(part_id, "New title", 180)
+    updated = repository.load_schedule(schedule.id)
+    assert updated == operations.get_custom_schedule(schedule.id)
+    assert updated.revision == schedule.revision + 1
+    assert (updated.parts[0].title, updated.parts[0].planned_seconds) == ("New title", 180)
+    assert changes.count() == 1

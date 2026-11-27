@@ -23,49 +23,103 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+113"/>
-        <location line="+119"/>
+        <source>Could not load custom schedules. Try again.</source>
+        <translation>Hindi ma-load ang mga custom na iskedyul. Subukan muli.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the estimates before saving.</source>
+        <translation>Ilagay ang oras ng pagsisimula at pagtatapos o burahin ang mga pagtataya bago mag-save.</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Timbang (0–100): mas inaayos ang mga may mas mataas na timbang. Ang timbang na 0 ay nagpapanatiling hindi nagbabago ng isang bahagi kapag may positibong timbang ang ibang bahagi. Kung 0 ang lahat ng timbang, pantay na inaayos ang mga bahagi na maaaring ayusin.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location line="+199"/>
         <source>Clock</source>
         <translation>Orasan</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-214"/>
         <source>Digital</source>
         <translation>Digital</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog</source>
         <translation>Analog</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog + digital</source>
         <translation>Analog + digital</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Signature</source>
         <extracomment>&quot;Signature&quot; is the proper name of this clock face. Keep it unchanged.</extracomment>
         <translation>Signature</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Classic</source>
         <translation>Klasiko</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <location line="+54"/>
+        <location line="+31"/>
         <source>Timer</source>
         <translation>Timer</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-83"/>
         <source>Clock + timer</source>
         <translation>Orasan + timer</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+5"/>
+        <source>Off</source>
+        <translation>Naka-off</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor only</source>
+        <translation>Subaybayan lang</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor and adjust</source>
+        <translation>Subaybayan at ayusin</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Forecasts the finish time without changing part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Tinataya ang oras ng pagtatapos nang hindi binabago ang target ng mga bahagi. Naka-save kada profile para sa Mga Pulong at Mga Iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Forecasts the finish time and adjusts upcoming eligible part targets. Changing mode during a run keeps the active target.</source>
+        <translation>Tinataya ang oras ng pagtatapos at inaayos ang target ng mga susunod na kwalipikadong bahagi. Pinananatili ang kasalukuyang target kapag pinalitan ang mode habang tumatakbo.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Does not forecast finish time or adjust part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Hindi tinataya ang oras ng pagtatapos at hindi inaayos ang target ng mga bahagi. Naka-save kada profile para sa Mga Pulong at Mga Iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Pacing</source>
+        <translation>Pagsunod sa oras</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Mode</source>
+        <translation>Mode</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Clock face</source>
         <translation>Mukha ng orasan</translation>
     </message>
@@ -75,12 +129,12 @@
         <translation>Analog na istilo</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Format</source>
         <translation>Format</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+7"/>
         <source>24-hour</source>
         <translation>24-oras</translation>
     </message>
@@ -90,24 +144,24 @@
         <translation>12-oras</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+3"/>
+        <location line="+9"/>
+        <location line="+7"/>
         <source>Show seconds</source>
         <translation>Ipakita ang segundo</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+3"/>
+        <location line="+6"/>
+        <location line="+6"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Part timer</source>
         <translation>Timer ng bahagi</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>During parts</source>
         <translation>Habang may bahagi</translation>
     </message>
@@ -117,7 +171,7 @@
         <translation>Direksiyon ng bilang</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Count down</source>
         <translation>Bilang pababa</translation>
     </message>
@@ -127,59 +181,59 @@
         <translation>Bilang pataas</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Hold duration when stopped</source>
         <translation>Panatilihin ang tagal kapag nakahinto</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Less</source>
         <translation>Mas kaunti</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More</source>
         <translation>Mas marami</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Display</source>
         <translation>Display</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Display size</source>
         <translation>Laki ng display</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+22"/>
         <source>Monitors</source>
         <translation>Mga Monitor</translation>
     </message>
     <message>
-        <location line="+2"/>
         <location line="+5"/>
+        <location line="+4"/>
         <source>Show timer</source>
         <translation>Ipakita ang timer</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+58"/>
         <source>Reserved for the timer · %1</source>
         <translation>Nakareserba para sa timer · %1</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+16"/>
         <source>Unreserve</source>
         <translation>Alisin ang reserba</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+358"/>
+        <location line="+170"/>
         <source>Reserve</source>
         <translation>Ireserba</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-167"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Ireserba ang monitor na ito para sa timer</translation>
     </message>
@@ -189,27 +243,150 @@
         <translation>Walang na-detect na secondary monitor</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago magpalit ng iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Meetings</source>
+        <translation>Mga Pulong</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Schedules</source>
+        <translation>Mga Iskedyul</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Show the timer on a monitor to raise hand</source>
+        <translation>Ipakita ang timer sa isang monitor para makapagtaas ng kamay</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clear hand alert</source>
+        <translation>Alisin ang abiso ng kamay</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Raise hand</source>
+        <translation>Magtaas ng kamay</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Add at least one part to export PDF</source>
+        <translation>Magdagdag ng kahit isang bahagi para makapag-export ng PDF</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Timer settings</source>
+        <translation>Mga setting ng timer</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Previous week</source>
         <translation>Nakaraang linggo</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+50"/>
         <source>Not the current week</source>
         <translation>Hindi ang kasalukuyang linggo</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+15"/>
         <source>Next week</source>
         <translation>Susunod na linggo</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Back to this week</source>
-        <translation>Bumalik sa linggong ito</translation>
+        <location line="+12"/>
+        <source>Current week</source>
+        <translation>Kasalukuyang linggo</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back to current week</source>
+        <translation>Bumalik sa kasalukuyang linggo</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <location line="+5"/>
+        <location line="+172"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <source>New schedule</source>
+        <translation>Bagong iskedyul</translation>
+    </message>
+    <message>
+        <location line="-173"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago gumawa ng iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <source>Edit schedule</source>
+        <translation>I-edit ang iskedyul</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Stop the running timer before organizing this schedule.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago ayusin ang iskedyul na ito.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Organize parts and sections</source>
+        <translation>Ayusin ang mga bahagi at seksiyon</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>More schedule actions</source>
+        <translation>Iba pang pagkilos sa iskedyul</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Reload</source>
+        <translation>I-reload</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>No custom schedules yet</source>
+        <translation>Wala pang custom na iskedyul</translation>
     </message>
     <message>
         <location line="+10"/>
+        <source>Create a schedule for trainings, assemblies, or any timed event. Sections and target times are optional.</source>
+        <translation>Gumawa ng iskedyul para sa mga pagsasanay, asamblea, o anumang nakatakdang aktibidad. Opsyonal ang mga seksiyon at target na oras.</translation>
+    </message>
+    <message>
+        <location line="+200"/>
+        <source>Timing and pacing…</source>
+        <translation>Oras at pagsunod sa iskedyul…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Rename schedule…</source>
+        <translation>Palitan ang pangalan ng iskedyul…</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <source>Duplicate</source>
+        <translation>I-duplicate</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <source>Reset results</source>
+        <translation>I-reset ang mga resulta</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <source>Delete</source>
+        <translation>Burahin</translation>
+    </message>
+    <message>
+        <location line="-484"/>
         <source>Midweek</source>
         <translation>Gitnang sanlinggo</translation>
     </message>
@@ -219,49 +396,703 @@
         <translation>Dulo ng sanlinggo</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-171"/>
+        <location line="+4"/>
         <source>Export PDF</source>
         <translation>I-export ang PDF</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Meeting parts</source>
-        <translation>Mga bahagi ng pulong</translation>
+        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <source>Part</source>
+        <translation>Bahagi</translation>
     </message>
     <message>
-        <location line="+85"/>
-        <source>Parts</source>
-        <translation>Mga bahagi</translation>
+        <location line="+8"/>
+        <source>Planned</source>
+        <translation>Planado</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
+        <source>Result</source>
+        <translation>Resulta</translation>
+    </message>
+    <message>
+        <location line="+188"/>
         <source>Fewer parts</source>
         <translation>Mas kaunting bahagi</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More parts</source>
         <translation>Mas maraming bahagi</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>%1 total</source>
-        <translation>%1 kabuuan</translation>
+        <location line="+38"/>
+        <source>Empty section</source>
+        <translation>Walang lamang seksiyon</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+345"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location line="+354"/>
+        <source>Delete part</source>
+        <translation>Burahin ang bahagi</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename section…</source>
+        <translation>Palitan ang pangalan ng seksiyon…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Section appearance…</source>
+        <translation>Hitsura ng seksiyon…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <source>Add part to section</source>
+        <translation>Magdagdag ng bahagi sa seksiyon</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <source>Delete section</source>
+        <translation>Burahin ang seksiyon</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>Ginagamit ng media ang monitor</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Kasalukuyang ginagamit ng media ang %1. Ireserba ito para sa timer at alisin ang media sa monitor na ito?</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location line="+130"/>
+        <location line="+66"/>
+        <location line="+48"/>
+        <location line="+106"/>
+        <location line="+102"/>
+        <location line="+271"/>
+        <location line="+404"/>
+        <location line="+52"/>
+        <location line="+37"/>
+        <location line="+34"/>
+        <location line="+132"/>
         <source>Cancel</source>
         <translation>Kanselahin</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <source>Projected %1 min behind</source>
+        <translation>Tinatayang huli nang %1 min</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Projected %1 min ahead</source>
+        <translation>Tinatayang maaga nang %1 min</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On schedule</source>
+        <translation>Nasa oras</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projected end %1 · Target %2</source>
+        <translation>Tinatayang tapos %1 · Target %2</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Part overtime</source>
+        <translation>Lampas sa oras ang bahagi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In progress</source>
+        <translation>Isinasagawa</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Completed (over target)</source>
+        <translation>Tapos na (lampas sa target)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Completed</source>
+        <translation>Tapos na</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Schedule completed</source>
+        <translation>Tapos na ang iskedyul</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selected part</source>
+        <translation>Napiling bahagi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready</source>
+        <translation>Handa na</translation>
+    </message>
+    <message>
+        <location line="+82"/>
+        <location line="+540"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <source>Edit part…</source>
+        <translation>I-edit ang bahagi…</translation>
+    </message>
+    <message>
+        <location line="-527"/>
+        <location line="+377"/>
+        <source>No parts in this schedule</source>
+        <translation>Walang mga bahagi sa iskedyul na ito</translation>
+    </message>
+    <message>
+        <location line="-318"/>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+395"/>
+        <source>Target %1 · Planned %2</source>
+        <translation>Target %1 · Planado %2</translation>
+    </message>
+    <message>
+        <location line="-404"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <source>Target %1</source>
+        <translation>Target %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+396"/>
+        <source>Planned %1</source>
+        <translation>Planado %1</translation>
+    </message>
+    <message>
+        <location line="-376"/>
+        <location line="+313"/>
+        <location line="+5"/>
+        <source>Stop</source>
+        <translation>Ihinto</translation>
+    </message>
+    <message>
+        <location line="-316"/>
+        <location line="+312"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <source>Restart</source>
+        <translation>Simulan muli</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <location line="+309"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <source>Start</source>
+        <translation>Simulan</translation>
+    </message>
+    <message>
+        <location line="-290"/>
+        <location line="+383"/>
+        <source>Adjust time</source>
+        <translation>Ayusin ang oras</translation>
+    </message>
+    <message>
+        <location line="-372"/>
+        <location line="+408"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <source>Reset</source>
+        <translation>I-reset</translation>
+    </message>
+    <message>
+        <location line="-405"/>
+        <location line="+406"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <source>Reset this part</source>
+        <translation>I-reset ang bahaging ito</translation>
+    </message>
+    <message>
+        <location line="-358"/>
+        <source>Reset all results</source>
+        <translation>I-reset ang lahat ng resulta</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Set the meeting time in Profile settings to track schedule pacing.</source>
+        <translation>Itakda ang oras ng pulong sa mga setting ng profile para masubaybayan ang pagsunod sa iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set start and end times in the menu (⋯) to track pacing.</source>
+        <translation>Itakda ang oras ng simula at pagtatapos sa menu (⋯) para masubaybayan ang pagsunod sa oras.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+239"/>
+        <source>Configure meeting time</source>
+        <translation>I-configure ang oras ng pulong</translation>
+    </message>
+    <message>
+        <location line="-238"/>
+        <location line="+238"/>
+        <source>Set schedule time</source>
+        <translation>Itakda ang oras ng iskedyul</translation>
+    </message>
+    <message>
+        <location line="-219"/>
+        <source>The configured time window will take effect after resetting results.</source>
+        <translation>Magkakabisa ang itinakdang saklaw ng oras pagkatapos i-reset ang mga resulta.</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Up next</source>
+        <translation>Susunod</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+196"/>
+        <source>Start next part</source>
+        <translation>Simulan ang susunod na bahagi</translation>
+    </message>
+    <message>
+        <location line="-55"/>
+        <source>Meeting time not set</source>
+        <translation>Hindi nakatakda ang oras ng pulong</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Schedule time not set</source>
+        <translation>Hindi nakatakda ang oras ng iskedyul</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset results to apply time window</source>
+        <translation>I-reset ang mga resulta para mailapat ang saklaw ng oras</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Set time</source>
+        <translation>Itakda ang oras</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Adjust</source>
+        <translation>Ayusin</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Next</source>
+        <translation>Susunod</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <source>Editing: %1</source>
+        <translation>Ine-edit: %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Drag items to reorder, add parts or sections, then save your changes.</source>
+        <translation>I-drag ang mga item para muling ayusin ang pagkakasunod-sunod, magdagdag ng mga bahagi o seksiyon, saka i-save ang mga pagbabago.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location line="+56"/>
+        <source>Add section</source>
+        <translation>Magdagdag ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location line="+70"/>
+        <source>Add part</source>
+        <translation>Magdagdag ng bahagi</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location line="+195"/>
+        <location line="+48"/>
+        <location line="+482"/>
+        <location line="+405"/>
+        <source>Save</source>
+        <translation>I-save</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>This schedule has no parts yet.</source>
+        <translation>Wala pang mga bahagi ang iskedyul na ito.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use Add part or Add section above to build it.</source>
+        <translation>Gamitin ang Magdagdag ng bahagi o Magdagdag ng seksiyon sa itaas para mabuo ito.</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <location line="+354"/>
+        <source>Move up</source>
+        <translation>Ilipat pataas</translation>
+    </message>
+    <message>
+        <location line="-342"/>
+        <location line="+354"/>
+        <source>Move down</source>
+        <translation>Ilipat pababa</translation>
+    </message>
+    <message>
+        <location line="-344"/>
+        <location line="+3"/>
+        <location line="+176"/>
+        <location line="+175"/>
+        <location line="+3"/>
+        <source>Move to…</source>
+        <translation>Ilipat sa…</translation>
+    </message>
+    <message>
+        <location line="-228"/>
+        <source>Change section icon and color</source>
+        <translation>Palitan ang icon at kulay ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Move section up</source>
+        <translation>Ilipat pataas ang seksiyon</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Move section down</source>
+        <translation>Ilipat pababa ang seksiyon</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Move section</source>
+        <translation>Ilipat ang seksiyon</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Empty the section before deleting it</source>
+        <translation>Alisin muna ang mga laman ng seksiyon bago ito burahin</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Empty section — drag a part here or click +</source>
+        <translation>Walang lamang seksiyon — mag-drag ng bahagi rito o i-click ang +</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <source>%1 (copy)</source>
+        <translation>%1 (kopya)</translation>
+    </message>
+    <message>
+        <location line="+160"/>
+        <source>No section (root)</source>
+        <translation>Walang seksiyon (pinakataas)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>No icon</source>
+        <translation>Walang icon</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default</source>
+        <translation>Default</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Edit part</source>
+        <translation>I-edit ang bahagi</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+368"/>
+        <source>Part name</source>
+        <translation>Pangalan ng bahagi</translation>
+    </message>
+    <message>
+        <location line="-362"/>
+        <source>Restore default</source>
+        <translation>Ibalik sa default</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Planned duration</source>
+        <translation>Planadong tagal</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reset this part to change its planned duration.</source>
+        <translation>I-reset ang bahaging ito para mapalitan ang planadong tagal nito.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This part&apos;s duration is fixed.</source>
+        <translation>Nakatakda ang tagal ng bahaging ito.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <location line="+129"/>
+        <location line="+218"/>
+        <source>Enter a valid duration (e.g., 5 or 05:00).</source>
+        <translation>Maglagay ng wastong tagal (hal., 5 o 05:00).</translation>
+    </message>
+    <message>
+        <location line="-280"/>
+        <source>Schedule name</source>
+        <translation>Pangalan ng iskedyul</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>e.g., Volunteer training</source>
+        <translation>hal., Pagsasanay ng mga boluntaryo</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>First part (optional — sections and times can be added later)</source>
+        <translation>Unang bahagi (opsyonal — maaaring idagdag mamaya ang mga seksiyon at oras)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Part name (e.g., Welcome)</source>
+        <translation>Pangalan ng bahagi (hal., Maligayang pagdating)</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Create schedule</source>
+        <translation>Gumawa ng iskedyul</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Rename schedule</source>
+        <translation>Palitan ang pangalan ng iskedyul</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Rename section</source>
+        <translation>Palitan ang pangalan ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Duration</source>
+        <translation>Tagal</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Section (optional)</source>
+        <translation>Seksiyon (opsyonal)</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Section name</source>
+        <translation>Pangalan ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>e.g., Practice</source>
+        <translation>hal., Pagsasanay</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Color (optional)</source>
+        <translation>Kulay (opsyonal)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+156"/>
+        <source>Default color</source>
+        <translation>Default na kulay</translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <source>Section appearance</source>
+        <translation>Hitsura ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Section preview</source>
+        <translation>Preview ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Section color</source>
+        <translation>Kulay ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Custom hex</source>
+        <translation>Custom na hex</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Section icon</source>
+        <translation>Icon ng seksiyon</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Gumamit ng 6-digit na hex na kulay tulad ng #41b6c4.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Schedule timing and pacing</source>
+        <translation>Oras at pagsunod sa iskedyul</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Total planned parts: %1</source>
+        <translation>Kabuuang planadong bahagi: %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Set start and end times so the timer can track whether you are ahead or behind, and adjust remaining parts when Automatic mode is active.</source>
+        <translation>Itakda ang oras ng simula at pagtatapos para masubaybayan ng timer kung maaga o huli ang iskedyul, at maayos ang mga natitirang bahagi kapag aktibo ang Awtomatikong mode.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Start (HH:MM)</source>
+        <translation>Simula (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>End (HH:MM)</source>
+        <translation>Pagtatapos (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Mga bahaging maaaring awtomatikong ayusin</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>Sa Awtomatikong mode, ang mga bahaging may tsek lang ang paiikliin o pahahabain para matapos sa oras. Mananatili sa planadong tagal ang mga walang tsek.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>Sa Awtomatikong mode, maaaring paikliin o pahabain ang mga bahaging may tsek para matapos sa oras. Kung walang may tsek, pantay na iaayos ang lahat ng bahaging 1 min o higit pa.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Under 1 min</source>
+        <translation>Wala pang 1 min</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Advanced options</source>
+        <translation>Mga advanced na opsyon</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Weight (0–100): the higher the weight, the more this part will be adjusted compared to parts with a lower weight. 0 keeps the part fixed.</source>
+        <translation>Bigat (0–100): mas mataas ang bigat, mas malaki ang magiging pag-aayos sa bahaging ito kumpara sa mga bahaging mas mababa ang bigat. Pinananatiling nakatakda ang bahagi kapag 0.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
+        <translation>Tinatayang oras sa labas ng mga bahagi (segundo): kabuuang oras para sa pagpapalit ng tagapagsalita, mga awit, o mga patalastas. Unang inilalaan ang mga partikular na pagitan bago ang isang bahagi o pagkatapos ng huling bahagi (hal., pangwakas na awit at panalangin); ang matitira ay hinahati sa iba pang pagitan.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Estimated time outside parts (sec)</source>
+        <translation>Tinatayang oras sa labas ng mga bahagi (seg)</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Weight</source>
+        <translation>Bigat</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Break before (sec)</source>
+        <translation>Pagitan bago ito (seg)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Time after last part (sec)</source>
+        <translation>Oras pagkatapos ng huling bahagi (seg)</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Clear time</source>
+        <translation>Alisin ang oras</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Duplicate schedule</source>
+        <translation>I-duplicate ang iskedyul</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Creates a copy of the structure with all results reset.</source>
+        <translation>Gumagawa ng kopya ng istruktura nang naka-reset ang lahat ng resulta.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Delete schedule?</source>
+        <translation>Burahin ang iskedyul?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>“%1” and its recorded results will be permanently removed.</source>
+        <translation>Permanenteng mabubura ang “%1” at ang mga naitalang resulta nito.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Reset results?</source>
+        <translation>I-reset ang mga resulta?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All recorded times in this schedule will be cleared. The structure stays intact.</source>
+        <translation>Aalisin ang lahat ng naitalang oras sa iskedyul na ito. Mananatiling buo ang istruktura.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <location line="+9"/>
+        <location line="+11"/>
+        <source>Before “%1”</source>
+        <translation>Bago ang “%1”</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+9"/>
+        <location line="+14"/>
+        <source>At the end</source>
+        <translation>Sa dulo</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Move “%1”</source>
+        <translation>Ilipat ang “%1”</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Destination</source>
+        <translation>Patutunguhan</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Position</source>
+        <translation>Posisyon</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Move</source>
+        <translation>Ilipat</translation>
     </message>
 </context>
 <context>
@@ -2699,52 +3530,6 @@ Mananatili ang manual na idinagdag na nilalaman, mga trim, framing, at nakabukan
         <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Walang media na naidagdag.</translation>
-    </message>
-</context>
-<context>
-    <name>MeetingPartRow</name>
-    <message>
-        <location filename="../../qml/MeetingPartRow.qml" line="+127"/>
-        <source>Started %1</source>
-        <translation>Sinimulan %1</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>−1 min</source>
-        <translation>−1 min</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>+1 min</source>
-        <translation>+1 min</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>duration</source>
-        <translation>tagal</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Stop</source>
-        <translation>Ihinto</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reset</source>
-        <translation>I-reset</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Start</source>
-        <translation>Simulan</translation>
-    </message>
-    <message>
-        <source>−1 s</source>
-        <translation>−1 s</translation>
-    </message>
-    <message>
-        <source>+1 s</source>
-        <translation>+1 s</translation>
     </message>
 </context>
 <context>
@@ -9803,7 +10588,52 @@ Magdagdag kapag handa ka na.</translation>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../../ui/qml/timer_bridge.py" line="+333"/>
+        <location filename="../../ui/qml/timer_bridge.py" line="+365"/>
+        <source>Total duration ({requested}) exceeds the schedule window ({available}).</source>
+        <translation>Lumampas ang kabuuang tagal ({requested}) sa saklaw ng oras ng iskedyul ({available}).</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+846"/>
+        <location line="+186"/>
+        <source>This schedule was updated elsewhere. Reload it before making changes.</source>
+        <translation>Na-update ang iskedyul na ito sa ibang lugar. I-reload muna ito bago gumawa ng mga pagbabago.</translation>
+    </message>
+    <message>
+        <location line="-1028"/>
+        <source>Stop the running timer before making this change.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago gawin ang pagbabagong ito.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Move or delete the section&apos;s parts before deleting the section.</source>
+        <translation>Ilipat o burahin muna ang mga bahagi ng seksiyon bago burahin ang seksiyon.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset the part before changing its duration.</source>
+        <translation>I-reset muna ang bahagi bago baguhin ang tagal nito.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This action is currently unavailable.</source>
+        <translation>Hindi available ang pagkilos na ito sa ngayon.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+828"/>
+        <location line="+16"/>
+        <location line="+170"/>
+        <source>The selected item no longer exists.</source>
+        <translation>Wala na ang napiling item.</translation>
+    </message>
+    <message>
+        <location line="-833"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago magpalit ng iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Weekend</source>
         <translation>Dulo ng sanlinggo</translation>
     </message>
@@ -9813,7 +10643,169 @@ Magdagdag kapag handa ka na.</translation>
         <translation>Gitnang sanlinggo</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+173"/>
+        <source>Diamond</source>
+        <translation>Diyamante</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wheat</source>
+        <translation>Trigo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sheep</source>
+        <translation>Tupa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Speaker</source>
+        <translation>Tagapagsalita</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tower</source>
+        <translation>Tore</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Book</source>
+        <translation>Aklat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>People</source>
+        <translation>Mga Tao</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>Mikropono</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Music</source>
+        <translation>Musika</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Video</source>
+        <translation>Video</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Calendar</source>
+        <translation>Kalendaryo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clock</source>
+        <translation>Orasan</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Marker</source>
+        <translation>Pananda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check</source>
+        <translation>Tsek</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Teal</source>
+        <translation>Asul-berde</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gold</source>
+        <translation>Ginto</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Crimson</source>
+        <translation>Krimson</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amber</source>
+        <translation>Amber</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blue</source>
+        <translation>Asul</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Emerald</source>
+        <translation>Esmeralda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Violet</source>
+        <translation>Lila</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neutral</source>
+        <translation>Neutral</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago gumawa ng iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set a valid duration for the first part.</source>
+        <translation>Magtakda ng wastong tagal para sa unang bahagi.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <location line="+43"/>
+        <location line="+55"/>
+        <location line="+604"/>
+        <source>Could not save changes. Try again.</source>
+        <translation>Hindi ma-save ang mga pagbabago. Subukan muli.</translation>
+    </message>
+    <message>
+        <source>Could not finish creating the schedule. Check the schedule list before trying again.</source>
+        <translation>Hindi natapos ang paggawa ng iskedyul. Tingnan ang listahan ng mga iskedyul bago subukang muli.</translation>
+    </message>
+    <message>
+        <source>Could not change the schedule or restore the previous selection.</source>
+        <translation>Hindi mapalitan ang iskedyul o maibalik ang dating pinili.</translation>
+    </message>
+    <message>
+        <location line="-684"/>
+        <location line="+40"/>
+        <source>The selected schedule no longer exists.</source>
+        <translation>Wala na ang napiling iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Stop the running timer before deleting a schedule.</source>
+        <translation>Ihinto muna ang tumatakbong timer bago magbura ng iskedyul.</translation>
+    </message>
+    <message>
+        <location line="+325"/>
+        <source>Enter valid start and end times (HH:MM).</source>
+        <translation>Maglagay ng wastong oras ng simula at pagtatapos (HH:MM).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>End time must be different from start time.</source>
+        <translation>Dapat magkaiba ang oras ng pagtatapos at ang oras ng simula.</translation>
+    </message>
+    <message>
+        <location line="+370"/>
         <source>this monitor</source>
         <translation>ang monitor na ito</translation>
     </message>
@@ -9985,7 +10977,7 @@ Magdagdag kapag handa ka na.</translation>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+76"/>
+        <location filename="../../qml/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>Timer</translation>
     </message>
@@ -10002,8 +10994,8 @@ Magdagdag kapag handa ka na.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Assignments</source>
-        <translation>Mga atas</translation>
+        <source>Schedule</source>
+        <translation>Iskedyul</translation>
     </message>
     <message>
         <location line="-18"/>

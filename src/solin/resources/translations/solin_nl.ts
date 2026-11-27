@@ -23,49 +23,103 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+113"/>
-        <location line="+119"/>
+        <source>Could not load custom schedules. Try again.</source>
+        <translation>Aangepaste schema’s konden niet worden geladen. Probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the estimates before saving.</source>
+        <translation>Voer begin- en eindtijden in of wis de schattingen voordat je opslaat.</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Gewicht (0–100): hogere gewichten krijgen meer aanpassing. Een gewicht van 0 houdt een onderdeel vast wanneer een ander onderdeel een positief gewicht heeft. Als alle gewichten 0 zijn, worden in aanmerking komende onderdelen gelijkmatig aangepast.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location line="+199"/>
         <source>Clock</source>
         <translation>Klok</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-214"/>
         <source>Digital</source>
         <translation>Digitaal</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog</source>
         <translation>Analoog</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog + digital</source>
         <translation>Analoog + digitaal</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Signature</source>
         <extracomment>&quot;Signature&quot; is the proper name of this clock face. Keep it unchanged.</extracomment>
         <translation>Signature</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Classic</source>
         <translation>Klassiek</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <location line="+54"/>
+        <location line="+31"/>
         <source>Timer</source>
         <translation>Timer</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-83"/>
         <source>Clock + timer</source>
         <translation>Klok + timer</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+5"/>
+        <source>Off</source>
+        <translation>Uit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor only</source>
+        <translation>Alleen bewaken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor and adjust</source>
+        <translation>Bewaken en aanpassen</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Forecasts the finish time without changing part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Voorspelt de eindtijd zonder de doeltijden van onderdelen te wijzigen. Wordt per profiel opgeslagen voor zowel Vergaderingen als Schema&apos;s.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Forecasts the finish time and adjusts upcoming eligible part targets. Changing mode during a run keeps the active target.</source>
+        <translation>Voorspelt de eindtijd en past de doeltijden van komende geschikte onderdelen aan. Bij het wijzigen van de modus tijdens een lopend onderdeel blijft de actieve doeltijd behouden.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Does not forecast finish time or adjust part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Voorspelt geen eindtijd en past geen doeltijden van onderdelen aan. Wordt per profiel opgeslagen voor zowel Vergaderingen als Schema&apos;s.</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Pacing</source>
+        <translation>Tijdsbewaking</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Mode</source>
+        <translation>Modus</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Clock face</source>
         <translation>Wijzerplaat</translation>
     </message>
@@ -75,12 +129,12 @@
         <translation>Analoge stijl</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Format</source>
         <translation>Formaat</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+7"/>
         <source>24-hour</source>
         <translation>24-uurs</translation>
     </message>
@@ -90,24 +144,24 @@
         <translation>12-uurs</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+3"/>
+        <location line="+9"/>
+        <location line="+7"/>
         <source>Show seconds</source>
         <translation>Seconden tonen</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+3"/>
+        <location line="+6"/>
+        <location line="+6"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Part timer</source>
         <translation>Onderdeel-timer</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>During parts</source>
         <translation>Tijdens onderdelen</translation>
     </message>
@@ -117,7 +171,7 @@
         <translation>Telrichting</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Count down</source>
         <translation>Aftellen</translation>
     </message>
@@ -127,59 +181,59 @@
         <translation>Optellen</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Hold duration when stopped</source>
         <translation>Duur vasthouden wanneer gestopt</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Less</source>
         <translation>Minder</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More</source>
         <translation>Meer</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Display</source>
         <translation>Weergave</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Display size</source>
         <translation>Weergavegrootte</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+22"/>
         <source>Monitors</source>
         <translation>Schermen</translation>
     </message>
     <message>
-        <location line="+2"/>
         <location line="+5"/>
+        <location line="+4"/>
         <source>Show timer</source>
         <translation>Timer tonen</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+58"/>
         <source>Reserved for the timer · %1</source>
         <translation>Gereserveerd voor de timer · %1</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+16"/>
         <source>Unreserve</source>
         <translation>Reservering opheffen</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+358"/>
+        <location line="+170"/>
         <source>Reserve</source>
         <translation>Reserveren</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-167"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Deze monitor reserveren voor de timer</translation>
     </message>
@@ -189,27 +243,150 @@
         <translation>Geen extra schermen gedetecteerd</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Stop de lopende timer voordat een ander schema wordt gekozen.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Meetings</source>
+        <translation>Vergaderingen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Schedules</source>
+        <translation>Schema&apos;s</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Show the timer on a monitor to raise hand</source>
+        <translation>Toon de timer op een monitor om een hand op te steken</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clear hand alert</source>
+        <translation>Handmelding wissen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Raise hand</source>
+        <translation>Hand opsteken</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Add at least one part to export PDF</source>
+        <translation>Voeg minimaal één onderdeel toe om een PDF te exporteren</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Timer settings</source>
+        <translation>Timerinstellingen</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Previous week</source>
         <translation>Vorige week</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+50"/>
         <source>Not the current week</source>
         <translation>Niet de huidige week</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+15"/>
         <source>Next week</source>
         <translation>Volgende week</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Back to this week</source>
-        <translation>Terug naar deze week</translation>
+        <location line="+12"/>
+        <source>Current week</source>
+        <translation>Huidige week</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back to current week</source>
+        <translation>Terug naar huidige week</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <location line="+5"/>
+        <location line="+172"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <source>New schedule</source>
+        <translation>Nieuw schema</translation>
+    </message>
+    <message>
+        <location line="-173"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Stop de lopende timer voordat een schema wordt aangemaakt.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <source>Edit schedule</source>
+        <translation>Schema bewerken</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Stop the running timer before organizing this schedule.</source>
+        <translation>Stop de lopende timer voordat dit schema wordt ingedeeld.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Organize parts and sections</source>
+        <translation>Onderdelen en secties indelen</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>More schedule actions</source>
+        <translation>Meer schema-acties</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Reload</source>
+        <translation>Herladen</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>No custom schedules yet</source>
+        <translation>Nog geen aangepaste schema&apos;s</translation>
     </message>
     <message>
         <location line="+10"/>
+        <source>Create a schedule for trainings, assemblies, or any timed event. Sections and target times are optional.</source>
+        <translation>Maak een schema voor trainingen, kringvergaderingen of andere getimede evenementen. Secties en streeftijden zijn optioneel.</translation>
+    </message>
+    <message>
+        <location line="+200"/>
+        <source>Timing and pacing…</source>
+        <translation>Tijden en tijdsbewaking…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Rename schedule…</source>
+        <translation>Schema hernoemen…</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <source>Duplicate</source>
+        <translation>Dupliceren</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <source>Reset results</source>
+        <translation>Resultaten resetten</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <source>Delete</source>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <location line="-484"/>
         <source>Midweek</source>
         <translation>Midweek</translation>
     </message>
@@ -219,49 +396,703 @@
         <translation>Weekend</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-171"/>
+        <location line="+4"/>
         <source>Export PDF</source>
         <translation>PDF exporteren</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Meeting parts</source>
-        <translation>Vergaderonderdelen</translation>
+        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <source>Part</source>
+        <translation>Onderdeel</translation>
     </message>
     <message>
-        <location line="+85"/>
-        <source>Parts</source>
-        <translation>Onderdelen</translation>
+        <location line="+8"/>
+        <source>Planned</source>
+        <translation>Gepland</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
+        <source>Result</source>
+        <translation>Resultaat</translation>
+    </message>
+    <message>
+        <location line="+188"/>
         <source>Fewer parts</source>
         <translation>Minder onderdelen</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More parts</source>
         <translation>Meer onderdelen</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>%1 total</source>
-        <translation>%1 totaal</translation>
+        <location line="+38"/>
+        <source>Empty section</source>
+        <translation>Lege sectie</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+345"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location line="+354"/>
+        <source>Delete part</source>
+        <translation>Onderdeel verwijderen</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename section…</source>
+        <translation>Sectie hernoemen…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Section appearance…</source>
+        <translation>Weergave van sectie…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <source>Add part to section</source>
+        <translation>Onderdeel aan sectie toevoegen</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <source>Delete section</source>
+        <translation>Sectie verwijderen</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>Monitor in gebruik door media</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Media gebruikt momenteel %1. Reserveren voor de timer en media van deze monitor verplaatsen?</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location line="+130"/>
+        <location line="+66"/>
+        <location line="+48"/>
+        <location line="+106"/>
+        <location line="+102"/>
+        <location line="+271"/>
+        <location line="+404"/>
+        <location line="+52"/>
+        <location line="+37"/>
+        <location line="+34"/>
+        <location line="+132"/>
         <source>Cancel</source>
         <translation>Annuleren</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <source>Projected %1 min behind</source>
+        <translation>Verwacht %1 min achter op schema</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Projected %1 min ahead</source>
+        <translation>Verwacht %1 min voor op schema</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On schedule</source>
+        <translation>Op schema</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projected end %1 · Target %2</source>
+        <translation>Verwacht einde %1 · Doel %2</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Part overtime</source>
+        <translation>Onderdeel over tijd</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In progress</source>
+        <translation>Bezig</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Completed (over target)</source>
+        <translation>Voltooid (over tijd)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Completed</source>
+        <translation>Voltooid</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Schedule completed</source>
+        <translation>Schema voltooid</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selected part</source>
+        <translation>Geselecteerd onderdeel</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready</source>
+        <translation>Gereed</translation>
+    </message>
+    <message>
+        <location line="+82"/>
+        <location line="+540"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <source>Edit part…</source>
+        <translation>Onderdeel bewerken…</translation>
+    </message>
+    <message>
+        <location line="-527"/>
+        <location line="+377"/>
+        <source>No parts in this schedule</source>
+        <translation>Geen onderdelen in dit schema</translation>
+    </message>
+    <message>
+        <location line="-318"/>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+395"/>
+        <source>Target %1 · Planned %2</source>
+        <translation>Doel %1 · Gepland %2</translation>
+    </message>
+    <message>
+        <location line="-404"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <source>Target %1</source>
+        <translation>Doel %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+396"/>
+        <source>Planned %1</source>
+        <translation>Gepland %1</translation>
+    </message>
+    <message>
+        <location line="-376"/>
+        <location line="+313"/>
+        <location line="+5"/>
+        <source>Stop</source>
+        <translation>Stoppen</translation>
+    </message>
+    <message>
+        <location line="-316"/>
+        <location line="+312"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <source>Restart</source>
+        <translation>Opnieuw starten</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <location line="+309"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <source>Start</source>
+        <translation>Starten</translation>
+    </message>
+    <message>
+        <location line="-290"/>
+        <location line="+383"/>
+        <source>Adjust time</source>
+        <translation>Tijd aanpassen</translation>
+    </message>
+    <message>
+        <location line="-372"/>
+        <location line="+408"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <source>Reset</source>
+        <translation>Resetten</translation>
+    </message>
+    <message>
+        <location line="-405"/>
+        <location line="+406"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <source>Reset this part</source>
+        <translation>Dit onderdeel resetten</translation>
+    </message>
+    <message>
+        <location line="-358"/>
+        <source>Reset all results</source>
+        <translation>Alle resultaten resetten</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Set the meeting time in Profile settings to track schedule pacing.</source>
+        <translation>Stel de vergadertijd in bij de profielinstellingen om het tijdschema te bewaken.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set start and end times in the menu (⋯) to track pacing.</source>
+        <translation>Stel de begin- en eindtijd in via het menu (⋯) om het tijdschema te bewaken.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+239"/>
+        <source>Configure meeting time</source>
+        <translation>Vergadertijd configureren</translation>
+    </message>
+    <message>
+        <location line="-238"/>
+        <location line="+238"/>
+        <source>Set schedule time</source>
+        <translation>Schematijd instellen</translation>
+    </message>
+    <message>
+        <location line="-219"/>
+        <source>The configured time window will take effect after resetting results.</source>
+        <translation>Het geconfigureerde tijdvak wordt actief nadat de resultaten zijn gereset.</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Up next</source>
+        <translation>Hierna</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+196"/>
+        <source>Start next part</source>
+        <translation>Volgend onderdeel starten</translation>
+    </message>
+    <message>
+        <location line="-55"/>
+        <source>Meeting time not set</source>
+        <translation>Vergadertijd niet ingesteld</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Schedule time not set</source>
+        <translation>Schematijd niet ingesteld</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset results to apply time window</source>
+        <translation>Reset de resultaten om het tijdvak toe te passen</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Set time</source>
+        <translation>Tijd instellen</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Adjust</source>
+        <translation>Aanpassen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Next</source>
+        <translation>Volgende</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <source>Editing: %1</source>
+        <translation>Bewerken: %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Drag items to reorder, add parts or sections, then save your changes.</source>
+        <translation>Sleep items om de volgorde te wijzigen, voeg onderdelen of secties toe en sla de wijzigingen op.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location line="+56"/>
+        <source>Add section</source>
+        <translation>Sectie toevoegen</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location line="+70"/>
+        <source>Add part</source>
+        <translation>Onderdeel toevoegen</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location line="+195"/>
+        <location line="+48"/>
+        <location line="+482"/>
+        <location line="+405"/>
+        <source>Save</source>
+        <translation>Opslaan</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>This schedule has no parts yet.</source>
+        <translation>Dit schema bevat nog geen onderdelen.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use Add part or Add section above to build it.</source>
+        <translation>Gebruik Onderdeel toevoegen of Sectie toevoegen hierboven om het schema samen te stellen.</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <location line="+354"/>
+        <source>Move up</source>
+        <translation>Omhoog verplaatsen</translation>
+    </message>
+    <message>
+        <location line="-342"/>
+        <location line="+354"/>
+        <source>Move down</source>
+        <translation>Omlaag verplaatsen</translation>
+    </message>
+    <message>
+        <location line="-344"/>
+        <location line="+3"/>
+        <location line="+176"/>
+        <location line="+175"/>
+        <location line="+3"/>
+        <source>Move to…</source>
+        <translation>Verplaatsen naar…</translation>
+    </message>
+    <message>
+        <location line="-228"/>
+        <source>Change section icon and color</source>
+        <translation>Pictogram en kleur van sectie wijzigen</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Move section up</source>
+        <translation>Sectie omhoog verplaatsen</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Move section down</source>
+        <translation>Sectie omlaag verplaatsen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Move section</source>
+        <translation>Sectie verplaatsen</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Empty the section before deleting it</source>
+        <translation>Maak de sectie leeg voordat deze wordt verwijderd</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Empty section — drag a part here or click +</source>
+        <translation>Lege sectie — sleep een onderdeel hierheen of klik op +</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <source>%1 (copy)</source>
+        <translation>%1 (kopie)</translation>
+    </message>
+    <message>
+        <location line="+160"/>
+        <source>No section (root)</source>
+        <translation>Geen sectie (hoofdniveau)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>No icon</source>
+        <translation>Geen pictogram</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default</source>
+        <translation>Standaard</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Edit part</source>
+        <translation>Onderdeel bewerken</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+368"/>
+        <source>Part name</source>
+        <translation>Naam van onderdeel</translation>
+    </message>
+    <message>
+        <location line="-362"/>
+        <source>Restore default</source>
+        <translation>Standaard herstellen</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Planned duration</source>
+        <translation>Geplande duur</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reset this part to change its planned duration.</source>
+        <translation>Reset dit onderdeel om de geplande duur te wijzigen.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This part&apos;s duration is fixed.</source>
+        <translation>De duur van dit onderdeel staat vast.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <location line="+129"/>
+        <location line="+218"/>
+        <source>Enter a valid duration (e.g., 5 or 05:00).</source>
+        <translation>Voer een geldige duur in (bijv. 5 of 05:00).</translation>
+    </message>
+    <message>
+        <location line="-280"/>
+        <source>Schedule name</source>
+        <translation>Naam van schema</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>e.g., Volunteer training</source>
+        <translation>bijv. Training voor vrijwilligers</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>First part (optional — sections and times can be added later)</source>
+        <translation>Eerste onderdeel (optioneel — secties en tijden kunnen later worden toegevoegd)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Part name (e.g., Welcome)</source>
+        <translation>Naam van onderdeel (bijv. Welkom)</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Create schedule</source>
+        <translation>Schema aanmaken</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Rename schedule</source>
+        <translation>Schema hernoemen</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Rename section</source>
+        <translation>Sectie hernoemen</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Duration</source>
+        <translation>Duur</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Section (optional)</source>
+        <translation>Sectie (optioneel)</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Section name</source>
+        <translation>Naam van sectie</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>e.g., Practice</source>
+        <translation>bijv. Oefening</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Color (optional)</source>
+        <translation>Kleur (optioneel)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+156"/>
+        <source>Default color</source>
+        <translation>Standaardkleur</translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <source>Section appearance</source>
+        <translation>Weergave van sectie</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Section preview</source>
+        <translation>Voorbeeld van sectie</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Section color</source>
+        <translation>Sectiekleur</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Custom hex</source>
+        <translation>Aangepaste hexkleur</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Section icon</source>
+        <translation>Sectiepictogram</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Gebruik een 6-cijferige hexkleur zoals #41b6c4.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Schedule timing and pacing</source>
+        <translation>Tijden en tijdsbewaking van het schema</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Total planned parts: %1</source>
+        <translation>Totaal geplande onderdelen: %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Set start and end times so the timer can track whether you are ahead or behind, and adjust remaining parts when Automatic mode is active.</source>
+        <translation>Stel de begin- en eindtijd in zodat de timer kan bijhouden of het schema voorloopt of achterloopt en resterende onderdelen kan aanpassen wanneer de automatische modus actief is.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Start (HH:MM)</source>
+        <translation>Begin (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>End (HH:MM)</source>
+        <translation>Einde (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Onderdelen die automatisch mogen worden aangepast</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>In de automatische modus worden alleen aangevinkte onderdelen ingekort of verlengd om op tijd te eindigen. Niet-aangevinkte onderdelen behouden hun geplande duur.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>In de automatische modus kunnen aangevinkte onderdelen worden ingekort of verlengd om op tijd te eindigen. Als er niets is aangevinkt, worden alle onderdelen van 1 min of langer gelijkmatig aangepast.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Under 1 min</source>
+        <translation>Korter dan 1 min</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Advanced options</source>
+        <translation>Geavanceerde opties</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Weight (0–100): the higher the weight, the more this part will be adjusted compared to parts with a lower weight. 0 keeps the part fixed.</source>
+        <translation>Weging (0–100): hoe hoger de weging, hoe sterker dit onderdeel wordt aangepast ten opzichte van onderdelen met een lagere weging. Bij 0 blijft het onderdeel vast.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
+        <translation>Geschatte tijd buiten de onderdelen (seconden): totale tijd voor sprekerswisselingen, liederen of mededelingen. Specifieke pauzes vóór een onderdeel of na het laatste onderdeel (bijv. slotlied en gebed) worden eerst gereserveerd; de rest wordt verdeeld over de overige tussentijden.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Estimated time outside parts (sec)</source>
+        <translation>Geschatte tijd buiten de onderdelen (sec)</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Weight</source>
+        <translation>Weging</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Break before (sec)</source>
+        <translation>Pauze ervoor (sec)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Time after last part (sec)</source>
+        <translation>Tijd na het laatste onderdeel (sec)</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Clear time</source>
+        <translation>Tijd wissen</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Duplicate schedule</source>
+        <translation>Schema dupliceren</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Creates a copy of the structure with all results reset.</source>
+        <translation>Maakt een kopie van de structuur waarbij alle resultaten zijn gereset.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Delete schedule?</source>
+        <translation>Schema verwijderen?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>“%1” and its recorded results will be permanently removed.</source>
+        <translation>“%1” en de vastgelegde resultaten worden definitief verwijderd.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Reset results?</source>
+        <translation>Resultaten resetten?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All recorded times in this schedule will be cleared. The structure stays intact.</source>
+        <translation>Alle vastgelegde tijden in dit schema worden gewist. De structuur blijft behouden.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <location line="+9"/>
+        <location line="+11"/>
+        <source>Before “%1”</source>
+        <translation>Vóór “%1”</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+9"/>
+        <location line="+14"/>
+        <source>At the end</source>
+        <translation>Aan het einde</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Move “%1”</source>
+        <translation>“%1” verplaatsen</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Destination</source>
+        <translation>Bestemming</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Position</source>
+        <translation>Positie</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Move</source>
+        <translation>Verplaatsen</translation>
     </message>
 </context>
 <context>
@@ -2699,52 +3530,6 @@ Handmatig toegevoegde inhoud, bijgesneden delen, kadrering en de uitgeklapte sta
         <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Er kon geen media worden toegevoegd.</translation>
-    </message>
-</context>
-<context>
-    <name>MeetingPartRow</name>
-    <message>
-        <location filename="../../qml/MeetingPartRow.qml" line="+127"/>
-        <source>Started %1</source>
-        <translation>Gestart %1</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>−1 min</source>
-        <translation>−1 min</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>+1 min</source>
-        <translation>+1 min</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>duration</source>
-        <translation>duur</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Stop</source>
-        <translation>Stoppen</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reset</source>
-        <translation>Resetten</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Start</source>
-        <translation>Starten</translation>
-    </message>
-    <message>
-        <source>−1 s</source>
-        <translation>−1 s</translation>
-    </message>
-    <message>
-        <source>+1 s</source>
-        <translation>+1 s</translation>
     </message>
 </context>
 <context>
@@ -9803,7 +10588,52 @@ Voeg er een toe wanneer u wilt.</translation>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../../ui/qml/timer_bridge.py" line="+333"/>
+        <location filename="../../ui/qml/timer_bridge.py" line="+365"/>
+        <source>Total duration ({requested}) exceeds the schedule window ({available}).</source>
+        <translation>De totale duur ({requested}) overschrijdt het tijdvak van het schema ({available}).</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+846"/>
+        <location line="+186"/>
+        <source>This schedule was updated elsewhere. Reload it before making changes.</source>
+        <translation>Dit schema is elders bijgewerkt. Herlaad het voordat wijzigingen worden aangebracht.</translation>
+    </message>
+    <message>
+        <location line="-1028"/>
+        <source>Stop the running timer before making this change.</source>
+        <translation>Stop de lopende timer voordat deze wijziging wordt aangebracht.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Move or delete the section&apos;s parts before deleting the section.</source>
+        <translation>Verplaats of verwijder de onderdelen van de sectie voordat de sectie wordt verwijderd.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset the part before changing its duration.</source>
+        <translation>Reset het onderdeel voordat de duur wordt gewijzigd.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This action is currently unavailable.</source>
+        <translation>Deze actie is momenteel niet beschikbaar.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+828"/>
+        <location line="+16"/>
+        <location line="+170"/>
+        <source>The selected item no longer exists.</source>
+        <translation>Het geselecteerde item bestaat niet meer.</translation>
+    </message>
+    <message>
+        <location line="-833"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Stop de lopende timer voordat een ander schema wordt gekozen.</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Weekend</source>
         <translation>Weekend</translation>
     </message>
@@ -9813,7 +10643,169 @@ Voeg er een toe wanneer u wilt.</translation>
         <translation>Midweek</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+173"/>
+        <source>Diamond</source>
+        <translation>Diamant</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wheat</source>
+        <translation>Tarwe</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sheep</source>
+        <translation>Schaap</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Speaker</source>
+        <translation>Spreker</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tower</source>
+        <translation>Toren</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Book</source>
+        <translation>Boek</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>People</source>
+        <translation>Personen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>Microfoon</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Music</source>
+        <translation>Muziek</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Video</source>
+        <translation>Video</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Calendar</source>
+        <translation>Kalender</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clock</source>
+        <translation>Klok</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Marker</source>
+        <translation>Markering</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check</source>
+        <translation>Vinkje</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Teal</source>
+        <translation>Blauwgroen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gold</source>
+        <translation>Goud</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Crimson</source>
+        <translation>Karmozijn</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amber</source>
+        <translation>Amber</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blue</source>
+        <translation>Blauw</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Emerald</source>
+        <translation>Smaragd</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Violet</source>
+        <translation>Violet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neutral</source>
+        <translation>Neutraal</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Stop de lopende timer voordat een schema wordt aangemaakt.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set a valid duration for the first part.</source>
+        <translation>Stel een geldige duur in voor het eerste onderdeel.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <location line="+43"/>
+        <location line="+55"/>
+        <location line="+604"/>
+        <source>Could not save changes. Try again.</source>
+        <translation>De wijzigingen konden niet worden opgeslagen. Probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>Could not finish creating the schedule. Check the schedule list before trying again.</source>
+        <translation>Het maken van het schema kon niet worden voltooid. Controleer de lijst met schema’s vóór een nieuwe poging.</translation>
+    </message>
+    <message>
+        <source>Could not change the schedule or restore the previous selection.</source>
+        <translation>Het schema kon niet worden gewijzigd en de vorige selectie kon niet worden hersteld.</translation>
+    </message>
+    <message>
+        <location line="-684"/>
+        <location line="+40"/>
+        <source>The selected schedule no longer exists.</source>
+        <translation>Het geselecteerde schema bestaat niet meer.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Stop the running timer before deleting a schedule.</source>
+        <translation>Stop de lopende timer voordat een schema wordt verwijderd.</translation>
+    </message>
+    <message>
+        <location line="+325"/>
+        <source>Enter valid start and end times (HH:MM).</source>
+        <translation>Voer geldige begin- en eindtijden in (HH:MM).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>End time must be different from start time.</source>
+        <translation>De eindtijd moet verschillen van de begintijd.</translation>
+    </message>
+    <message>
+        <location line="+370"/>
         <source>this monitor</source>
         <translation>deze monitor</translation>
     </message>
@@ -9985,7 +10977,7 @@ Voeg er een toe wanneer u wilt.</translation>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+76"/>
+        <location filename="../../qml/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>Timer</translation>
     </message>
@@ -10002,8 +10994,8 @@ Voeg er een toe wanneer u wilt.</translation>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Assignments</source>
-        <translation>Toewijzingen</translation>
+        <source>Schedule</source>
+        <translation>Schema</translation>
     </message>
     <message>
         <location line="-18"/>

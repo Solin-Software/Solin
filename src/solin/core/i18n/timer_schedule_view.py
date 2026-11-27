@@ -135,6 +135,22 @@ def section_title(section: Section | str | None, custom_title: str = "") -> str:
     return translate_meeting_section_title(source)
 
 
+def section_appearance(
+    section: Section | str | None, custom_section: TimerSection | None = None,
+) -> dict[str, str]:
+    palette = section_palette(section, custom_section.color if custom_section else None)
+    return {
+        "sectionIconKey": section_icon_key(section, custom_section.icon if custom_section else None),
+        "sectionIconChoice": custom_section.icon.value if custom_section else "",
+        "sectionCustomColor": (custom_section.color or "") if custom_section else "",
+        "sectionTitle": section_title(section, custom_section.title if custom_section else ""),
+        "sectionColor": palette["accent"],
+        "sectionTextColor": palette["text"],
+        "sectionBadgeBg": palette["badge"],
+        "sectionBorderColor": palette["border"],
+    }
+
+
 def parts_model_for_schedule(
     schedule: MeetingSchedule | CustomTimerSchedule, time_format: str = "HH:mm:ss",
 ) -> list[dict]:
@@ -153,6 +169,10 @@ def parts_model_for_schedule(
         totals[section] = totals.get(section, 0) + part.planned_seconds
         counts[section] = counts.get(section, 0) + 1
 
+    appearances = {
+        section: section_appearance(section, sections.get(section or ""))
+        for section in totals
+    }
     configurable_counts: dict[str | None, int] = (
         {
             section: configurable_count_for(schedule, section)
@@ -170,26 +190,15 @@ def parts_model_for_schedule(
         first = section not in seen_sections
         seen_sections.add(section)
         section_value = section.value if isinstance(section, Section) else (section or "")
-        custom_section = sections.get(section_value)
-        palette = section_palette(section, custom_section.color if custom_section else None)
         indexed_number = section_position if is_indexed_part_title_source(part.title) else None
         show_section_header = (
             section not in _STANDALONE_SECTIONS if is_meeting else section is not None
         )
-        title = section_title(section, custom_section.title if custom_section else "")
-        icon_key = section_icon_key(section, custom_section.icon if custom_section else None)
         rows.append({
             "id": part.id,
             "section": section_value,
             "sectionKey": section_value,
-            "sectionIconKey": icon_key,
-            "sectionIconChoice": custom_section.icon.value if custom_section else "",
-            "sectionCustomColor": (custom_section.color or "") if custom_section else "",
-            "sectionTitle": title,
-            "sectionColor": palette["accent"],
-            "sectionTextColor": palette["text"],
-            "sectionBadgeBg": palette["badge"],
-            "sectionBorderColor": palette["border"],
+            **appearances[section],
             "title": display_part_title(part, indexed_number=indexed_number),
             "hasTitleOverride": part.title_override is not None,
             "displayNumber": number,

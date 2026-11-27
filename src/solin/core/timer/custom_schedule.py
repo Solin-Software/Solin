@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 
 from .models import (
@@ -143,6 +143,20 @@ def _set_section_color(
     _section(schedule, section_id).color = _validate_section_color(color)
 
 
+def _set_section_appearance(
+    schedule: CustomTimerSchedule,
+    *,
+    section_id: str,
+    icon: CustomSectionIcon | str,
+    color: str | None,
+) -> None:
+    section = _section(schedule, section_id)
+    validated_icon = _validate_section_icon(icon)
+    validated_color = _validate_section_color(color)
+    section.icon = validated_icon
+    section.color = validated_color
+
+
 def _rename_schedule(schedule: CustomTimerSchedule, *, title: str) -> None:
     schedule.title = validate_title(title)
 
@@ -241,15 +255,28 @@ def _set_pacing_transition(
     schedule.pacing_window = replace(window, transitions=transitions)
 
 
-def _set_adjustment_weight(
+def _validate_adjustment_weight(
     schedule: CustomTimerSchedule, *, part_id: str, adjustment_weight: int,
-) -> None:
+) -> tuple[TimerPart, int]:
     if type(adjustment_weight) is not int or not 0 <= adjustment_weight <= MAX_ADJUSTMENT_WEIGHT:
         raise TimerOperationError("invalid", "Choose a valid timer adjustment weight.")
     part = _part(schedule, part_id)
-    if adjustment_weight and part.planned_seconds < MIN_PLANNED_PART_SECONDS:
+    if (
+        adjustment_weight > 0
+        and adjustment_weight != part.adjustment_weight
+        and part.planned_seconds < MIN_PLANNED_PART_SECONDS
+    ):
         raise TimerOperationError("invalid", "An adjustable timer part must have at least 60 seconds.")
-    part.adjustment_weight = adjustment_weight
+    return part, adjustment_weight
+
+
+def _set_adjustment_weight(
+    schedule: CustomTimerSchedule, *, part_id: str, adjustment_weight: int,
+) -> None:
+    part, validated = _validate_adjustment_weight(
+        schedule, part_id=part_id, adjustment_weight=adjustment_weight,
+    )
+    part.adjustment_weight = validated
 
 
 _EDITORS: dict[str, Callable[..., None]] = {
@@ -259,6 +286,7 @@ _EDITORS: dict[str, Callable[..., None]] = {
     "rename_section": _rename_section,
     "set_section_icon": _set_section_icon,
     "set_section_color": _set_section_color,
+    "set_section_appearance": _set_section_appearance,
     "rename_schedule": _rename_schedule,
     "move_part": _move_part,
     "move_section": _move_section,
@@ -354,8 +382,6 @@ def replace_custom_schedule_entries(
             part.section = section_id
             part.title = title
             part.planned_seconds = planned
-            if planned < MIN_PLANNED_PART_SECONDS:
-                part.adjustment_weight = 0
             return part
         return TimerPart.new(section_id, title, planned)
 
@@ -399,3 +425,83 @@ def replace_custom_schedule_entries(
                 window,
                 transitions=replace(window.transitions, before_part_seconds=before),
             )
+
+
+def replace_custom_timing_settings(
+    schedule: CustomTimerSchedule,
+    *,
+    start_time: str | None,
+    end_time: str | None,
+    untracked_seconds: int | None = None,
+    update_untracked: bool = False,
+    weights: Mapping[str, int] | None = None,
+    before_parts: Mapping[str, int | None] | None = None,
+    closing_seconds: int | None = None,
+    update_closing: bool = False,
+) -> None:
+    """Validate and apply window, part weights, and transition estimates atomically."""
+    if schedule.has_running_part():
+        raise TimerOperationError("blocked", "Stop the timer before editing this schedule.")
+    if update_untracked and untracked_seconds is not None and (
+        type(untracked_seconds) is not int or untracked_seconds < 0
+    ):
+        raise TimerOperationError("invalid", "Set a nonnegative duration for time outside parts.")
+
+    staged_weights: list[tuple[TimerPart, int]] = []
+    if weights is not None:
+        for part_id, weight in weights.items():
+            staged_weights.append(
+                _validate_adjustment_weight(schedule, part_id=part_id, adjustment_weight=weight)
+            )
+
+    next_window: PacingWindow | None
+    if start_time is None and end_time is None:
+        has_explicit_transitions = (
+            (update_untracked and untracked_seconds is not None)
+            or (update_closing and closing_seconds is not None)
+            or bool(before_parts and any(val is not None for val in before_parts.values()))
+        )
+        if has_explicit_transitions:
+            raise TimerOperationError("invalid", "Set both the timer start and end.")
+        next_window = None
+    elif start_time is None or end_time is None:
+        raise TimerOperationError("invalid", "Set both the timer start and end.")
+    else:
+        existing = schedule.pacing_window
+        resolved_untracked = (
+            untracked_seconds
+            if update_untracked
+            else (existing.untracked_seconds if existing else None)
+        )
+        before_dict = dict(existing.transitions.before_part_seconds) if existing else {}
+        if before_parts is not None:
+            for part_id, estimated in before_parts.items():
+                _part(schedule, part_id)
+                if estimated is None:
+                    before_dict.pop(part_id, None)
+                else:
+                    if type(estimated) is not int or estimated < 0:
+                        raise TimerOperationError(
+                            "invalid", "Set a transition estimate within the timer window."
+                        )
+                    before_dict[part_id] = estimated
+
+        resolved_closing = (
+            closing_seconds
+            if update_closing
+            else (existing.transitions.closing_seconds if existing else None)
+        )
+        if resolved_closing is not None and (type(resolved_closing) is not int or resolved_closing < 0):
+            raise TimerOperationError("invalid", "Set a transition estimate within the timer window.")
+
+        try:
+            transitions = PacingTransitions(tuple(before_dict.items()), resolved_closing)
+            next_window = PacingWindow(
+                start_time, end_time, resolved_untracked, transitions,
+            )
+        except ValueError as error:
+            raise TimerOperationError("invalid", str(error)) from error
+
+    for part, validated_weight in staged_weights:
+        part.adjustment_weight = validated_weight
+    schedule.pacing_window = next_window

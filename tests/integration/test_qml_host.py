@@ -35,7 +35,8 @@ from solin.core.i18n.meeting_schedule import (
     meeting_weekday_names,
 )
 from solin.core.meetings.tree_editing import move_tree_node
-from solin.core.timer.models import ClockConfig
+from solin.core.i18n.timer_schedule_view import format_mmss, format_total_duration, section_palette
+from solin.core.timer.models import MAX_PLANNED_PART_SECONDS, MIN_PLANNED_PART_SECONDS, ClockConfig
 from solin.ui.qml.host import configure_qml_host
 from solin.ui.qml.media_tree.model import MediaTreeSource
 from solin.ui.qml.media_tree.snapshot import (
@@ -208,13 +209,21 @@ class _AdvancedTimerProbe(QObject):
                 "id": "part-1",
                 "section": "ministry",
                 "sectionKey": "ministry",
+                "sectionIconKey": "ministry",
+                "sectionTitle": "APPLY YOURSELF TO THE FIELD MINISTRY",
                 "sectionColor": "#5a9cf8",
                 "sectionTextColor": "#9fc5ff",
                 "sectionBadgeBg": "#172a45",
                 "sectionBorderColor": "#315b91",
                 "title": "Initial Call",
+                "hasTitleOverride": False,
                 "displayNumber": 1,
+                "plannedSeconds": 180,
                 "plannedLabel": "03:00",
+                "effectiveSeconds": 180,
+                "effectiveLabel": "03:00",
+                "hasAdjustedTarget": False,
+                "durationEditable": part_state == "idle",
                 "state": part_state,
                 "firstOfSection": True,
                 "showSectionHeader": True,
@@ -223,17 +232,128 @@ class _AdvancedTimerProbe(QObject):
                 "sectionTotalLabel": "12 min",
                 "startedLabel": "19:30:00" if part_state != "idle" else "",
                 "resultLabel": "02:54" if part_state == "stopped" else "",
+                "overTarget": False,
             }
         ]
         self._live_state = {
             "active": part_state == "running",
             "active_part_id": "part-1" if part_state == "running" else "",
+            "active_part_title": "Initial Call" if part_state == "running" else "",
+            "state": part_state,
+            "direction": "down",
+            "planned_seconds": 180,
+            "elapsed_seconds": 84,
+            "remaining_seconds": 96,
             "overrun": False,
             "display_seconds": 96,
         }
+        self._pacing_mode = "off"
         self.adjustments: list[tuple[str, int]] = []
+        self.started_parts: list[str] = []
+        self.stopped_parts: list[str] = []
         self.output_available = False
         self.manual_hand = False
+
+    pacingChanged = Signal()
+    customSchedulesChanged = Signal()
+    feedbackChanged = Signal()
+
+    @Property(str, notify=pacingChanged)
+    def pacingMode(self) -> str:  # noqa: N802 - QML API
+        return self._pacing_mode
+
+    @Property("QVariant", constant=True)
+    def pacingModes(self):  # noqa: N802 - QML API
+        return ["off", "monitor", "automatic"]
+
+    @Property("QVariant", notify=pacingChanged)
+    def pacingState(self):  # noqa: N802 - QML API
+        return {
+            "mode": self._pacing_mode,
+            "enabled": self._pacing_mode != "off",
+            "automatic": self._pacing_mode == "automatic",
+            "availability": "missing_window",
+            "canConfigureMeetingWindow": True,
+            "hasProjection": False,
+        }
+
+    @Slot(str, result=bool)
+    def setPacingMode(self, value: str) -> bool:  # noqa: N802 - QML API
+        self._pacing_mode = value
+        self.pacingChanged.emit()
+        return True
+
+    @Property(str, notify=scheduleChanged)
+    def activeScheduleTab(self) -> str:  # noqa: N802 - QML API
+        return "meetings"
+
+    @Property(bool, notify=liveStateChanged)
+    def isRunning(self) -> bool:  # noqa: N802 - QML API
+        return self._parts[0]["state"] == "running"
+
+    @Property(bool, notify=scheduleChanged)
+    def canExportPdf(self) -> bool:  # noqa: N802 - QML API
+        return len(self._parts) > 0
+
+    @Property("QVariant", notify=scheduleChanged)
+    def scheduleSummary(self):  # noqa: N802 - QML API
+        return {
+            "nextPartId": "part-1" if self._parts[0]["state"] == "idle" else "",
+            "nextPartTitle": "Initial Call" if self._parts[0]["state"] == "idle" else "",
+            "nextPartPlannedLabel": "03:00",
+            "allCompleted": self._parts[0]["state"] == "stopped",
+            "plannedTotalLabel": "3 min",
+            "hasAnyTimingData": self._parts[0]["state"] != "idle",
+            "activePlannedSeconds": 180,
+            "activePlannedLabel": "03:00",
+            "activeEffectiveSeconds": 180,
+            "activeEffectiveLabel": "03:00",
+            "activeHasAdjustedTarget": False,
+        }
+
+    @Property("QVariant", notify=customSchedulesChanged)
+    def customSchedules(self):  # noqa: N802 - QML API
+        return []
+
+    @Property("QVariant", notify=customSchedulesChanged)
+    def activeCustomSchedule(self):  # noqa: N802 - QML API
+        return {}
+
+    @Property("QVariant", notify=customSchedulesChanged)
+    def sectionIconCatalog(self):  # noqa: N802 - QML API
+        return []
+
+    @Property("QVariant", constant=True)
+    def sectionColorPresets(self):  # noqa: N802 - QML API
+        return []
+
+    @Slot(str, result="QVariant")
+    def customSectionPalette(self, color: str):  # noqa: N802 - QML API
+        return section_palette("custom", color or None)
+
+    @Slot(float, bool, result=str)
+    def formatPlannedDuration(self, seconds: float, compact: bool) -> str:  # noqa: N802 - QML API
+        return format_total_duration(seconds) if compact else format_mmss(seconds)
+
+    @Property(int, constant=True)
+    def minPlannedPartSeconds(self):  # noqa: N802 - QML API
+        return MIN_PLANNED_PART_SECONDS
+
+    @Property(int, constant=True)
+    def maxPlannedPartSeconds(self):  # noqa: N802 - QML API
+        return MAX_PLANNED_PART_SECONDS
+
+    @Property(str, constant=True)
+    def defaultSectionIconKey(self) -> str:  # noqa: N802 - QML API
+        return "section_group"
+
+    @Property("QVariant", notify=feedbackChanged)
+    def feedback(self):  # noqa: N802 - QML API
+        return {}
+
+    @Slot()
+    def clearFeedback(self) -> None:  # noqa: N802 - QML API
+        pass
 
     @Property(bool, notify=manualHandChanged)
     def manualHandAvailable(self) -> bool:  # noqa: N802 - QML API
@@ -303,6 +423,10 @@ class _AdvancedTimerProbe(QObject):
     def parts(self):
         return self._parts
 
+    @Property("QVariant", notify=scheduleChanged)
+    def displayEntries(self):  # noqa: N802 - QML API
+        return [dict(row, rowType="part") for row in self._parts]
+
     @Property("QVariant", notify=liveStateChanged)
     def liveState(self):  # noqa: N802 - QML API
         return self._live_state
@@ -343,6 +467,7 @@ class _AdvancedTimerProbe(QObject):
             {
                 **self._parts[0],
                 "state": state,
+                "durationEditable": state == "idle",
                 "startedLabel": started_label,
                 "resultLabel": result_label,
             }
@@ -350,17 +475,21 @@ class _AdvancedTimerProbe(QObject):
         self._live_state = {
             **self._live_state,
             "active": state == "running",
+            "state": state,
             "active_part_id": "part-1" if state == "running" else "",
+            "active_part_title": "Initial Call" if state == "running" else "",
         }
         self.scheduleChanged.emit()
         self.liveStateChanged.emit()
 
     @Slot(str)
-    def startPart(self, _part_id: str) -> None:  # noqa: N802 - QML API
+    def startPart(self, part_id: str) -> None:  # noqa: N802 - QML API
+        self.started_parts.append(part_id)
         self._set_part_state("running")
 
     @Slot(str)
-    def stopPart(self, _part_id: str) -> None:  # noqa: N802 - QML API
+    def stopPart(self, part_id: str) -> None:  # noqa: N802 - QML API
+        self.stopped_parts.append(part_id)
         self._set_part_state("stopped")
 
     @Slot(str)
@@ -1290,12 +1419,12 @@ def test_timer_view_moves_mode_selector_below_header_when_compact(
 
 
 @pytest.mark.parametrize(
-    ("width", "compact_navigation"),
-    [(320, True), (480, True), (768, True), (900, False), (1200, False)],
+    ("width", "split_workspace"),
+    [(340, False), (396, False), (495, False), (760, True), (1100, True)],
 )
 def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width(
     width: int,
-    compact_navigation: bool,
+    split_workspace: bool,
     request: pytest.FixtureRequest,
 ) -> None:
     timer = _AdvancedTimerProbe()
@@ -1315,25 +1444,24 @@ def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width
     QTest.qWait(40)
 
     content = root.findChild(QObject, "advancedTimerContent")
-    navigation = root.findChild(QObject, "timerWeekNavigationCard")
-    wide_layout = root.findChild(QObject, "timerWeekNavigationWide")
-    compact_layout = root.findChild(QObject, "timerWeekNavigationCompact")
+    sub_bar = _find_visual(root, "timerSubTabBar")
+    visible_workspace = _find_visual(root, "timerOperationWorkspace")
     assert content is not None
-    assert navigation is not None
-    assert wide_layout is not None
-    assert compact_layout is not None
+    assert sub_bar is not None
+    assert visible_workspace is not None and visible_workspace.isVisible()
     assert 0 < content.property("width") <= width
-    assert navigation.property("width") <= content.property("width")
-    assert bool(compact_layout.property("visible")) is compact_navigation
-    assert bool(wide_layout.property("visible")) is not compact_navigation
+    assert bool(root.property("splitWorkspace")) is split_workspace
 
-    visible_navigation = compact_layout if compact_navigation else wide_layout
-    manual_hand = _find_visual(visible_navigation, "timerManualHandButton")
-    export_pdf = _find_visual(visible_navigation, "timerExportPdfButton")
+    manual_hand = _find_visual(sub_bar, "timerManualHandButton")
+    export_pdf = _find_visual(sub_bar, "timerExportPdfButton")
+    settings_button = _find_visual(sub_bar, "timerSettingsButton")
     assert manual_hand is not None and manual_hand.isVisible()
     assert export_pdf is not None and export_pdf.isVisible()
-    assert manual_hand.parentItem() == export_pdf.parentItem()
+    assert settings_button is not None and settings_button.isVisible()
+    assert manual_hand.parentItem() == export_pdf.parentItem() == settings_button.parentItem()
     assert 0 <= manual_hand.x() < manual_hand.x() + manual_hand.width() <= export_pdf.x()
+    assert export_pdf.x() + export_pdf.width() <= settings_button.x()
+    assert settings_button.mapToItem(root, QPointF(settings_button.width(), 0)).x() <= width + 0.5
 
     assert not manual_hand.isEnabled()
     button_center = manual_hand.mapToItem(
@@ -1349,35 +1477,28 @@ def test_advanced_timer_keeps_navigation_and_part_actions_inside_available_width
     QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=button_center)
     assert not timer.manual_hand
 
-    settings_buttons = [
-        button
-        for name in ("timerSettingsButtonWide", "timerSettingsButtonCompact")
-        if (button := _find_visual(root, name)) is not None and button.isVisible()
-    ]
-    assert len(settings_buttons) == 1
-    button_origin = settings_buttons[0].mapToItem(navigation, QPointF())
-    assert button_origin.x() >= 0
-    assert button_origin.x() + settings_buttons[0].property("width") <= navigation.property("width")
-
-    part_row = _find_visual(root, "timerMeetingPartRow")
+    part_row = _find_visual(visible_workspace, "timerPartRow")
     assert part_row is not None
-    assert 0 < part_row.property("width") <= content.property("width")
-    assert bool(part_row.property("compactLayout")) is (part_row.property("width") < 620)
-
-    visible_actions = [
-        action
-        for action in _find_visuals(part_row, "timerPartActionButton")
-        if action.isVisible()
-    ]
-    assert len(visible_actions) == 1
-    action = visible_actions[0]
-    action_origin = action.mapToItem(part_row, QPointF())
+    assert 0 < part_row.property("width") <= width
+    # Controls live in the centralized clock panel rather than per-row buttons.
+    assert _find_visual(part_row, "timerPartActionButton") is None
+    clock_panel = _find_visual(
+        visible_workspace,
+        "timerWideClockPanel" if split_workspace else "timerCompactClockStrip",
+    )
+    assert clock_panel is not None and clock_panel.isVisible()
+    action = _find_visual(
+        clock_panel,
+        "timerPrimaryActionButton" if split_workspace else "timerCompactPrimaryActionButton",
+    )
+    assert action is not None and action.isVisible()
+    action_origin = action.mapToItem(root, QPointF())
     assert action_origin.x() >= 0
-    assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
+    assert action_origin.x() + action.property("width") <= width + 0.5
     assert widget.errors() == []
 
 
-@pytest.mark.parametrize(("width", "height"), [(320, 400), (640, 520), (960, 760)])
+@pytest.mark.parametrize(("width", "height"), [(340, 460), (640, 520), (960, 760)])
 def test_advanced_timer_settings_open_as_a_responsive_modal(
     request,
     width: int,
@@ -1404,11 +1525,8 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     viewport = root.findChild(QObject, "timerSettingsViewport")
     assert settings is not None
     assert viewport is not None
-    settings_button = next(
-        button
-        for name in ("timerSettingsButtonWide", "timerSettingsButtonCompact")
-        if (button := _find_visual(root, name)) is not None and button.isVisible()
-    )
+    settings_button = _find_visual(root, "timerSettingsButton")
+    assert settings_button is not None and settings_button.isVisible()
     click_point = settings_button.mapToScene(
         QPointF(settings_button.width() / 2, settings_button.height() / 2)
     ).toPoint()
@@ -1427,6 +1545,7 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     for card_name in (
         "timerSettingsClockCard",
         "timerSettingsPartCard",
+        "timerSettingsPacingCard",
         "timerSettingsDisplayCard",
         "timerSettingsMonitorsCard",
     ):
@@ -1438,6 +1557,11 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
     assert clock_mode is not None
     assert QMetaObject.invokeMethod(clock_mode, "picked", Q_ARG(int, 1))
     assert timer.clockConfig["mode"] == "analog"
+
+    pacing_select = root.findChild(QObject, "timerPacingModeSelect")
+    assert pacing_select is not None
+    assert QMetaObject.invokeMethod(pacing_select, "picked", Q_ARG(int, 2))
+    assert timer.pacingMode == "automatic"
     assert widget.errors() == []
     assert QMetaObject.invokeMethod(settings, "close")
     _wait_until(lambda: settings.property("visible") is False)
@@ -1446,10 +1570,10 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
 
 
 @pytest.mark.parametrize(
-    ("width", "state", "expected_action"),
+    ("width", "state", "expected_tip"),
     [
-        (320, "running", "Stop"),
-        (320, "stopped", "Reset"),
+        (340, "running", "Stop"),
+        (340, "stopped", "Reset"),
         (900, "running", "Stop"),
         (900, "stopped", "Reset"),
     ],
@@ -1457,7 +1581,7 @@ def test_advanced_timer_settings_open_as_a_responsive_modal(
 def test_advanced_timer_part_actions_remain_visible_in_live_states(
     width: int,
     state: str,
-    expected_action: str,
+    expected_tip: str,
 ) -> None:
     timer = _AdvancedTimerProbe(part_state=state)
     widget = QQuickWidget()
@@ -1474,23 +1598,38 @@ def test_advanced_timer_part_actions_remain_visible_in_live_states(
     widget.show()
     QTest.qWait(40)
 
-    part_row = _find_visual(root, "timerMeetingPartRow")
+    split = width >= 760
+    workspace = _find_visual(root, "timerOperationWorkspace")
+    assert workspace is not None and workspace.isVisible()
+    part_row = _find_visual(workspace, "timerPartRow")
     assert part_row is not None
-    visible_actions = [
-        action
-        for action in _find_visuals(part_row, "timerPartActionButton")
-        if action.isVisible()
-    ]
-    assert len(visible_actions) == 1
-    action = visible_actions[0]
-    action_origin = action.mapToItem(part_row, QPointF())
-    assert action.property("text") == expected_action
-    assert action_origin.x() + action.property("width") <= part_row.property("width") + 0.5
+    # Per-row action buttons are intentionally absent; controls live in the centralized clock panel.
+    assert _find_visual(part_row, "timerPartActionButton") is None
+
+    clock_panel = _find_visual(workspace, "timerWideClockPanel" if split else "timerCompactClockStrip")
+    assert clock_panel is not None and clock_panel.isVisible()
+    if state == "running":
+        action = _find_visual(
+            clock_panel,
+            "timerPrimaryActionButton" if split else "timerCompactPrimaryActionButton",
+        )
+        assert action is not None and action.isVisible()
+        assert (action.property("text") or action.property("tip")) == expected_tip
+    else:
+        reset_btn = _find_visual(clock_panel, "timerResetSelectedPartButton") if split else next(
+            (
+                item
+                for item in _find_visuals(clock_panel, "")
+                if item.isVisible() and item.property("tip") == "Reset this part"
+            ),
+            None,
+        )
+        assert reset_btn is not None and reset_btn.isVisible()
     assert widget.errors() == []
     widget.deleteLater()
 
 
-@pytest.mark.parametrize("width", [320, 900])
+@pytest.mark.parametrize("width", [340, 960])
 @pytest.mark.parametrize("direction", ["up", "down"])
 def test_advanced_timer_running_part_keeps_elapsed_controls(
     request, width: int, direction: str,
@@ -1500,7 +1639,7 @@ def test_advanced_timer_running_part_keeps_elapsed_controls(
     request.addfinalizer(lambda: dispose_widget(widget))
     timer.setParent(widget)
     widget.setWindowFlag(Qt.WindowType.FramelessWindowHint)
-    widget.resize(width, 520)
+    widget.resize(width, 600)
     configure_qml_host(
         widget,
         type_name="AdvancedTimerPage",
@@ -1512,25 +1651,9 @@ def test_advanced_timer_running_part_keeps_elapsed_controls(
     assert root is not None
     show_and_activate(widget)
 
-    def part_row():
-        row = _find_visual(root, "timerMeetingPartRow")
-        assert row is not None
-        return row
-
-    def visible_items():
-        return [item for item in _find_visuals(part_row(), "") if item.isVisible()]
-
-    def step_buttons():
-        return {
-            item.property("glyph"): item
-            for item in visible_items()
-            if item.property("glyph") in ("−", "+")
-        }
-
-    def stepper():
-        matches = [item for item in visible_items() if item.property("editable") is not None]
-        assert len(matches) == 1
-        return matches[0]
+    split = width >= 760
+    workspace = _find_visual(root, "timerOperationWorkspace")
+    assert workspace is not None and workspace.isVisible()
 
     def click(item):
         wait_until(lambda: item.width() > 0, description="timer control layout")
@@ -1540,156 +1663,133 @@ def test_advanced_timer_running_part_keeps_elapsed_controls(
             pos=item.mapToScene(QPointF(item.width() / 2, item.height() / 2)).toPoint(),
         )
 
-    def action():
-        return next(
-            item for item in _find_visuals(part_row(), "timerPartActionButton")
-            if item.isVisible()
-        )
+    clock_panel = _find_visual(workspace, "timerWideClockPanel" if split else "timerCompactClockStrip")
+    assert clock_panel is not None and clock_panel.isVisible()
+    start_btn = _find_visual(
+        clock_panel,
+        "timerPrimaryActionButton" if split else "timerCompactPrimaryActionButton",
+    )
+    assert start_btn is not None
+    click(start_btn)
+    wait_until(lambda: timer.isRunning, description="running part")
+    assert timer.started_parts == ["part-1"]
+    digits = _find_visual(clock_panel, "timerClockDigits" if split else "timerCompactClockDigits")
+    assert digits is not None and digits.isVisible()
 
-    assert stepper().property("editable") is True
-    assert set(step_buttons()) == {"−", "+"}
-    click(action())
-    wait_until(lambda: part_row().property("state") == "running", description="running part")
-    assert set(step_buttons()) == {"−", "+"}, "Elapsed +/- must remain visible after Start"
-    assert stepper().property("editable") is False
+    # Open manual adjustment controls in the clock panel
+    clock_panel.setProperty("adjustOpen", True)
+    QTest.qWait(30)
+    adjust_buttons = {
+        item.property("text"): item
+        for item in _find_visuals(clock_panel, "")
+        if item.isVisible() and item.property("text") in ("−1 min", "−1 s", "+1 s", "+1 min")
+    }
+    assert set(adjust_buttons) == {"−1 min", "−1 s", "+1 s", "+1 min"}
 
-    # Publish bridge snapshots separately from input assertions: this probe only
-    # records UI requests, leaving elapsed arithmetic to the backend tests.
-    timer._live_state.update({"direction": direction, "elapsed_seconds": 84,
-                              "remaining_seconds": 96})
-    for glyph, delta, seconds, label in (
-        ("+", 1, 85 if direction == "up" else 95, "01:25" if direction == "up" else "01:35"),
-        ("−", -1, 84 if direction == "up" else 96, "01:24" if direction == "up" else "01:36"),
+    timer._live_state.update({"direction": direction, "elapsed_seconds": 84, "remaining_seconds": 96})
+    for label_btn, delta, seconds, label in (
+        ("+1 s", 1, 85 if direction == "up" else 95, "01:25" if direction == "up" else "01:35"),
+        ("−1 s", -1, 84 if direction == "up" else 96, "01:24" if direction == "up" else "01:36"),
+        ("+1 min", 60, 144 if direction == "up" else 36, "02:24" if direction == "up" else "00:36"),
+        ("−1 min", -60, 84 if direction == "up" else 96, "01:24" if direction == "up" else "01:36"),
     ):
-        click(step_buttons()[glyph])
+        click(adjust_buttons[label_btn])
         assert timer.adjustments[-1] == ("part-1", delta)
         timer._live_state["display_seconds"] = seconds
         timer.liveStateChanged.emit()
-        wait_until(lambda label=label: label in _visible_texts(part_row()), description="live readout")
-    assert timer.adjustments == [("part-1", 1), ("part-1", -1)]
+        wait_until(lambda label=label: digits.property("text") == label, description="live readout")
+    assert timer.adjustments == [("part-1", 1), ("part-1", -1), ("part-1", 60), ("part-1", -60)]
 
     for seconds, label in ((3600, "1:00:00"), (-1, "-00:01")):
         timer._live_state.update({"display_seconds": seconds, "overrun": seconds < 0})
         timer.liveStateChanged.emit()
-        wait_until(lambda label=label: label in _visible_texts(part_row()), description="long live readout")
-        readout = next(
-            item for item in visible_items()
-            if item.property("text") == label and item.property("resolvedDigitFamily")
-        )
-        assert readout.property("resolvedDigitFamily")
-        assert readout.property("font").pixelSize() == 23
-        assert readout.property("font").kerning() is False
+        wait_until(lambda label=label: digits.property("text") == label, description="long live readout")
+        assert digits.property("resolvedDigitFamily")
+        assert digits.property("font").kerning() is False
         wait_until(
-            lambda readout=readout: readout.property("paintedWidth") <= readout.width() + 0.5,
-            description=lambda readout=readout: (
-                f"live digits fitted: text={readout.property('text')}, "
-                f"width={readout.width()}, painted={readout.property('paintedWidth')}, "
-                f"height={readout.height()}, minimum={readout.property('minimumPixelSize')}, "
-                f"family={readout.property('font').family()}"
-            ),
+            lambda: digits.property("paintedWidth") <= digits.width() + 0.5,
+            description="live digits fit inside clock panel",
         )
-        expected_color = part_row().property("pal_danger" if seconds < 0 else "accent")
-        assert readout.property("color") == expected_color
-        buttons = step_buttons()
-        left = buttons["−"].mapToItem(part_row(), QPointF()).x()
-        right = buttons["+"].mapToItem(part_row(), QPointF()).x() + buttons["+"].width()
-        text_left = readout.mapToItem(part_row(), QPointF()).x()
-        assert left >= 0
-        assert text_left >= left + buttons["−"].width()
-        assert text_left + readout.width() <= right - buttons["+"].width()
-        assert right <= action().mapToItem(part_row(), QPointF()).x()
+        if seconds < 0:
+            wait_until(
+                lambda: digits.property("color") == clock_panel.property("pal_danger"),
+                description="overrun danger color",
+            )
 
-    click(action())
-    wait_until(lambda: part_row().property("state") == "stopped", description="stopped part")
-    # A stopped timer can remain active while its frozen elapsed value is shown.
-    timer._live_state.update({"active": True, "active_part_id": "part-1",
-                              "display_seconds": 174, "overrun": False})
-    timer.liveStateChanged.emit()
-    wait_until(lambda: "02:54" in _visible_texts(part_row()), description="frozen readout")
-    assert step_buttons() == {}
-    assert stepper().property("editable") is False
-    assert action().property("text") == "Reset"
-    assert timer.parts[0]["plannedLabel"] == "03:00"
+    stop_btn = _find_visual(
+        clock_panel, "timerPrimaryActionButton" if split else "timerCompactPrimaryActionButton"
+    )
+    assert stop_btn is not None
+    click(stop_btn)
+    wait_until(lambda: not timer.isRunning, description="stopped part")
+    assert timer.stopped_parts == ["part-1"]
     assert widget.errors() == []
 
 
-@pytest.mark.parametrize("width", [320, 900])
+@pytest.mark.parametrize("width", [340, 900])
 def test_advanced_timer_part_state_changes_keep_the_row_geometry_stable(
     width: int,
 ) -> None:
     timer = _AdvancedTimerProbe()
     widget = QQuickWidget()
-    widget.resize(width, 520)
-    configure_qml_host(
-        widget,
-        type_name="AdvancedTimerPage",
-        clear_color="#000000",
-        context_properties={"timer": timer},
-        image_providers={"timericons": TimerIconProvider()},
-    )
-    root = widget.rootObject()
-    assert root is not None
-    widget.show()
-    QTest.qWait(40)
-
-    def visible_part_item(object_name: str):
-        part_row = _find_visual(root, "timerMeetingPartRow")
-        assert part_row is not None
-        matches = [
-            item
-            for item in _find_visuals(part_row, object_name)
-            if item.isVisible()
-        ]
-        assert len(matches) == 1
-        return part_row, matches[0]
-
-    def item_rect(item, relative_to):
-        origin = item.mapToItem(relative_to, QPointF())
-        return (origin.x(), origin.y(), item.property("width"), item.property("height"))
-
-    def stable_geometry():
-        part_row, action = visible_part_item("timerPartActionButton")
-        region_name = (
-            "timerPartCompactTimingArea"
-            if bool(part_row.property("compactLayout"))
-            else "timerPartPlannedControl"
+    try:
+        widget.resize(width, 520)
+        configure_qml_host(
+            widget,
+            type_name="AdvancedTimerPage",
+            clear_color="#000000",
+            context_properties={"timer": timer},
+            image_providers={"timericons": TimerIconProvider()},
         )
-        _, timing_region = visible_part_item(region_name)
-        action_x, action_y, action_width, action_height = item_rect(action, part_row)
-        timing_x, timing_y, timing_width, timing_height = item_rect(
-            timing_region,
-            part_row,
-        )
-        return (
-            part_row.property("height"),
-            action_y,
-            action_width,
-            action_height,
-            part_row.property("width") - action_x - action_width,
-            timing_y,
-            timing_height,
-            action_x - timing_x - timing_width,
-        )
+        root = widget.rootObject()
+        assert root is not None
+        show_and_activate(widget, size=QSize(width, 520))
 
-    def visible_action():
-        _part_row, action = visible_part_item("timerPartActionButton")
-        return action
-
-    initial_geometry = stable_geometry()
-    for expected_text in ("Stop", "Reset", "Start"):
-        action = visible_action()
-        click_point = action.mapToScene(
-            QPointF(action.width() / 2, action.height() / 2)
-        ).toPoint()
-        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=click_point)
-        _wait_until(
-            lambda expected=expected_text: visible_action().property("text") == expected
+        split = width >= 760
+        workspace = _find_visual(root, "timerOperationWorkspace")
+        assert workspace is not None
+        clock_panel = _find_visual(
+            workspace, "timerWideClockPanel" if split else "timerCompactClockStrip"
         )
-        assert stable_geometry() == pytest.approx(initial_geometry, abs=0.5)
+        assert clock_panel is not None
 
-    assert widget.errors() == []
-    widget.close()
-    widget.deleteLater()
+        def polished_geometry(expected_state: str):
+            def ready() -> bool:
+                widget.grabFramebuffer()
+                part_row = _find_visual(workspace, "timerPartRow")
+                if part_row is None or part_row.property("partState") != expected_state:
+                    return False
+                result_txt = _find_visual(part_row, "timerPartResultText")
+                if result_txt is None:
+                    return False
+                return part_row.width() > 200 and result_txt.width() >= 45
+
+            wait_until(ready, description=f"polished timerPartRow for state={expected_state}")
+            part_row = _find_visual(workspace, "timerPartRow")
+            assert part_row is not None
+            result_txt = _find_visual(part_row, "timerPartResultText")
+            assert result_txt is not None
+            origin = result_txt.mapToItem(part_row, QPointF())
+            return (
+                part_row.property("height"),
+                origin.y(),
+                result_txt.property("height"),
+                part_row.property("width") - origin.x() - result_txt.property("width"),
+            )
+
+        initial_geometry = polished_geometry("idle")
+        for next_state in ("running", "stopped", "idle"):
+            if next_state == "running":
+                timer.startPart("part-1")
+            elif next_state == "stopped":
+                timer.stopPart("part-1")
+            else:
+                timer.resetPart("part-1")
+            assert polished_geometry(next_state) == pytest.approx(initial_geometry, abs=0.5)
+
+        assert widget.errors() == []
+    finally:
+        dispose_widget(widget)
 
 
 def test_advanced_timer_settings_reuse_existing_portuguese_catalog(
@@ -1962,6 +2062,24 @@ def test_timer_pointer_area_enters_and_exits_native_cursor_state(
     assert (probe.entered, probe.exited) == (1, 1), diagnostic()
 
 
+def test_timer_icon_provider_preserves_tint_opacity_and_handles_zero_size() -> None:
+    provider = TimerIconProvider()
+    assert not provider.requestPixmap("check/0/ffffff", QSize(), QSize()).isNull()
+
+    def max_alpha(tint: str, icon: str = "check") -> int:
+        image = provider.requestPixmap(f"{icon}/32/{tint}", QSize(), QSize()).toImage()
+        return max(
+            image.pixelColor(x, y).alpha()
+            for x in range(image.width()) for y in range(image.height())
+        )
+
+    assert max_alpha("ffffff") == 255
+    assert 0 < max_alpha("80ffffff") < 255
+    assert max_alpha("80ffffff", "ban") == 128
+    assert max_alpha("00000000") == 0
+    assert max_alpha("invalid") > 0
+
+
 def test_timer_icon_only_button_centers_its_visible_content() -> None:
     widget = QQuickWidget()
     widget.resize(48, 34)
@@ -2015,7 +2133,7 @@ def test_timer_navigation_tooltip_uses_overlay_and_fits_below_header() -> None:
     widget.setFocus()
     QTest.qWait(40)
 
-    button = _find_visual(root, "timerPreviousWeekButtonCompact")
+    button = _find_visual(root, "timerSettingsButton")
     viewport = _find_visual(root, "advancedTimerViewport")
     assert button is not None
     assert viewport is not None

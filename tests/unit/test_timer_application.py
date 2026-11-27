@@ -9,6 +9,7 @@ from solin.core.timer.application import (
     DetectedPartTiming,
     TimerSession,
 )
+from solin.core.timer.custom_schedule import TimerOperationError
 from solin.core.timer.models import (
     AssignmentSetup,
     ClockConfig,
@@ -279,3 +280,31 @@ def test_timer_source_boundaries_keep_application_pure_and_widget_injected() -> 
     assert "QFileDialog" not in bridge_source
     assert "QMessageBox" not in bridge_source
     assert "QStandardPaths" not in bridge_source
+
+
+def test_meeting_part_edit_is_atomic_and_increments_revision_once(monkeypatch) -> None:
+    repo = _Repository()
+    session = TimerSession(repo, current_week_monday=_WEEK)
+    part = next(p for p in session.schedule.parts if p.planned_seconds >= 120)
+    original = (part.title_override, part.planned_seconds)
+    revision = session.meeting_revision
+    for invalid in (0, 86400, 80000):
+        with pytest.raises(TimerOperationError):
+            session.edit_part(part.id, "Invalid edit", invalid)
+        assert (part.title_override, part.planned_seconds) == original
+        assert session.meeting_revision == revision
+        assert repo.saved_schedules == []
+
+    def failed_write(_schedule):
+        raise OSError("storage unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(repo, "save_schedule", failed_write)
+        with pytest.raises(OSError):
+            session.edit_part(part.id, "Failed edit", original[1] - 60)
+    assert (part.title_override, part.planned_seconds) == original
+    assert session.meeting_revision == revision
+    assert session.edit_part(part.id, "New title", original[1] - 60)
+    assert (part.title_override, part.planned_seconds) == ("New title", original[1] - 60)
+    assert session.meeting_revision == revision + 1
+    assert len(repo.saved_schedules) == 1

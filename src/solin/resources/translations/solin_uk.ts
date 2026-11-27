@@ -23,49 +23,103 @@
 <context>
     <name>AdvancedTimerPage</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+113"/>
-        <location line="+119"/>
+        <source>Could not load custom schedules. Try again.</source>
+        <translation>Не вдалося завантажити власні розклади. Спробуйте ще раз.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the estimates before saving.</source>
+        <translation>Перед збереженням введіть час початку й завершення або очистьте оцінки.</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Вага (0–100): частини з більшою вагою коригуються більше. Вага 0 залишає частину незмінною, коли інша частина має додатну вагу. Якщо всі ваги дорівнюють 0, придатні частини коригуються однаково.</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location line="+199"/>
         <source>Clock</source>
         <translation>Годинник</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-214"/>
         <source>Digital</source>
         <translation>Цифровий</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog</source>
         <translation>Аналоговий</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Analog + digital</source>
         <translation>Аналоговий + цифровий</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+6"/>
         <source>Signature</source>
         <extracomment>&quot;Signature&quot; is the proper name of this clock face. Keep it unchanged.</extracomment>
         <translation>Signature</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Classic</source>
         <translation>Класичний</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <location line="+54"/>
+        <location line="+31"/>
         <source>Timer</source>
         <translation>Таймер</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="-83"/>
         <source>Clock + timer</source>
         <translation>Годинник + таймер</translation>
     </message>
     <message>
-        <location line="+121"/>
+        <location line="+5"/>
+        <source>Off</source>
+        <translation>Вимкнено</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor only</source>
+        <translation>Лише відстеження</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Monitor and adjust</source>
+        <translation>Відстеження та коригування</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Forecasts the finish time without changing part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Прогнозує час завершення без зміни цільового часу частин. Зберігається окремо для кожного профілю для «Зібрань» і «Розкладів».</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Forecasts the finish time and adjusts upcoming eligible part targets. Changing mode during a run keeps the active target.</source>
+        <translation>Прогнозує час завершення та коригує цільовий час наступних відповідних частин. Зміна режиму під час роботи зберігає поточну ціль.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Does not forecast finish time or adjust part targets. Saved per profile for both Meetings and Schedules.</source>
+        <translation>Не прогнозує час завершення і не коригує цільовий час частин. Зберігається окремо для кожного профілю для «Зібрань» і «Розкладів».</translation>
+    </message>
+    <message>
+        <location line="+146"/>
+        <source>Pacing</source>
+        <translation>Дотримання графіка</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Mode</source>
+        <translation>Режим</translation>
+    </message>
+    <message>
+        <location line="+36"/>
         <source>Clock face</source>
         <translation>Циферблат</translation>
     </message>
@@ -75,12 +129,12 @@
         <translation>Аналоговий стиль</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+18"/>
         <source>Format</source>
         <translation>Формат</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+7"/>
         <source>24-hour</source>
         <translation>24-годинний</translation>
     </message>
@@ -90,24 +144,24 @@
         <translation>12-годинний</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+3"/>
+        <location line="+9"/>
+        <location line="+7"/>
         <source>Show seconds</source>
         <translation>Показувати секунди</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <location line="+3"/>
+        <location line="+6"/>
+        <location line="+6"/>
         <source>AM / PM</source>
         <translation>AM / PM</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Part timer</source>
         <translation>Таймер частини</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+8"/>
         <source>During parts</source>
         <translation>Під час частин програми</translation>
     </message>
@@ -117,7 +171,7 @@
         <translation>Напрямок відліку</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+5"/>
         <source>Count down</source>
         <translation>Зворотний відлік</translation>
     </message>
@@ -127,59 +181,59 @@
         <translation>Прямий відлік</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Hold duration when stopped</source>
         <translation>Зберігати тривалість після зупинки</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Less</source>
         <translation>Менше</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More</source>
         <translation>Більше</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+10"/>
         <source>Display</source>
         <translation>Екран</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+7"/>
         <source>Display size</source>
         <translation>Розмір відображення</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+22"/>
         <source>Monitors</source>
         <translation>Монітори</translation>
     </message>
     <message>
-        <location line="+2"/>
         <location line="+5"/>
+        <location line="+4"/>
         <source>Show timer</source>
         <translation>Показувати таймер</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+58"/>
         <source>Reserved for the timer · %1</source>
         <translation>Зарезервовано для таймера · %1</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+16"/>
         <source>Unreserve</source>
         <translation>Скасувати резервування</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+358"/>
+        <location line="+170"/>
         <source>Reserve</source>
         <translation>Зарезервувати</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-167"/>
         <source>Reserve this monitor for the timer</source>
         <translation>Зарезервувати цей монітор для таймера</translation>
     </message>
@@ -189,27 +243,150 @@
         <translation>Додаткових моніторів не виявлено</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Зупиніть запущений таймер перед перемиканням розкладу.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <source>Meetings</source>
+        <translation>Зібрання</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Schedules</source>
+        <translation>Розклади</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Show the timer on a monitor to raise hand</source>
+        <translation>Покажіть таймер на моніторі, щоб підняти руку</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clear hand alert</source>
+        <translation>Зняти сигнал піднятої руки</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Raise hand</source>
+        <translation>Підняти руку</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Add at least one part to export PDF</source>
+        <translation>Додайте принаймні одну частину для експорту в PDF</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Timer settings</source>
+        <translation>Налаштування таймера</translation>
+    </message>
+    <message>
+        <location line="+54"/>
         <source>Previous week</source>
         <translation>Попередній тиждень</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+50"/>
         <source>Not the current week</source>
         <translation>Не поточний тиждень</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+15"/>
         <source>Next week</source>
         <translation>Наступний тиждень</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Back to this week</source>
-        <translation>Назад до цього тижня</translation>
+        <location line="+12"/>
+        <source>Current week</source>
+        <translation>Поточний тиждень</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back to current week</source>
+        <translation>Повернутися до поточного тижня</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <location line="+5"/>
+        <location line="+172"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <source>New schedule</source>
+        <translation>Новий розклад</translation>
+    </message>
+    <message>
+        <location line="-173"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Зупиніть запущений таймер перед створенням розкладу.</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <source>Edit schedule</source>
+        <translation>Редагувати розклад</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Stop the running timer before organizing this schedule.</source>
+        <translation>Зупиніть запущений таймер перед зміною структури цього розкладу.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Organize parts and sections</source>
+        <translation>Упорядкувати частини й розділи</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>More schedule actions</source>
+        <translation>Інші дії з розкладом</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Reload</source>
+        <translation>Перезавантажити</translation>
+    </message>
+    <message>
+        <location line="+66"/>
+        <source>No custom schedules yet</source>
+        <translation>Власних розкладів ще немає</translation>
     </message>
     <message>
         <location line="+10"/>
+        <source>Create a schedule for trainings, assemblies, or any timed event. Sections and target times are optional.</source>
+        <translation>Створіть розклад для навчань, конгресів або будь-якої події з хронометражем. Розділи та цільовий час необов’язкові.</translation>
+    </message>
+    <message>
+        <location line="+200"/>
+        <source>Timing and pacing…</source>
+        <translation>Час і дотримання графіка…</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Rename schedule…</source>
+        <translation>Перейменувати розклад…</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <source>Duplicate</source>
+        <translation>Дублювати</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <source>Reset results</source>
+        <translation>Скинути результати</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <source>Delete</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
+        <location line="-484"/>
         <source>Midweek</source>
         <translation>Серед тижня</translation>
     </message>
@@ -219,49 +396,703 @@
         <translation>Вихідні</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="-171"/>
+        <location line="+4"/>
         <source>Export PDF</source>
         <translation>Експортувати PDF</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>Meeting parts</source>
-        <translation>Частини зібрання</translation>
+        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <source>Part</source>
+        <translation>Частина</translation>
     </message>
     <message>
-        <location line="+85"/>
-        <source>Parts</source>
-        <translation>Частини</translation>
+        <location line="+8"/>
+        <source>Planned</source>
+        <translation>Заплановано</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
+        <source>Result</source>
+        <translation>Результат</translation>
+    </message>
+    <message>
+        <location line="+188"/>
         <source>Fewer parts</source>
         <translation>Менше частин</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <source>More parts</source>
         <translation>Більше частин</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>%1 total</source>
-        <translation>Усього %1</translation>
+        <location line="+38"/>
+        <source>Empty section</source>
+        <translation>Порожній розділ</translation>
     </message>
     <message>
-        <location line="+109"/>
+        <location line="+345"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location line="+354"/>
+        <source>Delete part</source>
+        <translation>Видалити частину</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Rename section…</source>
+        <translation>Перейменувати розділ…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Section appearance…</source>
+        <translation>Оформлення розділу…</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <source>Add part to section</source>
+        <translation>Додати частину до розділу</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <source>Delete section</source>
+        <translation>Видалити розділ</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>Монітор використовується медіа</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Media is currently using %1. Reserve it for the timer and move media off this monitor?</source>
         <translation>Медіа зараз використовує %1. Зарезервувати його для таймера і прибрати медіа з цього монітора?</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location line="+130"/>
+        <location line="+66"/>
+        <location line="+48"/>
+        <location line="+106"/>
+        <location line="+102"/>
+        <location line="+271"/>
+        <location line="+404"/>
+        <location line="+52"/>
+        <location line="+37"/>
+        <location line="+34"/>
+        <location line="+132"/>
         <source>Cancel</source>
         <translation>Скасувати</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <source>Projected %1 min behind</source>
+        <translation>Прогноз: відставання на %1 хв</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Projected %1 min ahead</source>
+        <translation>Прогноз: випередження на %1 хв</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>On schedule</source>
+        <translation>За розкладом</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Projected end %1 · Target %2</source>
+        <translation>Прогноз завершення %1 · Ціль %2</translation>
+    </message>
+    <message>
+        <location line="+36"/>
+        <source>Part overtime</source>
+        <translation>Перевищення часу</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In progress</source>
+        <translation>Триває</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Completed (over target)</source>
+        <translation>Завершено (понад час)</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Completed</source>
+        <translation>Завершено</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Schedule completed</source>
+        <translation>Розклад завершено</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Selected part</source>
+        <translation>Вибрана частина</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Ready</source>
+        <translation>Готово</translation>
+    </message>
+    <message>
+        <location line="+82"/>
+        <location line="+540"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <source>Edit part…</source>
+        <translation>Редагувати частину…</translation>
+    </message>
+    <message>
+        <location line="-527"/>
+        <location line="+377"/>
+        <source>No parts in this schedule</source>
+        <translation>У цьому розкладі немає частин</translation>
+    </message>
+    <message>
+        <location line="-318"/>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+395"/>
+        <source>Target %1 · Planned %2</source>
+        <translation>Ціль %1 · Заплановано %2</translation>
+    </message>
+    <message>
+        <location line="-404"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <source>Target %1</source>
+        <translation>Ціль %1</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <location line="+5"/>
+        <location line="+396"/>
+        <source>Planned %1</source>
+        <translation>Заплановано %1</translation>
+    </message>
+    <message>
+        <location line="-376"/>
+        <location line="+313"/>
+        <location line="+5"/>
+        <source>Stop</source>
+        <translation>Стоп</translation>
+    </message>
+    <message>
+        <location line="-316"/>
+        <location line="+312"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <source>Restart</source>
+        <translation>Перезапустити</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <location line="+309"/>
+        <location line="+5"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <source>Start</source>
+        <translation>Почати</translation>
+    </message>
+    <message>
+        <location line="-290"/>
+        <location line="+383"/>
+        <source>Adjust time</source>
+        <translation>Скоригувати час</translation>
+    </message>
+    <message>
+        <location line="-372"/>
+        <location line="+408"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <source>Reset</source>
+        <translation>Скинути</translation>
+    </message>
+    <message>
+        <location line="-405"/>
+        <location line="+406"/>
+        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <source>Reset this part</source>
+        <translation>Скинути цю частину</translation>
+    </message>
+    <message>
+        <location line="-358"/>
+        <source>Reset all results</source>
+        <translation>Скинути всі результати</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Set the meeting time in Profile settings to track schedule pacing.</source>
+        <translation>Укажіть час зібрання в налаштуваннях профілю, щоб відстежувати дотримання графіка.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Set start and end times in the menu (⋯) to track pacing.</source>
+        <translation>Укажіть час початку та завершення в меню (⋯), щоб відстежувати дотримання графіка.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <location line="+239"/>
+        <source>Configure meeting time</source>
+        <translation>Налаштувати час зібрання</translation>
+    </message>
+    <message>
+        <location line="-238"/>
+        <location line="+238"/>
+        <source>Set schedule time</source>
+        <translation>Задати час розкладу</translation>
+    </message>
+    <message>
+        <location line="-219"/>
+        <source>The configured time window will take effect after resetting results.</source>
+        <translation>Налаштований часовий інтервал набуде чинності після скидання результатів.</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Up next</source>
+        <translation>Далі</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <location line="+196"/>
+        <source>Start next part</source>
+        <translation>Почати наступну частину</translation>
+    </message>
+    <message>
+        <location line="-55"/>
+        <source>Meeting time not set</source>
+        <translation>Час зібрання не задано</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Schedule time not set</source>
+        <translation>Час розкладу не задано</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset results to apply time window</source>
+        <translation>Скиньте результати, щоб застосувати часовий інтервал</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <source>Set time</source>
+        <translation>Задати час</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>Adjust</source>
+        <translation>Скоригувати</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Next</source>
+        <translation>Наступна</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <source>Editing: %1</source>
+        <translation>Редагування: %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Drag items to reorder, add parts or sections, then save your changes.</source>
+        <translation>Перетягуйте елементи для зміни порядку, додавайте частини або розділи, а потім збережіть зміни.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location line="+56"/>
+        <source>Add section</source>
+        <translation>Додати розділ</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <location line="+3"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location line="+70"/>
+        <source>Add part</source>
+        <translation>Додати частину</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location line="+195"/>
+        <location line="+48"/>
+        <location line="+482"/>
+        <location line="+405"/>
+        <source>Save</source>
+        <translation>Зберегти</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>This schedule has no parts yet.</source>
+        <translation>У цьому розкладі ще немає частин.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Use Add part or Add section above to build it.</source>
+        <translation>Скористайтеся кнопками «Додати частину» або «Додати розділ» вище, щоб скласти розклад.</translation>
+    </message>
+    <message>
+        <location line="+142"/>
+        <location line="+354"/>
+        <source>Move up</source>
+        <translation>Перемістити вгору</translation>
+    </message>
+    <message>
+        <location line="-342"/>
+        <location line="+354"/>
+        <source>Move down</source>
+        <translation>Перемістити вниз</translation>
+    </message>
+    <message>
+        <location line="-344"/>
+        <location line="+3"/>
+        <location line="+176"/>
+        <location line="+175"/>
+        <location line="+3"/>
+        <source>Move to…</source>
+        <translation>Перемістити до…</translation>
+    </message>
+    <message>
+        <location line="-228"/>
+        <source>Change section icon and color</source>
+        <translation>Змінити значок і колір розділу</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Move section up</source>
+        <translation>Перемістити розділ угору</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Move section down</source>
+        <translation>Перемістити розділ униз</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Move section</source>
+        <translation>Перемістити розділ</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Empty the section before deleting it</source>
+        <translation>Очистьте розділ перед видаленням</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Empty section — drag a part here or click +</source>
+        <translation>Порожній розділ — перетягніть сюди частину або натисніть +</translation>
+    </message>
+    <message>
+        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <source>%1 (copy)</source>
+        <translation>%1 (копія)</translation>
+    </message>
+    <message>
+        <location line="+160"/>
+        <source>No section (root)</source>
+        <translation>Без розділу (корінь)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>No icon</source>
+        <translation>Без значка</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Default</source>
+        <translation>За замовчуванням</translation>
+    </message>
+    <message>
+        <location line="+67"/>
+        <source>Edit part</source>
+        <translation>Редагувати частину</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <location line="+368"/>
+        <source>Part name</source>
+        <translation>Назва частини</translation>
+    </message>
+    <message>
+        <location line="-362"/>
+        <source>Restore default</source>
+        <translation>Відновити за замовчуванням</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Planned duration</source>
+        <translation>Запланована тривалість</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>Reset this part to change its planned duration.</source>
+        <translation>Скиньте цю частину, щоб змінити її заплановану тривалість.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This part&apos;s duration is fixed.</source>
+        <translation>Тривалість цієї частини фіксована.</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <location line="+129"/>
+        <location line="+218"/>
+        <source>Enter a valid duration (e.g., 5 or 05:00).</source>
+        <translation>Введіть коректну тривалість (наприклад, 5 або 05:00).</translation>
+    </message>
+    <message>
+        <location line="-280"/>
+        <source>Schedule name</source>
+        <translation>Назва розкладу</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>e.g., Volunteer training</source>
+        <translation>наприклад, Навчання добровольців</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>First part (optional — sections and times can be added later)</source>
+        <translation>Перша частина (необов’язково — розділи та час можна додати пізніше)</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Part name (e.g., Welcome)</source>
+        <translation>Назва частини (наприклад, Вітання)</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Create schedule</source>
+        <translation>Створити розклад</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Rename schedule</source>
+        <translation>Перейменувати розклад</translation>
+    </message>
+    <message>
+        <location line="+48"/>
+        <source>Rename section</source>
+        <translation>Перейменувати розділ</translation>
+    </message>
+    <message>
+        <location line="+70"/>
+        <source>Duration</source>
+        <translation>Тривалість</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Section (optional)</source>
+        <translation>Розділ (необов’язково)</translation>
+    </message>
+    <message>
+        <location line="+87"/>
+        <source>Section name</source>
+        <translation>Назва розділу</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>e.g., Practice</source>
+        <translation>наприклад, Практика</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Color (optional)</source>
+        <translation>Колір (необов’язково)</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+156"/>
+        <source>Default color</source>
+        <translation>Колір за замовчуванням</translation>
+    </message>
+    <message>
+        <location line="-89"/>
+        <source>Section appearance</source>
+        <translation>Оформлення розділу</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Section preview</source>
+        <translation>Попередній перегляд розділу</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Section color</source>
+        <translation>Колір розділу</translation>
+    </message>
+    <message>
+        <location line="+60"/>
+        <source>Custom hex</source>
+        <translation>Власний HEX-код</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Section icon</source>
+        <translation>Значок розділу</translation>
+    </message>
+    <message>
+        <location line="+80"/>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Використовуйте 6-значний HEX-код кольору, наприклад #41b6c4.</translation>
+    </message>
+    <message>
+        <location line="+52"/>
+        <source>Schedule timing and pacing</source>
+        <translation>Час і дотримання графіка розкладу</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Total planned parts: %1</source>
+        <translation>Загальний час запланованих частин: %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Set start and end times so the timer can track whether you are ahead or behind, and adjust remaining parts when Automatic mode is active.</source>
+        <translation>Укажіть час початку та завершення, щоб таймер відстежував випередження або відставання та коригував решту частин в автоматичному режимі.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Start (HH:MM)</source>
+        <translation>Початок (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>End (HH:MM)</source>
+        <translation>Завершення (HH:MM)</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Частини з автоматичним коригуванням</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>В автоматичному режимі лише позначені частини скорочуються або подовжуються, щоб завершити вчасно. Непозначені частини зберігають заплановану тривалість.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>В автоматичному режимі позначені частини можуть скорочуватися або подовжуватися, щоб завершити вчасно. Якщо нічого не позначено, усі частини тривалістю від 1 хв коригуються рівномірно.</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <source>Under 1 min</source>
+        <translation>Менше 1 хв</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Advanced options</source>
+        <translation>Додаткові параметри</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Weight (0–100): the higher the weight, the more this part will be adjusted compared to parts with a lower weight. 0 keeps the part fixed.</source>
+        <translation>Вага (0–100): що більша вага, то сильніше коригуватиметься ця частина порівняно з частинами з меншою вагою. Значення 0 залишає частину фіксованою.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
+        <translation>Орієнтовний час поза частинами (у секундах): загальний час на зміну промовців, пісні чи оголошення. Окремі перерви перед частиною або після останньої частини (наприклад, кінцева пісня та молитва) резервуються насамперед; залишок розподіляється між іншими інтервалами.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Estimated time outside parts (sec)</source>
+        <translation>Орієнтовний час поза частинами (сек)</translation>
+    </message>
+    <message>
+        <location line="+27"/>
+        <source>Weight</source>
+        <translation>Вага</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Break before (sec)</source>
+        <translation>Перерва перед (сек)</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Time after last part (sec)</source>
+        <translation>Час після останньої частини (сек)</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>Clear time</source>
+        <translation>Очистити час</translation>
+    </message>
+    <message>
+        <location line="+47"/>
+        <source>Duplicate schedule</source>
+        <translation>Дублювати розклад</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Creates a copy of the structure with all results reset.</source>
+        <translation>Створює копію структури зі скинутими результатами.</translation>
+    </message>
+    <message>
+        <location line="+42"/>
+        <source>Delete schedule?</source>
+        <translation>Видалити розклад?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>“%1” and its recorded results will be permanently removed.</source>
+        <translation>«%1» і записані результати буде остаточно видалено.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Reset results?</source>
+        <translation>Скинути результати?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>All recorded times in this schedule will be cleared. The structure stays intact.</source>
+        <translation>Усі записані результати часу в цьому розкладі буде очищено. Структура залишиться без змін.</translation>
+    </message>
+    <message>
+        <location line="+39"/>
+        <location line="+9"/>
+        <location line="+11"/>
+        <source>Before “%1”</source>
+        <translation>Перед «%1»</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <location line="+9"/>
+        <location line="+14"/>
+        <source>At the end</source>
+        <translation>У кінці</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Move “%1”</source>
+        <translation>Перемістити «%1»</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Destination</source>
+        <translation>Призначення</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>Position</source>
+        <translation>Позиція</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>Move</source>
+        <translation>Перемістити</translation>
     </message>
 </context>
 <context>
@@ -2716,52 +3547,6 @@ Manually added content, trims, framing and expanded state will be kept.</source>
         <location filename="../../widgets/meetings/destinations.py" line="+73"/>
         <source>No media could be added.</source>
         <translation>Не вдалося додати медіа.</translation>
-    </message>
-</context>
-<context>
-    <name>MeetingPartRow</name>
-    <message>
-        <location filename="../../qml/MeetingPartRow.qml" line="+127"/>
-        <source>Started %1</source>
-        <translation>Почато %1</translation>
-    </message>
-    <message>
-        <location line="+21"/>
-        <source>−1 min</source>
-        <translation>−1 хв</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>+1 min</source>
-        <translation>+1 хв</translation>
-    </message>
-    <message>
-        <location line="+34"/>
-        <source>duration</source>
-        <translation>тривалість</translation>
-    </message>
-    <message>
-        <location line="+24"/>
-        <source>Stop</source>
-        <translation>Зупинити</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reset</source>
-        <translation>Скинути</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Start</source>
-        <translation>Почати</translation>
-    </message>
-    <message>
-        <source>−1 s</source>
-        <translation>−1 s</translation>
-    </message>
-    <message>
-        <source>+1 s</source>
-        <translation>+1 s</translation>
     </message>
 </context>
 <context>
@@ -9838,7 +10623,52 @@ Add one when you are ready.</source>
 <context>
     <name>TimerBridge</name>
     <message>
-        <location filename="../../ui/qml/timer_bridge.py" line="+333"/>
+        <location filename="../../ui/qml/timer_bridge.py" line="+365"/>
+        <source>Total duration ({requested}) exceeds the schedule window ({available}).</source>
+        <translation>Загальна тривалість ({requested}) перевищує часовий інтервал розкладу ({available}).</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+846"/>
+        <location line="+186"/>
+        <source>This schedule was updated elsewhere. Reload it before making changes.</source>
+        <translation>Цей розклад було оновлено в іншому місці. Перезавантажте його перед внесенням змін.</translation>
+    </message>
+    <message>
+        <location line="-1028"/>
+        <source>Stop the running timer before making this change.</source>
+        <translation>Зупиніть запущений таймер перед внесенням цієї зміни.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Move or delete the section&apos;s parts before deleting the section.</source>
+        <translation>Перемістіть або видаліть частини розділу перед його видаленням.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reset the part before changing its duration.</source>
+        <translation>Скиньте частину перед зміною її тривалості.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This action is currently unavailable.</source>
+        <translation>Ця дія зараз недоступна.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+828"/>
+        <location line="+16"/>
+        <location line="+170"/>
+        <source>The selected item no longer exists.</source>
+        <translation>Вибраний елемент більше не існує.</translation>
+    </message>
+    <message>
+        <location line="-833"/>
+        <source>Stop the running timer before switching schedules.</source>
+        <translation>Зупиніть запущений таймер перед перемиканням розкладу.</translation>
+    </message>
+    <message>
+        <location line="+82"/>
         <source>Weekend</source>
         <translation>Вихідні</translation>
     </message>
@@ -9848,7 +10678,169 @@ Add one when you are ready.</source>
         <translation>Серед тижня</translation>
     </message>
     <message>
-        <location line="+110"/>
+        <location line="+173"/>
+        <source>Diamond</source>
+        <translation>Діамант</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wheat</source>
+        <translation>Пшениця</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sheep</source>
+        <translation>Вівця</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Speaker</source>
+        <translation>Промовець</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Tower</source>
+        <translation>Вежа</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Book</source>
+        <translation>Книга</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>People</source>
+        <translation>Люди</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Microphone</source>
+        <translation>Мікрофон</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Music</source>
+        <translation>Музика</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Video</source>
+        <translation>Відео</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Calendar</source>
+        <translation>Календар</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Clock</source>
+        <translation>Годинник</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Marker</source>
+        <translation>Маркер</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check</source>
+        <translation>Галочка</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Teal</source>
+        <translation>Бірюзовий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Gold</source>
+        <translation>Золотий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Crimson</source>
+        <translation>Малиновий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Amber</source>
+        <translation>Бурштиновий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Indigo</source>
+        <translation>Індиго</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Blue</source>
+        <translation>Синій</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Emerald</source>
+        <translation>Смарагдовий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Violet</source>
+        <translation>Фіолетовий</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Neutral</source>
+        <translation>Нейтральний</translation>
+    </message>
+    <message>
+        <location line="+51"/>
+        <source>Stop the running timer before creating a schedule.</source>
+        <translation>Зупиніть запущений таймер перед створенням розкладу.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Set a valid duration for the first part.</source>
+        <translation>Укажіть коректну тривалість для першої частини.</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <location line="+43"/>
+        <location line="+55"/>
+        <location line="+604"/>
+        <source>Could not save changes. Try again.</source>
+        <translation>Не вдалося зберегти зміни. Спробуйте ще раз.</translation>
+    </message>
+    <message>
+        <source>Could not finish creating the schedule. Check the schedule list before trying again.</source>
+        <translation>Не вдалося завершити створення розкладу. Перевірте список розкладів, перш ніж повторити спробу.</translation>
+    </message>
+    <message>
+        <source>Could not change the schedule or restore the previous selection.</source>
+        <translation>Не вдалося змінити розклад або відновити попередній вибір.</translation>
+    </message>
+    <message>
+        <location line="-684"/>
+        <location line="+40"/>
+        <source>The selected schedule no longer exists.</source>
+        <translation>Вибраний розклад більше не існує.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Stop the running timer before deleting a schedule.</source>
+        <translation>Зупиніть запущений таймер перед видаленням розкладу.</translation>
+    </message>
+    <message>
+        <location line="+325"/>
+        <source>Enter valid start and end times (HH:MM).</source>
+        <translation>Введіть коректний час початку та завершення (HH:MM).</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>End time must be different from start time.</source>
+        <translation>Час завершення має відрізнятися від часу початку.</translation>
+    </message>
+    <message>
+        <location line="+370"/>
         <source>this monitor</source>
         <translation>цей монітор</translation>
     </message>
@@ -10020,7 +11012,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+76"/>
+        <location filename="../../qml/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>Таймер</translation>
     </message>
@@ -10037,8 +11029,8 @@ Add one when you are ready.</source>
     <message>
         <location line="+12"/>
         <location line="+18"/>
-        <source>Assignments</source>
-        <translation>Завдання</translation>
+        <source>Schedule</source>
+        <translation>Розклад</translation>
     </message>
     <message>
         <location line="-18"/>

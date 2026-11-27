@@ -159,8 +159,12 @@ class JsonCustomTimerRepository:
 
     def list_schedules(self) -> tuple[CustomTimerSchedule, ...]:
         schedules = []
-        for path in sorted(self._directory.glob("*.json")):
-            if _CUSTOM_SCHEDULE_ID.fullmatch(path.stem):
+        try:
+            paths = sorted(self._directory.iterdir())
+        except FileNotFoundError:
+            return ()
+        for path in paths:
+            if path.match("*.json") and _CUSTOM_SCHEDULE_ID.fullmatch(path.stem):
                 schedule = self.load_schedule(path.stem)
                 if schedule is not None:
                     schedules.append(schedule)
