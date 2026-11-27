@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import io
 import hashlib
 import json
@@ -71,7 +72,7 @@ def test_decode_confirmation_rejects_placeholders_errors_or_unrelated_media(chan
     }
     response = SceneIpcEnvelope(
         message_type="media_playback_state",
-        request_id="event-media",
+        request_id="open_media",
         session_id="smoke",
         process_generation="smoke",
         sequence=0,
@@ -79,9 +80,11 @@ def test_decode_confirmation_rejects_placeholders_errors_or_unrelated_media(chan
         deadline_monotonic_ms=0,
         payload=state,
     )
-    assert packaging._decoded_media_event(response, "smoke.wav")
-    state.update(changes)
-    assert not packaging._decoded_media_event(response, "smoke.wav")
+    request = replace(
+        response, message_type="open_media", sequence=1, payload={"path": "smoke.wav"}
+    )
+    assert packaging._decoded_media_event(response, request)
+    assert not packaging._decoded_media_event(replace(response, payload=state | changes), request)
 
 
 def _touch(path: Path, value: bytes = b"fixture") -> None:
@@ -1151,7 +1154,8 @@ def test_linux_dependency_notices_accept_pre_usr_merge_package_records(tmp_path,
 
 
 def _mock_sidecar(
-    monkeypatch, payload=None, returncode=0, corrupt=False, rejected=None, decoded=True
+    monkeypatch, payload=None, returncode=0, corrupt=False, rejected=None, decoded=True,
+    event_first=False, missing_ack=None, media_event_identity=None,
 ):
     calls = []
 
@@ -1176,27 +1180,24 @@ def _mock_sidecar(
                 if request.message_type == "ping"
                 else {"applied": request.message_type != rejected},
             )
-            output += encode_envelope(response)
+            event = b""
             if decoded and request.message_type == "open_media":
-                output += encode_envelope(
-                    SceneIpcEnvelope(
-                        message_type="media_playback_state",
-                        request_id="event-media",
-                        session_id=request.session_id,
-                        process_generation=request.process_generation,
-                        sequence=0,
-                        document_revision=0,
-                        deadline_monotonic_ms=request.deadline_monotonic_ms,
-                        payload={
-                            "state": 1,
-                            "position_ms": 250,
-                            "duration_ms": 2000,
-                            "path": request.payload["path"],
-                            "slot": 0,
-                            "error_code": "",
-                        },
-                    )
+                playback_event = replace(
+                    response,
+                    message_type="media_playback_state",
+                    sequence=0,
+                    payload={
+                        "state": 1,
+                        "position_ms": 250,
+                        "duration_ms": 2000,
+                        "path": request.payload["path"],
+                        "slot": 0,
+                        "error_code": "",
+                    },
                 )
+                event = encode_envelope(replace(playback_event, **(media_event_identity or {})))
+            ack = b"" if request.message_type == missing_ack else encode_envelope(response)
+            output += event + ack if event_first else ack + event
         return subprocess.CompletedProcess(
             command, returncode, b"native log\n" if corrupt else output, b"runtime diagnostics"
         )
@@ -1227,6 +1228,42 @@ def test_smoke_requires_real_runtime_ignores_source_overrides_and_uses_binary_ip
     assert "SOLIN_LIBOBS_SIDECAR_NO_RUNTIME" not in options["env"]
     assert options["requests"][0].message_type == "hello"
     assert options["requests"][1].payload["document"]["sources"][0]["type"] == "image"
+
+
+@pytest.mark.parametrize("identity_field", ["request_id", "session_id", "process_generation"])
+def test_smoke_requires_progress_from_the_open_media_request(tmp_path, monkeypatch, identity_field):
+    executable = tmp_path / "Solin.exe"
+    _touch(executable)
+    _mock_sidecar(monkeypatch, media_event_identity={identity_field: "unrelated"})
+
+    with pytest.raises(packaging.LibobsPackagingError, match="did not decode the smoke WAV"):
+        packaging.verify_packaged_sidecar(executable)
+
+
+@pytest.mark.parametrize("event_first", [True, False])
+def test_smoke_accepts_media_event_and_ack_with_the_same_request_id(tmp_path, monkeypatch, event_first):
+    executable = tmp_path / "Solin.exe"
+    _touch(executable)
+    _mock_sidecar(monkeypatch, event_first=event_first)
+    packaging.verify_packaged_sidecar(executable)
+
+
+@pytest.mark.parametrize("event_first", [True, False])
+@pytest.mark.parametrize(
+    "parameters, message",
+    [
+        ({"missing_ack": "open_media"}, "Missing packaged sidecar ack"),
+        ({"rejected": "open_media"}, "rejected open_media"),
+    ],
+)
+def test_smoke_requires_accepted_media_ack_even_when_decoded(
+    tmp_path, monkeypatch, event_first, parameters, message
+):
+    executable = tmp_path / "Solin.exe"
+    _touch(executable)
+    _mock_sidecar(monkeypatch, event_first=event_first, **parameters)
+    with pytest.raises(packaging.LibobsPackagingError, match=message):
+        packaging.verify_packaged_sidecar(executable)
 
 
 @pytest.mark.parametrize(
