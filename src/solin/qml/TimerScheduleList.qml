@@ -5,7 +5,7 @@ pragma Translator: "AdvancedTimerPage"
 // accidental click-to-edit triggers during live operation, right-click context
 // menu for editing/actions, visible empty custom sections, and bottom scroll
 // clearance so the last row clears the floating QuickAccessToolbar.
-import QtQuick 2.15
+import QtQuick
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 
@@ -278,6 +278,9 @@ Item {
                             border.color: activeFocus ? listRoot.pal_accent : "transparent"
                             border.width: activeFocus ? 1.5 : 0
                             activeFocusOnTab: visible && entryGroup.isCustom && !listRoot.isRunning
+                            onActiveFocusChanged: {
+                                if (activeFocus) scroll.positionViewAtChild(sectionHeader, Flickable.Contain)
+                            }
                             Accessible.role: Accessible.ListItem
                             Accessible.name: listRoot.sectionDisplayTitle(entryGroup.modelData)
                             Keys.onPressed: function(event) {
@@ -451,20 +454,8 @@ Item {
                             border.width: partRow.activeFocus ? 1.5 : 0
                             activeFocusOnTab: visible && !listRoot.isRunning
 
-                            function ensureRowVisible() {
-                                var topY = entryGroup.y + partRow.y
-                                var botY = topY + partRow.height
-                                var maxY = Math.max(0, scroll.contentHeight - scroll.height)
-                                if (topY < scroll.contentY) {
-                                    scroll.contentY = Math.max(0, topY)
-                                } else if (botY > scroll.contentY + scroll.height) {
-                                    scroll.contentY = Math.min(maxY, botY - scroll.height)
-                                }
-                            }
-
                             onActiveFocusChanged: {
-                                if (activeFocus)
-                                    ensureRowVisible()
+                                if (activeFocus) scroll.positionViewAtChild(partRow, Flickable.Contain)
                             }
 
                             Accessible.role: Accessible.ListItem

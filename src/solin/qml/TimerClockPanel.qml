@@ -3,7 +3,7 @@ pragma Translator: "AdvancedTimerPage"
 // TimerClockPanel.qml — centralized live clock, pacing summary, and primary
 // part controls shared by Meetings and Custom Schedules.
 // Adapts seamlessly between the right-side card (wide) and sticky top strip (compact).
-import QtQuick 2.15
+import QtQuick
 import QtQuick.Layouts 1.15
 import QtQuick.Controls 2.15
 
@@ -44,6 +44,13 @@ Rectangle {
     function rememberFocus(control, focused) {
         if (focused) {
             focusedControl = control
+            if (!showingCompactControls) {
+                Qt.callLater(function() {
+                    var item = panel.Window.window && panel.Window.window.activeFocusItem
+                    if (panel.showingCompactControls || panel.focusedControl !== control || !item || !item.activeFocus) return
+                    wideFlick.positionViewAtChild(item, Flickable.Contain)
+                })
+            }
         } else if (focusedControl === control) {
             focusedControl = ""
         }

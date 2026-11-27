@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Temps estimé hors parties (secondes) : durée totale prévue pour les changements d’orateur, les cantiques ou les annonces. Les pauses spécifiques avant une partie ou après la dernière partie (ex. : cantique final et prière) sont réservées en priorité ; le reste est réparti entre les autres intervalles.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Laissez l’estimation totale vide pour utiliser le temps restant après les parties prévues. Le temps des pauses estimées est réservé en premier. Le reste est réparti également entre les pauses sans estimation. Saisissez 0 pour ne réserver aucun temps.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Déplacer</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10808,6 +10816,14 @@ Ajoutez-en un quand vous le souhaitez.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>ce moniteur</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Saisissez un nom de 1 à {limit} caractères sur une seule ligne.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Le programme a été mis à jour, mais le système de stockage n’a pas pu confirmer son enregistrement.</translation>
     </message>
 </context>
 <context>

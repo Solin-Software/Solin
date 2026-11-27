@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Makadirio ya muda nje ya sehemu (sekunde): jumla ya muda wa kubadilisha wasemaji, nyimbo, au matangazo. Mapumziko maalum kabla ya sehemu au baada ya sehemu ya mwisho (k.m., wimbo wa kumalizia na sala) hutengwa kwanza; salio lolote hugawanywa kati ya vipindi vingine.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Acha makadirio ya jumla wazi ili kutumia muda unaobaki baada ya sehemu zilizopangwa. Muda wa mapumziko yenye makadirio hutengwa kwanza. Muda uliobaki hugawanywa kwa usawa kati ya mapumziko yasiyo na makadirio. Weka 0 ili usitenge muda.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Hamisha</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Otomatiki</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10808,6 +10816,14 @@ Ongeza moja ukiwa tayari.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>monitor hii</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Weka jina lenye herufi 1 hadi {limit} kwenye mstari mmoja.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Ratiba imesasishwa, lakini mfumo wa hifadhi haukuweza kuthibitisha kuwa imehifadhiwa.</translation>
     </message>
 </context>
 <context>

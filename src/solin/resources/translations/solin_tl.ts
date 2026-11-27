@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Tinatayang oras sa labas ng mga bahagi (segundo): kabuuang oras para sa pagpapalit ng tagapagsalita, mga awit, o mga patalastas. Unang inilalaan ang mga partikular na pagitan bago ang isang bahagi o pagkatapos ng huling bahagi (hal., pangwakas na awit at panalangin); ang matitira ay hinahati sa iba pang pagitan.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Iwanang blangko ang kabuuang tantiya para gamitin ang natitirang oras pagkatapos ng mga nakaplanong bahagi. Inuuna ang mga agwat na may tantiya. Pantay na hinahati ang natitira sa mga agwat na walang tantiya. Ilagay ang 0 kung walang ilalaang oras.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Ilipat</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10808,6 +10816,14 @@ Magdagdag kapag handa ka na.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>ang monitor na ito</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Maglagay ng pangalan na may 1 hanggang {limit} character sa iisang linya.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Na-update ang iskedyul, pero hindi makumpirma ng storage system na na-save ito.</translation>
     </message>
 </context>
 <context>

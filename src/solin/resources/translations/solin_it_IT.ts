@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Tempo stimato fuori dalle parti (secondi): tempo totale per cambi di oratore, cantici o annunci. Le pause specifiche prima di una parte o dopo l’ultima parte (es. cantico finale e preghiera) vengono riservate per prime; il resto viene suddiviso tra gli altri intervalli.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Lasciare vuota la stima totale per usare il tempo rimanente dopo le parti previste. Si riserva prima il tempo per le pause con una stima. Il resto si divide in parti uguali tra le pause senza stima. Inserire 0 per non riservare tempo.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Sposta</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10808,6 +10816,14 @@ Aggiungine uno quando vuoi.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>questo monitor</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Inserire un nome da 1 a {limit} caratteri su una sola riga.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Il programma è stato aggiornato, ma il sistema di archiviazione non ha potuto confermare il salvataggio.</translation>
     </message>
 </context>
 <context>

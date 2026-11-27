@@ -29,6 +29,7 @@ class TimerOperations(QObject):
     active_custom_changed = Signal(object)
     meeting_schedule_changed = Signal()
     pacing_mode_changed = Signal()
+    custom_save_durability_warning = Signal()
 
     def __init__(
         self,
@@ -67,6 +68,7 @@ class TimerOperations(QObject):
         if current is not None and previous != current:
             self.active_custom_changed.emit(self.session.schedule)
         self.changed.emit()
+        self._report_custom_save_durability()
 
     def _publish_catalog_edit(self, *, context_changed: bool = False) -> None:
         if context_changed:
@@ -74,6 +76,11 @@ class TimerOperations(QObject):
         self.custom_catalog_changed.emit()
         if not context_changed:
             self.changed.emit()
+            self._report_custom_save_durability()
+
+    def _report_custom_save_durability(self) -> None:
+        if self.session.take_custom_save_durability_warning():
+            self.custom_save_durability_warning.emit()
 
     def _show_context(self, direction: int = 0) -> None:
         if self.engine.schedule is not self.session.schedule:
@@ -150,10 +157,7 @@ class TimerOperations(QObject):
         return self.engine.stop_part(part_id)
 
     def reset_part(self, part_id: str) -> bool:
-        changed = self.engine.reset_part(part_id)
-        if changed and self.session.schedule.pacing_run is None:
-            self.refresh_meeting_window()
-        return changed
+        return self.engine.reset_part(part_id)
 
     def reset_all(self) -> bool:
         if not isinstance(self.session.schedule, CustomTimerSchedule):

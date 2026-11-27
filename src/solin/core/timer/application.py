@@ -99,7 +99,9 @@ class CustomTimerRepository(Protocol):
 
     def load_schedule(self, schedule_id: str) -> CustomTimerSchedule | None: ...
 
-    def save_schedule(self, schedule: CustomTimerSchedule) -> None: ...
+    def save_schedule(self, schedule: CustomTimerSchedule) -> bool:
+        """Publish a schedule and return whether its durability was confirmed."""
+        ...
 
     def delete_schedule(self, schedule_id: str) -> None: ...
 
@@ -123,6 +125,7 @@ class TimerSession:
         self._repository = repository
         self._custom_repository = custom_repository
         self._unrestored_custom_selection = False
+        self._custom_save_durability_warning = False
         self._meeting_revision = 0
         self._current_week_monday = current_week_monday
         self._meeting_schedule = meeting_schedule
@@ -211,11 +214,17 @@ class TimerSession:
             return
         self._clear_unrestored_custom_selection()
         previous_setup = schedule.assignment_setup
+        previous_window = schedule.pacing_window
+        previous_run = schedule.pacing_run
         schedule.assignment_setup = AssignmentSetup.MANUAL
         try:
+            # The last reset and any newly applicable window share one write.
+            self._apply_meeting_window(schedule, self._week_monday)
             self._repository.save_schedule(schedule)
         except (OSError, RuntimeError):
             schedule.assignment_setup = previous_setup
+            schedule.pacing_window = previous_window
+            schedule.pacing_run = previous_run
             raise
         schedule.has_unreadable_record = False
         self._meeting_revision += 1
@@ -388,7 +397,7 @@ class TimerSession:
             self._require_stopped()
         store = self._custom_store()
         try:
-            store.save_schedule(schedule)
+            durable = store.save_schedule(schedule)
             if select:
                 self._persist_custom_selection(schedule.id)
         except (OSError, RuntimeError, TimerOperationError) as error:
@@ -401,6 +410,8 @@ class TimerSession:
             raise
         if select:
             self._activate_custom_schedule(schedule)
+        if not durable:
+            self._custom_save_durability_warning = True
 
     @staticmethod
     def _discard_new_custom_schedule(store: CustomTimerRepository, schedule_id: str) -> bool:
@@ -586,13 +597,25 @@ class TimerSession:
         return True
 
     def _update_meeting_window(self, schedule: MeetingSchedule, week_monday: date) -> bool:
+        previous_window = schedule.pacing_window
+        previous_run = schedule.pacing_run
+        try:
+            if not self._apply_meeting_window(schedule, week_monday):
+                return False
+            self._repository.save_schedule(schedule)
+        except (OSError, RuntimeError):
+            schedule.pacing_window = previous_window
+            schedule.pacing_run = previous_run
+            raise
+        return True
+
+    def _apply_meeting_window(self, schedule: MeetingSchedule, week_monday: date) -> bool:
         if (
             self._meeting_schedule is None or week_monday < self._current_week()
             or schedule.has_unreadable_record
         ):
             return False
         # Heal an orphaned empty pacing_run left behind after resetting every part.
-        previous_run = schedule.pacing_run
         cleared_orphan_run = False
         if (
             schedule.pacing_run is not None
@@ -622,16 +645,9 @@ class TimerSession:
             window = PacingWindow.from_start_and_duration(
                 slot.time_text, REGULAR_MEETING_DURATION_SECONDS
             )
-        previous = schedule.pacing_window
-        if window == previous and not cleared_orphan_run:
+        if window == schedule.pacing_window and not cleared_orphan_run:
             return False
         schedule.pacing_window = window
-        try:
-            self._repository.save_schedule(schedule)
-        except (OSError, RuntimeError):
-            schedule.pacing_window = previous
-            schedule.pacing_run = previous_run
-            raise
         return True
 
     def _custom_store(self) -> CustomTimerRepository:
@@ -658,10 +674,17 @@ class TimerSession:
     def _save_custom_revision(self, schedule: CustomTimerSchedule) -> None:
         schedule.revision += 1
         try:
-            self._custom_store().save_schedule(schedule)
+            durable = self._custom_store().save_schedule(schedule)
         except (OSError, RuntimeError):
             schedule.revision -= 1
             raise
+        if not durable:
+            self._custom_save_durability_warning = True
+
+    def take_custom_save_durability_warning(self) -> bool:
+        warning = self._custom_save_durability_warning
+        self._custom_save_durability_warning = False
+        return warning
 
     def _require_stopped(self) -> None:
         if self._schedule.has_running_part():

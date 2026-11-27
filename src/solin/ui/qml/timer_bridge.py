@@ -40,6 +40,7 @@ from solin.core.timer.models import (
     CUSTOM_SECTION_COLOR_PRESETS,
     CUSTOM_SECTION_ICON_CATALOG,
     MAX_PLANNED_PART_SECONDS,
+    MAX_TIMER_TITLE_LENGTH,
     MEDIA_COUNTDOWN_PRESENTATION_OPTIONS,
     MIN_CUSTOM_PART_SECONDS,
     MIN_PLANNED_PART_SECONDS,
@@ -52,7 +53,9 @@ from solin.core.timer.models import (
     PartState,
     Section,
     normalize_section_color,
+    normalize_timer_title,
 )
+from solin.core.timer.pacing import PacingStatus
 from solin.core.timer.pacing_models import PacingMode
 from solin.core.timer.schedule_factory import schedule_has_timing_data
 from solin.controllers.timer_monitor_controller import TimerMonitorController
@@ -160,6 +163,7 @@ class TimerBridge(QObject):
         workbook_lookup: TimerWorkbookLookup | None = None,
         assignment_scope: AssignmentAutofillScope = DEFAULT_ASSIGNMENT_AUTOFILL_SCOPE,
         notify_error: Callable[[str], object] | None = None,
+        notify_warning: Callable[[str], object] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -175,6 +179,7 @@ class TimerBridge(QObject):
         self._workbook_lookup = workbook_lookup
         self._assignment_scope = assignment_scope
         self._notify_error = notify_error
+        self._notify_warning = notify_warning
         self._timer_page_visible = False
         self._assignments_mode_active = False
         self._assignment_lookup_deferred = False
@@ -215,6 +220,7 @@ class TimerBridge(QObject):
         operations.active_custom_changed.connect(self._on_active_custom_changed)
         operations.meeting_schedule_changed.connect(self._on_meeting_schedule_changed)
         operations.pacing_mode_changed.connect(self._on_pacing_mode_changed)
+        operations.custom_save_durability_warning.connect(self._on_custom_save_durability_warning)
         self._hand_alert.controls_changed.connect(self.manualHandChanged)
         self._media_countdown_automation.state_changed.connect(
             self.mediaCountdownChanged
@@ -270,6 +276,13 @@ class TimerBridge(QObject):
     @Slot()
     def _on_pacing_mode_changed(self) -> None:
         self._emit_pacing_if_changed(force=False)
+
+    @Slot()
+    def _on_custom_save_durability_warning(self) -> None:
+        if self._notify_warning is not None:
+            self._notify_warning(self.tr(
+                "The schedule was updated, but the storage system could not confirm the save."
+            ))
 
     def set_timer_page_visible(self, visible: bool) -> None:
         self._timer_page_visible = visible
@@ -766,6 +779,16 @@ class TimerBridge(QObject):
         )
 
     # ── Exposed: custom schedules catalog & editor ─────────────────────────
+
+    @Slot(str, result=str)
+    def timerNameError(self, title: str) -> str:
+        try:
+            normalize_timer_title(title)
+        except ValueError:
+            return self.tr("Enter a name of 1 to {limit} characters on one line.").format(
+                limit=MAX_TIMER_TITLE_LENGTH,
+            )
+        return ""
 
     def _custom_schedules_model(self) -> list[dict[str, object]]:
         return self._custom_catalog
@@ -1284,7 +1307,10 @@ class TimerBridge(QObject):
                 "hasAdjustmentDifference": False,
             }
         deviation_sec = int(round(projection.deviation_seconds))
-        deviation_min = max(1, int(round(abs(deviation_sec) / 60.0))) if abs(deviation_sec) > projection.tolerance_seconds else 0
+        deviation_min = (
+            0 if projection.status is PacingStatus.ON_TIME
+            else max(1, round(abs(projection.deviation_seconds) / 60.0))
+        )
         return {
             "mode": state.mode.value,
             "enabled": state.mode is not PacingMode.OFF,

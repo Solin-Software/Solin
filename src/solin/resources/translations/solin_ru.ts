@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Ориентировочное время вне пунктов (в секундах): общее время на смену докладчиков, песни или объявления. Отдельные перерывы перед пунктом или после последнего пункта (например, заключительная песня и молитва) резервируются в первую очередь; остаток распределяется между остальными интервалами.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Оставьте общую оценку пустой, чтобы использовать время, оставшееся после запланированных пунктов. Сначала резервируется время для перерывов с указанной оценкой. Оставшееся время поровну распределяется между перерывами без оценки. Введите 0, чтобы не резервировать время.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Переместить</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10842,6 +10850,14 @@ Add one when you are ready.</source>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>этот монитор</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Введите имя длиной от 1 до {limit} символов в одной строке.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Расписание обновлено, но система хранения не смогла подтвердить сохранение.</translation>
     </message>
 </context>
 <context>

@@ -567,6 +567,7 @@ class MainWindow(QWidget):
             workbook_lookup=workbook_lookup,
             assignment_scope=assignment_scope,
             notify_error=self.notifications.error,
+            notify_warning=self.notifications.warning,
         )
         self.timer_bridge.monitorsChanged.connect(self._refresh_timer_hand_alert_outputs)
         self._refresh_timer_hand_alert_outputs()

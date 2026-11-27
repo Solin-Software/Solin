@@ -12,11 +12,12 @@ Rectangle {
     property int controlHeight: 34
     property int labelPixelSize: 12
     property string accessibleName: ""
+    property string fallbackLabel: qsTranslate("MonitorManagerPopup", "Choose…")
     signal picked(int index)
 
     readonly property int count: Math.max(0, options.length)
-    readonly property int safeCurrent: count > 0 ? Math.min(count - 1, Math.max(0, current)) : 0
-    readonly property string currentLabel: count > 0 ? options[safeCurrent] : ""
+    readonly property int safeCurrent: current >= 0 && current < count ? current : -1
+    readonly property string currentLabel: safeCurrent >= 0 ? options[safeCurrent] : fallbackLabel
 
     function toggleMenu() {
         if (!select.enabled || select.count === 0)
@@ -149,7 +150,7 @@ Rectangle {
         onAboutToShow: {
             openLabels = JSON.stringify(select.options)
             openKeys = JSON.stringify(select.optionKeys)
-            menu.highlightedIndex = select.safeCurrent
+            menu.highlightedIndex = Math.max(0, select.safeCurrent)
             acceptingSelection = true
         }
         onOpened: {

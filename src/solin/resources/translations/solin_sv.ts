@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Beräknad tid utanför programpunkterna (sekunder): total tid för talarbyten, sånger eller meddelanden. Särskilda pauser före en programpunkt eller efter den sista programpunkten (t.ex. avslutande sång och bön) reserveras först; eventuell återstående tid fördelas på övriga mellanrum.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Lämna den totala uppskattningen tom för att använda tiden som återstår efter de planerade programpunkterna. Tid för pauser med en uppskattning reserveras först. Resten delas lika mellan pauser utan uppskattning. Ange 0 om du inte vill reservera tid.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Flytta</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10807,6 +10815,14 @@ Lägg till ett när du är redo.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>denna skärm</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Ange ett namn med 1 till {limit} tecken på en rad.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Schemat uppdaterades, men lagringssystemet kunde inte bekräfta att det sparades.</translation>
     </message>
 </context>
 <context>

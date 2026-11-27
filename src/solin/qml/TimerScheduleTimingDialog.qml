@@ -451,7 +451,7 @@ Popup {
                             }
                             Text {
                                 Layout.fillWidth: true
-                                text: qsTr("Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.")
+                                text: qsTr("Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.")
                                 color: timingDialog.pal_textMuted
                                 font.pixelSize: 11
                                 wrapMode: Text.WordWrap
@@ -474,7 +474,7 @@ Popup {
                             Layout.preferredWidth: 78; implicitHeight: 30
                             font.pixelSize: 12; horizontalAlignment: Text.AlignRight
                             enabled: timingDialog.hasDraftWindow; opacity: timingDialog.hasDraftWindow ? 1.0 : 0.45
-                            placeholderText: "0"
+                            placeholderText: qsTr("Auto")
                             inputMethodHints: Qt.ImhDigitsOnly
                         }
                     }
@@ -542,7 +542,7 @@ Popup {
                                 font.pixelSize: 12; horizontalAlignment: Text.AlignRight
                                 enabled: timingDialog.hasDraftWindow; opacity: timingDialog.hasDraftWindow ? 1.0 : 0.45
                                 text: draftBefore
-                                placeholderText: "0"
+                                placeholderText: qsTr("Auto")
                                 inputMethodHints: Qt.ImhDigitsOnly
                                 onTextEdited: timingDialog.setDraftBefore(modelData.id, text)
                             }
@@ -564,7 +564,7 @@ Popup {
                             Layout.preferredWidth: 78; implicitHeight: 30
                             font.pixelSize: 12; horizontalAlignment: Text.AlignRight
                             enabled: timingDialog.hasDraftWindow; opacity: timingDialog.hasDraftWindow ? 1.0 : 0.45
-                            placeholderText: "0"
+                            placeholderText: qsTr("Auto")
                             inputMethodHints: Qt.ImhDigitsOnly
                         }
                     }

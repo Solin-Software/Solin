@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>环节外的预计时间（秒）：用于演讲者交替、诗歌或通知的总时间。环节前的特定间隔以及最后环节后的时间（例如结束诗歌和祷告）将优先预留；剩余时间则分配给其他间隔。</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>总估计时间留空时，将使用扣除各环节计划用时后的剩余时间。先为已填写估计时间的间隔预留时间，再将剩余时间平均分配给留空的间隔。输入 0 表示不预留时间。</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>移动</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1（%2）</translation>
     </message>
 </context>
 <context>
@@ -10773,6 +10781,14 @@ Add one when you are ready.</source>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>此显示器</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>请输入长度为 1 至 {limit} 个字符的单行名称。</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>日程已更新，但存储系统无法确认保存结果。</translation>
     </message>
 </context>
 <context>

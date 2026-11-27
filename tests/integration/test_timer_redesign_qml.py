@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import Q_ARG, QMetaObject, QObject, QPointF, QSettings, Qt, Signal
+from PySide6.QtGui import QAccessible, QAccessibleActionInterface
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtTest import QSignalSpy, QTest
@@ -21,6 +22,7 @@ from solin.core.i18n.timer_schedule_view import section_palette
 from solin.core.integrations.automation.settings import ZoomSettingsStore
 from solin.core.meetings.schedule import MeetingSchedule as ProfileMeetingSchedule
 from solin.core.meetings.schedule import MeetingSlot
+from solin.core.storage import json_files
 from solin.core.timer import models, state_machine
 from solin.core.timer.application import TimerSession
 from solin.core.timer.infrastructure import JsonCustomTimerRepository, QSettingsTimerRepository
@@ -123,6 +125,7 @@ def timer_ui_factory(tmp_path, monkeypatch, request, qt_object_owner):
         profile: str = "main",
         meeting_schedule=None,
         type_name: str = "AdvancedTimerPage",
+        notify_warning=None,
     ):
         repo = QSettingsTimerRepository(SettingsStore.for_namespace(profile, "Timer"))
         custom = JsonCustomTimerRepository(tmp_path / profile / "timer_schedules")
@@ -141,6 +144,7 @@ def timer_ui_factory(tmp_path, monkeypatch, request, qt_object_owner):
             hand_alert=hand_alert,
             pdf_export=pdf_export,
             media_countdown_automation=_DummyAutomation(qt_object_owner),
+            notify_warning=notify_warning,
             parent=qt_object_owner,
         )
         widget = QQuickWidget()
@@ -167,6 +171,7 @@ def timer_ui_factory(tmp_path, monkeypatch, request, qt_object_owner):
             engine=engine,
             operations=operations,
             bridge=bridge,
+            hand_alert=hand_alert,
             pdf_export=pdf_export,
             widget=widget,
             root=root,
@@ -334,6 +339,48 @@ def test_compact_timer_view_keeps_schedule_usable_with_adjustments_open(timer_ui
     assert ctx.bridge.setPacingMode("monitor")
     assert pacing_status.property("text")
     assert ctx.widget.errors() == []
+
+
+@pytest.mark.parametrize(
+    ("direction", "labels"),
+    [("up", ("01:25", "01:24", "02:24", "01:24")), ("down", ("01:35", "01:36", "00:36", "01:36"))],
+)
+def test_clock_renders_adjustments_from_live_engine(timer_ui_factory, direction, labels) -> None:
+    ctx = timer_ui_factory()
+    ctx.bridge.createCustomSchedule("Training", "Intro", 180)
+    ctx.bridge.updateClock("direction", direction)
+    assert QMetaObject.invokeMethod(_find_visual(ctx.root, "timerPrimaryActionButton"), "clicked")
+    ctx.clock.now += 84
+    assert QMetaObject.invokeMethod(_find_visual(ctx.root, "timerAdjustToggleButton"), "clicked")
+    drawer = _find_visual(ctx.root, "timerAdjustDrawer")
+    digits = _find_visual(ctx.root, "timerClockDigits")
+    buttons = {
+        item.property("text"): item for item in _visual_items(drawer)
+        if item.metaObject().indexOfSignal("clicked()") >= 0
+    }
+
+    for action, label in zip(("+1 s", "−1 s", "+1 min", "−1 min"), labels, strict=True):
+        assert QMetaObject.invokeMethod(buttons[action], "clicked")
+        assert digits.property("text") == label
+
+
+def test_manual_hand_exposes_accessible_action_and_state(timer_ui_factory) -> None:
+    ctx = timer_ui_factory()
+    ctx.hand_alert.set_outputs(available=True)
+    hand = _find_visual(ctx.root, "timerManualHandButton")
+    accessible = QAccessible.queryAccessibleInterface(hand)
+    assert accessible is not None and accessible.state().checkable
+    actions = accessible.actionInterface()
+    assert actions is not None
+    press = QAccessibleActionInterface.pressAction()
+    assert press in actions.actionNames()
+
+    actions.doAction(press)
+    assert ctx.bridge.manualHandRaised
+    assert accessible.state().checked
+    actions.doAction(press)
+    assert not ctx.bridge.manualHandRaised
+    assert not accessible.state().checked
 
 
 def test_compact_primary_offers_reset_when_no_part_is_selected(timer_ui_factory) -> None:
@@ -677,6 +724,10 @@ def test_unified_selection_central_action_section_colors_and_dedicated_timing_mo
     QTest.qWait(30)
     assert active_title.property("text") == "Demo"
     assert _find_visual(root, "timerPartActionButton") is None
+    primary = _find_visual(root, "timerPrimaryActionButton")
+    assert QMetaObject.invokeMethod(primary, "clicked")
+    assert ctx.bridge.liveState["active_part_id"] == demo_row["id"]
+    ctx.bridge.stopPart(demo_row["id"])
 
     # 3. Dedicated Timing & Pacing modal exists under the ⋯ menu (separate from structure editor).
     timing_menu_item = root.findChild(QObject, "timerTimingMenuItem")
@@ -952,6 +1003,98 @@ def test_reset_part_and_orphaned_pacing_run_heal_meeting_target_window(
     assert ctx.bridge.pacingState["targetEndLabel"] == "10:35"
 
 
+def test_reset_and_new_meeting_window_commit_together(timer_ui_factory, monkeypatch) -> None:
+    profile_schedule = ProfileMeetingSchedule(
+        MeetingSlot.from_values("midweek", 2, "19:30"),
+        MeetingSlot.from_values("weekend", 6, "10:00"),
+    )
+    ctx = timer_ui_factory(meeting_schedule=lambda: profile_schedule)
+    part_id = ctx.bridge.parts[0]["id"]
+    ctx.bridge.startPart(part_id)
+    ctx.clock.now += 25
+    ctx.bridge.stopPart(part_id)
+    summary = ctx.bridge.scheduleSummary
+    binding = (summary["scheduleId"], summary["scheduleRevision"], part_id)
+
+    profile_schedule = ProfileMeetingSchedule(
+        MeetingSlot.from_values("midweek", 2, "20:30"),
+        MeetingSlot.from_values("weekend", 6, "10:00"),
+    )
+    save_schedule = ctx.repo.save_schedule
+    writes = []
+
+    def save(schedule):
+        writes.append(schedule.pacing_window.start_time)
+        if schedule.pacing_window.start_time == "20:30":
+            raise OSError("injected meeting schedule write failure")
+        save_schedule(schedule)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ctx.repo, "save_schedule", save)
+        assert not ctx.bridge.resetEditedPart(*binding)
+
+    assert writes == ["20:30"]
+    assert ctx.bridge.parts[0]["state"] == "stopped"
+    assert ctx.bridge.scheduleSummary["scheduleRevision"] == binding[1]
+    assert ctx.session.schedule.pacing_window.start_time == "19:30"
+    assert ctx.bridge.resetEditedPart(*binding)
+    assert ctx.bridge.parts[0]["state"] == "idle"
+    assert ctx.bridge.scheduleSummary["scheduleRevision"] == binding[1] + 1
+    stored = ctx.repo.load_schedule(_WEEK, ctx.session.meeting_type)
+    assert stored.parts[0].state.value == "idle"
+    assert stored.pacing_window.start_time == "20:30"
+
+
+def test_timing_save_publishes_replaced_file_when_directory_sync_fails(
+    timer_ui_factory, monkeypatch,
+) -> None:
+    warnings = []
+    ctx = timer_ui_factory(notify_warning=warnings.append)
+    schedule_id = ctx.bridge.createCustomSchedule("Training", "Intro", 300)
+    revision = ctx.bridge.activeCustomSchedule["revision"]
+
+    def fail_sync(_directory):
+        raise OSError("injected directory sync failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(json_files, "_sync_parent_directory", fail_sync)
+        assert ctx.bridge.saveCustomTimingSettings(
+            schedule_id, revision, {"startTime": "19:30", "endTime": "19:40"},
+        )
+
+    assert len(warnings) == 1
+    assert not ctx.bridge.feedback
+    assert ctx.session.schedule is ctx.engine.schedule
+    assert ctx.bridge.activeCustomSchedule["revision"] == revision + 1
+    assert ctx.bridge.customSchedules[0]["revision"] == revision + 1
+    assert ctx.custom.load_schedule(schedule_id) == ctx.session.schedule
+    assert ctx.bridge.saveCustomTimingSettings(
+        schedule_id, revision + 1, {"startTime": "19:30", "endTime": "19:45"},
+    )
+    assert len(warnings) == 1
+
+
+def test_pacing_label_agrees_with_projection_at_fractional_boundary(timer_ui_factory, monkeypatch) -> None:
+    ctx = timer_ui_factory()
+    schedule_id = ctx.bridge.createCustomSchedule("Training", "Intro", 120)
+    assert ctx.bridge.saveCustomTimingSettings(
+        schedule_id, ctx.bridge.activeCustomSchedule["revision"],
+        {"startTime": "19:30", "endTime": "19:32", "untrackedSeconds": 0},
+    )
+    assert ctx.bridge.setPacingMode("monitor")
+    pacing_state = ctx.operations.pacing_state
+
+    monkeypatch.setattr(ctx.operations, "pacing_state", lambda: pacing_state(ctx.clock.now + 30))
+    ctx.engine.refresh_schedule()
+    assert ctx.bridge.pacingState["status"] == "on_time"
+    assert ctx.bridge.pacingState["deviationMinutes"] == 0
+
+    monkeypatch.setattr(ctx.operations, "pacing_state", lambda: pacing_state(ctx.clock.now + 30.25))
+    ctx.engine.refresh_schedule()
+    assert ctx.bridge.pacingState["status"] == "behind"
+    assert ctx.bridge.pacingState["deviationMinutes"] == 1
+
+
 def test_timing_dialog_draft_cancel_and_unified_save(timer_ui_factory) -> None:
     ctx = timer_ui_factory(width=1040, height=740)
     root = ctx.root
@@ -1115,6 +1258,9 @@ def test_schedule_editor_drag_and_drop_reorders_without_vanishing(timer_ui_facto
         mouse_move(ctx.widget, last_sec_pos)
         QTest.qWait(40)
         assert editor.property("dropMode") == "section"
+        last_sec_pos += QPointF(25, 0).toPoint()
+        mouse_move(ctx.widget, last_sec_pos)
+        assert editor.property("dropMode") == "section"
         mouse_release(ctx.widget, Qt.MouseButton.LeftButton, pos=last_sec_pos)
         released_sec = True
     finally:
@@ -1267,6 +1413,131 @@ def two_custom_schedules(timer_ui_factory):
     assert sid_a and sid_b
     assert ctx.bridge.selectCustomSchedule(sid_a)
     return ctx, sid_a, sid_b
+
+
+def test_escape_cancels_drag_autoscroll_with_mouse_pressed(timer_ui_factory) -> None:
+    ctx = timer_ui_factory(width=1040, height=500)
+    show_and_activate(ctx.widget)
+    schedule_id = ctx.bridge.createCustomSchedule("Training", "Intro", 120)
+    for index in range(20):
+        revision = ctx.bridge.activeCustomSchedule["revision"]
+        assert ctx.bridge.addCustomPart(schedule_id, revision, f"Part {index + 1}", 120, "", "")
+    ctx.root.setProperty("editingCustomSchedule", True)
+    editor = _find_visual(ctx.root, "timerScheduleEditor")
+    flick = _find_visual(editor, "timerEditorFlickable")
+    first_row = _find_visual(editor, "timerEditorPartRow")
+    start = first_row.mapToItem(ctx.root, QPointF(20, first_row.height() / 2)).toPoint()
+    edge = flick.mapToItem(ctx.root, QPointF(30, flick.height() - 20)).toPoint()
+
+    last_pos = start
+    mouse_press(ctx.widget, Qt.MouseButton.LeftButton, pos=start)
+    try:
+        last_pos += QPointF(0, 15).toPoint()
+        mouse_move(ctx.widget, last_pos)
+        wait_until(lambda: editor.property("dragActive"), description="drag starts")
+        QTest.keyClick(ctx.widget, Qt.Key.Key_Escape)
+        assert not editor.property("dragActive")
+        offset = flick.property("contentY")
+        last_pos = edge
+        mouse_move(ctx.widget, last_pos)
+        QTest.qWait(90)
+        assert flick.property("contentY") == pytest.approx(offset)
+    finally:
+        mouse_release(ctx.widget, Qt.MouseButton.LeftButton, pos=last_pos)
+    QTest.qWait(70)
+    assert flick.property("contentY") == pytest.approx(offset)
+
+
+def test_keyboard_focus_reveals_clipped_timer_controls(timer_ui_factory) -> None:
+    ctx = timer_ui_factory(width=1040, height=330)
+    show_and_activate(ctx.widget)
+    schedule_id = ctx.bridge.createCustomSchedule("Training", "Intro", 120)
+    for index in range(10):
+        revision = ctx.bridge.activeCustomSchedule["revision"]
+        assert ctx.bridge.addCustomSectionStyled(schedule_id, revision, f"Section {index + 1}", "default", "", "")
+
+    list_flick = _find_visual(ctx.root, "timerScheduleFlickable")
+    sections = [item for item in _find_visuals(ctx.root, "timerSectionHeader") if item.isVisible()]
+    assert len(sections) == 10
+    section = sections[-1]
+    wait_until(
+        lambda: section.width() > 0 and section.mapToItem(list_flick, QPointF()).y() > list_flick.height(),
+        description="last section laid out below the viewport",
+    )
+    assert section.mapToItem(list_flick, section.boundingRect().bottomRight()).y() > list_flick.height()
+    section.forceActiveFocus()
+    wait_until(
+        lambda: section.mapToItem(list_flick, section.boundingRect().bottomRight()).y() <= list_flick.height() + 1,
+        description="section with keyboard focus is visible",
+    )
+
+    part_id = ctx.bridge.parts[0]["id"]
+    ctx.bridge.startPart(part_id)
+    ctx.clock.now += 10
+    ctx.bridge.stopPart(part_id)
+    clock_flick = _find_visual(ctx.root, "timerClockFlickable")
+    reset = _find_visual(ctx.root, "timerResetAllCompletedButton")
+    wait_until(lambda: reset.isVisible() and reset.width() > 0, description="reset action laid out")
+    assert reset.mapToItem(clock_flick, reset.boundingRect().bottomRight()).y() > clock_flick.height()
+    reset.forceActiveFocus()
+    wait_until(
+        lambda: reset.mapToItem(clock_flick, reset.boundingRect().bottomRight()).y() <= clock_flick.height() + 1,
+        description="clock control with keyboard focus is visible",
+    )
+
+
+def test_organizer_suspends_draft_when_counting_starts(two_custom_schedules) -> None:
+    ctx, sid_a, _ = two_custom_schedules
+    editor = _find_visual(ctx.root, "timerScheduleEditor")
+    ctx.root.setProperty("editingCustomSchedule", True)
+    revision = ctx.bridge.activeCustomSchedule["revision"]
+    assert QMetaObject.invokeMethod(
+        editor, "applyDraftAddPart", Q_ARG("QVariant", "Draft"), Q_ARG("QVariant", 120), Q_ARG("QVariant", ""),
+    )
+    part_id = ctx.bridge.parts[0]["id"]
+
+    assert ctx.operations.start_part(part_id)
+    assert not editor.isVisible()
+    ctx.clock.now += 5
+    assert ctx.operations.stop_part(part_id)
+    ctx.root.setProperty("editingCustomSchedule", True)
+
+    assert editor.isVisible()
+    assert editor.property("hasUnsavedChanges")
+    assert editor.property("draftScheduleId") == sid_a
+    assert editor.property("draftRevision") == revision
+    assert [entry["title"] for entry in editor.property("draftEntries").toVariant()] == ["Part A1", "Draft"]
+    assert _find_visual(ctx.root, "timerFeedbackReloadButton").isVisible()
+    assert QMetaObject.invokeMethod(editor, "saveDraft")
+    assert ctx.bridge.feedback["code"] == "schedule_stale"
+    assert QMetaObject.invokeMethod(_find_visual(ctx.root, "timerFeedbackReloadButton"), "clicked")
+    ctx.root.setProperty("editingCustomSchedule", True)
+    assert not editor.property("hasUnsavedChanges")
+    assert [entry["title"] for entry in editor.property("draftEntries").toVariant()] == ["Part A1"]
+
+
+@pytest.mark.parametrize("entry_kind", ["Part", "Section"])
+def test_organizer_keeps_invalid_name_open_for_correction(two_custom_schedules, entry_kind) -> None:
+    ctx, _, _ = two_custom_schedules
+    ctx.root.setProperty("editingCustomSchedule", True)
+    editor = _find_visual(ctx.root, "timerScheduleEditor")
+    assert QMetaObject.invokeMethod(_find_visual(editor, f"timerEditorAdd{entry_kind}Button"), "clicked")
+    dialog = ctx.root.findChild(QObject, f"timerQuickAdd{entry_kind}Dialog")
+    title = ctx.root.findChild(QObject, f"timerAdd{entry_kind}TitleInput")
+    confirm = ctx.root.findChild(QObject, f"timerAdd{entry_kind}ConfirmButton")
+
+    invalid_title = "x" * (models.MAX_TIMER_TITLE_LENGTH + 1)
+    title.setProperty("text", invalid_title)
+    assert QMetaObject.invokeMethod(confirm, "clicked")
+    assert dialog.property("visible") is True
+    assert dialog.property("errorMessage")
+    assert title.property("text") == invalid_title
+    assert not editor.property("hasUnsavedChanges")
+
+    title.setProperty("text", "Valid name")
+    assert QMetaObject.invokeMethod(confirm, "clicked")
+    assert editor.property("hasUnsavedChanges")
+    assert editor.property("draftEntries").toVariant()[-1]["title"] == "Valid name"
 
 
 def test_section_appearance_invalid_color_does_not_save_icon(two_custom_schedules) -> None:
@@ -1522,6 +1793,28 @@ def test_reset_confirmation_rejects_external_schedule_switch(two_custom_schedule
     assert QMetaObject.invokeMethod(reset_dlg, "close")
 
 
+def test_schedule_actions_close_on_external_context_switch(two_custom_schedules) -> None:
+    ctx, sid_a, sid_b = two_custom_schedules
+    assert ctx.operations.select_custom_schedule(sid_b)
+    part_b = ctx.bridge.parts[0]["id"]
+    ctx.bridge.startPart(part_b)
+    ctx.clock.now += 10
+    ctx.bridge.stopPart(part_b)
+    assert ctx.operations.select_custom_schedule(sid_a)
+    menu = ctx.root.findChild(QObject, "timerScheduleMoreMenu")
+    more = _find_visual(ctx.root, "timerScheduleMoreButton")
+    assert QMetaObject.invokeMethod(more, "clicked")
+    wait_until(lambda: menu.property("opened"), description="schedule A menu opened")
+
+    assert ctx.operations.select_custom_schedule(sid_b)
+    wait_until(lambda: not menu.property("visible"), description="stale menu closed")
+    action = ctx.root.findChild(QObject, "timerResetAllMenuItem")
+    assert QMetaObject.invokeMethod(action, "clicked")
+    reset = ctx.root.findChild(QObject, "timerResetResultsDialog")
+    assert not reset.property("visible")
+    assert ctx.bridge.parts[0]["state"] == "stopped"
+
+
 def test_schedule_selector_invalidates_open_menu_when_options_shrink(two_custom_schedules) -> None:
     ctx, sid_a, sid_b = two_custom_schedules
     root = ctx.root
@@ -1602,6 +1895,50 @@ def test_custom_catalog_failed_refresh_retains_snapshot_and_recovers(two_custom_
     assert ctx.bridge.refreshCustomCatalog()
     assert ctx.bridge.customCatalogAvailable
     assert ctx.bridge.customSchedules == previous
+
+
+def test_restored_running_timer_remains_visible_when_catalog_read_fails(timer_ui_factory, monkeypatch) -> None:
+    ctx = timer_ui_factory(profile="restored")
+    other = ctx.bridge.createCustomSchedule("Other", "Other part", 120)
+    active = ctx.bridge.createCustomSchedule("Active", "Active part", 120)
+    ctx.bridge.startPart(ctx.bridge.parts[0]["id"])
+    load_schedule = JsonCustomTimerRepository.load_schedule
+
+    def load(repository, schedule_id):
+        if schedule_id == other:
+            raise PermissionError("injected catalog read failure")
+        return load_schedule(repository, schedule_id)
+
+    monkeypatch.setattr(JsonCustomTimerRepository, "load_schedule", load)
+    restored = timer_ui_factory(profile="restored")
+    assert not restored.bridge.customCatalogAvailable
+    assert restored.bridge.activeCustomSchedule["id"] == active
+    assert restored.bridge.isRunning
+    assert not _find_visual(restored.root, "timerEmptyStateCard").isVisible()
+    assert _find_visual(restored.root, "timerCatalogFeedbackBanner").isVisible()
+    selector = _find_visual(restored.root, "timerCustomScheduleSelect")
+    assert selector.isVisible()
+    assert selector.property("currentLabel") == "Active"
+    primary = _find_visual(restored.root, "timerPrimaryActionButton")
+    assert primary.isVisible()
+    assert QMetaObject.invokeMethod(primary, "clicked")
+    assert not restored.bridge.isRunning
+
+
+def test_selector_uses_active_title_when_selection_is_missing_from_catalog(two_custom_schedules, monkeypatch) -> None:
+    ctx, sid_a, _ = two_custom_schedules
+
+    def fail_read():
+        raise OSError("injected catalog read failure")
+
+    monkeypatch.setattr(ctx.operations, "list_custom_schedules", fail_read)
+    active = ctx.bridge.createCustomSchedule("Outside catalog", "Part", 120)
+    assert ctx.bridge.activeCustomSchedule["id"] == active
+    selector = _find_visual(ctx.root, "timerCustomScheduleSelect")
+    assert selector.property("currentLabel") == "Outside catalog"
+    selector.forceActiveFocus()
+    QTest.keyClick(ctx.widget, Qt.Key.Key_Down)
+    assert ctx.bridge.activeCustomSchedule["id"] == sid_a
 
 
 def test_failed_creation_rollback_exposes_remaining_schedule(two_custom_schedules, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:

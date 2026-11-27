@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Tempo aproximado fora das partes (em segundos): total estimado para troca de oradores, cânticos ou avisos. Intervalos específicos antes de uma parte ou após a última (ex.: cântico final e oração) são reservados primeiro; o restante é dividido entre os demais intervalos.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Deixe a estimativa total em branco para usar o tempo que sobra depois das partes planejadas. Os intervalos com estimativa são reservados primeiro. O restante é dividido igualmente entre os intervalos em branco. Digite 0 para não reservar tempo.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Mover</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10833,6 +10841,14 @@ Adicione uma quando quiser.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>esta tela</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Digite um nome de 1 a {limit} caracteres em uma única linha.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>O roteiro foi atualizado. Não foi possível confirmar o salvamento no disco.</translation>
     </message>
 </context>
 <context>

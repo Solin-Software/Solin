@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Perkiraan waktu di luar bagian (detik): total waktu untuk pergantian pembicara, lagu, atau pengumuman. Jeda khusus sebelum suatu bagian atau setelah bagian terakhir (mis., lagu dan doa penutup) dicadangkan terlebih dahulu; sisanya dibagi rata di antara jeda lainnya.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Kosongkan perkiraan total untuk menggunakan waktu yang tersisa setelah bagian-bagian yang direncanakan. Waktu jeda dengan perkiraan dialokasikan terlebih dahulu. Sisanya dibagi rata di antara jeda tanpa perkiraan. Masukkan 0 jika tidak ingin mengalokasikan waktu.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Pindahkan</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Otomatis</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10773,6 +10781,14 @@ Tambahkan saat Anda siap.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>monitor ini</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Masukkan nama sepanjang 1 hingga {limit} karakter dalam satu baris.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Jadwal telah diperbarui, tetapi sistem penyimpanan tidak dapat mengonfirmasi penyimpanan.</translation>
     </message>
 </context>
 <context>

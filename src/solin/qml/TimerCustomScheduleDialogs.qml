@@ -277,6 +277,27 @@ Item {
             if (list[i].type === "section")
                 opts.push({ id: list[i].id, title: list[i].title })
         }
+        var counts = Object.create(null)
+        var used = Object.create(null)
+        var nextNumber = Object.create(null)
+        for (var j = 0; j < opts.length; j++) {
+            var title = String(opts[j].title || "")
+            counts[title] = (counts[title] || 0) + 1
+            used[title] = true
+        }
+        for (var k = 1; k < opts.length; k++) {
+            var name = String(opts[k].title || "")
+            if (counts[name] > 1) {
+                var number = nextNumber[name] || 1
+                var label
+                do {
+                    label = qsTr("%1 (%2)").arg(name).arg(number++)
+                } while (used[label])
+                nextNumber[name] = number
+                used[label] = true
+                opts[k].title = label
+            }
+        }
         return opts
     }
 
@@ -810,6 +831,8 @@ Item {
                             return
                         }
                         if (dialogs.addPartDraftMode) {
+                            addPartDialog.errorMessage = timer.timerNameError(addPartTitleInput.text)
+                            if (addPartDialog.errorMessage) return
                             dialogs.draftAddPartSubmitted(trimmedTitle, secs, dialogs.addPartSectionId)
                             addPartDialog.close()
                         } else if (timer.addCustomPart(addPartDialog.targetId, addPartDialog.targetRevision, trimmedTitle, secs, dialogs.addPartSectionId, "")) {
@@ -916,6 +939,8 @@ Item {
                         var trimmedSectionTitle = addSectionTitleInput.text.trim()
                         if (!trimmedSectionTitle) return
                         if (dialogs.addSectionDraftMode) {
+                            addSectionDialog.errorMessage = timer.timerNameError(addSectionTitleInput.text)
+                            if (addSectionDialog.errorMessage) return
                             dialogs.draftAddSectionSubmitted(trimmedSectionTitle, dialogs.addSectionIcon, dialogs.addSectionColor)
                             addSectionDialog.close()
                         } else if (timer.addCustomSectionStyled(addSectionDialog.targetId, addSectionDialog.targetRevision, trimmedSectionTitle, dialogs.addSectionIcon, dialogs.addSectionColor, "")) {

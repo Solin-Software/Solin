@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Arvioitu aika osien ulkopuolella (sekuntia): kokonaisaika puhujien vaihtoihin, lauluihin tai ilmoituksiin. Erityiset tauot ennen osaa tai viimeisen osan jälkeen (esim. loppulaulu ja rukous) varataan ensin; loppuosa jaetaan muiden välien kesken.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Jätä kokonaisarvio tyhjäksi, niin suunniteltujen osuuksien jälkeen jäljelle jäävä aika käytetään. Arvioidut tauot varataan ensin. Loput jaetaan tasan niiden taukojen kesken, joille ei ole arviota. Syötä 0, jos et halua varata aikaa.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Siirrä</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10808,6 +10816,14 @@ Lisää taso, kun olet valmis.</translation>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>tämä näyttö</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Anna yhdelle riville 1–{limit} merkin pituinen nimi.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Aikataulu päivitettiin, mutta tallennusjärjestelmä ei voinut vahvistaa tallennusta.</translation>
     </message>
 </context>
 <context>

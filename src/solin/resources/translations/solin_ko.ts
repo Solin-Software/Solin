@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>파트 외 예상 시간(초): 연사 교체, 노래 또는 광고 등에 소요되는 총 시간입니다. 특정 파트 앞의 간격이나 마지막 파트 뒤의 시간(예: 마치는 노래와 기도)이 먼저 확보되며, 나머지는 다른 간격에 분배됩니다.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>전체 예상 시간을 비워 두면 계획된 파트의 시간을 제외한 나머지 시간을 사용합니다. 예상 시간이 입력된 간격에 먼저 시간을 배정합니다. 그 뒤 남는 시간은 빈 간격에 균등하게 배정합니다. 시간을 배정하지 않으려면 0을 입력하세요.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>이동</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>자동</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10773,6 +10781,14 @@ Add one when you are ready.</source>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>이 모니터</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>한 줄에 1~{limit}자의 이름을 입력하세요.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>일정이 업데이트되었지만 저장 시스템에서 저장 여부를 확인하지 못했습니다.</translation>
     </message>
 </context>
 <context>

@@ -15,6 +15,7 @@ Item {
     objectName: "timerScheduleEditor"
 
     property var scheduleData: ({})
+    property bool draftSuspended: false
     property color pal_bg: appTheme.bg
     property color pal_surface: appTheme.surface
     property color pal_surfaceAlt: appTheme.surfaceAlt
@@ -84,6 +85,8 @@ Item {
     // Computed layout positions for every entry & child part + placeholder
     property bool layoutAnimationsReady: false
     property var layoutMap: ({})
+    property var dropHitMap: ({})
+    property real dropHitHeight: 0
     property real placeholderX: 0
     property real placeholderY: 0
     property real placeholderW: 200
@@ -444,6 +447,8 @@ Item {
         dropMode = "none"
         dropSectionId = ""
         dropIndex = -1
+        dropHitMap = ({})
+        dropHitHeight = 0
         placeholderVisible = false
         autoScrollTimer.stop()
     }
@@ -466,11 +471,15 @@ Item {
         dragOriginY = originY !== undefined ? originY : 0
         dragGrabOffsetX = Math.max(16, Math.min(180, grabX))
         dragGrabOffsetY = Math.max(12, Math.min(32, grabY))
+        // Keep the original row bounds for hit testing while the preview moves.
+        dropHitMap = layoutMap
+        dropHitHeight = totalContentHeight
         dragActive = true
         updateDrag(editorPoint)
     }
 
     function updateDrag(editorPoint) {
+        if (!dragActive) return
         lastDragPointerX = editorPoint.x
         lastDragPointerY = editorPoint.y
         dragGhostX = Math.max(4, Math.min(editor.width - ghostCard.width - 4, editorPoint.x - dragGrabOffsetX))
@@ -494,6 +503,7 @@ Item {
     }
 
     function computeLiveDropSlot(canvasY) {
+        if (!dragActive) return
         var visibleTop = []
         for (var i = 0; i < draftEntries.length; i++) {
             if (draftEntries[i].id !== dragId)
@@ -506,7 +516,7 @@ Item {
 
         if (dragType === "section") {
             for (var s = 0; s < visibleTop.length; s++) {
-                var box = layoutMap[visibleTop[s].id]
+                var box = dropHitMap[visibleTop[s].id]
                 if (!box) continue
                 if (canvasY < box.y + box.h * 0.5) {
                     nextIdx = s
@@ -516,7 +526,7 @@ Item {
         } else {
             for (var t = 0; t < visibleTop.length; t++) {
                 var entry = visibleTop[t]
-                var eBox = layoutMap[entry.id]
+                var eBox = dropHitMap[entry.id]
                 if (!eBox) continue
                 if (entry.type === "part") {
                     if (canvasY < eBox.y + eBox.h * 0.5) {
@@ -544,7 +554,7 @@ Item {
                         }
                         nextIdx = visibleParts.length
                         for (var c = 0; c < visibleParts.length; c++) {
-                            var cBox = layoutMap[visibleParts[c].id]
+                            var cBox = dropHitMap[visibleParts[c].id]
                             if (!cBox) continue
                             var absMid = eBox.y + cBox.y + cBox.h * 0.5
                             if (canvasY < absMid) {
@@ -605,7 +615,8 @@ Item {
 
     onVisibleChanged: {
         if (visible) {
-            loadDraftFromSchedule()
+            if (!(draftSuspended && scheduleData && scheduleData.id === draftScheduleId))
+                loadDraftFromSchedule()
             forceActiveFocus()
         }
         else {
@@ -780,10 +791,11 @@ Item {
         // ═══════════════════════════════════════════════════════════════════════
         Flickable {
             id: editorFlick
+            objectName: "timerEditorFlickable"
             Layout.fillWidth: true
             Layout.fillHeight: true
             contentWidth: width
-            contentHeight: Math.max(editor.totalContentHeight, 120) + editor.floatingToolbarClearance
+            contentHeight: Math.max(editor.totalContentHeight, editor.dropHitHeight, 120) + editor.floatingToolbarClearance
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             flickableDirection: Flickable.VerticalFlick

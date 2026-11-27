@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>パート外の想定時間（秒）: 話し手の交代、歌、発表などの合計時間です。特定のパートの前の間隔や最後のパートの後の時間（例: 閉会の歌と祈り）が優先的に確保され、残りが他の間隔に配分されます。</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>合計の見積もりを空欄にすると、各パートの予定時間を差し引いた残り時間を使います。見積もりを入力した間隔の時間を先に確保し、残りを空欄の間隔に均等に割り当てます。時間を確保しない場合は 0 を入力してください。</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>移動</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>自動</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1（%2）</translation>
     </message>
 </context>
 <context>
@@ -10773,6 +10781,14 @@ Add one when you are ready.</source>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>このモニター</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>1～{limit}文字の名前を1行で入力してください。</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>スケジュールは更新されましたが、保存を確認できませんでした。</translation>
     </message>
 </context>
 <context>

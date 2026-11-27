@@ -51,6 +51,10 @@ Item {
 
     // Explicit structure-organization mode for custom schedules
     property bool editingCustomSchedule: false
+    property bool draftSuspended: false
+    readonly property bool draftOutdated: editingCustomSchedule && hasActiveCustom
+                                              && scheduleEditor.draftScheduleId === activeCustom.id
+                                              && scheduleEditor.draftRevision !== activeCustom.revision
 
     // Selected part in the unified schedule list (drives centralized clock panel when idle)
     property string selectedPartId: ""
@@ -72,18 +76,37 @@ Item {
     }
 
     onIsRunningChanged: {
-        if (isRunning && editingCustomSchedule)
+        if (isRunning && editingCustomSchedule) {
+            draftSuspended = scheduleEditor.hasUnsavedChanges
             editingCustomSchedule = false
+        }
         if (isRunning && live && live.active_part_id)
             selectedPartId = live.active_part_id
     }
     onActiveTabChanged: {
+        scheduleMoreMenu.close()
+        draftSuspended = false
         editingCustomSchedule = false
         selectedPartId = ""
     }
     onHasActiveCustomChanged: {
-        if (!hasActiveCustom)
+        if (!hasActiveCustom) {
+            draftSuspended = false
             editingCustomSchedule = false
+        }
+    }
+    onActiveCustomChanged: {
+        if (scheduleMoreMenu.opened && scheduleMoreMenu.scheduleId !== String(activeCustom && activeCustom.id || ""))
+            scheduleMoreMenu.close()
+        if ((draftSuspended || editingCustomSchedule) && scheduleEditor.draftScheduleId
+                && scheduleEditor.draftScheduleId !== String(activeCustom && activeCustom.id || "")) {
+            draftSuspended = false
+            editingCustomSchedule = false
+        }
+    }
+    onEditingCustomScheduleChanged: {
+        if (!editingCustomSchedule && !isRunning)
+            draftSuspended = false
     }
 
     Connections {
@@ -267,6 +290,9 @@ Item {
                     id: handBtn
                     objectName: "timerManualHandButton"
                     enabled: timer.manualHandAvailable === true
+                    Accessible.checkable: true
+                    Accessible.checked: timer.manualHandRaised
+                    Accessible.onPressAction: if (handBtn.enabled) handBtn.clicked()
                     iconName: timer.manualHandRaised ? "raised_hand_filled" : "raised_hand"
                     iconSize: 15
                     variant: timer.manualHandRaised ? "soft" : "ghost"
@@ -324,7 +350,7 @@ Item {
         Item {
             id: contextBar
             Layout.fillWidth: true
-            visible: page.onMeetings || (page.onCustom && !page.editingCustomSchedule && page.customList.length > 0)
+            visible: page.onMeetings || (page.onCustom && !page.editingCustomSchedule && (page.customList.length > 0 || page.hasActiveCustom))
             Layout.preferredHeight: visible
                                     ? (page.onMeetings ? meetingsContextFlow.implicitHeight : customContextFlow.implicitHeight)
                                     : 0
@@ -459,7 +485,7 @@ Item {
             // ── Custom Schedules context controls (matches mockup!) ───────────
             Flow {
                 id: customContextFlow
-                visible: page.onCustom && !page.editingCustomSchedule && page.customList.length > 0
+                visible: page.onCustom && !page.editingCustomSchedule && (page.customList.length > 0 || page.hasActiveCustom)
                 anchors.left: parent.left
                 anchors.right: parent.right
                 spacing: 8
@@ -478,6 +504,7 @@ Item {
                         options: page.customScheduleLabels
                         optionKeys: page.customList.map(function(schedule) { return schedule.id })
                         current: page.selectedCustomIndex
+                        fallbackLabel: page.activeCustom && page.activeCustom.title ? page.activeCustom.title : qsTr("Schedules")
                         accent: page.pal_accent
                         enabled: !page.isRunning && page.customList.length > 0
                         onPicked: function(idx) {
@@ -549,14 +576,14 @@ Item {
         // ═══════════════════════════════════════════════════════════════════════
         Rectangle {
             objectName: "timerDraftFeedback"
-            visible: page.editingCustomSchedule && !!page.feedback && page.feedback.scope === "editor" && !!page.feedback.message
+            visible: page.editingCustomSchedule && (page.draftOutdated || (!!page.feedback && page.feedback.scope === "editor" && !!page.feedback.message))
             Layout.fillWidth: true
             implicitHeight: feedbackRow.implicitHeight + 14
             radius: 10
-            color: (page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
+            color: (page.draftOutdated || page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
                    ? Qt.rgba(page.pal_warning.r, page.pal_warning.g, page.pal_warning.b, 0.12)
                    : Qt.rgba(page.pal_danger.r, page.pal_danger.g, page.pal_danger.b, 0.12)
-            border.color: (page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
+            border.color: (page.draftOutdated || page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
                           ? page.pal_warning : page.pal_danger
             border.width: 1
 
@@ -569,9 +596,9 @@ Item {
                 Text {
                     objectName: "timerFeedbackText"
                     Layout.fillWidth: true
-                    text: page.feedback && page.feedback.message ? page.feedback.message : ""
+                    text: page.draftOutdated ? qsTranslate("TimerBridge", "This schedule was updated elsewhere. Reload it before making changes.") : (page.feedback && page.feedback.message ? page.feedback.message : "")
                     textFormat: Text.PlainText
-                    color: (page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
+                    color: (page.draftOutdated || page.feedback.code === "blocked" || page.feedback.code === "schedule_stale")
                            ? page.pal_warning : page.pal_danger
                     font.pixelSize: 12
                     font.weight: Font.Medium
@@ -580,7 +607,7 @@ Item {
 
                 TimerButton {
                     objectName: "timerFeedbackReloadButton"
-                    visible: page.feedback && page.feedback.retryable === true
+                    visible: page.draftOutdated || (page.feedback && page.feedback.retryable === true)
                     text: qsTr("Reload")
                     iconName: "refresh"
                     iconSize: 12
@@ -589,11 +616,13 @@ Item {
                     implicitHeight: 26
                     onClicked: {
                         page.editingCustomSchedule = false
+                        page.draftSuspended = false
                         timer.reloadActiveCustomSchedule()
                     }
                 }
 
                 TimerButton {
+                    visible: !page.draftOutdated
                     iconName: "close"
                     iconSize: 12
                     tip: qsTranslate("SettingsWidget", "Close")
@@ -651,7 +680,7 @@ Item {
             Rectangle {
                 id: emptyStateCard
                 objectName: "timerEmptyStateCard"
-                visible: page.onCustom && page.customList.length === 0
+                visible: page.onCustom && !page.hasActiveCustom && page.customList.length === 0 && timer.customCatalogAvailable !== false
                 anchors.centerIn: parent
                 width: Math.min(400, parent.width)
                 implicitHeight: emptyCol.implicitHeight + 40
@@ -723,6 +752,7 @@ Item {
                 visible: page.onCustom && page.hasActiveCustom && page.editingCustomSchedule
                 anchors.fill: parent
                 scheduleData: page.activeCustom
+                draftSuspended: page.draftSuspended
                 onCancelRequested: page.editingCustomSchedule = false
                 onSaved: page.editingCustomSchedule = false
                 onMoveRequested: function(itemType, itemId, itemTitle, currentSectionId, draftEntries) {
@@ -740,7 +770,7 @@ Item {
             // ── C. Unified live operation workspace (Meetings & Custom Schedules) ──
             Item {
                 objectName: "timerOperationWorkspace"
-                visible: !emptyStateCard.visible && !scheduleEditor.visible
+                visible: (page.onMeetings || page.hasActiveCustom) && !scheduleEditor.visible
                 anchors.fill: parent
 
                 TimerScheduleList {
@@ -802,6 +832,13 @@ Item {
     Popup {
         id: scheduleMoreMenu
         objectName: "timerScheduleMoreMenu"
+        property string scheduleId: ""
+        onAboutToShow: scheduleId = String(page.activeCustom && page.activeCustom.id || "")
+        onAboutToHide: scheduleId = ""
+        function contextValid() {
+            return scheduleId !== "" && page.onCustom && page.hasActiveCustom
+                    && scheduleId === String(page.activeCustom.id)
+        }
         parent: Overlay.overlay
         x: {
             if (!parent) return 0
@@ -840,6 +877,7 @@ Item {
                 enabled: !page.isRunning
                 implicitHeight: 34
                 onClicked: {
+                    if (!scheduleMoreMenu.contextValid()) return
                     scheduleMoreMenu.close()
                     customDialogs.openTimingModal()
                 }
@@ -855,6 +893,7 @@ Item {
                 enabled: !page.isRunning
                 implicitHeight: 34
                 onClicked: {
+                    if (!scheduleMoreMenu.contextValid()) return
                     scheduleMoreMenu.close()
                     customDialogs.openRenameSchedule(page.activeCustom.title || "")
                 }
@@ -877,6 +916,7 @@ Item {
                 enabled: !page.isRunning
                 implicitHeight: 34
                 onClicked: {
+                    if (!scheduleMoreMenu.contextValid()) return
                     scheduleMoreMenu.close()
                     customDialogs.openDuplicate(page.activeCustom.title || "")
                 }
@@ -892,6 +932,7 @@ Item {
                 enabled: !page.isRunning && page.summary && page.summary.hasAnyTimingData === true
                 implicitHeight: 34
                 onClicked: {
+                    if (!scheduleMoreMenu.contextValid() || String(page.summary.scheduleId || "") !== scheduleMoreMenu.scheduleId) return
                     scheduleMoreMenu.close()
                     customDialogs.openResetConfirm(page.summary.scheduleId || "", page.summary.scheduleRevision || 0)
                 }
@@ -916,6 +957,7 @@ Item {
                 enabled: !page.isRunning
                 implicitHeight: 34
                 onClicked: {
+                    if (!scheduleMoreMenu.contextValid()) return
                     scheduleMoreMenu.close()
                     customDialogs.openDeleteConfirm(
                         page.activeCustom.id || "",

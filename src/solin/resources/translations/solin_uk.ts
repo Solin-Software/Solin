@@ -1002,8 +1002,8 @@
     </message>
     <message>
         <location line="+7"/>
-        <source>Estimated time outside parts (seconds): total time for speaker changes, songs, or announcements. Specific breaks before a part or after the last part (e.g., closing song and prayer) are reserved first; any remainder is split among the other intervals.</source>
-        <translation>Орієнтовний час поза частинами (у секундах): загальний час на зміну промовців, пісні чи оголошення. Окремі перерви перед частиною або після останньої частини (наприклад, кінцева пісня та молитва) резервуються насамперед; залишок розподіляється між іншими інтервалами.</translation>
+        <source>Leave the total estimate blank to use the time left after the planned parts. Breaks with an estimate are reserved first. The rest is split equally among blank breaks. Enter 0 to reserve no time.</source>
+        <translation>Залиште загальну оцінку порожньою, щоб використати час, який залишився після запланованих частин. Спочатку резервується час для перерв із зазначеною оцінкою. Решта часу ділиться порівну між перервами без оцінки. Введіть 0, щоб не резервувати час.</translation>
     </message>
     <message>
         <location line="+12"/>
@@ -1093,6 +1093,14 @@
         <location line="+28"/>
         <source>Move</source>
         <translation>Перемістити</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>%1 (%2)</source>
+        <translation>%1 (%2)</translation>
     </message>
 </context>
 <context>
@@ -10843,6 +10851,14 @@ Add one when you are ready.</source>
         <location line="+370"/>
         <source>this monitor</source>
         <translation>цей монітор</translation>
+    </message>
+    <message>
+        <source>Enter a name of 1 to {limit} characters on one line.</source>
+        <translation>Введіть назву довжиною від 1 до {limit} символів в одному рядку.</translation>
+    </message>
+    <message>
+        <source>The schedule was updated, but the storage system could not confirm the save.</source>
+        <translation>Розклад оновлено, але система зберігання не змогла підтвердити збереження.</translation>
     </message>
 </context>
 <context>
