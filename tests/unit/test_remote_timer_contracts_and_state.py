@@ -82,6 +82,39 @@ def test_custom_commands_round_trip_and_validate_action_arguments() -> None:
         )
 
 
+def test_atomic_custom_commands_validate_payload_and_capabilities() -> None:
+    base = {"commandId": str(uuid.uuid4()), "scheduleRevision": 0,
+            "scheduleId": "schedule", "customRevision": 0}
+    entries = {**base, "type": "replace_custom_schedule_entries", "entries": [
+        {"type": "section", "title": "Section", "parts": [
+            {"type": "part", "title": "Part", "plannedSeconds": 30},
+        ]},
+    ]}
+    timing = {**base, "type": "replace_custom_timing_settings", "startTime": "19:30",
+              "endTime": "20:30", "weights": {"part": 50}, "closingSeconds": None}
+    custom = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=True, allow_pacing=False)
+    )
+    pacing = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=True, allow_pacing=True)
+    )
+    for payload in (entries, timing):
+        command = parse_timer_command(payload)
+        assert parse_timer_command(command.to_dict()) == command
+    assert custom.allows_command(parse_timer_command(entries))
+    assert not custom.allows_command(parse_timer_command(timing))
+    assert pacing.allows_command(parse_timer_command(timing))
+    for invalid in (
+        {**entries, "entries": [{"type": "part", "title": "Part", "plannedSeconds": True}]},
+        {**entries, "entries": [{"type": "section", "title": "S", "parts": [{"type": "section"}]}]},
+        {**timing, "weights": {"part": True}},
+        {**timing, "beforeParts": {"part": -1}},
+        {**timing, "unexpected": 1},
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command(invalid)
+
+
 def test_pacing_commands_are_strict_gated_and_revision_checked() -> None:
     command_id = str(uuid.uuid4())
     commands = (
@@ -733,3 +766,31 @@ def test_part_wire_item_exposes_and_validates_duration_editable() -> None:
 
     with pytest.raises(TypeError, match="duration_editable"):
         replace(editable, duration_editable="no")  # type: ignore[arg-type]
+
+
+def test_edit_part_presence_validation_and_capabilities() -> None:
+    from solin.core.remote_control.timer.contracts import TimerControlCapabilities, parse_timer_command
+    from uuid import uuid4
+
+    base = {"commandId": str(uuid4()), "type": "edit_part", "scheduleRevision": 1, "partId": "part"}
+    rename = parse_timer_command({**base, "title": None})
+    duration = parse_timer_command({**base, "plannedSeconds": 60})
+    both = parse_timer_command({**base, "title": "New", "plannedSeconds": 60})
+    assert "title" not in duration.to_dict()
+    assert rename.to_dict()["title"] is None
+    for invalid in ({}, {"plannedSeconds": None}, {"plannedSeconds": True},
+                    {"plannedSeconds": 0}, {"title": ""}, {"title": 1}, {"extra": 1}):
+        with pytest.raises((TypeError, ValueError)):
+            parse_timer_command({**base, **invalid})
+    caps = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=False, allow_schedule_structure_edits=True)
+    )
+    assert caps.allows_command(duration)
+    assert not caps.allows_command(rename)
+    assert not caps.allows_command(both)
+    caps = TimerControlCapabilities.from_feature_flags(
+        TimerRemoteFeatureFlags(allow_custom_schedules=True, allow_schedule_structure_edits=False)
+    )
+    assert caps.allows_command(rename)
+    assert not caps.allows_command(duration)
+    assert not caps.allows_command(both)

@@ -154,8 +154,9 @@ parts** when already authenticated:
   `parts` (including per-part `durationEditable` and `sectionIconKey`), and server-authoritative `capabilities`
   (`controlParts`, `adjustPlannedMinutes`, `setPlannedSeconds`, `setSectionCount`,
   `switchMeetingType`, `navigateWeeks`, `manageCustomSchedules`, `managePacing`).
-  `manageCustomSchedules` is false by default. With it enabled, `customSchedule` describes the active custom schedule,
-  including its ID, title, revision, and ordered root parts and sections (each with its persisted `icon` choice), including empty sections.
+  With `manageCustomSchedules` enabled, `customSchedule` describes the active custom schedule,
+  including its ID, title, revision, and ordered root parts and sections. Sections carry their
+  persisted `icon` and `color` choices, including when empty.
 - `GET /remote/timer/api/custom-schedules` — authenticated, on-demand custom schedule catalog;
   unavailable when the capability or adapter is disabled. The Qt adapter obtains each snapshot on
   the main thread. Part progress contains `state`, accumulated `elapsedSeconds`,
@@ -176,12 +177,30 @@ parts** when already authenticated:
   - `set_meeting_type` (`meetingType` in `{"midweek", "weekend"}`)
   - `set_pacing_mode` (`scheduleRevision`, `mode` in `{"off", "monitor", "automatic"}`)
   - `navigate_week` (`target` in `{"previous", "next", "current"}`)
-  - `create_custom_schedule` (`scheduleRevision`, `title`)
+  - `create_custom_schedule` (`scheduleRevision`, `title`, optional `firstPart` object containing
+    `title` and `plannedSeconds`, created atomically with the schedule)
   - `duplicate_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `title`)
   - `delete_custom_schedule`, `select_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`)
   - `select_meeting_schedule`, `reset_all` (`scheduleRevision`)
   - `rename_part` (`scheduleRevision`, `partId`, nullable `title`)
+  - `edit_part` (`scheduleRevision`, `partId`, optional `title` and `plannedSeconds`):
+    saves both supplied fields atomically. Omitted fields are unchanged; `title: null`
+    restores a meeting part’s canonical title. At least one field is required. Title edits
+    require the same capabilities as `rename_part`; duration edits require those of
+    `set_part_seconds` and obey its state and range restrictions. Custom parts have no
+    canonical title and reject `title: null`. Meeting part snapshots include optional
+    `titleOverridden` and localized `canonicalTitle` metadata.
   - `edit_custom_schedule` (`scheduleRevision`, `scheduleId`, `customRevision`, `action`, `values`)
+  - `replace_custom_schedule_entries` (`scheduleRevision`, `scheduleId`, `customRevision`,
+    `entries`) atomically replaces the ordered structure. Entries are root parts
+    (`type`, optional `id`, `title`, `plannedSeconds`) or sections (`type`, optional `id`,
+    `title`, optional `icon` and `color`, `parts`). New entries can omit their ID. Existing IDs
+    preserve their progress. Requires `manageCustomSchedules`.
+  - `replace_custom_timing_settings` (`scheduleRevision`, `scheduleId`, `customRevision`,
+    nullable `startTime` and `endTime`, optional `untrackedSeconds`, `weights`, `beforeParts`,
+    and `closingSeconds`) atomically replaces the supplied timing settings. Omitted optional
+    fields preserve their values, while a null estimate clears it. `weights` and `beforeParts`
+    map part IDs to values. Requires both `manageCustomSchedules` and `managePacing`.
 
   `set_pacing_mode` requires `managePacing` (see below). The custom-schedule commands
   (`create_custom_schedule`, `duplicate_custom_schedule`, `delete_custom_schedule`,
@@ -209,14 +228,15 @@ parts** when already authenticated:
   `no_projection` covers empty or historical schedules without enough timing data.
   When availability is `ready`, `pacing` supplies the projection and parts carry
   `effectiveSeconds` and their resolved `adjustmentWeight`. Clients show pacing when the mode
-  is `monitor` or `automatic`.
+  is `monitor` or `automatic` in the authenticated controller workspace. The
+  `managePacing` capability controls changes to the settings.
   The clock can derive the projected finish from
   `max(now, projection_anchor_epoch) + projection_tail_seconds`. When `complete` is true,
   use the anchor as the frozen projection. Times use Unix seconds. The payload also gives the
   tolerance and remaining adjustment capacity in each direction. Public viewers receive the
   active clock and countdown.
 
-  `managePacing` is false by default and governs editing. It enables `set_pacing_mode`,
+  `managePacing` governs editing. It enables `set_pacing_mode`,
   which changes the profile preference. A running part keeps its current target.
   With `manageCustomSchedules` also enabled,
   custom edits include `set_pacing_window` (nullable `start_time` and `end_time` in `HH:MM`, optional

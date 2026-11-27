@@ -14,6 +14,9 @@ import pytest
 
 from solin.core.remote_control.web_assets import RemoteControlWebAssets
 from solin.styles.icons import (
+    ICON_BAN,
+    ICON_CLOSE,
+    ICON_EDIT,
     ICON_HOME,
     ICON_IMAGE,
     ICON_MUSIC,
@@ -27,6 +30,7 @@ from solin.styles.icons import (
     ICON_SEC_TREASURES,
     ICON_SEC_WATCHTOWER,
     ICON_SHIELD,
+    ICON_SLIDERS,
     ICON_VIDEO,
     ICON_VOLUME_HIGH,
     ICON_VOLUME_LOW,
@@ -298,7 +302,8 @@ def test_timer_shell_is_fullscreen_first_with_modal_login_and_canonical_section_
         "sticky-timer-bar",
         "sticky-scroll-top",
         "sticky-expand-button",
-        "hero-expand-button",
+        "control-stage-button",
+        "hero-start-button",
         "hero-side-time",
         "hero-ampm-time",
         "hero-suffix-time",
@@ -312,7 +317,6 @@ def test_timer_shell_is_fullscreen_first_with_modal_login_and_canonical_section_
         "schedule-list",
         "setup-view",
     } <= ids
-    assert "control-stage-button" not in ids
     assert "hero-fullscreen-button" not in ids
 
     assert html.index('id="stage-view"') < html.index('id="control-view"')
@@ -332,10 +336,13 @@ def test_timer_shell_is_fullscreen_first_with_modal_login_and_canonical_section_
     assert "`:${stageSecs}`" not in renderer
     assert "`:${wallSecs}`" not in renderer
     assert "`:${seconds}`" not in clock_face
-    assert "suffixTime.textContent = secsText" in renderer
 
     canonical_icons = {
         "home": ICON_HOME,
+        "edit": ICON_EDIT,
+        "ban": ICON_BAN,
+        "close": ICON_CLOSE,
+        "sliders": ICON_SLIDERS,
         "shield": ICON_SHIELD,
         "hand": ICON_RAISED_HAND,
         "hand-filled": ICON_RAISED_HAND_FILLED,
@@ -345,8 +352,14 @@ def test_timer_shell_is_fullscreen_first_with_modal_login_and_canonical_section_
         "sec-public_talk": ICON_SEC_PUBLIC_TALK,
         "sec-watchtower": ICON_SEC_WATCHTOWER,
     }
+    rendered_html = RemoteControlWebAssets(
+        TIMER_ROOT,
+        shared_root=SHARED_ROOT,
+        installation_id="contract-installation",
+        url_prefix="/remote/timer",
+    ).index_html.decode()
     for name, canonical in canonical_icons.items():
-        assert _svg_shape(_sprite_symbol(html, name)) == _svg_shape(canonical)
+        assert _svg_shape(_sprite_symbol(rendered_html, name)) == _svg_shape(canonical)
 
 
 @pytest.mark.parametrize(
@@ -503,7 +516,7 @@ def test_stale_play_recovery_is_bounded_and_revalidates_the_catalog_origin() -> 
     assert 'code === "catalog_stale" && !retriedPlay && recovered && refreshed' in body
     assert "retriedPlay = true" in body
     assert "continue" in body
-    assert body.count("newCommandId()") == 1
+    assert body.count("newUuid()") == 1
     assert "function refreshedPlayCommand(fields)" in app
     assert "candidate.id === collectionId && candidate.kind === source" in app
     assert 'node.kind !== "media" || !node.available' in app
@@ -542,7 +555,7 @@ def test_stale_play_recovery_behavior() -> None:
         let toasts;
         const store = { state: {} };
         const t = (key) => key;
-        const newCommandId = () => `command-${++nextId}`;
+        const newUuid = () => `command-${++nextId}`;
         const isUnauthorized = (error) => error instanceof ApiError && error.status === 401;
         const showToast = (message, level) => toasts.push({ message, level });
         const api = {
@@ -739,7 +752,7 @@ def test_timer_workspace_constrains_long_content_on_narrow_screens() -> None:
         r"\.schedule-list",
         r"\.section-parts",
         r"\.part-copy",
-        r"\.login-form,\s*\.duration-form",
+        r"\.login-form",
         r"\.field",
         r"\.setup-steps",
         r"\.verification-card",
@@ -763,8 +776,6 @@ def test_timer_workspace_constrains_long_content_on_narrow_screens() -> None:
         (".section-header", components),
         (".part-row", components),
         (".part-info", components),
-        (".part-controls", components),
-        (".duration-cluster", components),
     ):
         rules = re.findall(
             rf"{re.escape(selector)}\s*\{{(?P<body>.*?)\}}",
@@ -775,7 +786,7 @@ def test_timer_workspace_constrains_long_content_on_narrow_screens() -> None:
             selector
         )
 
-    for selector in (".hero-title", ".section-title", ".part-title", ".duration-modal-title"):
+    for selector in (".hero-title", ".section-title", ".part-title"):
         rules = re.findall(
             rf"{re.escape(selector)}\s*\{{(?P<body>.*?)\}}",
             components,
@@ -791,133 +802,6 @@ def test_timer_workspace_constrains_long_content_on_narrow_screens() -> None:
     assert any(
         "grid-template-columns: repeat(2, minmax(0, 1fr));" in rule for rule in segmented_rules
     )
-
-
-def test_timer_part_rows_hide_minute_steppers_when_uneditable_and_use_single_slot_actions() -> None:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node.js is required to execute the timer part-row behavior test")
-    renderer = (TIMER_ROOT / "scripts" / "renderer.js").read_text(encoding="utf-8")
-    components = (TIMER_ROOT / "styles" / "components.css").read_text(encoding="utf-8")
-    part_row_fn = _javascript_function(renderer, "buildPartRow")
-
-    script = textwrap.dedent(
-        """
-        function element(tag, options = {}) {
-          return {
-            tag,
-            className: options.className ?? "",
-            text: options.text ?? "",
-            attrs: { ...(options.attrs ?? {}) },
-            dataset: { ...(options.dataset ?? {}) },
-            disabled: false,
-            children: [],
-            append(...items) {
-              this.children.push(...items);
-            },
-          };
-        }
-        const cssIcon = (name) => element("span", { className: `css-icon css-icon--${name}` });
-        const uiIcon = (name) => element("svg", { className: "ui-icon", dataset: { icon: name } });
-        const t = (key) => key;
-
-        __BUILD_PART_ROW__
-
-        function walk(node, out = []) {
-          out.push(node);
-          for (const child of node.children) walk(child, out);
-          return out;
-        }
-        const actionsIn = (row) => walk(row).filter((n) => n.dataset.action).map((n) => n.dataset.action);
-        const hasClass = (row, cls) => walk(row).some((n) => n.className.split(/\\s+/).includes(cls));
-        const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
-
-        const caps = {
-          adjustPlannedMinutes: true,
-          setPlannedSeconds: true,
-          controlParts: true,
-        };
-        const basePart = {
-          id: "p1",
-          displayNumber: 1,
-          title: "Part 1",
-          plannedSeconds: 300,
-          plannedLabel: "05:00",
-          state: "idle",
-          durationEditable: true,
-          startedLabel: "",
-          resultLabel: "",
-        };
-
-        // 1. Editable idle part: +/-1 min, duration editor, and Start action
-        const idleEditable = buildPartRow(basePart, { isInteractive: true, caps });
-        assert(
-          JSON.stringify(actionsIn(idleEditable)) ===
-            JSON.stringify(["adjust-part", "edit-duration", "adjust-part", "start-part"]),
-          "editable idle part must expose minute steppers, duration editor, and start-part",
-        );
-
-        // 2. Locked idle part (e.g., 1-part fixed-total section): no steppers or editor, read-only badge + Start
-        const idleLocked = buildPartRow(
-          { ...basePart, durationEditable: false },
-          { isInteractive: true, caps },
-        );
-        assert(
-          JSON.stringify(actionsIn(idleLocked)) === JSON.stringify(["start-part"]),
-          "locked idle part must omit minute steppers and duration editor",
-        );
-        assert(hasClass(idleLocked, "part-duration-badge"), "locked idle part shows read-only badge");
-
-        // 3. Running part: live badge + Stop only (no disabled minute steppers)
-        const runningRow = buildPartRow(
-          { ...basePart, state: "running", durationEditable: false, startedLabel: "19:30" },
-          { isInteractive: true, caps },
-        );
-        assert(
-          JSON.stringify(actionsIn(runningRow)) === JSON.stringify(["stop-part"]),
-          "running part must omit minute steppers and expose only stop-part",
-        );
-        assert(hasClass(runningRow, "part-live-badge"), "running part shows live badge");
-        assert(
-          walk(runningRow).some((n) => n.dataset.livePartId === "p1"),
-          "running part binds livePartId for live countdown ticks",
-        );
-
-        // 4. Stopped part: read-only badge + Reset in the primary action slot (never Start + Reset)
-        const stoppedRow = buildPartRow(
-          {
-            ...basePart,
-            state: "stopped",
-            durationEditable: false,
-            startedLabel: "19:30",
-            resultLabel: "05:12",
-          },
-          { isInteractive: true, caps },
-        );
-        assert(
-          JSON.stringify(actionsIn(stoppedRow)) === JSON.stringify(["reset-part"]),
-          "stopped part must expose reset-part in place of start-part and omit minute steppers",
-        );
-        const resetBtn = walk(stoppedRow).find((n) => n.dataset.action === "reset-part");
-        assert(
-          resetBtn.className.includes("part-action-btn") && resetBtn.className.includes("button--reset"),
-          "reset button must occupy the primary part-action-btn slot",
-        );
-        assert(hasClass(stoppedRow, "part-duration-badge"), "stopped part shows read-only badge");
-        """
-    ).replace("__BUILD_PART_ROW__", part_row_fn)
-
-    result = subprocess.run(  # noqa: S603 - fixed local Node.js test harness
-        [node, "--input-type=module", "--eval", script],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    assert result.returncode == 0, result.stderr
-
-    for selector in (".button--reset", ".part-live-badge", ".part-duration-badge"):
-        assert re.search(rf"{re.escape(selector)}\s*\{{", components) is not None, selector
 
 
 @pytest.mark.parametrize("app_root", [MEDIA_ROOT, TIMER_ROOT])

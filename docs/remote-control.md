@@ -19,11 +19,10 @@ remote-control switch and per-service toggles:
   playlists, and linked folders, with live playback state and transport controls (play, pause,
   resume, seek, volume, previous/next, and stop). Filesystem paths, media URLs, and catalog
   editing are never exposed.
-- **Timer (`/remote/timer/` — Solin Timer):** Fullscreen-first live meeting clock and part
-  timer accessible without signing in (for podium, stage, or tablet displays), paired with an
-  authenticated controller workspace to start, stop, reset, nudge (`±1 s` while running), and
-  adjust meeting parts, sections, meeting type, and weeks according to server-authoritative
-  capabilities.
+- **Timer (`/remote/timer/` — Solin Timer):** Fullscreen-first live clock and active part
+  accessible without signing in. The authenticated workspace runs and edits meeting and
+  custom schedules according to server-authoritative capabilities. The authenticated
+  controller workspace shows the pacing forecast and schedule window when available.
 
 Each application has its own PWA manifest (`id`, `scope`, `start_url`) and distinct icon set so
 both can be installed side by side on the same phone or tablet. Enabling or disabling one
@@ -56,8 +55,8 @@ interrupting projection or the running timer.
 
 ## Protocol reference
 
-Custom timer schedule management is disabled by default and is available only to authenticated
-timer controllers when explicitly enabled. Public live viewing remains available.
+Custom schedule management is enabled for authenticated timer controllers by default.
+Changing pacing settings remotely requires a separate capability.
 
 The base HTTP, WebSocket, caching, CSP, and command contract for both web applications is
 documented in

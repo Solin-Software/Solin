@@ -13542,6 +13542,66 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <translation>Walang mga bahagi sa iskedyul na ito</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Walang lamang seksiyon</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Itakda ang oras ng iskedyul</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Custom na hex</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Gumamit ng 6-digit na hex na kulay tulad ng #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Preview ng seksiyon</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>I-edit ang iskedyul</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Itakda ang mga oras at pagsubaybay sa iskedyul sa Solin app.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Mga advanced na opsyon</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Timbang (0–100): mas inaayos ang mga may mas mataas na timbang. Ang timbang na 0 ay nagpapanatiling hindi nagbabago ng isang bahagi kapag may positibong timbang ang ibang bahagi. Kung 0 ang lahat ng timbang, pantay na inaayos ang mga bahagi na maaaring ayusin.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Mga bahaging maaaring awtomatikong ayusin</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>Sa Awtomatikong mode, ang mga bahaging may tsek lang ang paiikliin o pahahabain para matapos sa oras. Mananatili sa planadong tagal ang mga walang tsek.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>Sa Awtomatikong mode, maaaring paikliin o pahabain ang mga bahaging may tsek para matapos sa oras. Kung walang may tsek, pantay na iaayos ang lahat ng bahaging 1 min o higit pa.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Wala pang 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Alisin ang oras</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Mga bahagi</translation>
@@ -13597,19 +13657,9 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <translation>Magdagdag ng 1 minuto sa {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Itakda ang tagal para sa {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Tagal (MM:SS o minuto)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Ilapat</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13665,6 +13715,378 @@ Gamitin ang play button para mag-project · I-drag ang grip ⠿ para ayusin ang 
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Isara ang listahan ng mga nakataas ang kamay</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Hindi na available ang pagkilos o bahaging ito ng timer.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Mga Iskedyul</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Uri ng iskedyul</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Pumili ng iskedyul</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Walang naka-save na iskedyul</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Nilo-load ang mga iskedyul…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Hindi ma-load ang mga iskedyul.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Bagong iskedyul</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Mga pagkilos sa iskedyul</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Oras at pagsunod sa iskedyul</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>I-edit ang bahagi</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Palitan ang pangalan</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>I-duplicate</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Burahin</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>I-save</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Pangalan</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Maglagay ng pangalan.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Kopya ng {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Tanggalin ang “{title}” at ang mga naitalang oras nito?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>I-reset ang mga resulta</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>I-reset ang lahat ng naitalang oras para sa “{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Ibalik ang default na pamagat</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>NAPILING BAHAGI</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Simulan muli</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Ayusin</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Susunod</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Nakaplano {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Target {target} · Nakaplano {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Lumipas na oras</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Pagsunod sa oras</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Naka-off</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Subaybayan lang</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Subaybayan at ayusin</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Nasa oras</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Mas maaga nang {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Nahuhuli nang {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Itakda ang oras ng pagsisimula at pagtatapos para makita ang pagtataya.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Magkakabisa ang bagong saklaw ng iskedyul pagkatapos i-reset ang mga resulta.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Walang available na pagtataya.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Isinasagawa pa ang pagkilos na ito.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Suriin ang mga halaga at subukang muli.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Lampas sa saklaw ng iskedyul ang mga bahagi at tinatayang oras.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>I-close</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Magdagdag ng bahagi</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Magdagdag ng seksiyon</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Tagal (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Ilipat sa</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Sa labas ng mga seksiyon</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Alisin ang bahagi</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Alisin ang seksiyon</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Icon</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Kulay</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Karaniwan</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Wala</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Oras ng pagsisimula</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Oras ng pagtatapos</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Oras na hindi sinusubaybayan (segundo)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Oras ng pagtatapos (segundo)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Bago ang bahaging ito (segundo)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Bigat ng pagsasaayos (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Maglagay ng pangalan para sa bawat bahagi at seksiyon.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Maglagay ng tagal sa pagitan ng 00:01 at 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Ilagay ang magkaibang oras ng pagsisimula at pagtatapos.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Maglagay ng buong bilang ng mga segundo na hindi negatibo.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Ilagay ang oras ng pagsisimula at pagtatapos o burahin ang tinatayang oras.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Maglagay ng bigat mula 0 hanggang 100. Hindi maaaring bagong piliin ang mga bahaging mas maikli sa isang minuto.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Hindi ma-save ang iskedyul. Narito pa rin ang mga pagbabago mo.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Itapon ang mga pagbabagong hindi na-save?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Kayamanan</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Ministeryo</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Pamumuhay</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Pahayag pangmadla</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Bantayan</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Aklat</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Mga Tao</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Mikropono</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musika</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalendaryo</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Orasan</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Suriin</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Asul-berde</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Ginto</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Krimson</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Ambar</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Asul</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Esmeralda</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Lila</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutral</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Nagbago ang iskedyul na ito. Isara at buksan muli para magamit ang kasalukuyang bersyon.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Simulan ang susunod na bahagi</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>I-edit ang seksiyon</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Inaasahang pagtatapos {finish}</translation>
     </message>
 </context>
 <context>

@@ -12195,6 +12195,66 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>No parts in this schedule</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Empty section</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Set schedule time</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Custom hex</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Use a 6-digit hex color like #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Section preview</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Edit schedule</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Set schedule times and pacing in the Solin app.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Advanced options</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Parts allowed to adjust automatically</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Under 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Clear time</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Parts</translation>
@@ -12250,19 +12310,9 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Add 1 minute to {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Set duration for {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Duration (MM:SS or minutes)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Apply</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -12318,6 +12368,378 @@ Click an item to project it · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Close raised hands list</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>This action or timer part is no longer available.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Schedules</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Schedule type</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Choose a schedule</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>No saved schedules</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Loading schedules…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Could not load schedules.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>New schedule</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Schedule actions</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Schedule timing and pacing</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Edit part</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Rename</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Duplicate</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Enter a name.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Copy of {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Delete “{title}” and its recorded times?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Reset results</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Reset all recorded times for “{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Restore default title</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>SELECTED PART</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Restart</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Adjust</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Up next</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Planned {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Target {target} · Planned {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Elapsed progress</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Pacing</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Monitor only</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Monitor and adjust</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>On schedule</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Ahead by {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Behind by {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Set start and end times to see a forecast.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>The new schedule window applies after results are reset.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>No forecast available.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>This action is still in progress.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Check the values and try again.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>The parts and estimates exceed the schedule window.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Add part</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Add section</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Duration (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Move to</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Outside sections</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Remove part</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Remove section</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Icon</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Color</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Default</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>None</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Start time</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>End time</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Untracked time (seconds)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Closing time (seconds)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Before this part (seconds)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Adjustment weight (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Enter a name for each part and section.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Enter a duration between 00:01 and 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Enter both start and end times, with different values.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Enter a nonnegative whole number of seconds.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Enter start and end times or clear the time estimates.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Could not save the schedule. Your changes are still here.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Discard your unsaved changes?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Treasures</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Ministry</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Living</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Public talk</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Watchtower</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Book</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>People</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Music</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Calendar</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Clock</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Check</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Teal</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Gold</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Crimson</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Amber</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Blue</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Emerald</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Violet</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutral</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>This schedule changed. Close and reopen to work with the current version.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Start next part</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Edit section</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Projected finish {finish}</translation>
     </message>
 </context>
 <context>

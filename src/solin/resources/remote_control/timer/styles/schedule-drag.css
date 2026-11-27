@@ -1,0 +1,65 @@
+[data-drag-handle] {
+  cursor: grab;
+  touch-action: none;
+}
+
+.schedule-drag-active [data-drag-handle] { cursor: grabbing; }
+.schedule-drag-active { overflow-anchor: none; }
+.schedule-drag-source { display: none; }
+
+@media (hover: hover) and (pointer: fine) {
+  #schedule-list[data-drag-container] :is(.part-row, .section-header):has([data-drag-handle]:enabled) {
+    cursor: grab;
+    user-select: none;
+  }
+
+  #schedule-list.schedule-drag-active :is(.part-row, .section-header) {
+    cursor: grabbing;
+  }
+}
+
+.schedule-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  display: flex;
+  width: min(460px, calc(100vw - 8px));
+  min-height: 48px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  color: var(--text-primary);
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  opacity: .98;
+}
+
+.schedule-drag-ghost > .ui-icon {
+  flex: 0 0 auto;
+  color: var(--accent-hover);
+}
+
+.schedule-drag-ghost strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: .875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-drag-placeholder {
+  min-height: 48px;
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  background: var(--accent-tint);
+}
+
+.section-parts:has(> .schedule-drag-placeholder:not([hidden])) > .section-empty {
+  display: none;
+}

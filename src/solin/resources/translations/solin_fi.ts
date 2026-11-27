@@ -13542,6 +13542,66 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <translation>Ei osia tässä ohjelmassa</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Tyhjä osio</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Aseta aikataulun aika</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Mukautettu heksakoodi</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Käytä 6-merkkistä heksavärikoodia, kuten #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Osion esikatselu</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Muokkaa aikataulua</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Määritä ajat ja aikataulun seuranta Solin-sovelluksessa.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Lisäasetukset</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Paino (0–100): suurempi paino saa enemmän säätöä. Paino 0 pitää osan kiinteänä, kun toisella osalla on positiivinen paino. Jos kaikki painot ovat 0, soveltuvia osia säädetään yhtä paljon.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Automaattisesti mukautettavat osat</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>Automaattisessa tilassa vain valittuja osia lyhennetään tai pidennetään ajassa päättymiseksi. Valitsemattomat osat säilyttävät suunnitellun kestonsa.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>Automaattisessa tilassa valittuja osia voidaan lyhentää tai pidentää ajassa päättymiseksi. Jos yhtään osaa ei ole valittu, kaikkia vähintään 1 min kestäviä osia mukautetaan tasaisesti.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Alle 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Tyhjennä aika</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Osat</translation>
@@ -13597,19 +13657,9 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <translation>Lisää 1 minuutti osaan {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Aseta kesto osalle {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Kesto (MM:SS tai minuutit)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Käytä</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13665,6 +13715,378 @@ Käytä toistopainiketta esittämiseen · Muuta järjestystä vetämällä kahva
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Sulje nostettujen käsien luettelo</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Tämä toiminto tai ajastimen osa ei ole enää käytettävissä.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Aikataulut</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Aikataulun tyyppi</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Valitse aikataulu</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Ei tallennettuja aikatauluja</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Ladataan aikatauluja…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Aikatauluja ei voitu ladata.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Uusi aikataulu</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Aikataulun toiminnot</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Aikataulun ajat ja tahdistus</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Muokkaa osaa</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Nimeä uudelleen</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Monista</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Poista</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Tallenna</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nimi</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Anna nimi.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Kopio: {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Poistetaanko ”{title}” ja sen tallennetut ajat?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Nollaa tulokset</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Nollataanko kaikki kohteen ”{title}” tallennetut ajat?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Palauta oletusnimi</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>VALITTU OSA</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Aloita uudelleen</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Säädä</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Seuraavana</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Suunniteltu {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Tavoite {target} · Suunniteltu {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Kulunut aika</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Tahdistus</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Pois käytöstä</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Vain seuranta</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Seuranta ja mukautus</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Aikataulussa</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Edellä {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Jäljessä {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Aseta alku- ja loppuaika nähdäksesi ennusteen.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Uusi aikatauluväli tulee voimaan, kun tulokset nollataan.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Ennustetta ei ole saatavilla.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Tämä toiminto on vielä kesken.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Tarkista arvot ja yritä uudelleen.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Osat ja arviot ylittävät aikatauluvälin.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Sulje</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Lisää osa</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Lisää osio</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Kesto (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Siirrä kohteeseen</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Osioiden ulkopuolella</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Poista osa</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Poista osio</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Kuvake</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Väri</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Oletus</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ei mitään</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Alkamisaika</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Päättymisaika</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Seuraamaton aika (sekuntia)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Lopetusaika (sekuntia)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Ennen tätä osaa (sekuntia)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Mukautuspaino (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Anna nimi jokaiselle osalle ja osiolle.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Anna kesto väliltä 00:01–23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Anna eri arvot alku- ja loppuajalle.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Anna ei-negatiivinen kokonaisluku sekunteina.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Anna alku- ja loppuaika tai tyhjennä aika-arviot.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Anna paino väliltä 0–100. Alle minuutin osia ei voi valita uutena.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Aikataulua ei voitu tallentaa. Muutoksesi ovat tallella.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Hylätäänkö tallentamattomat muutokset?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Aarteita</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Palvelus</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Elämä</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Julkinen puhe</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Vartiotorni</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Kirja</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Henkilöt</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Mikrofoni</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musiikki</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalenteri</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Kello</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Valintamerkki</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Sinivihreä</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Kulta</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Karmiini</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Meripihka</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Sininen</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Smaragdi</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Violetti</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutraali</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Tätä aikataulua on muutettu. Sulje se ja avaa se uudelleen, jotta voit muokata uusinta versiota.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Aloita seuraava osa</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Muokkaa osiota</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Arvioitu lopetus {finish}</translation>
     </message>
 </context>
 <context>

@@ -47,6 +47,7 @@ TIMER_SESSION_COOKIE_NAME: Final = "__Host-solin_remote_timer"
 
 MAX_LOGIN_BODY_BYTES: Final = 2_048
 MAX_COMMAND_BODY_BYTES: Final = 8_192
+MAX_TIMER_COMMAND_BODY_BYTES: Final = 131_072
 COMMAND_TIMEOUT_SECONDS: Final = 10.0
 COMMAND_SHUTDOWN_TIMEOUT_SECONDS: Final = 5.0
 REQUEST_BODY_TIMEOUT_SECONDS: Final = 5.0
@@ -1197,9 +1198,19 @@ async def read_strict_json_object(
         )
     if request.content_type != "application/json":
         raise web.HTTPUnsupportedMediaType(text="Expected application/json")
+
+    async def read_bounded() -> bytes:
+        body = bytearray()
+        while len(body) <= maximum_bytes:
+            chunk = await request.content.read(min(65_536, maximum_bytes + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        return bytes(body)
+
     try:
         raw = await asyncio.wait_for(
-            request.read(),
+            read_bounded(),
             timeout=timeout_seconds,
         )
     except TimeoutError as error:

@@ -13497,6 +13497,66 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>この予定にパートはありません</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>空のセクション</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>スケジュールの時間を設定</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>カスタム HEX</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>#41b6c4 のような 6 桁の 16 進数カラーコードを使用してください。</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>セクションのプレビュー</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>スケジュールを編集</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Solinアプリで開始・終了時刻と進行管理を設定してください。</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>詳細オプション</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>重み（0～100）: 重みが大きいほど調整量が大きくなります。他のパートの重みが正の場合、重みが0のパートは固定されます。すべての重みが0の場合、調整可能なパートは均等に調整されます。</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>自動調整を許可するパート</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>自動モードでは、チェックされたパートのみが時間通りに終了するよう短縮または延長されます。チェックされていないパートは予定時間を維持します。</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>自動モードでは、チェックされたパートが時間通りに終了するよう短縮または延長されます。1つもチェックされていない場合、1分以上のすべてのパートが均等に調整されます。</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>1 分未満</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>時間をクリア</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>自動</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>パート</translation>
@@ -13552,19 +13612,9 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>{title}に1分増やす</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>{title}の時間を設定</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>時間（MM:SS または分）</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>適用</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13620,6 +13670,378 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>挙手した参加者の一覧を閉じる</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>この操作またはタイマーの項目は利用できなくなりました。</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>スケジュール</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>プログラムの種類</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>プログラムを選択</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>保存されたプログラムはありません</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>プログラムを読み込み中…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>プログラムを読み込めませんでした。</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>新しいスケジュール</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>プログラムの操作</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>スケジュールの時間と進行管理</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>パートを編集</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>名前の変更</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>複製</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名前</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>名前を入力してください。</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>{title}のコピー</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>「{title}」と記録された時間を削除しますか？</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>結果をリセット</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>「{title}」の記録された時間をすべてリセットしますか？</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>既定のタイトルに戻す</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>選択した項目</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>再開始</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>調整</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>次のパート</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>予定 {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>目標 {target} · 予定 {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>経過時間</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>進行管理</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>オフ</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>監視のみ</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>監視と調整</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>予定通り</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>{duration}早い</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>{duration}遅い</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>予測を表示するには開始時刻と終了時刻を設定してください。</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>新しいプログラムの時間枠は結果のリセット後に適用されます。</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>予測はありません。</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>この操作はまだ進行中です。</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>値を確認してもう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>項目と見積もりの合計がプログラムの時間枠を超えています。</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>パートを追加</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>セクションを追加</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>時間（MM:SS）</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>移動先</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>セクションの外</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>項目を削除</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>セクションを削除</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>アイコン</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>色</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>デフォルト</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>なし</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>開始時刻</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>終了時刻</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>記録しない時間（秒）</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>終了時の時間（秒）</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>この項目の前（秒）</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>調整の重み（0–100）</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>各項目とセクションの名前を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>00:01から23:59:59までの時間を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>異なる開始時刻と終了時刻の両方を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>0以上の整数で秒数を入力してください。</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>開始時刻と終了時刻を入力するか、見積もり時間を消去してください。</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>0から100までの重みを入力してください。1分未満の項目は新たに選択できません。</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>プログラムを保存できませんでした。変更は保持されています。</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>保存していない変更を破棄しますか？</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>宝</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>奉仕</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>生活</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>公開講演</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>ものみの塔</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>本</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>人々</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>マイク</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>音楽</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>カレンダー</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>時計</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>確認</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>ティール</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>ゴールド</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>クリムゾン</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>アンバー</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>インディゴ</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>ブルー</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>エメラルド</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>バイオレット</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>ニュートラル</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>このスケジュールは変更されました。最新の内容を編集するには、閉じてから開き直してください。</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>次のパートを開始</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>セクションを編集</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>終了予測 {finish}</translation>
     </message>
 </context>
 <context>

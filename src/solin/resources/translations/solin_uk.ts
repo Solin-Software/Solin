@@ -13587,6 +13587,66 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>У цьому розкладі немає частин</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Порожній розділ</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Задати час розкладу</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Власний HEX-код</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Використовуйте 6-значний HEX-код кольору, наприклад #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Попередній перегляд розділу</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Редагувати розклад</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Налаштуйте час і контроль розкладу в застосунку Solin.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Додаткові параметри</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Вага (0–100): частини з більшою вагою коригуються більше. Вага 0 залишає частину незмінною, коли інша частина має додатну вагу. Якщо всі ваги дорівнюють 0, придатні частини коригуються однаково.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Частини з автоматичним коригуванням</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>В автоматичному режимі лише позначені частини скорочуються або подовжуються, щоб завершити вчасно. Непозначені частини зберігають заплановану тривалість.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>В автоматичному режимі позначені частини можуть скорочуватися або подовжуватися, щоб завершити вчасно. Якщо нічого не позначено, усі частини тривалістю від 1 хв коригуються рівномірно.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Менше 1 хв</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Очистити час</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Частини</translation>
@@ -13642,19 +13702,9 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Додати 1 хвилину до {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Встановити тривалість для {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Тривалість (ХХ:СС або хвилини)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Застосувати</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13710,6 +13760,378 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Закрити список піднятих рук</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Ця дія або частина таймера більше недоступна.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Розклади</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Тип розкладу</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Виберіть розклад</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Немає збережених розкладів</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Завантаження розкладів…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Не вдалося завантажити розклади.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Новий розклад</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Дії з розкладом</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Час і дотримання графіка розкладу</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Редагувати частину</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Перейменувати</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Дублювати</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Видалити</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Зберегти</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Назва</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Введіть назву.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Копія: {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Видалити «{title}» і записаний час?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Скинути результати</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Скинути весь записаний час для «{title}»?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Відновити типову назву</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>ВИБРАНА ЧАСТИНА</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Перезапустити</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Скоригувати</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Далі</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Заплановано {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Ціль {target} · Заплановано {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Минулий час</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Дотримання графіка</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Вимкнено</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Лише відстеження</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Відстеження та коригування</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>За розкладом</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Випередження на {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Відставання на {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Укажіть час початку й завершення, щоб побачити прогноз.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Новий часовий проміжок застосовується після скидання результатів.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Прогноз недоступний.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Ця дія ще виконується.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Перевірте значення й повторіть спробу.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Частини й розрахунковий час виходять за межі розкладу.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрити</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Додати частину</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Додати розділ</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Тривалість (ХХ:СС)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Перемістити до</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Поза розділами</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Видалити частину</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Видалити розділ</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Піктограма</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Колір</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>За замовчуванням</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Немає</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Час початку</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Час завершення</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Необлікований час (секунди)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Час заключення (секунди)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Перед цією частиною (секунди)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Вага коригування (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Введіть назву кожної частини та розділу.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Введіть тривалість від 00:01 до 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Введіть різні значення часу початку й завершення.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Введіть невід’ємне ціле число секунд.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Введіть час початку й завершення або очистьте розрахунковий час.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Введіть вагу від 0 до 100. Частини, коротші за хвилину, не можна вибрати заново.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Не вдалося зберегти розклад. Ваші зміни залишилися тут.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Відкинути незбережені зміни?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Скарби</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Служіння</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Християнське життя</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Публічна промова</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Вартова башта</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Книга</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Люди</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Мікрофон</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Музика</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Календар</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Годинник</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Галочка</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Бірюзовий</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Золотий</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Малиновий</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Бурштиновий</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Індиго</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Синій</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Смарагдовий</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Фіолетовий</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Нейтральний</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Цей сценарій змінився. Закрийте й відкрийте його знову, щоб працювати з поточною версією.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Почати наступну частину</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Редагувати розділ</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Очікуване завершення {finish}</translation>
     </message>
 </context>
 <context>

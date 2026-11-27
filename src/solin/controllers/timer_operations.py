@@ -179,8 +179,10 @@ class TimerOperations(QObject):
     def rename_part(self, part_id: str, title: str | None) -> bool:
         return self._publish_schedule_edit(self.session.rename_part(part_id, title))
 
-    def edit_part(self, part_id: str, title: str | None, seconds: int | None) -> bool:
-        return self._publish_schedule_edit(self.session.edit_part(part_id, title, seconds))
+    def edit_part(self, part_id: str, title: str | None, seconds: int | None, *, restore_title: bool = False) -> bool:
+        return self._publish_schedule_edit(
+            self.session.edit_part(part_id, title, seconds, restore_title=restore_title)
+        )
 
     def update_clock(self, key: str, value: object) -> None:
         config = self.session.update_clock(key, value)

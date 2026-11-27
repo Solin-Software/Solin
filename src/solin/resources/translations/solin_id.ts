@@ -13497,6 +13497,66 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Tidak ada bagian dalam jadwal ini</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Seksi kosong</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Tetapkan waktu jadwal</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Heks khusus</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Gunakan kode warna heksadesimal 6 digit seperti #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Pratinjau seksi</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Edit jadwal</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Atur waktu dan ketepatan jadwal di aplikasi Solin.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Opsi lanjutan</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Bobot (0–100): bobot yang lebih tinggi menerima lebih banyak penyesuaian. Bobot 0 membuat suatu bagian tetap jika bagian lain memiliki bobot positif. Jika semua bobot 0, bagian yang memenuhi syarat disesuaikan secara merata.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Bagian yang diizinkan menyesuaikan otomatis</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>Dalam mode Otomatis, hanya bagian yang dicentang yang dipersingkat atau diperpanjang agar selesai tepat waktu. Bagian yang tidak dicentang tetap pada durasi yang direncanakan.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>Dalam mode Otomatis, bagian yang dicentang dapat dipersingkat atau diperpanjang agar selesai tepat waktu. Jika tidak ada yang dicentang, semua bagian berdurasi 1 mnt atau lebih disesuaikan secara merata.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Kurang dari 1 mnt</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Hapus waktu</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Otomatis</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Bagian</translation>
@@ -13552,19 +13612,9 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Tambah 1 menit ke {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Atur durasi untuk {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Durasi (MM:SS atau menit)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Terapkan</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13620,6 +13670,378 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Tutup daftar tangan terangkat</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Tindakan atau bagian timer ini tidak lagi tersedia.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Jadwal</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Jenis jadwal</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Pilih jadwal</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Tidak ada jadwal tersimpan</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Memuat jadwal…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Jadwal tidak dapat dimuat.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Jadwal baru</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Tindakan jadwal</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Waktu dan ketepatan jadwal</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Edit bagian</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Ubah nama</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Duplikat</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Hapus</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Simpan</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nama</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Masukkan nama.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Salinan {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Hapus “{title}” dan waktu yang tercatat?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Atur ulang hasil</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Atur ulang semua waktu yang tercatat untuk “{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Pulihkan judul bawaan</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>BAGIAN TERPILIH</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Mulai ulang</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Sesuaikan</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Berikutnya</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Direncanakan {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Target {target} · Direncanakan {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Waktu berlalu</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Ketepatan waktu</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Nonaktif</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Hanya pantau</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Pantau dan sesuaikan</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Tepat waktu</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Lebih cepat {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Terlambat {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Atur waktu mulai dan selesai untuk melihat perkiraan.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Rentang jadwal baru berlaku setelah hasil diatur ulang.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Tidak ada perkiraan.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Tindakan ini masih berlangsung.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Periksa nilainya dan coba lagi.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Bagian dan perkiraan melebihi rentang waktu jadwal.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Tutup</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Tambahkan bagian</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Tambahkan seksi</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Durasi (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Pindahkan ke</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Di luar seksi</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Hapus bagian</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Hapus seksi</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Ikon</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Warna</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Bawaan</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Tidak ada</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Waktu mulai</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Waktu selesai</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Waktu yang tidak dicatat (detik)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Waktu penutup (detik)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Sebelum bagian ini (detik)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Bobot penyesuaian (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Masukkan nama untuk setiap bagian dan seksi.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Masukkan durasi antara 00:01 dan 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Masukkan waktu mulai dan selesai yang berbeda.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Masukkan jumlah detik berupa bilangan bulat yang tidak negatif.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Masukkan waktu mulai dan selesai atau hapus perkiraan waktu.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Masukkan bobot antara 0 dan 100. Bagian yang lebih pendek dari satu menit tidak dapat dipilih sebagai pilihan baru.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Jadwal tidak dapat disimpan. Perubahan Anda masih ada.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Buang perubahan yang belum disimpan?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Harta</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Pelayanan</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Kehidupan</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Khotbah umum</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Menara Pengawal</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Buku</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Orang</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Mikrofon</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musik</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalender</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Jam</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Periksa</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Hijau kebiruan</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Emas</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Merah tua</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Ambar</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Nila</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Biru</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Zamrud</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Ungu</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Netral</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Jadwal ini telah berubah. Tutup lalu buka kembali untuk menggunakan versi terbaru.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Mulai bagian berikutnya</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Edit bagian</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Perkiraan selesai {finish}</translation>
     </message>
 </context>
 <context>

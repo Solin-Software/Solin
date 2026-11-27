@@ -18,7 +18,7 @@ class TimerRemoteHandAlertPolicy(StrEnum):
 
 TIMER_REMOTE_REQUIRE_CREDENTIALS: Final[bool] = True
 TIMER_REMOTE_ALLOW_SCHEDULE_STRUCTURE_EDITS: Final[bool] = True
-TIMER_REMOTE_ALLOW_CUSTOM_SCHEDULES: Final[bool] = False
+TIMER_REMOTE_ALLOW_CUSTOM_SCHEDULES: Final[bool] = True
 TIMER_REMOTE_ALLOW_PACING: Final[bool] = False  # Permission to edit pacing configuration.
 TIMER_REMOTE_HAND_ALERT_POLICY: Final = TimerRemoteHandAlertPolicy.PUBLIC_NAMES
 

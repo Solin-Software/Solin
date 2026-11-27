@@ -13542,6 +13542,66 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <translation>Geen onderdelen in dit schema</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Lege sectie</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Schematijd instellen</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Aangepaste hexkleur</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Gebruik een 6-cijferige hexkleur zoals #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Voorbeeld van sectie</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Schema bewerken</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Stel de tijden en tijdsbewaking in de Solin-app in.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Geavanceerde opties</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Gewicht (0–100): hogere gewichten krijgen meer aanpassing. Een gewicht van 0 houdt een onderdeel vast wanneer een ander onderdeel een positief gewicht heeft. Als alle gewichten 0 zijn, worden in aanmerking komende onderdelen gelijkmatig aangepast.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Onderdelen die automatisch mogen worden aangepast</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>In de automatische modus worden alleen aangevinkte onderdelen ingekort of verlengd om op tijd te eindigen. Niet-aangevinkte onderdelen behouden hun geplande duur.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>In de automatische modus kunnen aangevinkte onderdelen worden ingekort of verlengd om op tijd te eindigen. Als er niets is aangevinkt, worden alle onderdelen van 1 min of langer gelijkmatig aangepast.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Korter dan 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Tijd wissen</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Onderdelen</translation>
@@ -13597,19 +13657,9 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <translation>1 minuut toevoegen aan {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Duur instellen voor {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Duur (MM:SS of minuten)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Toepassen</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13665,6 +13715,378 @@ Gebruik de afspeelknop om te projecteren · Sleep de greep ⠿ om de volgorde te
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Lijst met opgestoken handen sluiten</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Deze actie of dit timeronderdeel is niet meer beschikbaar.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Schema's</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Type schema</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Kies een schema</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Geen opgeslagen schema’s</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Schema’s laden…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Schema’s konden niet worden geladen.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Nieuw schema</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Schema-acties</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Tijden en tijdsbewaking van het schema</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Onderdeel bewerken</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Naam wijzigen</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Dupliceren</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Verwijderen</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Opslaan</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Naam</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Voer een naam in.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Kopie van {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>‘{title}’ en de geregistreerde tijden verwijderen?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Resultaten resetten</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Alle geregistreerde tijden voor ‘{title}’ resetten?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Standaardtitel herstellen</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>GESELECTEERD ONDERDEEL</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Opnieuw starten</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Aanpassen</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Hierna</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Gepland {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Doel {target} · Gepland {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Verstreken tijd</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Tijdsbewaking</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Uit</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Alleen bewaken</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Bewaken en aanpassen</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Op schema</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>{duration} voor op schema</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>{duration} achter op schema</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Stel een begin- en eindtijd in om een prognose te zien.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Het nieuwe tijdvenster geldt nadat de resultaten zijn gereset.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Geen prognose beschikbaar.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Deze actie wordt nog uitgevoerd.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Controleer de waarden en probeer het opnieuw.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>De onderdelen en schattingen overschrijden het tijdvenster.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Sluiten</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Onderdeel toevoegen</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Sectie toevoegen</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Duur (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Verplaatsen naar</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Buiten secties</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Onderdeel verwijderen</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Sectie verwijderen</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Pictogram</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Kleur</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Standaard</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Geen</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Begintijd</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Eindtijd</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Niet bijgehouden tijd (seconden)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Afsluitingstijd (seconden)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Vóór dit onderdeel (seconden)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Aanpassingsgewicht (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Voer voor elk onderdeel en elke sectie een naam in.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Voer een duur in tussen 00:01 en 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Voer verschillende begin- en eindtijden in.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Voer een niet-negatief geheel aantal seconden in.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Voer begin- en eindtijden in of wis de tijdschattingen.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Voer een gewicht in tussen 0 en 100. Onderdelen korter dan één minuut kunnen niet nieuw worden geselecteerd.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Het schema kon niet worden opgeslagen. Je wijzigingen zijn behouden.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Niet-opgeslagen wijzigingen verwerpen?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Schatten</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Velddienst</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Leven</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Openbare lezing</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Wachttoren</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Boek</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Personen</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microfoon</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Muziek</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalender</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Klok</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Vinkje</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Blauwgroen</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Goud</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Karmozijn</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Amber</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Blauw</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Smaragd</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Violet</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutraal</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Dit draaiboek is gewijzigd. Sluit het en open het opnieuw om met de huidige versie te werken.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Volgend onderdeel starten</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Sectie bewerken</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Verwacht einde {finish}</translation>
     </message>
 </context>
 <context>

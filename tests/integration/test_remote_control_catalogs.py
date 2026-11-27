@@ -209,3 +209,25 @@ def test_every_non_english_catalog_compiles_the_new_remote_control_copy(
             "Use at least %1 characters. Credentials belong only to this profile.",
         ), locale_code
         assert "%1" in password_hint, locale_code
+
+
+def test_timer_editor_messages_resolve_in_the_remote_context(compiled_translation_catalogs):
+    sources = remote_timer_message_sources()
+    editor_keys = (
+        "schedule.emptySection",
+        "workspace.editSchedule",
+        "pacing.setTime",
+        "pacing.configureInSolin",
+        "scheduleEditor.sectionPreview",
+        "scheduleEditor.customHex",
+        "scheduleEditor.advanced",
+        "scheduleEditor.adjustableParts",
+    )
+    for catalog in compiled_translation_catalogs.glob("solin_*.qm"):
+        translator = QTranslator()
+        assert translator.load(str(catalog)), catalog.name
+        for key in editor_keys:
+            assert translator.translate("_RemoteControlWeb", sources[key]).strip(), (
+                catalog.name,
+                key,
+            )

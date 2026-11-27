@@ -308,3 +308,11 @@ def test_meeting_part_edit_is_atomic_and_increments_revision_once(monkeypatch) -
     assert (part.title_override, part.planned_seconds) == ("New title", original[1] - 60)
     assert session.meeting_revision == revision + 1
     assert len(repo.saved_schedules) == 1
+    with monkeypatch.context() as patch:
+        patch.setattr(repo, "save_schedule", failed_write)
+        with pytest.raises(OSError):
+            session.edit_part(part.id, None, original[1], restore_title=True)
+    assert (part.title_override, part.planned_seconds) == ("New title", original[1] - 60)
+    assert session.meeting_revision == revision + 1
+    assert session.edit_part(part.id, None, original[1], restore_title=True)
+    assert (part.title_override, part.planned_seconds) == (None, original[1])

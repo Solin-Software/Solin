@@ -1460,8 +1460,12 @@ def test_strict_json_times_out_a_stalled_request_body() -> None:
         content_length = None
         content_type = "application/json"
 
+        @property
+        def content(self):
+            return self
+
         @staticmethod
-        async def read() -> bytes:
+        async def read(_size: int) -> bytes:
             await asyncio.Event().wait()
             raise AssertionError("unreachable")
 

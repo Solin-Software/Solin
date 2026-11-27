@@ -20,14 +20,14 @@ export function createInitialState() {
   return {
     view: "boot",
     loginModalOpen: false,
-    durationModal: {
-      open: false,
-      partId: "",
-      title: "",
-      initialText: "",
-    },
     hudVisible: true,
     heroStuck: false,
+    selectedPartId: "",
+    adjustOpen: false,
+    browsingSchedules: false,
+    scheduleSwitch: null,
+    organizer: null,
+    catalog: { status: "idle", schedules: [] },
     authenticated: false,
     controlAvailable: true,
     connection: "connecting",
@@ -95,6 +95,8 @@ export function normalizeCapabilities(raw) {
       src.switchMeetingType ?? DEFAULT_CAPABILITIES.switchMeetingType,
     ),
     navigateWeeks: Boolean(src.navigateWeeks ?? DEFAULT_CAPABILITIES.navigateWeeks),
+    manageCustomSchedules: src.manageCustomSchedules === true,
+    managePacing: src.managePacing === true,
   };
 }
 
@@ -151,7 +153,38 @@ export function normalizeScheduleSnapshot(raw) {
     meetingType: src.meetingType === "weekend" ? "weekend" : "midweek",
     parts,
     capabilities: normalizeCapabilities(src.capabilities),
+    customSchedule: src.customSchedule ?? null,
+    pacing: src.pacing ?? null,
+    pacingMode: src.pacingMode ?? "off",
+    pacingAvailability: src.pacingAvailability ?? "off",
   };
+}
+
+export function selectedTimerPart(state) {
+  if (state.browsingSchedules && !state.schedule.customSchedule) return null;
+  const { parts } = state.schedule;
+  const running = state.live.state === "running";
+  const requestedId = running
+    ? state.live.activePartId
+    : state.selectedPartId || (state.live.active ? state.live.activePartId : "");
+  return parts.find((part) => part.id === requestedId) ??
+    (running ? null : parts.find((part) => part.state === "idle") ?? parts[0] ?? null);
+}
+
+export function timerContextChange(current, schedule) {
+  const context = (snapshot) => snapshot.customSchedule?.id ||
+    `${snapshot.weekMonday}:${snapshot.meetingType}`;
+  return context(current.schedule) === context(schedule) ? {} :
+    { selectedPartId: "", adjustOpen: false, browsingSchedules: false };
+}
+
+export function nextTimerPart(state) {
+  if (state.browsingSchedules && !state.schedule.customSchedule) return null;
+  const { parts } = state.schedule;
+  const activeId = state.live.active ? state.live.activePartId : null;
+  const index = parts.findIndex((part) => part.id === activeId);
+  const idle = (part) => part.state === "idle" && part.id !== activeId;
+  return parts.slice(index + 1).find(idle) ?? parts.find(idle) ?? null;
 }
 
 function normalizePartItem(raw) {
@@ -165,10 +198,14 @@ function normalizePartItem(raw) {
     displayNumber: Math.max(1, Math.trunc(Number(raw.displayNumber) || 1)),
     section: String(raw.section ?? "opening_comments"),
     sectionKey: String(raw.sectionKey ?? raw.section ?? "opening_comments"),
+    sectionIconKey: String(raw.sectionIconKey ?? ""),
     sectionHeaderTitle: String(raw.sectionHeaderTitle ?? ""),
     title: String(raw.title ?? ""),
+    canonicalTitle: typeof raw.canonicalTitle === "string" ? raw.canonicalTitle : "",
+    titleOverridden: raw.titleOverridden === true,
     plannedSeconds: Math.max(0, Math.trunc(Number(raw.plannedSeconds) || 0)),
     plannedLabel: String(raw.plannedLabel ?? "0:00"),
+    effectiveSeconds: Number.isFinite(raw.effectiveSeconds) ? raw.effectiveSeconds : null,
     state,
     firstOfSection: Boolean(raw.firstOfSection),
     showSectionHeader: Boolean(raw.showSectionHeader),
@@ -193,16 +230,20 @@ export function normalizeProfile(raw) {
 
 export function applyPublicBootstrap(store, payload, { preserveView = false } = {}) {
   const live = normalizeLiveSnapshot(payload?.live);
+  const serverInstanceId = String(payload?.serverInstanceId ?? store.state.serverInstanceId);
+  const retainSession = store.state.authenticated && Boolean(payload?.authenticated) &&
+    Boolean(payload?.controlAvailable) && serverInstanceId === store.state.serverInstanceId;
   store.update((current) => ({
     view: preserveView && current.view !== "boot" ? current.view : "stage",
-    authenticated: Boolean(payload?.authenticated),
+    authenticated: retainSession,
     controlAvailable: Boolean(payload?.controlAvailable),
-    serverInstanceId: String(payload?.serverInstanceId ?? current.serverInstanceId),
+    serverInstanceId,
     eventSequence: Math.max(0, Math.trunc(Number(payload?.eventSequence) || 0)),
     liveRevision: live.liveRevision,
     liveAnchorMonotonicMs: nowMonotonicMs(),
     profile: normalizeProfile(payload?.profile),
     live,
+    ...(!retainSession ? { schedule: normalizeScheduleSnapshot(null), scheduleRevision: 0 } : {}),
   }));
 }
 
@@ -223,6 +264,7 @@ export function applyAuthenticatedBootstrap(
     liveRevision: live.liveRevision,
     scheduleRevision: schedule.scheduleRevision,
     liveAnchorMonotonicMs: nowMonotonicMs(),
+    ...timerContextChange(current, schedule),
     profile: normalizeProfile(payload?.profile),
     live,
     schedule,

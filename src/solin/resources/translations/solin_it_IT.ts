@@ -13542,6 +13542,66 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <translation>Nessuna parte in questo programma</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Sezione vuota</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Imposta orario del programma</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Colore esadecimale</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Usare un colore esadecimale a 6 cifre come #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Anteprima della sezione</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Modifica programma</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Imposta gli orari e il monitoraggio dei tempi nell’app Solin.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Opzioni avanzate</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Peso (0–100): i pesi più alti ricevono maggiori aggiustamenti. Un peso pari a 0 mantiene fissa una parte quando un’altra ha un peso positivo. Se tutti i pesi sono 0, le parti idonee vengono aggiustate in ugual misura.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Parti con adattamento automatico</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>In modalità Automatica, solo le parti selezionate vengono accorciate o allungate per terminare in orario. Le parti non selezionate mantengono la durata prevista.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>In modalità Automatica, le parti selezionate possono essere accorciate o allungate per terminare in orario. Se nessuna è selezionata, tutte le parti di almeno 1 min si adattano in modo uguale.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Meno di 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Cancella orario</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Parti</translation>
@@ -13597,19 +13657,9 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <translation>Aggiungi 1 minuto a {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Imposta durata per {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Durata (MM:SS o minuti)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Applica</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13665,6 +13715,378 @@ Usa il pulsante di riproduzione per proiettare · Trascina la maniglia ⠿ per r
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Chiudi l’elenco delle mani alzate</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Questa azione o parte del timer non è più disponibile.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Programmi</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Tipo di programma</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Scegli un programma</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Nessun programma salvato</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Caricamento programmi…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Impossibile caricare i programmi.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Nuovo programma</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Azioni programma</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Orario e puntualità del programma</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Modifica parte</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Rinomina</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Duplica</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Elimina</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Salva</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Nome</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Inserisci un nome.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Copia di {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Eliminare “{title}” e i tempi registrati?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Reimposta risultati</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Azzerare tutti i tempi registrati di “{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Ripristina titolo predefinito</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>PARTE SELEZIONATA</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Riavvia</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Adatta</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>A seguire</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Previsto {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Obiettivo {target} · Previsto {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Tempo trascorso</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Puntualità</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Disattivato</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Solo monitoraggio</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Monitoraggio e adattamento</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>In orario</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>In anticipo di {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>In ritardo di {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Imposta gli orari di inizio e fine per vedere una previsione.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Il nuovo intervallo del programma sarà applicato dopo l’azzeramento dei risultati.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Nessuna previsione disponibile.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Questa azione è ancora in corso.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Controlla i valori e riprova.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Le parti e le stime superano l’intervallo del programma.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Chiudi</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Aggiungi parte</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Aggiungi sezione</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Durata (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Sposta in</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Fuori dalle sezioni</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Rimuovi parte</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Rimuovi sezione</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Icona</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Colore</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Predefinito</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Nessuno</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Ora di inizio</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Ora di fine</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Tempo non conteggiato (secondi)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Tempo di chiusura (secondi)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Prima di questa parte (secondi)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Peso di regolazione (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Inserisci un nome per ogni parte e sezione.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Inserisci una durata tra 00:01 e 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Inserisci orari di inizio e fine diversi.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Inserisci un numero intero di secondi maggiore o uguale a zero.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Inserisci gli orari di inizio e fine oppure cancella le stime di tempo.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Inserisci un peso tra 0 e 100. Le parti inferiori a un minuto non possono essere selezionate per la prima volta.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Impossibile salvare il programma. Le modifiche sono ancora qui.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Scartare le modifiche non salvate?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Tesori</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Ministero</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Vita cristiana</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Discorso pubblico</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Torre di Guardia</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Libro</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Persone</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microfono</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musica</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Calendario</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Orologio</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Spunta</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Ottanio</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Oro</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Cremisi</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Ambra</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indaco</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Blu</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Smeraldo</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Viola</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutro</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Questo programma è cambiato. Chiudilo e riaprilo per lavorare sulla versione attuale.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Avvia parte successiva</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Modifica sezione</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Fine prevista {finish}</translation>
     </message>
 </context>
 <context>

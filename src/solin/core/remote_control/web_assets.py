@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -32,6 +33,7 @@ _DYNAMIC_INDEX_ASSETS: Final = frozenset(
 _SHELL_REVISION_DOMAIN: Final = b"solin-remote-shell-revision-v1\0"
 _SHELL_REVISION_PLACEHOLDER: Final = "__SOLIN_REMOTE_SHELL_REVISION__"
 _SHELL_RESOURCES_PLACEHOLDER: Final = "__SOLIN_REMOTE_SHELL_RESOURCES__"
+_TIMER_SPRITE_PLACEHOLDER: Final = b"<!-- __SOLIN_TIMER_SPRITE__ -->"
 _INDEX_ASSET_REFERENCE: Final = re.compile(
     r'(?P<prefix>\b(?:href|src)=")(?P<rel>\./|\.\./shared/)(?P<path>[^"?#]+)(?P<suffix>[^"]*")'
 )
@@ -86,7 +88,7 @@ class RemoteControlWebAssets:
         if normalized_url_prefix == "/":
             raise ValueError("Remote-control URL prefix cannot be empty")
 
-        index_template = self._read_required(resolved_root / _INDEX_NAME)
+        index_template = self._render_timer_sprite(self._read_required(resolved_root / _INDEX_NAME))
         worker_template = self._read_required(resolved_root / _SERVICE_WORKER_NAME)
 
         asset_owners: dict[str, tuple[Path, str]] = {}
@@ -166,6 +168,44 @@ class RemoteControlWebAssets:
         if candidate.suffix.lower() not in WEB_ASSET_CONTENT_TYPES:
             return None
         return candidate
+
+    @staticmethod
+    def _render_timer_sprite(template: bytes) -> bytes:
+        if _TIMER_SPRITE_PLACEHOLDER not in template:
+            return template
+        if template.count(_TIMER_SPRITE_PLACEHOLDER) != 1:
+            raise ValueError("Timer sprite placeholder must occur exactly once")
+
+        from solin.core.timer.models import CUSTOM_SECTION_COLOR_PRESETS, CUSTOM_SECTION_ICON_CATALOG
+        from solin.styles.icons import ICON_BAN, ICON_CLOSE, ICON_EDIT, ICON_SLIDERS
+        from solin.styles.timer_section_icons import TIMER_SECTION_ICONS
+
+        icons = escape(json.dumps([icon.value for icon in CUSTOM_SECTION_ICON_CATALOG]), quote=True)
+        colors = escape(json.dumps(CUSTOM_SECTION_COLOR_PRESETS), quote=True)
+
+        symbols = [f'<g id="timer-section-catalog" data-icons="{icons}" data-colors="{colors}"></g>']
+        glyphs = {
+            **{f"sec-{key if key != 'section_group' else 'default'}": svg for key, svg in TIMER_SECTION_ICONS.items()},
+            "edit": ICON_EDIT,
+            "ban": ICON_BAN,
+            "close": ICON_CLOSE,
+            "sliders": ICON_SLIDERS,
+        }
+        for key, svg in glyphs.items():
+            match = re.fullmatch(
+                r'<svg(?P<attrs>[^>]*)>(?P<body>.*)</svg>',
+                svg,
+                flags=re.DOTALL,
+            )
+            namespace = ' xmlns="http://www.w3.org/2000/svg"'
+            if match is None or match.group("attrs").count(namespace) != 1:
+                raise ValueError(f"Invalid canonical Timer SVG: {key}")
+            attrs = match.group("attrs").replace(namespace, "")
+            symbols.append(
+                f'<symbol id="icon-{key}"{attrs}>'
+                f'{match.group("body")}</symbol>'
+            )
+        return template.replace(_TIMER_SPRITE_PLACEHOLDER, "\n        ".join(symbols).encode())
 
     @staticmethod
     def _read_required(path: Path) -> bytes:

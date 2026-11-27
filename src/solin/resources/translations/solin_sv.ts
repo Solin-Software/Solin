@@ -13541,6 +13541,66 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Inga punkter i detta schema</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Tomt avsnitt</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Ange schematid</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Egen hex-kod</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Använd en 6-siffrig hexfärg som #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Förhandsgranskning av avsnitt</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Redigera schema</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Ställ in tider och schemauppföljning i Solin-appen.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Avancerade alternativ</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Vikt (0–100): högre vikter får större justeringar. Vikten 0 håller en del oförändrad när en annan del har en positiv vikt. Om alla vikter är 0 justeras delar som kan justeras lika mycket.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Programpunkter som får justeras automatiskt</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>I automatiskt läge förkortas eller förlängs endast markerade programpunkter för att avsluta i tid. Omarkerade programpunkter behåller sin planerade längd.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>I automatiskt läge kan markerade programpunkter förkortas eller förlängas för att avsluta i tid. Om inga är markerade justeras alla programpunkter på 1 min eller mer lika mycket.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Under 1 min</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Rensa tid</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Punkter</translation>
@@ -13596,19 +13656,9 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <translation>Lägg till 1 minut till {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Ange längd för {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Längd (MM:SS eller minuter)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Tillämpa</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13664,6 +13714,378 @@ Använd uppspelningsknappen för att projicera · Dra handtaget ⠿ för att än
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Stäng listan över uppräckta händer</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Åtgärden eller timerdelen är inte längre tillgänglig.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Scheman</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Schematyp</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Välj ett schema</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Inga sparade scheman</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Läser in scheman…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Det gick inte att läsa in scheman.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Nytt schema</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Schemaåtgärder</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Tider och tidshållning för schemat</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Redigera programpunkt</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Byt namn</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Duplicera</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Ta bort</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Spara</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Namn</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Ange ett namn.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Kopia av {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Ta bort ”{title}” och dess registrerade tider?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Återställ resultat</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Återställa alla registrerade tider för ”{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Återställ standardtitel</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>VALD DEL</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Starta om</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Justera</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Härnäst</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Planerat {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Mål {target} · Planerat {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Förfluten tid</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Tidshållning</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Av</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Endast övervakning</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Övervaka och justera</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Enligt schema</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Före med {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Efter med {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Ange start- och sluttid för att se en prognos.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Det nya tidsintervallet gäller när resultaten har återställts.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Ingen prognos tillgänglig.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Åtgärden pågår fortfarande.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Kontrollera värdena och försök igen.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Delarna och uppskattningarna överskrider schemats tidsintervall.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Stäng</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Lägg till programpunkt</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Lägg till avsnitt</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Längd (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Flytta till</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Utanför avsnitt</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Ta bort del</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Ta bort avsnitt</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Ikon</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Färg</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Ingen</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Starttid</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Sluttid</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Tid utan mätning (sekunder)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Avslutningstid (sekunder)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Före denna del (sekunder)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Justeringsvikt (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Ange ett namn för varje del och avsnitt.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Ange en längd mellan 00:01 och 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Ange olika värden för start- och sluttid.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Ange ett icke-negativt heltal sekunder.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Ange start- och sluttid eller rensa tidsuppskattningarna.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Ange en vikt mellan 0 och 100. Delar kortare än en minut kan inte väljas på nytt.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Det gick inte att spara schemat. Dina ändringar finns kvar.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Kasta dina osparade ändringar?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Skatter</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Tjänsten</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Livet</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Offentligt tal</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Vakttornet</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Bok</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Personer</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Mikrofon</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musik</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalender</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Klocka</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Bockmarkering</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Blågrön</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Guld</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Karmosin</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Bärnsten</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Indigo</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Blå</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Smaragd</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Violett</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Neutral</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Det här schemat har ändrats. Stäng och öppna det igen för att arbeta med den aktuella versionen.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Starta nästa programpunkt</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Redigera avsnitt</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Beräknat slut {finish}</translation>
     </message>
 </context>
 <context>
