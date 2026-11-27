@@ -122,9 +122,6 @@ export class ScheduleDrag {
 
   activate(state) {
     state.active = true;
-    const rootRect = this.root.getBoundingClientRect();
-    state.dropHeight = rootRect.height;
-    state.targets = captureDropTargets(this.root, state.item, rootRect.top);
     const rect = state.item.getBoundingClientRect();
     state.ghost = makeGhost(state.item, state.data.type);
     document.body.append(state.ghost);
@@ -137,12 +134,11 @@ export class ScheduleDrag {
     state.position = state.ghost.animate([], { duration: 1, fill: "both" });
     state.position.pause();
     state.position.currentTime = 0;
-    state.marker = element("div", { className: "schedule-drag-placeholder", attrs: { "aria-hidden": "true" } });
-    state.item.before(state.marker);
     state.restoreFocus = document.activeElement === state.handle;
     state.item.classList.add("schedule-drag-source");
     this.root.classList.add("schedule-drag-active");
     state.scrollTarget = scrollParent(this.root);
+    for (const item of this.root.querySelectorAll(ITEM)) this.layoutAnimations.get(item)?.cancel();
   }
 
   update(state) {
@@ -151,30 +147,38 @@ export class ScheduleDrag {
     state.position.effect.setKeyframes([{ width: `${state.ghostWidth}px`, transform: `translate(${x}px, ${y}px)`, offset: 0 }]);
     const { zone, before } = this.dropSlot(state);
     if (!zone) {
-      state.marker.hidden = true;
+      this.clearDropIndicator(state);
       state.destination = null;
       return;
     }
-    const markerAnchor = state.marker.nextElementSibling === state.item ?
-      state.item.nextElementSibling : state.marker.nextElementSibling;
-    if (state.marker.parentElement !== zone || markerAnchor !== before) {
-      const positions = this.layoutPositions();
-      zone.insertBefore(state.marker, before);
-      state.marker.hidden = false;
-      this.animateLayout(positions);
-    }
-    state.marker.hidden = false;
-    state.destination = { id: state.data.id, type: state.data.type, sectionId: zone.dataset.dragContainer || "", beforeId: before?.dataset.dragId || "" };
+    const sectionId = zone.dataset.dragContainer || "";
+    const beforeId = before?.dataset.dragId || "";
+    if (state.destination?.sectionId === sectionId && state.destination.beforeId === beforeId) return;
+    this.clearDropIndicator(state);
+    state.indicator = before ?? items(zone).filter((item) => item !== state.item).at(-1) ?? zone;
+    state.indicator.dataset.dropSlot = before ? "before" : state.indicator === zone ? "inside" : "after";
+    state.destination = { ...state.data, sectionId, beforeId };
+  }
+
+  clearDropIndicator(state) {
+    if (!state.indicator) return;
+    delete state.indicator.dataset.dropSlot;
+    state.indicator = null;
   }
 
   dropSlot(state) {
     const rect = this.root.getBoundingClientRect();
-    // Moving the placeholder changes the rendered rows. Keep hit testing in the original list
-    // coordinates so a stationary pointer cannot lose its target during that reflow.
+    // Drop indicators leave the collapsed list's layout intact. Relative coordinates remain
+    // valid as the scroll container moves.
     const y = state.y - rect.top;
     const hit = document.elementFromPoint(state.x, state.y);
     if (!hit || !state.scrollTarget.contains(hit) || state.x < rect.left || state.x > rect.right ||
-      y < 0 || y > Math.max(state.dropHeight, rect.height) + 12) return {};
+      y < 0 || y > rect.height + 12) return {};
+    if (rect.width !== state.targetWidth || rect.height !== state.targetHeight) {
+      state.targets = captureDropTargets(this.root, state.item, rect.top);
+      state.targetWidth = rect.width;
+      state.targetHeight = rect.height;
+    }
     for (const target of state.targets) {
       if (state.data.type === "part" && target.zone && y >= target.top + 12 && y < target.bottom - 6) {
         return { zone: target.zone, before: target.parts.find((part) => y < part.middle)?.node ?? null };
@@ -300,7 +304,7 @@ export class ScheduleDrag {
     if (state.frame) cancelAnimationFrame(state.frame);
     state.position?.cancel();
     state.ghost?.remove();
-    state.marker?.remove();
+    this.clearDropIndicator(state);
     state.item.classList.remove("schedule-drag-source");
     this.root.classList.remove("schedule-drag-active");
     if (this.root.hasPointerCapture(state.pointerId)) this.root.releasePointerCapture(state.pointerId);

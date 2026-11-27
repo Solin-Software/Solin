@@ -186,26 +186,63 @@ def test_pacing_window_is_shown_in_control_workspace_and_absent_from_expanded_cl
     assert not page_errors
 
 
+@pytest.mark.parametrize("custom", [False, True], ids=["meeting", "custom"])
+def test_pacing_keeps_periods_hidden_on_the_clock_but_visible_in_schedule_times(open_stage, custom):
+    midnight = 1_700_006_400
+    start = midnight + 7 * 3600 + 30 * 60
+    end = start + 12 * 3600
+    part = _part("warm-up", "Warm-up")
+    custom_schedule = {
+        "id": "training", "title": "Training", "revision": 2,
+        "entries": [part | {"type": "part"}],
+        "pacingConfig": {"start_time": "07:30", "end_time": "19:30"},
+    } if custom else None
+    schedule = _schedule(
+        parts=[part], customSchedule=custom_schedule,
+        pacingMode="monitor", pacingAvailability="ready",
+        pacing={
+            "start_epoch": start, "end_epoch": end, "projection_anchor_epoch": end,
+            "projection_tail_seconds": 0, "tolerance_seconds": 10, "complete": True,
+        },
+    )
+    page, push, _, page_errors = open_stage(authenticated=True, schedule=schedule)
+    page.locator("#stage-control-button").click()
+    clock_config = {"hourFormat24h": False, "showAmpm": False, "showSeconds": False}
+    push(auth=True, utcOffsetMinutes=0, clockConfig=clock_config)
+    expect(page.locator("#pacing-window-time")).to_have_text("7:30 AM–7:30 PM")
+    expect(page.locator("#pacing-window")).to_have_attribute("aria-label", re.compile("7:30 AM.*7:30 PM"))
+    expect(page.locator("#pacing-forecast")).to_contain_text("7:30 PM")
+    expect(page.locator("#hero-wall-clock")).to_have_text(re.compile(r"^\d{1,2}:\d{2}$"))
+    push(auth=True, utcOffsetMinutes=0, clockConfig=clock_config | {"hourFormat24h": True})
+    expect(page.locator("#pacing-window-time")).to_have_text("07:30–19:30")
+    assert not page_errors
+
+
 @pytest.mark.parametrize(("width", "height"), [(320, 700), (1800, 820)])
 def test_timer_workspace_selects_then_controls_a_part_without_layout_overflow(
     open_stage, width, height
 ):
     commands = []
 
-    def on_command(command):
-        commands.append(command)
-        return {"ok": True, "scheduleRevision": 17}
-
     parts = [
         _part("p1", "Opening comments") | {"state": "stopped", "resultLabel": "04:30"},
         _part("p2", "Schedule discussion", 2) | {"titleOverridden": True, "canonicalTitle": "Discussion"},
         *[_part(f"p{n}", f"Part {n}", n) for n in range(3, 19)],
     ]
+    schedule = _schedule(parts=parts)
+
+    def on_command(command):
+        commands.append(command)
+        if command["type"] == "edit_part":
+            parts[1] = _part("p2", "Discussion", 2) | {"plannedSeconds": 360}
+            schedule["scheduleRevision"] += 1
+        return {"ok": True, "scheduleRevision": schedule["scheduleRevision"]}
+
     page, push, _, page_errors = open_stage(
         width=width,
         height=height,
         authenticated=True,
-        schedule=_schedule(parts=parts),
+        schedule=schedule,
         on_command=on_command,
     )
     page.locator("#stage-control-button").click()
@@ -240,16 +277,19 @@ def test_timer_workspace_selects_then_controls_a_part_without_layout_overflow(
     assert {key: commands[-1][key] for key in ("type", "partId", "title", "plannedSeconds")} == {
         "type": "edit_part", "partId": "p2", "title": None, "plannedSeconds": 360,
     }
+    expect(title).to_have_text("Discussion")
+    expect(page.locator("#hero-primary-time")).to_have_text("06:00")
     with page.expect_response(f"{TIMER_URL}api/commands"):
         page.locator("#hero-start-button").click()
     assert {key: commands[-1][key] for key in ("type", "partId", "scheduleRevision")} == {
         "type": "start_part",
         "partId": "p2",
-        "scheduleRevision": 17,
+        "scheduleRevision": 18,
     }
-    push(auth=True, active=True, state="running", activePartId="p2", plannedSeconds=300)
+    push(auth=True, active=True, state="running", activePartId="p2", plannedSeconds=360)
     expect(page.locator("#hero-stop-button")).to_be_enabled()
     expect(page.locator("#hero-stop-button")).to_be_focused()
+    expect(page.locator("#hero-target-label")).to_contain_text("06:00")
     expect(page.locator("#tab-schedules")).to_be_disabled()
     page.locator("#hero-adjust-button").click()
     expect(page.locator("#hero-nudge-group")).to_be_visible()
@@ -266,9 +306,69 @@ def test_timer_workspace_selects_then_controls_a_part_without_layout_overflow(
             page.locator("#sticky-stop-button").click()
         assert commands[-1]["type"] == "stop_part"
 
-    push(auth=True, active=True, state="stopped", activePartId="p2", plannedSeconds=300)
+    push(auth=True, active=True, state="stopped", activePartId="p2", plannedSeconds=360)
     expect(page.locator("#hero-nudge-group")).to_be_hidden()
     expect(page.locator("#tab-schedules")).to_be_enabled()
+    assert not page_errors
+
+
+@pytest.mark.parametrize("target", ["hero-adjust-button", "hero-plus-second", "sticky-minus-second"])
+def test_remote_stop_returns_focus_from_hidden_timer_actions(open_stage, target):
+    parts = [_part(f"p{index}", f"Part {index}", index) for index in range(1, 19)]
+    page, push, _, page_errors = open_stage(width=540, height=720, authenticated=True, schedule=_schedule(parts=parts))
+    page.locator("#stage-control-button").click()
+    push(auth=True, active=True, state="running", activePartId="p1", plannedSeconds=300)
+    expect(page.locator("#hero-stop-button")).to_be_enabled()
+    if target.startswith("sticky"):
+        page.locator('[data-action="select-part"][data-part-id="p18"]').scroll_into_view_if_needed()
+        expect(page.locator("#sticky-timer-bar")).to_have_attribute("data-stuck", "true")
+    elif target == "hero-plus-second":
+        page.locator("#hero-adjust-button").click()
+    action = page.locator(f"#{target}")
+    action.focus()
+    expect(action).to_be_focused()
+
+    push(auth=True, active=True, state="stopped", activePartId="p1", plannedSeconds=300)
+
+    expect(action).to_be_hidden()
+    panel = target.split("-", 1)[0]
+    expect(page.locator(f"#{panel}-start-button")).to_be_focused()
+    assert not page_errors
+
+
+@pytest.mark.parametrize(("before", "after", "focus_name"), [
+    (3, 4, "More"), (4, 3, "Fewer"), (7, 8, "Fewer"), (2, 1, "More"),
+])
+def test_section_count_keeps_keyboard_focus_in_the_stepper(open_stage, before, after, focus_name):
+    def parts(count):
+        return [
+            _part(f"p{index}", f"Ministry part {index}", index) | {
+                "section": "ministry", "sectionKey": "ministry", "sectionHeaderTitle": "Ministry",
+                "firstOfSection": index == 1, "showSectionHeader": index == 1,
+                "configurableCount": True, "sectionCount": count,
+            } for index in range(1, count + 1)
+        ]
+
+    commands = []
+    schedule = _schedule(parts=parts(before))
+
+    def on_command(command):
+        commands.append(command)
+        schedule.update(parts=parts(after), scheduleRevision=18)
+        return {"ok": True, "scheduleRevision": 18}
+
+    page, _, send, page_errors = open_stage(authenticated=True, schedule=schedule, on_command=on_command)
+    page.locator("#stage-control-button").click()
+    stepper = page.get_by_role("group", name="Parts")
+    pressed = "More" if after > before else "Fewer"
+    button = stepper.get_by_role("button", name=f"{pressed} parts in Ministry")
+    with page.expect_response(f"{TIMER_URL}api/commands"):
+        button.press("Space")
+    assert commands[-1]["count"] == after
+    send("timer.schedule", schedule, auth=True)
+
+    expect(stepper).to_contain_text(str(after))
+    expect(stepper.get_by_role("button", name=f"{focus_name} parts in Ministry")).to_be_focused()
     assert not page_errors
 
 
@@ -454,6 +554,44 @@ def test_custom_workspace_creates_and_submits_an_atomic_revision_bound_draft(ope
         section | {"icon": "microphone", "color": "#4a6b8c",
                    "parts": [{"id": "part-1", "type": "part", "title": "Briefing", "plannedSeconds": 45}]}
     ]
+    assert not page_errors
+
+
+def test_tall_section_can_be_dragged_past_the_next_visible_section(open_stage):
+    parts = [_part(f"p{index}", f"Part {index}", index) | {"type": "part"} for index in range(1, 14)]
+    entries = [
+        {"id": "tall", "type": "section", "title": "Tall section", "parts": parts[:-1]},
+        {"id": "short", "type": "section", "title": "Short section", "parts": parts[-1:]},
+    ]
+    custom = {"id": "training", "title": "Training", "revision": 2, "entries": entries}
+    page, _, _, page_errors = open_stage(
+        width=844, height=740, authenticated=True, reduced_motion="no-preference",
+        schedule=_schedule(parts=parts, customSchedule=custom), catalog=[custom],
+    )
+    page.locator("#stage-control-button").click()
+    page.locator("#custom-organize").click()
+    headings = page.locator("#schedule-list").get_by_role("heading", level=2)
+    expect(headings).to_have_text(["Tall section", "Short section"])
+    tall = page.locator('[data-drag-id="tall"]')
+    short = page.locator('[data-drag-id="short"]')
+    handle = tall.locator(".section-header [data-drag-handle]").bounding_box()
+    x = handle["x"] + handle["width"] / 2
+    y = handle["y"] + handle["height"] / 2
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x, y + 10)
+    ghost = page.locator(".schedule-drag-ghost")
+    expect(ghost).to_be_visible()
+    expect(tall).to_be_hidden()
+
+    drop = short.bounding_box()
+    page.mouse.move(x, drop["y"] + 0.8 * drop["height"], steps=8)
+    page.mouse.up()
+
+    expect(ghost).to_have_count(0)
+    expect(headings).to_have_text(["Short section", "Tall section"])
+    expect(tall.locator(".section-parts [data-drag-type='part']")).to_have_count(12)
+    expect(page.locator("#organizer-save")).to_be_enabled()
     assert not page_errors
 
 

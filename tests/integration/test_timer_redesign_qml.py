@@ -775,6 +775,12 @@ def test_meeting_schedule_change_updates_the_visible_pacing_window_immediately(
     )
     ctx.operations.on_meeting_schedule_changed()
     assert window.property("text") == "08:50–10:35"
+
+    ctx.bridge.updateClock("show_ampm", False)
+    ctx.bridge.updateClock("hour_format_24h", False)
+    assert window.property("text") == "8:50 AM–10:35 AM"
+    assert ctx.bridge.clockConfig["show_ampm"] is False
+
     assert ctx.bridge.setPacingMode("off")
     assert not window.isVisible()
 

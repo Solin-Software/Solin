@@ -53,13 +53,30 @@
   white-space: nowrap;
 }
 
-.schedule-drag-placeholder {
-  min-height: 48px;
-  border: 1px dashed var(--accent);
-  border-radius: 10px;
-  background: var(--accent-tint);
+[data-drop-slot] {
+  position: relative;
 }
 
-.section-parts:has(> .schedule-drag-placeholder:not([hidden])) > .section-empty {
-  display: none;
+[data-drop-slot]::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-inline: 6px;
+  pointer-events: none;
+}
+
+[data-drop-slot="before"]::after,
+[data-drop-slot="after"]::after {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+[data-drop-slot="before"]::after { inset-block-start: 0; }
+[data-drop-slot="after"]::after { inset-block-end: 0; }
+
+[data-drop-slot="inside"]::after {
+  inset-block: 4px;
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
 }

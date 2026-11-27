@@ -56,13 +56,20 @@ export class Renderer {
   }
 
   #restoreTimerActionFocus(focused, state) {
+    const active = document.activeElement;
+    if (active !== document.body && active?.id !== focused) return;
     const running = state === "running";
-    const from = running ? "start" : "stop";
-    const to = running ? "stop" : "start";
+    const from = running ? ["start-button"] : ["stop-button", "adjust-button", "minus-second", "plus-second"];
     for (const group of ["hero", "sticky"]) {
-      if (focused === `${group}-${from}-button`) {
-        byId(`${group}-${to}-button`).focus({ preventScroll: true });
+      if (!from.some((action) => focused === `${group}-${action}`)) continue;
+      const action = byId(`${group}-${running ? "stop" : "start"}-button`);
+      if (!action.disabled && !action.closest("[hidden], [inert]")) {
+        action.focus({ preventScroll: true });
       }
+      if (document.activeElement !== action) {
+        byId("control-stage-button").focus({ preventScroll: true });
+      }
+      return;
     }
   }
 
@@ -559,7 +566,7 @@ export class Renderer {
     else delete container.dataset.dragContainer;
     const focus = document.activeElement;
     const hadFocus = container.contains(focus);
-    const { action, partId, section, count } = hadFocus ? focus.dataset : {};
+    const { action, partId, section, direction } = hadFocus ? focus.dataset : {};
     const custom = schedule.customSchedule;
     const waitingForSelection = browsingSchedules && !custom;
     const groups = editing ? groupCustomParts(draftParts(schedule.parts, organizer.entries), organizer.entries) :
@@ -585,11 +592,13 @@ export class Renderer {
     }
     container.replaceChildren(fragment);
     if (hadFocus) {
-      const newFocus = [...container.querySelectorAll("button:enabled")].find((button) =>
+      const matchingButtons = [...container.querySelectorAll("button:enabled")].filter((button) =>
         action === button.dataset.action && partId === button.dataset.partId &&
-        section === button.dataset.section && (count === undefined || count === button.dataset.count));
+        section === button.dataset.section);
+      const newFocus = matchingButtons.find((button) => direction === button.dataset.direction) ??
+        matchingButtons[0];
       const current = part?.id && container.querySelector(
-        `button[data-action="select-part"][data-part-id="${CSS.escape(part.id)}"]`);
+        `button[data-action="select-part"][data-part-id="${CSS.escape(part.id)}"]:enabled`);
       (newFocus || current || byId("control-stage-button")).focus({ preventScroll: true });
     }
   }
@@ -618,8 +627,9 @@ function isControlInteractive(state) {
 
 function pacingCopy(schedule, now, clockConfig, utcOffsetMinutes) {
   if (schedule.pacingMode === "off") return null;
+  const pacingClock = { hourFormat24h: clockConfig.hourFormat24h, showAmpm: true };
   const wallTime = (epoch, offset = utcOffsetMinutes) => {
-    const [clock, , period] = formatWallClock(epoch, clockConfig, offset);
+    const [clock, , period] = formatWallClock(epoch, pacingClock, offset);
     return period ? `${clock} ${period}` : clock;
   };
   const configuredTime = (time) => {
@@ -803,6 +813,7 @@ function buildSectionCard(group, { isInteractive, caps, selectedId, canSelect, e
         dataset: {
           action: "section-count",
           section: group.section,
+          direction: "decrease",
           count: String(Math.max(1, firstPart.sectionCount - 1)),
         },
       });
@@ -823,6 +834,7 @@ function buildSectionCard(group, { isInteractive, caps, selectedId, canSelect, e
         dataset: {
           action: "section-count",
           section: group.section,
+          direction: "increase",
           count: String(Math.min(8, firstPart.sectionCount + 1)),
         },
       });
