@@ -4328,9 +4328,10 @@ def test_native_terminal_state_survives_a_decoder_position_reset(slot, duration,
         media._state = terminal_state
         media.media_time = 0
         snapshot = engine._sample_media(slot)
-        assert snapshot == (
-            terminal_state, 0, duration, "https://cdn.example/media.mp3",
-        )
+        assert snapshot.state == terminal_state
+        assert snapshot.position_ms == 0
+        assert snapshot.duration_ms == duration
+        assert snapshot.path == "https://cdn.example/media.mp3"
     finally:
         engine.shutdown()
 
@@ -4861,16 +4862,15 @@ def test_engine_media_trim_end_latches_ended_state():
     media.media_time = 40000  # at the trim end (duration 60000 - 20000)
     media._state = 1  # PLAYING
 
-    state, _pos, _dur, _path = engine._sample_media()
-    assert state == int(MediaPlaybackState.ENDED)
+    assert engine._sample_media().state is MediaPlaybackState.ENDED
     assert media.play_pause_calls[-1] is True  # paused at the trim end
     # the source now reads PAUSED, but ENDED stays latched across ticks
-    assert engine._sample_media()[0] == int(MediaPlaybackState.ENDED)
+    assert engine._sample_media().state is MediaPlaybackState.ENDED
 
     engine.handle(_request("control_media", {"action": "restart"}))
     media._state = 1
     media.media_time = 0
-    assert engine._sample_media()[0] != int(MediaPlaybackState.ENDED)  # latch cleared
+    assert engine._sample_media().state is not MediaPlaybackState.ENDED  # latch cleared
     engine.shutdown()
 
 
@@ -4886,9 +4886,9 @@ def test_engine_media_oversized_trim_end_does_not_end_early():
     media.media_time = 1000
     media._state = 1  # PLAYING
 
-    state, _pos, duration, _path = engine._sample_media()
-    assert state == int(MediaPlaybackState.PLAYING)  # no spurious instant end
-    assert duration == 60000  # natural duration, not a collapsed 0
+    snapshot = engine._sample_media()
+    assert snapshot.state is MediaPlaybackState.PLAYING
+    assert snapshot.duration_ms == 60000
     engine.shutdown()
 
 

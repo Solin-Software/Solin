@@ -11649,8 +11649,8 @@ Båda enheterna måste vara anslutna till samma Wi-Fi-nätverk.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Stänger av din Zoom-mikrofon medan Solin spelar upp ljud eller video. Om Solin stängde av mikrofonen slås den på igen när uppspelningen pausas eller stoppas.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Stänger av din Zoom-mikrofon medan Solin spelar upp ljud eller video. Om Solin stängde av mikrofonen kan den slås på igen vid längre tystnad eller när uppspelningen pausas eller stoppas.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

@@ -85,7 +85,7 @@ class ZoomService(QObject):
         self._next_id = 0
         self._queued_operation: _Request | None = None
         self._participant_steps: list[ParticipantStepResult] = []
-        self._media_playing = False
+        self._playback_audio_expected = False
         self._mute_during_playback = settings.mute_during_playback()
         self._playback_mute_sent: bool | None = None
         self._playback_microphone_retry_at: float | None = None
@@ -147,9 +147,9 @@ class ZoomService(QObject):
         self.mute_during_playback_changed.emit(enabled)
         self._dispatch_playback_microphone()
 
-    def set_media_playing(self, playing: bool) -> None:
-        if playing != self._media_playing:
-            self._media_playing = playing
+    def set_playback_audio_expected(self, expected: bool) -> None:
+        if expected != self._playback_audio_expected:
+            self._playback_audio_expected = expected
             self._dispatch_playback_microphone()
 
     def start(self) -> None:
@@ -309,7 +309,7 @@ class ZoomService(QObject):
             self._retire(code="worker_failed")
 
     def _dispatch_playback_microphone(self) -> bool:
-        wanted = self._mute_during_playback and self._media_playing
+        wanted = self._mute_during_playback and self._playback_audio_expected
         if (
             not self._active or not self._connected or not self._ready
             or self._pending is not None or self.is_busy
@@ -468,7 +468,7 @@ class ZoomService(QObject):
         else:
             if any(f.code == "meeting_not_found" for f in outcome.failed_steps):
                 self._set_connected(False)
-            if command == "pre_meeting" and self._mute_during_playback and self._media_playing:
+            if command == "pre_meeting" and self._mute_during_playback and self._playback_audio_expected:
                 # Meeting start can turn the microphone on during playback.
                 self._playback_mute_sent = None
             log.debug(

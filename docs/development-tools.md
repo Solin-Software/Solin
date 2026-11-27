@@ -39,3 +39,14 @@ meeting discovery and cached audio/video reads with P50 and P95 timings. Open
 a Zoom meeting first. The benchmark does not change meeting controls or focus.
 Add `--raised-hands` with the Participants panel open to also measure passive
 raised-hand reads, including their snapshot status and UIA queries per read.
+
+### Zoom microphone during playback
+
+With **Mute microphone during playback** enabled, Solin restores a microphone it
+muted after 800 ms of sustained silence in foreground media. This applies to
+local and streamed media, including silent credits. If audio returns, Solin
+mutes again. Pausing or ending playback restores the microphone without waiting
+for the silence interval.
+
+Set `SOLIN_ZOOM_PLAYBACK_SILENCE_MS` before launching Solin to override the
+interval in milliseconds. Use `0` to disable silence detection.

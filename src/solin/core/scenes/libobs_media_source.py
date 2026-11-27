@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
 
+from solin.core.scenes.media_audio_activity import MediaAudioActivity
+
 log = logging.getLogger(__name__)
 
 MEDIA_SOURCE_ID = "solin_media_source"
@@ -78,8 +80,10 @@ class _StartupTransport:
 class LibobsMediaSource:
     """A native media source with Qt-free transport and state."""
 
-    def __init__(self, runtime: Any) -> None:
+    def __init__(self, runtime: Any, *, silence_hold_ms: int = 0) -> None:
         self._runtime = runtime
+        self._silence_hold_ms = silence_hold_ms
+        self._audio_activity: MediaAudioActivity | None = None
         self._source: Any = None
         self._video_readiness: Any = None
         self._startup: _StartupTransport | None = None
@@ -101,6 +105,22 @@ class LibobsMediaSource:
     @property
     def path(self) -> str:
         return self._path
+
+    @property
+    def monitors_audio_activity(self) -> bool:
+        return self._audio_activity is not None
+
+    def audio_is_silent(self, state: int, position_ms: int) -> bool:
+        activity = self._audio_activity
+        return activity is not None and activity.sample(
+            position_ms,
+            playing=state == STATE_PLAYING and self._startup is None,
+            speed_percent=self._speed_percent,
+        )
+
+    def _reset_audio_activity(self) -> None:
+        if self._audio_activity is not None:
+            self._audio_activity.reset()
 
     def wait_for_video_frame(self, *, deadline: float) -> bool:
         """Wait for a native video texture, bounded by IPC expiry.
@@ -222,6 +242,15 @@ class LibobsMediaSource:
         self._path = path
         self._local = local
         self._speed_percent = max(1, int(speed_percent or 100))
+        if self._silence_hold_ms:
+            activity = MediaAudioActivity(self._silence_hold_ms)
+            try:
+                activity.attach(source, self._runtime.ob.VolumeMeter.create)
+            except Exception:  # noqa: BLE001 - an unavailable meter must not prevent playback
+                activity.close()
+                log.warning("Could not monitor foreground media audio", exc_info=True)
+            else:
+                self._audio_activity = activity
         self.set_volume(volume_percent)
         try:
             from solin.core.media.obs_runtime import MONITORING_MONITOR_ONLY
@@ -328,6 +357,7 @@ class LibobsMediaSource:
                 log.debug("could not set media speed", exc_info=True)
                 return
             self._speed_percent = speed
+            self._reset_audio_activity()
 
     def _apply_source_volume(self) -> None:
         """Keep pending startup transport silent until its intent is applied."""
@@ -353,6 +383,7 @@ class LibobsMediaSource:
 
     def pause(self) -> None:
         with self._transport_lock:
+            self._reset_audio_activity()
             if self._source is not None and self._startup is not None:
                 self._startup.state = STATE_PAUSED
                 self._apply_source_volume()
@@ -366,6 +397,7 @@ class LibobsMediaSource:
 
     def stop(self) -> None:
         with self._transport_lock:
+            self._reset_audio_activity()
             self._requested_seek_ms = 0
             if self._startup is not None:
                 self._startup = _StartupTransport(STATE_STOPPED)
@@ -380,6 +412,7 @@ class LibobsMediaSource:
 
     def restart(self) -> None:
         with self._transport_lock:
+            self._reset_audio_activity()
             self._requested_seek_ms = 0
             if self._startup is not None:
                 self._startup = _StartupTransport(STATE_PLAYING)
@@ -395,6 +428,7 @@ class LibobsMediaSource:
         if not self._local and not _is_seekable_remote(self._path):
             return
         with self._transport_lock:
+            self._reset_audio_activity()
             self._requested_seek_ms = target
             if self._startup is not None:
                 self._startup.phase = _StartupPhase.DECODING
@@ -464,6 +498,9 @@ class LibobsMediaSource:
         return self._detach_source()
 
     def _detach_source(self) -> Any | None:
+        if self._audio_activity is not None:
+            self._audio_activity.close()
+            self._audio_activity = None
         readiness = self._video_readiness
         if readiness is not None:
             # Retain both owners if native unregistration fails. close() keeps

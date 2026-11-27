@@ -582,8 +582,10 @@ class MainWindow(QWidget):
         # Zoom Meetings integration
         self._zoom_service = service_factories.zoom(self._zoom_settings, self)
         self._zoom_service.raised_hands_changed.connect(self._timer_hand_alert.set_zoom_snapshot)
-        self.media_ctrl.audible_playback_changed.connect(self._zoom_service.set_media_playing)
-        self._zoom_service.set_media_playing(self.media_ctrl.is_playing_audibly)
+        self.media_ctrl.playback_audio_expected_changed.connect(
+            self._zoom_service.set_playback_audio_expected
+        )
+        self._zoom_service.set_playback_audio_expected(self.media_ctrl.playback_audio_expected)
 
         self._background_song_service = service_factories.background_song(
             self.lang,

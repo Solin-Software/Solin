@@ -1,4 +1,4 @@
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 
 import pytest
 from PySide6.QtCore import QByteArray, QBuffer, QIODevice
@@ -45,6 +45,11 @@ class _ServiceStub:
         self.stopped += 1
         if self.events is not None:
             self.events.append((self.name, "stop"))
+
+    @contextmanager
+    def replace_playback(self):
+        self.stop()
+        yield
 
     def start_playback(self, request):
         self.requests.append(request)

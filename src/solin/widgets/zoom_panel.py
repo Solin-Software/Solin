@@ -310,7 +310,7 @@ class ZoomPanel(ToolbarPanel):
         self._playback_mute.set_copy(self.tr("Mute microphone during playback"))
         self._playback_mute.setToolTip(self.tr(
             "Mute your Zoom microphone while Solin plays audio or video. "
-            "Unmute it when playback pauses or stops if Solin muted it."
+            "If Solin muted it, it can unmute during sustained silence or when playback pauses or stops."
         ))
         self._busy_text.setText(self.tr("Automation in progress…"))
         self._cancel.setText(self.tr("Cancel"))

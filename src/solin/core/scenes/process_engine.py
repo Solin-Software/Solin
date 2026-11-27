@@ -163,7 +163,7 @@ _PROGRAM_RECORDING_STATE_FIELDS = frozenset(
     }
 )
 _MEDIA_PLAYBACK_STATE_FIELDS = frozenset(
-    {"state", "position_ms", "duration_ms", "path", "error_code", "slot"}
+    {"state", "position_ms", "duration_ms", "path", "error_code", "slot", "audio_silent"}
 )
 _T = TypeVar("_T")
 log = logging.getLogger(__name__)
@@ -2268,6 +2268,8 @@ def _media_playback_event_from_envelope(
             path=require_text(payload["path"], "Media path", maximum=MAXIMUM_MEDIA_PATH_LENGTH),
             error_code=require_text(payload["error_code"], "Media error code", maximum=128),
             slot=slot,
+            audio_silent=require_bool(payload["audio_silent"], "Media audio silence state"),
+            source_request_id=envelope.request_id,
         )
     )
 

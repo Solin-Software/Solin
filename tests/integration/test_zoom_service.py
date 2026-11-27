@@ -202,7 +202,7 @@ def test_playback_microphone_reconciles_latest_state_after_pending_commands(
     monkeypatch.setattr(ZoomService, "is_available", property(lambda _: True))
     service, messages = monitor
     service.refresh()
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     service.set_mute_during_playback(True)
     assert [message["command"] for message in messages] == ["meeting"]
 
@@ -211,16 +211,16 @@ def test_playback_microphone_reconciles_latest_state_after_pending_commands(
     assert messages[-1]["muted"] is True
     assert not service.is_busy
 
-    service.set_media_playing(False)
-    service.set_media_playing(True)
-    service.set_media_playing(False)
+    service.set_playback_audio_expected(False)
+    service.set_playback_audio_expected(True)
+    service.set_playback_audio_expected(False)
     assert len(messages) == 2
     _reply(service, messages, owner=_PLAYBACK_OWNER)
     assert messages[-1]["muted"] is False
     _reply(service, messages, owner=None)
     assert len(messages) == 3
 
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     assert messages[-1]["muted"] is True
     _reply(service, messages, owner=_PLAYBACK_OWNER)
     assert zoom_settings.mute_during_playback()
@@ -240,9 +240,9 @@ def test_playback_microphone_retries_a_failed_restore_without_retrying_immediate
     service.refresh()
     _reply(service, messages, connected=True)
     service.set_mute_during_playback(True)
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     _reply(service, messages, owner=_PLAYBACK_OWNER)
-    service.set_media_playing(False)
+    service.set_playback_audio_expected(False)
     failed_restore = messages[-1]
     _reply(service, messages, error="microphone_not_changed")
     assert messages[-1] == failed_restore
@@ -269,7 +269,7 @@ def test_cancelling_another_action_preserves_playback_mute_until_restored(
     service.refresh()
     _reply(service, messages, connected=True)
     service.set_mute_during_playback(True)
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     _reply(service, messages, owner=_PLAYBACK_OWNER)
 
     worker = service._process
@@ -284,7 +284,7 @@ def test_cancelling_another_action_preserves_playback_mute_until_restored(
     assert results == [SequenceResult("pre_meeting", cancelled=True)]
 
     if not playing_after_restart:
-        service.set_media_playing(False)
+        service.set_playback_audio_expected(False)
     replacement = SimpleNamespace(
         write=worker.write,
         state=lambda: QProcess.ProcessState.NotRunning,
@@ -300,13 +300,13 @@ def test_cancelling_another_action_preserves_playback_mute_until_restored(
         assert messages[-1]["muted"] is True
         assert messages[-1]["owner"] == _PLAYBACK_OWNER
         _reply(service, messages, owner=_PLAYBACK_OWNER)
-        service.set_media_playing(False)
+        service.set_playback_audio_expected(False)
     assert messages[-1]["command"] == PLAYBACK_MICROPHONE
     assert messages[-1]["muted"] is False
     assert messages[-1]["owner"] == _PLAYBACK_OWNER
     _reply(service, messages, owner=None)
 
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     assert messages[-1]["owner"] is None
 
 
@@ -323,7 +323,7 @@ def test_zoom_disable_waits_for_worker_and_only_discards_confirmed_restores(
     service.refresh()
     _reply(service, messages, connected=True)
     service.set_mute_during_playback(True)
-    service.set_media_playing(True)
+    service.set_playback_audio_expected(True)
     _reply(service, messages, owner=_PLAYBACK_OWNER)
 
     replacement = service._process
@@ -343,7 +343,7 @@ def test_zoom_disable_waits_for_worker_and_only_discards_confirmed_restores(
 
     monkeypatch.setattr(service, "_launch", launch)
     service.stop()
-    service.set_media_playing(False)
+    service.set_playback_audio_expected(False)
     service.start()
     assert events == ["eof"]
     service._exited(worker)

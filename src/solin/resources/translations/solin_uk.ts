@@ -11690,8 +11690,8 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Вимикає мікрофон Zoom, поки Solin відтворює аудіо чи відео. Якщо мікрофон вимкнув Solin, він увімкне його знову під час паузи або після зупинки відтворення.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Вимикає мікрофон Zoom, поки Solin відтворює аудіо чи відео. Якщо мікрофон вимкнув Solin, він може ввімкнути його знову під час тривалої тиші, паузи або після зупинки відтворення.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

@@ -6,20 +6,23 @@ the small transport vocabulary the :class:`~solin.core.media.playback.MediaContr
 needs onto the scene-engine control protocol (``open_media`` / ``control_media`` /
 ``set_media_properties``), turning percents and actions into engine requests.
 
-Requests are fire-and-forget: playback state comes back asynchronously as
-``media_playback_state`` events (see ``MediaController.on_engine_media_state``),
-so a failed transport call is logged, not surfaced synchronously.
+Playback state arrives asynchronously as ``media_playback_state`` events.
+Opening also returns its acknowledgement future so the controller can handle
+a request that fails before any playback state arrives.
 """
 
 from __future__ import annotations
 
 import logging
-from concurrent.futures import Future
 from collections.abc import Callable
-from typing import Any
+from concurrent.futures import Future
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from solin.core.scenes.media_control import MediaControlAction
+
+if TYPE_CHECKING:
+    from solin.core.scenes.engine import SceneEngineAck
 
 log = logging.getLogger(__name__)
 
@@ -77,23 +80,22 @@ class SceneEngineMediaRoute:
         speed_percent: int,
         trim_start_ms: int,
         trim_end_ms: int,
-    ) -> None:
-        self._watch(
-            self._engine.open_media(
-                path,
-                is_local_file=is_local_file,
-                autoplay=autoplay,
-                volume_percent=volume_percent,
-                speed_percent=speed_percent,
-                trim_start_ms=trim_start_ms,
-                trim_end_ms=trim_end_ms,
-                slot=self._slot,
-                content_media_epoch=(self._presentation_id() if self._presentation_id is not None else None),
-                request_id=self._request_id("open"),
-                deadline_ms=self._deadline_ms,
-            ),
-            "open",
+    ) -> tuple[str, Future[SceneEngineAck]]:
+        request_id = self._request_id("open")
+        future = self._engine.open_media(
+            path,
+            is_local_file=is_local_file,
+            autoplay=autoplay,
+            volume_percent=volume_percent,
+            speed_percent=speed_percent,
+            trim_start_ms=trim_start_ms,
+            trim_end_ms=trim_end_ms,
+            slot=self._slot,
+            content_media_epoch=(self._presentation_id() if self._presentation_id is not None else None),
+            request_id=request_id,
+            deadline_ms=self._deadline_ms,
         )
+        return request_id, future
 
     def _control(self, action: MediaControlAction, *, position_ms: int = 0) -> None:
         self._watch(

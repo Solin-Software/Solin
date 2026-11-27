@@ -11,21 +11,22 @@ Remote URLs stream through the sidecar directly; an already-cached copy is
 preferred, and (per cache policy) a background download populates the cache for
 offline reuse on the next play.
 """
-import logging
-from typing import Callable
+from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+import logging
+from collections.abc import Iterator
+from concurrent.futures import Future
+from contextlib import contextmanager
+from functools import partial
+from typing import TYPE_CHECKING, Callable
+
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QPixmap  # noqa: F401 - part of the cover_art_changed contract
 
+from solin.core.scenes.media_control import MediaPlaybackNativeState, MediaPlaybackState
+
 from .cache import MediaCacheManager
-from .playback_state import (
-    ENGINE_STATE_BUFFERING,
-    ENGINE_STATE_ENDED,
-    ENGINE_STATE_PAUSED,
-    ENGINE_STATE_PLAYING,
-    ENGINE_STATE_TO_SOLIN,
-    SolinPlaybackState,
-)
+from .playback_state import ENGINE_STATE_TO_SOLIN, SolinPlaybackState
 from .qt_contracts import MediaMetadataExtractor, MediaPlaybackRoute, PlaybackDownloaderFactory
 from .playback_session import MediaPlaybackSession
 from .playback_request import (
@@ -35,6 +36,9 @@ from .playback_request import (
 )
 from .settings import MediaPlaybackSettings
 
+if TYPE_CHECKING:
+    from solin.core.scenes.engine import SceneEngineAck
+
 log = logging.getLogger(__name__)
 
 
@@ -42,7 +46,7 @@ class MediaController(QObject):
     # SolinPlaybackState (Qt-free). Signal(object) because a Python enum is not a
     # registered Qt metatype; consumers compare against SolinPlaybackState members.
     state_changed     = Signal(object)
-    audible_playback_changed = Signal(bool)
+    playback_audio_expected_changed = Signal(bool)
     duration_changed  = Signal(int)
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
@@ -67,6 +71,7 @@ class MediaController(QObject):
     # (AutoConnection → QueuedConnection), serialising engine state with the
     # GUI-thread transport methods that touch the same fields.
     _engine_media_state_received = Signal(object)
+    _engine_open_finished = Signal(str, object)
 
     def __init__(
         self,
@@ -93,7 +98,8 @@ class MediaController(QObject):
         self._playback_rate = 1.0
         self._volume = 1.0  # 0.0–1.0; forwarded to the sidecar as a percent
         self._audio_suppressed = False
-        self._last_audible_playback = False
+        self._last_playback_audio_expected = False
+        self._replacing_playback = False
         # True while a background cache copy is downloading behind a stream.
         self._caching_remote = False
         # True while the engine reports the stream re-establishing itself.
@@ -101,12 +107,16 @@ class MediaController(QObject):
 
         # libobs sidecar route: the only decode path.
         self._engine_route: MediaPlaybackRoute | None = None
-        self._engine_route_active = False
-        self._engine_state = 0
+        self._engine_request_id: str | None = None
+        self._engine_audio_silent = False
+        self._engine_state: MediaPlaybackState | None = None
         self._engine_position_ms = 0
         self._engine_duration_ms = 0
         self._engine_media_ended_emitted = False
         self._engine_media_state_received.connect(self._apply_engine_media_state)
+        self._engine_open_finished.connect(
+            self._apply_engine_open_result, Qt.ConnectionType.QueuedConnection,
+        )
 
         # Title and embedded cover come from the isolated media extractor,
         # since the sidecar does not surface container tags.
@@ -150,16 +160,25 @@ class MediaController(QObject):
 
     @property
     def is_playing(self) -> bool:
-        return self._engine_route_active and self._engine_state == ENGINE_STATE_PLAYING
+        return self._engine_route_active and self._engine_state == MediaPlaybackState.PLAYING
 
     @property
-    def is_playing_audibly(self) -> bool:
-        """Whether playback is running with nonzero output volume."""
-        return self.is_playing and self._output_volume_percent() > 0
+    def playback_audio_expected(self) -> bool:
+        """Whether foreground transport can currently send audio to the room."""
+        if self._replacing_playback:
+            return self._last_playback_audio_expected
+        if not self._engine_route_active or not self._output_volume_percent():
+            return False
+        if self._engine_state in (None, MediaPlaybackState.OPENING):
+            # A newly opened source has yet to report its playback audio.
+            return self._session.requested_playing and self._last_playback_audio_expected
+        if self._engine_state == MediaPlaybackState.BUFFERING:
+            return self._session.requested_playing
+        return self.is_playing and not self._engine_audio_silent
 
     @property
     def is_paused(self) -> bool:
-        return self._engine_route_active and self._engine_state == ENGINE_STATE_PAUSED
+        return self._engine_route_active and self._engine_state == MediaPlaybackState.PAUSED
 
     @property
     def duration(self) -> int:
@@ -170,6 +189,10 @@ class MediaController(QObject):
         return self._engine_position_ms if self._engine_route_active else 0
 
     # ── Engine routing ───────────────────────────────────────────────────────
+
+    @property
+    def _engine_route_active(self) -> bool:
+        return self._engine_request_id is not None
 
     def set_engine_media_route(self, route: MediaPlaybackRoute | None) -> None:
         """Install (or clear with ``None``) the libobs sidecar media route."""
@@ -185,11 +208,11 @@ class MediaController(QObject):
     def _output_volume_percent(self) -> int:
         return 0 if self._audio_suppressed else round(self._volume * 100)
 
-    def _publish_audible_playback(self) -> None:
-        audible = self.is_playing_audibly
-        if audible != self._last_audible_playback:
-            self._last_audible_playback = audible
-            self.audible_playback_changed.emit(audible)
+    def _publish_playback_audio_expected(self) -> None:
+        expected = self.playback_audio_expected
+        if expected != self._last_playback_audio_expected:
+            self._last_playback_audio_expected = expected
+            self.playback_audio_expected_changed.emit(expected)
 
     def _speed_percent(self) -> int:
         return max(1, round(self._playback_rate * 100))
@@ -211,14 +234,14 @@ class MediaController(QObject):
             raise RuntimeError("Media engine route is unavailable")
         start_ms, end_trim_ms = self._trim_offsets(request)
         is_remote = MediaCacheManager.is_remote(url)
-        self._engine_route_active = True
-        self._engine_state = 0
+        self._engine_state = None
+        self._engine_audio_silent = False
         self._engine_position_ms = 0
         self._engine_duration_ms = 0
         self._engine_media_ended_emitted = False
         self._session.set_cached_local(url)
         self._session.set_stream_persist(False)
-        route.open(
+        request_id, completion = route.open(
             url,
             is_local_file=not is_remote,  # libobs ffmpeg_source streams remote URLs
             autoplay=request.autoplay,
@@ -227,6 +250,8 @@ class MediaController(QObject):
             trim_start_ms=start_ms,
             trim_end_ms=end_trim_ms,
         )
+        self._engine_request_id = request_id
+        completion.add_done_callback(partial(self._engine_open_finished.emit, request_id))
         # The sidecar decodes the media; read its title + cover here for the UI.
         self._metadata_extractor.request(self._session.session_id, url)
         # The badge means "playing from a local copy", so it must follow the source.
@@ -250,12 +275,12 @@ class MediaController(QObject):
         elif not self._session.cover_emitted:
             self.cover_art_changed.emit(None)
 
-    def on_engine_media_state(self, state) -> None:
+    def on_engine_media_state(self, state: MediaPlaybackNativeState) -> None:
         """Entry from the engine's event thread; hop to the GUI thread to apply."""
         self._engine_media_state_received.emit(state)
 
-    def _apply_engine_media_state(self, state) -> None:
-        if not self._engine_route_active:
+    def _apply_engine_media_state(self, state: MediaPlaybackNativeState) -> None:
+        if state.source_request_id != self._engine_request_id:
             return
         duration = max(0, int(state.duration_ms))
         if duration != self._engine_duration_ms:
@@ -263,27 +288,59 @@ class MediaController(QObject):
             self.duration_changed.emit(duration)
         self._engine_position_ms = max(0, int(state.position_ms))
         self.position_changed.emit(self._engine_position_ms)
-        raw_state = int(state.state)
-        if raw_state != self._engine_state:
-            self._engine_state = raw_state
+        engine_state = state.state
+        self._engine_audio_silent = state.audio_silent
+        if engine_state != self._engine_state:
+            self._engine_state = engine_state
             self.state_changed.emit(
-                ENGINE_STATE_TO_SOLIN.get(raw_state, SolinPlaybackState.STOPPED)
+                ENGINE_STATE_TO_SOLIN.get(engine_state, SolinPlaybackState.STOPPED)
             )
-            self._publish_audible_playback()
+        self._publish_playback_audio_expected()
         # Reflect the decoder's recovery state in the transport UI.
-        recovering = raw_state == ENGINE_STATE_BUFFERING
+        recovering = engine_state == MediaPlaybackState.BUFFERING
         if recovering != self._engine_recovering:
             self._engine_recovering = recovering
             self.playback_recovery_changed.emit(recovering)
-        if raw_state == ENGINE_STATE_ENDED and not self._engine_media_ended_emitted:
+        if engine_state == MediaPlaybackState.ENDED and not self._engine_media_ended_emitted:
             self._engine_media_ended_emitted = True
             self._session.mark_media_ended()
             self.media_ended.emit()
-        error_code = getattr(state, "error_code", "")
-        if error_code:
-            self.error_occurred.emit(str(error_code))
+        if state.error_code:
+            self.error_occurred.emit(state.error_code)
+
+    def _apply_engine_open_result(self, request_id: str, completion: Future[SceneEngineAck]) -> None:
+        if (
+            request_id != self._engine_request_id
+            or self._engine_state not in (None, MediaPlaybackState.OPENING)
+        ):
+            return
+        try:
+            ack = completion.result()
+        except Exception:  # noqa: BLE001 - IPC can fail before the sidecar sends a state
+            log.debug("engine media open request failed", exc_info=True)
+            error_code = "media_open_failed"
+        else:
+            if ack.applied:
+                return
+            error_code = ack.error_code
+        self._apply_engine_media_state(MediaPlaybackNativeState(
+            MediaPlaybackState.ERROR, self.position, self.duration,
+            error_code=error_code, source_request_id=request_id,
+        ))
 
     # ── Playback control ─────────────────────────────────────────────────────
+
+    @contextmanager
+    def replace_playback(self) -> Iterator[None]:
+        """Stop the old transport while keeping its audio policy through a replacement."""
+        replacing = self._replacing_playback
+        self._replacing_playback = True
+        try:
+            self.stop()
+            yield
+        finally:
+            self._replacing_playback = replacing
+            self._publish_playback_audio_expected()
 
     def start_playback(self, request: MediaPlaybackRequest) -> None:
         """Start one playback request through the libobs sidecar."""
@@ -292,13 +349,13 @@ class MediaController(QObject):
         url = request.source
         self._request = request
         self._session.begin_playback(url, requested_playing=request.autoplay)
-        self._engine_route_active = False
-        self._publish_audible_playback()
+        self._engine_request_id = None
 
         if not self._route_should_handle(url):
             # libobs is the only engine; without a ready route there is nothing to
             # decode. Surface it rather than fail silently.
             log.warning("libobs engine route unavailable; cannot play %r", url)
+            self._publish_playback_audio_expected()
             self.error_occurred.emit("engine_unavailable")
             return
 
@@ -315,6 +372,7 @@ class MediaController(QObject):
             self._caching_remote = False
             self._downloader.cancel()
         self._begin_engine_playback(request, target)
+        self._publish_playback_audio_expected()
 
     def _on_cache_progress(self, downloaded: int, total: int) -> None:
         """Forward the background cache download's progress to the transport.
@@ -339,11 +397,13 @@ class MediaController(QObject):
     def play(self):
         self._session.set_requested_playing(True)
         if self._engine_route_active and self._engine_route is not None:
+            self._publish_playback_audio_expected()
             self._engine_route.play()
 
     def pause(self):
         self._session.set_requested_playing(False)
         if self._engine_route_active and self._engine_route is not None:
+            self._publish_playback_audio_expected()
             self._engine_route.pause()
 
     def stop(self):
@@ -354,21 +414,22 @@ class MediaController(QObject):
             return
         if self._engine_route_active and self._engine_route is not None:
             self._engine_route.close()
-        self._engine_route_active = False
+        self._engine_request_id = None
         self._session.begin_stop()
         self._session.finish_stop()
         self._request = None
-        self._engine_state = 0
+        self._engine_state = None
+        self._engine_audio_silent = False
         self._engine_position_ms = 0
         self._engine_duration_ms = 0
         self._engine_media_ended_emitted = False
         self.state_changed.emit(SolinPlaybackState.STOPPED)
-        self._publish_audible_playback()
+        self._publish_playback_audio_expected()
         self.playback_source_changed.emit(False)
 
     def toggle_play_pause(self):
-        if self._engine_state == ENGINE_STATE_PLAYING or (
-            self._engine_state == ENGINE_STATE_BUFFERING and self._session.requested_playing
+        if self._engine_state == MediaPlaybackState.PLAYING or (
+            self._engine_state == MediaPlaybackState.BUFFERING and self._session.requested_playing
         ):
             self.pause()
         else:
@@ -388,14 +449,14 @@ class MediaController(QObject):
     def set_volume(self, value: float):
         self._volume = max(0.0, min(1.0, float(value)))
         self._apply_playback_properties()
-        self._publish_audible_playback()
+        self._publish_playback_audio_expected()
 
     def set_audio_suppressed(self, suppressed: bool) -> None:
         """Temporarily silence output while keeping the configured volume."""
         if suppressed != self._audio_suppressed:
             self._audio_suppressed = suppressed
             self._apply_playback_properties()
-            self._publish_audible_playback()
+            self._publish_playback_audio_expected()
 
     def set_playback_rate(self, rate: float):
         self._playback_rate = max(0.1, rate)

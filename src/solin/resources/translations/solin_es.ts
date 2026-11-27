@@ -11650,8 +11650,8 @@ Ambos deben estar en la misma red Wi-Fi.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Silencia tu micrófono de Zoom mientras Solin reproduce audio o vídeo. Si Solin lo silenció, lo reactiva al pausar o detener la reproducción.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Silencia tu micrófono de Zoom mientras Solin reproduce audio o vídeo. Si Solin lo silenció, puede reactivarlo durante un silencio prolongado o al pausar o detener la reproducción.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

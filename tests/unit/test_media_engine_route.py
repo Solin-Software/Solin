@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import Future
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -13,7 +14,7 @@ from solin.controllers.media_engine_route import SceneEngineMediaRoute
 from solin.core.media.cache import MediaCacheManager
 from solin.core.media.playback import MediaController
 from solin.core.media.playback_request import MediaPlaybackRequest, MediaTrim
-from solin.core.scenes.engine import SceneEngineStatus
+from solin.core.scenes.engine import SceneEngineAck, SceneEngineStatus
 from solin.core.scenes.media_control import (
     MediaControlAction,
     MediaPlaybackNativeState,
@@ -54,6 +55,7 @@ class _FakeRoute:
 
     def open(self, path, **kwargs):
         self.calls.append(("open", path, kwargs))
+        return "", Future()
 
     def play(self):
         self.calls.append(("play",))
@@ -307,10 +309,13 @@ def test_engine_failure_does_not_emit_media_ended(tmp_path):
 class _FakeEngine:
     def __init__(self) -> None:
         self.calls: list = []
+        self.opens: list[Future] = []
 
     def open_media(self, path, **kwargs):
         self.calls.append(("open_media", path, kwargs))
-        return Future()
+        pending = Future()
+        self.opens.append(pending)
+        return pending
 
     def control_media(self, action, **kwargs):
         self.calls.append(("control_media", action, kwargs))
@@ -337,10 +342,13 @@ def test_toggle_during_buffering_uses_latest_requested_intent_through_engine_rou
     controller.set_engine_media_route(SceneEngineMediaRoute(engine))
     controller.start_playback(MediaPlaybackRequest("https://cdn.example/clip.mp4", autoplay=autoplay))
     assert engine.calls[0][0] == "open_media"
+    request_id = engine.calls[0][2]["request_id"]
     engine.calls.clear()
 
     controller.on_engine_media_state(
-        MediaPlaybackNativeState(MediaPlaybackState.BUFFERING, 1200, 5000)
+        MediaPlaybackNativeState(
+            MediaPlaybackState.BUFFERING, 1200, 5000, source_request_id=request_id,
+        )
     )
     controller.toggle_play_pause()
     # The next toggle can precede a native state acknowledgement.
@@ -369,6 +377,85 @@ def test_scene_engine_route_translates_to_engine_calls():
     assert engine.calls[2][2]["position_ms"] == 1500
     assert engine.calls[3][1] is MediaControlAction.CLOSE
     assert engine.calls[4][1]["volume_percent"] == 50
+
+
+@pytest.mark.parametrize("stop_before_open", [False, True])
+def test_playback_audio_tracks_silence_end_and_replacement_of_the_same_url(
+    tmp_path, stop_before_open,
+):
+    controller, _extractor = _controller_with_extractor(tmp_path)
+    engine = _FakeEngine()
+    engine.health = SimpleNamespace(status=SceneEngineStatus.READY)
+    controller.set_engine_media_route(SceneEngineMediaRoute(engine))
+    changes = []
+    controller.playback_audio_expected_changed.connect(changes.append)
+    request = MediaPlaybackRequest("https://cdn.example/clip.mp4")
+
+    def report(state, *, source_request_id, audio_silent=False):
+        controller.on_engine_media_state(MediaPlaybackNativeState(
+            state, 1500, 5000, path=request.source, audio_silent=audio_silent,
+            source_request_id=source_request_id,
+        ))
+
+    controller.start_playback(request)
+    first_request = engine.calls[-1][2]["request_id"]
+    report(MediaPlaybackState.PLAYING, source_request_id=first_request)
+    report(MediaPlaybackState.PLAYING, source_request_id=first_request, audio_silent=True)
+    assert controller.is_playing
+    assert changes == [True, False]
+
+    report(MediaPlaybackState.PLAYING, source_request_id=first_request)
+    report(MediaPlaybackState.BUFFERING, source_request_id=first_request)
+    assert changes == [True, False, True]
+
+    with controller.replace_playback() if stop_before_open else nullcontext():
+        controller.start_playback(request)
+    second_request = engine.calls[-1][2]["request_id"]
+    assert changes == [True, False, True]
+    report(MediaPlaybackState.OPENING, source_request_id=second_request)
+    assert changes == [True, False, True]
+    report(MediaPlaybackState.PLAYING, source_request_id=second_request)
+    report(MediaPlaybackState.PLAYING, source_request_id=first_request, audio_silent=True)
+    report(MediaPlaybackState.ENDED, source_request_id=first_request)
+    assert changes == [True, False, True]
+    assert controller.is_playing
+    report(MediaPlaybackState.PLAYING, source_request_id=second_request, audio_silent=True)
+    report(MediaPlaybackState.PLAYING, source_request_id=second_request)
+    report(MediaPlaybackState.ENDED, source_request_id=second_request)
+    assert changes == [True, False, True, False, True, False]
+
+
+@pytest.mark.parametrize("rejected", [False, True])
+def test_failed_open_releases_audio_expectation_only_for_the_current_replacement(tmp_path, rejected):
+    controller, _extractor = _controller_with_extractor(tmp_path)
+    engine = _FakeEngine()
+    engine.health = SimpleNamespace(status=SceneEngineStatus.READY)
+    controller.set_engine_media_route(SceneEngineMediaRoute(engine))
+    request = MediaPlaybackRequest("/videos/clip.mp4")
+    changes = []
+    controller.playback_audio_expected_changed.connect(changes.append)
+
+    controller.start_playback(request)
+    first_request_id = engine.calls[-1][2]["request_id"]
+    controller.on_engine_media_state(MediaPlaybackNativeState(
+        MediaPlaybackState.PLAYING, 1000, 5000, source_request_id=first_request_id,
+    ))
+    with controller.replace_playback():
+        controller.start_playback(request)
+    controller.start_playback(request)
+
+    engine.opens[1].set_exception(TimeoutError())
+    QCoreApplication.processEvents()
+    assert changes == [True]
+    if rejected:
+        request_id = engine.calls[-1][2]["request_id"]
+        engine.opens[2].set_result(SceneEngineAck(
+            request_id, "session", "process", 0, 0, False, "runtime_unavailable",
+        ))
+    else:
+        engine.opens[2].set_exception(TimeoutError())
+    QCoreApplication.processEvents()
+    assert changes == [True, False]
 
 
 def test_foreground_open_binds_the_current_visual_presentation():

@@ -11610,8 +11610,8 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Solin에서 오디오나 동영상을 재생하는 동안 Zoom 마이크를 음소거합니다. Solin이 음소거한 경우 재생을 일시 정지하거나 중지하면 음소거를 해제합니다.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Solin에서 오디오나 동영상을 재생하는 동안 Zoom 마이크를 음소거합니다. Solin이 음소거한 경우 무음이 계속되거나 재생이 일시 정지 또는 중지되면 음소거를 해제할 수 있습니다.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>

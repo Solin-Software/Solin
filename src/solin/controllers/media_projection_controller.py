@@ -333,51 +333,50 @@ class MediaProjectionController:
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.ndi_service.stop()
-        context.media_controller.stop()
-        context.ndi_service.stop()
-
-        for projection_window in context.projection_windows():
-            projection_window.clear()
-
-        context.projection_bar.activate_video(
-            title,
-            keep_expanded=keep_expanded,
-            is_audio=is_audio,
-        )
-
-        if not is_audio:
+        with context.media_controller.replace_playback():
+            context.ndi_service.stop()
             for projection_window in context.projection_windows():
-                projection_window.begin_video()
+                projection_window.clear()
 
-        announce = (
-            is_sjjm
-            and not is_audio
-            and context.sjjm_announce_mode()
-            and not self._item_has_custom_trim(media_item)
-        )
-        if not is_audio:
-            self._handlers.prepare_video_session()
-
-        wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback()
-        if announce:
-            context.projection_bar.begin_announcement_mode()
-
-        self._session.set_state(
-            {
-                "type": "video",
-                "is_audio": is_audio,
-                "title": title,
-                "origin": self._projection_origin(media_item),
-            }
-        )
-        start_paused = not is_audio and not announce and context.start_videos_paused()
-        context.media_controller.start_playback(
-            self._playback_request(
-                media_item or {"url": url},
-                source=url,
-                autoplay=not (start_paused or wait_for_auto_share),
+            context.projection_bar.activate_video(
+                title,
+                keep_expanded=keep_expanded,
+                is_audio=is_audio,
             )
-        )
+
+            if not is_audio:
+                for projection_window in context.projection_windows():
+                    projection_window.begin_video()
+
+            announce = (
+                is_sjjm
+                and not is_audio
+                and context.sjjm_announce_mode()
+                and not self._item_has_custom_trim(media_item)
+            )
+            if not is_audio:
+                self._handlers.prepare_video_session()
+
+            wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback()
+            if announce:
+                context.projection_bar.begin_announcement_mode()
+
+            self._session.set_state(
+                {
+                    "type": "video",
+                    "is_audio": is_audio,
+                    "title": title,
+                    "origin": self._projection_origin(media_item),
+                }
+            )
+            start_paused = not is_audio and not announce and context.start_videos_paused()
+            context.media_controller.start_playback(
+                self._playback_request(
+                    media_item or {"url": url},
+                    source=url,
+                    autoplay=not (start_paused or wait_for_auto_share),
+                )
+            )
         self._handlers.update_projection_status(
             True,
             title,

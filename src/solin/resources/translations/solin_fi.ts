@@ -11650,8 +11650,8 @@ Molempien laitteiden on oltava samassa Wi-Fi-verkossa.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
-        <source>Mute your Zoom microphone while Solin plays audio or video. Unmute it when playback pauses or stops if Solin muted it.</source>
-        <translation>Mykistää Zoom-mikrofonin, kun Solin toistaa ääntä tai videota. Jos Solin mykisti mikrofonin, mykistys poistetaan, kun toisto keskeytetään tai pysäytetään.</translation>
+        <source>Mute your Zoom microphone while Solin plays audio or video. If Solin muted it, it can unmute during sustained silence or when playback pauses or stops.</source>
+        <translation>Mykistää Zoom-mikrofonin, kun Solin toistaa ääntä tai videota. Jos Solin mykisti mikrofonin, se voi poistaa mykistyksen pitkän hiljaisuuden aikana tai kun toisto keskeytetään tai pysäytetään.</translation>
     </message>
     <message>
         <location filename="../../widgets/zoom_panel.py"/>
