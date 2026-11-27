@@ -217,7 +217,9 @@ def _sources(window):
     )
 
 
-def _handlers(window, *, timer_output=None, timer_bridge=None, apply_theme=None):
+def _handlers(
+    window, *, timer_output=None, timer_bridge=None, apply_theme=None, refresh_timer_meeting_schedule=None,
+):
     return MainWindowSignalHandlers(
         media_projection=window._media_projection,
         timer_projection=window._timer_projection,
@@ -233,6 +235,7 @@ def _handlers(window, *, timer_output=None, timer_bridge=None, apply_theme=None)
         open_meeting_schedule_settings=_slot("open_meeting_schedule_settings"),
         timer_output=timer_output,
         timer_bridge=timer_bridge,
+        refresh_timer_meeting_schedule=refresh_timer_meeting_schedule,
         apply_theme=apply_theme,
     )
 
@@ -338,6 +341,7 @@ def test_screen_changes_refresh_timer_output_and_monitor_bridge():
     window = _WindowStub()
     timer_output = SimpleNamespace(on_screens_changed=_slot("timer_screens_changed"))
     refresh_calls = []
+    schedule_calls = []
     timer_bridge = SimpleNamespace(refreshMonitors=lambda: refresh_calls.append("refresh"))
     controller = SignalConnectionController(
         _sources(window),
@@ -345,14 +349,18 @@ def test_screen_changes_refresh_timer_output_and_monitor_bridge():
             window,
             timer_output=timer_output,
             timer_bridge=timer_bridge,
+            refresh_timer_meeting_schedule=lambda: schedule_calls.append("meeting_schedule"),
         ),
     )
 
     controller.connect_signals()
     window.screen_mgr.screens_changed.connected[-1]()
+    for callback in list(window.settings_widget.general.meeting_schedule_changed.connected):
+        callback()
 
     assert window.screen_mgr.screens_changed.connected[:2] == [
         window._projection_targets.on_screens_changed,
         timer_output.on_screens_changed,
     ]
     assert refresh_calls == ["refresh"]
+    assert schedule_calls == ["meeting_schedule"]

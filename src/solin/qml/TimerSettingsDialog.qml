@@ -20,6 +20,7 @@ Dialog {
     property color pal_textMuted: appTheme.textMuted
     property color pal_accent: appTheme.accent
     property color pal_warning: appTheme.warning
+    property color pal_danger: appTheme.danger
 
     property var returnFocusItem: null
     property int pendingReserveIndex: -1
@@ -41,6 +42,10 @@ Dialog {
     readonly property var partDisplayRows: optionRows(timer.partTimerDisplays, ["timer", "clock", "clock_timer"])
     readonly property var partDisplayOptions: optionLabels(partDisplayRows, partDisplayLabel)
     readonly property int partDisplayCurrent: optionIndex(partDisplayRows, cfg.part_timer_display, "timer")
+    readonly property string currentPacingMode: timer.pacingMode
+    readonly property var pacingModeRows: optionRows(timer.pacingModes, ["off", "monitor", "automatic"])
+    readonly property var pacingModeOptions: optionLabels(pacingModeRows, pacingModeLabel)
+    readonly property int pacingModeCurrent: optionIndex(pacingModeRows, currentPacingMode, "off")
 
     objectName: "timerSettingsDialog"
     parent: Overlay.overlay
@@ -55,16 +60,14 @@ Dialog {
     closePolicy: Popup.CloseOnEscape
 
     function present(focusItem) {
+        if (timer.feedback.scope === "settings")
+            timer.clearFeedback()
         returnFocusItem = focusItem
         open()
     }
 
     function optionOpacity(available) {
         return available ? 1.0 : 0.68
-    }
-
-    function iconHex(colorValue) {
-        return String(colorValue).replace("#", "")
     }
 
     function optionRows(rows, fallback) {
@@ -116,6 +119,21 @@ Dialog {
         if (id === "clock") return qsTr("Clock")
         if (id === "clock_timer") return qsTr("Clock + timer")
         return id
+    }
+
+    function pacingModeLabel(id) {
+        if (id === "off") return qsTr("Off")
+        if (id === "monitor") return qsTr("Monitor only")
+        if (id === "automatic") return qsTr("Monitor and adjust")
+        return id
+    }
+
+    function pacingModeHint(id) {
+        if (id === "monitor")
+            return qsTr("Forecasts the finish time without changing part targets. Saved per profile for both Meetings and Schedules.")
+        if (id === "automatic")
+            return qsTr("Forecasts the finish time and adjusts upcoming eligible part targets. Changing mode during a run keeps the active target.")
+        return qsTr("Does not forecast finish time or adjust part targets. Saved per profile for both Meetings and Schedules.")
     }
 
     onClosed: {
@@ -170,11 +188,12 @@ Dialog {
                     color: Qt.rgba(dialog.pal_accent.r, dialog.pal_accent.g, dialog.pal_accent.b, 0.11)
                     border.color: Qt.rgba(dialog.pal_accent.r, dialog.pal_accent.g, dialog.pal_accent.b, 0.30)
                     border.width: 1
-                    Image {
+                    TimerIcon {
                         anchors.centerIn: parent
                         width: 19; height: 19
-                        sourceSize.width: 38; sourceSize.height: 38
-                        source: "image://timericons/settings/38/" + dialog.iconHex(dialog.pal_accent)
+                        rasterSize: 38
+                        iconName: "settings"
+                        tint: dialog.pal_accent
                     }
                 }
                 ColumnLayout {
@@ -204,6 +223,31 @@ Dialog {
             Layout.preferredHeight: 1
             color: dialog.pal_border
             opacity: 0.8
+        }
+
+        Rectangle {
+            objectName: "timerSettingsPacingErrorBanner"
+            visible: !!timer.feedback && timer.feedback.scope === "settings" && !!timer.feedback.message
+            Layout.fillWidth: true
+            Layout.leftMargin: dialog.outerMargin
+            Layout.rightMargin: dialog.outerMargin
+            Layout.topMargin: 10
+            implicitHeight: settingsPacingErrTxt.implicitHeight + 14
+            radius: 8
+            color: Qt.rgba(dialog.pal_danger.r, dialog.pal_danger.g, dialog.pal_danger.b, 0.12)
+            border.color: dialog.pal_danger
+            border.width: 1
+
+            Text {
+                id: settingsPacingErrTxt
+                anchors.fill: parent
+                anchors.margins: 7
+                text: timer.feedback && timer.feedback.message ? timer.feedback.message : ""
+                textFormat: Text.PlainText
+                color: dialog.pal_danger
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+            }
         }
 
         Flickable {
@@ -257,6 +301,42 @@ Dialog {
                 y: dialog.outerMargin
                 width: Math.max(0, viewport.width - dialog.outerMargin * 2 - 10)
                 spacing: 14
+
+                SettingsCard {
+                    objectName: "timerSettingsPacingCard"
+                    Layout.fillWidth: true
+                    title: qsTr("Pacing")
+
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: dialog.compact ? 1 : 2
+                        columnSpacing: 18
+                        rowSpacing: dialog.compact ? 7 : 10
+
+                        SettingLabel { text: qsTr("Mode") }
+                        TimerSelect {
+                            objectName: "timerPacingModeSelect"
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            options: dialog.pacingModeOptions
+                            current: dialog.pacingModeCurrent
+                            accent: dialog.pal_accent
+                            onPicked: function(i) {
+                                if (timer.setPacingMode)
+                                    timer.setPacingMode(dialog.optionIdAt(dialog.pacingModeRows, i, "off"))
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: dialog.pacingModeHint(dialog.currentPacingMode)
+                        color: dialog.pal_textMuted
+                        font.pixelSize: 12
+                        lineHeight: 1.3
+                        wrapMode: Text.WordWrap
+                    }
+                }
 
                 SettingsCard {
                     objectName: "timerSettingsClockCard"
@@ -469,12 +549,12 @@ Dialog {
                                                : dialog.pal_bg
                                         border.color: modelData.reserved ? dialog.pal_accent : dialog.pal_border
                                         border.width: 1
-                                        Image {
+                                        TimerIcon {
                                             anchors.centerIn: parent
                                             width: 16; height: 16
-                                            sourceSize.width: 32; sourceSize.height: 32
-                                            source: "image://timericons/monitor/32/"
-                                                    + dialog.iconHex(modelData.reserved ? dialog.pal_accent : dialog.pal_textMuted)
+                                            rasterSize: 32
+                                            iconName: "monitor"
+                                            tint: modelData.reserved ? dialog.pal_accent : dialog.pal_textMuted
                                         }
                                     }
                                     ColumnLayout {
@@ -484,6 +564,7 @@ Dialog {
                                         Text {
                                             Layout.fillWidth: true
                                             text: modelData.name
+                                            textFormat: Text.PlainText
                                             color: dialog.pal_textPrimary
                                             font.pixelSize: 14
                                             font.weight: Font.DemiBold
@@ -586,11 +667,12 @@ Dialog {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                Image {
+                TimerIcon {
                     visible: card.iconName !== ""
                     Layout.preferredWidth: 15; Layout.preferredHeight: 15
-                    sourceSize.width: 30; sourceSize.height: 30
-                    source: card.iconName === "" ? "" : "image://timericons/" + card.iconName + "/30/" + dialog.iconHex(dialog.pal_textMuted)
+                    rasterSize: 30
+                    iconName: card.iconName
+                    tint: dialog.pal_textMuted
                 }
                 Text {
                     Layout.fillWidth: true
@@ -644,11 +726,12 @@ Dialog {
                 color: Qt.rgba(dialog.pal_warning.r, dialog.pal_warning.g, dialog.pal_warning.b, 0.14)
                 border.color: Qt.rgba(dialog.pal_warning.r, dialog.pal_warning.g, dialog.pal_warning.b, 0.34)
                 border.width: 1
-                Image {
+                TimerIcon {
                     anchors.centerIn: parent
                     width: 22; height: 22
-                    sourceSize.width: 44; sourceSize.height: 44
-                    source: "image://timericons/monitor/44/d29922"
+                    rasterSize: 44
+                    iconName: "monitor"
+                    tint: "#d29922"
                 }
             }
             Text {

@@ -9,12 +9,13 @@ from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.timer_engine import TimerEngine
 from solin.controllers.timer_operations import TimerOperations
+from solin.controllers.timer_pdf_export_controller import TimerPdfExportController
 from solin.controllers.timer_hand_alert_controller import TimerHandAlertController
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.i18n.date import format_time_with_seconds
 from solin.core.integrations.automation.settings import ZoomSettingsStore
 from solin.core.timer.application import TimerSession
-from solin.core.timer.infrastructure import QSettingsTimerRepository
+from solin.core.timer.infrastructure import JsonCustomTimerRepository, QSettingsTimerRepository
 from solin.core.meetings.workbook import Workbook, WorkbookPart
 from solin.core.timer.models import AssignmentSetup, Direction, MeetingType, PartState, Section
 from solin.ui.qml.timer_bridge import TimerBridge
@@ -70,7 +71,8 @@ def timer_context(tmp_path, monkeypatch, qt_object_owner):
         lambda _: QSettings(settings_path, QSettings.Format.IniFormat),
     )
     repository = QSettingsTimerRepository(SettingsStore.for_namespace("test", "timer"))
-    session = TimerSession(repository, _WEEK)
+    custom = JsonCustomTimerRepository(tmp_path / "timer_schedules")
+    session = TimerSession(repository, _WEEK, custom)
     engine = TimerEngine(qt_object_owner)
     automation = _Automation(qt_object_owner)
     hand_alert = TimerHandAlertController(
@@ -78,16 +80,157 @@ def timer_context(tmp_path, monkeypatch, qt_object_owner):
     )
     lookup = _Lookup(qt_object_owner)
     language = _Language(qt_object_owner)
+    notifications = []
     bridge = TimerBridge(
         operations=TimerOperations(engine, session, parent=qt_object_owner),
         output=None, monitors=None, pdf_export=None,
         hand_alert=hand_alert, media_countdown_automation=automation, parent=qt_object_owner,
         language_manager=language, workbook_lookup=lookup,
+        notify_error=notifications.append,
     )
     return SimpleNamespace(
         clock=clock, repository=repository, session=session, engine=engine, bridge=bridge,
-        hand_alert=hand_alert, lookup=lookup, language=language,
+        hand_alert=hand_alert, lookup=lookup, language=language, notifications=notifications,
     )
+
+
+def test_custom_catalog_initial_read_failure_can_recover(timer_context, monkeypatch, qt_object_owner):
+    ctx = timer_context
+    operations = ctx.bridge.operations
+    list_schedules = operations.list_custom_schedules
+
+    def fail_read():
+        raise OSError("catalog unavailable")
+
+    monkeypatch.setattr(operations, "list_custom_schedules", fail_read)
+    bridge = TimerBridge(
+        operations=operations, output=None, monitors=None, pdf_export=None,
+        hand_alert=ctx.hand_alert, media_countdown_automation=ctx.bridge._media_countdown_automation,
+        parent=qt_object_owner,
+    )
+    assert not bridge.customCatalogAvailable
+    assert bridge.customSchedules == []
+
+    monkeypatch.setattr(operations, "list_custom_schedules", list_schedules)
+    assert bridge.refreshCustomCatalog()
+    assert bridge.customCatalogAvailable
+    assert bridge.customSchedules == []
+
+
+def test_live_controls_update_the_active_catalog_row_without_reloading(timer_context, monkeypatch):
+    ctx = timer_context
+    operations = ctx.bridge.operations
+    schedule = operations.create_custom_schedule("Training", first_part_title="Talk", first_part_seconds=90, select=True)
+    part_id = schedule.parts[0].id
+    reads = []
+    list_schedules = operations.list_custom_schedules
+
+    def counted_read():
+        reads.append(True)
+        return list_schedules()
+
+    monkeypatch.setattr(operations, "list_custom_schedules", counted_read)
+    structure_updates = QSignalSpy(ctx.bridge.scheduleChanged)
+    live_updates = QSignalSpy(ctx.bridge.liveStateChanged)
+    assert operations.start_part(part_id)
+    assert ctx.bridge.customSchedules[0]["hasTimingData"]
+    structure_before_tick = structure_updates.count()
+    live_before_tick = live_updates.count()
+    ctx.clock.now += 5
+    ctx.engine.tick.emit(ctx.engine.snapshot().to_dict())
+    assert live_updates.count() == live_before_tick + 1
+    assert structure_updates.count() == structure_before_tick
+    assert operations.stop_part()
+    assert operations.reset_all()
+    assert not ctx.bridge.customSchedules[0]["hasTimingData"]
+    assert ctx.bridge.customSchedules[0]["revision"] == ctx.session.schedule.revision
+    assert not reads
+
+
+def test_timer_operation_errors_use_central_notifications_outside_dialogs(timer_context, monkeypatch):
+    ctx = timer_context
+
+    def fail_save(_schedule):
+        raise OSError("disk error")
+
+    part = ctx.session.schedule.parts[0]
+    monkeypatch.setattr(ctx.repository, "save_schedule", fail_save)
+    ctx.bridge.startPart(part.id)
+    assert ctx.notifications == [ctx.bridge.feedback["message"]]
+    assert not ctx.session.schedule.has_running_part()
+
+    binding = ctx.bridge.scheduleSummary
+    assert not ctx.bridge.savePartEdit(
+        binding["scheduleId"], binding["scheduleRevision"], part.id, "New title", -1,
+    )
+    assert ctx.bridge.feedback["scope"] == f"part:{part.id}"
+    assert len(ctx.notifications) == 1
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_timer_pdf_reports_export_outcome_through_central_notifications(timer_context, tmp_path, monkeypatch, fail):
+    from solin.controllers import timer_pdf_export_controller as export_module
+
+    output = tmp_path / "report.pdf"
+    notifications = []
+    notifications_center = SimpleNamespace(
+        error=lambda message, **_: notifications.append(("error", message)),
+        success=lambda message, **_: notifications.append(("success", message)),
+    )
+
+    def export(_schedule, path, **_kwargs):
+        if fail:
+            raise OSError("disk error")
+        with open(path, "wb") as report:
+            report.write(b"%PDF")
+
+    monkeypatch.setattr(export_module.QFileDialog, "getSaveFileName", lambda *_: (str(output), ""))
+    monkeypatch.setattr(export_module, "export_schedule_pdf", export)
+    TimerPdfExportController(None, notifications_center).export(
+        timer_context.session.schedule,
+        week_label="Week",
+        meeting_type_label="Midweek",
+        date_format="dd/MM/yyyy",
+        time_format="HH:mm:ss",
+    )
+
+    assert [kind for kind, _ in notifications] == ["error" if fail else "success"]
+    assert output.exists() is not fail
+
+
+def test_settings_feedback_survives_unrelated_changes_and_clears_on_retry(timer_context, monkeypatch):
+    ctx = timer_context
+    save_clock = ctx.repository.save_clock_config
+    save_pacing = ctx.repository.save_pacing_mode
+
+    def fail_save(_value):
+        raise OSError("settings unavailable")
+
+    monkeypatch.setattr(ctx.repository, "save_clock_config", fail_save)
+    show_seconds = not ctx.bridge.clockConfig["show_seconds"]
+    ctx.bridge.updateClock("show_seconds", show_seconds)
+    clock_error = ctx.bridge.feedback
+    assert clock_error["scope"] == "settings"
+    assert clock_error["code"] == "failed"
+    assert ctx.bridge.setPacingMode("monitor")
+    assert ctx.bridge.feedback == clock_error
+
+    monkeypatch.setattr(ctx.repository, "save_clock_config", save_clock)
+    ctx.bridge.updateClock("show_seconds", show_seconds)
+    assert ctx.bridge.clockConfig["show_seconds"] == show_seconds
+    assert not ctx.bridge.feedback
+
+    monkeypatch.setattr(ctx.repository, "save_pacing_mode", fail_save)
+    assert not ctx.bridge.setPacingMode("automatic")
+    pacing_error = ctx.bridge.feedback
+    assert pacing_error["scope"] == "settings"
+    assert pacing_error["code"] == "failed"
+    ctx.bridge.updateClock("show_seconds", not show_seconds)
+    assert ctx.bridge.feedback == pacing_error
+
+    monkeypatch.setattr(ctx.repository, "save_pacing_mode", save_pacing)
+    assert ctx.bridge.setPacingMode("automatic")
+    assert not ctx.bridge.feedback
 
 
 def test_manual_hand_control_updates_the_projection_without_changing_the_clock(timer_context):
@@ -232,7 +375,8 @@ def test_stale_lookup_never_replaces_in_use_assignments(timer_context, action):
     initial = _show_assignments(ctx)
     part = ctx.session.schedule.parts_in(Section.MINISTRY)[0]
     if action == "duration":
-        ctx.bridge.setPartSeconds(part.id, 420)
+        summary = ctx.bridge.scheduleSummary
+        assert ctx.bridge.savePartEdit(summary["scheduleId"], summary["scheduleRevision"], part.id, "", 420)
     elif action == "count":
         ctx.bridge.setSectionCount("ministry", 4)
     elif action == "rename":
@@ -266,6 +410,12 @@ def test_inline_edit_defers_lookup_even_when_language_changes(timer_context):
     ctx.bridge.set_timer_page_visible(True)
     assert len(ctx.lookup.requests) == 2
     assert ctx.lookup.requests[-1][1:] == (_WEEK, "FI")
+
+
+def test_custom_section_palette_falls_back_for_invalid_preview(timer_context):
+    bridge = timer_context.bridge
+    assert bridge.customSectionPalette("invalid") == bridge.customSectionPalette("")
+    assert bridge.customSectionPalette("#41b6c4") != bridge.customSectionPalette("")
 
 
 def test_manually_selecting_a_different_visible_week_or_language_discards_old_document(timer_context):

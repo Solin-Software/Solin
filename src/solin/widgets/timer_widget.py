@@ -71,6 +71,7 @@ class TimerWidget(QWidget):
                 "timer": self.bridge,
             },
             mouse_tracking=True,
+            dismiss_text_focus_on_pointer_press=True,
             defer_load=self._defer_qml,
         )
         layout.addWidget(self._qml)

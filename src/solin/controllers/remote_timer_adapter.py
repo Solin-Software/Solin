@@ -497,12 +497,9 @@ class RemoteTimerAdapter(QObject):
                     **command.values,
                 )
             elif isinstance(command, SelectCustomScheduleCommand):
-                schedule = operations.get_custom_schedule(command.schedule_id)
-                if schedule is None:
-                    raise TimerOperationError("not_found", "The timer schedule no longer exists.")
-                if schedule.revision != command.custom_revision:
-                    raise TimerOperationError("schedule_stale", "The timer schedule changed.")
-                operations.select_custom_schedule(command.schedule_id)
+                operations.select_custom_schedule(
+                    command.schedule_id, expected_revision=command.custom_revision,
+                )
             elif isinstance(command, SelectMeetingScheduleCommand):
                 operations.select_meeting_schedule()
             elif isinstance(command, RenamePartCommand):
@@ -517,7 +514,10 @@ class RemoteTimerAdapter(QObject):
                 available_seconds=error.available_seconds, requested_seconds=error.requested_seconds,
             )
         except TimerOperationError as error:
-            code = TimerCommandErrorCode(error.code)
+            try:
+                code = TimerCommandErrorCode(error.code)
+            except ValueError:
+                code = TimerCommandErrorCode.FAILED
             return TimerCommandError(code, str(error), retryable=code is TimerCommandErrorCode.SCHEDULE_STALE)
 
         if not self._active:

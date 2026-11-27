@@ -1253,6 +1253,63 @@ def test_custom_pacing_round_trips_through_authenticated_remote(
         engine._revert_timer.stop()
 
 
+@pytest.mark.parametrize("action", ["create_custom_schedule", "select_custom_schedule"])
+def test_custom_schedule_recovery_errors_are_returned_by_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str,
+) -> None:
+    engine, session, bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=True),
+        custom_directory=tmp_path / "timers",
+    )
+    existing = bridge.operations.create_custom_schedule("Existing")
+
+    if action == "create_custom_schedule":
+        save_schedule = JsonCustomTimerRepository.save_schedule
+
+        def fail_after_saving(repository, schedule):
+            save_schedule(repository, schedule)
+            raise OSError("Could not sync the schedule directory")
+
+        def fail_cleanup(_repository, _schedule_id):
+            raise OSError("Could not remove the new schedule")
+
+        monkeypatch.setattr(JsonCustomTimerRepository, "save_schedule", fail_after_saving)
+        monkeypatch.setattr(JsonCustomTimerRepository, "delete_schedule", fail_cleanup)
+        payload = {"title": "New"}
+    else:
+        save_selection = JsonCustomTimerRepository.save_selection
+
+        def fail_selection(repository, schedule_id):
+            if schedule_id is not None:
+                save_selection(repository, schedule_id)
+            raise OSError("Could not save the selection")
+
+        monkeypatch.setattr(JsonCustomTimerRepository, "save_selection", fail_selection)
+        payload = {"scheduleId": existing.id, "customRevision": existing.revision}
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            command = {
+                "commandId": str(uuid.uuid4()),
+                "type": action,
+                "scheduleRevision": adapter.state.schedule_revision,
+                **payload,
+            }
+            response = await client.post("/remote/timer/api/commands", headers=headers, json=command)
+            result = await response.json()
+            assert not result["ok"]
+            assert result["error"]["code"] == "failed"
+            assert "schedule" in result["error"]["message"]
+            assert isinstance(session.schedule, MeetingSchedule)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
 def test_custom_schedule_feature_is_disabled_by_default(tmp_path: Path) -> None:
     engine, _session, _bridge, adapter, app = _build_stack(
         custom_directory=tmp_path / "custom-timers"

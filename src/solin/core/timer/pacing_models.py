@@ -19,9 +19,12 @@ def normalize_time_of_day(value: object) -> str:
     if not isinstance(value, str):
         raise ValueError("Set a valid start and end time (HH:MM).")
     parts = value.strip().split(":")
-    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+    if len(parts) != 2 or not all(part.isdecimal() for part in parts):
         raise ValueError("Set a valid start and end time (HH:MM).")
-    hour, minute = int(parts[0]), int(parts[1])
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError as exc:
+        raise ValueError("Set a valid start and end time (HH:MM).") from exc
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         raise ValueError("Set a valid start and end time (HH:MM).")
     return f"{hour:02d}:{minute:02d}"

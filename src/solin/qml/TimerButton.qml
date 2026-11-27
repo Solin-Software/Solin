@@ -11,7 +11,7 @@ Rectangle {
     property string variant: "ghost"          // primary | soft | ghost
     property color accent: appTheme.accent
     property string iconName: ""
-    property string iconColorHex: ""
+    property color iconColor: _filled ? appTheme.white : appTheme.textSecondary
     property int iconSize: 14
     property string tip: ""
     signal clicked()
@@ -20,18 +20,14 @@ Rectangle {
     readonly property bool _soft: variant === "soft"
     readonly property bool _hasIcon: iconName !== ""
     readonly property bool _hasLabel: text !== ""
-    readonly property real _contentImplicitWidth: label.implicitWidth
-                                                  + (icon.visible ? icon.width + row.spacing : 0)
+    readonly property real _contentImplicitWidth: (ctl._hasLabel ? label.implicitWidth : 0)
+                                                  + (ctl._hasIcon ? ctl.iconSize + (ctl._hasLabel ? 7 : 0) : 0)
     readonly property string _toolTipText: tip !== ""
                                               ? tip
                                               : (label.truncated ? text : "")
 
-    function iconHex(colorValue) {
-        return String(colorValue).replace("#", "")
-    }
-
     implicitHeight: 34
-    implicitWidth: _contentImplicitWidth + (_contentImplicitWidth > 0 ? 26 : 22)
+    implicitWidth: _hasLabel ? (_contentImplicitWidth + 26) : Math.max(32, iconSize + 18)
     radius: 8
     opacity: enabled ? 1.0 : 0.4
     activeFocusOnTab: enabled
@@ -71,23 +67,20 @@ Rectangle {
         id: row
         objectName: "timerButtonContent"
         anchors.centerIn: parent
-        width: Math.min(ctl._contentImplicitWidth, Math.max(0, ctl.width - 20))
+        width: Math.min(ctl._contentImplicitWidth, Math.max(0, ctl.width - (ctl._hasLabel ? 20 : 4)))
         height: Math.max(icon.visible ? icon.height : 0, label.visible ? label.implicitHeight : 0)
         spacing: ctl._hasIcon && ctl._hasLabel ? 7 : 0
 
-        Image {
+        TimerIcon {
             id: icon
             objectName: "timerButtonIcon"
             visible: ctl._hasIcon
             anchors.verticalCenter: parent.verticalCenter
             width: ctl.iconSize
             height: ctl.iconSize
-            sourceSize.width: ctl.iconSize * 2
-            sourceSize.height: ctl.iconSize * 2
-            source: ctl.iconName === "" ? "" :
-                    "image://timericons/" + ctl.iconName + "/" + (ctl.iconSize * 2) + "/" +
-                    (ctl.iconColorHex !== "" ? ctl.iconColorHex
-                     : ctl._filled ? ctl.iconHex(appTheme.white) : ctl.iconHex(appTheme.textSecondary))
+            rasterSize: ctl.iconSize * 2
+            iconName: ctl.iconName
+            tint: ctl.iconColor
         }
 
         Text {

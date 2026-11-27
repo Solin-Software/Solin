@@ -156,9 +156,27 @@ class _TextFocusDismissFilter(QObject):
         local_point = boundary.mapFromScene(event.position())
         if boundary.contains(local_point):
             return
+        # Clear focus on the text boundary first so modal Popup FocusScopes
+        # (in Overlay.overlay) do not immediately restore focus back into it.
+        if isinstance(focus_item, QQuickItem):
+            focus_item.setFocus(False)
+        boundary.setFocus(False)
+        scope = cls._enclosing_focus_scope(boundary)
+        if scope is not None:
+            scope.forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+            return
         root = widget.rootObject()
         if isinstance(root, QQuickItem):
             root.forceActiveFocus(Qt.FocusReason.MouseFocusReason)
+
+    @staticmethod
+    def _enclosing_focus_scope(boundary: QQuickItem) -> QQuickItem | None:
+        current = boundary.parentItem()
+        while isinstance(current, QQuickItem):
+            if current.isFocusScope():
+                return current
+            current = current.parentItem()
+        return None
 
     @staticmethod
     def _focus_boundary(item: QQuickItem | None) -> QQuickItem | None:

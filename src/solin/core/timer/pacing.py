@@ -89,6 +89,7 @@ def adjustment_weights(schedule: TimerSchedule, parts: Sequence[TimerPart]) -> d
     eligible = [part for part in parts if part.planned_seconds >= MIN_PLANNED_PART_SECONDS]
     if isinstance(schedule, MeetingSchedule):
         return {part.id: weight for part in eligible if (weight := _meeting_adjustment_weight(part))}
+    # A temporarily ineligible selection still restricts which parts may be adjusted.
     if any(part.adjustment_weight for part in parts):
         return {part.id: part.adjustment_weight for part in eligible if part.adjustment_weight}
     return dict.fromkeys((part.id for part in eligible), DEFAULT_ADJUSTMENT_WEIGHT)

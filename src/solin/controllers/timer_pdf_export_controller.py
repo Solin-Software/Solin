@@ -5,40 +5,27 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP, QStandardPaths
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtCore import QCoreApplication, QStandardPaths
+from PySide6.QtWidgets import QFileDialog, QWidget
 
 from ..core.rendering.timer_report_pdf import (
     default_pdf_filename,
     export_schedule_pdf,
 )
+from ..core.timer.models import TimerSchedule
 from ..core.timer.pacing_models import PacingMode
+from ..ui.notifications import NotificationCenter
 
 log = logging.getLogger(__name__)
 
-_TR_CONTEXT = "TimerPdfExport"
-_EXPORT_PDF_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Export PDF")
-_PDF_FILES_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "PDF files (*.pdf)")
-_EXPORT_FAILED_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Export failed")
-_EXPORT_ERROR_SOURCE = QT_TRANSLATE_NOOP(
-    "TimerPdfExport",
-    "Could not export the timer PDF:\n{error}",
-)
-_EXPORTED_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "PDF exported")
-_SAVED_TO_SOURCE = QT_TRANSLATE_NOOP("TimerPdfExport", "Saved to:\n{path}")
-
-
-def _tr(source: str) -> str:
-    return QCoreApplication.translate(_TR_CONTEXT, source)
-
-
 class TimerPdfExportController:
-    def __init__(self, parent) -> None:
+    def __init__(self, parent: QWidget | None, notifications: NotificationCenter) -> None:
         self._parent = parent
+        self._notifications = notifications
 
     def export(
         self,
-        schedule,
+        schedule: TimerSchedule,
         *,
         week_label: str,
         meeting_type_label: str,
@@ -53,9 +40,9 @@ class TimerPdfExportController:
         default_path = base_dir / default_pdf_filename(schedule)
         path, _ = QFileDialog.getSaveFileName(
             self._parent,
-            _tr(_EXPORT_PDF_SOURCE),
+            QCoreApplication.translate("TimerPdfExport", "Export PDF"),
             str(default_path),
-            _tr(_PDF_FILES_SOURCE),
+            QCoreApplication.translate("TimerPdfExport", "PDF files (*.pdf)"),
         )
         if not path:
             return
@@ -74,15 +61,15 @@ class TimerPdfExportController:
             )
         except Exception as exc:  # noqa: BLE001 - PDF export adapter boundary
             log.exception("Timer PDF export failed")
-            QMessageBox.critical(
-                self._parent,
-                _tr(_EXPORT_FAILED_SOURCE),
-                _tr(_EXPORT_ERROR_SOURCE).format(error=exc),
+            self._notifications.error(
+                QCoreApplication.translate(
+                    "TimerPdfExport", "Could not export the timer PDF:\n{error}",
+                ).format(error=exc),
+                title=QCoreApplication.translate("TimerPdfExport", "Export failed"),
             )
             return
 
-        QMessageBox.information(
-            self._parent,
-            _tr(_EXPORTED_SOURCE),
-            _tr(_SAVED_TO_SOURCE).format(path=path),
+        self._notifications.success(
+            QCoreApplication.translate("TimerPdfExport", "Saved to:\n{path}").format(path=path),
+            title=QCoreApplication.translate("TimerPdfExport", "PDF exported"),
         )

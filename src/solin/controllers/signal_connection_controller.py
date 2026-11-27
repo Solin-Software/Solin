@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,6 +45,7 @@ class MainWindowSignalHandlers:
     apply_theme: Any | None = None
     timer_output: Any | None = None
     timer_bridge: Any | None = None
+    refresh_timer_meeting_schedule: Callable[[], None] | None = None
 
 
 class SignalConnectionController:
@@ -158,6 +160,8 @@ class SignalConnectionController:
         settings.general.meeting_schedule_changed.connect(
             sources.media_countdown_automation.reload_schedule
         )
+        if handlers.refresh_timer_meeting_schedule is not None:
+            settings.general.meeting_schedule_changed.connect(handlers.refresh_timer_meeting_schedule)
         if handlers.apply_theme is not None:
             settings.general.theme_changed.connect(handlers.apply_theme)
 

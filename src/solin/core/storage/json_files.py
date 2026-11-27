@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 
+class JsonDirectorySyncError(OSError):
+    """The target was replaced, but the directory update could not be synced."""
+
+
 def read_json_file(path: str | Path) -> Any:
     with Path(path).open("r", encoding="utf-8") as file:
         return json.load(file)
@@ -42,7 +46,12 @@ def write_json_atomic(
             file.flush()
             os.fsync(file.fileno())
         os.replace(tmp, target)
-        _sync_parent_directory(target.parent)
+        try:
+            _sync_parent_directory(target.parent)
+        except OSError as error:
+            raise JsonDirectorySyncError(
+                f"Could not confirm durability after replacing {target}."
+            ) from error
     finally:
         try:
             tmp.unlink(missing_ok=True)

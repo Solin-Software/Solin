@@ -712,6 +712,52 @@ def test_shared_text_field_cursor_icon_click_clear_and_outside_focus():
         dispose_widget(widget)
 
 
+def test_shared_text_field_dismisses_focus_when_clicking_outside_inside_modal_popup():
+    widget, root = _controls_widget(b'''
+        import QtQuick
+        import QtQuick.Controls
+        Item {
+            width: 360; height: 300
+            Popup {
+                id: dlg
+                objectName: "modal"
+                parent: Overlay.overlay
+                x: 20; y: 20; width: 320; height: 240
+                modal: true; focus: true; visible: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                contentItem: Item {
+                    AppTextField {
+                        objectName: "popupInput"
+                        x: 12; y: 12; width: 220
+                    }
+                }
+            }
+        }
+    ''')
+    try:
+        show_and_activate(widget)
+        popup = root.findChild(QObject, "modal")
+        field = root.findChild(QObject, "popupInput")
+        assert popup is not None and field is not None
+        assert popup.property("visible") is True
+
+        # Click inside the input -> acquires activeFocus and accepts typing
+        mouse_click(widget, Qt.MouseButton.LeftButton, pos=QPoint(80, 56))
+        wait_until(lambda: field.property("activeFocus") is True, description="popup input focus")
+        QTest.keyClicks(widget, "abc")
+        assert field.property("text") == "abc"
+
+        # Click outside the input (still inside the modal popup) -> loses activeFocus, modal stays open!
+        mouse_click(widget, Qt.MouseButton.LeftButton, pos=QPoint(180, 200))
+        wait_until(
+            lambda: field.property("activeFocus") is False,
+            description="popup input focus dismissal on click outside",
+        )
+        assert popup.property("visible") is True
+    finally:
+        dispose_widget(widget)
+
+
 def test_shared_selection_list_reserves_scrollbar_space_and_preserves_elastic_bounds():
     widget, root = _controls_widget(b'''
         import QtQuick

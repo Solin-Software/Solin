@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage import json_files
+from solin.core.storage.json_files import JsonDirectorySyncError, read_json_file, write_json_atomic
 from solin.core.storage.json_repository import JsonFileRepository
 
 
@@ -32,6 +33,29 @@ def test_write_json_atomic_removes_temp_file_when_serialization_fails(tmp_path) 
         write_json_atomic(path, {"bad": object()})
 
     assert not path.exists()
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
+@pytest.mark.parametrize("after_replacement", [False, True])
+def test_atomic_json_write_distinguishes_replacement_from_durability(
+    tmp_path, monkeypatch, after_replacement,
+) -> None:
+    path = tmp_path / "state.json"
+    write_json_atomic(path, {"revision": 1})
+
+    def fail(*_args):
+        raise OSError("injected write failure")
+
+    if after_replacement:
+        monkeypatch.setattr(json_files, "_sync_parent_directory", fail)
+    else:
+        monkeypatch.setattr(json_files.os, "replace", fail)
+
+    with pytest.raises(OSError) as result:
+        write_json_atomic(path, {"revision": 2})
+
+    assert isinstance(result.value, JsonDirectorySyncError) is after_replacement
+    assert read_json_file(path) == {"revision": 2 if after_replacement else 1}
     assert list(tmp_path.glob(".*.tmp")) == []
 
 

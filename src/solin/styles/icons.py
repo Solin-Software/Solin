@@ -165,6 +165,7 @@ _ICON_NAMES = frozenset(
         "ICON_IMAGE",
         "ICON_CLOSE",
         "ICON_MORE_VERT",
+        "ICON_MORE_HORIZ",
         "ICON_MENU",
         "ICON_ARROW_LEFT",
         "ICON_LOG_OUT",
@@ -264,6 +265,8 @@ _ICON_NAMES = frozenset(
         "ICON_BOUNDS",
         "ICON_CURSOR_HOVER",
         "ICON_SECTION",
+        "ICON_TIMER_SECTION",
+        "ICON_BAN",
         "ICON_MARKER",
         "ICON_PALETTE",
         "ICON_FULLSCREEN",
@@ -399,6 +402,14 @@ def _build_icon_svg(name: str) -> str:
             '<circle cx="12" cy="5" r="2" fill="currentColor"/>'
             '<circle cx="12" cy="12" r="2" fill="currentColor"/>'
             '<circle cx="12" cy="19" r="2" fill="currentColor"/>'
+            "</svg>"
+        )
+    elif name == "ICON_MORE_HORIZ":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<circle cx="5" cy="12" r="2" fill="currentColor"/>'
+            '<circle cx="12" cy="12" r="2" fill="currentColor"/>'
+            '<circle cx="19" cy="12" r="2" fill="currentColor"/>'
             "</svg>"
         )
     elif name == "ICON_MENU":
@@ -1349,6 +1360,25 @@ def _build_icon_svg(name: str) -> str:
             ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
             '<rect x="3" y="3" width="18" height="7" rx="2"/>'
             '<rect x="3" y="14" width="18" height="7" rx="2"/>'
+            "</svg>"
+        )
+    elif name == "ICON_TIMER_SECTION":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<rect x="3" y="4" width="18" height="5" rx="1.75"/>'
+            '<line x1="7" y1="14" x2="20" y2="14"/>'
+            '<line x1="7" y1="19" x2="16" y2="19"/>'
+            '<circle cx="4" cy="14" r="1" fill="currentColor" stroke="none"/>'
+            '<circle cx="4" cy="19" r="1" fill="currentColor" stroke="none"/>'
+            "</svg>"
+        )
+    elif name == "ICON_BAN":
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+            ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+            '<circle cx="12" cy="12" r="9"/>'
+            '<line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>'
             "</svg>"
         )
     elif name == "ICON_MARKER":

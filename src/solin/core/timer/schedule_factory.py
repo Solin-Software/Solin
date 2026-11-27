@@ -9,6 +9,7 @@ from .models import (
     MAX_PLANNED_PART_SECONDS,
     MIN_PLANNED_PART_SECONDS,
     TimerPart,
+    TimerSchedule,
     MeetingSchedule,
     MeetingType,
     PartKind,
@@ -157,9 +158,9 @@ def normalize_schedule(schedule: MeetingSchedule) -> bool:
     return changed
 
 
-def schedule_has_timing_data(schedule: MeetingSchedule) -> bool:
+def schedule_has_timing_data(schedule: TimerSchedule) -> bool:
     """True once any part has live or historical stopwatch data."""
-    return schedule.pacing_run is not None or any(_part_has_timing_data(part) for part in schedule.parts)
+    return schedule.pacing_run is not None or any(_part_has_timing_data(part) for part in schedule.iter_parts())
 
 
 def _part_has_timing_data(part: TimerPart) -> bool:

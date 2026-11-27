@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import date
 import logging
 
@@ -23,7 +23,13 @@ log = logging.getLogger(__name__)
 class TimerOperations(QObject):
     changed = Signal()
     context_changed = Signal(int)
+    schedule_reselected = Signal()
     clock_changed = Signal()
+    custom_catalog_changed = Signal()
+    active_custom_changed = Signal(object)
+    meeting_schedule_changed = Signal()
+    pacing_mode_changed = Signal()
+    custom_save_durability_warning = Signal()
 
     def __init__(
         self,
@@ -41,15 +47,40 @@ class TimerOperations(QObject):
         self.engine.set_direction(session.clock_config.direction)
         self.engine.set_freeze_seconds(session.clock_config.freeze_seconds)
         self.engine.set_schedule(session.schedule)
+        self._active_custom_version = self._custom_version()
         self.engine.state_changed.connect(self._on_engine_change)
 
     @property
     def time_format(self) -> str:
         return self._time_format()
 
+    def _custom_version(self) -> tuple[str, int] | None:
+        schedule = self.session.schedule
+        if isinstance(schedule, CustomTimerSchedule):
+            return schedule.id, schedule.revision
+        return None
+
     @Slot(dict)
     def _on_engine_change(self, _snapshot: dict) -> None:
+        previous = self._active_custom_version
+        current = self._custom_version()
+        self._active_custom_version = current
+        if current is not None and previous != current:
+            self.active_custom_changed.emit(self.session.schedule)
         self.changed.emit()
+        self._report_custom_save_durability()
+
+    def _publish_catalog_edit(self, *, context_changed: bool = False) -> None:
+        if context_changed:
+            self._show_context()
+        self.custom_catalog_changed.emit()
+        if not context_changed:
+            self.changed.emit()
+            self._report_custom_save_durability()
+
+    def _report_custom_save_durability(self) -> None:
+        if self.session.take_custom_save_durability_warning():
+            self.custom_save_durability_warning.emit()
 
     def _show_context(self, direction: int = 0) -> None:
         if self.engine.schedule is not self.session.schedule:
@@ -113,10 +144,12 @@ class TimerOperations(QObject):
             self.refresh_meeting_window()
         except (OSError, RuntimeError):
             log.warning("Could not update the meeting timer window.", exc_info=True)
+        self.meeting_schedule_changed.emit()
 
     def set_pacing_mode(self, mode: PacingMode) -> bool:
         if not self.session.set_pacing_mode(mode):
             return False
+        self.pacing_mode_changed.emit()
         self.changed.emit()
         return True
 
@@ -124,10 +157,7 @@ class TimerOperations(QObject):
         return self.engine.stop_part(part_id)
 
     def reset_part(self, part_id: str) -> bool:
-        changed = self.engine.reset_part(part_id)
-        if changed and self.session.schedule.pacing_run is None:
-            self.refresh_meeting_window()
-        return changed
+        return self.engine.reset_part(part_id)
 
     def reset_all(self) -> bool:
         if not isinstance(self.session.schedule, CustomTimerSchedule):
@@ -149,6 +179,9 @@ class TimerOperations(QObject):
     def rename_part(self, part_id: str, title: str | None) -> bool:
         return self._publish_schedule_edit(self.session.rename_part(part_id, title))
 
+    def edit_part(self, part_id: str, title: str | None, seconds: int | None) -> bool:
+        return self._publish_schedule_edit(self.session.edit_part(part_id, title, seconds))
+
     def update_clock(self, key: str, value: object) -> None:
         config = self.session.update_clock(key, value)
         if config is None:
@@ -166,44 +199,67 @@ class TimerOperations(QObject):
     def get_custom_schedule(self, schedule_id: str) -> CustomTimerSchedule | None:
         return self.session.get_custom_schedule(schedule_id)
 
-    def create_custom_schedule(self, title: str) -> CustomTimerSchedule:
-        schedule = self.session.create_custom_schedule(title)
-        self.changed.emit()
-        return schedule
+    def create_custom_schedule(
+        self, title: str, *, first_part_title: str | None = None, first_part_seconds: int = 0,
+        select: bool = False,
+    ) -> CustomTimerSchedule:
+        return self._publish_new_custom(
+            self.session.create_custom_schedule,
+            title,
+            first_part_title=first_part_title,
+            first_part_seconds=first_part_seconds,
+            select=select,
+        )
 
     def duplicate_custom_schedule(
-        self, schedule_id: str, title: str, expected_revision: int,
+        self, schedule_id: str, title: str, expected_revision: int, *, select: bool = False,
     ) -> CustomTimerSchedule:
-        schedule = self.session.duplicate_custom_schedule(schedule_id, title, expected_revision)
-        self.changed.emit()
+        return self._publish_new_custom(
+            self.session.duplicate_custom_schedule, schedule_id, title, expected_revision, select=select,
+        )
+
+    def _publish_new_custom(
+        self, create: Callable[..., CustomTimerSchedule], *args, select: bool, **kwargs,
+    ) -> CustomTimerSchedule:
+        try:
+            schedule = create(*args, select=select, **kwargs)
+        except TimerOperationError as error:
+            if error.code == "created_without_selection":
+                self._publish_catalog_edit()
+            raise
+        self._publish_catalog_edit(context_changed=select)
         return schedule
 
-    def delete_custom_schedule(self, schedule_id: str, expected_revision: int) -> None:
-        self.session.delete_custom_schedule(schedule_id, expected_revision)
-        self.changed.emit()
+    def delete_custom_schedule(
+        self, schedule_id: str, expected_revision: int, *, replace_active: bool = False,
+    ) -> bool:
+        context_changed = self.session.delete_custom_schedule(
+            schedule_id, expected_revision, replace_active=replace_active,
+        )
+        self._publish_catalog_edit(context_changed=context_changed)
+        return context_changed
 
-    def select_custom_schedule(self, schedule_id: str) -> bool:
-        if not self.session.select_custom_schedule(schedule_id):
+    def select_custom_schedule(self, schedule_id: str, *, expected_revision: int | None = None) -> bool:
+        if not self.session.select_custom_schedule(schedule_id, expected_revision=expected_revision):
+            self.schedule_reselected.emit()
             return False
         self._show_context()
         return True
 
     def select_meeting_schedule(self) -> bool:
-        if not self.session.select_meeting_schedule():
-            return False
-        self._show_context()
-        return True
+        changed = self.session.select_meeting_schedule()
+        if changed:
+            self._show_context()
+        else:
+            self.schedule_reselected.emit()
+        return changed
 
     def edit_custom_schedule(
         self, schedule_id: str, expected_revision: int, action: str, **values: object,
     ) -> bool:
         if not self.session.edit_custom_schedule(schedule_id, expected_revision, action, **values):
             return False
-        active = self.session.schedule
-        if isinstance(active, CustomTimerSchedule) and active.id == schedule_id:
-            self._publish_schedule_edit(True)
-        else:
-            self.changed.emit()
+        self._publish_custom_edit(schedule_id)
         return True
 
     def replace_custom_schedule_entries(
@@ -216,9 +272,42 @@ class TimerOperations(QObject):
             schedule_id, expected_revision, draft_entries
         ):
             return False
+        self._publish_custom_edit(schedule_id)
+        return True
+
+    def replace_custom_timing_settings(
+        self,
+        schedule_id: str,
+        expected_revision: int,
+        *,
+        start_time: str | None,
+        end_time: str | None,
+        untracked_seconds: int | None = None,
+        update_untracked: bool = False,
+        weights: Mapping[str, int] | None = None,
+        before_parts: Mapping[str, int | None] | None = None,
+        closing_seconds: int | None = None,
+        update_closing: bool = False,
+    ) -> bool:
+        if not self.session.replace_custom_timing_settings(
+            schedule_id,
+            expected_revision,
+            start_time=start_time,
+            end_time=end_time,
+            untracked_seconds=untracked_seconds,
+            update_untracked=update_untracked,
+            weights=weights,
+            before_parts=before_parts,
+            closing_seconds=closing_seconds,
+            update_closing=update_closing,
+        ):
+            return False
+        self._publish_custom_edit(schedule_id)
+        return True
+
+    def _publish_custom_edit(self, schedule_id: str) -> None:
         active = self.session.schedule
         if isinstance(active, CustomTimerSchedule) and active.id == schedule_id:
             self._publish_schedule_edit(True)
         else:
-            self.changed.emit()
-        return True
+            self._publish_catalog_edit()

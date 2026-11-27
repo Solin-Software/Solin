@@ -561,11 +561,13 @@ class MainWindow(QWidget):
             output=self.timer_output,
             monitors=self.timer_monitors,
             hand_alert=self._timer_hand_alert,
-            pdf_export=TimerPdfExportController(self),
+            pdf_export=TimerPdfExportController(self, self.notifications),
             media_countdown_automation=self._media_countdown_automation,
             language_manager=lang_manager,
             workbook_lookup=workbook_lookup,
             assignment_scope=assignment_scope,
+            notify_error=self.notifications.error,
+            notify_warning=self.notifications.warning,
         )
         self.timer_bridge.monitorsChanged.connect(self._refresh_timer_hand_alert_outputs)
         self._refresh_timer_hand_alert_outputs()
@@ -1020,14 +1022,12 @@ class MainWindow(QWidget):
                 apply_theme=self._apply_theme,
                 timer_output=self.timer_output,
                 timer_bridge=self.timer_bridge,
+                refresh_timer_meeting_schedule=self.timer_operations.on_meeting_schedule_changed,
                 open_meeting_schedule_settings=self._open_meeting_schedule_settings,
             ),
         )
         startup.mark("projection_controllers_ready")
         self._signal_connections.connect_signals()
-        self.settings_widget.general.meeting_schedule_changed.connect(
-            self.timer_operations.on_meeting_schedule_changed
-        )
         self.settings_widget.general.yearly_text_changed.connect(
             self._program_content.update_yearly_text
         )

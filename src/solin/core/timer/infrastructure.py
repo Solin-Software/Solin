@@ -22,7 +22,7 @@ from solin.core.foundation.constants import QSETTINGS_TIMER_APP
 from solin.core.foundation.settings_keys import SettingsKey
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.profiles.settings import ProfileSettings
-from solin.core.storage.json_files import read_json_file, write_json_atomic
+from solin.core.storage.json_files import JsonDirectorySyncError, read_json_file, write_json_atomic
 
 from .custom_schedule import TimerOperationError
 from .models import AssignmentSetup, ClockConfig, CustomTimerSchedule, MeetingSchedule, MeetingType
@@ -159,8 +159,12 @@ class JsonCustomTimerRepository:
 
     def list_schedules(self) -> tuple[CustomTimerSchedule, ...]:
         schedules = []
-        for path in sorted(self._directory.glob("*.json")):
-            if _CUSTOM_SCHEDULE_ID.fullmatch(path.stem):
+        try:
+            paths = sorted(self._directory.iterdir())
+        except FileNotFoundError:
+            return ()
+        for path in paths:
+            if path.match("*.json") and _CUSTOM_SCHEDULE_ID.fullmatch(path.stem):
                 schedule = self.load_schedule(path.stem)
                 if schedule is not None:
                     schedules.append(schedule)
@@ -183,9 +187,14 @@ class JsonCustomTimerRepository:
             log.warning("Invalid custom timer schedule %s", schedule_id, exc_info=True)
             return None
 
-    def save_schedule(self, schedule: CustomTimerSchedule) -> None:
+    def save_schedule(self, schedule: CustomTimerSchedule) -> bool:
         path = self._path(schedule.id)
-        write_json_atomic(path, dict(schedule.to_dict(), version=_CUSTOM_SCHEDULE_VERSION))
+        try:
+            write_json_atomic(path, dict(schedule.to_dict(), version=_CUSTOM_SCHEDULE_VERSION))
+        except JsonDirectorySyncError:
+            log.warning("Custom timer schedule was replaced without confirming durability.", exc_info=True)
+            return False
+        return True
 
     def delete_schedule(self, schedule_id: str) -> None:
         self._path(schedule_id).unlink()

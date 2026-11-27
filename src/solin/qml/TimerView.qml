@@ -31,10 +31,6 @@ Rectangle {
     onModeChanged: timer.setAssignmentsModeActive(mode === 0)
     Component.onCompleted: timer.setAssignmentsModeActive(mode === 0)
 
-    function iconHex(colorValue) {
-        return String(colorValue).replace("#", "")
-    }
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -61,11 +57,12 @@ Rectangle {
                     color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.10)
                     border.color: Qt.rgba(root.accent.r, root.accent.g, root.accent.b, 0.28)
                     border.width: 1
-                    Image {
+                    TimerIcon {
                         anchors.centerIn: parent
                         width: 20; height: 20
-                        sourceSize.width: 40; sourceSize.height: 40
-                        source: "image://timericons/clock/40/" + root.iconHex(root.accentText)
+                        rasterSize: 40
+                        iconName: "clock"
+                        tint: root.accentText
                     }
                 }
 
@@ -98,11 +95,11 @@ Rectangle {
                     objectName: "timerModeSelectorWide"
                     visible: !root.compactHeader
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                    options: [qsTr("Assignments"), qsTr("Timer", "countdown mode")]
+                    options: [qsTr("Schedule"), qsTr("Timer", "countdown mode")]
                     current: root.mode
                     accent: root.accent
-                    segWidth: 140
-                    segHeight: 44
+                    segWidth: 132
+                    segHeight: 40
                     onPicked: function(index) { root.mode = index }
                 }
             }
@@ -116,11 +113,11 @@ Rectangle {
                 anchors.leftMargin: root.sideMargin
                 anchors.rightMargin: root.sideMargin
                 anchors.bottomMargin: 8
-                options: [qsTr("Assignments"), qsTr("Timer", "countdown mode")]
+                options: [qsTr("Schedule"), qsTr("Timer", "countdown mode")]
                 current: root.mode
                 accent: root.accent
                 stretch: true
-                segHeight: 40
+                segHeight: 38
                 onPicked: function(index) { root.mode = index }
             }
         }
