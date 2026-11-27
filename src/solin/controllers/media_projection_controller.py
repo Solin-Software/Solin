@@ -15,8 +15,13 @@ from PySide6.QtWidgets import QMessageBox
 from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
 )
+from ..core.media.duration import normalize_duration_ticks
 from ..core.media.formats import MediaKind, media_kind_from_path
-from ..core.media.playback_request import MediaPlaybackRequest, MediaTrim
+from ..core.media.playback_request import (
+    TICKS_PER_MILLISECOND,
+    MediaPlaybackRequest,
+    MediaTrim,
+)
 from ..core.meetings.models import MeetingMedia
 from ..core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
@@ -215,6 +220,8 @@ class MediaProjectionController:
         keep_expanded: bool = False,
         announce_song: bool = False,
     ) -> bool:
+        if not url.strip():
+            return False
         if user_initiated and not self._playback.allow_manual_projection_change():
             return False
         media_type = (
@@ -233,6 +240,8 @@ class MediaProjectionController:
         if self._session.state_type != "video":
             return
         action = self._playback.after_media_ended()
+        if action is PlaybackEndAction.HOLD:
+            return
         if action is PlaybackEndAction.REPLAY:
             self._context.media_controller.replay()
         elif action is PlaybackEndAction.STOP:
@@ -251,13 +260,21 @@ class MediaProjectionController:
         announce_song: bool = False,
         start_paused: bool = False,
     ) -> bool:
-        if not url:
-            return False
         context = self._context
         media_item = queue.current_item
         is_audio = (
             (media_item is not None and media_item.get("type") == "audio")
             or media_kind_from_path(url) is MediaKind.AUDIO
+        )
+        profile_paused = not is_audio and context.start_videos_paused()
+        pause_without_announcement = start_paused or profile_paused
+        duration_ticks = normalize_duration_ticks(ticks=(media_item or {}).get("base_duration_ticks"))
+        announce = (
+            announce_song
+            and not is_audio
+            and context.sjjm_announce_mode()
+            and not self._item_has_custom_trim(media_item)
+            and self._playback.allows_announcement(duration_ticks // TICKS_PER_MILLISECOND)
         )
 
         self._session.set_tab_projection_active(False)
@@ -279,20 +296,16 @@ class MediaProjectionController:
                 for projection_window in context.projection_windows():
                     projection_window.begin_video()
 
-            announce = (
-                announce_song
-                and not is_audio
-                and context.sjjm_announce_mode()
-                and not self._item_has_custom_trim(media_item)
-            )
             if not is_audio:
                 self._handlers.prepare_video_session()
 
-            wait_for_auto_share = (
-                not is_audio and self._handlers.prepare_auto_share_playback(not start_paused)
+            wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback(
+                not pause_without_announcement
             )
             if announce:
-                self._playback.begin_announcement()
+                self._playback.begin_announcement(
+                    start_paused=start_paused, pause_if_short=profile_paused
+                )
 
             self._session.set_state(
                 {
@@ -302,15 +315,13 @@ class MediaProjectionController:
                     "origin": self._projection_origin(media_item),
                 }
             )
-            start_paused = not announce and (
-                start_paused or (not is_audio and context.start_videos_paused())
-            )
+            open_paused = start_paused or (profile_paused and not announce) or wait_for_auto_share
             session_id = self._session.session_id
             context.media_controller.start_playback(
                 self._playback_request(
                     media_item or {"url": url},
                     source=url,
-                    autoplay=not (start_paused or wait_for_auto_share),
+                    autoplay=not open_paused,
                 )
             )
         if self._session.session_id != session_id:
@@ -504,7 +515,7 @@ class MediaProjectionController:
         announce_song: bool = False,
     ) -> ProjectionResult:
         item = queue.current_item
-        if not item or not (url := str(item.get("url") or "")):
+        if not item or not (url := str(item.get("url") or "")).strip():
             return ProjectionResult(ProjectionResultStatus.INVALID)
 
         title = str(item.get("title") or "")

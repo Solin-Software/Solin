@@ -36,6 +36,7 @@ class _NavigationStub:
 
 class _ServiceStub(QObject):
     volume_changed = Signal(float)
+    duration_changed = Signal(int)
     position_changed = Signal(int)
 
     def set_volume(self, volume):
@@ -51,6 +52,8 @@ class _ServiceStub(QObject):
 
     def __init__(self, events=None, name="media"):
         super().__init__()
+        self.position = 0
+        self.is_ended = False
         self.stopped = 0
         self.played = []
         self.paused = 0
@@ -86,6 +89,9 @@ class _ServiceStub(QObject):
 
     def replay(self):
         self.replayed += 1
+
+    def seek(self, position):
+        self.position = position
 
 
 class _SettingsStub:
@@ -678,17 +684,127 @@ def test_project_video_starts_visual_video_paused_while_auto_share_is_pending():
     controller.project_video("talk.mp4", "Talk")
 
     assert window.media_ctrl.requests[-1].autoplay is False
+    window.playback.resolve_auto_share_wait(True)
+    assert window.media_ctrl.resumed == 1
+
+
+def test_auto_share_success_respects_the_profile_pause_for_a_regular_video():
+    window = _WindowStub()
+    window.settings_widget.start_videos_paused = True
+    window._projection_integrations.wait_for_auto_share = True
+    controller = _controller(window)
+
+    assert controller.project_video("talk.mp4", "Talk")
+    assert not window.media_ctrl.requests[-1].autoplay
+    window.playback.resolve_auto_share_wait(True)
+
+    assert window.media_ctrl.resumed == 0
+    assert window.playback.resume()
+    assert window.media_ctrl.resumed == 1
 
 
 def test_auto_share_pause_does_not_override_song_announcement_mode():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
+    window.settings_widget.start_videos_paused = True
     window._projection_integrations.wait_for_auto_share = True
     controller = _controller(window)
     controller.project_video("song.mp4", "Song", announce_song=True)
 
     assert window.events.count(("media", "audio_suppressed", True)) == 1
     assert window.media_ctrl.requests[-1].autoplay is False
+    window.playback.resolve_auto_share_wait(True)
+    assert window.media_ctrl.resumed == 1
+    assert window.playback.transport_blocked
+
+
+@pytest.mark.parametrize("share_success", [None, False, True])
+def test_explicitly_paused_announcement_starts_only_on_operator_request(share_success):
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    window._projection_integrations.wait_for_auto_share = share_success is not None
+    controller = _controller(window)
+    song = MeetingMedia(key_symbol="sjjm", track=1, file_path="song.mp4", mime_type="video/mp4")
+
+    assert controller.on_meeting_media_project(song, start_paused=True).accepted
+    assert not window.media_ctrl.requests[-1].autoplay
+    if share_success is not None:
+        window.playback.resolve_auto_share_wait(share_success)
+    assert window.media_ctrl.resumed == 0
+
+    assert window.playback.resume()
+    assert window.media_ctrl.resumed == 1
+    assert window.playback.transport_blocked
+    window.media_ctrl.position_changed.emit(3500)
+    assert window.media_ctrl.paused == 1
+    assert window.playback.resume()
+    assert ("media", "audio_suppressed", False) in window.events
+
+
+@pytest.mark.parametrize(("duration_ms", "announced"), [(5000, False), (5001, True)])
+def test_known_song_duration_determines_announcement_and_profile_priority(duration_ms, announced):
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    window.settings_widget.start_videos_paused = True
+    controller = _controller(window)
+    song = {"url": "song.mp4", "base_duration_ticks": duration_ms * 10_000}
+
+    assert controller.project_video("song.mp4", "Song", [song], announce_song=True)
+
+    assert window.media_ctrl.requests[-1].autoplay is announced
+    assert (("media", "audio_suppressed", True) in window.events) is announced
+
+
+@pytest.mark.parametrize("preference_paused", [False, True])
+def test_decoder_duration_bypasses_announcement_for_an_unprobed_short_song(preference_paused):
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    window.settings_widget.start_videos_paused = preference_paused
+    controller = _controller(window)
+    assert controller.project_video("song.mp4", "Song", announce_song=True)
+
+    window.media_ctrl.position = 100
+    window.media_ctrl.duration_changed.emit(2000)
+
+    assert not window.playback.transport_blocked
+    assert window.events[-1] == ("media", "audio_suppressed", False)
+    if preference_paused:
+        assert window.media_ctrl.paused == 1
+        assert window.media_ctrl.position == 0
+        assert window.media_ctrl.replayed == 0
+    else:
+        assert window.media_ctrl.paused == 0
+        assert window.media_ctrl.replayed == 1
+
+
+@pytest.mark.parametrize("loop", [False, True])
+@pytest.mark.parametrize("duration_reported_at_end", [False, True])
+def test_unprobed_song_ending_during_announcement_can_restart_with_audio(
+    loop, duration_reported_at_end
+):
+    window = _WindowStub()
+    window.settings_widget.sjjm_announce_mode = True
+    controller = _controller(window)
+    if loop:
+        window.playback.toggle_loop()
+    assert controller.project_video("song.mp4", "Song", announce_song=True)
+
+    window.media_ctrl.is_ended = True
+    if duration_reported_at_end:
+        # The first decoder sample with a duration can already be ended at position zero.
+        window.media_ctrl.duration_changed.emit(2000)
+    controller.on_media_ended()
+
+    assert window.auto_stops == 0
+    assert window.media_ctrl.replayed == 0
+    assert window.playback.resume()
+    assert ("media", "audio_suppressed", False) in window.events
+    assert window.media_ctrl.replayed == 1
+
+    controller.on_media_ended()
+
+    assert window.auto_stops == int(not loop)
+    assert window.media_ctrl.replayed == 1 + int(loop)
 
 
 def test_project_video_pauses_sjjm_video_when_announcement_mode_is_disabled():
@@ -1168,6 +1284,25 @@ def test_queue_navigation_keeps_occurrences_separate_when_source_is_reused():
     assert (first_open.occurrence_id, first_open.trim.start_trim_ticks) == ("second", 2_000_000)
     assert (second_open.occurrence_id, second_open.trim.start_trim_ticks) == ("first", 1_000_000)
     assert window.playback.queue.current_item["id"] == "first"
+
+
+def test_blank_video_source_leaves_the_active_projection_alone():
+    window = _WindowStub()
+    controller = _controller(window)
+    assert controller.project_media_at_index([
+        {"url": "active.mp4", "title": "Active"},
+        {"url": "   ", "title": "Unavailable"},
+    ]).accepted
+    session_id = window.projection_session.session_id
+    queue = window.playback.queue
+    stops = window.media_ctrl.stopped
+
+    assert controller.on_playlist_navigate(1).status is ProjectionResultStatus.INVALID
+    assert not controller.project_video(" \t", "Unavailable")
+    assert window.playback.queue is queue
+    assert window.projection_session.session_id == session_id
+    assert window.media_ctrl.stopped == stops
+    assert window.media_ctrl.played == ["active.mp4"]
 
 
 def test_explicit_paused_playback_waits_for_operator_after_auto_share():

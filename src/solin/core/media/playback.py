@@ -186,6 +186,10 @@ class MediaController(QObject):
         return self._engine_route_active and self._engine_state == MediaPlaybackState.PAUSED
 
     @property
+    def is_ended(self) -> bool:
+        return self._engine_route_active and self._engine_state == MediaPlaybackState.ENDED
+
+    @property
     def duration(self) -> int:
         return self._engine_duration_ms if self._engine_route_active else 0
 
@@ -287,16 +291,22 @@ class MediaController(QObject):
     def _apply_engine_media_state(self, state: MediaPlaybackNativeState) -> None:
         if state.source_request_id != self._engine_request_id:
             return
+        # Publish a coherent sample to duration and position listeners.
+        engine_state = state.state
+        state_changed = engine_state != self._engine_state
+        self._engine_state = engine_state
+        self._engine_audio_silent = state.audio_silent
+        self._engine_position_ms = max(0, int(state.position_ms))
+        if engine_state == MediaPlaybackState.PLAYING:
+            # A restart uses the same source ID. Ignore queued EOF samples
+            # until the decoder confirms that a new playback pass has started.
+            self._engine_media_ended_emitted = False
         duration = max(0, int(state.duration_ms))
         if duration != self._engine_duration_ms:
             self._engine_duration_ms = duration
             self.duration_changed.emit(duration)
-        self._engine_position_ms = max(0, int(state.position_ms))
         self.position_changed.emit(self._engine_position_ms)
-        engine_state = state.state
-        self._engine_audio_silent = state.audio_silent
-        if engine_state != self._engine_state:
-            self._engine_state = engine_state
+        if state_changed:
             self.state_changed.emit(
                 ENGINE_STATE_TO_SOLIN.get(engine_state, SolinPlaybackState.STOPPED)
             )
@@ -443,7 +453,6 @@ class MediaController(QObject):
     def replay(self):
         """Restart from the effective beginning without replacing the source."""
         if self._engine_route_active and self._engine_route is not None:
-            self._engine_media_ended_emitted = False
             self._session.set_requested_playing(True)
             self._engine_route.restart()
 

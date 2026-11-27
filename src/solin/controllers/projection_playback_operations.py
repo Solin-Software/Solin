@@ -35,14 +35,17 @@ class ProjectionQueue:
 
 
 class PlaybackEndAction(Enum):
+    HOLD = auto()
     STOP = auto()
     REPLAY = auto()
 
 
 class _Announcement(Enum):
     OFF = auto()
+    WAITING_FOR_PLAY = auto()
     LEAD_IN = auto()
     READY = auto()
+    ENDED = auto()
 
 
 class _ShareWait(Enum):
@@ -55,6 +58,7 @@ class ProjectionPlaybackOperations(QObject):
     changed = Signal()
     queue_replaced = Signal()
     _ANNOUNCEMENT_LEAD_IN_MS = 3500
+    _ANNOUNCEMENT_MIN_DURATION_MS = 5000
 
     def __init__(
         self,
@@ -70,12 +74,14 @@ class ProjectionPlaybackOperations(QObject):
         self._queue = ProjectionQueue(order=settings.playback_order())
         self._loop = settings.loop_enabled()
         self._announcement = _Announcement.OFF
+        self._pause_if_short = False
         self._share_wait = _ShareWait.OFF
         volume = settings.volume()
         self._pre_mute_volume = volume or 0.8
         media.set_volume(volume)
         media.set_playback_rate(settings.speed())
         media.volume_changed.connect(self._on_volume_changed)
+        media.duration_changed.connect(self._on_duration_changed)
         media.position_changed.connect(self._on_position_changed)
         protection.lockedChanged.connect(self.changed)
 
@@ -158,6 +164,10 @@ class ProjectionPlaybackOperations(QObject):
         return False
 
     def after_media_ended(self) -> PlaybackEndAction | ProjectionQueue:
+        if self._announcement is not _Announcement.OFF:
+            self._announcement = _Announcement.ENDED
+            self.changed.emit()
+            return PlaybackEndAction.HOLD
         queue = self.queue
         count = len(queue.items)
         when_exhausted = PlaybackEndAction.REPLAY if self.loop else PlaybackEndAction.STOP
@@ -212,6 +222,10 @@ class ProjectionPlaybackOperations(QObject):
         return self._share_wait is not _ShareWait.OFF or self._announcement is _Announcement.LEAD_IN
 
     @property
+    def awaiting_announcement_replay(self) -> bool:
+        return self._announcement is _Announcement.ENDED
+
+    @property
     def protection_locked(self) -> bool:
         return bool(self._protection.locked)
 
@@ -226,10 +240,10 @@ class ProjectionPlaybackOperations(QObject):
     def toggle(self) -> None:
         if self.transport_blocked:
             return
-        if self._announcement is _Announcement.READY:
-            self.resume()
-        else:
+        if self._announcement is _Announcement.OFF:
             self._media.toggle_play_pause()
+        else:
+            self.resume()
 
     def pause(self) -> bool:
         if self.transport_blocked:
@@ -240,13 +254,21 @@ class ProjectionPlaybackOperations(QObject):
     def resume(self) -> bool:
         if self.transport_blocked:
             return False
-        restart_announcement = self._announcement is _Announcement.READY
-        if restart_announcement:
+        announcement = self._announcement
+        if announcement is _Announcement.WAITING_FOR_PLAY:
+            self._announcement = _Announcement.LEAD_IN
+            self._pause_if_short = False
+        elif announcement in (_Announcement.READY, _Announcement.ENDED):
             self._announcement = _Announcement.OFF
-            self._media.seek(0)
+            if announcement is _Announcement.READY:
+                self._media.seek(0)
             self._media.set_audio_suppressed(False)
-        self._media.play()
-        if restart_announcement:
+
+        if announcement is _Announcement.ENDED:
+            self._media.replay()
+        else:
+            self._media.play()
+        if announcement is not _Announcement.OFF:
             self.changed.emit()
         return True
 
@@ -264,7 +286,12 @@ class ProjectionPlaybackOperations(QObject):
         if wait is _ShareWait.OFF:
             return
         self._share_wait = _ShareWait.OFF
-        if self._announcement is _Announcement.LEAD_IN or (success and wait is _ShareWait.RESUME):
+        if self._announcement is _Announcement.LEAD_IN:
+            # If the decoder later identifies a short clip, apply the ordinary
+            # video policy for a failed share.
+            self._pause_if_short = self._pause_if_short or not success
+            self._media.play()
+        elif success and wait is _ShareWait.RESUME:
             self._media.play()
         self.changed.emit()
 
@@ -273,9 +300,45 @@ class ProjectionPlaybackOperations(QObject):
             self._share_wait = _ShareWait.OFF
             self.changed.emit()
 
-    def begin_announcement(self) -> None:
-        self._announcement = _Announcement.LEAD_IN
+    @classmethod
+    def allows_announcement(cls, duration_ms: int) -> bool:
+        return duration_ms == 0 or duration_ms > cls._ANNOUNCEMENT_MIN_DURATION_MS
+
+    def begin_announcement(self, *, start_paused: bool = False, pause_if_short: bool = False) -> None:
+        self._announcement = (
+            _Announcement.WAITING_FOR_PLAY if start_paused else _Announcement.LEAD_IN
+        )
+        self._pause_if_short = pause_if_short
         self._media.set_audio_suppressed(True)
+        self.changed.emit()
+
+    @Slot(int)
+    def _on_duration_changed(self, duration: int) -> None:
+        announcement = self._announcement
+        if (
+            announcement not in (
+                _Announcement.WAITING_FOR_PLAY,
+                _Announcement.LEAD_IN,
+                _Announcement.READY,
+            )
+            or self.allows_announcement(duration)
+        ):
+            return
+        position = self._media.position
+        if self._media.is_ended or position >= duration:
+            # The end handler lets the operator restart an already-ended lead-in.
+            return
+
+        self._announcement = _Announcement.OFF
+        started = (
+            self._share_wait is _ShareWait.OFF and announcement is not _Announcement.WAITING_FOR_PLAY
+        )
+        if started and self._pause_if_short:
+            self._media.pause()
+            self._media.seek(0)
+        elif started and position > 0:
+            self._media.replay()
+        self._media.set_audio_suppressed(False)
         self.changed.emit()
 
     @Slot(int)
@@ -283,6 +346,7 @@ class ProjectionPlaybackOperations(QObject):
         if (
             self._share_wait is _ShareWait.OFF
             and self._announcement is _Announcement.LEAD_IN
+            and not self._media.is_ended
             and position >= self._ANNOUNCEMENT_LEAD_IN_MS
         ):
             self._announcement = _Announcement.READY

@@ -8,7 +8,9 @@ from solin.controllers.projection_playback_operations import ProjectionPlaybackO
 
 class Media(QObject):
     volume_changed = Signal(float)
+    duration_changed = Signal(int)
     position_changed = Signal(int)
+    is_ended = False
 
     def __init__(self):
         super().__init__()

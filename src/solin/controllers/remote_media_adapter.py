@@ -438,7 +438,7 @@ class RemoteMediaAdapter(QObject):
         playback = dependencies.projection_playback
         is_video = state_type == "video"
         media_playing = bool(media_controller.is_playing)
-        media_paused = bool(media_controller.is_paused)
+        media_paused = media_controller.is_paused or playback.awaiting_announcement_replay
         error = None
         media_error = self._last_media_error
         if is_video and media_error is not None and media_error[0] == media_controller.session_id:

@@ -16,7 +16,10 @@ from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 import pytest
 
-from solin.controllers.projection_playback_operations import ProjectionPlaybackOperations
+from solin.controllers.projection_playback_operations import (
+    PlaybackEndAction,
+    ProjectionPlaybackOperations,
+)
 from solin.controllers.remote_control_controller import (
     RemoteControlController,
     RemoteControlDependencies,
@@ -151,6 +154,7 @@ class _MediaController(QObject):
         self.session_id = 0
         self.is_playing = False
         self.is_paused = False
+        self.is_ended = False
 
     def play(self) -> None:
         self.is_playing = True
@@ -159,6 +163,10 @@ class _MediaController(QObject):
     def pause(self) -> None:
         self.is_playing = False
         self.is_paused = True
+
+    def replay(self) -> None:
+        self.position = 0
+        self.play()
 
 
     def set_volume(self, volume: float) -> None:
@@ -1483,19 +1491,28 @@ def test_remote_resume_and_seek_respect_shared_auto_share_gate(tmp_path: Path) -
         controller.stop()
 
 
-def test_remote_resume_restarts_a_prepared_announcement_with_audio(tmp_path: Path) -> None:
+@pytest.mark.parametrize("ended", [False, True])
+def test_remote_resume_restarts_a_prepared_announcement_with_audio(
+    tmp_path: Path, ended: bool
+) -> None:
     controller, session, playback, media, _projection = _controller(tmp_path, [])
     adapter = controller._media_adapter
     session.state_type = "video"
     session.state = {"type": "video", "title": "Prepared song"}
     playback.begin_announcement()
-    media.position = 3_500
+    media.position = 2_000 if ended else 3_500
     media.position_changed.emit(media.position)
+    if ended:
+        # The native decoder reports neither playing nor paused after EOF.
+        media.is_ended = True
+        assert playback.after_media_ended() is PlaybackEndAction.HOLD
     adapter._refresh_playback()
     session_id = controller.media_state.playback.playback_session_id
     assert session_id is not None
 
     try:
+        assert controller.media_state.playback.state is PlaybackState.PAUSED
+        assert controller.media_state.playback.capabilities.can_resume
         assert adapter._execute_command(ResumeCommand(str(uuid.uuid4()), session_id)) is None
         assert media.position == 0
         assert not media.audio_suppressed
