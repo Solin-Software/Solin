@@ -1,5 +1,6 @@
 import os
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -43,7 +44,7 @@ def test_active_projection_bar_surface_owns_click_cursor():
     bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
     QFrame.__init__(bar)
     bar._container = None
-    bar._volume = 0.5
+    bar._playback = Mock(volume=0.5)
     bar.setCursor(Qt.CursorShape.ArrowCursor)
     try:
         bar._build_bar_ui()
@@ -158,14 +159,10 @@ def _bar(*, mode="video", audio=False, overlay=None):
     bar._mode = mode
     bar._is_audio = audio
     bar._expanded = False
-    bar._playlist = []
-    bar._playlist_index = 0
-    bar._played_indices = {0}
-    bar._loop = False
-    bar._playback_order = projection_bar.ORDER_OFF
+    bar._playback = Mock()
+    bar._playback.queue = SimpleNamespace(items=[], index=0)
+    bar._playback.has_pending_automatic_playback = False
     bar._fullscreen_overlay = overlay
-    bar._announce_state = "off"
-    bar._auto_share_playback_waiting = False
     bar.ov_fullscreen_btn = _Button()
     bar.seek_slider = _Slider()
     bar._playback_protection = _Protection()
@@ -334,91 +331,21 @@ def test_buffer_progress_is_mirrored_to_app_fullscreen():
 def test_playlist_navigation_state_is_mirrored_to_app_fullscreen():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)
-    bar._playlist = [{}, {}, {}]
-    bar._playlist_index = 1
-
+    bar._playback.queue = SimpleNamespace(items=[{}, {}, {}], index=1)
+    bar._playback.can_navigate.return_value = True
     bar._sync_app_fullscreen_navigation()
-
     assert overlay.navigation == [(True, True, True)]
 
 
-def test_playback_options_indicator_follows_effective_auto_playback():
+def test_playback_options_indicator_mirrors_shared_playback_state():
     overlay = _Overlay(active=True)
     bar = _bar(mode="video", overlay=overlay)
-    bar._loop = False
-    bar._playback_order = projection_bar.ORDER_NEXT
-    bar._playlist = [{}, {}]
-    bar._playlist_index = 0
-    bar._played_indices = {0}
     bar.more_btn = _Button()
     bar.more_btn.setIcon = lambda _icon: None
-
-    bar._refresh_playback_options_indicator()
-
-    assert overlay.playback_options_active == [True]
-
-    bar._playlist_index = 1
-    bar._refresh_playback_options_indicator()
-
+    for active in (True, False):
+        bar._playback.has_pending_automatic_playback = active
+        bar._refresh_playback_options_indicator()
     assert overlay.playback_options_active == [True, False]
-
-
-def test_playback_options_indicator_treats_loop_as_active_without_next_item():
-    overlay = _Overlay(active=True)
-    bar = _bar(mode="video", overlay=overlay)
-    bar._loop = True
-    bar._playback_order = projection_bar.ORDER_OFF
-    bar._playlist = [{}]
-    bar._playlist_index = 0
-    bar._played_indices = {0}
-    bar.more_btn = _Button()
-    bar.more_btn.setIcon = lambda _icon: None
-
-    bar._refresh_playback_options_indicator()
-
-    assert overlay.playback_options_active == [True]
-
-
-def test_playback_options_indicator_ignores_exhausted_random_order():
-    overlay = _Overlay(active=True)
-    bar = _bar(mode="video", overlay=overlay)
-    bar._loop = False
-    bar._playback_order = projection_bar.ORDER_RANDOM
-    bar._playlist = [{}, {}]
-    bar._playlist_index = 1
-    bar._played_indices = {0, 1}
-    bar.more_btn = _Button()
-    bar.more_btn.setIcon = lambda _icon: None
-
-    bar._refresh_playback_options_indicator()
-
-    assert overlay.playback_options_active == [False]
-
-
-def test_fullscreen_seek_respects_song_announcement_lock():
-    bar = _bar(mode="video")
-    bar.seek_requested = _ValueSignal()
-
-    bar._announce_state = "gate"
-    bar._on_fullscreen_seek_requested(1234)
-
-    bar._announce_state = "ready"
-    bar._on_fullscreen_seek_requested(2345)
-
-    bar._announce_state = "off"
-    bar._on_fullscreen_seek_requested(3456)
-
-    assert bar.seek_requested.values == [3456]
-
-
-def test_fullscreen_seek_respects_auto_share_playback_wait():
-    bar = _bar(mode="video")
-    bar.seek_requested = _ValueSignal()
-    bar._auto_share_playback_waiting = True
-
-    bar._on_fullscreen_seek_requested(1234)
-
-    assert bar.seek_requested.values == []
 
 
 def test_fullscreen_controls_mirror_announcement_enabled_state():

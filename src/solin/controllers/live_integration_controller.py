@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .projection_playback_operations import ProjectionPlaybackOperations
+
 from PySide6.QtCore import QCoreApplication, Slot, QT_TRANSLATE_NOOP
 from PySide6.QtGui import QImage
 
@@ -41,6 +43,7 @@ class LiveIntegrationContext:
     zoom_service: Any
     notifications: Any
     projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     quick_toolbar: Callable[[], Any | None]
     projection_windows: Callable[[], list[Any]]
@@ -165,7 +168,7 @@ class LiveIntegrationController:
         except Exception:  # noqa: BLE001 - native browser projection cleanup boundary
             log.debug("Failed to stop browser tab projection before OBS stream", exc_info=True)
         context.media_controller.stop()
-        context.projection_bar.set_playlist([])
+        context.projection_playback.reset_projection()
         for win in context.projection_windows():
             win.clear()
         title = _tr(_OBS_STREAM_TITLE_SOURCE)

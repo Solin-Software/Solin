@@ -1,7 +1,8 @@
 from contextlib import contextmanager, nullcontext
+from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+from PySide6.QtCore import QByteArray, QBuffer, QIODevice, QObject, Signal
 from PySide6.QtGui import QColor, QImage
 
 from solin.controllers.media_projection_controller import (
@@ -9,6 +10,8 @@ from solin.controllers.media_projection_controller import (
     MediaProjectionController,
     MediaProjectionHandlers,
 )
+from solin.controllers.projection_playback_operations import ProjectionPlaybackOperations
+from solin.core.foundation.constants import ORDER_NEXT, ORDER_OFF, ORDER_RANDOM
 from solin.core.meetings.models import MeetingMedia
 from solin.core.projection.application import ProjectionSession
 from solin.core.projection.image_framing import ImageTransform
@@ -31,11 +34,27 @@ class _NavigationStub:
         self.stopped += 1
 
 
-class _ServiceStub:
+class _ServiceStub(QObject):
+    volume_changed = Signal(float)
+    position_changed = Signal(int)
+
+    def set_volume(self, volume):
+        self.volume = volume
+        self.volume_changed.emit(volume)
+
+    def set_playback_rate(self, rate):
+        self.playback_rate = rate
+
+    def set_audio_suppressed(self, suppressed):
+        self.events.append(("media", "audio_suppressed", suppressed))
+
+
     def __init__(self, events=None, name="media"):
+        super().__init__()
         self.stopped = 0
         self.played = []
         self.paused = 0
+        self.resumed = 0
         self.replayed = 0
         self.requests = []
         self.events = events
@@ -62,6 +81,9 @@ class _ServiceStub:
         if self.events is not None:
             self.events.append((self.name, "pause"))
 
+    def play(self):
+        self.resumed += 1
+
     def replay(self):
         self.replayed += 1
 
@@ -78,8 +100,11 @@ class _SettingsStub:
         return self.start_videos_paused
 
 
-class _ProtectionStub:
+class _ProtectionStub(QObject):
+    lockedChanged = Signal()
+
     def __init__(self):
+        super().__init__()
         self.locked = False
         self.blocked = 0
 
@@ -102,12 +127,8 @@ class _PreviewContentStub:
 class _ProjectionBarStub:
     def __init__(self, events=None):
         self.events = events
-        self.playlists = []
-        self.playlist_indices = []
         self.videos = []
         self.images = []
-        self.announcement_count = 0
-        self.current_item = None
         self.expanded = False
         self.video_mode = False
         self.audio_mode = False
@@ -119,16 +140,6 @@ class _ProjectionBarStub:
         self.projected_image_transforms = []
         self.image_activation_options = []
         self.preview_content = _PreviewContentStub()
-        self._playlist_items = []
-
-    def set_playlist(self, items, playback_order=None, from_saved_playlist=False):
-        self.playlists.append((items, playback_order, from_saved_playlist))
-        self._playlist_items = items
-        if self.events is not None:
-            self.events.append(("proj_bar", "set_playlist", items))
-
-    def set_playlist_index(self, index):
-        self.playlist_indices.append(index)
 
     def activate_video(self, title, keep_expanded=False, is_audio=False):
         self.videos.append((title, keep_expanded, is_audio))
@@ -155,14 +166,6 @@ class _ProjectionBarStub:
         self.projected_image_transforms.append(transform)
         return transform
 
-    def begin_announcement_mode(self):
-        self.announcement_count += 1
-        if self.events is not None:
-            self.events.append(("proj_bar", "begin_announcement_mode"))
-
-    def current_playlist_item(self):
-        return self.current_item
-
     def is_expanded(self):
         return self.expanded
 
@@ -184,10 +187,6 @@ class _ProjectionBarStub:
     def update_tab_live_preview(self, frame):
         self.tab_previews.append(frame)
 
-    def playlist_items(self):
-        return self._playlist_items
-
-
 class _AutoKeyProjectionStub:
     def __init__(self, events=None):
         self.prepared = 0
@@ -200,14 +199,17 @@ class _AutoKeyProjectionStub:
 
 
 class _ProjectionIntegrationsStub:
-    def __init__(self):
+    def __init__(self, playback):
+        self.playback = playback
         self.statuses = []
         self.wait_for_auto_share = False
 
     def update_status(self, *args, **kwargs):
         self.statuses.append((args, kwargs))
 
-    def prepare_video_playback_for_auto_share(self):
+    def prepare_video_playback_for_auto_share(self, resume_on_success):
+        if self.wait_for_auto_share:
+            self.playback.begin_auto_share_wait(resume_on_success=resume_on_success)
         return self.wait_for_auto_share
 
 
@@ -280,8 +282,20 @@ class _WindowStub:
         self.proj_bar = _ProjectionBarStub(self.events)
         self.settings_widget = _SettingsStub()
         self.playback_protection = _ProtectionStub()
+        self.playback = ProjectionPlaybackOperations(
+            self.media_ctrl,
+            SimpleNamespace(
+                volume=lambda: 0.8,
+                speed=lambda: 1.0,
+                playback_order=lambda: ORDER_OFF,
+                loop_enabled=lambda: False,
+                set_loop_enabled=lambda _enabled: None,
+            ),
+            self.playback_protection,
+        )
+        self.auto_stops = 0
         self._auto_key_projection = _AutoKeyProjectionStub(self.events)
-        self._projection_integrations = _ProjectionIntegrationsStub()
+        self._projection_integrations = _ProjectionIntegrationsStub(self.playback)
         self.playlist_widget = _PlaylistWidgetStub()
         self.meeting_service = _MeetingServiceStub()
         self.windows = [
@@ -289,6 +303,9 @@ class _WindowStub:
             _ProjectionWindowStub(self.events),
         ]
         self.content_frames = []
+
+    def stop_projection(self):
+        self.auto_stops += 1
 
     def _all_windows(self):
         return self.windows
@@ -314,11 +331,12 @@ def _controller(window, *, content_frame_sink=None, image_source_lease=nullconte
             dialog_parent=window,
             sjjm_announce_mode=window.settings_widget.get_sjjm_announce_mode,
             start_videos_paused=window.settings_widget.get_start_videos_paused,
-            playback_protection=window.playback_protection,
+            projection_playback=window.playback,
             content_frame_sink=content_frame_sink or window.content_frames.append,
             image_source_lease=image_source_lease,
         ),
         MediaProjectionHandlers(
+            stop_projection=window.stop_projection,
             stop_browser_tab_projection=(window._navigation.stop_browser_tab_projection),
             update_projection_status=(window._projection_integrations.update_status),
             prepare_video_session=(window._auto_key_projection.prepare_video_session),
@@ -496,7 +514,7 @@ def test_project_video_classifies_audio_and_updates_status():
 
     controller.project_video("song.mp3", "Song")
 
-    assert window.proj_bar.playlists == [([{"url": "song.mp3", "title": "Song"}], None, False)]
+    assert window.playback.queue.items == ({"url": "song.mp3", "title": "Song", "type": "audio"},)
     assert window.proj_bar.videos == [("Song", False, True)]
     assert [projection_window.began_video for projection_window in window.windows] == [0, 0]
     assert window.media_ctrl.played == ["song.mp3"]
@@ -555,7 +573,7 @@ def test_resolved_meeting_video_preserves_catalog_origin_in_projection_queue():
 
     controller.on_meeting_media_project(item)
 
-    projected = window.proj_bar.playlists[-1][0][0]
+    projected = window.playback.queue.current_item
     assert projected["origin_kind"] == "meeting"
     assert projected["origin_container_id"] == "mwb:2026-07-13:T:20260700"
     assert projected["origin_item_id"] == "song-34"
@@ -575,7 +593,7 @@ def test_manual_projection_is_rejected_before_any_state_changes_when_locked():
 
     assert result is False
     assert window.playback_protection.blocked == 1
-    assert window.proj_bar.playlists == []
+    assert not window.playback.queue.items
     assert window.proj_bar.videos == []
     assert window.media_ctrl.stopped == 0
     assert window.media_ctrl.played == []
@@ -584,33 +602,35 @@ def test_manual_projection_is_rejected_before_any_state_changes_when_locked():
 
 def test_automatic_advance_bypasses_manual_playback_protection():
     window = _WindowStub()
-    window.playback_protection.locked = True
     controller = _controller(window)
+    window.playback.commit_queue(window.playback.new_queue([
+        {"url": "current.mp4", "title": "Current"},
+        {"url": "automatic.mp4", "title": "Automatic"},
+    ], ORDER_NEXT))
+    window.projection_session.set_state({"type": "video", "title": "Current"})
+    window.playback_protection.locked = True
 
-    controller.project_next_auto({"url": "automatic.mp4", "title": "Automatic", "type": "video"})
+    controller.on_media_ended()
 
     assert window.playback_protection.blocked == 0
     assert window.media_ctrl.played == ["automatic.mp4"]
-    assert window.proj_bar.videos == [("Automatic", False, False)]
+    assert window.proj_bar.videos == [("Automatic", True, False)]
 
 
-def test_project_video_core_uses_announcement_mode_for_sjjm_video():
+def test_project_video_uses_announcement_mode_for_sjjm_video():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
     controller = _controller(window)
-    controller._next_is_sjjm = True
+    controller.project_video("video.mp4", "Video", keep_expanded=True, announce_song=True)
 
-    controller.project_video_core("video.mp4", "Video", keep_expanded=True)
-
-    assert controller._next_is_sjjm is False
     assert window.proj_bar.videos == [("Video", True, False)]
-    assert window.proj_bar.announcement_count == 1
+    assert window.events.count(("media", "audio_suppressed", True)) == 1
     assert window._auto_key_projection.prepared == 1
     assert window.media_ctrl.played == ["video.mp4"]
     assert window.media_ctrl.paused == 0
     assert [projection_window.began_video for projection_window in window.windows] == [1, 1]
-    assert window.events.index(("proj_bar", "begin_announcement_mode")) < (
+    assert window.events.index(("media", "audio_suppressed", True)) < (
         window.events.index(("media", "start_playback", "video.mp4"))
     )
     assert ("media", "pause") not in window.events
@@ -620,7 +640,6 @@ def test_custom_times_bypass_song_announcement_mode():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     controller = _controller(window)
-    controller._next_is_sjjm = True
     item = {
         "url": "song.mp4",
         "type": "video",
@@ -629,21 +648,21 @@ def test_custom_times_bypass_song_announcement_mode():
         "base_duration_ticks": 100_000_000,
     }
 
-    controller.project_video_core("song.mp4", "Song", media_item=item)
+    controller.project_video("song.mp4", "Song", [item], announce_song=True)
 
-    assert window.proj_bar.announcement_count == 0
+    assert ("media", "audio_suppressed", True) not in window.events
     assert window.media_ctrl.requests[-1].trim is not None
     assert window.media_ctrl.requests[-1].autoplay is True
 
 
-def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
+def test_project_video_starts_regular_visual_videos_paused_when_enabled():
     window = _WindowStub()
     window.settings_widget.start_videos_paused = True
     controller = _controller(window)
 
-    controller.project_video_core("talk.mp4", "Talk")
+    controller.project_video("talk.mp4", "Talk")
 
-    assert window.proj_bar.announcement_count == 0
+    assert ("media", "audio_suppressed", True) not in window.events
     assert window.media_ctrl.played == ["talk.mp4"]
     assert window.media_ctrl.requests[-1].autoplay is False
     assert window.media_ctrl.paused == 0
@@ -651,12 +670,12 @@ def test_project_video_core_starts_regular_visual_videos_paused_when_enabled():
     assert [projection_window.began_video for projection_window in window.windows] == [1, 1]
 
 
-def test_project_video_core_starts_visual_video_paused_while_auto_share_is_pending():
+def test_project_video_starts_visual_video_paused_while_auto_share_is_pending():
     window = _WindowStub()
     window._projection_integrations.wait_for_auto_share = True
     controller = _controller(window)
 
-    controller.project_video_core("talk.mp4", "Talk")
+    controller.project_video("talk.mp4", "Talk")
 
     assert window.media_ctrl.requests[-1].autoplay is False
 
@@ -666,54 +685,46 @@ def test_auto_share_pause_does_not_override_song_announcement_mode():
     window.settings_widget.sjjm_announce_mode = True
     window._projection_integrations.wait_for_auto_share = True
     controller = _controller(window)
-    controller._next_is_sjjm = True
+    controller.project_video("song.mp4", "Song", announce_song=True)
 
-    controller.project_video_core("song.mp4", "Song")
-
-    assert window.proj_bar.announcement_count == 1
+    assert window.events.count(("media", "audio_suppressed", True)) == 1
     assert window.media_ctrl.requests[-1].autoplay is False
 
 
-def test_project_video_core_pauses_sjjm_video_when_announcement_mode_is_disabled():
+def test_project_video_pauses_sjjm_video_when_announcement_mode_is_disabled():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = False
     window.settings_widget.start_videos_paused = True
     controller = _controller(window)
-    controller._next_is_sjjm = True
+    controller.project_video("song.mp4", "Song", announce_song=True)
 
-    controller.project_video_core("song.mp4", "Song")
-
-    assert controller._next_is_sjjm is False
-    assert window.proj_bar.announcement_count == 0
+    assert ("media", "audio_suppressed", True) not in window.events
     assert window.media_ctrl.played == ["song.mp4"]
     assert window.media_ctrl.requests[-1].autoplay is False
 
 
-def test_project_video_core_ignores_announcement_for_non_sjjm_videos_but_still_pauses():
+def test_project_video_ignores_announcement_for_non_sjjm_videos_but_still_pauses():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
     controller = _controller(window)
 
-    controller.project_video_core("regular.mp4", "Regular")
+    controller.project_video("regular.mp4", "Regular")
 
-    assert window.proj_bar.announcement_count == 0
+    assert ("media", "audio_suppressed", True) not in window.events
     assert window.media_ctrl.played == ["regular.mp4"]
     assert window.media_ctrl.requests[-1].autoplay is False
 
 
-def test_project_video_core_never_start_pauses_audio_or_enters_song_announcement():
+def test_project_video_never_start_pauses_audio_or_enters_song_announcement():
     window = _WindowStub()
     window.settings_widget.sjjm_announce_mode = True
     window.settings_widget.start_videos_paused = True
     controller = _controller(window)
-    controller._next_is_sjjm = True
+    controller.project_video("song.mp3", "Song Audio", announce_song=True)
 
-    controller.project_video_core("song.mp3", "Song Audio", is_audio=True)
-
-    assert controller._next_is_sjjm is False
     assert window.proj_bar.videos == [("Song Audio", False, True)]
-    assert window.proj_bar.announcement_count == 0
+    assert ("media", "audio_suppressed", True) not in window.events
     assert window.media_ctrl.played == ["song.mp3"]
     assert window.media_ctrl.paused == 0
     assert window._auto_key_projection.prepared == 0
@@ -728,15 +739,15 @@ def test_on_sjjm_project_marks_only_the_next_video_for_announcement():
 
     controller.on_sjjm_project("song.mp4", "Song", playlist, "")
 
-    assert controller._next_is_sjjm is False
-    assert window.proj_bar.playlists == [(playlist, None, True)]
-    assert window.proj_bar.announcement_count == 1
+    assert window.playback.queue.items == tuple(playlist)
+    assert window.playback.queue.from_saved_playlist
+    assert window.events.count(("media", "audio_suppressed", True)) == 1
     assert window.media_ctrl.played == ["song.mp4"]
     assert window.media_ctrl.paused == 0
 
-    controller.project_video_core("talk.mp4", "Talk")
+    controller.project_video("talk.mp4", "Talk")
 
-    assert window.proj_bar.announcement_count == 1
+    assert window.events.count(("media", "audio_suppressed", True)) == 1
     assert window.media_ctrl.played == ["song.mp4", "talk.mp4"]
 
 
@@ -750,7 +761,9 @@ def test_on_playlist_project_image_keeps_playlist_and_saved_source(tmp_path):
 
     controller.on_playlist_project(str(image_path), "Slide", playlist, "random")
 
-    assert window.proj_bar.playlists == [(playlist, "random", True)]
+    assert window.playback.queue.items == tuple(playlist)
+    assert window.playback.queue.order == ORDER_RANDOM
+    assert window.playback.queue.from_saved_playlist
     assert window.proj_bar.images == [("Slide", image_path.read_bytes(), True)]
     assert [projection_window.images for projection_window in window.windows] == [
         [image_path.read_bytes()],
@@ -834,7 +847,7 @@ def test_reprojecting_same_image_animates_only_changed_prepared_framing(tmp_path
     assert window.projection_session.state["transform"] == (2.0, -0.25, 0.1)
     assert window.proj_bar.projected_image_transforms == [expected]
     assert len(window.proj_bar.images) == 1
-    assert len(window.proj_bar.playlists) == 1
+    assert window.playback.queue.items == tuple(playlist)
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
@@ -872,7 +885,7 @@ def test_reprojecting_same_image_with_same_framing_reloads_normally(tmp_path):
 
     assert window.proj_bar.projected_image_transforms == []
     assert len(window.proj_bar.images) == 2
-    assert len(window.proj_bar.playlists) == 2
+    assert window.playback.queue.items == tuple(playlist)
     assert window._navigation.stopped == 2
     assert len(window._projection_integrations.statuses) == 2
     for surface in window.windows:
@@ -980,7 +993,8 @@ def test_automatic_replay_keeps_the_current_decoder_and_presentation():
     window.projection_session.set_state({"type": "video", "title": "Current"})
     epoch = window.projection_session.presentation_session_id
 
-    controller.project_next_auto({"url": "__replay__", "type": "video"})
+    window.playback.toggle_loop()
+    controller.on_media_ended()
 
     assert window.media_ctrl.replayed == 1
     assert window.media_ctrl.stopped == 0
@@ -996,20 +1010,26 @@ def test_automatic_advance_keeps_complete_image_item_framing(tmp_path):
     image.fill(QColor("#ffffff"))
     assert image.save(str(image_path))
 
-    controller.project_next_auto(
-        {
-            "url": str(image_path),
-            "title": "Next",
-            "type": "image",
-            "image_framing": {
-                "version": 1,
-                "zoom": 1.5,
-                "norm_x": -0.2,
-                "norm_y": 0.0,
+    controller.project_media_at_index(
+        [
+            {"url": "current.mp4", "title": "Current"},
+            {
+                "url": str(image_path),
+                "title": "Next",
+                "type": "image",
+                "image_framing": {
+                    "version": 1,
+                    "zoom": 1.5,
+                    "norm_x": -0.2,
+                    "norm_y": 0.0,
+                },
             },
-        }
+        ],
+        playback_order=ORDER_NEXT,
     )
+    controller.on_media_ended()
 
+    assert window.playback.queue.index == 1
     assert window.projection_session.state["transform"] == (1.5, -0.2, 0.0)
 
 
@@ -1023,7 +1043,7 @@ def test_project_tab_frame_initializes_live_tab_once():
     controller.project_tab_frame(frame)
 
     assert window.projection_session.tab_projection_active is True
-    assert window.proj_bar.playlists == [([], None, False)]
+    assert not window.playback.queue.items
     assert window.proj_bar.images[0][0] == "Browser — Live Tab"
     assert window.proj_bar.hidden_add_to_destination == 1
     assert window.proj_bar.live_tab_modes == [True]
@@ -1080,10 +1100,11 @@ def test_title_metadata_only_updates_video_mode():
     controller = _controller(window)
 
     controller.on_title_from_metadata("Ignored")
-    window.proj_bar.video_mode = True
+    window.projection_session.set_state({"type": "video", "title": "Pending"})
     controller.on_title_from_metadata("Resolved")
 
     assert window.proj_bar.projected_titles == ["Resolved"]
+    assert window.projection_session.state["title"] == "Resolved"
 
 
 def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
@@ -1098,8 +1119,8 @@ def test_project_media_at_index_sets_playlist_index_for_images(tmp_path):
 
     controller.project_media_at_index(playlist, index=1, keep_expanded=True)
 
-    assert window.proj_bar.playlists == [(playlist, None, False)]
-    assert window.proj_bar.playlist_indices == [1]
+    assert window.playback.queue.items == tuple(playlist)
+    assert window.playback.queue.index == 1
     assert window.proj_bar.images == [("Second", image_path.read_bytes(), True)]
 
 
@@ -1107,3 +1128,145 @@ def test_media_projection_controller_uses_explicit_dependencies():
     controller = _controller(_WindowStub())
 
     assert not hasattr(controller, "_window")
+
+
+def test_unreadable_queue_image_does_not_change_selection_or_projection(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    playlist = [
+        {"url": "current.mp4", "title": "Current"},
+        {"url": str(tmp_path / "missing.png"), "title": "Next", "type": "image"},
+    ]
+    result = controller.project_media_at_index(playlist, playback_order=ORDER_NEXT)
+    assert result.accepted
+    session_id = window.projection_session.session_id
+
+    assert controller.on_playlist_navigate(1).status is ProjectionResultStatus.FAILED
+    assert controller.on_playlist_navigate(-1).status is ProjectionResultStatus.INVALID
+    assert window.playback.queue.index == 0
+    assert window.playback.queue.played == {0}
+    assert window.projection_session.session_id == session_id
+    assert not window.proj_bar.images
+
+    controller.on_media_ended()
+
+    assert window.auto_stops == 1
+
+
+def test_queue_navigation_keeps_occurrences_separate_when_source_is_reused():
+    window = _WindowStub()
+    controller = _controller(window)
+    playlist = [
+        {"url": "same.mp4", "title": "First", "id": "first", "start_trim_ticks": 1_000_000},
+        {"url": "same.mp4", "title": "Second", "id": "second", "start_trim_ticks": 2_000_000},
+    ]
+
+    assert controller.project_media_at_index(playlist, index=1).accepted
+    assert controller.on_playlist_navigate(0).accepted
+
+    first_open, second_open = window.media_ctrl.requests
+    assert (first_open.occurrence_id, first_open.trim.start_trim_ticks) == ("second", 2_000_000)
+    assert (second_open.occurrence_id, second_open.trim.start_trim_ticks) == ("first", 1_000_000)
+    assert window.playback.queue.current_item["id"] == "first"
+
+
+def test_explicit_paused_playback_waits_for_operator_after_auto_share():
+    window = _WindowStub()
+    window._projection_integrations.wait_for_auto_share = True
+    controller = _controller(window)
+
+    result = controller.project_media_at_index(
+        [{"url": "clip.mp4", "title": "Clip"}], start_paused=True
+    )
+    assert result.accepted
+    assert not window.media_ctrl.requests[-1].autoplay
+
+    window.playback.resolve_auto_share_wait(True)
+
+    assert window.media_ctrl.resumed == 0
+    assert window.playback.resume()
+    assert window.media_ctrl.resumed == 1
+
+
+def test_unresolvable_meeting_media_leaves_previous_playback_alone():
+    window = _WindowStub()
+    controller = _controller(window)
+    assert controller.project_video("clip.mp4", "Clip")
+    session_id = window.projection_session.session_id
+
+    result = controller.on_meeting_media_project(
+        MeetingMedia(key_symbol="sjjm", track=1), notify=False, start_paused=True
+    )
+
+    assert result.status is ProjectionResultStatus.FAILED
+    assert window.projection_session.session_id == session_id
+    assert window.media_ctrl.paused == 0
+    assert window.media_ctrl.played == ["clip.mp4"]
+
+
+def test_queue_selection_reidentifies_identical_image_bytes(tmp_path):
+    window = _WindowStub()
+    controller = _controller(window)
+    image = tmp_path / "slide.png"
+    image.write_bytes(_png_bytes(1600, 900))
+    playlist = [
+        {"url": str(image), "title": "First", "type": "image"},
+        {
+            "url": str(image),
+            "title": "Second",
+            "type": "image",
+            "image_framing": {"version": 1, "zoom": 1.5, "norm_x": 0.1, "norm_y": 0},
+        },
+    ]
+    assert controller.project_media_at_index(playlist).accepted
+    before = window.projection_session.session_id
+
+    assert controller.on_playlist_navigate(1).accepted
+
+    assert window.projection_session.session_id != before
+    assert window.projection_session.state["title"] == "Second"
+    assert window.playback.queue.index == 1
+
+
+def test_synchronous_transport_failure_does_not_publish_active_projection():
+    window = _WindowStub()
+    controller = _controller(window)
+    start_playback = window.media_ctrl.start_playback
+
+    def fail_on_open(request):
+        start_playback(request)
+        window.playback.reset_projection()
+        window.projection_session.reset_state()
+
+    window.media_ctrl.start_playback = fail_on_open
+
+    result = controller.project_media_at_index([{"url": "clip.mp4", "title": "Clip"}])
+
+    assert result.status is ProjectionResultStatus.FAILED
+    assert not window.playback.queue.items
+    assert window.projection_session.state_type == "idle"
+    assert window._projection_integrations.statuses == []
+
+
+def test_manual_queue_navigation_requires_playback_protection_to_be_unlocked():
+    window = _WindowStub()
+    controller = _controller(window)
+    playlist = [
+        {"url": "first.mp4", "title": "First"},
+        {"url": "second.mp4", "title": "Second"},
+    ]
+    assert controller.project_media_at_index(playlist).accepted
+    window.playback_protection.locked = True
+
+    assert not window.playback.can_navigate(1)
+    assert controller.on_playlist_navigate(0).accepted
+    assert controller.on_playlist_navigate(1).status is ProjectionResultStatus.BLOCKED
+    assert window.playback_protection.blocked == 1
+    assert window.playback.queue.index == 0
+    assert window.media_ctrl.played == ["first.mp4"]
+
+    window.playback_protection.locked = False
+    assert window.playback.can_navigate(1)
+    assert controller.on_playlist_navigate(1).accepted
+    assert window.playback.queue.index == 1
+    assert window.media_ctrl.played == ["first.mp4", "second.mp4"]

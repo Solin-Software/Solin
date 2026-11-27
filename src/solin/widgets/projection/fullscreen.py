@@ -187,6 +187,7 @@ class FullscreenVideoOverlay(QWidget):
     seek_requested = Signal(int)
     toggle_requested = Signal()
     volume_changed = Signal(float)
+    mute_toggled = Signal()
     stop_requested = Signal()
     previous_requested = Signal()
     next_requested = Signal()
@@ -213,8 +214,6 @@ class FullscreenVideoOverlay(QWidget):
         self._loop_enabled = False
         self._playback_order = ORDER_OFF
         self._playback_options_active = False
-        self._muted = False
-        self._pre_mute_volume = 0.8
         self._playback_state = SolinPlaybackState.STOPPED
         self._navigation_state = (False, False, False)
 
@@ -404,7 +403,7 @@ class FullscreenVideoOverlay(QWidget):
             PALETTE.text_secondary,
             self._tr("Volume"),
         )
-        self.vol_btn.clicked.connect(self._toggle_mute)
+        self.vol_btn.clicked.connect(self.mute_toggled.emit)
         self.vol_btn.setStyleSheet(self._icon_button_stylesheet(self.vol_btn))
 
         self.vol_slider = ThemedHorizontalSlider(
@@ -548,11 +547,6 @@ class FullscreenVideoOverlay(QWidget):
 
     def set_volume(self, value: float) -> None:
         volume = max(0.0, min(1.0, float(value)))
-        if volume > 0:
-            self._pre_mute_volume = volume
-            self._muted = False
-        else:
-            self._muted = True
         blocker = QSignalBlocker(self.vol_slider)
         self.vol_slider.setValue(int(round(volume * 100)))
         del blocker
@@ -858,20 +852,8 @@ class FullscreenVideoOverlay(QWidget):
         self._show_chrome()
 
     def _on_volume_slider(self, value: int) -> None:
-        if value > 0:
-            self._pre_mute_volume = value / 100.0
-            self._muted = False
-        else:
-            self._muted = True
         self._refresh_volume_icon()
         self.volume_changed.emit(value / 100.0)
-
-    def _toggle_mute(self) -> None:
-        if self._muted:
-            self.vol_slider.setValue(int(round(self._pre_mute_volume * 100)))
-        else:
-            self._pre_mute_volume = max(0.01, self.vol_slider.value() / 100.0)
-            self.vol_slider.setValue(0)
 
     def _refresh_volume_icon(self) -> None:
         value = self.vol_slider.value()

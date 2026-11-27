@@ -8,12 +8,9 @@ from solin.controllers.signal_connection_controller import (
 
 
 class _Signal:
-    registry = []
-
     def __init__(self, name):
         self.name = name
         self.connected = []
-        self.registry.append(self)
 
     def connect(self, callback):
         self.connected.append(callback)
@@ -69,12 +66,8 @@ class _WindowStub:
             "send_to_temp_playlist_requested",
             "source_duration_discovered",
             "stop_requested",
-            "seek_requested",
-            "toggle_requested",
-            "volume_changed",
             "timer_updated",
             "timer_blink",
-            "play_next_requested",
             "playlist_navigate",
             "image_apply_transform",
             "image_apply_transform_instant",
@@ -90,11 +83,8 @@ class _WindowStub:
             "state_changed",
             "cover_art_changed",
             "title_from_metadata",
+            "media_ended",
         )
-        self.media_ctrl.seek = _slot("seek")
-        self.media_ctrl.toggle_play_pause = _slot("toggle_play_pause")
-        self.media_ctrl.set_volume = _slot("set_volume")
-        self.playback_protection = SimpleNamespace(request_seek=_slot("protected_seek"))
 
         self.screen_mgr = _signal_namespace("screen_mgr", "screens_changed")
         self.lang = _signal_namespace("lang", "language_changed")
@@ -179,7 +169,7 @@ class _WindowStub:
             project_generated_image=_slot("project_generated_image"),
             distribute_frame=_slot("distribute_frame"),
             on_title_from_metadata=_slot("title_from_metadata"),
-            project_next_auto=_slot("project_next"),
+            on_media_ended=_slot("on_media_ended"),
             on_playlist_navigate=_slot("playlist_navigate"),
             on_image_apply_transform=_slot("image_apply"),
             on_image_apply_transform_instant=_slot("image_apply_instant"),
@@ -206,7 +196,6 @@ def _sources(window):
         playlist_widget=window.playlist_widget,
         projection_bar=window.proj_bar,
         media_controller=window.media_ctrl,
-        playback_protection=window.playback_protection,
         screen_manager=window.screen_mgr,
         language_manager=window.lang,
         settings_widget=window.settings_widget,
@@ -241,14 +230,11 @@ def _handlers(
 
 
 def test_connect_signals_wires_expected_signal_graph():
-    _Signal.registry = []
     window = _WindowStub()
     controller = SignalConnectionController(_sources(window), _handlers(window))
 
     controller.connect_signals()
 
-    total_connections = sum(len(signal.connected) for signal in _Signal.registry)
-    assert total_connections == 51
     assert window.library_widget.project_media_signal.connected == [
         controller._project_library_media
     ]
@@ -276,7 +262,7 @@ def test_connect_signals_wires_expected_signal_graph():
         window.proj_bar.set_yearly_text,
     ]
     assert window.proj_bar.stop_requested.connected == [window._projection_stop.stop_any]
-    assert window.proj_bar.seek_requested.connected == [window.playback_protection.request_seek]
+    assert window.media_ctrl.media_ended.connected == [window._media_projection.on_media_ended]
     assert window.proj_bar.source_duration_discovered.connected == [
         window.playlist_widget.record_source_duration
     ]

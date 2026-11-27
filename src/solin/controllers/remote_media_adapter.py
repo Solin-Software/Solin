@@ -21,13 +21,13 @@ from ..core.media.formats import MediaKind
 from ..core.media.playback_state import SolinPlaybackState
 from ..core.media.thumbnail_identity import thumbnail_storage_id
 from ..core.meetings.thumbnails import meeting_thumb_storage_id
+from ..core.projection.result import ProjectionResult, ProjectionResultStatus
 from ..core.remote_control.media.catalog import (
     CatalogBuild,
     CatalogResolutionCode,
     CatalogResolutionError,
     MediaAvailability,
     RemoteCatalog,
-    ResolvedMeetingPlay,
     ResolvedPlaylistPlay,
 )
 from ..core.remote_control.media.contracts import (
@@ -68,6 +68,7 @@ from ..core.remote_control.security import (
 )
 from ..core.remote_control.server import SetupProvider
 from ..styles.theme import current_theme_scheme
+from .projection_playback_operations import ProjectionPlaybackOperations
 from .qt_command_bridge import QtCommandBridge
 
 
@@ -92,11 +93,10 @@ class RemoteMediaAdapterDependencies:
     meeting_thumbnail_store: Any
     media_thumbnail_extractor: Any
     projection_session: Any
-    projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     media_projection: Any
     projection_stop: Any
-    playback_protection: Any
     watched_folder_changed_signal: Any | None = None
 
 
@@ -120,7 +120,7 @@ class RemoteMediaAdapter(QObject):
         self._fallback_thumbnails: OrderedDict[ThumbnailRequestKey, tuple[float, bytes]] = (
             OrderedDict()
         )
-        self._last_media_error = ""
+        self._last_media_error: tuple[int, str] | None = None
         self._active = False
         self._unsubscribers: list[Callable[[], None]] = []
         self._bridge: QtCommandBridge[RemoteCommand, CommandError] = QtCommandBridge(
@@ -290,10 +290,7 @@ class RemoteMediaAdapter(QObject):
         media.duration_changed.connect(lambda _value: self.playback_invalidated.emit())
         media.position_changed.connect(lambda _value: self.playback_invalidated.emit())
         media.error_occurred.connect(self._on_media_error)
-        dependencies.projection_bar.volume_changed.connect(
-            lambda _value: self.playback_invalidated.emit()
-        )
-        dependencies.playback_protection.lockedChanged.connect(self.playback_invalidated.emit)
+        dependencies.projection_playback.changed.connect(self.playback_invalidated.emit)
         if dependencies.watched_folder_changed_signal is not None:
             dependencies.watched_folder_changed_signal.connect(self._on_watched_folder_changed)
 
@@ -406,21 +403,18 @@ class RemoteMediaAdapter(QObject):
     @Slot(object)
     def _on_media_state(self, state: object) -> None:
         if state in (SolinPlaybackState.PLAYING, SolinPlaybackState.PAUSED):
-            self._last_media_error = ""
-        if self._active:
-            self._refresh_playback()
+            self._last_media_error = None
+        self._schedule_playback_refresh()
 
     @Slot(str)
     def _on_media_error(self, message: str) -> None:
         raw_message = str(message or "").strip()
         if raw_message:
             log.warning("Local media playback error: %s", raw_message)
+        fallback = "The media could not be played."
         self._last_media_error = (
-            public_reason(
-                raw_message,
-                fallback="The media could not be played.",
-            )
-            or "The media could not be played."
+            self._dependencies.media_controller.session_id,
+            public_reason(raw_message, fallback=fallback) or fallback,
         )
         if self._active:
             self._refresh_playback()
@@ -441,14 +435,15 @@ class RemoteMediaAdapter(QObject):
 
         state = projection_session.state
         media_controller = dependencies.media_controller
-        projection_bar = dependencies.projection_bar
+        playback = dependencies.projection_playback
         is_video = state_type == "video"
         media_playing = bool(media_controller.is_playing)
         media_paused = bool(media_controller.is_paused)
         error = None
-        if is_video and self._last_media_error:
+        media_error = self._last_media_error
+        if is_video and media_error is not None and media_error[0] == media_controller.session_id:
             playback_state = PlaybackState.ERROR
-            error = ProjectionError("media_error", self._last_media_error)
+            error = ProjectionError("media_error", media_error[1])
         elif is_video and media_playing:
             playback_state = PlaybackState.PLAYING
         elif is_video and media_paused:
@@ -458,13 +453,9 @@ class RemoteMediaAdapter(QObject):
         else:
             playback_state = PlaybackState.PAUSED
 
-        queue = self._projection_queue()
-        current_index = None
-        if queue:
-            current_index = max(
-                0,
-                min(int(projection_bar.playlist_index), len(queue) - 1),
-            )
+        selection = playback.queue
+        queue = self._projection_queue(selection.items)
+        current_index = selection.index if queue else None
         origin = (
             queue[current_index].origin
             if current_index is not None
@@ -477,14 +468,13 @@ class RemoteMediaAdapter(QObject):
         if duration is not None:
             position = min(position, duration)
         media_kind = self._media_kind_for_state(state_type, state)
-        navigation_unlocked = not dependencies.playback_protection.locked
         capabilities = PlaybackCapabilities(
-            can_pause=is_video and media_playing,
-            can_resume=is_video and media_paused,
-            can_seek=is_video and duration is not None and navigation_unlocked,
+            can_pause=is_video and media_playing and not playback.transport_blocked,
+            can_resume=is_video and media_paused and not playback.transport_blocked,
+            can_seek=is_video and duration is not None and not playback.seek_blocked,
             can_set_volume=is_video,
-            can_previous=projection_bar.can_navigate_previous(),
-            can_next=projection_bar.can_navigate_next(),
+            can_previous=playback.can_navigate(-1),
+            can_next=playback.can_navigate(1),
             can_stop=True,
         )
         return ProjectionSnapshot(
@@ -496,7 +486,6 @@ class RemoteMediaAdapter(QObject):
             origin=origin,
             title=public_title(
                 state.get("title")
-                or projection_bar.current_media_title()
                 or (queue[current_index].title if current_index is not None else ""),
                 "Media",
             ),
@@ -505,14 +494,16 @@ class RemoteMediaAdapter(QObject):
             current_index=current_index,
             position_ms=position,
             duration_ms=duration,
-            volume=projection_bar.volume_percent,
+            volume=round(playback.volume * 100),
             capabilities=capabilities,
             error=error,
         )
 
-    def _projection_queue(self) -> tuple[ProjectionQueueItem, ...]:
+    def _projection_queue(
+        self, items: tuple[Mapping[str, Any], ...]
+    ) -> tuple[ProjectionQueueItem, ...]:
         queue: list[ProjectionQueueItem] = []
-        for index, item in enumerate(self._dependencies.projection_bar.playlist_items()):
+        for index, item in enumerate(items):
             origin = self._origin_from_item(item, index)
             queue.append(
                 ProjectionQueueItem(
@@ -633,11 +624,13 @@ class RemoteMediaAdapter(QObject):
         }.get(state_type, RemoteMediaKind.UNKNOWN)
 
     def _execute_command(self, command: RemoteCommand) -> CommandError | None:
+        self._refresh_playback()
         if precondition_error := self._state.validate_command_preconditions(command):
             return precondition_error
         if isinstance(command, PlayCommand):
             return self._execute_play(command)
         snapshot = self._state.playback
+        playback = self._dependencies.projection_playback
         if isinstance(command, StopCommand):
             if snapshot.state is not PlaybackState.IDLE:
                 self._dependencies.projection_stop.stop_projection()
@@ -646,35 +639,36 @@ class RemoteMediaAdapter(QObject):
         if snapshot.state is PlaybackState.IDLE:
             return CommandError(CommandErrorCode.BLOCKED, "Nothing is being projected.")
         if isinstance(command, PauseCommand):
-            if not snapshot.capabilities.can_pause:
+            if not snapshot.capabilities.can_pause or not playback.pause():
                 return CommandError(CommandErrorCode.BLOCKED, "Playback cannot be paused now.")
-            self._dependencies.media_controller.pause()
         elif isinstance(command, ResumeCommand):
-            if not snapshot.capabilities.can_resume:
+            if not snapshot.capabilities.can_resume or not playback.resume():
                 return CommandError(CommandErrorCode.BLOCKED, "Playback cannot be resumed now.")
-            self._dependencies.projection_bar.resume_playback()
         elif isinstance(command, SeekCommand):
             if not snapshot.capabilities.can_seek:
                 return CommandError(CommandErrorCode.BLOCKED, "Seeking is unavailable now.")
             if snapshot.duration_ms is not None and command.position_ms > snapshot.duration_ms:
                 return CommandError(CommandErrorCode.INVALID, "Seek position is out of range.")
-            if not self._dependencies.playback_protection.request_seek(command.position_ms):
+            if not playback.seek(command.position_ms):
                 return CommandError(CommandErrorCode.BLOCKED, "Pause playback before seeking.")
         elif isinstance(command, SetVolumeCommand):
             if not snapshot.capabilities.can_set_volume:
                 return CommandError(CommandErrorCode.BLOCKED, "Volume is unavailable now.")
-            self._dependencies.projection_bar.set_volume_percent(command.volume)
-        elif isinstance(command, PreviousCommand):
-            if not self._dependencies.projection_bar.navigate_previous():
-                return CommandError(CommandErrorCode.BLOCKED, "There is no previous item.")
-        elif isinstance(command, NextCommand):
-            if not self._dependencies.projection_bar.navigate_next():
-                return CommandError(CommandErrorCode.BLOCKED, "There is no next item.")
+            playback.set_volume(command.volume / 100)
+        elif isinstance(command, (PreviousCommand, NextCommand)):
+            offset = -1 if isinstance(command, PreviousCommand) else 1
+            if not playback.can_navigate(offset):
+                return CommandError(CommandErrorCode.BLOCKED, "Navigation is unavailable now.")
+            result = self._dependencies.media_projection.on_playlist_navigate(
+                playback.queue.index + offset, notify=False
+            )
+            if error := self._projection_error(result):
+                return error
         self._refresh_playback()
         return None
 
     def _execute_play(self, command: PlayCommand) -> CommandError | None:
-        if not self._dependencies.playback_protection.allow_manual_projection_change(notify=False):
+        if not self._dependencies.projection_playback.allow_manual_projection_change(notify=False):
             return CommandError(
                 CommandErrorCode.BLOCKED,
                 "Pause the current playback before changing media.",
@@ -684,16 +678,27 @@ class RemoteMediaAdapter(QObject):
         except CatalogResolutionError as error:
             return self._catalog_error(error)
         if isinstance(resolved, ResolvedPlaylistPlay):
-            self._dependencies.media_projection.project_media_at_index(
+            result = self._dependencies.media_projection.project_media_at_index(
                 list(resolved.items),
                 resolved.current_index,
+                notify=False,
+                start_paused=resolved.start_paused,
             )
-        elif isinstance(resolved, ResolvedMeetingPlay):
-            self._dependencies.media_projection.on_meeting_media_project(resolved.media)
-        if resolved.start_paused and self._dependencies.projection_session.state_type == "video":
-            self._dependencies.media_controller.pause()
-        self._last_media_error = ""
+        else:
+            result = self._dependencies.media_projection.on_meeting_media_project(
+                resolved.media, notify=False, start_paused=resolved.start_paused
+            )
         self._refresh_playback()
+        return self._projection_error(result)
+
+    @staticmethod
+    def _projection_error(result: ProjectionResult) -> CommandError | None:
+        if result.status is ProjectionResultStatus.BLOCKED:
+            return CommandError(
+                CommandErrorCode.BLOCKED, "Pause the current playback before changing media."
+            )
+        if not result.accepted:
+            return CommandError(CommandErrorCode.UNAVAILABLE, "This item could not be projected.")
         return None
 
     @staticmethod

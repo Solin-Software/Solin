@@ -4,6 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .projection_playback_operations import ProjectionPlaybackOperations
+
 from PySide6.QtCore import QCoreApplication, QDateTime, QT_TRANSLATE_NOOP
 
 from ..core.foundation.time_utils import ceil_remaining_seconds
@@ -28,6 +30,7 @@ class TimerProjectionContext:
 
     projection_session: Any
     projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     ndi_service: Any
     projection_windows: Callable[[], list[Any]]
@@ -94,7 +97,7 @@ class TimerProjectionController:
         presentation = MediaCountdownPresentation(presentation_value)
         self._session.set_tab_projection_active(False)
         self._stop_active_sources()
-        context.projection_bar.set_playlist([])
+        context.projection_playback.reset_projection()
         context.projection_bar.activate_timer(target_dt, presentation)
 
         remaining = self._remaining_seconds(target_dt)

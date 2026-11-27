@@ -8,6 +8,7 @@ from typing import Any, Protocol
 from PySide6.QtCore import QTimer
 
 from ..core.foundation.constants import MEMORIZE_PRE_MEDIA_SCENE
+from .projection_playback_operations import ProjectionPlaybackOperations
 
 
 AUTO_SHARE_REFOCUS_PROJECTION_DELAY_MS = 1900
@@ -53,6 +54,7 @@ class ProjectionIntegrationContext:
     obs_settings: Any
     auto_share_settings: Any
     projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     interaction_guard: DesktopAutomationInteractionGuard
     auto_share_finished: Callable[[int, bool, bool], None]
     start_auto_share: StartAutoShare
@@ -156,7 +158,7 @@ class ProjectionIntegrationController:
     def auto_share_configured(self) -> bool:
         return self._context.auto_share_settings.is_configured()
 
-    def prepare_video_playback_for_auto_share(self) -> bool:
+    def prepare_video_playback_for_auto_share(self, resume_on_success: bool = True) -> bool:
         """Hold a visual video while a required share start is unresolved."""
         context = self._context
         should_wait = (
@@ -169,20 +171,20 @@ class ProjectionIntegrationController:
             return False
 
         self._auto_share_playback_pending = True
-        context.projection_bar.begin_auto_share_playback_wait()
+        context.projection_playback.begin_auto_share_wait(resume_on_success=resume_on_success)
         return True
 
     def _resolve_auto_share_playback(self, success: bool) -> None:
         if not self._auto_share_playback_pending:
             return
         self._auto_share_playback_pending = False
-        self._context.projection_bar.resolve_auto_share_playback_wait(success)
+        self._context.projection_playback.resolve_auto_share_wait(success)
 
     def _cancel_auto_share_playback(self) -> None:
         if not self._auto_share_playback_pending:
             return
         self._auto_share_playback_pending = False
-        self._context.projection_bar.cancel_auto_share_playback_wait()
+        self._context.projection_playback.cancel_auto_share_wait()
 
     @staticmethod
     def _auto_share_lock_owner(generation: int) -> str:

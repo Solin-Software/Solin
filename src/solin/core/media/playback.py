@@ -51,6 +51,7 @@ class MediaController(QObject):
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
     media_ended       = Signal()
+    volume_changed    = Signal(float)
     cover_art_changed    = Signal(object)   # QPixmap | None
     title_from_metadata  = Signal(str)
 
@@ -157,6 +158,10 @@ class MediaController(QObject):
     @property
     def volume(self) -> float:
         return self._volume
+
+    @property
+    def playback_rate(self) -> float:
+        return self._playback_rate
 
     @property
     def is_playing(self) -> bool:
@@ -447,9 +452,12 @@ class MediaController(QObject):
             self._engine_route.seek(max(0, int(ms)))
 
     def set_volume(self, value: float):
+        previous = self._volume
         self._volume = max(0.0, min(1.0, float(value)))
         self._apply_playback_properties()
         self._publish_playback_audio_expected()
+        if self._volume != previous:
+            self.volume_changed.emit(self._volume)
 
     def set_audio_suppressed(self, suppressed: bool) -> None:
         """Temporarily silence output while keeping the configured volume."""

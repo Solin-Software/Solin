@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
-import random
 from collections.abc import Callable
 
 from PySide6.QtCore import (
     QDateTime,
     QEvent,
+    QSignalBlocker,
     QObject,
     Qt,
     QTimer,
@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from solin.controllers.projection_playback_operations import ProjectionPlaybackOperations
 from solin.core.foundation.constants import ORDER_OFF, ORDER_NEXT, ORDER_RANDOM
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.time_utils import ceil_remaining_seconds
@@ -88,7 +89,7 @@ from .controls import (
 )
 from .fullscreen import FullscreenVideoOverlay
 from .native_surface import NativeVideoSurface
-from .playlist import ProjectionPlaylistMixin, playback_order_has_pending_item
+from .playlist import ProjectionPlaylistMixin
 from .preview import ImagePreviewWidget
 from solin.widgets.common.buffered_slider import BufferedSlider
 from solin.core.media.playback_state import SolinPlaybackState
@@ -204,15 +205,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
       - SVG icons instead of emoji.
       - Playlist support with off / next / random modes.
       - Video options menu (speed, loop, order).
-      - Persisted playback preferences through a typed settings store.
     """
     stop_requested      = Signal()
-    seek_requested      = Signal(int)
-    toggle_requested    = Signal()
-    volume_changed      = Signal(float)
     timer_updated       = Signal(int, int)
     timer_blink         = Signal(bool)
-    play_next_requested = Signal(object)  # complete media item for automatic advance
     playlist_navigate   = Signal(int)        # absolute index for manual previous/next navigation
     add_to_destination_requested = Signal(str, str, object)  # url, title, metadata
     send_to_temp_playlist_requested = Signal(list)  # items in the current playlist
@@ -230,7 +226,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         media_ctrl: MediaController,
         *,
         playback_settings: ProjectionPlaybackSettingsStore,
-        playback_protection,
+        playback: ProjectionPlaybackOperations,
         profile_paths: ProfilePaths,
         profile_media_store: ProfileMediaStore,
         media_cache_dir: str | os.PathLike[str],
@@ -245,7 +241,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         super().__init__(parent)
         self.media      = media_ctrl
         self._playback_settings = playback_settings
-        self._playback_protection = playback_protection
+        self._playback = playback
         self._profile_paths = profile_paths
         self._profile_media_store = profile_media_store
         self._media_cache_dir = media_cache_dir
@@ -303,17 +299,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._wave_speed = [0.07, 0.09, 0.11, 0.08, 0.10, 0.07, 0.09]  # lerp per bar
 
         # ── Playlist state ───────────────────────────────────────────────
-        self._playlist: list[dict] = []         # [{"url":..., "title":...}]
-        self._playlist_index: int = 0
-        self._played_indices: set = set()        # for random playback without looping
-        self._screen_count: int = 0              # stored for language refresh
-        self._is_from_saved_playlist: bool = False  # True while playing from a saved playlist
-
-        # ── Persisted playback preferences ───────────────────────────────
-        self._loop: bool = self._playback_settings.loop_enabled()
-        self._playback_order: str = self._playback_settings.playback_order()
-        self._speed: float = self._playback_settings.speed()
-        self._volume: float = self._playback_settings.volume()
+        self._screen_count = 0
         self._image_match_projection_aspect: bool = (
             self._playback_settings.image_match_projection_aspect()
         )
@@ -321,25 +307,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self._playback_settings.image_constrain_to_frame()
         )
 
-        # ── Song Announcement Mode state machine ─────────────────────────
-        # States: "off" | "gate" | "ready"
-        #   off   → normal video playback
-        #   gate  → first 3.5s of media time: playing muted, controls locked
-        #   ready → paused with audio still suppressed, play enabled, slider locked
-        self._announce_state: str = "off"
-        self._announce_gate_ms: int = 3500
-        self._announce_timer = QTimer(self)
-        self._announce_timer.setInterval(40)
-        self._announce_timer.timeout.connect(self._on_announce_gate_expired)
-
-        # ── Automatic Zoom share playback gate ───────────────────────────
-        # Visual videos remain paused and user playback controls stay locked
-        # until the asynchronous share-start attempt has been resolved.
-        self._auto_share_playback_waiting = False
-
         # Thumbnail queue for the playlist panel
         self._thumb_queue = media_info_queue_factory(self)
         self._panel_populated = False
+        self._thumbnail_sources: dict[int, tuple[str, str]] = {}
         # One-shot timer: capture a live thumbnail of current media once per track.
         self._live_thumb_captured: bool = False
         self._live_thumb_timer = QTimer(self)
@@ -375,18 +346,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             self,
         )
         self._connect_media()
-        self._playback_protection.enabledChanged.connect(
-            self._sync_protected_media_controls
-        )
-        self._playback_protection.lockedChanged.connect(
-            self._sync_protected_media_controls
-        )
+        self._playback.changed.connect(self._sync_playback_controls)
+        self._playback.queue_replaced.connect(self._on_queue_replaced)
+        self._sync_playback_controls()
         if self._container is not None:
             self._container.installEventFilter(self)
-
-        # Aplica volume salvo
-        self.vol_slider.setValue(int(self._volume * 100))
-        self.media.set_volume(self._volume)
 
     # Bar (always visible)
 
@@ -526,7 +490,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Play/Pause: same size and style as the other buttons.
         self.play_btn = _icon_btn(ICON_PAUSE, 30, 15, PALETTE.text_secondary,
                                   self.tr("Pause/Resume"))
-        self.play_btn.clicked.connect(self._on_play_btn_clicked)
+        self.play_btn.clicked.connect(self._playback.toggle)
 
         # Prev / Next playlist navigation
         self.prev_btn = _icon_btn(ICON_SKIP_PREV, 30, 15, PALETTE.text_faint, self.tr("Previous"))
@@ -539,14 +503,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Volume
         self.vol_btn = _icon_btn(ICON_VOLUME_HIGH, 30, 15, PALETTE.text_muted,
                                  self.tr("Volume"))
-        self.vol_btn.clicked.connect(self._toggle_mute)
-        self._muted = False
-        self._pre_mute_vol = self._volume
-
+        self.vol_btn.clicked.connect(self._playback.toggle_mute)
         self.vol_slider = ThemedHorizontalSlider(track_height=3, handle_diameter=10)
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setFixedWidth(70)
-        self.vol_slider.valueChanged.connect(self._on_volume_slider)
+        self.vol_slider.valueChanged.connect(lambda value: self._playback.set_volume(value / 100))
 
         # More options (video only)
         self.more_btn = _icon_btn(ICON_MORE_VERT, 30, 15, PALETTE.text_muted,
@@ -905,11 +866,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     # MediaController connections
 
     def _connect_media(self):
-        self.seek_slider.sliderMoved.connect(self.seek_requested)
+        self.seek_slider.sliderMoved.connect(self._playback.seek)
         self.media.state_changed.connect(self._on_state_changed)
         self.media.duration_changed.connect(self._on_duration_changed)
         self.media.position_changed.connect(self._on_position_changed)
-        self.media.media_ended.connect(self._on_media_ended)
         self.media.playback_source_changed.connect(self._on_playback_source_changed)
         # The buffer bar behind the playback position: how much of a streaming
         # item is already cached on disk.
@@ -917,18 +877,19 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # Animate the slider while the media controller reports stream recovery.
         self.media.playback_recovery_changed.connect(self._on_playback_recovery_changed)
 
-    def _sync_protected_media_controls(self) -> None:
-        seek_enabled = (
-            self._announce_state == "off"
-            and not self._auto_share_playback_waiting
-            and not self._playback_protection.locked
-        )
-        self.seek_slider.setEnabled(seek_enabled)
+    @Slot()
+    def _sync_playback_controls(self) -> None:
+        self.play_btn.setEnabled(not self._playback.transport_blocked)
+        self.seek_slider.setEnabled(not self._playback.seek_blocked)
         self.seek_slider.setToolTip(
-            self.tr("Pause playback to seek.")
-            if self._playback_protection.locked
-            else ""
+            self.tr("Pause playback to seek.") if self._playback.protection_locked else ""
         )
+        self._sync_volume()
+        overlay = self._fullscreen_overlay
+        if overlay is not None:
+            overlay.set_speed(self._playback.speed)
+            overlay.set_loop_enabled(self._playback.loop)
+            overlay.set_playback_order(self._playback.queue.order)
         self._sync_fullscreen_media_controls()
         self._update_nav_buttons()
 
@@ -968,19 +929,9 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def is_audio_mode(self) -> bool:
         return self._is_audio
 
-    def current_media_title(self) -> str:
-        return (self.proj_title.text() or "").strip()
-
     @property
     def projection_mode(self) -> str | None:
         return self._mode
-
-    @property
-    def volume_percent(self) -> int:
-        return max(0, min(100, int(round(self._volume * 100))))
-
-    def set_volume_percent(self, value: int) -> None:
-        self.vol_slider.setValue(max(0, min(100, int(value))))
 
     def is_visual_media_active(self) -> bool:
         return self._mode == "image" or (self._mode == "video" and not self._is_audio)
@@ -1018,15 +969,16 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             parent=self,
         )
         overlay.exit_requested.connect(self.exit_app_fullscreen)
-        overlay.seek_requested.connect(self._on_fullscreen_seek_requested)
-        overlay.toggle_requested.connect(self._on_play_btn_clicked)
-        overlay.volume_changed.connect(self._on_fullscreen_volume_changed)
+        overlay.seek_requested.connect(self._playback.seek)
+        overlay.toggle_requested.connect(self._playback.toggle)
+        overlay.volume_changed.connect(self._playback.set_volume)
+        overlay.mute_toggled.connect(self._playback.toggle_mute)
         overlay.stop_requested.connect(self.stop_requested.emit)
         overlay.previous_requested.connect(self._on_prev_clicked)
         overlay.next_requested.connect(self._on_next_clicked)
-        overlay.speed_selected.connect(self._set_speed)
-        overlay.loop_toggled.connect(self._toggle_loop)
-        overlay.playback_order_selected.connect(self._set_playback_order)
+        overlay.speed_selected.connect(self._playback.set_speed)
+        overlay.loop_toggled.connect(self._playback.toggle_loop)
+        overlay.playback_order_selected.connect(self._playback.set_order)
         overlay.visibility_changed.connect(
             self._on_fullscreen_visibility_changed
         )
@@ -1055,10 +1007,10 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _hydrate_fullscreen_overlay(self, overlay: FullscreenVideoOverlay) -> None:
         title = self.ov_title.text() or self.proj_title.toolTip() or self.proj_title.text()
         overlay.set_title(title)
-        overlay.set_volume(self._volume)
-        overlay.set_speed(self._speed)
-        overlay.set_loop_enabled(self._loop)
-        overlay.set_playback_order(self._playback_order)
+        overlay.set_volume(self._playback.volume)
+        overlay.set_speed(self._playback.speed)
+        overlay.set_loop_enabled(self._playback.loop)
+        overlay.set_playback_order(self._playback.queue.order)
         overlay.set_playback_options_active(self._playback_options_indicator_active())
         overlay.set_duration(self.media.duration)
         overlay.set_position(self.media.position, self.media.duration)
@@ -1088,25 +1040,11 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is None:
             return
-        item_count = len(self._playlist)
-        navigation_unlocked = not self._playback_protection.locked
         overlay.set_navigation(
-            show=item_count > 1,
-            can_previous=navigation_unlocked and self._playlist_index > 0,
-            can_next=(
-                navigation_unlocked
-                and self._playlist_index < item_count - 1
-            ),
+            show=len(self._playback.queue.items) > 1,
+            can_previous=self._playback.can_navigate(-1),
+            can_next=self._playback.can_navigate(1),
         )
-        overlay.set_playback_options_active(self._playback_options_indicator_active())
-
-    def _on_fullscreen_volume_changed(self, volume: float) -> None:
-        self.vol_slider.setValue(int(round(max(0.0, min(1.0, volume)) * 100)))
-
-    def _on_fullscreen_seek_requested(self, value: int) -> None:
-        if self._announce_state != "off" or self._auto_share_playback_waiting:
-            return
-        self.seek_requested.emit(value)
 
     def _sync_fullscreen_media_controls(
         self,
@@ -1131,11 +1069,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
             overlay.set_title(title)
 
     def _enter_mode(self, mode: str | None) -> None:
-        """End the previous projection's timer and announcement work."""
         self._stop_timer_internals()
-        self._cancel_announcement_mode()
-        if mode != "video":
-            self.cancel_auto_share_playback_wait()
         self._mode = mode
         self._sync_preview_surface()
 
@@ -1148,7 +1082,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     def activate_video(self, title: str, keep_expanded: bool = False, is_audio: bool = False):
         self._ensure_overlay_ready()
-        self.cancel_auto_share_playback_wait()
         self._is_audio = is_audio
         self._enter_mode("video")
         self._image_pixmap = None
@@ -1181,7 +1114,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.vol_btn.setVisible(True)
         self.vol_slider.setVisible(True)
         self.more_btn.setVisible(True)
-        self._sync_protected_media_controls()
+        self._sync_playback_controls()
         self.timer_countdown_label.setVisible(False)
         self.obs_scene_btn.setVisible(False)
         self._fill_spacer.setVisible(False)
@@ -1189,9 +1122,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.active_widget.setVisible(True)
         self.overlay_stack.setCurrentIndex(0)
         self._sync_app_fullscreen_availability()
-
-        # Apply the saved playback speed.
-        self.media.set_playback_rate(self._speed)
 
         if self.app_fullscreen_active() and self._fullscreen_overlay is not None:
             self._fullscreen_overlay.clear_frame()
@@ -1452,101 +1382,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Automatic share playback gate ─────────────────────────────────────
 
-    def begin_auto_share_playback_wait(self) -> None:
-        """Lock a paused visual video until Zoom share startup is resolved."""
-        self._auto_share_playback_waiting = True
-        self.play_btn.setEnabled(False)
-        self._sync_protected_media_controls()
-
-    def resolve_auto_share_playback_wait(self, success: bool) -> None:
-        """Release the share gate, resuming only successful regular videos."""
-        if not self._auto_share_playback_waiting:
-            return
-        self._auto_share_playback_waiting = False
-
-        if self._announce_state == "gate":
-            # Announcement mode has precedence. Its muted media-time gate must
-            # run before it reaches the user-controlled READY state.
-            self.play_btn.setEnabled(False)
-            self._announce_timer.start()
-            self.media.play()
-        else:
-            self.play_btn.setEnabled(True)
-            if success:
-                self.media.play()
-
-        self._sync_protected_media_controls()
-
-    def cancel_auto_share_playback_wait(self) -> None:
-        """Discard a pending gate without changing playback state."""
-        if not self._auto_share_playback_waiting:
-            return
-        self._auto_share_playback_waiting = False
-        self.play_btn.setEnabled(self._announce_state != "gate")
-        self._sync_protected_media_controls()
-
-    # ── Song Announcement Mode ────────────────────────────────────────────
-
-    def begin_announcement_mode(self) -> None:
-        """
-        Enters GATE state: video plays muted while the conductor
-        announces the song. Controls are locked — only the close button works.
-        Called by MainWindow right before media_ctrl.start_playback().
-        """
-        self._announce_state = "gate"
-        self.media.set_audio_suppressed(True)
-        # Lock play button and seek slider — close button remains active
-        self.play_btn.setEnabled(False)
-        self._sync_protected_media_controls()
-        self._sync_fullscreen_media_controls()
-        # Poll media time only while playback can advance. Automatic sharing
-        # starts this timer when its paused startup gate is resolved.
-        if not self._auto_share_playback_waiting:
-            self._announce_timer.start()
-
-    def _on_announce_gate_expired(self) -> None:
-        """Pause on the announcement frame and keep audio suppressed until play."""
-        if self._announce_state != "gate":
-            return
-        if self.media.position < self._announce_gate_ms:
-            return
-        self._announce_timer.stop()
-        self._announce_state = "ready"
-        self.media.pause()
-        # Only play button is re-enabled; slider remains locked
-        self.play_btn.setEnabled(not self._auto_share_playback_waiting)
-        self._sync_protected_media_controls()
-        self._sync_fullscreen_media_controls()
-
-    def _on_play_btn_clicked(self) -> None:
-        if self._auto_share_playback_waiting or self._announce_state == "gate":
-            return
-        if self._announce_state == "ready":
-            self.resume_playback()
-        else:
-            self.toggle_requested.emit()
-
-    def resume_playback(self) -> None:
-        """Resume playback, restarting a prepared song with its configured audio."""
-        if self._announce_state == "ready":
-            self._announce_state = "off"
-            self.media.seek(0)
-            self._sync_protected_media_controls()
-            self.media.set_audio_suppressed(False)
-        self.media.play()
-
-    def _cancel_announcement_mode(self) -> None:
-        """Aborts announcement mode and restores controls unconditionally."""
-        if self._announce_state == "off":
-            return
-        self._announce_timer.stop()
-        self._announce_state = "off"
-        self.media.set_audio_suppressed(False)
-        # Restore controls
-        self.play_btn.setEnabled(not self._auto_share_playback_waiting)
-        self._sync_protected_media_controls()
-        self._sync_fullscreen_media_controls()
-
     def deactivate(self):
         self._reset_app_fullscreen()
         self._enter_mode(None)
@@ -1554,9 +1389,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self._image_file_path = ""
         self._is_audio = False
         self._audio_cover_pixmap = None
-        self._playlist = []
-        self._playlist_index = 0
-        self._played_indices = set()
         self._last_buffer_progress = (0, 0)
         self._playback_recovering = False
         if self._expanded:
@@ -1669,7 +1501,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         self.video_preview.apply_theme()
         self.seek_slider.update()
         self._on_state_changed(self._current_playback_state())
-        self._on_volume_slider(self.vol_slider.value())
+        self._sync_volume()
         self._update_nav_buttons()
         self._refresh_playback_options_indicator()
         self._refresh_obs_scene_btn()
@@ -1785,8 +1617,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         for label, val in SPEED_CHOICES:
             act = QAction(label, speed_group)
             act.setCheckable(True)
-            act.setChecked(abs(self._speed - val) < 0.01)
-            act.triggered.connect(lambda checked, v=val: self._set_speed(v))
+            act.setChecked(abs(self._playback.speed - val) < 0.01)
+            act.triggered.connect(lambda checked, v=val: self._playback.set_speed(v))
             speed_menu.addAction(act)
 
         menu.addSeparator()
@@ -1794,8 +1626,8 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         # ── Loop ────────────────────────────────────────────────────────
         loop_act = QAction("  " + self.tr("Loop"), menu)
         loop_act.setCheckable(True)
-        loop_act.setChecked(self._loop)
-        loop_act.triggered.connect(self._toggle_loop)
+        loop_act.setChecked(self._playback.loop)
+        loop_act.triggered.connect(self._playback.toggle_loop)
         menu.addAction(loop_act)
 
         menu.addSeparator()
@@ -1812,49 +1644,14 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         ]:
             act = QAction("  " + label, order_group)
             act.setCheckable(True)
-            act.setChecked(self._playback_order == val)
-            act.triggered.connect(lambda checked, v=val: self._set_playback_order(v))
+            act.setChecked(self._playback.queue.order == val)
+            act.triggered.connect(lambda checked, v=val: self._playback.set_order(v))
             order_menu.addAction(act)
 
         menu.exec(self.more_btn.mapToGlobal(self.more_btn.rect().bottomLeft()))
 
-    def _set_speed(self, rate: float):
-        self._speed = rate
-        self._playback_settings.set_speed(rate)
-        self.media.set_playback_rate(rate)
-        overlay = getattr(self, "_fullscreen_overlay", None)
-        if overlay is not None:
-            overlay.set_speed(rate)
-
-    def _toggle_loop(self):
-        self._loop = not self._loop
-        self._playback_settings.set_loop_enabled(self._loop)
-        self._refresh_playback_options_indicator()
-        overlay = getattr(self, "_fullscreen_overlay", None)
-        if overlay is not None:
-            overlay.set_loop_enabled(self._loop)
-
-    def _set_playback_order(self, order: str):
-        self._playback_order = order
-        self._playback_settings.set_playback_order(order)
-        # Reset random playback tracking when changing modes.
-        self._played_indices = {self._playlist_index}
-        self._refresh_playback_options_indicator()
-        overlay = getattr(self, "_fullscreen_overlay", None)
-        if overlay is not None:
-            overlay.set_playback_order(order)
-
     def _playback_options_indicator_active(self) -> bool:
-        if getattr(self, "_mode", None) != "video":
-            return False
-        if bool(getattr(self, "_loop", False)):
-            return True
-        return playback_order_has_pending_item(
-            order=getattr(self, "_playback_order", ORDER_OFF),
-            item_count=len(getattr(self, "_playlist", ())),
-            current_index=getattr(self, "_playlist_index", 0),
-            played_indices=set(getattr(self, "_played_indices", ())),
-        )
+        return self._mode == "video" and self._playback.has_pending_automatic_playback
 
     def _refresh_playback_options_indicator(self) -> None:
         active = self._playback_options_indicator_active()
@@ -1868,30 +1665,20 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
 
     # ── Volume ────────────────────────────────────────────────────────────
 
-    def _on_volume_slider(self, value: int):
-        vol = value / 100.0
-        self._volume = vol
-        self._playback_settings.set_volume(vol)
-        self.volume_changed.emit(vol)
-        # Update the icon.
+    def _sync_volume(self) -> None:
+        volume = self._playback.volume
+        value = round(volume * 100)
+        with QSignalBlocker(self.vol_slider):
+            self.vol_slider.setValue(value)
         if value == 0:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_MUTE, 15, PALETTE.text_muted))
+            icon = ICON_VOLUME_MUTE
         elif value < 50:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_LOW, 15, PALETTE.text_muted))
+            icon = ICON_VOLUME_LOW
         else:
-            self.vol_btn.setIcon(make_icon(ICON_VOLUME_HIGH, 15, PALETTE.text_muted))
-        overlay = getattr(self, "_fullscreen_overlay", None)
-        if overlay is not None:
-            overlay.set_volume(vol)
-
-    def _toggle_mute(self):
-        if self._muted:
-            self._muted = False
-            self.vol_slider.setValue(int(self._pre_mute_vol * 100))
-        else:
-            self._pre_mute_vol = self._volume
-            self._muted = True
-            self.vol_slider.setValue(0)
+            icon = ICON_VOLUME_HIGH
+        self.vol_btn.setIcon(make_icon(icon, 15, PALETTE.text_muted))
+        if self._fullscreen_overlay is not None:
+            self._fullscreen_overlay.set_volume(volume)
 
     # ── Timer mode ────────────────────────────────────────────────────────
 
@@ -1990,7 +1777,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_playback_state(state)
-        self._sync_protected_media_controls()
 
     @Slot(int)
     def _on_duration_changed(self, duration: int):
@@ -2005,7 +1791,7 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
     def _on_source_duration_changed(self, duration: int):
         if duration <= 0:
             return
-        item = self.current_playlist_item()
+        item = self._playback.queue.current_item
         if not item:
             return
         item_id = str(item.get("id") or "")
@@ -2022,70 +1808,6 @@ class ProjectionBar(ProjectionAudioMixin, ProjectionPlaylistMixin, QFrame):
         overlay = getattr(self, "_fullscreen_overlay", None)
         if overlay is not None:
             overlay.set_position(position, self.media.duration)
-        if self._announce_state == "gate" and position >= self._announce_gate_ms:
-            self._on_announce_gate_expired()
-
-    def _on_media_ended(self):
-        """Advance automatically according to the playlist and playback order."""
-        if self._mode != 'video':
-            return
-
-        order = self._playback_order
-        n = len(self._playlist)
-
-        if n == 0:
-            # No playlist — legacy behavior
-            if self._loop:
-                self.play_next_requested.emit(
-                    {"url": "__replay__", "title": "", "type": "video"}
-                )
-            else:
-                self.stop_requested.emit()
-            return
-
-        if order == ORDER_OFF:
-            # Play only the current item.
-            if self._loop:
-                self.media.replay()
-            else:
-                self.stop_requested.emit()
-
-        elif order == ORDER_NEXT:
-            next_idx = self._playlist_index + 1
-            if next_idx >= n:
-                if self._loop:
-                    if n == 1:
-                        self.media.replay()
-                        return
-                    next_idx = 0
-                else:
-                    self.stop_requested.emit()
-                    return
-            self._playlist_index = next_idx
-            self._played_indices.add(next_idx)
-            self._update_nav_buttons()
-            item = self._playlist[next_idx]
-            self.play_next_requested.emit(dict(item))
-
-        elif order == ORDER_RANDOM:
-            self._played_indices.add(self._playlist_index)
-            remaining = [i for i in range(n) if i not in self._played_indices]
-            if not remaining:
-                if self._loop:
-                    if n == 1:
-                        self.media.replay()
-                        return
-                    self._played_indices = set()
-                    remaining = list(range(n))
-                else:
-                    self.stop_requested.emit()
-                    return
-            next_idx = random.choice(remaining)
-            self._playlist_index = next_idx
-            self._played_indices.add(next_idx)
-            self._update_nav_buttons()
-            item = self._playlist[next_idx]
-            self.play_next_requested.emit(dict(item))
 
     @Slot(int, int)
     def _on_buffer_progress(self, downloaded: int, total: int):

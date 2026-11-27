@@ -70,6 +70,7 @@ from .lazy_page_controller import load_browser_widget_type
 if TYPE_CHECKING:
     from ..core.media.browser_downloads import BrowserDownloadService
     from ..core.network.browser_images import BrowserImageFetchService
+    from .projection_playback_operations import ProjectionPlaybackOperations
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +106,7 @@ class MainWindowUiContext:
     auto_key_settings: Any
     media_settings: Any
     playback_protection: Any
+    projection_playback: ProjectionPlaybackOperations
     browser_settings: Any
     meeting_schedule_settings: Any
     watched_folder_settings: Any
@@ -685,7 +687,7 @@ class MainWindowUiController:
         projection_bar = ProjectionBar(
             context.media_controller,
             playback_settings=context.projection_playback_settings,
-            playback_protection=context.playback_protection,
+            playback=context.projection_playback,
             profile_paths=context.profile_paths,
             profile_media_store=context.profile_media_store,
             media_cache_dir=context.media_cache_manager.media_cache_dir,

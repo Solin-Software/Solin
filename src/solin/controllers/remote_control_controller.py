@@ -47,6 +47,7 @@ log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ..core.remote_control.certificates import TLSIdentity
     from ..core.remote_control.server import RemoteControlServer
+    from .projection_playback_operations import ProjectionPlaybackOperations
     from .timer_operations import TimerOperations
 
 
@@ -67,11 +68,10 @@ class RemoteControlDependencies:
     meeting_thumbnail_store: Any
     media_thumbnail_extractor: Any
     projection_session: Any
-    projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     media_projection: Any
     projection_stop: Any
-    playback_protection: Any
     timer_operations: TimerOperations
     settings_widget: Any
     timer_feature_flags: TimerRemoteFeatureFlags = DEFAULT_TIMER_REMOTE_FEATURE_FLAGS
@@ -125,11 +125,10 @@ class RemoteControlController(QObject):
                 meeting_thumbnail_store=dependencies.meeting_thumbnail_store,
                 media_thumbnail_extractor=dependencies.media_thumbnail_extractor,
                 projection_session=dependencies.projection_session,
-                projection_bar=dependencies.projection_bar,
+                projection_playback=dependencies.projection_playback,
                 media_controller=dependencies.media_controller,
                 media_projection=dependencies.media_projection,
                 projection_stop=dependencies.projection_stop,
-                playback_protection=dependencies.playback_protection,
                 watched_folder_changed_signal=watched_signal,
             ),
             self,

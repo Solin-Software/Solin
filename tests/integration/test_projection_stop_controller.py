@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from solin.controllers.projection_stop_controller import (
@@ -97,6 +99,7 @@ class _WindowStub:
         self.media_ctrl = _ServiceStub()
         self._ndi_service = _ServiceStub()
         self.proj_bar = _ProjectionBarStub(visual_active=visual_active)
+        self.projection_playback = Mock()
         self._projection_integrations = _ProjectionIntegrationsStub(auto_share=auto_share)
         self._live_integrations = _LiveIntegrationsStub()
         self.windows = [_ProjectionWindowStub(), _ProjectionWindowStub()]
@@ -113,6 +116,7 @@ def _controller(window):
         ProjectionStopContext(
             projection_session=window.projection_session,
             projection_bar=window.proj_bar,
+            projection_playback=window.projection_playback,
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
             projection_windows=window._all_windows,
@@ -142,6 +146,7 @@ def test_stop_any_clears_projection_without_replacing_floating_preview():
     assert window.projection_session.tab_projection_active is False
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
+    window.projection_playback.reset_projection.assert_called_once_with()
     assert window._ndi_service.stopped == 1
     assert window._ndi_service.stopped_later == 0
     assert [projection_window.cleared for projection_window in window.windows] == [1, 1]
@@ -161,6 +166,7 @@ def test_stop_projection_uses_delayed_ndi_stop_for_obs_stream():
 
     controller.stop_projection()
 
+    window.projection_playback.reset_projection.assert_called_once_with()
     assert window._ndi_service.stopped == 0
     assert window._ndi_service.stopped_later == 1
     assert window.projection_session.floating_preview_window.zoom_breaks == 0
@@ -176,6 +182,7 @@ def test_stop_projection_swallows_navigation_errors():
     controller.stop_projection()
 
     assert window._navigation.stopped == 1
+    window.projection_playback.reset_projection.assert_called_once_with()
     assert window.projection_session.state == {"type": "idle"}
 
 
@@ -185,6 +192,7 @@ def test_stop_any_preserves_navigation_errors():
 
     with pytest.raises(RuntimeError):
         controller.stop_any()
+    window.projection_playback.reset_projection.assert_not_called()
 
 
 def test_projection_stop_controller_uses_explicit_dependencies():
