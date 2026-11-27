@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>終了予測 %1 · 目標 %2</translation>
+        <source>Projected end %1</source>
+        <translation>終了予測 %1</translation>
     </message>
     <message>
         <location line="+36"/>

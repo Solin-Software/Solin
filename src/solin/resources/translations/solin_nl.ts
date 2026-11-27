@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>Verwacht einde %1 · Doel %2</translation>
+        <source>Projected end %1</source>
+        <translation>Verwacht einde %1</translation>
     </message>
     <message>
         <location line="+36"/>
