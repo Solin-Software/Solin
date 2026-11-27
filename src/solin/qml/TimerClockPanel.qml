@@ -173,11 +173,60 @@ Rectangle {
         return qsTr("On schedule")
     }
 
-    readonly property string pacingSubline: {
-        if (!pacingReady) return ""
-        return qsTr("Projected end %1 · Target %2")
-            .arg(pacing.projectedEndLabel || "")
-            .arg(pacing.targetEndLabel || "")
+    readonly property string pacingForecast: pacingReady && pacing.projectedEndLabel
+        ? qsTr("Projected end %1").arg(pacing.projectedEndLabel) : ""
+    readonly property string pacingWindowLabel: pacingReady && pacing.startLabel && pacing.targetEndLabel
+        ? pacing.startLabel + "–" + pacing.targetEndLabel : ""
+
+    component PacingProjection: RowLayout {
+        visible: panel.pacingReady
+        Layout.fillWidth: true
+        spacing: 8
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            spacing: 2
+
+            Text {
+                objectName: "timerPacingHeadline"
+                Layout.fillWidth: true
+                text: panel.pacingHeadline
+                color: panel.pacingColor
+                font.pixelSize: panel.compactStrip ? 11 : 13
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+            }
+
+            Text {
+                objectName: "timerPacingSubline"
+                visible: text.length > 0
+                Layout.fillWidth: true
+                text: panel.pacingForecast
+                color: panel.pal_textMuted
+                font.pixelSize: panel.compactStrip ? 11 : 12
+                wrapMode: Text.Wrap
+            }
+        }
+
+        RowLayout {
+            visible: panel.pacingWindowLabel.length > 0
+            spacing: 4
+
+            TimerIcon {
+                Layout.preferredWidth: 13
+                Layout.preferredHeight: 13
+                iconName: "clock"
+                tint: panel.pal_textSecondary
+            }
+
+            TimerDigits {
+                objectName: "timerPacingWindow"
+                text: panel.pacingWindowLabel
+                color: panel.pal_textSecondary
+                font.pixelSize: panel.compactStrip ? 11 : 12
+            }
+        }
     }
 
     function formatClockSeconds(seconds) {
@@ -514,27 +563,7 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 5
 
-            // Ready projection (matches mockup: "Atraso previsto de 2 min" + "Fim previsto 20:32 · Meta 20:30")
-            Text {
-                objectName: "timerPacingHeadline"
-                visible: panel.pacingReady
-                Layout.fillWidth: true
-                text: panel.pacingHeadline
-                color: panel.pacingColor
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
-                wrapMode: Text.WordWrap
-            }
-
-            Text {
-                objectName: "timerPacingSubline"
-                visible: panel.pacingReady
-                Layout.fillWidth: true
-                text: panel.pacingSubline
-                color: panel.pal_textMuted
-                font.pixelSize: 12
-                wrapMode: Text.WordWrap
-            }
+            PacingProjection {}
 
             // Missing schedule window guidance + direct shortcut
             Text {
@@ -753,9 +782,11 @@ Rectangle {
             }
         }
 
-        // Secondary compact row: pacing + Adjust/Next/Reset
+        PacingProjection {}
+
+        // Secondary compact row: guidance and part controls
         RowLayout {
-            visible: panel.isRunning || panel.targetIsCompleted || panel.pacingReady
+            visible: panel.isRunning || panel.targetIsCompleted
                      || (!panel.isRunning && !!panel.selectedPart && !!panel.selectedPart.id)
                      || (panel.pacingEnabled && (panel.pacingAvailability === "missing_window" || panel.pacingAvailability === "awaiting_reset"))
             Layout.fillWidth: true
@@ -766,23 +797,20 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
                 text: {
-                    if (panel.pacingReady)
-                        return panel.pacingHeadline + " · " + (panel.pacing.projectedEndLabel || "") + "/" + (panel.pacing.targetEndLabel || "")
                     if (panel.pacingAvailability === "missing_window")
                         return panel.scheduleKind === "meeting" ? qsTr("Meeting time not set") : qsTr("Schedule time not set")
                     if (panel.pacingAvailability === "awaiting_reset")
                         return qsTr("Reset results to apply time window")
+                    if (panel.pacingReady)
+                        return ""
                     if (panel.targetHasAdjusted)
                         return qsTr("Target %1 · Planned %2").arg(panel.targetEffectiveLabel).arg(panel.targetPlannedLabel)
                     if (panel.targetIsCompleted)
                         return qsTr("Planned %1").arg(panel.targetPlannedLabel)
                     return ""
                 }
-                color: panel.pacingReady
-                       ? panel.pacingColor
-                       : (panel.pacingAvailability === "awaiting_reset" ? panel.pal_warning : panel.pal_textMuted)
+                color: panel.pacingAvailability === "awaiting_reset" ? panel.pal_warning : panel.pal_textMuted
                 font.pixelSize: 11
-                font.weight: panel.pacingReady ? Font.DemiBold : Font.Normal
                 elide: Text.ElideRight
             }
 

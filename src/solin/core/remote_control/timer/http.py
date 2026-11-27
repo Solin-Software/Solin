@@ -22,7 +22,7 @@ from ..security import (
 )
 from ..server import (
     COMMAND_TIMEOUT_SECONDS,
-    MAX_COMMAND_BODY_BYTES,
+    MAX_TIMER_COMMAND_BODY_BYTES,
     REMOTE_TIMER_PREFIX,
     SetupProvider,
     ScopedRemoteHttpModule,
@@ -362,7 +362,7 @@ class TimerRemoteHttpModule(ScopedRemoteHttpModule):
     async def _command(self, request: web.Request) -> web.Response:
         self._authorize_mutation(request)
         try:
-            payload = await self._strict_json(request, MAX_COMMAND_BODY_BYTES)
+            payload = await self._strict_json(request, MAX_TIMER_COMMAND_BODY_BYTES)
             command = parse_timer_command(payload)
         except (TypeError, ValueError) as error:
             raise web.HTTPBadRequest(text="Invalid command") from error

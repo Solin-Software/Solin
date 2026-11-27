@@ -2,9 +2,9 @@ import {
   ApiError,
   EventStream,
   RemoteApi,
-  newCommandId,
+  newUuid,
 } from "../../shared/scripts/api.js";
-import { byId, setUiIcon } from "../../shared/scripts/dom.js";
+import { announce, byId, setUiIcon, showToast } from "../../shared/scripts/dom.js";
 import {
   applyLocalization,
   initializeLocalization,
@@ -12,7 +12,10 @@ import {
 } from "../../shared/scripts/i18n.js";
 import { setupPwa } from "../../shared/scripts/pwa.js";
 import { initializeSetup, isSetupRoute } from "../../shared/scripts/setup.js";
-import { Renderer, announce, showToast } from "./renderer.js";
+import { Renderer } from "./renderer.js";
+import { ScheduleTimingEditor } from "./schedule-editor.js";
+import { ScheduleOrganizer } from "./schedule-organizer.js";
+import { ScheduleWorkspace } from "./schedule-workspace.js";
 import {
   Store,
   applyAuthenticatedBootstrap,
@@ -21,8 +24,10 @@ import {
   normalizeLiveSnapshot,
   normalizeProfile,
   normalizeScheduleSnapshot,
+  nextTimerPart,
+  selectedTimerPart,
+  timerContextChange,
 } from "./state.js";
-import { formatPartLiveClock, parseDurationInput } from "./timer-display.js";
 import { ScreenWakeLock } from "./wake-lock.js";
 
 const PUBLIC_WS_PATH = "/remote/timer/api/ws/public";
@@ -34,10 +39,14 @@ const SCHEDULE_BOUND_COMMANDS = new Set([
   "start_part",
   "reset_part",
   "adjust_part",
-  "set_part_seconds",
+  "edit_part",
   "set_section_count",
+  "set_pacing_mode",
+  "create_custom_schedule",
+  "select_custom_schedule",
+  "select_meeting_schedule",
 ]);
-const inflightCommandKeys = new Set();
+const inflightCommandKeys = new Map();
 
 let api = new RemoteApi("/remote/timer/api");
 let initialSetupPayload = null;
@@ -55,6 +64,22 @@ await initializeLocalization({
 const store = new Store();
 const renderer = new Renderer();
 const wakeLock = new ScreenWakeLock();
+const organizer = new ScheduleOrganizer({
+  store,
+  save: (fields) => sendTimerCommand(
+    { ...fields, type: "replace_custom_schedule_entries" }, { inline: true, sync: true }),
+});
+const editor = new ScheduleTimingEditor({
+  saveTiming: ({ timing, ...context }) => sendTimerCommand(
+    { ...context, ...timing, type: "replace_custom_timing_settings" }, { inline: true, sync: true }),
+});
+const workspace = new ScheduleWorkspace({
+  store,
+  send: (command, options) => sendTimerCommand(command, { ...options, sync: true }),
+  loadCatalog: loadCustomCatalog,
+  editor,
+  organizer,
+});
 
 let recoveryPromise = null;
 let websocketSyncTimer = 0;
@@ -97,6 +122,8 @@ store.subscribe((state, previous) => {
     state.view === "stage" ||
     (state.view === "control" && state.live.active && state.live.state === "running");
   wakeLock.setDesired(keepAwake);
+  workspace.sync(state, previous);
+  organizer.sync(state, previous);
 });
 
 if (isSetupRoute()) {
@@ -176,7 +203,7 @@ function bindStaticEvents() {
     });
   }
 
-  byId("hero-expand-button").addEventListener("click", () => enterStageView());
+  byId("control-stage-button").addEventListener("click", enterStageView);
   byId("sticky-expand-button").addEventListener("click", () => enterStageView());
   byId("sticky-scroll-top").addEventListener("click", () => scrollWorkspaceToTop());
 
@@ -213,6 +240,7 @@ function bindStaticEvents() {
   byId("sticky-plus-second").addEventListener("click", () => nudgeActivePart(1));
   byId("sticky-stop-button").addEventListener("click", stopActivePart);
 
+  bindTimerWorkspace();
   setupStickyHeroObserver();
 
   byId("meeting-midweek").addEventListener("click", () => {
@@ -241,15 +269,6 @@ function bindStaticEvents() {
 
   byId("schedule-list").addEventListener("click", handleScheduleClick);
 
-  byId("duration-close").addEventListener("click", closeDurationModal);
-  byId("duration-cancel").addEventListener("click", closeDurationModal);
-  byId("duration-modal").addEventListener("click", (event) => {
-    if (event.target === event.currentTarget) {
-      closeDurationModal();
-    }
-  });
-  byId("duration-form").addEventListener("submit", handleDurationSubmit);
-
   window.addEventListener("keydown", handleGlobalKeydown);
   window.addEventListener("offline", () => handleConnectionStatus("offline"));
   window.addEventListener("online", () => void recover());
@@ -267,13 +286,11 @@ function activeModalContainer() {
   if (store.state.loginModalOpen && store.state.controlAvailable) {
     return byId("login-modal");
   }
-  if (store.state.durationModal.open && store.state.authenticated) {
-    return byId("duration-modal");
-  }
   return document.querySelector('#stage-hand-alert-card[aria-modal="true"]');
 }
 
 function handleGlobalKeydown(event) {
+  if (document.querySelector("dialog[open]")) return;
   const modal = activeModalContainer();
   if (event.key === "Tab") {
     if (modal && !modal.hidden) {
@@ -301,11 +318,6 @@ function handleGlobalKeydown(event) {
     if (store.state.loginModalOpen) {
       event.preventDefault();
       closeLoginModal();
-      return;
-    }
-    if (store.state.durationModal.open) {
-      event.preventDefault();
-      closeDurationModal();
       return;
     }
     if (store.state.view === "stage" && !store.state.hudVisible) {
@@ -359,9 +371,10 @@ function enterStageView() {
     view: "stage",
     hudVisible: true,
     heroStuck: false,
-    durationModal: { open: false, partId: "", title: "", initialText: "" },
+
   });
   renderer.invalidateStage();
+  byId("stage-view").focus({ preventScroll: true });
   armStageHudAutohide();
 }
 
@@ -369,7 +382,8 @@ function enterControlWorkspace() {
   if (!store.state.authenticated || !store.state.controlAvailable) return;
   clearStageHudAutohide();
   store.update({ view: "control", loginModalOpen: false });
-  window.requestAnimationFrame(() => syncStickyHeroState());
+  byId("control-stage-button").focus({ preventScroll: true });
+  window.requestAnimationFrame(syncStickyHeroState);
 }
 
 let heroIntersecting = true;
@@ -445,12 +459,6 @@ function closeLoginModal() {
   store.update({ loginModalOpen: false });
   armStageHudAutohide();
   window.setTimeout(() => byId("stage-signin-button")?.focus(), 0);
-}
-
-function closeDurationModal() {
-  store.update({
-    durationModal: { open: false, partId: "", title: "", initialText: "" },
-  });
 }
 
 async function toggleBrowserFullscreen() {
@@ -559,17 +567,22 @@ function downgradeToPublicStage({ reason = "", notify = false } = {}) {
   clearWebsocketSync();
   eventStream.close();
   api.clearSecrets();
+  inflightCommandKeys.clear();
   // Requests started before the downgrade must not restore the old session.
   api = new RemoteApi(api.apiRoot);
   store.update((current) => ({
     view: "stage",
     authenticated: false,
     loginModalOpen: false,
-    durationModal: { open: false, partId: "", title: "", initialText: "" },
+
     hudVisible: true,
     live: { ...current.live, handAlert: null },
     schedule: normalizeScheduleSnapshot(null),
     scheduleRevision: 0,
+    selectedPartId: "",
+    adjustOpen: false,
+    browsingSchedules: false,
+    catalog: { status: "idle", schedules: [] },
   }));
   armStageHudAutohide();
   connectWebSocket(PUBLIC_WS_PATH);
@@ -622,6 +635,10 @@ async function doRecover({ initial }) {
   try {
     const publicPayload = await recoveryApi.publicBootstrap();
     if (recoveryApi !== api || !navigator.onLine) return false;
+    if (store.state.authenticated && !(publicPayload.authenticated && publicPayload.controlAvailable)) {
+      downgradeToPublicStage({ reason: "expired", notify: true });
+      return true;
+    }
     applyLocalization(publicPayload.profile);
     setupPage?.setInstallAvailable(pwa.isInstallAvailable());
     applyPublicBootstrap(store, publicPayload, { preserveView: !initial });
@@ -640,15 +657,9 @@ async function doRecover({ initial }) {
         if (!(authError instanceof ApiError && authError.status === 401)) {
           throw authError;
         }
-        api.clearSecrets();
-        store.update((current) => ({
-          view: "stage",
-          authenticated: false,
-          live: { ...current.live, handAlert: null },
-        }));
+        downgradeToPublicStage({ reason: "expired", notify: true });
+        return true;
       }
-    } else if (store.state.view === "control") {
-      store.update({ view: "stage", authenticated: false });
     }
 
     connectWebSocket(PUBLIC_WS_PATH);
@@ -750,6 +761,7 @@ function handleRemoteEvent(event) {
   }
 
   if (event.type === "session.snapshot") {
+    if (!store.state.authenticated) return;
     const live = normalizeLiveSnapshot(event.payload?.live);
     const schedule = normalizeScheduleSnapshot(event.payload?.schedule);
     const profile = normalizeProfile(event.payload?.profile);
@@ -764,7 +776,8 @@ function handleRemoteEvent(event) {
       liveRevision: live.liveRevision,
       scheduleRevision: schedule.scheduleRevision,
       liveAnchorMonotonicMs: performance.now(),
-      durationModal: syncDurationModalWithSchedule(current.durationModal, schedule),
+
+      ...timerContextChange(current, schedule),
       profile,
       live,
       schedule,
@@ -804,6 +817,8 @@ function handleRemoteEvent(event) {
         eventSequence: Number.isFinite(nextSequence) ? nextSequence : current.eventSequence,
         liveRevision: live.liveRevision,
         liveAnchorMonotonicMs: performance.now(),
+        adjustOpen: live.state === "running" && live.activePartId === current.live.activePartId && current.adjustOpen,
+        selectedPartId: live.state === "running" ? live.activePartId : current.selectedPartId,
         live,
       };
     });
@@ -811,6 +826,7 @@ function handleRemoteEvent(event) {
   }
 
   if (event.type === "timer.schedule") {
+    if (!store.state.authenticated) return;
     const schedule = normalizeScheduleSnapshot(event.payload);
     store.update((current) => {
       if (schedule.scheduleRevision < current.scheduleRevision) {
@@ -823,7 +839,8 @@ function handleRemoteEvent(event) {
         connection: "online",
         eventSequence: Number.isFinite(nextSequence) ? nextSequence : current.eventSequence,
         scheduleRevision: schedule.scheduleRevision,
-        durationModal: syncDurationModalWithSchedule(current.durationModal, schedule),
+
+        ...timerContextChange(current, schedule),
         schedule,
       };
     });
@@ -851,90 +868,66 @@ function handleRemoteEvent(event) {
   }
 }
 
-function handleScheduleClick(event) {
-  const button = event.target.closest("[data-action]");
-  if (!button || button.disabled) return;
-  const { action } = button.dataset;
 
-  if (action === "start-part") {
-    void sendTimerCommand({ type: "start_part", partId: button.dataset.partId });
-  } else if (action === "stop-part") {
-    void sendTimerCommand({ type: "stop_part", partId: button.dataset.partId });
-  } else if (action === "reset-part") {
-    void sendTimerCommand({ type: "reset_part", partId: button.dataset.partId });
-  } else if (action === "adjust-part") {
-    void sendTimerCommand({
-      type: "adjust_part",
-      partId: button.dataset.partId,
-      deltaSeconds: Number.parseInt(button.dataset.delta, 10),
-    });
-  } else if (action === "section-count") {
-    void sendTimerCommand({
-      type: "set_section_count",
-      section: button.dataset.section,
-      count: Number.parseInt(button.dataset.count, 10),
-    });
-  } else if (action === "edit-duration") {
-    const partId = String(button.dataset.partId ?? "");
-    const target = store.state.schedule.parts.find((item) => item.id === partId);
-    if (
-      !target ||
-      target.state !== "idle" ||
-      !target.durationEditable ||
-      !store.state.schedule.capabilities.setPlannedSeconds
-    ) {
-      return;
+function bindTimerWorkspace() {
+  const selected = () => selectedTimerPart(store.state);
+  const startSelected = () => {
+    const part = selected();
+    if (part) void sendTimerCommand({ type: "start_part", partId: part.id });
+  };
+  byId("hero-start-button").addEventListener("click", startSelected);
+  byId("sticky-start-button").addEventListener("click", startSelected);
+  byId("hero-reset-button").addEventListener("click", () => {
+    const part = selected();
+    if (part) void sendTimerCommand({ type: "reset_part", partId: part.id });
+  });
+  byId("hero-edit-button").addEventListener("click", () => {
+    const part = selected();
+    if (part) workspace.editPart(part);
+  });
+  byId("hero-adjust-button").addEventListener("click", () => {
+    store.update((state) => ({ adjustOpen: !state.adjustOpen }));
+  });
+  byId("hero-next-button").addEventListener("click", () => {
+    const next = nextTimerPart(store.state);
+    if (next) void sendTimerCommand({ type: "start_part", partId: next.id });
+  });
+}
+
+async function loadCustomCatalog() {
+  const catalogApi = api;
+  try {
+    const catalog = await catalogApi.get("/custom-schedules");
+    if (catalogApi !== api || !store.state.authenticated || !Array.isArray(catalog?.schedules)) {
+      throw new Error(t("workspace.catalogFailed"));
     }
-    const seconds = Number.parseInt(button.dataset.plannedSeconds, 10) || 60;
-    store.update({
-      durationModal: {
-        open: true,
-        partId,
-        title: String(button.dataset.title ?? ""),
-        initialText: formatPartLiveClock(seconds),
-      },
-    });
+    return catalog.schedules;
+  } catch (error) {
+    if (catalogApi === api && error instanceof ApiError && error.status === 401) {
+      downgradeToPublicStage({ reason: "expired", notify: true });
+    }
+    throw error;
   }
 }
 
-function syncDurationModalWithSchedule(currentModal, schedule) {
-  if (!currentModal?.open) return currentModal;
-  if (!schedule.capabilities.setPlannedSeconds) {
-    return { open: false, partId: "", title: "", initialText: "" };
-  }
-  const target = schedule.parts.find((item) => item.id === currentModal.partId);
-  if (!target || target.state !== "idle" || !target.durationEditable) {
-    return { open: false, partId: "", title: "", initialText: "" };
-  }
-  return currentModal;
-}
-
-function handleDurationSubmit(event) {
-  event.preventDefault();
-  const errorNode = byId("duration-error");
-  const rawValue = byId("duration-input").value;
-  const parsedSeconds = parseDurationInput(rawValue);
-  if (parsedSeconds === null) {
-    errorNode.textContent = t("part.invalidDuration");
-    errorNode.hidden = false;
-    byId("duration-input").focus();
-    return;
-  }
-
-  const partId = store.state.durationModal.partId;
-  closeDurationModal();
-  if (partId) {
-    void sendTimerCommand({
-      type: "set_part_seconds",
-      partId,
-      plannedSeconds: parsedSeconds,
-    });
+function handleScheduleClick(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button || button.disabled || store.state.live.state === "running") return;
+  const { action, partId, section, count } = button.dataset;
+  if (action === "select-part") {
+    store.update({ selectedPartId: partId, adjustOpen: false });
+  } else if (action === "section-count") {
+    void sendTimerCommand({ type: "set_section_count", section, count: Number(count) });
   }
 }
 
 async function refreshScheduleOnly() {
+  const scheduleApi = api;
+  const { serverInstanceId, profile } = store.state;
   try {
-    const schedulePayload = await api.schedule();
+    const schedulePayload = await scheduleApi.schedule();
+    if (scheduleApi !== api || !store.state.authenticated || serverInstanceId !== store.state.serverInstanceId ||
+        profile.id !== store.state.profile.id) return;
     const schedule = normalizeScheduleSnapshot(schedulePayload);
     store.update((current) => {
       if (schedule.scheduleRevision < current.scheduleRevision) {
@@ -942,12 +935,13 @@ async function refreshScheduleOnly() {
       }
       return {
         scheduleRevision: schedule.scheduleRevision,
-        durationModal: syncDurationModalWithSchedule(current.durationModal, schedule),
+
+        ...timerContextChange(current, schedule),
         schedule,
       };
     });
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (scheduleApi === api && error instanceof ApiError && error.status === 401) {
       downgradeToPublicStage({ reason: "expired", notify: true });
     }
   }
@@ -957,86 +951,80 @@ function commandDedupeKey(commandFields) {
   if (commandFields.type === "adjust_part" && Math.abs(commandFields.deltaSeconds) === 1) {
     return null;
   }
-  return `${commandFields.type}:${commandFields.partId ?? commandFields.section ?? commandFields.meetingType ?? commandFields.target ?? ""}`;
+  return `${commandFields.type}:${commandFields.partId ?? commandFields.scheduleId ?? commandFields.section ?? commandFields.meetingType ?? commandFields.target ?? ""}`;
 }
 
-async function postCommandWithCsrfRecovery(envelope) {
+
+async function postCommandWithCsrfRecovery(commandApi, envelope) {
   try {
-    return await api.command(envelope);
+    return await commandApi.command(envelope);
   } catch (error) {
-    if (!(error instanceof ApiError) || error.status !== 403) {
-      throw error;
-    }
+    if (!(error instanceof ApiError) || error.status !== 403 || commandApi !== api) throw error;
     const recovered = await recover();
-    if (!store.state.authenticated) {
-      return null;
-    }
+    if (commandApi !== api || !store.state.authenticated) return null;
     if (!recovered) {
       throw new ApiError(t("command.sessionConfirmFailed"), {
         status: 403,
         code: "csrf_recovery_failed",
       });
     }
-    return api.command(envelope);
+    return commandApi.command(envelope);
   }
 }
 
-async function sendTimerCommand(commandFields) {
-  if (!store.state.authenticated) return;
+async function sendTimerCommand(commandFields, { inline = false, sync = false } = {}) {
+  const fail = (code, message, tone = "error") => {
+    if (!inline && code !== "expired" && code !== "command_in_progress") showToast(message, tone);
+    return { ok: false, error: { code, message } };
+  };
+  if (!store.state.authenticated || !store.state.controlAvailable) {
+    return fail("expired", t("login.sessionExpired"));
+  }
+  const commandApi = api;
+  const { serverInstanceId, profile } = store.state;
   const dedupeKey = commandDedupeKey(commandFields);
   if (dedupeKey && inflightCommandKeys.has(dedupeKey)) {
-    return;
+    return fail("command_in_progress", t("command.inProgress"));
   }
-  if (dedupeKey) {
-    inflightCommandKeys.add(dedupeKey);
-  }
-  const envelope = {
-    commandId: newCommandId(),
-    ...commandFields,
-  };
+  const envelope = { commandId: newUuid(), ...commandFields };
   if (SCHEDULE_BOUND_COMMANDS.has(envelope.type)) {
-    envelope.scheduleRevision = store.state.schedule.scheduleRevision;
+    envelope.scheduleRevision ??= store.state.scheduleRevision;
   }
-
+  if (dedupeKey) inflightCommandKeys.set(dedupeKey, envelope.commandId);
+  const isCurrent = () => commandApi === api && store.state.authenticated &&
+    serverInstanceId === store.state.serverInstanceId && profile.id === store.state.profile.id;
   try {
-    const result = await postCommandWithCsrfRecovery(envelope);
-    if (!result) return;
-    if (result?.ok) {
-      if (store.state.connection !== "online") {
-        void recover();
-      }
-      return;
+    const result = await postCommandWithCsrfRecovery(commandApi, envelope);
+    if (!isCurrent() || !result) return fail("expired", t("login.sessionExpired"));
+    if (result.ok) {
+      if (sync && store.state.scheduleRevision < result.scheduleRevision) await refreshScheduleOnly();
+      if (!isCurrent()) return fail("expired", t("login.sessionExpired"));
+      if (store.state.connection !== "online") void recover();
+      return result;
     }
 
-    const code = result?.error?.code ?? "failed";
-    if (code === "schedule_stale") {
-      showToast(t("command.stateChanged"), "info");
-      await refreshScheduleOnly();
-      return;
-    }
-    if (code === "blocked") {
-      showToast(t("command.protected"), "error");
-      return;
-    }
-    if (code === "not_found" || code === "unavailable") {
-      showToast(t("command.unavailable"), "error");
-      await refreshScheduleOnly();
-      return;
-    }
-    showToast(t("command.notCompleted"), "error");
+    const code = result.error?.code ?? "failed";
+    const labels = {
+      schedule_stale: "command.stateChanged",
+      blocked: "command.protected",
+      not_found: "command.unavailable",
+      unavailable: "command.unavailable",
+      duration_budget: "command.durationBudget",
+      invalid: "command.invalid",
+      command_in_progress: "command.inProgress",
+    };
+    if (["schedule_stale", "not_found", "unavailable"].includes(code)) await refreshScheduleOnly();
+    if (!isCurrent()) return fail("expired", t("login.sessionExpired"));
+    return fail(code, t(labels[code] ?? "command.notCompleted"), code === "schedule_stale" ? "info" : "error");
   } catch (error) {
-    if (error instanceof ApiError) {
-      if (error.status === 401) {
-        downgradeToPublicStage({ reason: "expired", notify: true });
-        return;
-      }
-      showToast(error.message || t("command.sendFailed"), "error");
-      return;
+    if (!isCurrent()) return fail("expired", t("login.sessionExpired"));
+    if (error instanceof ApiError && error.status === 401) {
+      downgradeToPublicStage({ reason: "expired", notify: true });
+      return fail("expired", t("login.sessionExpired"));
     }
-    showToast(t("command.sendFailed"), "error");
+    return fail(error?.code ?? "failed", error instanceof ApiError
+      ? error.message || t("command.sendFailed") : t("command.sendFailed"));
   } finally {
-    if (dedupeKey) {
-      inflightCommandKeys.delete(dedupeKey);
-    }
+    if (inflightCommandKeys.get(dedupeKey) === envelope.commandId) inflightCommandKeys.delete(dedupeKey);
   }
 }

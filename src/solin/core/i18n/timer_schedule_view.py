@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from ..meetings.colors import section_colors, section_colors_from_hex
 from ..meetings.section_meta import SECTION_META
 from ..timer.models import (
@@ -201,6 +203,7 @@ def parts_model_for_schedule(
             **appearances[section],
             "title": display_part_title(part, indexed_number=indexed_number),
             "hasTitleOverride": part.title_override is not None,
+            **({"canonicalTitle": display_part_title(replace(part, title_override=None), indexed_number=indexed_number)} if is_meeting else {}),
             "displayNumber": number,
             "plannedSeconds": part.planned_seconds,
             "plannedLabel": format_mmss(part.planned_seconds),

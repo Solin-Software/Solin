@@ -1254,9 +1254,8 @@ class TimerBridge(QObject):
 
     # ── Exposed: pacing / pontualidade ─────────────────────────────────────
 
-    def _format_clock_hhmm(self, epoch: float) -> str:
-        cfg = self._session.clock_config
-        pattern = "HH:mm" if cfg.hour_format_24h else ("h:mm a" if cfg.show_ampm else "h:mm")
+    def _format_pacing_time(self, epoch: float) -> str:
+        pattern = "HH:mm" if self._session.clock_config.hour_format_24h else "h:mm a"
         return format_time_with_seconds(epoch, pattern)
 
     def _compute_pacing_model(self) -> dict[str, object]:
@@ -1322,10 +1321,10 @@ class TimerBridge(QObject):
             "complete": projection.complete,
             "deviationSeconds": deviation_sec,
             "deviationMinutes": deviation_min,
-            "projectedEndLabel": self._format_clock_hhmm(projection.projected_end_epoch),
-            "adjustedEndLabel": self._format_clock_hhmm(projection.adjusted_end_epoch),
-            "targetEndLabel": self._format_clock_hhmm(projection.end_epoch),
-            "startLabel": self._format_clock_hhmm(projection.start_epoch),
+            "projectedEndLabel": self._format_pacing_time(projection.projected_end_epoch),
+            "adjustedEndLabel": self._format_pacing_time(projection.adjusted_end_epoch),
+            "targetEndLabel": self._format_pacing_time(projection.end_epoch),
+            "startLabel": self._format_pacing_time(projection.start_epoch),
             "hasAdjustmentDifference": (
                 abs(projection.adjusted_end_epoch - projection.projected_end_epoch) >= 30
             ),

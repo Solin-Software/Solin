@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>예상 종료 %1 · 목표 %2</translation>
+        <source>Projected end %1</source>
+        <translation>예상 종료 %1</translation>
     </message>
     <message>
         <location line="+36"/>
@@ -13497,6 +13497,66 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>이 일정에 파트가 없습니다</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>빈 섹션</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>일정 시간 설정</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>사용자 지정 HEX</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>#41b6c4와 같은 6자리 HEX 색상 코드를 사용하세요.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>섹션 미리 보기</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>일정 편집</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Solin 앱에서 시작·종료 시간과 일정 진행 관리를 설정하세요.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>고급 옵션</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>가중치(0–100): 가중치가 높을수록 더 많이 조정됩니다. 다른 부분의 가중치가 양수이면 가중치가 0인 부분은 고정됩니다. 모든 가중치가 0이면 조정 가능한 부분이 균등하게 조정됩니다.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>자동 조정이 허용된 파트</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>자동 모드에서는 선택한 파트만 정시에 마치도록 단축되거나 연장됩니다. 선택하지 않은 파트는 계획 시간을 유지합니다.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>자동 모드에서는 선택한 파트가 정시에 마치도록 단축되거나 연장될 수 있습니다. 아무것도 선택하지 않으면 1분 이상인 모든 파트가 동일하게 조정됩니다.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>1분 미만</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>시간 지우기</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>자동</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>파트</translation>
@@ -13552,19 +13612,9 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>{title}에 1분 늘리기</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>{title} 시간 설정</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>시간(MM:SS 또는 분)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>적용</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13620,6 +13670,378 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>손을 든 참가자 목록 닫기</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>이 작업이나 타이머 항목을 더 이상 사용할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>일정</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>일정 유형</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>일정 선택</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>저장된 일정이 없습니다</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>일정을 불러오는 중…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>일정을 불러오지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>새 일정</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>일정 작업</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>일정 시간 및 진행 관리</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>파트 편집</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>이름 바꾸기</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>복제</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>삭제</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>저장</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>이름</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>이름을 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>{title}의 복사본</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>“{title}” 및 기록된 시간을 삭제하시겠습니까?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>결과 재설정</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>“{title}”의 기록된 시간을 모두 초기화하시겠습니까?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>기본 제목 복원</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>선택한 항목</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>다시 시작</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>조정</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>다음 파트</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>계획 {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>목표 {target} · 계획 {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>경과 시간</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>진행 관리</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>꺼짐</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>모니터링만</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>모니터링 및 조정</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>예정대로</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>{duration} 빠름</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>{duration} 늦음</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>예상을 보려면 시작 및 종료 시간을 설정하세요.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>결과를 초기화한 후 새 일정 시간이 적용됩니다.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>사용 가능한 예상이 없습니다.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>이 작업이 아직 진행 중입니다.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>값을 확인하고 다시 시도하세요.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>항목과 예상 시간의 합이 일정 시간을 초과합니다.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>닫기</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>파트 추가</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>섹션 추가</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>시간 (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>이동할 위치</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>섹션 밖</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>항목 제거</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>섹션 제거</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>아이콘</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>색상</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>기본값</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>없음</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>시작 시간</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>종료 시간</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>기록하지 않는 시간(초)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>마무리 시간(초)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>이 항목 이전(초)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>조정 가중치 (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>각 항목과 섹션의 이름을 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>00:01에서 23:59:59 사이의 시간을 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>서로 다른 시작 시간과 종료 시간을 모두 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>0 이상의 정수로 초를 입력하세요.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>시작 및 종료 시간을 입력하거나 예상 시간을 지우세요.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>0에서 100 사이의 가중치를 입력하세요. 1분 미만의 항목은 새로 선택할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>일정을 저장하지 못했습니다. 변경 사항은 그대로 유지됩니다.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>저장하지 않은 변경 사항을 버리시겠습니까?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>보물</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>봉사</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>생활</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>공개 강연</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>파수대</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>책</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>사람들</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>마이크</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>음악</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>달력</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>시계</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>확인</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>청록색</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>금색</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>진홍색</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>호박색</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>남색</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>파란색</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>에메랄드색</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>보라색</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>중립</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>이 일정이 변경되었습니다. 최신 버전으로 작업하려면 닫았다가 다시 여세요.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>다음 파트 시작</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>섹션 편집</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>예상 종료 {finish}</translation>
     </message>
 </context>
 <context>

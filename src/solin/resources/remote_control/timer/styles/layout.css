@@ -241,17 +241,6 @@
   box-shadow: var(--shadow-lg);
 }
 
-.duration-card {
-  width: min(100%, 380px);
-  min-width: 0;
-  max-width: 100%;
-  padding: 24px;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius-xl);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-lg);
-}
-
 .modal-card-header {
   display: flex;
   min-width: 0;
@@ -431,12 +420,13 @@
 
 .control-container {
   display: grid;
-  width: min(100%, 920px);
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   margin: 0 auto;
-  gap: 14px;
+  gap: 16px 22px;
 }
 
 @media (max-width: 720px) {
@@ -557,10 +547,6 @@
     border-radius: 12px;
   }
 
-  .duration-card {
-    padding: 20px 18px;
-  }
-
   .stage-hud {
     padding: max(10px, var(--safe-top)) max(12px, var(--safe-right)) 12px
       max(12px, var(--safe-left));
@@ -607,5 +593,60 @@
 
   .sticky-timer-shell {
     padding-top: 6px;
+  }
+}
+
+.schedule-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 12px;
+}
+
+.control-container[data-organizing="true"] > .hero-card {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .control-workspace {
+    padding-inline: max(clamp(18px, 2vw, 32px), var(--safe-left))
+      max(clamp(18px, 2vw, 32px), var(--safe-right));
+  }
+
+  .control-container {
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 36vw, 660px);
+    row-gap: 0;
+  }
+
+  .control-container > .schedule-tabs {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin-bottom: 12px;
+  }
+
+  .control-container > .hero-card {
+    position: sticky;
+    top: 0;
+    grid-column: 2;
+    grid-row: 2;
+    max-height: calc(100dvh - var(--topbar-height) - 52px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .schedule-column {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .control-container[data-organizing="true"] > .schedule-column {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-height: 540px) and (min-width: 900px) {
+  .control-container > .hero-card {
+    position: static;
+    max-height: none;
   }
 }

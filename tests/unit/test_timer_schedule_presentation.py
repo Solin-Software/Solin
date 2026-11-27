@@ -51,6 +51,12 @@ def test_custom_titles_are_literal_and_meeting_overrides_take_precedence():
         assert display_part_title(custom, indexed_number=2) == "Part {number}"
         official.title_override = "Part {number}"
         assert display_part_title(official, indexed_number=2) == "Part {number}"
+        first = TimerPart.new(Section.MINISTRY, "Part {number}", 60)
+        schedule = MeetingSchedule("2026-11-23", MeetingType.MIDWEEK, [first, official])
+        row = parts_model_for_schedule(schedule)[1]
+        assert row["title"] == "Part {number}"
+        assert row["canonicalTitle"] == "Translated 2"
+        assert row["hasTitleOverride"] is True
     finally:
         app.removeTranslator(translator)
 

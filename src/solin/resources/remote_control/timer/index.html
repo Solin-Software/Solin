@@ -23,6 +23,8 @@
     <link rel="stylesheet" href="./styles/layout.css">
     <link rel="stylesheet" href="./styles/components.css">
     <link rel="stylesheet" href="./styles/hand-alert.css">
+    <link rel="stylesheet" href="./styles/schedule-editor.css">
+    <link rel="stylesheet" href="./styles/schedule-drag.css">
     <script type="module" src="./scripts/app.js"></script>
   </head>
   <body>
@@ -74,13 +76,13 @@
           <line x1="21" y1="3" x2="14" y2="10"></line>
           <line x1="3" y1="21" x2="10" y2="14"></line>
         </symbol>
-        <symbol id="icon-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="4" y1="6" x2="20" y2="6"></line>
-          <line x1="4" y1="12" x2="20" y2="12"></line>
-          <line x1="4" y1="18" x2="20" y2="18"></line>
-          <circle cx="9" cy="6" r="2" fill="currentColor"></circle>
-          <circle cx="15" cy="12" r="2" fill="currentColor"></circle>
-          <circle cx="10" cy="18" r="2" fill="currentColor"></circle>
+        <symbol id="icon-grip" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/>
+          <circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/>
+          <circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/>
+        </symbol>
+        <symbol id="icon-skip-next" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m5 5 10 7-10 7V5Zm13 0v14"/>
         </symbol>
         <symbol id="icon-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="11" width="16" height="10" rx="2"></rect>
@@ -104,29 +106,10 @@
           <circle cx="12" cy="12" r="9"></circle>
           <polyline points="12 7 12 12 15.5 14"></polyline>
         </symbol>
-        <symbol id="icon-sec-treasures" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 4 h12 l4 6 L12 22 L2 10 Z M2 10 h20 M6 4 L12 22 M18 4 L12 22 M8 10 L12 4 L16 10"></path>
+        <symbol id="icon-more" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>
         </symbol>
-        <symbol id="icon-sec-ministry" viewBox="0 0 49 61">
-          <g fill="currentColor">
-            <path d="M20.89 14.5c.36-3.29-2.07-8.82 2.28-10.08.09 2.99.8 6.18-.12 9.09-.54.25-1.62.74-2.16.99m-4.43-2.8c-.56-2.24-.47-4.55 2.24-5.03-.2 1.97 1.15 6.21-2.24 5.03m8.87.54c.29-1.8-.92-6.74 2.35-4.77.51 2.15.36 4.61-2.35 4.77m-14.24 7.67c-2.47-2.65-1.6-6.68-.93-9.88 3.45 2.03 7.26 3.76 10.03 6.72 1.57 2.75.72 6.1.37 9.07-3.27-1.76-6.6-3.53-9.47-5.91m.59-5.98c-.21 4.46 4.03 6.23 7.31 8 .22-4.5-4.04-6.2-7.31-8m12.16 2.95c2.86-3.09 6.74-5.16 10.66-6.62-.11 3.19 1.01 7.15-1.51 9.7-2.91 2.4-6.23 4.33-9.76 5.67.08-2.88-.68-6.07.61-8.75m8.17-2.72c-3.23 1.59-7.05 3.53-6.83 7.77 2.83-1.84 8-3.36 6.83-7.77M9.69 22.5c3.67 1.65 7.4 3.51 10.32 6.32 1.81 2.79.84 6.34.66 9.44-3.5-2.02-7.33-3.74-10.19-6.66-1.64-2.72-.73-6.1-.79-9.1m1.95 3.77c-.2 4.46 4 6.22 7.27 8.02.22-4.42-4.06-6.2-7.27-8.02m12.39 2.63c2.94-2.85 6.7-4.73 10.39-6.41-.05 3.33 1.27 7.69-1.79 10.11-2.86 2.05-5.77 4.35-9.21 5.3-.31-2.95-.92-6.3.61-9m1.24 5.47c3.2-1.9 7.41-3.65 7.23-8.12-3.23 1.86-7.56 3.62-7.23 8.12"></path>
-            <path d="M20.46 50.41c-7.05-1.1-12.97-8.65-10.22-15.71 2.91 1.78 5.9 3.47 8.65 5.49 2.69 1.64 1.93 5.17 2.33 7.81h1.8c.33-2.4-.49-5.47 1.57-7.26 2.95-2.44 6.36-4.26 9.72-6.06 1.83 7.23-3.4 14.61-10.66 15.74-.3 1.65-.02 3.67-1.67 4.67-1.39-1.17-1.22-3.06-1.52-4.68m-8.77-11.8c1.07 3.82 3.37 7.21 7.05 8.91-.1-1.57-.33-3.13-.67-4.66-1.85-1.79-4.2-2.93-6.38-4.25m15.27 3.45c-1.9 1.12-1.1 3.65-1.51 5.46 3.59-1.79 5.97-5.07 6.96-8.92-1.85 1.1-3.75 2.13-5.45 3.46"></path>
-          </g>
-        </symbol>
-        <symbol id="icon-sec-living" viewBox="0 0 111 108">
-          <g fill="currentColor">
-            <path d="M72.35 21.29c5.01-3.3 12.92-3.64 17.05 1.26 2.86 3.26 6.09 6.2 8.7 9.66 1.08 3.18-1.07 6.51-3.54 8.39-2.17 1.77-5.12 1.3-7.71 1.48-1.41 6.97-2.85 13.94-4.24 20.91-0.7 4.13-3.59 7.52-7.04 9.72.87 7.37 2.37 14.72 2.15 22.17-3.47.02-7.03.53-10.46-.25-1.88-4.85-2.87-10-4.2-15.02-1.15 5.23-2.9 10.3-4.69 15.34-3.38.03-6.84.39-10.13-.57.62-6.47 1.63-12.9 2.37-19.36-3.48-.05-7-.25-10.41.56 1.36 6.37 3.54 12.55 4.48 19.01-3.62.56-7.29.47-10.94.32-1.76-4.35-3.62-8.68-4.88-13.22-.99 4.27-1.73 8.61-3.07 12.78-2.99.98-6.37.68-9.46.19l-.57-1.01c-.12-7.16-.39-14.38.13-21.51 2.25-2.68 4.98-4.9 7.48-7.34.02-1.81.05-3.61.09-5.41-2.19 1.4-5.04 5.19-7.71 2.55-.48-4.66-.4-9.41-.02-14.08 1.13-7.67 8.39-14.09 16.2-13.87 8.07-.05 16.14.09 24.21-.02 1.34.15 2.28-.98 3.26-1.68 4.29-3.7 8.49-7.52 12.95-11m1.94 4.02c-4.96 4.01-9.58 8.46-14.61 12.38-9.2.83-18.54-.08-27.78.42-4.97.36-9.4 3.98-11.1 8.6-.7 3.21-.36 6.53-.5 9.79 2.09-1.39 5.17-5.21 7.55-2.44.96 3.85.16 8.04.43 12.03-2.57 2.62-5.23 5.15-7.89 7.69-.03 5.86-.07 11.72.02 17.58.38-.18 1.13-.53 1.51-.7 1.4-3.81 1.48-8.02 3.09-11.76 4.22-2.53 8.75-4.52 13.09-6.83 2.4-1.44 5.27-1.04 7.94-1.09 6.42.15 12.85-.24 19.27.26 2.01 6.47 3.51 13.1 5.7 19.5.54.13 1.61.4 2.15.53-.54-6.95-2.23-13.86-1.89-20.84 2.46-2.12 5.85-3.87 6.46-7.39 1.72-7.61 3.11-15.3 4.83-22.92.37-3.19 4.32-1.75 6.46-2.19 2.69.13 4.37-2.25 4.87-4.61-3.01-2.8-5.69-5.91-8.7-8.7-3.12-2.71-7.88-1.6-10.9.69M54.88 75.3c-.09 5.39-1.16 10.7-1.52 16.07l1.51-.69c2.04-5.12 3.41-10.51 5.07-15.78-1.69.11-3.38.24-5.06.4m-21.87 4.31c1.22 3.7 2.46 7.43 4.12 10.96.57.19 1.73.56 2.31.75-1.07-4.42-2.3-8.81-3.3-13.25-1.04.51-2.08 1.02-3.13 1.54"></path>
-            <path d="M74.38 30.37c1.66-1.12 3.36.09 4.4 1.42-.75 1.03-1.5 2.05-2.24 3.08l.24 2.92c.95 1.24 2.21 2.48 1.82 4.21-1.23 1.72-3.92 1.1-4.89-.57-2.28-3.13-2.38-8.38.67-11.06"></path>
-          </g>
-        </symbol>
-        <symbol id="icon-sec-public_talk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="7" r="3"></circle>
-          <path d="M6 17a6 6 0 0 1 12 0"></path>
-          <path d="M4 17h16l-2 4H6z"></path>
-        </symbol>
-        <symbol id="icon-sec-watchtower" viewBox="0 0 32 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4.149 1.398 H8.169 V4.668 H10.572 V1.398 H14.636 V4.668 H17.039 V1.398 H21.103 V4.668 H23.55 V1.398 H27.57 V8.332 L23.754 13.063 V22 H7.965 V13.063 L4.149 8.332 Z"></path>
-        </symbol>
+        <!-- __SOLIN_TIMER_SPRITE__ -->
       </defs>
     </svg>
 
@@ -522,6 +505,11 @@
             <span class="status-dot" aria-hidden="true"></span>
             <span id="control-connection-label" data-i18n="connection.connecting">Connecting…</span>
           </div>
+          <button id="control-stage-button" class="button button--secondary button--compact" type="button"
+            data-i18n-aria-label="stage.expandTimer">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-expand"></use></svg>
+            <span class="desktop-label" data-i18n="stage.expand">Expand</span>
+          </button>
 
           <button
             id="control-install-button"
@@ -622,6 +610,11 @@
               <span class="sticky-stop-label" data-i18n="part.stop">Stop</span>
             </button>
 
+            <button id="sticky-start-button" class="button button--primary button--mini" type="button" hidden>
+              <span class="css-icon css-icon--play" aria-hidden="true"></span>
+              <span id="sticky-start-label" data-i18n="part.start">Start</span>
+            </button>
+
             <button
               id="sticky-expand-button"
               class="icon-button icon-button--small sticky-expand-button"
@@ -640,7 +633,7 @@
       </aside>
 
       <main id="main-content" class="control-workspace">
-        <div class="control-container">
+        <div id="control-container" class="control-container">
           <section id="hero-card" class="hero-card" data-state="idle" data-overrun="false">
             <div class="hero-top">
               <div class="hero-meta">
@@ -658,20 +651,9 @@
                   </svg>
                   <span id="hero-wall-clock">—</span>
                 </div>
-
-                <button
-                  id="hero-expand-button"
-                  class="button button--secondary button--compact hero-expand-button"
-                  type="button"
-                  aria-label="Expand timer"
-                  title="Expand timer"
-                  data-i18n-aria-label="stage.expandTimer"
-                  data-i18n-title="stage.expandTimer"
-                >
-                  <svg class="ui-icon" aria-hidden="true" focusable="false">
-                    <use href="#icon-expand"></use>
-                  </svg>
-                  <span class="hero-expand-label" data-i18n="stage.expand">Expand</span>
+                <button id="hero-edit-button" class="icon-button" type="button"
+                  data-i18n-aria-label="workspace.editPart" data-i18n-title="workspace.editPart" hidden>
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-edit"></use></svg>
                 </button>
               </div>
             </div>
@@ -684,8 +666,23 @@
                   <span id="hero-suffix-time" class="hero-suffix-time" hidden></span>
                 </span>
               </div>
+              <div class="hero-target" id="hero-target" hidden>
+                <progress id="hero-progress" max="1" value="0" data-i18n-aria-label="workspace.progress" hidden></progress>
+                <span id="hero-target-label"></span>
+              </div>
 
               <div id="hero-actions" class="hero-actions" hidden>
+                <button id="hero-start-button" class="button button--primary" type="button" hidden>
+                  <span class="css-icon css-icon--play" aria-hidden="true"></span>
+                  <span id="hero-start-label" data-i18n="part.start">Start</span>
+                </button>
+                <button id="hero-reset-button" class="button button--secondary" type="button" hidden>
+                  <span data-i18n="part.reset">Reset</span>
+                </button>
+                <button id="hero-adjust-button" class="button button--secondary" type="button" aria-expanded="false"
+                  aria-controls="hero-nudge-group" hidden>
+                  <span data-i18n="workspace.adjust">Adjust</span>
+                </button>
                 <div id="hero-nudge-group" class="nudge-group" hidden>
                   <button
                     id="hero-minus-second"
@@ -714,145 +711,190 @@
                   <span data-i18n="part.stop">Stop</span>
                 </button>
               </div>
+              <div id="hero-next" class="hero-next" hidden>
+                <div class="hero-next-copy">
+                  <span class="eyebrow" data-i18n="workspace.upNext">Up next</span>
+                  <strong id="hero-next-title"></strong>
+                  <span id="hero-next-duration"></span>
+                </div>
+                <button id="hero-next-button" class="icon-button" type="button"
+                  data-i18n-aria-label="workspace.startNext" data-i18n-title="workspace.startNext">
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-skip-next"></use></svg>
+                </button>
+              </div>
+            </div>
+            <div id="hero-pacing-panel" class="hero-pacing-panel" hidden>
+              <div id="pacing-setting" class="pacing-setting" hidden>
+                <label for="pacing-mode" data-i18n="pacing.label">Pacing</label>
+                <div class="timer-select">
+                  <select id="pacing-mode">
+                    <option value="off" data-i18n="pacing.off">Off</option>
+                    <option value="monitor" data-i18n="pacing.monitor">Monitor only</option>
+                    <option value="automatic" data-i18n="pacing.automatic">Monitor and adjust</option>
+                  </select>
+                  <span class="css-icon css-icon--chevron-down" aria-hidden="true"></span>
+                </div>
+              </div>
+              <div id="hero-pacing" class="pacing-line" hidden>
+                <div><strong id="pacing-status"></strong><span id="pacing-forecast"></span></div>
+                <span id="pacing-window" class="pacing-window" role="group" hidden>
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg>
+                  <span id="pacing-window-time"></span>
+                </span>
+                <button id="pacing-set-time" class="button button--secondary button--compact" type="button" hidden>
+                  <svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"></use></svg>
+                  <span data-i18n="pacing.setTime">Set schedule time</span>
+                </button>
+              </div>
             </div>
           </section>
 
-          <section id="meeting-bar" class="meeting-bar">
-            <div class="segmented-switch" role="group">
-              <button
-                id="meeting-midweek"
-                class="segmented-button"
-                type="button"
-                aria-pressed="true"
-                data-meeting-type="midweek"
-                data-i18n="meeting.midweek"
-              >
-                Midweek
-              </button>
-              <button
-                id="meeting-weekend"
-                class="segmented-button"
-                type="button"
-                aria-pressed="false"
-                data-meeting-type="weekend"
-                data-i18n="meeting.weekend"
-              >
-                Weekend
-              </button>
-            </div>
-
-            <div id="week-nav" class="week-nav">
-              <button
-                id="week-prev"
-                class="icon-button icon-button--small week-nav-button"
-                type="button"
-                aria-label="Previous week"
-                title="Previous week"
-                data-i18n-aria-label="week.previous"
-                data-i18n-title="week.previous"
-              >
-                <span class="css-icon css-icon--chevron-left" aria-hidden="true"></span>
-              </button>
-
-              <div class="week-summary">
-                <div class="week-label-row">
-                  <svg class="ui-icon week-calendar-icon" aria-hidden="true" focusable="false">
-                    <use href="#icon-calendar"></use>
-                  </svg>
-                  <strong id="week-label" class="week-label">—</strong>
-                </div>
-                <span
-                  id="week-not-current"
-                  class="week-substatus"
-                  data-i18n="week.notCurrent"
-                  hidden
+          <div id="schedule-tabs" class="schedule-tabs" role="group" data-i18n-aria-label="workspace.scheduleType" hidden>
+            <button id="tab-meetings" type="button" aria-pressed="true" data-i18n="workspace.meetings">Meetings</button>
+            <button id="tab-schedules" type="button" aria-pressed="false" data-i18n="workspace.schedules">Schedules</button>
+          </div>
+          <div class="schedule-column">
+            <section id="meeting-bar" class="meeting-bar">
+              <div class="segmented-switch" role="group">
+                <button
+                  id="meeting-midweek"
+                  class="segmented-button"
+                  type="button"
+                  aria-pressed="true"
+                  data-meeting-type="midweek"
+                  data-i18n="meeting.midweek"
                 >
-                  Not the current week
-                </span>
+                  Midweek
+                </button>
+                <button
+                  id="meeting-weekend"
+                  class="segmented-button"
+                  type="button"
+                  aria-pressed="false"
+                  data-meeting-type="weekend"
+                  data-i18n="meeting.weekend"
+                >
+                  Weekend
+                </button>
               </div>
 
-              <button
-                id="week-next"
-                class="icon-button icon-button--small week-nav-button"
-                type="button"
-                aria-label="Next week"
-                title="Next week"
-                data-i18n-aria-label="week.next"
-                data-i18n-title="week.next"
-              >
-                <span class="css-icon css-icon--chevron-right" aria-hidden="true"></span>
-              </button>
+              <div id="week-nav" class="week-nav">
+                <button
+                  id="week-prev"
+                  class="icon-button icon-button--small week-nav-button"
+                  type="button"
+                  aria-label="Previous week"
+                  title="Previous week"
+                  data-i18n-aria-label="week.previous"
+                  data-i18n-title="week.previous"
+                >
+                  <span class="css-icon css-icon--chevron-left" aria-hidden="true"></span>
+                </button>
 
-              <button
-                id="week-current"
-                class="icon-button icon-button--small week-nav-button week-home-button"
-                type="button"
-                aria-label="Back to this week"
-                title="Back to this week"
-                data-i18n-aria-label="week.backToCurrent"
-                data-i18n-title="week.backToCurrent"
-                disabled
-              >
-                <svg class="ui-icon" aria-hidden="true" focusable="false">
-                  <use href="#icon-home"></use>
-                </svg>
+                <div class="week-summary">
+                  <div class="week-label-row">
+                    <svg class="ui-icon week-calendar-icon" aria-hidden="true" focusable="false">
+                      <use href="#icon-calendar"></use>
+                    </svg>
+                    <strong id="week-label" class="week-label">—</strong>
+                  </div>
+                  <span
+                    id="week-not-current"
+                    class="week-substatus"
+                    data-i18n="week.notCurrent"
+                    hidden
+                  >
+                    Not the current week
+                  </span>
+                </div>
+
+                <button
+                  id="week-next"
+                  class="icon-button icon-button--small week-nav-button"
+                  type="button"
+                  aria-label="Next week"
+                  title="Next week"
+                  data-i18n-aria-label="week.next"
+                  data-i18n-title="week.next"
+                >
+                  <span class="css-icon css-icon--chevron-right" aria-hidden="true"></span>
+                </button>
+
+                <button
+                  id="week-current"
+                  class="icon-button icon-button--small week-nav-button week-home-button"
+                  type="button"
+                  aria-label="Back to this week"
+                  title="Back to this week"
+                  data-i18n-aria-label="week.backToCurrent"
+                  data-i18n-title="week.backToCurrent"
+                  disabled
+                >
+                  <svg class="ui-icon" aria-hidden="true" focusable="false">
+                    <use href="#icon-home"></use>
+                  </svg>
+                </button>
+              </div>
+            </section>
+
+            <div id="custom-bar" class="custom-bar" hidden>
+              <label class="visually-hidden" for="custom-selector" data-i18n="workspace.chooseSchedule">Choose a schedule</label>
+              <div class="timer-select">
+                <select id="custom-selector"></select>
+                <span class="css-icon css-icon--chevron-down" aria-hidden="true"></span>
+              </div>
+              <button id="custom-organize" class="button button--secondary button--compact" type="button">
+                <svg class="ui-icon" aria-hidden="true"><use href="#icon-sliders"></use></svg>
+                <span data-i18n="workspace.editSchedule">Edit schedule</span>
+              </button>
+              <button id="custom-actions" class="icon-button" type="button" aria-haspopup="dialog"
+                aria-label="Schedule actions" data-i18n-aria-label="workspace.actions">
+                <svg class="ui-icon" aria-hidden="true"><use href="#icon-more"></use></svg>
               </button>
             </div>
-          </section>
-
-          <div id="schedule-list" class="schedule-list" aria-live="polite"></div>
+            <div id="organizer-toolbar" class="organizer-toolbar" hidden>
+              <div class="organizer-actions">
+                <button id="organizer-add-part" class="button button--secondary button--compact" type="button"
+                  data-i18n="scheduleEditor.addPart">Add part</button>
+                <button id="organizer-add-section" class="button button--secondary button--compact" type="button"
+                  data-i18n="scheduleEditor.addSection">Add section</button>
+              </div>
+              <div class="organizer-actions">
+                <button id="organizer-cancel" class="button button--secondary button--compact" type="button"
+                  data-i18n="scheduleEditor.cancel">Cancel</button>
+                <button id="organizer-save" class="button button--primary button--compact" type="button"
+                  data-i18n="scheduleEditor.save">Save</button>
+              </div>
+              <p id="organizer-error" class="form-error" role="alert" hidden></p>
+            </div>
+            <div id="catalog-message" class="catalog-message" hidden>
+              <p id="catalog-status" role="status"></p>
+              <button id="catalog-retry" class="button button--secondary button--compact" type="button"
+                data-i18n="connection.retryNow" hidden>Try now</button>
+              <button id="catalog-new" class="button button--primary button--compact" type="button"
+                data-i18n="workspace.newSchedule" hidden>New schedule</button>
+            </div>
+            <div id="schedule-list" class="schedule-list"></div>
+          </div>
         </div>
       </main>
     </div>
 
-    <div
-      id="duration-modal"
-      class="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="duration-modal-title"
-      hidden
-    >
-      <section class="duration-card">
+    <dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-dialog-title">
+      <form id="workspace-form" novalidate>
         <div class="modal-card-header">
-          <h2 id="duration-modal-title" class="duration-modal-title"></h2>
-          <button
-            id="duration-close"
-            class="icon-button icon-button--small"
-            type="button"
-            aria-label="Cancel"
-            data-i18n-aria-label="part.cancelDuration"
-          >
-            <span class="css-icon css-icon--close" aria-hidden="true"></span>
-          </button>
+          <h2 id="workspace-dialog-title"></h2>
+          <button id="workspace-dialog-close" class="icon-button" type="button" aria-label="Close"
+            data-i18n-aria-label="scheduleEditor.close"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
         </div>
-
-        <form id="duration-form" class="duration-form" novalidate>
-          <div class="field">
-            <label for="duration-input" data-i18n="part.durationInputLabel">Duration (MM:SS or minutes)</label>
-            <input
-              id="duration-input"
-              name="duration"
-              type="text"
-              inputmode="text"
-              autocomplete="off"
-              spellcheck="false"
-              maxlength="12"
-              required
-            >
-          </div>
-          <p id="duration-error" class="form-error" role="alert" hidden></p>
-          <div class="duration-actions">
-            <button id="duration-cancel" class="button button--secondary" type="button" data-i18n="part.cancelDuration">
-              Cancel
-            </button>
-            <button id="duration-submit" class="button button--primary" type="submit" data-i18n="part.saveDuration">
-              Apply
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+        <div id="workspace-dialog-content" class="workspace-dialog-content"></div>
+        <p id="workspace-dialog-error" class="workspace-dialog-error form-error" role="alert" hidden></p>
+        <div id="workspace-dialog-actions" class="workspace-dialog-actions" hidden>
+          <button id="workspace-cancel" class="button button--secondary" type="button" data-i18n="scheduleEditor.cancel">Cancel</button>
+          <button id="workspace-submit" class="button button--primary" type="submit"></button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
     <div id="assertive-status" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>

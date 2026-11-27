@@ -29,7 +29,10 @@ from ..core.remote_control.timer.contracts import (
     DeleteCustomScheduleCommand,
     DuplicateCustomScheduleCommand,
     EditCustomScheduleCommand,
+    ReplaceCustomScheduleEntriesCommand,
+    ReplaceCustomTimingSettingsCommand,
     RenamePartCommand,
+    EditPartCommand,
     ResetAllCommand,
     SelectCustomScheduleCommand,
     SelectMeetingScheduleCommand,
@@ -271,6 +274,8 @@ class RemoteTimerAdapter(QObject):
                     section_icon_key=str(raw.get("sectionIconKey") or ""),
                     section_header_title=header_title,
                     title=public_title(raw.get("title"), f"Part {index}"),
+                    title_overridden=bool(raw["hasTitleOverride"]) if "canonicalTitle" in raw else None,
+                    canonical_title=public_title(raw["canonicalTitle"], f"Part {index}") if "canonicalTitle" in raw else None,
                     planned_seconds=max(0, int(raw.get("plannedSeconds", 0))),
                     planned_label=str(raw.get("plannedLabel") or "00:00"),
                     state=PartState(str(raw.get("state") or PartState.IDLE.value)),
@@ -407,6 +412,7 @@ class RemoteTimerAdapter(QObject):
                 ResetPartCommand,
                 AdjustPartCommand,
                 SetPartSecondsCommand,
+                EditPartCommand,
             ),
         ):
             part_id = command.part_id
@@ -438,14 +444,18 @@ class RemoteTimerAdapter(QObject):
                     return TimerCommandError(
                         TimerCommandErrorCode.BLOCKED, "This duration cannot be changed."
                     )
-            if isinstance(command, SetPartSecondsCommand):
+            planned_seconds = (
+                command.planned_seconds
+                if isinstance(command, (SetPartSecondsCommand, EditPartCommand)) else None
+            )
+            if planned_seconds is not None:
                 if part.state is not PartState.IDLE:
                     return TimerCommandError(
                         TimerCommandErrorCode.BLOCKED, "This duration cannot be changed."
                     )
                 if (
                     not isinstance(schedule, CustomTimerSchedule)
-                    and command.planned_seconds < MIN_PLANNED_PART_SECONDS
+                    and planned_seconds < MIN_PLANNED_PART_SECONDS
                 ):
                     return TimerCommandError(
                         TimerCommandErrorCode.INVALID,
@@ -471,6 +481,11 @@ class RemoteTimerAdapter(QObject):
                 operations.adjust_part(command.part_id, command.delta_seconds)
             elif isinstance(command, SetPartSecondsCommand):
                 operations.set_part_seconds(command.part_id, command.planned_seconds)
+            elif isinstance(command, EditPartCommand):
+                operations.edit_part(
+                    command.part_id, command.title, command.planned_seconds,
+                    restore_title=command.title_supplied and command.title is None,
+                )
             elif isinstance(command, SetSectionCountCommand):
                 operations.set_section_count(command.section, command.count)
             elif isinstance(command, SetMeetingTypeCommand):
@@ -480,7 +495,11 @@ class RemoteTimerAdapter(QObject):
             elif isinstance(command, NavigateWeekCommand):
                 operations.navigate_week(command.target.value)
             elif isinstance(command, CreateCustomScheduleCommand):
-                created_schedule_id = operations.create_custom_schedule(command.title).id
+                created_schedule_id = operations.create_custom_schedule(
+                    command.title,
+                    first_part_title=command.first_part_title,
+                    first_part_seconds=command.first_part_seconds or 0,
+                ).id
             elif isinstance(command, DuplicateCustomScheduleCommand):
                 created_schedule_id = operations.duplicate_custom_schedule(
                     command.schedule_id,
@@ -495,6 +514,24 @@ class RemoteTimerAdapter(QObject):
                     command.custom_revision,
                     command.action,
                     **command.values,
+                )
+            elif isinstance(command, ReplaceCustomScheduleEntriesCommand):
+                operations.replace_custom_schedule_entries(
+                    command.schedule_id, command.custom_revision, command.entries,
+                )
+            elif isinstance(command, ReplaceCustomTimingSettingsCommand):
+                settings = command.settings
+                operations.replace_custom_timing_settings(
+                    command.schedule_id,
+                    command.custom_revision,
+                    start_time=settings["startTime"],
+                    end_time=settings["endTime"],
+                    untracked_seconds=settings.get("untrackedSeconds"),
+                    update_untracked="untrackedSeconds" in settings,
+                    weights=settings.get("weights"),
+                    before_parts=settings.get("beforeParts"),
+                    closing_seconds=settings.get("closingSeconds"),
+                    update_closing="closingSeconds" in settings,
                 )
             elif isinstance(command, SelectCustomScheduleCommand):
                 operations.select_custom_schedule(

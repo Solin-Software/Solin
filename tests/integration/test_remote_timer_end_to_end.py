@@ -872,6 +872,143 @@ def test_abort_pending_commands_unblocks_server_waiter_without_pumping_qt() -> N
     assert dispatched == []
 
 
+@pytest.mark.parametrize("allow_pacing", [False, True])
+def test_atomic_custom_drafts_over_remote(tmp_path: Path, allow_pacing: bool) -> None:
+    engine, _session, _bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(
+            allow_custom_schedules=True, allow_pacing=allow_pacing,
+        ),
+        custom_directory=tmp_path / "custom-timers",
+    )
+    schedule = _bridge.operations.create_custom_schedule("Training")
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            public_headers = {"Host": _HOST, "Origin": _ORIGIN}
+
+            async def send(payload: dict) -> dict:
+                response = await client.post("/remote/timer/api/commands", headers=headers, json=payload)
+                assert response.status == 200
+                return await response.json()
+
+            revision = adapter.state.schedule_revision
+            command = {
+                "commandId": str(uuid.uuid4()),
+                "type": "replace_custom_schedule_entries",
+                "scheduleRevision": revision,
+                "scheduleId": schedule.id,
+                "customRevision": schedule.revision,
+                "entries": [
+                    {"type": "part", "title": "Opening", "plannedSeconds": 60},
+                    {"type": "section", "title": "Training", "icon": "book", "color": "#abcdef",
+                     "parts": [{"type": "part", "title": "Exercise", "plannedSeconds": 120}]},
+                ],
+            }
+            saved = await send(command)
+            assert saved["ok"]
+            assert await send(command) == saved
+            stale = await send({**command, "commandId": str(uuid.uuid4())})
+            assert stale["error"]["code"] == "schedule_stale"
+            catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+            current = catalog["schedules"][0]
+            assert [item["title"] for item in current["entries"]] == ["Opening", "Training"]
+            part_id = current["entries"][0]["id"]
+            timing = {
+                "commandId": str(uuid.uuid4()),
+                "type": "replace_custom_timing_settings",
+                "scheduleRevision": adapter.state.schedule_revision,
+                "scheduleId": schedule.id,
+                "customRevision": current["revision"],
+                "startTime": "19:30", "endTime": "20:30",
+                "untrackedSeconds": 20, "weights": {part_id: 30},
+                "beforeParts": {part_id: 10}, "closingSeconds": 5,
+            }
+            result = await send(timing)
+            if allow_pacing:
+                assert result["ok"]
+                catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+                current = catalog["schedules"][0]
+                assert current["entries"][0]["adjustmentWeight"] == 30
+                assert current["pacingConfig"]["start_time"] == "19:30"
+                assert current["pacingConfig"]["transitions"]["closing_seconds"] == 5
+                cleared = await send({
+                    **timing, "commandId": str(uuid.uuid4()),
+                    "scheduleRevision": adapter.state.schedule_revision,
+                    "customRevision": current["revision"],
+                    "untrackedSeconds": None, "beforeParts": {part_id: None},
+                    "closingSeconds": None,
+                })
+                assert cleared["ok"]
+                catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+                current = catalog["schedules"][0]
+                assert current["pacingConfig"]["untracked_seconds"] is None
+                assert "transitions" not in current["pacingConfig"]
+            else:
+                assert result["error"]["code"] == "blocked"
+            invalid = await send({
+                **command, "commandId": str(uuid.uuid4()),
+                "scheduleRevision": adapter.state.schedule_revision,
+                "customRevision": current["revision"],
+                "entries": [{"type": "part", "title": "Too long", "plannedSeconds": 8_000}],
+            }) if allow_pacing else None
+            if invalid is not None:
+                assert invalid["error"]["code"] == "duration_budget"
+                catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+                assert catalog["schedules"][0]["revision"] == current["revision"]
+            public = await (await client.get("/remote/timer/api/public", headers=public_headers)).json()
+            assert "schedule" not in public
+            assert (await client.get("/remote/timer/api/schedule", headers=public_headers)).status in (401, 403)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_large_atomic_custom_draft_is_accepted(tmp_path: Path) -> None:
+    engine, _session, _bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=True),
+        custom_directory=tmp_path / "custom-timers",
+    )
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            create = {
+                "commandId": str(uuid.uuid4()), "type": "create_custom_schedule",
+                "scheduleRevision": adapter.state.schedule_revision, "title": "Large",
+                "firstPart": {"title": "First", "plannedSeconds": 60},
+            }
+            response = await client.post("/remote/timer/api/commands", headers=headers, json=create)
+            created = await response.json()
+            assert created["ok"]
+            repeated = await client.post("/remote/timer/api/commands", headers=headers, json=create)
+            assert await repeated.json() == created
+            catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+            schedule = catalog["schedules"][0]
+            assert schedule["entries"][0]["title"] == "First"
+            entries = [
+                {"type": "part", "title": f"Part {index} " + "x" * 80, "plannedSeconds": 1}
+                for index in range(100)
+            ]
+            response = await client.post("/remote/timer/api/commands", headers=headers, json={
+                "commandId": str(uuid.uuid4()), "type": "replace_custom_schedule_entries",
+                "scheduleRevision": adapter.state.schedule_revision, "scheduleId": schedule["id"],
+                "customRevision": schedule["revision"], "entries": entries,
+            })
+            assert response.status == 200
+            assert (await response.json())["ok"]
+            catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+            assert len(catalog["schedules"][0]["entries"]) == len(entries)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
 def test_custom_schedule_remote_lifecycle_and_privacy(tmp_path: Path) -> None:
     engine, _session, _bridge, adapter, app = _build_stack(
         feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=True),
@@ -1310,9 +1447,10 @@ def test_custom_schedule_recovery_errors_are_returned_by_remote(
         engine._revert_timer.stop()
 
 
-def test_custom_schedule_feature_is_disabled_by_default(tmp_path: Path) -> None:
+def test_custom_schedule_feature_can_be_disabled(tmp_path: Path) -> None:
     engine, _session, _bridge, adapter, app = _build_stack(
-        custom_directory=tmp_path / "custom-timers"
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=False),
+        custom_directory=tmp_path / "custom-timers",
     )
 
     async def scenario() -> None:
@@ -1384,7 +1522,10 @@ def test_catalog_read_failure_does_not_interrupt_live_timer(
 
 
 def test_disabled_custom_feature_blocks_active_custom_controls(tmp_path: Path) -> None:
-    engine, _session, bridge, adapter, app = _build_stack(custom_directory=tmp_path / "custom-timers")
+    engine, _session, bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(allow_custom_schedules=False),
+        custom_directory=tmp_path / "custom-timers",
+    )
     operations = bridge.operations
     schedule = operations.create_custom_schedule("Private session")
     operations.edit_custom_schedule(schedule.id, schedule.revision, "add_part", title="Exercise", planned_seconds=20)
@@ -1443,6 +1584,99 @@ def test_deactivating_remote_timer_adapter_aborts_pending_commands(
         finally:
             adapter._bridge.requested.disconnect(envelopes.append)
             adapter._bridge.requested.connect(adapter._bridge._dispatch)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        adapter.stop()
+        engine._revert_timer.stop()
+
+
+def test_remote_edit_part_is_atomic_and_restores_canonical_title(tmp_path: Path) -> None:
+    engine, session, _bridge, adapter, app = _build_stack(
+        feature_flags=TimerRemoteFeatureFlags(
+            allow_custom_schedules=True, allow_schedule_structure_edits=True,
+        ),
+        custom_directory=tmp_path / "custom",
+    )
+
+    async def scenario() -> None:
+        async with TestClient(TestServer(app.app)) as client:
+            headers = await _login_headers(client)
+            boot = await (await client.get("/remote/timer/api/bootstrap", headers=headers)).json()
+            original = boot["schedule"]["parts"][0]
+            assert original["titleOverridden"] is False
+            assert original["canonicalTitle"] == original["title"]
+            revision = boot["scheduleRevision"]
+
+            async def send(rev: int, **fields: object) -> dict:
+                response = await client.post(
+                    "/remote/timer/api/commands", headers=headers,
+                    json={"commandId": str(uuid.uuid4()), "type": "edit_part",
+                          "scheduleRevision": rev, "partId": original["id"], **fields},
+                )
+                assert response.status == 200
+                return await response.json()
+
+            changed = await send(revision, title="Rehearsal", plannedSeconds=120)
+            assert changed["ok"]
+            assert changed["scheduleRevision"] == revision + 1
+            part = session.schedule.part_by_id(original["id"])
+            assert (part.title_override, part.planned_seconds) == ("Rehearsal", 120)
+            current = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert current["parts"][0]["canonicalTitle"] == original["title"]
+            assert current["parts"][0]["titleOverridden"] is True
+
+            stale = await send(revision, title=None, plannedSeconds=180)
+            assert not stale["ok"]
+            assert (part.title_override, part.planned_seconds) == ("Rehearsal", 120)
+            restored = await send(changed["scheduleRevision"], title=None, plannedSeconds=180)
+            assert restored["ok"]
+            assert (part.title_override, part.planned_seconds) == (None, 180)
+            renamed = await send(restored["scheduleRevision"], title="Another")
+            assert renamed["ok"]
+            duration = await send(renamed["scheduleRevision"], plannedSeconds=240)
+            assert duration["ok"]
+            assert (part.title_override, part.planned_seconds) == ("Another", 240)
+            rejected = await send(duration["scheduleRevision"], title="Must not persist", plannedSeconds=1)
+            assert not rejected["ok"]
+            assert (part.title_override, part.planned_seconds) == ("Another", 240)
+
+            async def post(payload: dict) -> dict:
+                response = await client.post(
+                    "/remote/timer/api/commands", headers=headers,
+                    json={"commandId": str(uuid.uuid4()), **payload},
+                )
+                assert response.status == 200
+                return await response.json()
+
+            created = await post({
+                "type": "create_custom_schedule", "scheduleRevision": duration["scheduleRevision"],
+                "title": "Custom", "firstPart": {"title": "Original", "plannedSeconds": 60},
+            })
+            assert created["ok"]
+            catalog = await (await client.get("/remote/timer/api/custom-schedules", headers=headers)).json()
+            custom = catalog["schedules"][0]
+            selected = await post({
+                "type": "select_custom_schedule", "scheduleRevision": created["scheduleRevision"],
+                "scheduleId": custom["id"], "customRevision": custom["revision"],
+            })
+            assert selected["ok"]
+            snapshot = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            custom_part = snapshot["parts"][0]
+            assert "canonicalTitle" not in custom_part and "titleOverridden" not in custom_part
+            edited = await post({
+                "type": "edit_part", "scheduleRevision": selected["scheduleRevision"],
+                "partId": custom_part["id"], "title": "Edited", "plannedSeconds": 90,
+            })
+            assert edited["ok"]
+            rejected = await post({
+                "type": "edit_part", "scheduleRevision": edited["scheduleRevision"],
+                "partId": custom_part["id"], "title": None, "plannedSeconds": 120,
+            })
+            assert not rejected["ok"]
+            snapshot = await (await client.get("/remote/timer/api/schedule", headers=headers)).json()
+            assert (snapshot["parts"][0]["title"], snapshot["parts"][0]["plannedSeconds"]) == ("Edited", 90)
 
     try:
         asyncio.run(scenario())

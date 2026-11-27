@@ -316,7 +316,7 @@ export class EventStream {
   }
 }
 
-export function newCommandId() {
+export function newUuid() {
   if (typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }

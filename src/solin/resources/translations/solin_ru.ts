@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>Прогноз окончания %1 · Цель %2</translation>
+        <source>Projected end %1</source>
+        <translation>Прогноз окончания %1</translation>
     </message>
     <message>
         <location line="+36"/>
@@ -13586,6 +13586,66 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>В этом расписании нет пунктов</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Пустой раздел</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Задать время расписания</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Свой HEX-код</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Используйте 6-значный HEX-код цвета, например #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Предпросмотр раздела</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Редактировать расписание</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Настройте время и контроль расписания в приложении Solin.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Дополнительные параметры</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Вес (0–100): чем выше вес, тем больше корректировка. Вес 0 оставляет часть неизменной, если вес другой части положительный. Если все веса равны 0, подходящие части корректируются одинаково.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Пункты с автоматической корректировкой</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>В автоматическом режиме только отмеченные пункты сокращаются или продлеваются, чтобы уложиться в график. Неотмеченные пункты сохраняют запланированную длительность.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>В автоматическом режиме отмеченные пункты могут сокращаться или продлеваться, чтобы уложиться в график. Если ничего не отмечено, все пункты длительностью от 1 мин корректируются равномерно.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Менее 1 мин</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Очистить время</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Пункты</translation>
@@ -13641,19 +13701,9 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>Добавить 1 минуту к {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Задать длительность для {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Длительность (ММ:СС или минуты)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Применить</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13709,6 +13759,378 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Закрыть список поднятых рук</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Это действие или часть таймера больше недоступны.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Расписания</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Тип расписания</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Выберите расписание</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Нет сохранённых расписаний</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Загрузка расписаний…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Не удалось загрузить расписания.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Новое расписание</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Действия с расписанием</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Время и соблюдение графика расписания</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Редактировать пункт</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Дублировать</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Название</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Введите название.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Копия: {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Удалить «{title}» и записанное время?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Сбросить результаты</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Сбросить всё записанное время для «{title}»?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Восстановить название по умолчанию</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>ВЫБРАННАЯ ЧАСТЬ</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Перезапустить</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Скорректировать</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Далее</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>По плану {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Цель {target} · По плану {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Прошедшее время</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Соблюдение графика</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Выключено</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Только отслеживание</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Отслеживание и корректировка</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>По расписанию</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Опережение на {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Отставание на {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Укажите время начала и окончания, чтобы увидеть прогноз.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Новый временной интервал применяется после сброса результатов.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Прогноз недоступен.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Это действие ещё выполняется.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Проверьте значения и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Части и расчётное время выходят за пределы расписания.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Добавить пункт</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Добавить раздел</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Длительность (ММ:СС)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Переместить в</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Вне разделов</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Удалить часть</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Удалить раздел</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Значок</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Цвет</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>По умолчанию</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Нет</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Время начала</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Время окончания</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Неучтённое время (секунды)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Время заключения (секунды)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Перед этой частью (секунды)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Вес корректировки (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Введите название каждой части и раздела.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Введите длительность от 00:01 до 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Введите разные значения времени начала и окончания.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Введите неотрицательное целое число секунд.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Введите время начала и окончания или очистите расчётное время.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Введите вес от 0 до 100. Части короче минуты нельзя выбрать заново.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Не удалось сохранить расписание. Ваши изменения сохранены здесь.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Отменить несохранённые изменения?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Сокровища</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Служение</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Христианская жизнь</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Публичная речь</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Сторожевая башня</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Книга</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Люди</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Музыка</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Календарь</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Часы</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Галочка</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Бирюзовый</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Золотой</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Малиновый</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Янтарный</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Индиго</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Синий</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Изумрудный</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Фиолетовый</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Нейтральный</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Этот сценарий изменился. Закройте и снова откройте его, чтобы работать с текущей версией.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Начать следующий пункт</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Изменить раздел</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Ожидаемое окончание {finish}</translation>
     </message>
 </context>
 <context>

@@ -59,14 +59,14 @@ export function formatPartLiveClock(seconds) {
   return `${sign}${pad2(minutes)}:${pad2(secs)}`;
 }
 
-export function parseDurationInput(raw) {
+export function parseDurationInput(raw, { minimum = MIN_PLANNED_SECONDS } = {}) {
   const trimmed = String(raw || "").trim();
   if (!trimmed) return null;
   if (/^\d+$/.test(trimmed)) {
     const minutes = Number.parseInt(trimmed, 10);
     if (!Number.isFinite(minutes) || minutes <= 0) return null;
     const total = minutes * 60;
-    return Math.min(MAX_PLANNED_SECONDS, Math.max(MIN_PLANNED_SECONDS, total));
+    return Math.min(MAX_PLANNED_SECONDS, Math.max(minimum, total));
   }
   const parts = trimmed.split(":");
   if (parts.length !== 2 && parts.length !== 3) return null;
@@ -82,7 +82,7 @@ export function parseDurationInput(raw) {
     if (minutes >= 60 || seconds >= 60) return null;
     totalSeconds = hours * 3600 + minutes * 60 + seconds;
   }
-  if (totalSeconds < MIN_PLANNED_SECONDS || totalSeconds > MAX_PLANNED_SECONDS) {
+  if (totalSeconds < minimum || totalSeconds > MAX_PLANNED_SECONDS) {
     return null;
   }
   return totalSeconds;

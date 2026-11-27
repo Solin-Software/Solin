@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>预计结束 %1 · 目标 %2</translation>
+        <source>Projected end %1</source>
+        <translation>预计结束 %1</translation>
     </message>
     <message>
         <location line="+36"/>
@@ -13497,6 +13497,66 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>此日程中没有环节</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>空板块</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>设置日程时间</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>自定义十六进制色值</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>请使用 6 位十六进制颜色代码，例如 #41b6c4。</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>板块预览</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>编辑日程</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>请在 Solin 应用中设置时间和进度管理。</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>高级选项</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>权重（0–100）：权重越高，调整幅度越大。当其他部分的权重为正数时，权重为 0 的部分保持不变。如果所有权重均为 0，则符合条件的部分将被平均调整。</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>允许自动调整的环节</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>在自动模式下，仅已勾选的环节会被缩短或延长以按时结束。未勾选的环节保持计划时长。</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>在自动模式下，已勾选的环节可缩短或延长以按时结束。若未勾选任何环节，所有不少于 1 分钟的环节将平均调整。</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>不足 1 分钟</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>清除时间</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>自动</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>环节</translation>
@@ -13552,19 +13612,9 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>将 {title} 增加 1 分钟</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>设置 {title} 的时长</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>时长（MM:SS 或分钟）</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>应用</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13620,6 +13670,378 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>关闭举手名单</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>此操作或计时项目已不可用。</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>日程</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>节目表类型</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>选择节目表</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>没有已保存的节目表</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>正在加载节目表…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>无法加载节目表。</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>新建日程</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>节目表操作</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>日程时间与进度控制</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>编辑环节</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>保存</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>名称</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>请输入名称。</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>{title}的副本</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>删除“{title}”及其记录的时间？</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>重置结果</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>重置“{title}”的所有记录时间？</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>恢复默认标题</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>已选项目</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>重新开始</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>调整</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>下一环节</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>计划 {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>目标 {target} · 计划 {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>已用时间进度</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>进度控制</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>仅监控</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>监控并调整</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>准时</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>提前 {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>落后 {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>设置开始和结束时间以查看预测。</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>重置结果后将应用新的节目表时间范围。</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>暂无预测。</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>此操作仍在进行中。</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>请检查数值并重试。</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>项目和估算时间超出节目表时间范围。</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>添加环节</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>添加板块</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>时长（MM:SS）</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>移至</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>部分之外</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>移除项目</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>移除部分</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>图标</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>颜色</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>默认</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>无</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>开始时间</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>结束时间</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>未记录时间（秒）</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>结束时间预留（秒）</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>此项目前（秒）</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>调整权重（0–100）</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>请为每个项目和部分输入名称。</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>请输入介于 00:01 和 23:59:59 之间的时长。</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>请输入不同的开始和结束时间。</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>请输入非负整数秒数。</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>请输入开始和结束时间，或清除估算时间。</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>请输入 0 到 100 之间的权重。少于一分钟的项目不能新选。</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>无法保存节目表。您的更改仍然保留。</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>放弃未保存的更改？</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>珍宝</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>传道</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>生活</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>公众演讲</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>守望台</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>书本</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>人员</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>麦克风</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>音乐</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>日历</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>时钟</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>检查</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>青色</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>金色</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>绯红色</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>琥珀色</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>靛蓝色</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>蓝色</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>翠绿色</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>紫罗兰色</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>中性色</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>此流程已更改。请关闭后重新打开，以使用当前版本。</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>开始下一环节</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>编辑分组</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>预计结束 {finish}</translation>
     </message>
 </context>
 <context>

@@ -1,12 +1,4 @@
-import {
-  announce,
-  byId,
-  cssIcon,
-  element,
-  setUiIcon,
-  showToast,
-  uiIcon,
-} from "../../shared/scripts/dom.js";
+import { byId, element, setUiIcon, uiIcon } from "../../shared/scripts/dom.js";
 import { currentLocale, t } from "../../shared/scripts/i18n.js";
 import { ClockStageCanvas } from "./clock-face.js";
 import { StageHandAlert } from "./hand-alert.js";
@@ -18,20 +10,15 @@ import {
   formatWallClock,
 } from "./timer-display.js";
 
-const SECTION_ICONS = new Set([
-  "treasures",
-  "ministry",
-  "living",
-  "public_talk",
-  "watchtower",
-]);
 
-export { announce, showToast };
+import { nextTimerPart, selectedTimerPart } from "./state.js";
+
+import { applySectionColor, sectionMark } from "./section-mark.js";
 
 export class Renderer {
   #stageCanvas;
   #stageHandAlert;
-  #lastScheduleKey = "";
+  #lastScheduleKey = null;
 
   constructor() {
     this.#stageCanvas = new ClockStageCanvas(byId("stage-canvas"));
@@ -43,6 +30,8 @@ export class Renderer {
   }
 
   render(state, previous = null) {
+    const focused = document.activeElement?.id;
+    if (previous?.view === "control" && state.view !== "control") syncPacingLine(null);
     this.#syncTheme(state);
     this.#syncViews(state);
     this.#syncModals(state, previous);
@@ -58,8 +47,30 @@ export class Renderer {
     });
     this.#syncStickyVisibility(state);
     this.#syncMeetingBar(state);
+    this.#syncCatalog(state);
     this.#syncScheduleList(state);
     this.renderLiveFrame(state);
+    if (state.view === "control" && previous?.live.state !== state.live.state) {
+      this.#restoreTimerActionFocus(focused, state.live.state);
+    }
+  }
+
+  #restoreTimerActionFocus(focused, state) {
+    const active = document.activeElement;
+    if (active !== document.body && active?.id !== focused) return;
+    const running = state === "running";
+    const from = running ? ["start-button"] : ["stop-button", "adjust-button", "minus-second", "plus-second"];
+    for (const group of ["hero", "sticky"]) {
+      if (!from.some((action) => focused === `${group}-${action}`)) continue;
+      const action = byId(`${group}-${running ? "stop" : "start"}-button`);
+      if (!action.disabled && !action.closest("[hidden], [inert]")) {
+        action.focus({ preventScroll: true });
+      }
+      if (document.activeElement !== action) {
+        byId("control-stage-button").focus({ preventScroll: true });
+      }
+      return;
+    }
   }
 
   renderLiveFrame(state, monotonicNowMs = performance.now()) {
@@ -104,6 +115,7 @@ export class Renderer {
 
     if (state.view === "control") {
       this.#renderHero(state, evaluated);
+      this.#renderPacing(state, evaluated);
       this.#renderStickyDock(state, evaluated);
       this.#renderRunningPartPills(evaluated);
     }
@@ -159,46 +171,13 @@ export class Renderer {
       window.setTimeout(() => byId("username")?.focus(), 0);
     }
 
-    const durationModal = byId("duration-modal");
-    const shouldShowDuration = Boolean(state.durationModal.open && state.authenticated);
-    const wasShowingDuration = Boolean(
-      previous?.durationModal?.open && previous?.authenticated,
-    );
-    durationModal.hidden = !shouldShowDuration;
-
-    const modalOpen = Boolean(shouldShowLogin || shouldShowDuration);
     for (const id of ["boot-view", "stage-view", "control-view", "setup-view"]) {
       const view = byId(id);
-      if (view) view.inert = modalOpen;
+      if (view) view.inert = shouldShowLogin;
     }
     const skipLink = document.querySelector(".skip-link");
-    if (skipLink) skipLink.inert = modalOpen;
+    if (skipLink) skipLink.inert = shouldShowLogin;
 
-    if (shouldShowDuration && !wasShowingDuration) {
-      byId("duration-modal-title").textContent = t("part.editDuration", {
-        title: state.durationModal.title,
-      });
-      const input = byId("duration-input");
-      input.value = state.durationModal.initialText;
-      byId("duration-error").hidden = true;
-      window.setTimeout(() => {
-        input.focus();
-        input.select();
-      }, 0);
-    } else if (!shouldShowDuration && wasShowingDuration) {
-      const closedPartId = previous?.durationModal?.partId ?? "";
-      window.setTimeout(() => {
-        const list = byId("schedule-list");
-        const target =
-          (closedPartId &&
-            (list?.querySelector(
-              `[data-action="edit-duration"][data-part-id="${CSS.escape(closedPartId)}"]`,
-            ) ||
-              list?.querySelector(`[data-part-id="${CSS.escape(closedPartId)}"]`))) ||
-          byId("hero-expand-button");
-        target?.focus();
-      }, 0);
-    }
   }
 
   #syncProfile(state) {
@@ -253,91 +232,126 @@ export class Renderer {
     }
   }
 
+
   #renderHero(state, evaluated) {
     const heroCard = byId("hero-card");
     const isInteractive = isControlInteractive(state);
     const caps = state.schedule.capabilities;
+    const part = selectedTimerPart(state);
+    const running = evaluated.active && evaluated.state === "running";
+    const showingLive = !state.browsingSchedules &&
+      (running || (evaluated.active && part?.id === evaluated.activePartId));
+    const stopped = !running && (part?.state === "stopped" || (showingLive && evaluated.state === "stopped"));
+    const overrun = showingLive && evaluated.overrun;
 
-    heroCard.dataset.state = evaluated.active ? evaluated.state : "idle";
-    heroCard.dataset.overrun = evaluated.active && evaluated.overrun ? "true" : "false";
-    if (evaluated.active && evaluated.activeSection) {
-      heroCard.dataset.section = evaluated.activeSection;
+    heroCard.dataset.state = running ? "running" : stopped ? "stopped" : "idle";
+    heroCard.dataset.overrun = String(overrun);
+    if (part || (showingLive && evaluated.activeSection)) {
+      heroCard.dataset.section = part?.section || evaluated.activeSection;
     } else {
       delete heroCard.dataset.section;
     }
 
-    const eyebrow = byId("hero-eyebrow");
-    const overrunBadge = byId("hero-overrun-badge");
-    const title = byId("hero-title");
-    const wallClockPill = byId("hero-wall-clock-pill");
-    const primaryTime = byId("hero-primary-time");
-    const sideTime = byId("hero-side-time");
-    const ampmTime = byId("hero-ampm-time");
-    const suffixTime = byId("hero-suffix-time");
-
     const [wallPrimary, wallSecs, wallAmpm] = formatWallClock(
-      evaluated.wallClockEpoch,
-      evaluated.clockConfig,
-      evaluated.utcOffsetMinutes,
+      evaluated.wallClockEpoch, evaluated.clockConfig, evaluated.utcOffsetMinutes,
     );
-    const wallFormatted = [
-      wallSecs ? `${wallPrimary}:${wallSecs}` : wallPrimary,
-      wallAmpm,
-    ]
-      .filter(Boolean)
-      .join(" ");
+    const wallFormatted = [wallSecs ? `${wallPrimary}:${wallSecs}` : wallPrimary, wallAmpm]
+      .filter(Boolean).join(" ");
+    const targetSeconds = showingLive ? evaluated.plannedSeconds :
+      part?.effectiveSeconds ?? part?.plannedSeconds;
+    const [primary, suffix] = showingLive
+      ? formatStageDuration(evaluated.displaySeconds)
+      : stopped && part?.resultLabel
+        ? [part.resultLabel, ""]
+        : part
+          ? formatStageDuration(targetSeconds)
+          : [wallPrimary, wallSecs];
+    const period = part || showingLive ? "" : wallAmpm;
 
-    let secsText = "";
-    let ampmText = "";
-    if (evaluated.active) {
-      eyebrow.textContent = t(
-        evaluated.state === "stopped" ? "hero.stoppedEyebrow" : "hero.runningEyebrow",
-      );
-      overrunBadge.hidden = !evaluated.overrun;
-      title.textContent = evaluated.activePartTitle || t("app.timer");
-      wallClockPill.hidden = false;
-      byId("hero-wall-clock").textContent = wallFormatted;
+    const eyebrow = running ? "hero.runningEyebrow" : stopped ? "hero.stoppedEyebrow" :
+      part ? "workspace.selectedPart" : "hero.clockEyebrow";
+    setText(byId("hero-eyebrow"), t(eyebrow));
+    byId("hero-overrun-badge").hidden = !overrun;
+    setText(byId("hero-title"), showingLive ? evaluated.activePartTitle || part?.title || t("app.timer") :
+      part?.title ?? t(state.browsingSchedules ? "workspace.chooseSchedule" :
+        state.schedule.customSchedule ? "schedule.empty" : "hero.idleTitle"));
+    byId("hero-wall-clock-pill").hidden = !part && !showingLive;
+    setText(byId("hero-wall-clock"), wallFormatted);
+    setText(byId("hero-primary-time"), primary);
+    setText(byId("hero-ampm-time"), period || "");
+    byId("hero-ampm-time").hidden = !period;
+    setText(byId("hero-suffix-time"), suffix || "");
+    byId("hero-suffix-time").hidden = !suffix;
+    byId("hero-side-time").hidden = !suffix && !period;
 
-      const [stagePrimary, stageSecs] = formatStageDuration(evaluated.displaySeconds);
-      primaryTime.textContent = stagePrimary;
-      secsText = stageSecs || "";
-    } else {
-      eyebrow.textContent = t("hero.clockEyebrow");
-      overrunBadge.hidden = true;
-      title.textContent = t("hero.idleTitle");
-      wallClockPill.hidden = true;
-      primaryTime.textContent = wallPrimary;
-      secsText = wallSecs || "";
-      ampmText = wallAmpm || "";
+    byId("hero-target").hidden = !targetSeconds;
+    const progress = byId("hero-progress");
+    progress.hidden = !running;
+    if (running) progress.value = Math.min(1, evaluated.elapsedSeconds / Math.max(1, targetSeconds));
+    if (targetSeconds) {
+      const plannedSeconds = part?.plannedSeconds ?? targetSeconds;
+      setText(byId("hero-target-label"), targetSeconds === plannedSeconds
+        ? t("workspace.plannedDuration", { duration: formatPartLiveClock(plannedSeconds) })
+        : t("workspace.adjustedDuration", {
+            target: formatPartLiveClock(targetSeconds),
+            planned: formatPartLiveClock(plannedSeconds),
+          }));
     }
 
-    ampmTime.textContent = ampmText;
-    ampmTime.hidden = !ampmText;
-    suffixTime.textContent = secsText;
-    suffixTime.hidden = !secsText;
-    sideTime.hidden = !secsText && !ampmText;
+    const canOperate = caps.controlParts;
+    const canStart = !running && Boolean(part) && canOperate;
+    const canStop = running && canOperate;
+    const canReset = stopped && Boolean(part) && canOperate;
+    const canEdit = !running && Boolean(part) &&
+      ((caps.controlParts && caps.manageCustomSchedules) || (part.durationEditable && caps.setPlannedSeconds));
+    setButton("hero-start-button", canStart, isInteractive && canStart);
+    setText(byId("hero-start-label"), t(stopped ? "workspace.restart" : "part.start"));
+    setButton("hero-reset-button", canReset, isInteractive && canReset);
+    setButton("hero-edit-button", canEdit, isInteractive && canEdit);
+    setButton("hero-stop-button", canStop, isInteractive && canStop);
+    setButton("hero-adjust-button", canStop, isInteractive && canStop);
+    byId("hero-adjust-button").setAttribute("aria-expanded", String(canStop && state.adjustOpen));
+    byId("hero-nudge-group").hidden = !canStop || !state.adjustOpen;
+    for (const sign of ["minus", "plus"]) {
+      setButton(`hero-${sign}-second`, canStop, isInteractive && canStop);
+    }
+    byId("hero-actions").hidden = !canStart && !canStop && !canReset;
 
-    const canNudge = Boolean(
-      evaluated.active && evaluated.state === "running" && caps.controlParts,
-    );
-    const canStop = Boolean(
-      evaluated.active && evaluated.state === "running" && caps.controlParts,
-    );
-    byId("hero-nudge-group").hidden = !canNudge;
-    byId("hero-minus-second").disabled = !canNudge || !isInteractive;
-    byId("hero-plus-second").disabled = !canNudge || !isInteractive;
+    const next = nextTimerPart(state);
+    const showNext = Boolean(next && (running || next.id !== part?.id));
+    byId("hero-next").hidden = !showNext;
+    setButton("hero-next-button", showNext && canOperate, isInteractive && canOperate);
+    setText(byId("hero-next-title"), showNext ? next.title : "");
+    setText(byId("hero-next-duration"), showNext ?
+      formatPartLiveClock(next.effectiveSeconds ?? next.plannedSeconds) : "");
+  }
 
-    const stopBtn = byId("hero-stop-button");
-    stopBtn.hidden = !canStop;
-    stopBtn.disabled = !isInteractive;
-    byId("hero-actions").hidden = !canNudge && !canStop;
+  #renderPacing(state, evaluated) {
+    const schedule = state.schedule;
+    const copy = state.authenticated && state.controlAvailable && state.connection === "online" &&
+      !state.browsingSchedules
+      ? pacingCopy(schedule, evaluated.wallClockEpoch, evaluated.clockConfig,
+          evaluated.utcOffsetMinutes)
+      : null;
+    const { customSchedule, capabilities, pacingAvailability, pacingMode } = schedule;
+    const canManage = state.authenticated && capabilities.managePacing;
+    syncPacingLine(copy);
+    byId("hero-pacing-panel").hidden = !copy && !canManage;
+    byId("pacing-setting").hidden = !canManage;
+    const select = byId("pacing-mode");
+    select.disabled = !canManage || !isControlInteractive(state);
+    if (select.value !== pacingMode) select.value = pacingMode;
+    const canSetTime = Boolean(copy && canManage && customSchedule && capabilities.manageCustomSchedules &&
+      pacingAvailability === "missing_window");
+    setButton("pacing-set-time", canSetTime, canSetTime &&
+      isControlInteractive(state) && evaluated.state !== "running");
   }
 
   #syncStickyVisibility(state) {
     const stickyShell = byId("sticky-timer-bar");
-    const stuck = Boolean(state.view === "control" && state.heroStuck);
+    const stuck = Boolean(state.view === "control" && state.heroStuck && !state.organizer);
     if (!stuck && stickyShell.contains(document.activeElement)) {
-      byId("hero-expand-button")?.focus({ preventScroll: true });
+      byId("control-stage-button")?.focus({ preventScroll: true });
     }
     stickyShell.dataset.stuck = stuck ? "true" : "false";
     stickyShell.inert = !stuck;
@@ -362,12 +376,22 @@ export class Renderer {
     const suffixTime = byId("sticky-suffix-time");
     const stickyTitle = byId("sticky-title");
 
-    if (evaluated.active) {
+    const part = selectedTimerPart(state);
+    const running = evaluated.active && evaluated.state === "running";
+    if (evaluated.active && (running || evaluated.activePartId === part?.id)) {
       const [stagePrimary, stageSecs] = formatStageDuration(evaluated.displaySeconds);
       primaryTime.textContent = stagePrimary;
       suffixTime.textContent = stageSecs || "";
       suffixTime.hidden = !stageSecs;
       stickyTitle.textContent = evaluated.activePartTitle || t("app.timer");
+    } else if (part) {
+      const [primary, suffix] = part.state === "stopped" && part.resultLabel
+        ? [part.resultLabel, ""]
+        : formatStageDuration(part.effectiveSeconds ?? part.plannedSeconds);
+      setText(primaryTime, primary);
+      setText(suffixTime, suffix || "");
+      suffixTime.hidden = !suffix;
+      setText(stickyTitle, part.title);
     } else {
       const [wallPrimary, wallSecs, wallAmpm] = formatWallClock(
         evaluated.wallClockEpoch,
@@ -391,6 +415,9 @@ export class Renderer {
     const stickyStop = byId("sticky-stop-button");
     stickyStop.hidden = !canControlRunning;
     stickyStop.disabled = !isInteractive;
+    const canStart = !running && Boolean(part) && caps.controlParts;
+    setButton("sticky-start-button", canStart, canStart && isInteractive);
+    setText(byId("sticky-start-label"), t(part?.state === "stopped" ? "workspace.restart" : "part.start"));
   }
 
   #renderRunningPartPills(evaluated) {
@@ -416,9 +443,12 @@ export class Renderer {
 
   #syncMeetingBar(state) {
     if (state.view !== "control") return;
-    const isInteractive = isControlInteractive(state);
+    const isInteractive = isControlInteractive(state) && state.live.state !== "running";
     const { schedule } = state;
     const caps = schedule.capabilities;
+    const custom = Boolean(schedule.customSchedule || state.browsingSchedules);
+    byId("meeting-bar").hidden = custom;
+    if (custom) return;
 
     const midweekBtn = byId("meeting-midweek");
     const weekendBtn = byId("meeting-weekend");
@@ -450,94 +480,140 @@ export class Renderer {
       !isInteractive || !caps.navigateWeeks || Boolean(schedule.isCurrentWeek);
   }
 
+
+  #syncCatalog(state) {
+    const selector = byId("custom-selector");
+    if (state.view !== "control") {
+      if (!state.authenticated && selector.options.length) selector.replaceChildren();
+      return;
+    }
+    const { schedule, catalog, browsingSchedules, organizer } = state;
+    const visible = schedule.capabilities.manageCustomSchedules;
+    const current = schedule.customSchedule;
+    const custom = visible && Boolean(current || browsingSchedules);
+    const canChange = isControlInteractive(state) && state.live.state !== "running" &&
+      !organizer && !state.scheduleSwitch;
+    const canEdit = state.connection === "online" && state.live.state !== "running" &&
+      !organizer?.saving && !organizer?.stale;
+    byId("control-stage-button").disabled = Boolean(organizer);
+    byId("control-container").dataset.organizing = String(Boolean(organizer));
+    byId("organizer-toolbar").hidden = !organizer;
+    byId("organizer-add-part").disabled = !canEdit;
+    byId("organizer-add-section").disabled = !canEdit;
+    byId("organizer-save").disabled = !canEdit || !organizer?.dirty;
+    byId("organizer-cancel").disabled = Boolean(organizer?.saving);
+    byId("organizer-error").hidden = !organizer?.error;
+    setText(byId("organizer-error"), organizer?.error ?? "");
+    byId("schedule-tabs").hidden = !visible;
+    byId("tab-meetings").disabled = !canChange;
+    byId("tab-schedules").disabled = !canChange;
+    byId("tab-meetings").setAttribute("aria-pressed", String(!custom));
+    byId("tab-schedules").setAttribute("aria-pressed", String(custom));
+    byId("custom-bar").hidden = !custom || (!current && !catalog.schedules.length);
+    setButton("custom-organize", Boolean(current) && !organizer, canChange);
+    setButton("custom-actions", Boolean(current), canChange);
+
+    selector.disabled = !canChange || (!current && (catalog.status !== "ready" || !catalog.schedules.length));
+    if (custom) {
+      const schedules = catalog.schedules.map((item) => item.id === current?.id ? current : item);
+      if (current && !schedules.some((item) => item.id === current.id)) schedules.unshift(current);
+      const options = schedules.map((item) => [item.id, item.title]);
+      if (!current) options.unshift(["", t("workspace.chooseSchedule")]);
+      if (options.length !== selector.options.length || options.some(([id, title], index) =>
+        selector.options[index]?.value !== id || selector.options[index]?.textContent !== title)) {
+        selector.replaceChildren(...options.map(([value, text]) => {
+          const option = element("option", { text, attrs: { value } });
+          option.disabled = !value;
+          return option;
+        }));
+      }
+      if (selector.value !== (current?.id ?? "")) selector.value = current?.id ?? "";
+    } else if (selector.options.length) {
+      selector.replaceChildren();
+    }
+
+    const message = !custom ? "" :
+      catalog.status === "error" ? "workspace.catalogFailed" :
+      current ? "" :
+      catalog.status !== "ready" ? "workspace.loadingSchedules" :
+      !catalog.schedules.length ? "workspace.noSchedules" : "";
+    byId("catalog-message").hidden = !message && !(custom && !current);
+    setText(byId("catalog-status"), message ? t(message) : "");
+    setButton("catalog-retry", custom && catalog.status === "error", canChange);
+    setButton("catalog-new", custom && !current, canChange && catalog.status === "ready");
+  }
+
   #syncScheduleList(state) {
-    if (state.view !== "control") return;
+    if (state.view !== "control") {
+      if (this.#lastScheduleKey) byId("schedule-list").replaceChildren();
+      this.#lastScheduleKey = null;
+      return;
+    }
     const isInteractive = isControlInteractive(state);
-    const caps = state.schedule.capabilities;
-    const key = [
-      currentLocale(),
-      state.schedule.scheduleRevision,
-      state.schedule.meetingType,
-      state.schedule.weekMonday,
-      isInteractive ? "1" : "0",
-      state.live.activePartId || "",
-      state.live.state,
-      JSON.stringify(caps),
-      state.schedule.parts
-        .map(
-          (p) =>
-            `${p.id}:${p.state}:${p.plannedSeconds}:${p.durationEditable ? 1 : 0}:${p.sectionCount}:${p.startedLabel}:${p.resultLabel}`,
-        )
-        .join("|"),
-    ].join("::");
-    if (key === this.#lastScheduleKey) return;
+    const { schedule, browsingSchedules, organizer } = state;
+    const caps = schedule.capabilities;
+    const part = selectedTimerPart(state);
+    const editing = Boolean(organizer);
+    const canEdit = editing && state.connection === "online" && state.live.state !== "running" &&
+      !organizer.saving && !organizer.stale;
+    const key = [currentLocale(), editing ? organizer : schedule, isInteractive, canEdit,
+      part?.id, state.live.state, browsingSchedules];
+    if (this.#lastScheduleKey?.every((value, index) => value === key[index])) return;
     this.#lastScheduleKey = key;
 
     const container = byId("schedule-list");
-    const focusDescriptor = captureScheduleFocus(container);
-
-    if (state.schedule.parts.length === 0) {
-      container.replaceChildren(
-        element("p", {
-          className: "schedule-empty",
-          text: t("schedule.empty"),
-        }),
-      );
+    if (editing) container.dataset.dragContainer = "";
+    else delete container.dataset.dragContainer;
+    const focus = document.activeElement;
+    const hadFocus = container.contains(focus);
+    const { action, partId, section, direction } = hadFocus ? focus.dataset : {};
+    const custom = schedule.customSchedule;
+    const waitingForSelection = browsingSchedules && !custom;
+    const groups = editing ? groupCustomParts(draftParts(schedule.parts, organizer.entries), organizer.entries) :
+      waitingForSelection ? [] : custom
+      ? groupCustomParts(schedule.parts, custom.entries)
+      : groupPartsBySection(schedule.parts);
+    if (!groups.length && !waitingForSelection) {
+      container.replaceChildren(element("p", { className: "schedule-empty", text: t("schedule.empty") }));
+      if (hadFocus) byId("control-stage-button").focus({ preventScroll: true });
       return;
     }
 
     const fragment = document.createDocumentFragment();
-    const groups = groupPartsBySection(state.schedule.parts);
     for (const group of groups) {
-      fragment.append(buildSectionCard(group, { isInteractive, caps }));
+      fragment.append(buildSectionCard(group, {
+        isInteractive,
+        caps,
+        editing,
+        canEdit,
+        selectedId: part?.id,
+        canSelect: state.live.state !== "running",
+      }));
     }
     container.replaceChildren(fragment);
-    restoreScheduleFocus(container, focusDescriptor);
-  }
-}
-
-const PRIMARY_PART_ACTIONS = new Set(["start-part", "stop-part", "reset-part"]);
-
-function captureScheduleFocus(container) {
-  const active = document.activeElement;
-  if (!active || !container.contains(active)) return null;
-  const button = active.closest("button[data-action]");
-  if (!button) return null;
-  return {
-    action: button.dataset.action || "",
-    partId: button.dataset.partId || "",
-    delta: button.dataset.delta || "",
-    section: button.dataset.section || "",
-    text: button.textContent || "",
-  };
-}
-
-function restoreScheduleFocus(container, descriptor) {
-  if (!descriptor) return;
-  let candidate = null;
-  if (PRIMARY_PART_ACTIONS.has(descriptor.action) && descriptor.partId) {
-    candidate = container.querySelector(
-      `.part-row[data-part-id="${CSS.escape(descriptor.partId)}"] .part-action-btn:not(:disabled)`,
-    );
-  } else if (descriptor.action === "adjust-part" && descriptor.partId && descriptor.delta) {
-    candidate = container.querySelector(
-      `button[data-action="adjust-part"][data-part-id="${CSS.escape(descriptor.partId)}"][data-delta="${CSS.escape(descriptor.delta)}"]:not(:disabled)`,
-    );
-  } else if (descriptor.action === "edit-duration" && descriptor.partId) {
-    candidate = container.querySelector(
-      `button[data-action="edit-duration"][data-part-id="${CSS.escape(descriptor.partId)}"]:not(:disabled)`,
-    );
-  } else if (descriptor.action === "section-count" && descriptor.section) {
-    for (const btn of container.querySelectorAll(
-      `button[data-action="section-count"][data-section="${CSS.escape(descriptor.section)}"]:not(:disabled)`,
-    )) {
-      if (btn.textContent === descriptor.text) {
-        candidate = btn;
-        break;
-      }
+    if (hadFocus) {
+      const matchingButtons = [...container.querySelectorAll("button:enabled")].filter((button) =>
+        action === button.dataset.action && partId === button.dataset.partId &&
+        section === button.dataset.section);
+      const newFocus = matchingButtons.find((button) => direction === button.dataset.direction) ??
+        matchingButtons[0];
+      const current = part?.id && container.querySelector(
+        `button[data-action="select-part"][data-part-id="${CSS.escape(part.id)}"]:enabled`);
+      (newFocus || current || byId("control-stage-button")).focus({ preventScroll: true });
     }
   }
-  candidate?.focus({ preventScroll: true });
+}
+
+function draftParts(parts, entries) {
+  const persisted = new Map(parts.map((part) => [part.id, part]));
+  return entries.flatMap((entry) =>
+    entry.type === "section" ? entry.parts.map((part) => [part, entry.id]) : [[entry, ""]]
+  ).map(([entry, section], index) => ({
+    state: "idle", ...persisted.get(entry.id), id: entry.id, title: entry.title, section,
+    effectiveSeconds: null,
+    displayNumber: index + 1, plannedSeconds: entry.plannedSeconds,
+    plannedLabel: formatPartLiveClock(entry.plannedSeconds),
+  }));
 }
 
 function isControlInteractive(state) {
@@ -546,6 +622,73 @@ function isControlInteractive(state) {
       state.controlAvailable &&
       (state.connection === "online" || state.connection === "syncing"),
   );
+}
+
+
+function pacingCopy(schedule, now, clockConfig, utcOffsetMinutes) {
+  if (schedule.pacingMode === "off") return null;
+  const pacingClock = { hourFormat24h: clockConfig.hourFormat24h, showAmpm: true };
+  const wallTime = (epoch, offset = utcOffsetMinutes) => {
+    const [clock, , period] = formatWallClock(epoch, pacingClock, offset);
+    return period ? `${clock} ${period}` : clock;
+  };
+  const configuredTime = (time) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return wallTime(hours * 3600 + minutes * 60, 0);
+  };
+  const config = schedule.customSchedule?.pacingConfig;
+  const configuredWindow = config?.start_time && config?.end_time
+    ? [configuredTime(config.start_time), configuredTime(config.end_time)] : null;
+  if (schedule.pacingAvailability !== "ready" || !schedule.pacing) {
+    const labels = {
+      missing_window: schedule.customSchedule && schedule.capabilities.managePacing && schedule.capabilities.manageCustomSchedules
+        ? "pacing.missingWindow" : "pacing.configureInSolin",
+      awaiting_reset: "pacing.awaitingReset",
+      no_projection: "pacing.noProjection",
+    };
+    const key = labels[schedule.pacingAvailability];
+    return key ? { tone: "neutral", label: t(key), window: configuredWindow } : null;
+  }
+  const pacing = schedule.pacing;
+  const finish = pacing.complete ? pacing.projection_anchor_epoch :
+    Math.max(now, pacing.projection_anchor_epoch) + pacing.projection_tail_seconds;
+  const difference = finish - pacing.end_epoch;
+  const tone = Math.abs(difference) <= pacing.tolerance_seconds ? "onTime" :
+    difference > 0 ? "behind" : "ahead";
+  return {
+    tone,
+    label: t(`pacing.${tone}`, { duration: formatPartLiveClock(Math.abs(difference)) }),
+    detail: t("pacing.projectedFinish", { finish: wallTime(finish) }),
+    window: configuredWindow ?? (Number.isFinite(pacing.start_epoch)
+      ? [wallTime(pacing.start_epoch), wallTime(pacing.end_epoch)] : null),
+  };
+}
+
+function syncPacingLine(copy) {
+  const line = byId("hero-pacing");
+  line.hidden = !copy;
+  line.dataset.tone = copy?.tone ?? "";
+  setText(byId("pacing-status"), copy?.label ?? "");
+  setText(byId("pacing-forecast"), copy?.detail ?? "");
+  const windowInfo = byId("pacing-window");
+  const [start, end] = copy?.window ?? [];
+  windowInfo.hidden = !start;
+  const windowLabel = start ? `${t("scheduleEditor.start")} ${start} · ${t("scheduleEditor.end")} ${end}` : "";
+  if (windowInfo.title !== windowLabel) {
+    windowInfo.title = windowLabel;
+    windowInfo.setAttribute("aria-label", windowLabel);
+  }
+  setText(byId("pacing-window-time"), start ? `${start}–${end}` : "");
+}
+
+function setText(node, value) {
+  if (node.textContent !== value) node.textContent = value;
+}
+
+function setButton(id, visible, enabled) {
+  const button = byId(id);
+  button.hidden = !visible;
+  button.disabled = !enabled;
 }
 
 function connectionLabelKey(status) {
@@ -576,6 +719,7 @@ function groupPartsBySection(parts) {
       groups.push({
         section: part.section,
         sectionKey: part.sectionKey,
+        icon: part.sectionIconKey || part.sectionKey,
         headerTitle: part.sectionHeaderTitle,
         standalone: false,
         parts: [part],
@@ -585,23 +729,51 @@ function groupPartsBySection(parts) {
   return groups;
 }
 
-function buildSectionCard(group, { isInteractive, caps }) {
+function groupCustomParts(parts, entries) {
+  const byPartId = new Map(parts.map((part) => [part.id, part]));
+  const groups = [];
+  for (const entry of entries) {
+    if (entry.type === "section") {
+      groups.push({
+        section: entry.id,
+        icon: entry.icon,
+        color: entry.color,
+        headerTitle: entry.title,
+        standalone: false,
+        parts: entry.parts.map((part) => byPartId.get(part.id)).filter(Boolean),
+      });
+    } else {
+      const part = byPartId.get(entry.id);
+      if (part) groups.push({ section: part.section, standalone: true, parts: [part] });
+    }
+  }
+  return groups;
+}
+
+function buildSectionCard(group, { isInteractive, caps, selectedId, canSelect, editing, canEdit }) {
   const firstPart = group.parts[0];
   const card = element("section", {
     className: `section-card${group.standalone ? " section-card--standalone" : ""}`,
     dataset: { section: group.section },
   });
+  applySectionColor(card, group.color);
+  if (editing) {
+    card.dataset.dragId = group.standalone ? firstPart.id : group.section;
+    card.dataset.dragType = group.standalone ? "part" : "section";
+  }
 
   if (!group.standalone) {
     const header = element("header", { className: "section-header" });
     const heading = element("div", { className: "section-heading" });
+    if (editing) heading.append(entryDragHandle(group.headerTitle, canEdit));
 
-    if (SECTION_ICONS.has(group.sectionKey)) {
+    const mark = sectionMark(group.icon, group.color);
+    if (mark) {
       const iconBadge = element("span", {
         className: "section-icon-badge",
         attrs: { "aria-hidden": "true" },
       });
-      iconBadge.append(uiIcon(`sec-${group.sectionKey}`));
+      iconBadge.append(mark);
       heading.append(iconBadge);
     }
 
@@ -614,7 +786,9 @@ function buildSectionCard(group, { isInteractive, caps }) {
     header.append(heading);
 
     const tools = element("div", { className: "section-tools" });
-    if (firstPart.sectionTotalLabel) {
+    if (editing) {
+      tools.append(entryEditButton(group.section, "workspace.editSection", canEdit));
+    } else if (firstPart?.sectionTotalLabel) {
       tools.append(
         element("span", {
           className: "section-total-pill",
@@ -623,7 +797,7 @@ function buildSectionCard(group, { isInteractive, caps }) {
       );
     }
 
-    if (firstPart.configurableCount && caps.setSectionCount) {
+    if (firstPart?.configurableCount && caps.setSectionCount) {
       const sectionLabel = group.headerTitle || group.sectionKey;
       const stepper = element("div", {
         className: "count-stepper",
@@ -639,10 +813,11 @@ function buildSectionCard(group, { isInteractive, caps }) {
         dataset: {
           action: "section-count",
           section: group.section,
+          direction: "decrease",
           count: String(Math.max(1, firstPart.sectionCount - 1)),
         },
       });
-      decBtn.disabled = !isInteractive || firstPart.sectionCount <= 1;
+      decBtn.disabled = !isInteractive || !canSelect || firstPart.sectionCount <= 1;
 
       const countText = element("span", {
         className: "stepper-value",
@@ -659,10 +834,11 @@ function buildSectionCard(group, { isInteractive, caps }) {
         dataset: {
           action: "section-count",
           section: group.section,
+          direction: "increase",
           count: String(Math.min(8, firstPart.sectionCount + 1)),
         },
       });
-      incBtn.disabled = !isInteractive || firstPart.sectionCount >= 8;
+      incBtn.disabled = !isInteractive || !canSelect || firstPart.sectionCount >= 8;
 
       stepper.append(decBtn, countText, incBtn);
       tools.append(stepper);
@@ -673,228 +849,111 @@ function buildSectionCard(group, { isInteractive, caps }) {
   }
 
   const list = element("div", { className: "section-parts" });
+  if (editing && !group.standalone) list.dataset.dragContainer = group.section;
+  if (!group.parts.length) {
+    const empty = element("div", { className: "section-empty" });
+    empty.append(element("span", { text: t("schedule.emptySection") }));
+    if (editing) {
+      const add = element("button", {
+        className: "button button--secondary button--compact",
+        attrs: { type: "button" },
+        dataset: { action: "organize-add-part", section: group.section },
+        text: t("scheduleEditor.addPart"),
+      });
+      add.disabled = !canEdit;
+      empty.append(add);
+    }
+    list.append(empty);
+  }
   for (const part of group.parts) {
-    list.append(buildPartRow(part, { isInteractive, caps }));
+    const row = buildPartRow(part, { isInteractive, selectedId, canSelect, editing, canEdit });
+    if (editing && !group.standalone) {
+      row.dataset.dragId = part.id;
+      row.dataset.dragType = "part";
+    }
+    list.append(row);
   }
   card.append(list);
   return card;
 }
 
-function buildPartRow(part, { isInteractive, caps }) {
-  const row = element("article", {
+function entryDragHandle(title, enabled) {
+  const label = t("scheduleEditor.moveTo");
+  const handle = element("button", {
+    className: "icon-button entry-grip",
+    attrs: { type: "button", title: label, "aria-label": `${label} · ${title}`, "aria-keyshortcuts": "ArrowUp ArrowDown" },
+    dataset: { dragHandle: "" },
+  });
+  handle.disabled = !enabled;
+  handle.append(uiIcon("grip"));
+  return handle;
+}
+
+function entryEditButton(id, key, enabled) {
+  const label = t(key);
+  const button = element("button", {
+    className: "icon-button",
+    attrs: { type: "button", title: label, "aria-label": label },
+    dataset: { action: "organize-edit", partId: id },
+  });
+  button.disabled = !enabled;
+  button.append(uiIcon("edit"));
+  return button;
+}
+
+function buildPartRow(part, { isInteractive, selectedId, canSelect, editing, canEdit }) {
+  const row = element(editing ? "div" : "button", {
     className: "part-row",
+    attrs: editing ? {} : { type: "button", "aria-pressed": String(part.id === selectedId) },
     dataset: {
+      action: "select-part",
       partId: part.id,
       partState: part.state,
       overrun: "false",
     },
   });
+  if (editing) row.append(entryDragHandle(part.title, canEdit));
+  else row.disabled = !isInteractive || !canSelect;
 
-  const info = element("div", { className: "part-info" });
-  info.append(
-    element("span", {
-      className: "part-number",
-      text: String(part.displayNumber),
-    }),
-  );
-
-  const copy = element("div", { className: "part-copy" });
-  copy.append(
-    element("strong", {
-      className: "part-title",
-      text: part.title,
-    }),
-  );
-
-  const hasStarted = Boolean(part.startedLabel);
-  const hasResult = Boolean(part.resultLabel);
-  if (hasStarted || hasResult) {
-    const submeta = element("span", { className: "part-submeta" });
-    if (hasStarted) {
-      submeta.append(
-        element("span", {
-          className: "part-meta-started",
-          text: t("part.startedAt", { time: part.startedLabel }),
-        }),
-      );
-    }
-    if (hasStarted && hasResult) {
-      submeta.append(
-        element("span", {
-          className: "part-meta-sep",
-          text: " · ",
-          attrs: { "aria-hidden": "true" },
-        }),
-      );
-    }
-    if (hasResult) {
-      submeta.append(
-        element("span", {
-          className: "part-meta-recorded",
-          text: t("part.recordedDuration", { duration: part.resultLabel }),
-        }),
-      );
-    }
-    copy.append(submeta);
+  const info = element("span", { className: "part-info" });
+  info.append(element("span", {
+    className: "part-number",
+    text: part.state === "stopped" ? "✓" : String(part.displayNumber),
+    attrs: { "aria-hidden": "true" },
+  }));
+  const copy = element("span", { className: "part-copy" });
+  copy.append(element("strong", { className: "part-title", text: part.title }));
+  if (part.startedLabel) {
+    copy.append(element("span", {
+      className: "part-submeta",
+      text: t("part.startedAt", { time: part.startedLabel }),
+    }));
   }
   info.append(copy);
   row.append(info);
 
-  const controls = element("div", { className: "part-controls" });
-  const isIdle = part.state === "idle";
-  const isRunning = part.state === "running";
-  const isStopped = part.state === "stopped";
-  const canAdjustMinutes = Boolean(
-    isIdle && part.durationEditable && caps.adjustPlannedMinutes,
-  );
-  const canEditSeconds = Boolean(
-    isIdle && part.durationEditable && caps.setPlannedSeconds,
-  );
-
-  if (isRunning) {
-    const liveBadge = element("div", {
+  const times = element("span", { className: "part-times" });
+  if (part.state === "running") {
+    const badge = element("span", {
       className: "part-live-badge",
-      dataset: {
-        running: "true",
-        overrun: "false",
-      },
+      dataset: { running: "true", overrun: "false" },
     });
-    liveBadge.append(
-      element("span", {
-        className: "part-live-dot",
-        attrs: { "aria-hidden": "true" },
-      }),
-      element("span", {
-        className: "part-live-time",
-        text: part.plannedLabel,
-        dataset: { livePartId: part.id },
-      }),
-    );
-    controls.append(liveBadge);
-  } else if (canAdjustMinutes) {
-    const durationCluster = element("div", { className: "duration-cluster" });
-    const minusMin = element("button", {
-      className: "minute-button",
-      text: t("part.minusMinute"),
-      attrs: {
-        type: "button",
-        "aria-label": t("part.minusMinuteAria", { title: part.title }),
-      },
-      dataset: {
-        action: "adjust-part",
-        partId: part.id,
-        delta: "-60",
-      },
-    });
-    minusMin.disabled = !isInteractive || part.plannedSeconds <= 60;
-
-    const durationNode = element(canEditSeconds ? "button" : "span", {
-      className: "duration-pill",
-      text: part.plannedLabel,
-      attrs: canEditSeconds
-        ? {
-            type: "button",
-            "aria-label": t("part.editDuration", { title: part.title }),
-          }
-        : {},
-      dataset: canEditSeconds
-        ? {
-            action: "edit-duration",
-            partId: part.id,
-            title: part.title,
-            plannedSeconds: String(part.plannedSeconds),
-          }
-        : {},
-    });
-    if (canEditSeconds) {
-      durationNode.disabled = !isInteractive;
-    }
-
-    const plusMin = element("button", {
-      className: "minute-button",
-      text: t("part.plusMinute"),
-      attrs: {
-        type: "button",
-        "aria-label": t("part.plusMinuteAria", { title: part.title }),
-      },
-      dataset: {
-        action: "adjust-part",
-        partId: part.id,
-        delta: "60",
-      },
-    });
-    plusMin.disabled = !isInteractive;
-
-    durationCluster.append(minusMin, durationNode, plusMin);
-    controls.append(durationCluster);
-  } else if (canEditSeconds) {
-    const durationButton = element("button", {
-      className: "duration-pill duration-pill--standalone",
-      text: part.plannedLabel,
-      attrs: {
-        type: "button",
-        "aria-label": t("part.editDuration", { title: part.title }),
-      },
-      dataset: {
-        action: "edit-duration",
-        partId: part.id,
-        title: part.title,
-        plannedSeconds: String(part.plannedSeconds),
-      },
-    });
-    durationButton.disabled = !isInteractive;
-    controls.append(durationButton);
+    badge.append(element("span", { className: "part-live-dot", attrs: { "aria-hidden": "true" } }),
+      element("span", { className: "part-live-time", text: part.plannedLabel, dataset: { livePartId: part.id } }));
+    times.append(badge);
   } else {
-    controls.append(
-      element("span", {
-        className: "part-duration-badge",
-        text: part.plannedLabel,
-      }),
-    );
-  }
-
-  if (caps.controlParts) {
-    const actions = element("div", { className: "part-actions" });
-    if (isRunning) {
-      const stopBtn = element("button", {
-        className: "button button--danger button--compact part-action-btn",
-        attrs: { type: "button" },
-        dataset: {
-          action: "stop-part",
-          partId: part.id,
-        },
-      });
-      stopBtn.disabled = !isInteractive;
-      stopBtn.append(cssIcon("stop"), element("span", { text: t("part.stop") }));
-      actions.append(stopBtn);
-    } else if (isStopped) {
-      const resetBtn = element("button", {
-        className: "button button--reset button--compact part-action-btn",
-        attrs: { type: "button" },
-        dataset: {
-          action: "reset-part",
-          partId: part.id,
-        },
-      });
-      resetBtn.disabled = !isInteractive;
-      resetBtn.append(uiIcon("reset"), element("span", { text: t("part.reset") }));
-      actions.append(resetBtn);
-    } else {
-      const startBtn = element("button", {
-        className: "button button--primary button--compact part-action-btn",
-        attrs: { type: "button" },
-        dataset: {
-          action: "start-part",
-          partId: part.id,
-        },
-      });
-      startBtn.disabled = !isInteractive;
-      startBtn.append(cssIcon("play"), element("span", { text: t("part.start") }));
-      actions.append(startBtn);
+    times.append(element("span", {
+      className: "part-duration-badge",
+      text: part.plannedLabel,
+    }));
+    if (part.resultLabel) {
+      times.append(element("span", {
+        className: "part-secondary-time",
+        text: t("part.recordedDuration", { duration: part.resultLabel }),
+      }));
     }
-    controls.append(actions);
   }
-
-  row.append(controls);
+  row.append(times);
+  if (editing) row.append(entryEditButton(part.id, "workspace.editPart", canEdit));
   return row;
 }

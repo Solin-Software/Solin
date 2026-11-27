@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
-from typing import ClassVar, Final, TypeAlias
+from typing import ClassVar, Final, NotRequired, TypeAlias, TypedDict, cast
 
 from ...timer.hand_alert import TimerHandAlert
 from ...timer.models import (
@@ -39,6 +39,7 @@ from ..features import (
 from ..validation import (
     MAX_ERROR_TEXT_LENGTH,
     JsonObject,
+    JsonValue,
     payload_int,
     payload_optional_string,
     payload_string,
@@ -56,10 +57,13 @@ __all__ = [
     "AdjustPartCommand",
     "CreateCustomScheduleCommand",
     "EditCustomScheduleCommand",
+    "ReplaceCustomScheduleEntriesCommand",
+    "ReplaceCustomTimingSettingsCommand",
     "DeleteCustomScheduleCommand",
     "SelectCustomScheduleCommand",
     "DuplicateCustomScheduleCommand",
     "RenamePartCommand",
+    "EditPartCommand",
     "ResetAllCommand",
     "SelectMeetingScheduleCommand",
     "CustomSchedulePartWireItem",
@@ -221,6 +225,10 @@ class TimerControlCapabilities:
         )
 
     def allows_command(self, command: TimerCommand) -> bool:
+        if isinstance(command, ReplaceCustomTimingSettingsCommand):
+            return self.can_manage_custom_schedules and self.can_manage_pacing
+        if isinstance(command, ReplaceCustomScheduleEntriesCommand):
+            return self.can_manage_custom_schedules
         if isinstance(command, SetPacingModeCommand):
             return self.can_manage_pacing
         if isinstance(command, EditCustomScheduleCommand) and command.action in (
@@ -239,6 +247,11 @@ class TimerControlCapabilities:
             ),
         ):
             return self.can_manage_custom_schedules
+        if isinstance(command, EditPartCommand):
+            return (
+                (not command.title_supplied or (self.can_manage_custom_schedules and self.can_control_parts))
+                and (command.planned_seconds is None or self.can_set_planned_seconds)
+            )
         if isinstance(command, (RenamePartCommand, ResetAllCommand)):
             return self.can_manage_custom_schedules and self.can_control_parts
         if isinstance(command, (StartPartCommand, StopPartCommand, ResetPartCommand)):
@@ -427,6 +440,8 @@ class TimerPartWireItem:
     effective_seconds: int | None = None
     adjustment_weight: int = 0
     section_icon_key: str = ""
+    title_overridden: bool | None = None
+    canonical_title: str | None = None
 
     def __post_init__(self) -> None:
         require_identifier(self.id, field_name="id")
@@ -458,6 +473,10 @@ class TimerPartWireItem:
         ):
             if not isinstance(getattr(self, bool_field), bool):
                 raise TypeError(f"{bool_field} must be a boolean")
+        if self.title_overridden is not None and type(self.title_overridden) is not bool:
+            raise TypeError("title_overridden must be a boolean")
+        if self.canonical_title is not None:
+            require_string(self.canonical_title, field_name="canonical_title")
         require_nonnegative_int(self.section_count, field_name="section_count")
         require_string(self.section_total_label, field_name="section_total_label", allow_empty=True)
         require_string(self.started_label, field_name="started_label", allow_empty=True)
@@ -484,6 +503,10 @@ class TimerPartWireItem:
             "startedLabel": self.started_label,
             "resultLabel": self.result_label,
         }
+        if self.title_overridden is not None:
+            data["titleOverridden"] = self.title_overridden
+        if self.canonical_title is not None:
+            data["canonicalTitle"] = self.canonical_title
         if self.effective_seconds is not None:
             data["effectiveSeconds"] = self.effective_seconds
             data["adjustmentWeight"] = self.adjustment_weight
@@ -822,10 +845,13 @@ class TimerCommandType(StrEnum):
     NAVIGATE_WEEK = "navigate_week"
     CREATE_CUSTOM_SCHEDULE = "create_custom_schedule"
     EDIT_CUSTOM_SCHEDULE = "edit_custom_schedule"
+    REPLACE_CUSTOM_SCHEDULE_ENTRIES = "replace_custom_schedule_entries"
+    REPLACE_CUSTOM_TIMING_SETTINGS = "replace_custom_timing_settings"
     DELETE_CUSTOM_SCHEDULE = "delete_custom_schedule"
     SELECT_CUSTOM_SCHEDULE = "select_custom_schedule"
     DUPLICATE_CUSTOM_SCHEDULE = "duplicate_custom_schedule"
     RENAME_PART = "rename_part"
+    EDIT_PART = "edit_part"
     RESET_ALL = "reset_all"
     SELECT_MEETING_SCHEDULE = "select_meeting_schedule"
     SET_PACING_MODE = "set_pacing_mode"
@@ -1023,16 +1049,32 @@ class NavigateWeekCommand(TimerCommand):
 @dataclass(frozen=True, slots=True)
 class CreateCustomScheduleCommand(_ScheduleBoundTimerCommand):
     title: str
+    first_part_title: str | None = None
+    first_part_seconds: int | None = None
     TYPE: ClassVar[TimerCommandType] = TimerCommandType.CREATE_CUSTOM_SCHEDULE
 
     def __post_init__(self) -> None:
         super(CreateCustomScheduleCommand, self).__post_init__()
         if normalize_timer_title(self.title) != self.title:
             raise ValueError("title must be normalized")
+        if (self.first_part_title is None) != (self.first_part_seconds is None):
+            raise ValueError("the first part requires a title and duration")
+        if self.first_part_title is not None:
+            if normalize_timer_title(self.first_part_title) != self.first_part_title:
+                raise ValueError("first part title must be normalized")
+        if self.first_part_seconds is not None:
+            require_int(self.first_part_seconds, field_name="first part duration")
+            if not MIN_CUSTOM_PART_SECONDS <= self.first_part_seconds <= MAX_PLANNED_PART_SECONDS:
+                raise ValueError("first part duration is out of range")
 
     def to_dict(self) -> JsonObject:
         result = super(CreateCustomScheduleCommand, self).to_dict()
         result["title"] = self.title
+        if self.first_part_title is not None:
+            result["firstPart"] = {
+                "title": self.first_part_title,
+                "plannedSeconds": self.first_part_seconds,
+            }
         return result
 
 
@@ -1049,6 +1091,112 @@ class _ExistingCustomScheduleCommand(_ScheduleBoundTimerCommand):
     def to_dict(self) -> JsonObject:
         result = super(_ExistingCustomScheduleCommand, self).to_dict()
         result.update({"scheduleId": self.schedule_id, "customRevision": self.custom_revision})
+        return result
+
+
+def _validate_draft_entries(entries: object) -> None:
+    if not isinstance(entries, list):
+        raise TypeError("entries must be an array")
+
+    def validate_entry(raw: object, *, nested: bool = False) -> None:
+        if not isinstance(raw, dict):
+            raise TypeError("entry must be an object")
+        kind = raw.get("type")
+        if kind == "part":
+            reject_unknown_fields(raw, {"type", "id", "title", "plannedSeconds"})
+            seconds = payload_int(raw, "plannedSeconds")
+            if not MIN_CUSTOM_PART_SECONDS <= seconds <= MAX_PLANNED_PART_SECONDS:
+                raise ValueError("plannedSeconds is out of range")
+        elif kind == "section" and not nested:
+            reject_unknown_fields(raw, {"type", "id", "title", "icon", "color", "parts"})
+            normalize_section_icon(raw.get("icon", CustomSectionIcon.DEFAULT))
+            normalize_section_color(raw.get("color"))
+            parts = raw.get("parts")
+            if not isinstance(parts, list):
+                raise TypeError("parts must be an array")
+            for part in parts:
+                validate_entry(part, nested=True)
+        else:
+            raise ValueError("invalid entry type")
+        title = payload_string(raw, "title")
+        if normalize_timer_title(title) != title:
+            raise ValueError("title must be normalized")
+        identifier = raw.get("id", "")
+        if identifier != "":
+            require_identifier(identifier, field_name="id")
+    for entry in entries:
+        validate_entry(entry)
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaceCustomScheduleEntriesCommand(_ExistingCustomScheduleCommand):
+    entries: list[dict[str, object]]
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.REPLACE_CUSTOM_SCHEDULE_ENTRIES
+
+    def __post_init__(self) -> None:
+        super(ReplaceCustomScheduleEntriesCommand, self).__post_init__()
+        _validate_draft_entries(self.entries)
+
+    def to_dict(self) -> JsonObject:
+        result = super(ReplaceCustomScheduleEntriesCommand, self).to_dict()
+        result["entries"] = cast(JsonValue, self.entries)
+        return result
+
+
+class _CustomTimingSettings(TypedDict):
+    startTime: str | None
+    endTime: str | None
+    untrackedSeconds: NotRequired[int | None]
+    weights: NotRequired[dict[str, int]]
+    beforeParts: NotRequired[dict[str, int | None]]
+    closingSeconds: NotRequired[int | None]
+
+
+_CUSTOM_TIMING_FIELDS = set(_CustomTimingSettings.__annotations__)
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaceCustomTimingSettingsCommand(_ExistingCustomScheduleCommand):
+    settings: _CustomTimingSettings
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.REPLACE_CUSTOM_TIMING_SETTINGS
+
+    def __post_init__(self) -> None:
+        super(ReplaceCustomTimingSettingsCommand, self).__post_init__()
+        raw = cast(Mapping[str, object], self.settings)
+        reject_unknown_fields(raw, _CUSTOM_TIMING_FIELDS)
+        if not {"startTime", "endTime"}.issubset(raw):
+            raise ValueError("both window endpoints are required")
+        start = payload_optional_string(raw, "startTime")
+        end = payload_optional_string(raw, "endTime")
+        if (start is None) != (end is None):
+            raise ValueError("both window endpoints must be set or null")
+        for value in (start, end):
+            if value is not None and normalize_time_of_day(value) != value:
+                raise ValueError("window time must be normalized")
+        if start is not None and start == end:
+            raise ValueError("window endpoints must differ")
+        for name in ("untrackedSeconds", "closingSeconds"):
+            if raw.get(name) is not None:
+                require_nonnegative_int(payload_int(raw, name), field_name=name)
+        for name in ("weights", "beforeParts"):
+            if name not in raw:
+                continue
+            values = raw[name]
+            if not isinstance(values, dict):
+                raise TypeError(f"{name} must be an object")
+            for part_id, value in values.items():
+                require_identifier(part_id, field_name="part ID")
+                if value is None and name == "beforeParts":
+                    continue
+                if not isinstance(value, int):
+                    raise TypeError(f"{name} values must be integers")
+                require_nonnegative_int(value, field_name=name)
+                if name == "weights" and value > MAX_ADJUSTMENT_WEIGHT:
+                    raise ValueError("weight is out of range")
+
+    def to_dict(self) -> JsonObject:
+        result = super(ReplaceCustomTimingSettingsCommand, self).to_dict()
+        result.update(cast(JsonObject, self.settings))
         return result
 
 
@@ -1196,6 +1344,40 @@ class DuplicateCustomScheduleCommand(_ExistingCustomScheduleCommand):
 
 
 @dataclass(frozen=True, slots=True)
+class EditPartCommand(_ScheduleBoundTimerCommand):
+    part_id: str
+    title_supplied: bool
+    title: str | None
+    planned_seconds: int | None
+    TYPE: ClassVar[TimerCommandType] = TimerCommandType.EDIT_PART
+
+    def __post_init__(self) -> None:
+        super(EditPartCommand, self).__post_init__()
+        require_identifier(self.part_id, field_name="part_id")
+        if type(self.title_supplied) is not bool:
+            raise TypeError("title_supplied must be a boolean")
+        if not self.title_supplied and self.title is not None:
+            raise ValueError("title was not supplied")
+        if self.title is not None and normalize_timer_title(self.title) != self.title:
+            raise ValueError("title must be normalized")
+        if self.planned_seconds is not None:
+            require_int(self.planned_seconds, field_name="planned_seconds")
+            if not MIN_CUSTOM_PART_SECONDS <= self.planned_seconds <= MAX_PLANNED_PART_SECONDS:
+                raise ValueError("planned_seconds is out of range")
+        if not self.title_supplied and self.planned_seconds is None:
+            raise ValueError("at least one editable field is required")
+
+    def to_dict(self) -> JsonObject:
+        result = super(EditPartCommand, self).to_dict()
+        result["partId"] = self.part_id
+        if self.title_supplied:
+            result["title"] = self.title
+        if self.planned_seconds is not None:
+            result["plannedSeconds"] = self.planned_seconds
+        return result
+
+
+@dataclass(frozen=True, slots=True)
 class RenamePartCommand(_ScheduleBoundTimerCommand):
     part_id: str
     title: str | None
@@ -1250,10 +1432,13 @@ TimerRemoteCommand: TypeAlias = (
     | NavigateWeekCommand
     | CreateCustomScheduleCommand
     | EditCustomScheduleCommand
+    | ReplaceCustomScheduleEntriesCommand
+    | ReplaceCustomTimingSettingsCommand
     | DeleteCustomScheduleCommand
     | SelectCustomScheduleCommand
     | DuplicateCustomScheduleCommand
     | RenamePartCommand
+    | EditPartCommand
     | ResetAllCommand
     | SelectMeetingScheduleCommand
     | SetPacingModeCommand
@@ -1404,6 +1589,13 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
             else SelectMeetingScheduleCommand
         )
         return cls(command_id, payload_int(payload, "scheduleRevision"))
+    if command_type is TimerCommandType.EDIT_PART:
+        reject_unknown_fields(payload, base | {"partId", "title", "plannedSeconds"})
+        return EditPartCommand(
+            command_id, payload_int(payload, "scheduleRevision"), payload_string(payload, "partId"),
+            "title" in payload, payload_optional_string(payload, "title"),
+            payload_int(payload, "plannedSeconds") if "plannedSeconds" in payload else None,
+        )
     if command_type is TimerCommandType.RENAME_PART:
         reject_unknown_fields(payload, base | {"partId", "title"})
         if "title" not in payload:
@@ -1415,12 +1607,21 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
             payload_optional_string(payload, "title"),
         )
     if command_type is TimerCommandType.CREATE_CUSTOM_SCHEDULE:
-        reject_unknown_fields(payload, base | {"title"})
+        reject_unknown_fields(payload, base | {"title", "firstPart"})
+        first_part = payload.get("firstPart")
+        if "firstPart" in payload:
+            if not isinstance(first_part, Mapping):
+                raise TypeError("firstPart must be an object")
+            reject_unknown_fields(first_part, {"title", "plannedSeconds"})
         return CreateCustomScheduleCommand(
-            command_id, payload_int(payload, "scheduleRevision"), payload_string(payload, "title")
+            command_id, payload_int(payload, "scheduleRevision"), payload_string(payload, "title"),
+            payload_string(first_part, "title") if isinstance(first_part, Mapping) else None,
+            payload_int(first_part, "plannedSeconds") if isinstance(first_part, Mapping) else None,
         )
     if command_type in (
         TimerCommandType.EDIT_CUSTOM_SCHEDULE,
+        TimerCommandType.REPLACE_CUSTOM_SCHEDULE_ENTRIES,
+        TimerCommandType.REPLACE_CUSTOM_TIMING_SETTINGS,
         TimerCommandType.DELETE_CUSTOM_SCHEDULE,
         TimerCommandType.SELECT_CUSTOM_SCHEDULE,
         TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE,
@@ -1428,6 +1629,10 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
         fields = base | {"scheduleId", "customRevision"}
         if command_type is TimerCommandType.EDIT_CUSTOM_SCHEDULE:
             fields |= {"action", "values"}
+        elif command_type is TimerCommandType.REPLACE_CUSTOM_SCHEDULE_ENTRIES:
+            fields.add("entries")
+        elif command_type is TimerCommandType.REPLACE_CUSTOM_TIMING_SETTINGS:
+            fields |= _CUSTOM_TIMING_FIELDS
         elif command_type is TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE:
             fields.add("title")
         reject_unknown_fields(payload, fields)
@@ -1443,6 +1648,14 @@ def parse_timer_command(payload: Mapping[str, object]) -> TimerRemoteCommand:
             return SelectCustomScheduleCommand(*args)
         if command_type is TimerCommandType.DUPLICATE_CUSTOM_SCHEDULE:
             return DuplicateCustomScheduleCommand(*args, payload_string(payload, "title"))
+        if command_type is TimerCommandType.REPLACE_CUSTOM_SCHEDULE_ENTRIES:
+            entries = payload.get("entries")
+            if not isinstance(entries, list):
+                raise TypeError("entries must be an array")
+            return ReplaceCustomScheduleEntriesCommand(*args, entries)
+        if command_type is TimerCommandType.REPLACE_CUSTOM_TIMING_SETTINGS:
+            settings = {key: payload[key] for key in _CUSTOM_TIMING_FIELDS if key in payload}
+            return ReplaceCustomTimingSettingsCommand(*args, cast(_CustomTimingSettings, settings))
         action = payload_string(payload, "action")
         values = payload.get("values")
         if not isinstance(values, Mapping):

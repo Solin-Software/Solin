@@ -310,13 +310,15 @@ class TimerSession:
             raise
         return True
 
-    def edit_part(self, part_id: str, title: str | None, seconds: int | None) -> bool:
+    def edit_part(self, part_id: str, title: str | None, seconds: int | None, *, restore_title: bool = False) -> bool:
         """Save the fields changed by the part editor as a single operation."""
         schedule = self._schedule
         part = schedule.part_by_id(part_id)
         if part is None:
             raise TimerOperationError("not_found", "The timer part no longer exists.")
         if isinstance(schedule, CustomTimerSchedule):
+            if restore_title:
+                raise TimerOperationError("invalid", "Custom parts have no canonical title.")
             candidate = deepcopy(schedule)
             if title is not None:
                 edit_custom_schedule(candidate, "rename_part", part_id=part_id, title=title)
@@ -334,7 +336,7 @@ class TimerSession:
 
         previous_title = part.title_override
         previous_seconds = part.planned_seconds
-        next_title = validate_title(title) if title is not None else previous_title
+        next_title = None if restore_title else validate_title(title) if title is not None else previous_title
         if seconds is not None:
             if type(seconds) is not int or not MIN_PLANNED_PART_SECONDS <= seconds <= MAX_PLANNED_PART_SECONDS:
                 raise TimerOperationError(

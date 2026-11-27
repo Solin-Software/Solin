@@ -2,7 +2,7 @@ import {
   ApiError,
   EventStream,
   RemoteApi,
-  newCommandId,
+  newUuid,
 } from "../../shared/scripts/api.js";
 import {
   applyLocalization,
@@ -393,7 +393,7 @@ async function executeCommandWithStateRecovery(initialFields) {
   let retriedPlay = false;
   while (true) {
     try {
-      const command = { commandId: newCommandId(), ...fields };
+      const command = { commandId: newUuid(), ...fields };
       const result = await postCommandWithAuthenticationRecovery(command);
       if (result === null) return;
       if (!result.ok) {

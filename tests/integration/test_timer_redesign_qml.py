@@ -748,8 +748,9 @@ def test_unified_selection_central_action_section_colors_and_dedicated_timing_mo
     assert ctx.widget.errors() == []
 
 
-def test_meeting_schedule_change_updates_unrecorded_meeting_target_immediately(
-    timer_ui_factory,
+@pytest.mark.parametrize("width", [340, 1040], ids=["compact", "wide"])
+def test_meeting_schedule_change_updates_the_visible_pacing_window_immediately(
+    timer_ui_factory, width,
 ) -> None:
     profile_schedule = [
         ProfileMeetingSchedule(
@@ -758,12 +759,14 @@ def test_meeting_schedule_change_updates_unrecorded_meeting_target_immediately(
         )
     ]
     ctx = timer_ui_factory(
-        width=1040,
+        width=width,
         height=720,
         meeting_schedule=lambda: profile_schedule[0],
     )
     assert ctx.bridge.setPacingMode("monitor")
-    assert ctx.bridge.pacingState["targetEndLabel"] == "21:15"
+    window = next((item for item in _find_visuals(ctx.root, "timerPacingWindow") if item.isVisible()), None)
+    assert window is not None
+    assert window.property("text") == "19:30–21:15"
 
     # User updates profile meeting time to 08:50 -> unrecorded current week updates to 10:35!
     profile_schedule[0] = ProfileMeetingSchedule(
@@ -771,7 +774,15 @@ def test_meeting_schedule_change_updates_unrecorded_meeting_target_immediately(
         MeetingSlot.from_values("weekend", 6, "10:00"),
     )
     ctx.operations.on_meeting_schedule_changed()
-    assert ctx.bridge.pacingState["targetEndLabel"] == "10:35"
+    assert window.property("text") == "08:50–10:35"
+
+    ctx.bridge.updateClock("show_ampm", False)
+    ctx.bridge.updateClock("hour_format_24h", False)
+    assert window.property("text") == "8:50 AM–10:35 AM"
+    assert ctx.bridge.clockConfig["show_ampm"] is False
+
+    assert ctx.bridge.setPacingMode("off")
+    assert not window.isVisible()
 
 
 def test_empty_sections_visible_draft_cancel_save_and_explicit_appearance_save(

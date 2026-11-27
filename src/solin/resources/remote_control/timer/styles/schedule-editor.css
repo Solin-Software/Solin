@@ -1,0 +1,123 @@
+.schedule-editor {
+  width: min(calc(100% - 24px), 520px);
+}
+
+.schedule-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.schedule-editor__field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.schedule-editor__label,
+.schedule-editor__hint {
+  color: var(--text-secondary);
+  font-size: .8rem;
+}
+
+.schedule-editor__label {
+  font-weight: 650;
+}
+
+.schedule-editor__input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--touch-target);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+}
+
+.schedule-editor__input:disabled {
+  opacity: .55;
+}
+
+.schedule-editor__parts {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.schedule-editor__parts legend {
+  padding: 0;
+  font-size: .88rem;
+  font-weight: 750;
+}
+
+.schedule-editor__hint {
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+
+.schedule-editor__part-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: var(--touch-target);
+  align-items: center;
+  gap: 10px;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  font-size: .82rem;
+  overflow-wrap: anywhere;
+}
+
+.schedule-editor__part-choice:has(input:not(:disabled)) {
+  cursor: pointer;
+}
+
+.schedule-editor__part-choice:hover:has(input:not(:disabled)),
+.schedule-editor__part-choice:has(input:checked) {
+  background: var(--accent-tint);
+}
+
+.schedule-editor__part-choice input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.schedule-editor__part-choice small,
+.schedule-editor__part-choice:has(input:disabled) {
+  color: var(--text-muted);
+}
+
+.schedule-editor__part-choice small {
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-editor__advanced {
+  border-top: 1px solid var(--border-muted);
+}
+
+.schedule-editor__advanced summary {
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.schedule-editor__timing-part {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  overflow-wrap: anywhere;
+}
+
+.schedule-editor__clear {
+  margin-inline-end: auto;
+}

@@ -506,8 +506,8 @@
     </message>
     <message>
         <location line="+5"/>
-        <source>Projected end %1 · Target %2</source>
-        <translation>Mwisho unaokadiriwa %1 · Lengo %2</translation>
+        <source>Projected end %1</source>
+        <translation>Mwisho unaokadiriwa %1</translation>
     </message>
     <message>
         <location line="+36"/>
@@ -13542,6 +13542,66 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Hakuna sehemu katika ratiba hii</translation>
     </message>
     <message>
+        <source>Empty section</source>
+        <translation>Kifungu tupu</translation>
+    </message>
+    <message>
+        <source>Set schedule time</source>
+        <translation>Weka muda wa ratiba</translation>
+    </message>
+    <message>
+        <source>Custom hex</source>
+        <translation>Msimbo maalum wa hex</translation>
+    </message>
+    <message>
+        <source>Use a 6-digit hex color like #41b6c4.</source>
+        <translation>Tumia rangi ya hex yenye tarakimu 6 kama #41b6c4.</translation>
+    </message>
+    <message>
+        <source>Section preview</source>
+        <translation>Onyesho la awali la kifungu</translation>
+    </message>
+    <message>
+        <source>Edit schedule</source>
+        <translation>Hariri ratiba</translation>
+    </message>
+    <message>
+        <source>Set schedule times and pacing in the Solin app.</source>
+        <translation>Weka saa na ufuatiliaji wa ratiba katika programu ya Solin.</translation>
+    </message>
+    <message>
+        <source>Advanced options</source>
+        <translation>Chaguo za kina</translation>
+    </message>
+    <message>
+        <source>Weight (0–100): higher weights receive more adjustment. A weight of 0 keeps a part fixed when another part has a positive weight. If all weights are 0, eligible parts adjust equally.</source>
+        <translation>Uzito (0–100): uzito wa juu hupokea marekebisho zaidi. Uzito wa 0 huacha sehemu bila kubadilika wakati sehemu nyingine ina uzito chanya. Ikiwa uzito wote ni 0, sehemu zinazostahili hurekebishwa kwa usawa.</translation>
+    </message>
+    <message>
+        <source>Parts allowed to adjust automatically</source>
+        <translation>Sehemu zinazoruhusiwa kurekebishwa kiotomatiki</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, only checked parts are shortened or extended to finish on time. Unchecked parts keep their planned duration.</source>
+        <translation>Katika hali ya Otomatiki, sehemu zilizotiwa tiki pekee ndizo hufupishwa au kuongezwa muda ili kumaliza kwa wakati. Sehemu zisizotiwa tiki hubaki na muda wake uliopangwa.</translation>
+    </message>
+    <message>
+        <source>In Automatic mode, checked parts can be shortened or extended to finish on time. With none checked, all parts of 1 min or more adjust equally.</source>
+        <translation>Katika hali ya Otomatiki, sehemu zilizotiwa tiki zinaweza kufupishwa au kuongezwa muda ili kumaliza kwa wakati. Ikiwa hakuna iliyotiwa tiki, sehemu zote za dak 1 au zaidi hurekebishwa kwa usawa.</translation>
+    </message>
+    <message>
+        <source>Under 1 min</source>
+        <translation>Chini ya dak 1</translation>
+    </message>
+    <message>
+        <source>Clear time</source>
+        <translation>Futa muda</translation>
+    </message>
+    <message>
+        <source>Auto</source>
+        <translation>Otomatiki</translation>
+    </message>
+    <message>
         <location filename="../../core/i18n/remote_control.py" line="323"/>
         <source>Parts</source>
         <translation>Sehemu</translation>
@@ -13597,19 +13657,9 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Ongeza dakika 1 kwenye {title}</translation>
     </message>
     <message>
-        <location filename="../../core/i18n/remote_control.py" line="334"/>
-        <source>Set duration for {title}</source>
-        <translation>Weka muda wa {title}</translation>
-    </message>
-    <message>
         <location filename="../../core/i18n/remote_control.py" line="335"/>
         <source>Duration (MM:SS or minutes)</source>
         <translation>Muda (MM:SS au dakika)</translation>
-    </message>
-    <message>
-        <location filename="../../core/i18n/remote_control.py" line="336"/>
-        <source>Apply</source>
-        <translation>Tumia</translation>
     </message>
     <message>
         <location filename="../../core/i18n/remote_control.py" line="337"/>
@@ -13665,6 +13715,378 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <location filename="../../core/i18n/remote_control.py"/>
         <source>Close raised hands list</source>
         <translation>Funga orodha ya mikono iliyoinuliwa</translation>
+    </message>
+    <message>
+        <source>This action or timer part is no longer available.</source>
+        <translation>Kitendo hiki au sehemu hii ya kipima wakati haipatikani tena.</translation>
+    </message>
+    <message>
+        <source>Schedules</source>
+        <translation>Ratiba</translation>
+    </message>
+    <message>
+        <source>Schedule type</source>
+        <translation>Aina ya ratiba</translation>
+    </message>
+    <message>
+        <source>Choose a schedule</source>
+        <translation>Chagua ratiba</translation>
+    </message>
+    <message>
+        <source>No saved schedules</source>
+        <translation>Hakuna ratiba zilizohifadhiwa</translation>
+    </message>
+    <message>
+        <source>Loading schedules…</source>
+        <translation>Inapakia ratiba…</translation>
+    </message>
+    <message>
+        <source>Could not load schedules.</source>
+        <translation>Haikuweza kupakia ratiba.</translation>
+    </message>
+    <message>
+        <source>New schedule</source>
+        <translation>Ratiba mpya</translation>
+    </message>
+    <message>
+        <source>Schedule actions</source>
+        <translation>Vitendo vya ratiba</translation>
+    </message>
+    <message>
+        <source>Schedule timing and pacing</source>
+        <translation>Upangaji na mwendo wa muda wa ratiba</translation>
+    </message>
+    <message>
+        <source>Edit part</source>
+        <translation>Hariri sehemu</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Badilisha jina</translation>
+    </message>
+    <message>
+        <source>Duplicate</source>
+        <translation>Nakili</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Futa</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Hifadhi</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Jina</translation>
+    </message>
+    <message>
+        <source>Enter a name.</source>
+        <translation>Weka jina.</translation>
+    </message>
+    <message>
+        <source>Copy of {title}</source>
+        <translation>Nakala ya {title}</translation>
+    </message>
+    <message>
+        <source>Delete “{title}” and its recorded times?</source>
+        <translation>Ungependa kufuta “{title}” na nyakati zake zilizorekodiwa?</translation>
+    </message>
+    <message>
+        <source>Reset results</source>
+        <translation>Weka upya matokeo</translation>
+    </message>
+    <message>
+        <source>Reset all recorded times for “{title}”?</source>
+        <translation>Ungependa kuweka upya nyakati zote zilizorekodiwa za “{title}”?</translation>
+    </message>
+    <message>
+        <source>Restore default title</source>
+        <translation>Rejesha kichwa chaguomsingi</translation>
+    </message>
+    <message>
+        <source>SELECTED PART</source>
+        <translation>SEHEMU ILIYOCHAGULIWA</translation>
+    </message>
+    <message>
+        <source>Restart</source>
+        <translation>Anza upya</translation>
+    </message>
+    <message>
+        <source>Adjust</source>
+        <translation>Rekebisha</translation>
+    </message>
+    <message>
+        <source>Up next</source>
+        <translation>Inayofuata</translation>
+    </message>
+    <message>
+        <source>Planned {duration}</source>
+        <translation>Iliyopangwa {duration}</translation>
+    </message>
+    <message>
+        <source>Target {target} · Planned {planned}</source>
+        <translation>Lengo {target} · Iliyopangwa {planned}</translation>
+    </message>
+    <message>
+        <source>Elapsed progress</source>
+        <translation>Muda uliopita</translation>
+    </message>
+    <message>
+        <source>Pacing</source>
+        <translation>Mwendo wa muda</translation>
+    </message>
+    <message>
+        <source>Off</source>
+        <translation>Imezimwa</translation>
+    </message>
+    <message>
+        <source>Monitor only</source>
+        <translation>Fuatilia pekee</translation>
+    </message>
+    <message>
+        <source>Monitor and adjust</source>
+        <translation>Fuatilia na rekebisha</translation>
+    </message>
+    <message>
+        <source>On schedule</source>
+        <translation>Kwa wakati</translation>
+    </message>
+    <message>
+        <source>Ahead by {duration}</source>
+        <translation>Mbele kwa {duration}</translation>
+    </message>
+    <message>
+        <source>Behind by {duration}</source>
+        <translation>Nyuma kwa {duration}</translation>
+    </message>
+    <message>
+        <source>Set start and end times to see a forecast.</source>
+        <translation>Weka nyakati za kuanza na kumaliza ili kuona makadirio.</translation>
+    </message>
+    <message>
+        <source>The new schedule window applies after results are reset.</source>
+        <translation>Muda mpya wa ratiba utatumika baada ya matokeo kuwekwa upya.</translation>
+    </message>
+    <message>
+        <source>No forecast available.</source>
+        <translation>Hakuna makadirio.</translation>
+    </message>
+    <message>
+        <source>This action is still in progress.</source>
+        <translation>Kitendo hiki bado kinaendelea.</translation>
+    </message>
+    <message>
+        <source>Check the values and try again.</source>
+        <translation>Angalia thamani na ujaribu tena.</translation>
+    </message>
+    <message>
+        <source>The parts and estimates exceed the schedule window.</source>
+        <translation>Sehemu na makadirio yanazidi muda wa ratiba.</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>Funga</translation>
+    </message>
+    <message>
+        <source>Add part</source>
+        <translation>Ongeza sehemu</translation>
+    </message>
+    <message>
+        <source>Add section</source>
+        <translation>Ongeza kifungu</translation>
+    </message>
+    <message>
+        <source>Duration (MM:SS)</source>
+        <translation>Muda (MM:SS)</translation>
+    </message>
+    <message>
+        <source>Move to</source>
+        <translation>Hamishia</translation>
+    </message>
+    <message>
+        <source>Outside sections</source>
+        <translation>Nje ya vipengele</translation>
+    </message>
+    <message>
+        <source>Remove part</source>
+        <translation>Ondoa sehemu</translation>
+    </message>
+    <message>
+        <source>Remove section</source>
+        <translation>Ondoa kipengele</translation>
+    </message>
+    <message>
+        <source>Icon</source>
+        <translation>Aikoni</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Rangi</translation>
+    </message>
+    <message>
+        <source>Default</source>
+        <translation>Chaguo-msingi</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation>Hakuna</translation>
+    </message>
+    <message>
+        <source>Start time</source>
+        <translation>Muda wa kuanza</translation>
+    </message>
+    <message>
+        <source>End time</source>
+        <translation>Muda wa kumaliza</translation>
+    </message>
+    <message>
+        <source>Untracked time (seconds)</source>
+        <translation>Muda usiofuatiliwa (sekunde)</translation>
+    </message>
+    <message>
+        <source>Closing time (seconds)</source>
+        <translation>Muda wa kumalizia (sekunde)</translation>
+    </message>
+    <message>
+        <source>Before this part (seconds)</source>
+        <translation>Kabla ya sehemu hii (sekunde)</translation>
+    </message>
+    <message>
+        <source>Adjustment weight (0–100)</source>
+        <translation>Uzito wa marekebisho (0–100)</translation>
+    </message>
+    <message>
+        <source>Enter a name for each part and section.</source>
+        <translation>Weka jina kwa kila sehemu na kipengele.</translation>
+    </message>
+    <message>
+        <source>Enter a duration between 00:01 and 23:59:59.</source>
+        <translation>Weka muda kati ya 00:01 na 23:59:59.</translation>
+    </message>
+    <message>
+        <source>Enter both start and end times, with different values.</source>
+        <translation>Weka nyakati tofauti za kuanza na kumaliza.</translation>
+    </message>
+    <message>
+        <source>Enter a nonnegative whole number of seconds.</source>
+        <translation>Weka idadi kamili ya sekunde isiyo hasi.</translation>
+    </message>
+    <message>
+        <source>Enter start and end times or clear the time estimates.</source>
+        <translation>Weka nyakati za kuanza na kumaliza au futa makadirio ya muda.</translation>
+    </message>
+    <message>
+        <source>Enter a weight between 0 and 100. Parts shorter than one minute cannot be newly selected.</source>
+        <translation>Weka uzito kati ya 0 na 100. Sehemu fupi kuliko dakika moja haziwezi kuchaguliwa kwa mara ya kwanza.</translation>
+    </message>
+    <message>
+        <source>Could not save the schedule. Your changes are still here.</source>
+        <translation>Haikuweza kuhifadhi ratiba. Mabadiliko yako bado yapo.</translation>
+    </message>
+    <message>
+        <source>Discard your unsaved changes?</source>
+        <translation>Ungependa kutupa mabadiliko ambayo hayajahifadhiwa?</translation>
+    </message>
+    <message>
+        <source>Treasures</source>
+        <translation>Hazina</translation>
+    </message>
+    <message>
+        <source>Ministry</source>
+        <translation>Huduma</translation>
+    </message>
+    <message>
+        <source>Living</source>
+        <translation>Maisha</translation>
+    </message>
+    <message>
+        <source>Public talk</source>
+        <translation>Hotuba ya watu wote</translation>
+    </message>
+    <message>
+        <source>Watchtower</source>
+        <translation>Mnara wa Mlinzi</translation>
+    </message>
+    <message>
+        <source>Book</source>
+        <translation>Kitabu</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Watu</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Maikrofoni</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Muziki</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Kalenda</translation>
+    </message>
+    <message>
+        <source>Clock</source>
+        <translation>Saa</translation>
+    </message>
+    <message>
+        <source>Check</source>
+        <translation>Kagua</translation>
+    </message>
+    <message>
+        <source>Teal</source>
+        <translation>Kijani-buluu</translation>
+    </message>
+    <message>
+        <source>Gold</source>
+        <translation>Dhahabu</translation>
+    </message>
+    <message>
+        <source>Crimson</source>
+        <translation>Nyekundu iliyokolea</translation>
+    </message>
+    <message>
+        <source>Amber</source>
+        <translation>Kaharabu</translation>
+    </message>
+    <message>
+        <source>Indigo</source>
+        <translation>Nili</translation>
+    </message>
+    <message>
+        <source>Blue</source>
+        <translation>Buluu</translation>
+    </message>
+    <message>
+        <source>Emerald</source>
+        <translation>Zumaridi</translation>
+    </message>
+    <message>
+        <source>Violet</source>
+        <translation>Urujuani</translation>
+    </message>
+    <message>
+        <source>Neutral</source>
+        <translation>Wastani</translation>
+    </message>
+    <message>
+        <source>This schedule changed. Close and reopen to work with the current version.</source>
+        <translation>Ratiba hii imebadilika. Ifunge kisha uifungue tena ili kutumia toleo la sasa.</translation>
+    </message>
+    <message>
+        <source>Start next part</source>
+        <translation>Anza sehemu inayofuata</translation>
+    </message>
+    <message>
+        <source>Edit section</source>
+        <translation>Hariri sehemu</translation>
+    </message>
+    <message>
+        <source>Projected finish {finish}</source>
+        <translation>Mwisho unaokadiriwa {finish}</translation>
     </message>
 </context>
 <context>
