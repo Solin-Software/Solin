@@ -108,6 +108,24 @@ def _native_host(widget: QWidget) -> QWidget:
     return native_host
 
 
+def wait_for_input_exposure(*widgets: QWidget) -> None:
+    """Wait for the current native receivers of window-system input."""
+    cocoa = QGuiApplication.platformName() == "cocoa"
+
+    def is_exposed(widget: QWidget) -> bool:
+        host = _native_host(widget)
+        window = host.windowHandle()
+        return window is not None and window.isExposed() and (
+            not cocoa or _cocoa_window_exposed(host)
+        )
+
+    names = ", ".join(type(widget).__name__ for widget in widgets)
+    wait_until(
+        lambda: all(is_exposed(widget) for widget in widgets),
+        description=f"native input exposure for {names}",
+    )
+
+
 def _window_position(widget: QWidget, pos: QPoint) -> tuple[QWindow, QPoint]:
     window = _native_host(widget).windowHandle()
     assert window is not None and window.isExposed(), "Input requires an exposed window"
